@@ -2,40 +2,41 @@
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.LayerChain;
 
-namespace LayerBase.EventHub
+namespace LayerBase.LayerHub
 {
-	public struct LayerBuilder
+	public struct LayersBuilder
 	{
 		private ResponsibilityChain rc;
-		
-		internal LayerBuilder(ResponsibilityChain rc)
+
+		internal LayersBuilder(ResponsibilityChain rc)
 		{
 			this.rc = rc;
 		}
 
-		public LayerBuilder Push(Node node)
+		public LayersBuilder Push(Node node)
 		{
 			rc.AddLast(node);
 			return this;
 		}
-
 	}
-	public static class EventHub
+
+	public static class LayerHub
 	{
 		private static List<ResponsibilityChain> m_responsibilityChains = new List<ResponsibilityChain>(4);
 		private static LayerBaseSynchronizationContext m_Context = LayerBaseSynchronizationContext.InstallAsCurrent();
+
 		/// <summary>
 		/// 创建责任链
 		/// </summary>
 		/// <returns></returns>
-		public static LayerBuilder CreateHub()
+		public static LayersBuilder CreateLayers()
 		{
 			var rcToken = RcOwnerToken.CreateId();
 			var rc = new ResponsibilityChain(rcToken);
 			m_responsibilityChains.Add(rc);
-			return new LayerBuilder(rc);
+			return new LayersBuilder(rc);
 		}
-		
+
 		/// <summary>
 		/// 处理所有层级的Buffer Events,
 		/// 处理所有异步事件
@@ -51,6 +52,7 @@ namespace LayerBase.EventHub
 		{
 			m_Context.Update();
 		}
+
 		private static void PumpBufferEvents()
 		{
 			foreach (var VARIABLE in m_responsibilityChains)
@@ -67,7 +69,7 @@ namespace LayerBase.EventHub
 					layer.Pump();
 					Node = Node.NextNode;
 				}
-				
+
 				//尾节点Pump
 				if (Node != null)
 				{
