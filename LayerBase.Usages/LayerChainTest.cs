@@ -1,17 +1,17 @@
 ﻿using LayerBase.Async;
 using LayerBase.Core.Event;
-using LayerBase.EventHub;
+using LayerBase.LayerHub;
 using LayerBase.LayerChain;
 
 GameLayer gameLayerHead = new GameLayer();
 GameLayer gameLayerTail = new GameLayer();
-EventHub.CreateHub()
+LayerHub.CreateLayers()
         .Push(gameLayerHead)
         .Push(gameLayerTail);
 gameLayerHead.Drop(new eventTest { i = 1 });
 while (true)
 {
-	EventHub.Pump();
+	LayerHub.Pump();
 }
 
 internal struct eventTest
