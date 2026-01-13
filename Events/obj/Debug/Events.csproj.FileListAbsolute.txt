@@ -1,9 +1,0 @@
-D:\RiderProject\Events\Events\bin\Debug\Events.dll
-D:\RiderProject\Events\Events\bin\Debug\Events.pdb
-D:\RiderProject\Events\Events\obj\Debug\Events.csproj.AssemblyReference.cache
-D:\RiderProject\Events\Events\obj\Debug\Events.csproj.CoreCompileInputs.cache
-D:\RiderProject\Events\Events\obj\Debug\Events.dll
-D:\RiderProject\Events\Events\obj\Debug\Events.pdb
-D:\RiderProject\Events\Events\bin\Debug\System.Buffers.dll
-D:\RiderProject\Events\Events\bin\Debug\System.Buffers.xml
-D:\RiderProject\Events\Events\obj\Debug\Events.csproj.Up2Date
