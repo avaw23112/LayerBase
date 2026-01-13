@@ -19,10 +19,6 @@ namespace Events.Core.UnmanagedList
 			this.Owner = owner;
 		}
 		
-		/// <summary>
-		/// TODO：等待事件改造，如提供PostDrop,PostBubble方法。
-		/// </summary>
-		/// <exception cref="Exception"></exception>
 		public void Pump()
 		{
 			while (m_pooledQueue.Count > 0)

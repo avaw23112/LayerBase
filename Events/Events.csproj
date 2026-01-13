@@ -62,5 +62,11 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LayerBaseTask\LayerBaseTask.csproj">
+      <Project>{67f94689-6126-4cce-893c-ec3bcb6b5398}</Project>
+      <Name>LayerBaseTask</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -24,7 +24,6 @@ namespace Events.LayerChain
 		/// </summary>
 		/// <typeparam name="Value"></typeparam>
 		/// <param name="eventHandlerDelegate"></param>
-		
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		protected void Bind<Value>(EventHandlerDelegate<Value> eventHandlerDelegate) where Value : struct
 		{
@@ -86,16 +85,17 @@ namespace Events.LayerChain
 			@event.MarkBubble();
 			BubbleInternal(@event);
 		}
+		
 		/// <summary>
 		/// 向下一层递送事件
 		/// </summary>
-		
 		public void Drop<Value>(in Value value) where Value : struct
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkDrop();
 			DropInternal(@event);
 		}
+		
 		/// <summary>
 		/// 广播事件
 		/// </summary>
@@ -108,6 +108,7 @@ namespace Events.LayerChain
 			BubbleInternal(@event);
 			DropInternal(@event);
 		}
+		
 		private void BubbleInternal<Value>(in Event<Value> @event) where Value : struct
 		{
 			if (!@event.IsVaild())
