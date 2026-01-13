@@ -1,0 +1,183 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\RiderProject\\Events\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|D:\\RiderProject\\Events\\events\\core\\unmanagedlist\\unmanagedlist.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|solutionrelative:events\\core\\unmanagedlist\\unmanagedlist.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|d:\\riderproject\\events\\events\\core\\unmanagedlist\\pooledchunkedoverwritequeue.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|solutionrelative:events\\core\\unmanagedlist\\pooledchunkedoverwritequeue.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|D:\\RiderProject\\Events\\events\\core\\layerchain\\layer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|solutionrelative:events\\core\\layerchain\\layer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|D:\\RiderProject\\Events\\events\\eventhub\\eventhub.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|solutionrelative:events\\eventhub\\eventhub.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{8D00A46A-8E3A-4270-8C7F-3A5A27171A77}|EventsUsages\\EventsUsages.csproj|d:\\riderproject\\events\\eventsusages\\layerchaintest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{8D00A46A-8E3A-4270-8C7F-3A5A27171A77}|EventsUsages\\EventsUsages.csproj|solutionrelative:eventsusages\\layerchaintest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|D:\\RiderProject\\Events\\events\\core\\event\\eventdispatcher.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|solutionrelative:events\\core\\event\\eventdispatcher.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|D:\\RiderProject\\Events\\events\\core\\responsibilitychain\\node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|solutionrelative:events\\core\\responsibilitychain\\node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|D:\\RiderProject\\Events\\events\\core\\responsibilitychain\\responsibilitychain.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|solutionrelative:events\\core\\responsibilitychain\\responsibilitychain.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|D:\\RiderProject\\Events\\events\\core\\event\\event.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|solutionrelative:events\\core\\event\\event.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|D:\\RiderProject\\Events\\events\\core\\event\\eventtypeid.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EF8A2A5F-F9AE-424B-8B26-E60198A831D2}|Events\\Events.csproj|solutionrelative:events\\core\\event\\eventtypeid.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 214,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "PooledChunkedOverwriteQueue.cs",
+              "DocumentMoniker": "D:\\RiderProject\\Events\\Events\\Core\\UnmanagedList\\PooledChunkedOverwriteQueue.cs",
+              "RelativeDocumentMoniker": "Events\\Core\\UnmanagedList\\PooledChunkedOverwriteQueue.cs",
+              "ToolTip": "D:\\RiderProject\\Events\\Events\\Core\\UnmanagedList\\PooledChunkedOverwriteQueue.cs",
+              "RelativeToolTip": "Events\\Core\\UnmanagedList\\PooledChunkedOverwriteQueue.cs",
+              "ViewState": "AgIAAAgAAAAAAAAAAAAqwA8AAAAgAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-13T07:22:06.892Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "UnmanagedList.cs",
+              "DocumentMoniker": "D:\\RiderProject\\Events\\Events\\Core\\UnmanagedList\\UnmanagedList.cs",
+              "RelativeDocumentMoniker": "Events\\Core\\UnmanagedList\\UnmanagedList.cs",
+              "ToolTip": "D:\\RiderProject\\Events\\Events\\Core\\UnmanagedList\\UnmanagedList.cs",
+              "RelativeToolTip": "Events\\Core\\UnmanagedList\\UnmanagedList.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAAUAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-13T07:12:29.941Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "EventHub.cs",
+              "DocumentMoniker": "D:\\RiderProject\\Events\\Events\\EventHub\\EventHub.cs",
+              "RelativeDocumentMoniker": "Events\\EventHub\\EventHub.cs",
+              "ToolTip": "D:\\RiderProject\\Events\\Events\\EventHub\\EventHub.cs",
+              "RelativeToolTip": "Events\\EventHub\\EventHub.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-13T06:53:26.493Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "LayerChainTest.cs",
+              "DocumentMoniker": "D:\\RiderProject\\Events\\EventsUsages\\LayerChainTest.cs",
+              "RelativeDocumentMoniker": "EventsUsages\\LayerChainTest.cs",
+              "ToolTip": "D:\\RiderProject\\Events\\EventsUsages\\LayerChainTest.cs",
+              "RelativeToolTip": "EventsUsages\\LayerChainTest.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAASAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-12T15:04:39.252Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "ResponsibilityChain.cs",
+              "DocumentMoniker": "D:\\RiderProject\\Events\\Events\\Core\\ResponsibilityChain\\ResponsibilityChain.cs",
+              "RelativeDocumentMoniker": "Events\\Core\\ResponsibilityChain\\ResponsibilityChain.cs",
+              "ToolTip": "D:\\RiderProject\\Events\\Events\\Core\\ResponsibilityChain\\ResponsibilityChain.cs",
+              "RelativeToolTip": "Events\\Core\\ResponsibilityChain\\ResponsibilityChain.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAJEAAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-12T14:31:34.724Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "Layer.cs",
+              "DocumentMoniker": "D:\\RiderProject\\Events\\Events\\Core\\LayerChain\\Layer.cs",
+              "RelativeDocumentMoniker": "Events\\Core\\LayerChain\\Layer.cs",
+              "ToolTip": "D:\\RiderProject\\Events\\Events\\Core\\LayerChain\\Layer.cs",
+              "RelativeToolTip": "Events\\Core\\LayerChain\\Layer.cs",
+              "ViewState": "AgIAADsAAAAAAAAAAAAewE0AAAAiAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-12T14:06:26.472Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "EventDispatcher.cs",
+              "DocumentMoniker": "D:\\RiderProject\\Events\\Events\\Core\\Event\\EventDispatcher.cs",
+              "RelativeDocumentMoniker": "Events\\Core\\Event\\EventDispatcher.cs",
+              "ToolTip": "D:\\RiderProject\\Events\\Events\\Core\\Event\\EventDispatcher.cs",
+              "RelativeToolTip": "Events\\Core\\Event\\EventDispatcher.cs",
+              "ViewState": "AgIAACYAAAAAAAAAAADwvxIAAAADAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-12T13:29:03.813Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "EventTypeId.cs",
+              "DocumentMoniker": "D:\\RiderProject\\Events\\Events\\Core\\Event\\EventTypeId.cs",
+              "RelativeDocumentMoniker": "Events\\Core\\Event\\EventTypeId.cs",
+              "ToolTip": "D:\\RiderProject\\Events\\Events\\Core\\Event\\EventTypeId.cs",
+              "RelativeToolTip": "Events\\Core\\Event\\EventTypeId.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACMAAAACAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-12T13:22:08.184Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "Event.cs",
+              "DocumentMoniker": "D:\\RiderProject\\Events\\Events\\Core\\Event\\Event.cs",
+              "RelativeDocumentMoniker": "Events\\Core\\Event\\Event.cs",
+              "ToolTip": "D:\\RiderProject\\Events\\Events\\Core\\Event\\Event.cs",
+              "RelativeToolTip": "Events\\Core\\Event\\Event.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABkAAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-12T12:53:33.888Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "Node.cs",
+              "DocumentMoniker": "D:\\RiderProject\\Events\\Events\\Core\\ResponsibilityChain\\Node.cs",
+              "RelativeDocumentMoniker": "Events\\Core\\ResponsibilityChain\\Node.cs",
+              "ToolTip": "D:\\RiderProject\\Events\\Events\\Core\\ResponsibilityChain\\Node.cs",
+              "RelativeToolTip": "Events\\Core\\ResponsibilityChain\\Node.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-12T14:41:09.172Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
