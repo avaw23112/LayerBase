@@ -7,8 +7,8 @@ namespace LayerBase.Core.EventHandler
     /// 阻塞事件.可截断事件流
     /// </summary>
     /// <typeparam name="TValue"></typeparam>
-    public delegate EventState EventHandlerDelegate<TValue>(TValue  value);
-
+    public delegate EventHandledState EventHandlerDelegate<TValue>(TValue  value);
+    
     /// <summary>
     /// 异步事件.不可截断事件流
     /// </summary>
@@ -22,6 +22,10 @@ namespace LayerBase.Core.EventHandler
     public interface IEventHandler<TValue> :IEventHandler
     {
         public void Deal(TValue @event);
+    } 
+    public interface IEventHandlerAsync<TValue> :IEventHandler
+    {
+        public LBTask Deal(TValue @event);
     } 
 }
 

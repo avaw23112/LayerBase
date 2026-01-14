@@ -1,6 +1,6 @@
 ﻿namespace LayerBase.Core.Event
 {
-	public enum EventState
+	public enum EventHandledState
 	{
 		// 创建
 		Created,
@@ -15,7 +15,7 @@
 		HandledAndContinue,
 	}
 
-	public enum EventDir
+	public enum EventForwardDir
 	{
 		BroadCast,
 		Bubble,
@@ -27,29 +27,28 @@
 	/// </summary>
 	public struct Event<EventArg> where EventArg : struct
 	{
-		private EventState m_eventState;
-		private EventDir m_dir;
+		private EventHandledState _mEventHandledState;
+		private EventForwardDir _mForwardDir;
 		private EventArg m_value;
 
 		public Event(EventArg value)
 		{
-			m_eventState = EventState.Created;
+			_mEventHandledState = EventHandledState.Created;
 			m_value = value;
 		}
 
 		public int Id => EventTypeId<EventArg>.Id;
 		public string Name => typeof(EventArg).Name;
 		public EventArg Value => m_value;
-		public EventDir Dir => m_dir;
+		public EventForwardDir ForwardDir => _mForwardDir;
 				
-		public bool IsVaild() => m_eventState != EventState.Handled;
-		public void MarkHandled()=>m_eventState = EventState.Handled;
-		public void MarkContinue() =>m_eventState = EventState.Continue;
-		public void MarkHandledAndContinue()=>m_eventState = EventState.HandledAndContinue;
-		public void MarkDrop() => m_dir = EventDir.Drop;
-		public void MarkBubble() => m_dir = EventDir.Bubble;
-		public void MarkBroadCast() => m_dir = EventDir.BroadCast;
-
+		public bool IsVaild() => _mEventHandledState != EventHandledState.Handled;
+		public void MarkHandled()=>_mEventHandledState = EventHandledState.Handled;
+		public void MarkContinue() =>_mEventHandledState = EventHandledState.Continue;
+		public void MarkHandledAndContinue()=>_mEventHandledState = EventHandledState.HandledAndContinue;
+		public void MarkDrop() => _mForwardDir = EventForwardDir.Drop;
+		public void MarkBubble() => _mForwardDir = EventForwardDir.Bubble;
+		public void MarkBroadCast() => _mForwardDir = EventForwardDir.BroadCast;
 		public override string ToString() => Name;
 	}
 }

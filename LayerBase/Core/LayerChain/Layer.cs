@@ -62,6 +62,30 @@ namespace LayerBase.LayerChain
 		{
 			m_pooledEventContainer.Pump();
 		}
+		internal void BroadCastEvent<Value>(in Event<Value> @event) where Value : struct
+		{
+			BubbleEvent(in @event);
+			DropEvent(in @event);
+		}
+		internal void BubbleEvent<Value>(in Event<Value> @event) where Value : struct
+		{
+			if (!@event.IsVaild()) return;
+			Layer preLayer = Prev as Layer;
+			preLayer?.m_pooledEventContainer.Post(@event);
+		}
+		internal void DropEvent<Value>(in Event<Value> @event) where Value : struct
+		{
+			if (!@event.IsVaild()) return;
+			Layer next = Next as Layer;
+			next?.m_pooledEventContainer.Post(@event);
+		}
+		
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		internal void DispatchEvent<Value>(in Event<Value> @event) where Value : struct
+		{
+			m_eventDispatcher.Dispatch(@event);
+		}
+		
 		public void Post<Value>(in Value value) where Value : struct
 		{
 			Event<Value> @event = new Event<Value>(value);
@@ -127,8 +151,8 @@ namespace LayerBase.LayerChain
 				return;
 			}
 			
-			EventState eventState = m_eventDispatcher.Dispatch(@event);
-			if (eventState == EventState.Handled)
+			EventHandledState eventHandledState = m_eventDispatcher.Dispatch(@event);
+			if (eventHandledState == EventHandledState.Handled)
 			{
 				return;
 			}
@@ -147,8 +171,8 @@ namespace LayerBase.LayerChain
 				return;
 			}
 
-			EventState eventState = m_eventDispatcher.Dispatch(@event);
-			if (eventState == EventState.Handled)
+			EventHandledState eventHandledState = m_eventDispatcher.Dispatch(@event);
+			if (eventHandledState == EventHandledState.Handled)
 			{
 				return;
 			}

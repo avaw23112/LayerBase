@@ -25,11 +25,12 @@ namespace LayerBase.Core.UnmanagedList
 			{
 				if (m_pooledQueue.TryDequeue(out Event<Value> val))
 				{
-					switch (val.Dir)
+					Owner.DispatchEvent(in val);
+					switch (val.ForwardDir)
 					{
-						case EventDir.BroadCast:Owner.BroadCast(val); break;
-						case EventDir.Bubble:Owner.Bubble(val);break;
-						case EventDir.Drop:Owner.Drop(val); break; 
+						case EventForwardDir.BroadCast: Owner.BroadCastEvent(val); break;
+						case EventForwardDir.Bubble:    Owner.BubbleEvent(val);break;
+						case EventForwardDir.Drop:      Owner.DropEvent(val); break; 
 					}
 				}
 				else

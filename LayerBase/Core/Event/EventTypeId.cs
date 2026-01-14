@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-
-namespace LayerBase.Core.Event
+﻿namespace LayerBase.Core.Event
 {
 	/// <summary>
 	/// 记录不同Event的独立签名

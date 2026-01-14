@@ -36,7 +36,21 @@ namespace LayerBase.Core.Event
 				list.Add(handler);
 			}
 		}
-		
+		public void Subscribe<EventArg>(IEventHandlerAsync<EventArg> handler) where EventArg : struct
+		{
+			if (handler == null) throw new ArgumentNullException(nameof(handler));
+			int typeId = EventTypeId<EventArg>.Id;
+			lock (m_lock)
+			{
+				if (!m_handlerMap.TryGetValue(typeId, out var list))
+				{
+					list = new List<IEventHandler>(capacity: 4);
+					m_handlerMap[typeId] = list;
+				}
+
+				list.Add(handler);
+			}
+		}
 		/// <summary>
 		/// 所有处理方法都是顺序相关的,它跟踪事件状态
 		/// </summary>
@@ -93,7 +107,24 @@ namespace LayerBase.Core.Event
 				return removed;
 			}
 		}
-		
+		public bool Unsubscribe<T>(IEventHandlerAsync<T> handler) where T : struct
+		{
+			if (handler == null) return false;
+			int typeId = EventTypeId<T>.Id;
+
+			lock (m_lock)
+			{
+				if (!m_handlerMap.TryGetValue(typeId, out var list) || list.Count == 0)
+					return false;
+				bool removed = list.Remove(handler);
+
+				if (removed && list.Count == 0)
+				{
+					m_handlerMap.Remove(typeId);
+				}
+				return removed;
+			}
+		}
 		public bool Unsubscribe<T>(EventHandlerDelegate<T> handlerDelegate) where T : struct
 		{
 			if (handlerDelegate == null) return false;
@@ -131,8 +162,13 @@ namespace LayerBase.Core.Event
 				return removed;
 			}
 		}
-		public EventState Dispatch<T>(in Event<T> @event) where T : struct
+		public EventHandledState Dispatch<T>(in Event<T> @event) where T : struct
 		{
+			if (!@event.IsVaild())
+			{
+				return EventHandledState.Handled;
+			}
+			
 			int typeId = EventTypeId<T>.Id;
 			
 			//先处理无顺序的Handler
@@ -142,18 +178,14 @@ namespace LayerBase.Core.Event
 			return DealDelegates(@event, typeId);
 		}
 
-		private EventState DealDelegates<T>(in Event<T> @event, int typeId) where T : struct
+		private EventHandledState DealDelegates<T>(in Event<T> @event, int typeId) where T : struct
 		{
 			//有效性校验
 			if (!m_map.TryGetValue(typeId, out var list) || list.Count == 0)
 			{
-				return EventState.Continue;
+				return EventHandledState.Continue;
 			}
-			if (!@event.IsVaild())
-			{
-				return EventState.Handled;
-			}
-			
+
 			//留个tag,最终决定是否继续传播事件
 			bool handledAndContinueSeen = false;
 			for (int i = 0; i < list.Count; i++)
@@ -164,13 +196,13 @@ namespace LayerBase.Core.Event
 				//有序处理事件委托
 				if (d is EventHandlerDelegate<T> eventHandlerDelegate)
 				{
-					EventState r = eventHandlerDelegate(value);
-					if (r == EventState.Handled)
+					EventHandledState r = eventHandlerDelegate(value);
+					if (r == EventHandledState.Handled)
 					{
 						@event.MarkHandled();
-						return EventState.Handled;
+						return EventHandledState.Handled;
 					}
-					if (r == EventState.HandledAndContinue)
+					if (r == EventHandledState.HandledAndContinue)
 					{
 						@event.MarkHandledAndContinue();
 						handledAndContinueSeen = true;
@@ -183,7 +215,7 @@ namespace LayerBase.Core.Event
 					eventHandlerDelegateAsync(value).Forget();
 				}
 			}
-			return handledAndContinueSeen ? EventState.HandledAndContinue : EventState.Continue;
+			return handledAndContinueSeen ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
 		}
 
 		private void DealHandlers<T>(in Event<T> @event, int typeId) where T : struct
@@ -193,13 +225,15 @@ namespace LayerBase.Core.Event
 				for (int i = 0; i < handlers.Count; i++)
 				{
 					var handler = handlers[i];
-					if (handler is IEventHandler<T> eventHandler == false)
-					{
-						throw new Exception($"致命错误.{@event}事件被分发到不可能的事件处理器{handler.GetType().Name}中");
-					}
-					
 					var value = @event.Value;
-					eventHandler.Deal(value);
+					if (handler is IEventHandler<T> eventHandler)
+					{
+						eventHandler.Deal(value);
+					}
+					if(handler is IEventHandlerAsync<T> eventHandlerAsync)
+					{
+						eventHandlerAsync.Deal(value).Forget();
+					}
 				}
 			}
 		}
