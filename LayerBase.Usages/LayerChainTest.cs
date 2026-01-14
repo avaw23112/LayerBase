@@ -7,11 +7,13 @@ GameLayer gameLayerHead = new GameLayer();
 GameLayer gameLayerTail = new GameLayer();
 LayerHub.CreateLayers()
         .Push(gameLayerHead)
-        .Push(gameLayerTail);
+        .Push(gameLayerTail)
+        .SetEventTracing(s => Console.WriteLine(s));
 gameLayerHead.Drop(new eventTest { i = 1 });
 while (true)
 {
 	LayerHub.Pump();
+	LayerHub.PrintLog();
 }
 
 internal struct eventTest
@@ -23,18 +25,18 @@ internal class GameLayer : Layer
 {
 	public GameLayer() 
 	{
-		Bind((eventTest @event) => TestEvent(@event));
-		Bind(async (eventTest @event) => await TestEventAsync(@event));
+		Bind((in Event<eventTest> @event) => TestEvent(@event));
+		Bind(async ( Event<eventTest> @event) => await TestEventAsync(@event));
 	}
-	public EventHandledState TestEvent(eventTest eventTest)
+	public EventHandledState TestEvent(Event<eventTest> eventTest)
 	{
-		Console.WriteLine(eventTest.i);
+		Console.WriteLine(eventTest.Value.i);
 		return EventHandledState.HandledAndContinue;
 	}
 	
-	public async LBTask TestEventAsync(eventTest eventTest)
+	public async LBTask TestEventAsync(Event<eventTest> eventTest)
 	{
 		await LBTask.Delay(new TimeSpan(0,0,5));
-		Console.WriteLine(eventTest.i);
+		Console.WriteLine(eventTest.Value.i);
 	}
 }

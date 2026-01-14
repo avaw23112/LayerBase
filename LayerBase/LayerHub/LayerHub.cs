@@ -1,29 +1,111 @@
 ﻿using LayerBase.Async;
+using LayerBase.Core.EventStateTrace;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.LayerChain;
 
 namespace LayerBase.LayerHub
 {
+	internal sealed class ResponsibilityChainBundle
+	{
+		private readonly ResponsibilityChain responsibilityChain;
+		private EventStateTracer? eventStateTracer;
+		private Action<string>? logger;
+
+		internal ResponsibilityChainBundle(ResponsibilityChain chain)
+		{
+			responsibilityChain = chain;
+		}
+
+		internal ResponsibilityChain Chain => responsibilityChain;
+
+		internal void AddNode(Node node)
+		{
+			responsibilityChain.AddLast(node);
+			if (eventStateTracer != null && node is Layer layer)
+			{
+				layer.SetEventTracer(eventStateTracer);
+			}
+		}
+
+		internal void SetEventTracing(Action<string>? logger = null, int slabSize = 512, int logCapacity = 256)
+		{
+			eventStateTracer = new EventStateTracer(slabSize, logCapacity)
+			{
+				Enabled = true
+			};
+			this.logger = logger;
+			foreach (var node in responsibilityChain)
+			{
+				(node as Layer)?.SetEventTracer(eventStateTracer);
+			}
+		}
+
+		internal void PumpEventLogs()
+		{
+			if (eventStateTracer == null)
+			{
+				return;
+			}
+
+			foreach (var node in responsibilityChain)
+			{
+				(node as Layer)?.PumpEventLog();
+			}
+		}
+
+		internal void PrintLog()
+		{
+			if (eventStateTracer == null)
+			{
+				return;
+			}
+
+			if (logger == null)
+			{
+				throw new Exception("未设置日志处理器");
+			}
+
+			var logQueue = eventStateTracer.Logs;
+			while (logQueue.Count > 0)
+			{
+				if (logQueue.TryDequeue(out string log))
+				{
+					logger(log);
+				}
+			}
+		}
+	}
+
 	public struct LayersBuilder
 	{
-		private ResponsibilityChain rc;
-
-		internal LayersBuilder(ResponsibilityChain rc)
+		private ResponsibilityChainBundle chainBundle;
+		internal LayersBuilder(ResponsibilityChainBundle chainBundle)
 		{
-			this.rc = rc;
+			this.chainBundle = chainBundle;
 		}
 
 		public LayersBuilder Push(Node node)
 		{
-			rc.AddLast(node);
+			chainBundle.AddNode(node);
 			return this;
+		}
+
+		public LayersBuilder SetEventTracing(Action<string>? logger = null, int slabSize = 512, int logCapacity = 256)
+		{
+			chainBundle.SetEventTracing(logger, slabSize, logCapacity);
+			return this;
+		}
+
+		public void PrintLog()
+		{
+			chainBundle.PrintLog();
 		}
 	}
 
 	public static class LayerHub
 	{
-		private static List<ResponsibilityChain> m_responsibilityChains = new List<ResponsibilityChain>(4);
-		private static LayerBaseSynchronizationContext m_Context = LayerBaseSynchronizationContext.InstallAsCurrent();
+		private static List<ResponsibilityChainBundle> s_responsibilityChains = new List<ResponsibilityChainBundle>(4);
+		private static LayerBaseSynchronizationContext s_Context = LayerBaseSynchronizationContext.InstallAsCurrent();
 
 		/// <summary>
 		/// 创建责任链
@@ -33,10 +115,25 @@ namespace LayerBase.LayerHub
 		{
 			var rcToken = RcOwnerToken.CreateId();
 			var rc = new ResponsibilityChain(rcToken);
-			m_responsibilityChains.Add(rc);
-			return new LayersBuilder(rc);
+			var chainBundle = new ResponsibilityChainBundle(rc);
+			s_responsibilityChains.Add(chainBundle);
+			return new LayersBuilder(chainBundle);
 		}
 
+		/// <summary>
+		/// 打印日志
+		/// </summary>
+		/// <exception cref="Exception"></exception>
+		public static void PrintLog()
+		{
+			foreach (var chainBundle in s_responsibilityChains)
+			{
+				chainBundle.PrintLog();
+			}
+		}
+		
+		// ----------------------事件日志----------------------------------------
+		
 		/// <summary>
 		/// 处理所有层级的Buffer Events,
 		/// 处理所有异步事件
@@ -46,39 +143,27 @@ namespace LayerBase.LayerHub
 		{
 			PumpBufferEvents();
 			PumpAsyncEvents();
+			PumpEventLogs();
 		}
-
+		
 		private static void PumpAsyncEvents()
 		{
-			m_Context.Update();
+			s_Context.Update();
 		}
-
+		private static void PumpEventLogs()
+		{
+			foreach (var chainBundle in s_responsibilityChains)
+			{
+				chainBundle.PumpEventLogs();
+			}
+		}
 		private static void PumpBufferEvents()
 		{
-			foreach (var VARIABLE in m_responsibilityChains)
+			foreach (var chainBundle in s_responsibilityChains)
 			{
-				//遍历链表将每一层的事件都Pump掉
-				var Node = VARIABLE.Head;
-				while (Node != VARIABLE.Tail)
+				foreach (var node in chainBundle.Chain)
 				{
-					Layer layer = Node as Layer;
-					if (layer == null)
-					{
-						throw new Exception("存在空层级");
-					}
-					layer.Pump();
-					Node = Node.NextNode;
-				}
-
-				//尾节点Pump
-				if (Node != null)
-				{
-					Layer layer = Node as Layer;
-					if (layer == null)
-					{
-						throw new Exception("存在空层级");
-					}
-					layer.Pump();
+					(node as Layer)?.Pump();
 				}
 			}
 		}

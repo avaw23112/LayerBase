@@ -1,11 +1,11 @@
-﻿using System;
+using System.Collections;
 
 namespace LayerBase.Core.ResponsibilityChain
 {
 	/// <summary>
 	/// 一个“外界可控”的双向责任链：节点知道 Prev/Next，外界可插入/删除/移动节点。
 	/// </summary>
-	internal sealed class ResponsibilityChain
+	internal sealed class ResponsibilityChain : IEnumerable<Node>
 	{
 		private Node m_head;
 		private Node m_tail;
@@ -239,6 +239,47 @@ namespace LayerBase.Core.ResponsibilityChain
 
 			if (!ReferenceEquals(prev, m_tail))
 				throw new InvalidOperationException("Invalid chain: Tail pointer mismatch.");
+		}
+
+		public Enumerator GetEnumerator() => new Enumerator(m_head);
+		IEnumerator<Node> IEnumerable<Node>.GetEnumerator() => new Enumerator(m_head);
+		IEnumerator IEnumerable.GetEnumerator() => new Enumerator(m_head);
+
+		public struct Enumerator : IEnumerator<Node>
+		{
+			private readonly Node? m_start;
+			private Node? m_current;
+
+			internal Enumerator(Node? start)
+			{
+				m_start = start;
+				m_current = null;
+			}
+
+			public Node Current => m_current!;
+			object IEnumerator.Current => m_current!;
+
+			public bool MoveNext()
+			{
+				if (m_current == null)
+				{
+					m_current = m_start;
+				}
+				else
+				{
+					m_current = m_current.Next;
+				}
+				return m_current != null;
+			}
+
+			public void Reset()
+			{
+				m_current = null;
+			}
+
+			public void Dispose()
+			{
+			}
 		}
 	}
 }

@@ -25,13 +25,14 @@ namespace LayerBase.Core.UnmanagedList
 			{
 				if (m_pooledQueue.TryDequeue(out Event<Value> val))
 				{
-					Owner.DispatchEvent(in val);
+					Owner.Dispatch(in val);
 					switch (val.ForwardDir)
 					{
-						case EventForwardDir.BroadCast: Owner.BroadCastEvent(val); break;
-						case EventForwardDir.Bubble:    Owner.BubbleEvent(val);break;
-						case EventForwardDir.Drop:      Owner.DropEvent(val); break; 
+						case EventForwardDir.BroadCast: Owner.PostEventToDoubleSide(val); break;
+						case EventForwardDir.Bubble:    Owner.PostEventToHigherLayer(val);break;
+						case EventForwardDir.Drop:      Owner.PostEventToLowerLayer(val); break; 
 					}
+					Owner.NotifyEventProcessed(val);
 				}
 				else
 				{
@@ -40,7 +41,7 @@ namespace LayerBase.Core.UnmanagedList
 			}
 		}
 
-		public void Post(Event<Value> val)
+		public void Post(in Event<Value> val)
 		{
 			m_pooledQueue.EnqueueOverwrite(val);
 		}

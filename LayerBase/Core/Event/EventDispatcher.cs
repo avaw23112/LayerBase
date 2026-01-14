@@ -14,6 +14,7 @@ namespace LayerBase.Core.Event
 		private readonly Dictionary<int, List<Delegate>> m_map = new ();
 		private readonly Dictionary<int, List<IEventHandler>> m_handlerMap = new ();
 		private readonly object m_lock = new ();
+		internal EventStateTrace.EventStateTracer? Tracer { get; set; }
 		
 		/// <summary>
 		/// 所有处理器都是顺序无关的,它不跟踪事件的状态
@@ -170,7 +171,6 @@ namespace LayerBase.Core.Event
 			}
 			
 			int typeId = EventTypeId<T>.Id;
-			
 			//先处理无顺序的Handler
 			DealHandlers(@event, typeId);
 			
@@ -188,15 +188,17 @@ namespace LayerBase.Core.Event
 
 			//留个tag,最终决定是否继续传播事件
 			bool handledAndContinueSeen = false;
+			var tracer = Tracer;
+			var token = @event.TraceToken;
 			for (int i = 0; i < list.Count; i++)
 			{
 				var d = list[i];
-				var value = @event.Value;
 				
 				//有序处理事件委托
 				if (d is EventHandlerDelegate<T> eventHandlerDelegate)
 				{
-					EventHandledState r = eventHandlerDelegate(value);
+					EventHandledState r = eventHandlerDelegate(@event);
+					tracer?.TryRecordHandler(token, GetHandlerDisplayName(eventHandlerDelegate, i), r);
 					if (r == EventHandledState.Handled)
 					{
 						@event.MarkHandled();
@@ -212,7 +214,8 @@ namespace LayerBase.Core.Event
 				//如果是异步事件,即发即忘不等待.
 				else if(d is EventHandlerDelegateAsync<T> eventHandlerDelegateAsync)
 				{
-					eventHandlerDelegateAsync(value).Forget();
+					tracer?.TryRecordHandler(token, GetHandlerDisplayName(eventHandlerDelegateAsync, i), EventHandledState.Continue);
+					eventHandlerDelegateAsync(@event).Forget();
 				}
 			}
 			return handledAndContinueSeen ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
@@ -220,22 +223,45 @@ namespace LayerBase.Core.Event
 
 		private void DealHandlers<T>(in Event<T> @event, int typeId) where T : struct
 		{
+			var tracer = Tracer;
+			var token = @event.TraceToken;
 			if (m_handlerMap.TryGetValue(typeId, out var handlers) && handlers.Count != 0)
 			{
 				for (int i = 0; i < handlers.Count; i++)
 				{
 					var handler = handlers[i];
-					var value = @event.Value;
 					if (handler is IEventHandler<T> eventHandler)
 					{
-						eventHandler.Deal(value);
+						eventHandler.Deal(@event);
+						tracer?.TryRecordHandler(token, handler.GetType().Name, EventHandledState.Continue);
 					}
 					if(handler is IEventHandlerAsync<T> eventHandlerAsync)
 					{
-						eventHandlerAsync.Deal(value).Forget();
+						tracer?.TryRecordHandler(token, handler.GetType().Name, EventHandledState.Continue);
+						eventHandlerAsync.Deal(@event).Forget();
 					}
 				}
 			}
+		}
+
+		private static string GetHandlerDisplayName(Delegate d, int index = -1)
+		{
+			var method = d.Method;
+			string typeName = method.DeclaringType?.Name ?? d.Target?.GetType()?.Name ?? "Global";
+			string methodName = method.Name;
+
+			// 编译器生成的闭包/局部函数名通常包含尖括号，替换成更友好的标识。
+			if (methodName.StartsWith("<") && methodName.Contains(">"))
+			{
+				methodName = "lambda";
+			}
+
+			string name = $"{typeName}.{methodName}";
+			if (index >= 0)
+			{
+				name = $"#{index}:{name}";
+			}
+			return name;
 		}
 	}
 }

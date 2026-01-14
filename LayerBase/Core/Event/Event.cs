@@ -27,6 +27,7 @@
 	/// </summary>
 	public struct Event<EventArg> where EventArg : struct
 	{
+		private EventStateTrace.EventStateToken _traceToken;
 		private EventHandledState _mEventHandledState;
 		private EventForwardDir _mForwardDir;
 		private EventArg m_value;
@@ -41,6 +42,7 @@
 		public string Name => typeof(EventArg).Name;
 		public EventArg Value => m_value;
 		public EventForwardDir ForwardDir => _mForwardDir;
+		internal EventStateTrace.EventStateToken TraceToken => _traceToken;
 				
 		public bool IsVaild() => _mEventHandledState != EventHandledState.Handled;
 		public void MarkHandled()=>_mEventHandledState = EventHandledState.Handled;
@@ -50,5 +52,6 @@
 		public void MarkBubble() => _mForwardDir = EventForwardDir.Bubble;
 		public void MarkBroadCast() => _mForwardDir = EventForwardDir.BroadCast;
 		public override string ToString() => Name;
+		internal void AttachTraceToken(EventStateTrace.EventStateToken token) => _traceToken = token;
 	}
 }

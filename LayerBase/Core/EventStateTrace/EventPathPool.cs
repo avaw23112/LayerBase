@@ -5,48 +5,66 @@ using System.Threading;
 namespace LayerBase.Core.EventStateTrace;
 
 /// <summary>
-/// 路径段池化，避免每个事件都分配独立数组。
+/// 路径数据池化，避免每个事件都分配独立数组。
 /// </summary>
 internal sealed class EventPathPool
 {
-    private readonly ArrayPool<int> _pool;
+    private readonly ArrayPool<PathFrame> _framePool;
+    private readonly ArrayPool<HandlerVisit> _handlerPool;
     private readonly bool _clearOnReturn;
     private int _versionSeed;
 
-    public EventPathPool(ArrayPool<int>? pool = null, bool clearOnReturn = false)
+    public EventPathPool(bool clearOnReturn = true)
     {
-        _pool = pool ?? ArrayPool<int>.Shared;
+        _framePool = ArrayPool<PathFrame>.Shared;
+        _handlerPool = ArrayPool<HandlerVisit>.Shared;
         _clearOnReturn = clearOnReturn;
-        _versionSeed = 0;
     }
 
-    public EventPath Rent(ReadOnlySpan<int> segments)
+    public EventPath Rent(int frameCapacity = 4, int handlerCapacity = 8)
     {
-        if (segments.Length == 0)
-        {
-            return default;
-        }
-
-        int[] buffer = _pool.Rent(segments.Length);
-        segments.CopyTo(buffer);
+        frameCapacity = Math.Max(frameCapacity, 1);
+        handlerCapacity = Math.Max(handlerCapacity, 1);
 
         return new EventPath
         {
-            Buffer = buffer,
-            Offset = 0,
-            Length = segments.Length,
+            Frames = _framePool.Rent(frameCapacity),
+            Handlers = _handlerPool.Rent(handlerCapacity),
+            FrameCount = 0,
+            HandlerCount = 0,
             Version = NextVersion()
         };
     }
 
+    public PathFrame[] GrowFrames(PathFrame[] oldFrames, int requiredCount)
+    {
+        int newSize = Math.Max(requiredCount, oldFrames.Length * 2);
+        var newArr = _framePool.Rent(newSize);
+        Array.Copy(oldFrames, newArr, oldFrames.Length);
+        _framePool.Return(oldFrames, _clearOnReturn);
+        return newArr;
+    }
+
+    public HandlerVisit[] GrowHandlers(HandlerVisit[] oldHandlers, int requiredCount)
+    {
+        int newSize = Math.Max(requiredCount, oldHandlers.Length * 2);
+        var newArr = _handlerPool.Rent(newSize);
+        Array.Copy(oldHandlers, newArr, oldHandlers.Length);
+        _handlerPool.Return(oldHandlers, _clearOnReturn);
+        return newArr;
+    }
+
     public void Return(in EventPath path)
     {
-        if (path.Buffer == null)
+        if (path.Frames != null)
         {
-            return;
+            _framePool.Return(path.Frames, _clearOnReturn);
         }
 
-        _pool.Return(path.Buffer, _clearOnReturn);
+        if (path.Handlers != null)
+        {
+            _handlerPool.Return(path.Handlers, _clearOnReturn);
+        }
     }
 
     private ushort NextVersion()

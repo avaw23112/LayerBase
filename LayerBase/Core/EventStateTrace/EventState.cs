@@ -1,6 +1,5 @@
 using System;
 using LayerBase.Core.Event;
-
 namespace LayerBase.Core.EventStateTrace;
 
 /// <summary>
@@ -12,6 +11,11 @@ public struct EventState
     /// 当前事件类型的 id（与 EventTypeId 对应）。
     /// </summary>
     public int EventTypeId;
+
+    /// <summary>
+    /// 事件发起时间戳（Stopwatch.GetTimestamp）。
+    /// </summary>
+    public long StartTimestamp;
 
     /// <summary>
     /// 当前处理状态。
@@ -28,10 +32,11 @@ public struct EventState
     /// </summary>
     public long CreatedTimestamp;
 
-    internal EventPath PathHandle;
-
     /// <summary>
-    /// 返回路径的只读视图（segment id 序列）。
+    /// 当前仍在处理/传播的分支计数。
     /// </summary>
-    public ReadOnlySpan<int> Path => PathHandle.AsSpan();
+    public int PendingCount;
+
+    internal EventPath PathHandle;
+    public bool HasPath => PathHandle.HasValue;
 }

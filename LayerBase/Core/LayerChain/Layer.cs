@@ -1,6 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
+using LayerBase.Core.EventStateTrace;
 using LayerBase.Core.PolledEventContainer;
 using LayerBase.Core.ResponsibilityChain;
 
@@ -13,11 +14,36 @@ namespace LayerBase.LayerChain
 	{
 		private EventDispatcher m_eventDispatcher;
 		private PooledEventContainer m_pooledEventContainer;
+		private EventStateTracer? m_eventStateTracer;
 		protected Layer() 
 		{
 			m_eventDispatcher = new EventDispatcher();
 			m_pooledEventContainer = new PooledEventContainer(this);
 		}
+		
+		// -----------------追踪-------------------
+		
+		internal void SetEventTracer(EventStateTracer? logTracer)
+		{
+			if (logTracer == null)
+			{
+				throw new Exception("无效日志追踪器");
+			}
+			m_eventStateTracer = logTracer;
+			m_eventDispatcher.Tracer = logTracer;
+		}
+		
+		public bool TryExportTracing(EventStateToken est,out string log)
+		{
+			return m_eventStateTracer.TryExport(est,out log);
+		}
+		
+		internal void PumpEventLog()
+		{
+			m_eventStateTracer.Pump();
+		}
+		
+		// -----------------追踪-------------------
 		
 		/// <summary>
 		/// 绑定当前层的事件处理器
@@ -54,42 +80,49 @@ namespace LayerBase.LayerChain
 
 		// --------------------------Buffer Events-------------------
 		
-		/// <summary>
-		/// 只供EventHub调用的Pump
-		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void Pump()
 		{
 			m_pooledEventContainer.Pump();
 		}
-		internal void BroadCastEvent<Value>(in Event<Value> @event) where Value : struct
+		internal void PostEventToDoubleSide<Value>(in Event<Value> @event) where Value : struct
 		{
-			BubbleEvent(in @event);
-			DropEvent(in @event);
+			PostEventToHigherLayer(in @event);
+			PostEventToLowerLayer(in @event);
 		}
-		internal void BubbleEvent<Value>(in Event<Value> @event) where Value : struct
+		internal void PostEventToHigherLayer<Value>(in Event<Value> @event) where Value : struct
 		{
 			if (!@event.IsVaild()) return;
 			Layer preLayer = Prev as Layer;
+			if (preLayer != null)
+			{
+				m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
+			}
 			preLayer?.m_pooledEventContainer.Post(@event);
 		}
-		internal void DropEvent<Value>(in Event<Value> @event) where Value : struct
+		internal void PostEventToLowerLayer<Value>(in Event<Value> @event) where Value : struct
 		{
 			if (!@event.IsVaild()) return;
 			Layer next = Next as Layer;
+			if (next != null)
+			{
+				m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
+			}
 			next?.m_pooledEventContainer.Post(@event);
 		}
 		
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal void DispatchEvent<Value>(in Event<Value> @event) where Value : struct
+		internal EventHandledState Dispatch<Value>(in Event<Value> @event) where Value : struct
 		{
-			m_eventDispatcher.Dispatch(@event);
+			m_eventStateTracer?.TryBeginLayer(@event.TraceToken, GetType().Name);
+			return m_eventDispatcher.Dispatch(@event);
 		}
 		
 		public void Post<Value>(in Value value) where Value : struct
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkBroadCast();
+			TryAttachTrace(ref @event);
 			if (!@event.IsVaild()) return;
 			m_pooledEventContainer.Post(@event);
 		}
@@ -98,6 +131,7 @@ namespace LayerBase.LayerChain
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkDrop();
+			TryAttachTrace(ref @event);
 			if (!@event.IsVaild()) return;
 			m_pooledEventContainer.Post(@event);
 		}
@@ -106,6 +140,7 @@ namespace LayerBase.LayerChain
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkBubble();
+			TryAttachTrace(ref @event);
 			if (!@event.IsVaild()) return;
 			m_pooledEventContainer.Post(@event);
 		}
@@ -118,6 +153,7 @@ namespace LayerBase.LayerChain
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkBubble();
+			TryAttachTrace(ref @event);
 			BubbleInternal(@event);
 		}
 		
@@ -128,6 +164,7 @@ namespace LayerBase.LayerChain
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkDrop();
+			TryAttachTrace(ref @event);
 			DropInternal(@event);
 		}
 		
@@ -136,10 +173,11 @@ namespace LayerBase.LayerChain
 		/// </summary>
 		/// <typeparam name="Value"></typeparam>
 		/// <param name="event"></param>
-		public void BroadCast<Value>(Value value) where Value : struct
+		public void BroadCast<Value>(in Value value) where Value : struct
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkBroadCast();
+			TryAttachTrace(ref @event);
 			BubbleInternal(@event);
 			DropInternal(@event);
 		}
@@ -151,17 +189,20 @@ namespace LayerBase.LayerChain
 				return;
 			}
 			
-			EventHandledState eventHandledState = m_eventDispatcher.Dispatch(@event);
+			EventHandledState eventHandledState = Dispatch(@event);
 			if (eventHandledState == EventHandledState.Handled)
 			{
+				m_eventStateTracer?.TryComplete(@event.TraceToken);
 				return;
 			}
 
 			//防空、防错、防循环
 			if (Previous != null && Previous is Layer preLayer && preLayer != this)
 			{
+				preLayer.m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
 				preLayer.BubbleInternal(@event);
 			}
+			m_eventStateTracer?.TryComplete(@event.TraceToken);
 		}
 
 		private void DropInternal<Value>(in Event<Value> @event) where Value : struct
@@ -171,16 +212,37 @@ namespace LayerBase.LayerChain
 				return;
 			}
 
-			EventHandledState eventHandledState = m_eventDispatcher.Dispatch(@event);
+			EventHandledState eventHandledState = Dispatch(@event);
 			if (eventHandledState == EventHandledState.Handled)
 			{
+				m_eventStateTracer?.TryComplete(@event.TraceToken);
 				return;
 			}
 
 			//防空、防错、防循环
 			if (Next != null && Next is Layer nextLayer && nextLayer != this)
 			{
+				nextLayer.m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
 				nextLayer.DropInternal(@event);
+			}
+			m_eventStateTracer?.TryComplete(@event.TraceToken);
+		}
+
+		internal void NotifyEventProcessed<EventArg>(in Event<EventArg> @event) where EventArg : struct
+		{
+			m_eventStateTracer?.TryComplete(@event.TraceToken);
+		}
+
+		private void TryAttachTrace<Value>(ref Event<Value> @event) where Value : struct
+		{
+			if (m_eventStateTracer == null || !m_eventStateTracer.Enabled)
+			{
+				return;
+			}
+			var token = m_eventStateTracer.Register(@event);
+			if (token.IsValid)
+			{
+				@event.AttachTraceToken(token);
 			}
 		}
 	}

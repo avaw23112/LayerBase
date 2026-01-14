@@ -7,25 +7,25 @@ namespace LayerBase.Core.EventHandler
     /// 阻塞事件.可截断事件流
     /// </summary>
     /// <typeparam name="TValue"></typeparam>
-    public delegate EventHandledState EventHandlerDelegate<TValue>(TValue  value);
+    public delegate EventHandledState EventHandlerDelegate<TValue>(in Event<TValue>  value) where TValue : struct;
     
     /// <summary>
     /// 异步事件.不可截断事件流
     /// </summary>
     /// <typeparam name="TValue"></typeparam>
-    public delegate LBTask EventHandlerDelegateAsync<TValue>(TValue value);
+    public delegate LBTask EventHandlerDelegateAsync<TValue>( Event<TValue> value) where TValue : struct;
     
     /// <summary>
     /// 事件处理器
     /// </summary>
     public interface IEventHandler {}
-    public interface IEventHandler<TValue> :IEventHandler
+    public interface IEventHandler<TValue> : IEventHandler where TValue : struct
     {
-        public void Deal(TValue @event);
+        public void Deal(in Event<TValue> @event);
     } 
-    public interface IEventHandlerAsync<TValue> :IEventHandler
+    public interface IEventHandlerAsync<TValue> :IEventHandler where TValue : struct
     {
-        public LBTask Deal(TValue @event);
+        public LBTask Deal(Event<TValue> @event);
     } 
 }
 
