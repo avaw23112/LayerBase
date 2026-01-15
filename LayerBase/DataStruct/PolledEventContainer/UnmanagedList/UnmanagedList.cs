@@ -1,6 +1,5 @@
-﻿using System;
-using LayerBase.Core.Event;
-using LayerBase.LayerChain;
+﻿using LayerBase.Core.Event;
+using LayerBase.Layers;
 
 namespace LayerBase.Core.UnmanagedList
 {

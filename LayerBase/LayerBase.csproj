@@ -10,4 +10,8 @@
       <ProjectReference Include="..\LayerBase.Task\LayerBase.Task.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Event\" />
+    </ItemGroup>
+
 </Project>

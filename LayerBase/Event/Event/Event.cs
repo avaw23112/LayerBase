@@ -1,4 +1,6 @@
-﻿namespace LayerBase.Core.Event
+﻿using LayerBase.Core.EventStateTrace;
+
+namespace LayerBase.Core.Event
 {
 	public enum EventHandledState
 	{
@@ -27,7 +29,7 @@
 	/// </summary>
 	public struct Event<EventArg> where EventArg : struct
 	{
-		private EventStateTrace.EventStateToken _traceToken;
+		private EventStateToken _traceToken;
 		private EventHandledState _mEventHandledState;
 		private EventForwardDir _mForwardDir;
 		private EventArg m_value;
@@ -52,6 +54,6 @@
 		public void MarkBubble() => _mForwardDir = EventForwardDir.Bubble;
 		public void MarkBroadCast() => _mForwardDir = EventForwardDir.BroadCast;
 		public override string ToString() => Name;
-		internal void AttachTraceToken(EventStateTrace.EventStateToken token) => _traceToken = token;
+		internal void AttachTraceToken(EventStateToken token) => _traceToken = token;
 	}
 }

@@ -5,7 +5,7 @@ using LayerBase.Core.EventStateTrace;
 using LayerBase.Core.PolledEventContainer;
 using LayerBase.Core.ResponsibilityChain;
 
-namespace LayerBase.LayerChain
+namespace LayerBase.Layers
 {
 	/// <summary>
 	/// 责任链式层级结构
@@ -15,6 +15,8 @@ namespace LayerBase.LayerChain
 		private EventDispatcher m_eventDispatcher;
 		private PooledEventContainer m_pooledEventContainer;
 		private EventStateTracer? m_eventStateTracer;
+		private EventLogTracer? m_eventLogTracer;
+		
 		protected Layer() 
 		{
 			m_eventDispatcher = new EventDispatcher();
@@ -23,24 +25,41 @@ namespace LayerBase.LayerChain
 		
 		// -----------------追踪-------------------
 		
-		internal void SetEventTracer(EventStateTracer? logTracer)
+		internal void SetEventTracer(EventStateTracer stateTracer)
+		{
+			if (stateTracer == null)
+			{
+				throw new Exception("无效事件追踪器");
+			}
+			m_eventStateTracer = stateTracer;
+			m_eventDispatcher.StateTracer = stateTracer;
+		}
+
+		internal void SetEventLogTracer(EventLogTracer logTracer)
 		{
 			if (logTracer == null)
 			{
 				throw new Exception("无效日志追踪器");
 			}
-			m_eventStateTracer = logTracer;
-			m_eventDispatcher.Tracer = logTracer;
+			if (m_eventStateTracer == null)
+			{
+				throw new Exception("无效事件追踪器");
+			}
+			
+			m_eventLogTracer = logTracer;
+			m_eventDispatcher.LogTracer = logTracer;
+			m_eventStateTracer.OnEventCompleted = (ref EventState state) => m_eventLogTracer.Pump(ref state);
 		}
 		
 		public bool TryExportTracing(EventStateToken est,out string log)
 		{
-			return m_eventStateTracer.TryExport(est,out log);
-		}
-		
-		internal void PumpEventLog()
-		{
-			m_eventStateTracer.Pump();
+			if (m_eventLogTracer == null || m_eventStateTracer==null)
+			{
+				log = string.Empty;
+				return false;
+			}
+			ref var eventState = ref m_eventStateTracer.Resolve(est);
+			return m_eventLogTracer.TryExport(eventState,out log);
 		}
 		
 		// -----------------追踪-------------------
@@ -84,6 +103,7 @@ namespace LayerBase.LayerChain
 		internal void Pump()
 		{
 			m_pooledEventContainer.Pump();
+			m_eventStateTracer?.Pump();
 		}
 		internal void PostEventToDoubleSide<Value>(in Event<Value> @event) where Value : struct
 		{
@@ -114,7 +134,8 @@ namespace LayerBase.LayerChain
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal EventHandledState Dispatch<Value>(in Event<Value> @event) where Value : struct
 		{
-			m_eventStateTracer?.TryBeginLayer(@event.TraceToken, GetType().Name);
+			ref EventState eventState = ref m_eventStateTracer.Resolve(@event.TraceToken);
+			m_eventLogTracer?.TryBeginLayer(ref eventState, GetType().Name);
 			return m_eventDispatcher.Dispatch(@event);
 		}
 		
@@ -235,11 +256,18 @@ namespace LayerBase.LayerChain
 
 		private void TryAttachTrace<Value>(ref Event<Value> @event) where Value : struct
 		{
-			if (m_eventStateTracer == null || !m_eventStateTracer.Enabled)
+			if (m_eventStateTracer == null)
 			{
 				return;
 			}
 			var token = m_eventStateTracer.Register(@event);
+			
+			if (m_eventLogTracer !=null && m_eventLogTracer.Enabled)
+			{
+				ref EventState eventState = ref m_eventStateTracer.Resolve(token);
+				m_eventLogTracer.Register(ref @eventState);
+			}
+			
 			if (token.IsValid)
 			{
 				@event.AttachTraceToken(token);

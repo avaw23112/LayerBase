@@ -1,19 +1,19 @@
 ﻿using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.LayerHub;
-using LayerBase.LayerChain;
+using LayerBase.Layers;
 
 GameLayer gameLayerHead = new GameLayer();
 GameLayer gameLayerTail = new GameLayer();
 LayerHub.CreateLayers()
         .Push(gameLayerHead)
         .Push(gameLayerTail)
-        .SetEventTracing(s => Console.WriteLine(s));
+        .SetLogTracing(s => Console.WriteLine(s));
+        
 gameLayerHead.Drop(new eventTest { i = 1 });
 while (true)
 {
 	LayerHub.Pump();
-	LayerHub.PrintLog();
 }
 
 internal struct eventTest

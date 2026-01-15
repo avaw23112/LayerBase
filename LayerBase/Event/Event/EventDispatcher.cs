@@ -1,11 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using LayerBase.Async;
+﻿using LayerBase.Async;
 using LayerBase.Core.EventHandler;
+using LayerBase.Core.EventStateTrace;
 
 namespace LayerBase.Core.Event
 {
-
 	/// <summary>
 	/// 每一层都有一个Dispatcher,负责管理所有绑定的事件handler
 	/// </summary>
@@ -14,7 +12,9 @@ namespace LayerBase.Core.Event
 		private readonly Dictionary<int, List<Delegate>> m_map = new ();
 		private readonly Dictionary<int, List<IEventHandler>> m_handlerMap = new ();
 		private readonly object m_lock = new ();
-		internal EventStateTrace.EventStateTracer? Tracer { get; set; }
+		
+		internal EventStateTracer? StateTracer { get; set; }
+		internal EventLogTracer? LogTracer { get; set; }
 		
 		/// <summary>
 		/// 所有处理器都是顺序无关的,它不跟踪事件的状态
@@ -188,8 +188,9 @@ namespace LayerBase.Core.Event
 
 			//留个tag,最终决定是否继续传播事件
 			bool handledAndContinueSeen = false;
-			var tracer = Tracer;
 			var token = @event.TraceToken;
+			ref EventState state = ref StateTracer.Resolve(token); 
+				
 			for (int i = 0; i < list.Count; i++)
 			{
 				var d = list[i];
@@ -198,7 +199,7 @@ namespace LayerBase.Core.Event
 				if (d is EventHandlerDelegate<T> eventHandlerDelegate)
 				{
 					EventHandledState r = eventHandlerDelegate(@event);
-					tracer?.TryRecordHandler(token, GetHandlerDisplayName(eventHandlerDelegate, i), r);
+					LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(eventHandlerDelegate, i), r);
 					if (r == EventHandledState.Handled)
 					{
 						@event.MarkHandled();
@@ -214,7 +215,7 @@ namespace LayerBase.Core.Event
 				//如果是异步事件,即发即忘不等待.
 				else if(d is EventHandlerDelegateAsync<T> eventHandlerDelegateAsync)
 				{
-					tracer?.TryRecordHandler(token, GetHandlerDisplayName(eventHandlerDelegateAsync, i), EventHandledState.Continue);
+					LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(eventHandlerDelegateAsync, i), EventHandledState.Continue);
 					eventHandlerDelegateAsync(@event).Forget();
 				}
 			}
@@ -223,8 +224,9 @@ namespace LayerBase.Core.Event
 
 		private void DealHandlers<T>(in Event<T> @event, int typeId) where T : struct
 		{
-			var tracer = Tracer;
 			var token = @event.TraceToken;
+			ref EventState state = ref StateTracer.Resolve(token); 
+			
 			if (m_handlerMap.TryGetValue(typeId, out var handlers) && handlers.Count != 0)
 			{
 				for (int i = 0; i < handlers.Count; i++)
@@ -233,11 +235,11 @@ namespace LayerBase.Core.Event
 					if (handler is IEventHandler<T> eventHandler)
 					{
 						eventHandler.Deal(@event);
-						tracer?.TryRecordHandler(token, handler.GetType().Name, EventHandledState.Continue);
+						LogTracer?.TryRecordHandler(ref state, handler.GetType().Name, EventHandledState.Continue);
 					}
 					if(handler is IEventHandlerAsync<T> eventHandlerAsync)
 					{
-						tracer?.TryRecordHandler(token, handler.GetType().Name, EventHandledState.Continue);
+						LogTracer?.TryRecordHandler(ref state, handler.GetType().Name, EventHandledState.Continue);
 						eventHandlerAsync.Deal(@event).Forget();
 					}
 				}

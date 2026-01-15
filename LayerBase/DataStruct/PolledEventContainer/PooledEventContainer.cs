@@ -1,8 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using LayerBase.Core.Event;
+﻿using LayerBase.Core.Event;
 using LayerBase.Core.UnmanagedList;
-using LayerBase.LayerChain;
+using LayerBase.Layers;
 
 namespace LayerBase.Core.PolledEventContainer
 {
