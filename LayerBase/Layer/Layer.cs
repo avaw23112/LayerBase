@@ -93,7 +93,7 @@ namespace LayerBase.Layers
 			
 			m_eventLogTracer = logTracer;
 			m_eventDispatcher.LogTracer = logTracer;
-			m_eventStateTracer.OnEventCompletedGlobal = (ref EventState state) => m_eventLogTracer.Pump(ref state);
+			m_eventStateTracer.OnEventCompleted = (ref EventState state) => m_eventLogTracer.Pump(ref state);
 		}
 		
 		public bool TryExportTracing(EventStateToken est,out string log)
@@ -142,6 +142,17 @@ namespace LayerBase.Layers
 			m_eventDispatcher.Subscribe(eventHandler);
 		}
 
+		/// <summary>
+		/// 绑定当前层的顺序无关异步事件处理器
+		/// </summary>
+		/// <param name="eventHandler"></param>
+		/// <typeparam name="Value"></typeparam>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		protected void Bind<Value>(IEventHandlerAsync<Value> eventHandler) where Value : struct
+		{
+			m_eventDispatcher.Subscribe(eventHandler);
+		}
+		
 		// --------------------------Buffer Events-------------------
 
 		internal void PostEventToDoubleSide<Value>(in Event<Value> @event) where Value : struct

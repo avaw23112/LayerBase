@@ -18,11 +18,11 @@ internal class EventCounter
 {
     Dictionary<EventCategoryToken,EventGlobalInfo> m_eventGlobalInfos = new();
     
-    public bool Increment<T>() where T : struct
+    public int Increment<T>() where T : struct
     { 
         if (EventMetaDataHandler.Category<T>().IsEmpty)
         {
-            return false;
+            return -1;
         }
         var category = EventMetaDataHandler.Category<T>();
         if (!m_eventGlobalInfos.TryGetValue(category,out EventGlobalInfo? info))
@@ -36,14 +36,14 @@ internal class EventCounter
             m_eventGlobalInfos.Add(category, info);
         }
         info.eventCount++;
-        return true;
+        return info.eventCount;
     }
 
-    public bool Decrement<T>() where T : struct
+    public int Decrement<T>() where T : struct
     {
         if (EventMetaDataHandler.Category<T>().IsEmpty)
         {
-            return false;
+            return -1;
         }
         var category = EventMetaDataHandler.Category<T>();
         if (!m_eventGlobalInfos.TryGetValue(category, out EventGlobalInfo? info))
@@ -52,13 +52,13 @@ internal class EventCounter
         }
         if (info.eventCount <= 0)
         {
-            return false;
+            throw new Exception("不可能完成的事件");
         }
         info.eventCount--;
-        return true;
+        return info.eventCount;
     }
 
-    public bool Decrement(Type type)
+    public int Decrement(Type type)
     {
         var  category = EventMetaDataHandler.Category(type);
         if (!m_eventGlobalInfos.TryGetValue(category, out EventGlobalInfo? info))
@@ -67,9 +67,9 @@ internal class EventCounter
         }
         if (info.eventCount <= 0)
         {
-            return false;
+            throw new Exception("不可能完成的事件");
         }
         info.eventCount--;
-        return true;
+        return info.eventCount;
     }
 }

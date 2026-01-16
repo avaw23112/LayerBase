@@ -14,8 +14,8 @@ public interface IEventMetaData
 /// <summary>
 /// 用于配置事件的元数据
 /// </summary>
-/// <typeparam name="Event"></typeparam>
-public abstract class EventMetaData<Event> :IEventMetaData where Event : struct 
+/// <typeparam name="EventState"></typeparam>
+public abstract class EventMetaData<EventState> :IEventMetaData where EventState : struct 
 {
     // ---------------接口适配---------------------
     public EventCategoryToken GetEventCategoryToken()
@@ -32,7 +32,7 @@ public abstract class EventMetaData<Event> :IEventMetaData where Event : struct
     /// 当该类事件创建
     /// </summary>
     /// <param name="e"></param>
-    public virtual void OnEventCreated(Event e)
+    public virtual void OnEventCreated(EventState e)
     {
         
     }
@@ -41,7 +41,7 @@ public abstract class EventMetaData<Event> :IEventMetaData where Event : struct
     /// 当该类事件销毁
     /// </summary>
     /// <param name="e"></param>
-    public virtual void OnEventDestroyed(Event e)
+    public virtual void OnEventDestroyed(EventState e)
     {
         
     }
@@ -50,7 +50,7 @@ public abstract class EventMetaData<Event> :IEventMetaData where Event : struct
     /// 当事件出现异常
     /// </summary>
     /// <param name="e"></param>
-    public virtual void OnEventExpectation(ref Event e)
+    public virtual void OnEventExpectation(ref EventState e)
     {
         
     }

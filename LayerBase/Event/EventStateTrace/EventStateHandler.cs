@@ -1,10 +1,18 @@
-﻿namespace LayerBase.Core.EventStateTrace;
+﻿using LayerBase.Core.EventCatalogue;
 
-public delegate void EventCompletedGlobalHandler(
-    ref EventState state // ref：按引用传参；回调里修改 state 会直接改到调用方那份变量
+namespace LayerBase.Core.EventStateTrace;
+
+public delegate void EventCompletedHandler(
+    ref EventState state
 );
 
+public delegate void ClassicEventCompletedHandler(
+    ref EventCategoryToken eventCategoryToken,ref EventState state 
+);
 
+public delegate void ClassicEventCreatedHandler(
+    ref EventCategoryToken eventCategoryToken,ref EventState state
+);
 public class EventStateHandler
 {
     

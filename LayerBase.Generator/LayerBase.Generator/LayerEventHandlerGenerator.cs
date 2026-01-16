@@ -11,26 +11,20 @@ using Microsoft.CodeAnalysis.Text;
 namespace LayerBase.Generator
 {
 	[Generator(LanguageNames.CSharp)]
-	public sealed class LayerServiceGenerator : IIncrementalGenerator
+	public sealed class LayerEventHandlerGenerator : IIncrementalGenerator
 	{
 		private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
-		private const string IServiceMetadataName = "LayerBase.DI.IService";
 		private const string LayerMetadataName = "LayerBase.Layers.Layer";
 		private const string EventHandlerMetadataName = "LayerBase.Core.EventHandler.IEventHandler`1";
 		private const string EventHandlerAsyncMetadataName = "LayerBase.Core.EventHandler.IEventHandlerAsync`1";
 
 		public void Initialize(IncrementalGeneratorInitializationContext context)
 		{
-			context.RegisterPostInitializationOutput(static ctx =>
-			{
-				ctx.AddSource("OwnerLayerAttribute.g.cs", SourceText.From(OwnerLayerAttributeSource, Encoding.UTF8));
-			});
-
 			var registrations = context.SyntaxProvider
 				.ForAttributeWithMetadataName(
 					OwnerLayerAttributeName,
 					predicate: static (node, _) => node is ClassDeclarationSyntax,
-					transform: static (ctx, ct) => CreateRegistrations(ctx))
+					transform: static (ctx, _) => CreateRegistrations(ctx))
 				.SelectMany(static (items, _) => items);
 
 			var compilationAndRegistrations = context.CompilationProvider.Combine(registrations.Collect());
@@ -40,35 +34,21 @@ namespace LayerBase.Generator
 				var compilation = source.Left;
 				var collected = source.Right;
 
-				var iServiceSymbol = compilation.GetTypeByMetadataName(IServiceMetadataName);
 				var layerSymbol = compilation.GetTypeByMetadataName(LayerMetadataName);
 				var eventHandlerSymbol = compilation.GetTypeByMetadataName(EventHandlerMetadataName);
 				var eventHandlerAsyncSymbol = compilation.GetTypeByMetadataName(EventHandlerAsyncMetadataName);
 
-				if (iServiceSymbol == null || layerSymbol == null)
+				if (layerSymbol == null || (eventHandlerSymbol == null && eventHandlerAsyncSymbol == null))
 				{
 					return;
 				}
 
-				List<ServiceRegistration> validRegistrations = new List<ServiceRegistration>();
+				List<HandlerBinding> validBindings = new List<HandlerBinding>();
 				foreach (var registration in collected)
 				{
-					var serviceSymbol = registration.ServiceType;
+					var handlerType = registration.HandlerType;
 					var targetLayer = registration.LayerType;
-					var implementsService = ImplementsInterface(serviceSymbol, iServiceSymbol);
-					var implementsEventHandler = ImplementsInterface(serviceSymbol, eventHandlerSymbol) ||
-					                             ImplementsInterface(serviceSymbol, eventHandlerAsyncSymbol);
-
-					if (!implementsService)
-					{
-						if (implementsEventHandler)
-						{
-							continue;
-						}
-
-						spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceMustImplementIService, registration.Location ?? serviceSymbol.Locations.FirstOrDefault(), serviceSymbol.ToDisplayString()));
-						continue;
-					}
+					var location = registration.Location ?? handlerType.Locations.FirstOrDefault();
 
 					if (!InheritsFromLayer(targetLayer, layerSymbol))
 					{
@@ -82,22 +62,31 @@ namespace LayerBase.Generator
 						continue;
 					}
 
-					if (!HasAccessibleParameterlessConstructor(serviceSymbol))
+					if (handlerType.IsAbstract)
 					{
-						spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceNeedsPublicParameterlessConstructor, registration.Location ?? serviceSymbol.Locations.FirstOrDefault(), serviceSymbol.ToDisplayString()));
+						spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.HandlerCannotBeAbstract, location, handlerType.ToDisplayString()));
 						continue;
 					}
 
-					if (serviceSymbol.IsAbstract)
+					if (!HasAccessibleParameterlessConstructor(handlerType))
 					{
-						spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceCannotBeAbstract, registration.Location ?? serviceSymbol.Locations.FirstOrDefault(), serviceSymbol.ToDisplayString()));
+						spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.HandlerNeedsPublicParameterlessConstructor, location, handlerType.ToDisplayString()));
 						continue;
 					}
 
-					validRegistrations.Add(registration);
+					var implementations = GetEventHandlerInterfaces(handlerType, eventHandlerSymbol, eventHandlerAsyncSymbol).ToList();
+					if (implementations.Count == 0)
+					{
+						continue;
+					}
+
+					foreach (var impl in implementations)
+					{
+						validBindings.Add(new HandlerBinding(handlerType, targetLayer, impl.EventType, impl.Kind, location));
+					}
 				}
 
-				var groupedByLayer = validRegistrations
+				var groupedByLayer = validBindings
 					.GroupBy(r => r.LayerType, SymbolEqualityComparer.Default);
 
 				foreach (var group in groupedByLayer)
@@ -112,15 +101,16 @@ namespace LayerBase.Generator
 					{
 						continue;
 					}
+
 					spc.AddSource(CreateHintName(layerKey), SourceText.From(sourceText, Encoding.UTF8));
 				}
 			});
 		}
 
-		private static ImmutableArray<ServiceRegistration> CreateRegistrations(GeneratorAttributeSyntaxContext context)
+		private static ImmutableArray<HandlerRegistration> CreateRegistrations(GeneratorAttributeSyntaxContext context)
 		{
-			var serviceSymbol = (INamedTypeSymbol)context.TargetSymbol;
-			var builder = ImmutableArray.CreateBuilder<ServiceRegistration>();
+			var handlerSymbol = (INamedTypeSymbol)context.TargetSymbol;
+			var builder = ImmutableArray.CreateBuilder<HandlerRegistration>();
 
 			foreach (var attribute in context.Attributes)
 			{
@@ -135,22 +125,36 @@ namespace LayerBase.Generator
 				}
 
 				var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
-				builder.Add(new ServiceRegistration(serviceSymbol, layerSymbol, location));
+				builder.Add(new HandlerRegistration(handlerSymbol, layerSymbol, location));
 			}
 
 			return builder.ToImmutable();
 		}
 
-		private static bool ImplementsInterface(INamedTypeSymbol type, INamedTypeSymbol? interfaceSymbol)
+		private static IEnumerable<EventHandlerImplementation> GetEventHandlerInterfaces(INamedTypeSymbol handlerType, INamedTypeSymbol? syncInterface, INamedTypeSymbol? asyncInterface)
 		{
-			if (interfaceSymbol == null)
+			if (syncInterface == null && asyncInterface == null)
 			{
-				return false;
+				yield break;
 			}
 
-			return type.AllInterfaces.Any(i =>
-				SymbolEqualityComparer.Default.Equals(i, interfaceSymbol) ||
-				SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, interfaceSymbol));
+			foreach (var iface in handlerType.AllInterfaces.OfType<INamedTypeSymbol>())
+			{
+				if (iface.TypeArguments.Length != 1)
+				{
+					continue;
+				}
+
+				var eventType = iface.TypeArguments[0];
+				if (syncInterface != null && SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, syncInterface))
+				{
+					yield return new EventHandlerImplementation(eventType, EventHandlerKind.Sync);
+				}
+				else if (asyncInterface != null && SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, asyncInterface))
+				{
+					yield return new EventHandlerImplementation(eventType, EventHandlerKind.Async);
+				}
+			}
 		}
 
 		private static bool InheritsFromLayer(INamedTypeSymbol target, INamedTypeSymbol layerSymbol)
@@ -196,16 +200,17 @@ namespace LayerBase.Generator
 			return false;
 		}
 
-		private static string GenerateLayerPartial(INamedTypeSymbol layerType, IEnumerable<ServiceRegistration> registrations)
+		private static string GenerateLayerPartial(INamedTypeSymbol layerType, IEnumerable<HandlerBinding> bindings)
 		{
-			var services = (registrations ?? Enumerable.Empty<ServiceRegistration>())
-				.Where(r => r?.ServiceType != null)
-				.Select(r => r.ServiceType!)
-				.Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default)
-				.OrderBy(s => s.ToDisplayString())
+			var handlers = (bindings ?? Enumerable.Empty<HandlerBinding>())
+				.Where(b => b?.HandlerType != null && b.EventType != null)
+				.Distinct(HandlerBindingComparer.Instance)
+				.OrderBy(b => b.HandlerType.ToDisplayString())
+				.ThenBy(b => b.EventType?.ToDisplayString())
+				.ThenBy(b => b.Kind)
 				.ToList();
 
-			if (services.Count == 0)
+			if (handlers.Count == 0)
 			{
 				return string.Empty;
 			}
@@ -219,7 +224,7 @@ namespace LayerBase.Generator
 
 			var builder = new StringBuilder();
 			builder.AppendLine("// <auto-generated />");
-			builder.AppendLine("// This file was generated by LayerServiceGenerator.");
+			builder.AppendLine("// This file was generated by LayerEventHandlerGenerator.");
 			builder.AppendLine("using LayerBase.Layers;");
 
 			if (!string.IsNullOrEmpty(@namespace))
@@ -236,10 +241,22 @@ namespace LayerBase.Generator
 			builder.AppendLine("        {");
 			builder.Append("            var typedLayer = (").Append(layerDisplayName).AppendLine(")layerInstance;");
 
-			foreach (var service in services)
+			foreach (var binding in handlers)
 			{
-				var serviceDisplay = service.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-				builder.Append("            typedLayer.RegisterService(new ").Append(serviceDisplay).AppendLine("());");
+				if (binding.EventType == null)
+				{
+					continue;
+				}
+
+				var handlerDisplay = binding.HandlerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+				var eventDisplay = binding.EventType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+				var interfaceName = binding.Kind == EventHandlerKind.Async
+					? "global::LayerBase.Core.EventHandler.IEventHandlerAsync"
+					: "global::LayerBase.Core.EventHandler.IEventHandler";
+
+				builder.Append("            typedLayer.Bind<").Append(eventDisplay).Append(">((")
+					.Append(interfaceName).Append("<").Append(eventDisplay).Append(">)new ")
+					.Append(handlerDisplay).AppendLine("());");
 			}
 
 			builder.AppendLine("        });");
@@ -262,26 +279,17 @@ namespace LayerBase.Generator
 			{
 				sanitized.Append(char.IsLetterOrDigit(ch) ? ch : '_');
 			}
-			return $"{sanitized}.LayerServices.g.cs";
+			return $"{sanitized}.LayerEventHandlers.g.cs";
 		}
 
 #pragma warning disable RS2008 // Enable analyzer release tracking
 		private static class Diagnostics
 		{
-			private const string Category = "LayerServiceGenerator";
-
-			public static readonly DiagnosticDescriptor ServiceMustImplementIService =
-				new DiagnosticDescriptor(
-					id: "LBG001",
-					title: "Service must implement IService",
-					messageFormat: "Type '{0}' is marked with OwnerLayer but does not implement LayerBase.DI.IService",
-					category: Category,
-					defaultSeverity: DiagnosticSeverity.Error,
-					isEnabledByDefault: true);
+			private const string Category = "LayerEventHandlerGenerator";
 
 			public static readonly DiagnosticDescriptor LayerMustInheritLayer =
 				new DiagnosticDescriptor(
-					id: "LBG002",
+					id: "LBG102",
 					title: "OwnerLayer target must derive from Layer",
 					messageFormat: "Type '{0}' is not a Layer and cannot be used with OwnerLayerAttribute",
 					category: Category,
@@ -290,65 +298,107 @@ namespace LayerBase.Generator
 
 			public static readonly DiagnosticDescriptor LayerMustBePartial =
 				new DiagnosticDescriptor(
-					id: "LBG003",
+					id: "LBG103",
 					title: "Layer must be partial",
 					messageFormat: "Layer '{0}' must be declared as partial to allow generator to emit registrations",
 					category: Category,
 					defaultSeverity: DiagnosticSeverity.Error,
 					isEnabledByDefault: true);
 
-			public static readonly DiagnosticDescriptor ServiceNeedsPublicParameterlessConstructor =
+			public static readonly DiagnosticDescriptor HandlerNeedsPublicParameterlessConstructor =
 				new DiagnosticDescriptor(
-					id: "LBG004",
-					title: "Service needs parameterless constructor",
-					messageFormat: "Service '{0}' must have a public or internal parameterless constructor",
+					id: "LBG104",
+					title: "Event handler needs parameterless constructor",
+					messageFormat: "Event handler '{0}' must have a public or internal parameterless constructor",
 					category: Category,
 					defaultSeverity: DiagnosticSeverity.Error,
 					isEnabledByDefault: true);
 
-			public static readonly DiagnosticDescriptor ServiceCannotBeAbstract =
+			public static readonly DiagnosticDescriptor HandlerCannotBeAbstract =
 				new DiagnosticDescriptor(
-					id: "LBG005",
-					title: "Service cannot be abstract",
-					messageFormat: "Service '{0}' cannot be abstract when used with OwnerLayerAttribute",
+					id: "LBG105",
+					title: "Event handler cannot be abstract",
+					messageFormat: "Event handler '{0}' cannot be abstract when used with OwnerLayerAttribute",
 					category: Category,
 					defaultSeverity: DiagnosticSeverity.Error,
 					isEnabledByDefault: true);
 		}
 #pragma warning restore RS2008
 
-		private static readonly string OwnerLayerAttributeSource = @"// <auto-generated />
-using System;
-
-namespace LayerBase.Layers
-{
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
-    public sealed class OwnerLayerAttribute : Attribute
-    {
-        public OwnerLayerAttribute(Type layerType)
-        {
-            LayerType = layerType ?? throw new ArgumentNullException(nameof(layerType));
-        }
-
-        public Type LayerType { get; }
-    }
-}
-";
-
-		private sealed class ServiceRegistration
+		private sealed class HandlerRegistration
 		{
-			public ServiceRegistration(INamedTypeSymbol serviceType, INamedTypeSymbol layerType, Location? location)
+			public HandlerRegistration(INamedTypeSymbol handlerType, INamedTypeSymbol layerType, Location? location)
 			{
-				ServiceType = serviceType;
+				HandlerType = handlerType;
 				LayerType = layerType;
 				Location = location;
 			}
 
-			public INamedTypeSymbol ServiceType { get; }
+			public INamedTypeSymbol HandlerType { get; }
 
 			public INamedTypeSymbol LayerType { get; }
 
 			public Location? Location { get; }
+		}
+
+		private sealed class HandlerBinding
+		{
+			public HandlerBinding(INamedTypeSymbol handlerType, INamedTypeSymbol layerType, ITypeSymbol? eventType, EventHandlerKind kind, Location? location)
+			{
+				HandlerType = handlerType;
+				LayerType = layerType;
+				EventType = eventType;
+				Kind = kind;
+				Location = location;
+			}
+
+			public INamedTypeSymbol HandlerType { get; }
+
+			public INamedTypeSymbol LayerType { get; }
+
+			public ITypeSymbol? EventType { get; }
+
+			public EventHandlerKind Kind { get; }
+
+			public Location? Location { get; }
+		}
+
+		private readonly record struct EventHandlerImplementation(ITypeSymbol EventType, EventHandlerKind Kind);
+
+		private enum EventHandlerKind
+		{
+			Sync,
+			Async
+		}
+
+		private sealed class HandlerBindingComparer : IEqualityComparer<HandlerBinding>
+		{
+			public static readonly HandlerBindingComparer Instance = new HandlerBindingComparer();
+
+			public bool Equals(HandlerBinding? x, HandlerBinding? y)
+			{
+				if (ReferenceEquals(x, y))
+				{
+					return true;
+				}
+
+				if (x is null || y is null)
+				{
+					return false;
+				}
+
+				return SymbolEqualityComparer.Default.Equals(x.HandlerType, y.HandlerType)
+				       && SymbolEqualityComparer.Default.Equals(x.EventType, y.EventType)
+				       && x.Kind == y.Kind;
+			}
+
+			public int GetHashCode(HandlerBinding obj)
+			{
+				int hash = SymbolEqualityComparer.Default.GetHashCode(obj.HandlerType);
+				hash = (hash * 397) ^ (obj.EventType != null ? SymbolEqualityComparer.Default.GetHashCode(obj.EventType) : 0);
+				hash = (hash * 397) ^ (int)obj.Kind;
+				return hash;
+			}
 		}
 	}
 }
