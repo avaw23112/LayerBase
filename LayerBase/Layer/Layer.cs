@@ -28,6 +28,7 @@ namespace LayerBase.Layers
 			m_eventDispatcher = new EventDispatcher();
 			m_pooledEventContainer = new PooledEventContainer(this);
 			m_serviceCollection = new ServiceCollection();
+			LayerServiceRegistry.Apply(this);
 		}
 		
 		/// <summary>
@@ -92,7 +93,7 @@ namespace LayerBase.Layers
 			
 			m_eventLogTracer = logTracer;
 			m_eventDispatcher.LogTracer = logTracer;
-			m_eventStateTracer.OnEventCompleted = (ref EventState state) => m_eventLogTracer.Pump(ref state);
+			m_eventStateTracer.OnEventCompletedGlobal = (ref EventState state) => m_eventLogTracer.Pump(ref state);
 		}
 		
 		public bool TryExportTracing(EventStateToken est,out string log)

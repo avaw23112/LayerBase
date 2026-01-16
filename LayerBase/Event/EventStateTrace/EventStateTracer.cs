@@ -1,22 +1,20 @@
 using System.Diagnostics;
 using LayerBase.Core.Event;
+using LayerBase.Core.EventCatalogue;
 
 namespace LayerBase.Core.EventStateTrace;
 
-public delegate void EventCompleteHandler(
-    ref EventState state // ref：按引用传参；回调里修改 state 会直接改到调用方那份变量
-);
 
-/// <summary>
-/// TODO:重构项目构成
-/// </summary>
 internal sealed class EventStateTracer
 {
+    private readonly EventCounter _counter = new();
     private readonly FreeList<EventState> _eventStates;
     private readonly List<SlotRef> _completed = new();
     private readonly object _lock = new();
     
-    public EventCompleteHandler OnEventCompleted;
+    public EventCompletedGlobalHandler OnEventCompletedGlobal;
+    
+   
 
     public EventStateTracer(int slabSize = 512)
     {
@@ -27,11 +25,8 @@ internal sealed class EventStateTracer
     public EventStateToken Register<T>(in Event<T> @event) where T : struct
     {
         EventHandledState state = @event.IsVaild() ? EventHandledState.Created : EventHandledState.Handled;
+        _counter.Increment<T>();
         return Register(EventTypeId<T>.Id, @event.ForwardDir, state);
-    }
-    public EventStateToken Register(int eventTypeId)
-    {
-        return Register(eventTypeId, EventForwardDir.BroadCast, EventHandledState.Created);
     }
     public EventStateToken Register(int eventTypeId, EventForwardDir forwardDir, EventHandledState handledState)
     {
@@ -49,6 +44,7 @@ internal sealed class EventStateTracer
                 StartTimestamp = Stopwatch.GetTimestamp(),
                 CreatedTimestamp = Stopwatch.GetTimestamp(),
             };
+             
              
             return slotRef.ToToken();
         }
@@ -92,6 +88,7 @@ internal sealed class EventStateTracer
                 slot.Completed = true;
                 _completed.Add(slotRef);
             }
+            _counter.Decrement(EventTypeId.GetType(slot.Value.EventTypeId));
             return true;
         }
     }
@@ -115,7 +112,7 @@ internal sealed class EventStateTracer
                     continue;
                 }
                 ref var slot = ref _eventStates.Resolve(slotRef);
-                OnEventCompleted(ref slot.Value);
+                OnEventCompletedGlobal(ref slot.Value);
                 _eventStates.Release(slotRef);
             }
         }

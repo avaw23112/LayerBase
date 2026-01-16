@@ -9,12 +9,14 @@ namespace LayerBase.Core.EventCatalogue
 	{
 		public int Id { get; }
 		public bool IsValid => Id > 0;
+		public bool IsEmpty { get => Id == 0;}
 
 		internal EventCategoryToken(int id)
 		{
 			Id = id;
 		}
 
+		public static EventCategoryToken Empty => new EventCategoryToken(0);
 		public bool Equals(EventCategoryToken other) => Id == other.Id;
 		public override bool Equals(object? obj) => obj is EventCategoryToken other && Equals(other);
 		public override int GetHashCode() => Id;

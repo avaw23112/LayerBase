@@ -3,6 +3,30 @@ using System.Buffers;
 
 namespace LayerBase.Core
 {
+	public enum EventQueueOverflowStrategy
+	{
+		/// <summary>
+		/// 溢出报错
+		/// </summary>
+		ThrowException,
+		
+		/// <summary>
+		/// 抛弃新进事件
+		/// </summary>
+		Throw,
+		
+		/// <summary>
+		/// 丢弃最老元素
+		/// </summary>
+		OverWrite,
+		
+		/// <summary>
+		/// 队列扩容
+		/// </summary>
+		Scaling 
+	}
+	
+	
 	/// <summary>
 	/// 分段 FIFO 队列（Chunked / Segmented Queue）：
 	/// - FIFO：First In First Out，先进先出（最早入队的最先出队）。
