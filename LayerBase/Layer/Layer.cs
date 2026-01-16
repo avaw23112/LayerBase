@@ -4,11 +4,13 @@ using LayerBase.Core.EventHandler;
 using LayerBase.Core.EventStateTrace;
 using LayerBase.Core.PolledEventContainer;
 using LayerBase.Core.ResponsibilityChain;
+using LayerBase.DI;
 
 namespace LayerBase.Layers
 {
 	/// <summary>
 	/// 责任链式层级结构
+	/// TODO:将EventStateTracer改为必非空
 	/// </summary>
 	public abstract class Layer : Node
 	{
@@ -17,10 +19,52 @@ namespace LayerBase.Layers
 		private EventStateTracer? m_eventStateTracer;
 		private EventLogTracer? m_eventLogTracer;
 		
+		//临时服务容器,存储由源生成器填充的Service
+		private ServiceCollection? m_serviceCollection;
+		private ServiceProvider? m_serviceProvider;
+		
 		protected Layer() 
 		{
 			m_eventDispatcher = new EventDispatcher();
 			m_pooledEventContainer = new PooledEventContainer(this);
+			m_serviceCollection = new ServiceCollection();
+		}
+		
+		/// <summary>
+		/// 主要入口
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		internal void Pump()
+		{
+			m_pooledEventContainer.Pump();
+			m_eventStateTracer?.Pump();
+		}
+		
+		// -----------------DI-------------------
+		public T GetService<T>()
+		{
+			if (m_serviceProvider == null)
+				throw new NullReferenceException("层级未构建容器");
+			return m_serviceProvider.Get<T>();
+		}
+		public void Dispose() => m_serviceProvider?.Dispose();
+		
+		/// <summary>
+		/// 由源生成器代码调用,将服务注册服务到容器中
+		/// </summary>
+		/// <param name="service"></param>
+		public void RegisterService(IService service)
+		{
+			service.ConfigureServices(m_serviceCollection);
+		}
+		
+		/// <summary>
+		/// 构建服务实例
+		/// </summary>
+		public void Build()
+		{
+			m_serviceProvider?.Dispose();
+			m_serviceProvider = new ServiceProvider(m_serviceCollection.ToDescriptors());
 		}
 		
 		// -----------------追踪-------------------
@@ -98,13 +142,7 @@ namespace LayerBase.Layers
 		}
 
 		// --------------------------Buffer Events-------------------
-		
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal void Pump()
-		{
-			m_pooledEventContainer.Pump();
-			m_eventStateTracer?.Pump();
-		}
+
 		internal void PostEventToDoubleSide<Value>(in Event<Value> @event) where Value : struct
 		{
 			PostEventToHigherLayer(in @event);
@@ -198,7 +236,7 @@ namespace LayerBase.Layers
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkBroadCast();
-			TryAttachTrace(ref @event);
+			TryAttachTrace(ref @event);		
 			BubbleInternal(@event);
 			DropInternal(@event);
 		}

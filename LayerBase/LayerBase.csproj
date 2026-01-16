@@ -13,6 +13,11 @@
     <ItemGroup>
       <Folder Include="DataStruct\DictionaryTree\" />
       <Folder Include="Event\" />
+      <Folder Include="Tools\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="DI\Service.cs" />
     </ItemGroup>
 
 </Project>

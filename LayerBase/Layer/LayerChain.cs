@@ -1,5 +1,7 @@
 ﻿using LayerBase.Core.EventStateTrace;
 using LayerBase.Core.ResponsibilityChain;
+using LayerBase.DI;
+
 namespace LayerBase.Layers;
 
 internal sealed class LayerChain
@@ -28,6 +30,7 @@ internal sealed class LayerChain
         foreach (var node in responsibilityChain)
         {
             (node as Layer)?.SetEventTracer(eventStateTracer);
+            (node as Layer)?.Build();
         }
     }
     internal void SetLogTracing(Action<string>? logger = null,int logQueueCapacity = 256)
