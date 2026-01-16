@@ -7,19 +7,36 @@ namespace LayerBase.LayerHub
 	public struct LayersBuilder
 	{
 		private LayerChain _chain;
+		private Action<string>? _logger;
+		private int _logQueueCapacity = 256;
+		private int _eventStateSlabSize = 256;
+		
 		internal LayersBuilder(LayerChain chain)
 		{
 			this._chain = chain;
 		}
 		public LayersBuilder Push(Node node)
 		{
-			_chain.AddNode(node);
+			this._chain.AddNode(node);
 			return this;
 		}
 		public LayersBuilder SetLogTracing(Action<string>? logger = null,int logQueueCapacity = 256)
 		{
-			_chain.SetLogTracing(logger,logQueueCapacity);
+			this._logger = logger;
+			this._logQueueCapacity = logQueueCapacity;
 			return this;
+		}
+
+		public LayersBuilder SetEventStateSlabSize(int eventStateSlabSize = 256)
+		{
+			this._eventStateSlabSize = eventStateSlabSize;
+			return this;
+		}
+
+		public void Build()
+		{
+			_chain.Build(_eventStateSlabSize);
+			_chain.SetLogTracing(_logger,_logQueueCapacity);
 		}
 	}
 
@@ -38,7 +55,6 @@ namespace LayerBase.LayerHub
 			var rc = new ResponsibilityChain(rcToken);
 			
 			var chainBundle = new LayerChain(rc);
-			chainBundle.Build(EventStateSlabSize);
 			
 			s_responsibilityChains.Add(chainBundle);
 			return new LayersBuilder(chainBundle);

@@ -1,5 +1,7 @@
 using System;
 using LayerBase.Core.Event;
+using LayerBase.Core.EventCatalogue;
+
 namespace LayerBase.Core.EventStateTrace;
 
 /// <summary>
@@ -26,6 +28,11 @@ public struct EventState
     /// 当前传播方向。
     /// </summary>
     public EventForwardDir ForwardDir;
+    
+    /// <summary>
+    /// 所属类别
+    /// </summary>
+    public EventCategoryToken CatalogueToken;
 
     /// <summary>
     /// 生成时间戳（Stopwatch.GetTimestamp）。

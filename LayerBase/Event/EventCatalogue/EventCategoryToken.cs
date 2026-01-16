@@ -8,16 +8,12 @@ namespace LayerBase.Core.EventCatalogue
 	public readonly struct EventCategoryToken : IEquatable<EventCategoryToken>
 	{
 		public int Id { get; }
-		public string Path { get; } = string.Empty;
 		public bool IsValid => Id > 0;
 
-		internal EventCategoryToken(int id, string path)
+		internal EventCategoryToken(int id)
 		{
 			Id = id;
-			Path = path;
 		}
-
-		public override string ToString() => Path;
 
 		public bool Equals(EventCategoryToken other) => Id == other.Id;
 		public override bool Equals(object? obj) => obj is EventCategoryToken other && Equals(other);

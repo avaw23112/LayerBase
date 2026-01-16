@@ -8,7 +8,8 @@ GameLayer gameLayerTail = new GameLayer();
 LayerHub.CreateLayers()
         .Push(gameLayerHead)
         .Push(gameLayerTail)
-        .SetLogTracing(s => Console.WriteLine(s));
+        .SetLogTracing(s => Console.WriteLine(s))
+        .Build();
         
 gameLayerHead.Drop(new eventTest { i = 1 });
 while (true)

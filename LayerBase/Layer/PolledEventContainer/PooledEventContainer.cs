@@ -4,12 +4,12 @@ using LayerBase.Layers;
 
 namespace LayerBase.Core.PolledEventContainer
 {
-    public class PooledEventContainer
+    internal class PooledEventContainer
     {
         private Dictionary<int, IUnmanagedList> m_unmanagedDic = new();
         private Layer Owner;
 
-        public PooledEventContainer(Layer owner)
+        internal PooledEventContainer(Layer owner)
         {
             if (owner == null)
             {
@@ -27,7 +27,7 @@ namespace LayerBase.Core.PolledEventContainer
             }
         }
         
-        public void Post<Value>(Event<Value> @event) where Value : struct
+        internal void Post<Value>(Event<Value> @event) where Value : struct
         {
             int typeId = EventTypeId<Value>.Id;
 

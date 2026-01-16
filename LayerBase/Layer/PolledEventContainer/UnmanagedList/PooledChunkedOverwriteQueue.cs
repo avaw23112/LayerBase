@@ -13,7 +13,7 @@ namespace LayerBase.Core
 	/// 元素类型；你这里的 Event 是 struct，所以用 where T : struct 以避免每个元素都走堆分配。
 	/// 注意：struct 里也可能包含引用字段（比如 string），那就要考虑清槽位以避免引用被池数组“意外保留”。
 	/// </typeparam>
-	public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struct
+	internal sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struct
 	{
 		// =========================
 		// 配置项（构造参数决定）
@@ -64,7 +64,7 @@ namespace LayerBase.Core
 		/// - true：最安全（防止引用泄漏/驻留）；
 		/// - false：更快（纯值类型 struct 最推荐）。
 		/// </param>
-		public PooledChunkedOverwriteQueue(
+		internal PooledChunkedOverwriteQueue(
 			int chunkSize = 256,                                // chunkSize：默认 256（你可按事件吞吐调整）
 			int maxCapacity = 0,                                // maxCapacity：默认 0 表示不设上限；若你要覆盖写就传一个正数
 			ArrayPool<T>? pool = null,                          // pool：允许 null，表示使用共享池
@@ -90,10 +90,10 @@ namespace LayerBase.Core
 		}
 
 		/// <summary>当前队列元素数量。</summary>
-		public int Count => _count;                             // 直接返回 _count
+		internal int Count => _count;                             // 直接返回 _count
 
 		/// <summary>队列是否为空。</summary>
-		public bool IsEmpty => _count == 0;                     // 空：count==0
+		internal bool IsEmpty => _count == 0;                     // 空：count==0
 
 		/// <summary>
 		/// 入队（覆盖写版本）：
@@ -101,7 +101,7 @@ namespace LayerBase.Core
 		/// - 如果没满/没上限：直接写入尾段；尾段满了就追加新段。
 		/// </summary>
 		/// <param name="item">要入队的元素（你的 struct Event）。</param>
-		public void EnqueueOverwrite(in T item)                 // in：只读引用传参，减少大 struct 拷贝
+		internal void EnqueueOverwrite(in T item)                 // in：只读引用传参，减少大 struct 拷贝
 		{
 			ThrowIfDisposed();                                   // 已释放则抛异常，避免池数组泄漏/错乱
 
@@ -127,7 +127,7 @@ namespace LayerBase.Core
 		/// </summary>
 		/// <param name="item">出队得到的元素。</param>
 		/// <returns>是否成功出队。</returns>
-		public bool TryDequeue(out T item)                       // out：把结果写回调用者变量
+		internal bool TryDequeue(out T item)                       // out：把结果写回调用者变量
 		{
 			ThrowIfDisposed();                                   // 防止释放后使用
 
@@ -168,7 +168,7 @@ namespace LayerBase.Core
 		/// </summary>
 		/// <param name="item">队头元素（若为空则 default）。</param>
 		/// <returns>是否成功读取到元素。</returns>
-		public bool TryPeek(out T item)
+		internal bool TryPeek(out T item)
 		{
 			ThrowIfDisposed();                                   // 防止释放后使用
 
@@ -185,7 +185,7 @@ namespace LayerBase.Core
 		/// <summary>
 		/// 清空队列：不销毁内存；把所有段数组 Return 回池，状态回到“空队列”。
 		/// </summary>
-		public void Clear()
+		internal void Clear()
 		{
 			ThrowIfDisposed();                                   // 防止释放后使用
 
@@ -210,7 +210,7 @@ namespace LayerBase.Core
 		/// 希望至少能容纳多少个元素。
 		/// 如果设置了 maxCapacity，则会按 min(capacity, maxCapacity) 进行预热。
 		/// </param>
-		public void Prewarm(int capacity)
+		internal void Prewarm(int capacity)
 		{
 			ThrowIfDisposed();                                   // 防止释放后使用
 
