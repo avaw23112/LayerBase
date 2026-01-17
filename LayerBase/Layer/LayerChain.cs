@@ -1,6 +1,6 @@
 ﻿using LayerBase.Core.EventStateTrace;
 using LayerBase.Core.ResponsibilityChain;
-using LayerBase.DI;
+using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Layers;
 
@@ -27,6 +27,12 @@ internal sealed class LayerChain
     internal void Build(int slabSize = 512)
     {
         eventStateTracer = new EventStateTracer(slabSize);
+        
+        // 注册事件元数据创建事件
+        eventStateTracer.OnClassicEventCompleted = EventMetaDataHandler.OnClassicEventDestroyed;
+        eventStateTracer.OnClassicEventCreated = EventMetaDataHandler.OnClassicEventCreated;
+        
+        // 构建层级
         foreach (var node in responsibilityChain)
         {
             (node as Layer)?.SetEventTracer(eventStateTracer);
@@ -37,6 +43,7 @@ internal sealed class LayerChain
     {
         this.logger = logger;
         _eventLogTracer = new EventLogTracer(logQueueCapacity);
+        
         foreach (var node in responsibilityChain)
         {
             (node as Layer)?.SetEventLogTracer(_eventLogTracer);

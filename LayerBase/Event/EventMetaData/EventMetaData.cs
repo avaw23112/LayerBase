@@ -1,21 +1,23 @@
 ﻿using LayerBase.Core;
 using LayerBase.Core.EventCatalogue;
+using LayerBase.Core.EventStateTrace;
 
 namespace LayerBase.Event.EventMetaData;
-
 
 
 public interface IEventMetaData
 {
     EventCategoryToken GetEventCategoryToken();
+    void OnEventCreated(ref EventState e);
+    void OnEventDestroyed(ref EventState e);
 }
 
 
 /// <summary>
 /// 用于配置事件的元数据
 /// </summary>
-/// <typeparam name="EventState"></typeparam>
-public abstract class EventMetaData<EventState> :IEventMetaData where EventState : struct 
+/// <typeparam name="EventType"></typeparam>
+public abstract class EventMetaData<EventType> :IEventMetaData where EventType : struct 
 {
     // ---------------接口适配---------------------
     public EventCategoryToken GetEventCategoryToken()
@@ -23,16 +25,11 @@ public abstract class EventMetaData<EventState> :IEventMetaData where EventState
         return Category;
     }
     
-    // ---------------接口适配---------------------
-    
-    
-    // ---------------事件配置---------------------
-    
     /// <summary>
     /// 当该类事件创建
     /// </summary>
     /// <param name="e"></param>
-    public virtual void OnEventCreated(EventState e)
+    public virtual void OnEventCreated(ref EventState e)
     {
         
     }
@@ -41,16 +38,21 @@ public abstract class EventMetaData<EventState> :IEventMetaData where EventState
     /// 当该类事件销毁
     /// </summary>
     /// <param name="e"></param>
-    public virtual void OnEventDestroyed(EventState e)
+    public virtual void OnEventDestroyed(ref EventState e)
     {
         
     }
+    
+    
+    // ---------------事件配置---------------------
+    
+    
     
     /// <summary>
     /// 当事件出现异常
     /// </summary>
     /// <param name="e"></param>
-    public virtual void OnEventExpectation(ref EventState e)
+    public virtual void OnEventExpectation(ref EventType e)
     {
         
     }
