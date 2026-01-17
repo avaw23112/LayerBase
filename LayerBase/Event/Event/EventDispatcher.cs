@@ -10,7 +10,7 @@ namespace LayerBase.Core.Event
 	/// </summary>
 	internal class EventDispatcher
 	{
-		private readonly Dictionary<int, List<Delegate>> m_map = new ();
+		private readonly Dictionary<int, List<Delegate>> m_mapDelegate = new ();
 		private readonly Dictionary<int, List<IEventHandler>> m_handlerMap = new ();
 		private readonly object m_lock = new ();
 		
@@ -66,10 +66,10 @@ namespace LayerBase.Core.Event
 
 			lock (m_lock)
 			{
-				if (!m_map.TryGetValue(typeId, out var list))
+				if (!m_mapDelegate.TryGetValue(typeId, out var list))
 				{
 					list = new List<Delegate>(capacity: 4);
-					m_map[typeId] = list;
+					m_mapDelegate[typeId] = list;
 				}
 
 				list.Add(handlerDelegate);
@@ -82,10 +82,10 @@ namespace LayerBase.Core.Event
 
 			lock (m_lock)
 			{
-				if (!m_map.TryGetValue(typeId, out var list))
+				if (!m_mapDelegate.TryGetValue(typeId, out var list))
 				{
 					list = new List<Delegate>(capacity: 4);
-					m_map[typeId] = list;
+					m_mapDelegate[typeId] = list;
 				}
 
 				list.Add(handlerDelegate);
@@ -134,13 +134,13 @@ namespace LayerBase.Core.Event
 
 			lock (m_lock)
 			{
-				if (!m_map.TryGetValue(typeId, out var list) || list.Count == 0)
+				if (!m_mapDelegate.TryGetValue(typeId, out var list) || list.Count == 0)
 					return false;
 				bool removed = list.Remove(handlerDelegate);
 
 				if (removed && list.Count == 0)
 				{
-					m_map.Remove(typeId);
+					m_mapDelegate.Remove(typeId);
 				}
 				return removed;
 			}
@@ -153,13 +153,13 @@ namespace LayerBase.Core.Event
 
 			lock (m_lock)
 			{
-				if (!m_map.TryGetValue(typeId, out var list) || list.Count == 0)
+				if (!m_mapDelegate.TryGetValue(typeId, out var list) || list.Count == 0)
 					return false;
 				bool removed = list.Remove(handlerDelegateAsync);
 
 				if (removed && list.Count == 0)
 				{
-					m_map.Remove(typeId);
+					m_mapDelegate.Remove(typeId);
 				}
 				return removed;
 			}
@@ -182,7 +182,7 @@ namespace LayerBase.Core.Event
 		private EventHandledState DealDelegates<T>(in Event<T> @event, int typeId) where T : struct
 		{
 			//有效性校验
-			if (!m_map.TryGetValue(typeId, out var list) || list.Count == 0)
+			if (!m_mapDelegate.TryGetValue(typeId, out var list) || list.Count == 0)
 			{
 				return EventHandledState.Continue;
 			}

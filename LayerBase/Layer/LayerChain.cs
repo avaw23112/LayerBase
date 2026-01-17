@@ -72,9 +72,9 @@ internal sealed class LayerChain
 
         if (logger == null)
         {
-            throw new Exception("未设置日志处理器");
+            return;
         }
-
+        
         var logQueue = _eventLogTracer.Logs;
         while (logQueue.Count > 0)
         {

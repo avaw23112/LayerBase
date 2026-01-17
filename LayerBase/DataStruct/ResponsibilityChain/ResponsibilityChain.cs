@@ -28,7 +28,7 @@ namespace LayerBase.Core.ResponsibilityChain
 				return node;
 			}
 
-			node!.Prev = m_tail;       // ^ 新节点前驱 = 旧尾
+			node.Prev = m_tail;       // ^ 新节点前驱 = 旧尾
 			m_tail.Next = node;       // ^ 旧尾后继 = 新节点
 			m_tail = node;            // ^ 更新尾指针
 			

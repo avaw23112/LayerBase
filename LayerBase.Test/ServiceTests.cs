@@ -25,8 +25,9 @@ public class ServiceRegistrationTests
 			var counter2 = layer.GetService<ICounterService>();
 
 			Assert.That(counter1, Is.SameAs(counter2), "Scoped service should reuse instance within layer");
-			Assert.That(counter1.Next(), Is.EqualTo(1));
+			// GreetingService already increments the scoped counter once
 			Assert.That(counter1.Next(), Is.EqualTo(2));
+			Assert.That(counter1.Next(), Is.EqualTo(3));
 		}
 		finally
 		{

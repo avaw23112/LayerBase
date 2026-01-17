@@ -6,6 +6,10 @@ namespace LayerBase.Layers.LayerMetaData;
 public enum LayerDispatchStrategy
 {
     /// <summary>
+    /// 正常处理:处理,且推送给其他层
+    /// </summary>
+    None,
+    /// <summary>
     /// 抛弃事件:将事件在此层抛弃
     /// </summary>
     Throw,
@@ -19,11 +23,6 @@ public enum LayerDispatchStrategy
     /// 忽略事件:不处理,但推送给其他层
     /// </summary>
     Ignore,
-    
-    /// <summary>
-    /// 正常处理:处理,且推送给其他层
-    /// </summary>
-    None
 }
 
 public static class LayerMetaData
@@ -42,6 +41,10 @@ public static class LayerMetaData
         }
         else
         {
+            if (!dispatchStrategy.TryGetValue(category, out strategy))
+            {
+                dispatchStrategy.Add(category, strategy);
+            }
             dispatchStrategy.TryGetValue(category, out strategy);
         }
         return strategy;
@@ -57,6 +60,10 @@ public static class LayerMetaData
         }
         else
         {
+            if (!dispatchStrategy.TryGetValue(category, out strategy))
+            {
+                dispatchStrategy.Add(category, strategy);
+            }
             dispatchStrategy.TryGetValue(category, out strategy);
         }
         return strategy;
@@ -71,6 +78,13 @@ public static class LayerMetaData
             m_dispatchStrategyByType.Add(typeof(Layer), dispatchStrategy);
         }
         dispatchStrategy[category] = strategy;
+    }
+
+    public static void Clear()
+    {
+        foreach (var dic in m_dispatchStrategyByType.Values)
+            dic.Clear();
+        m_dispatchStrategyByType.Clear();
     }
 }
 

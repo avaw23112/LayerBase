@@ -61,6 +61,10 @@ internal class EventCounter
     public int Decrement(Type type)
     {
         var  category = EventMetaDataHandler.Category(type);
+        if (category.IsEmpty)
+        {
+            return -1;
+        }
         if (!m_eventGlobalInfos.TryGetValue(category, out EventGlobalInfo? info))
         {
             throw new Exception("不可能完成的事件");

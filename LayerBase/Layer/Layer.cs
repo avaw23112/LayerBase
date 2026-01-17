@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System;
+using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Core.EventStateTrace;
@@ -6,6 +7,7 @@ using LayerBase.Core.PolledEventContainer;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.Layers.LayerMetaData;
 using LayerBase.DI;
+using LayerBase.DI.Options;
 using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Layers
@@ -14,7 +16,7 @@ namespace LayerBase.Layers
 	/// 责任链式层级结构
 	/// TODO:将EventStateTracer改为必非空
 	/// </summary>
-	public abstract class Layer : Node
+	public abstract class Layer : Node,IUpdate
 	{
 		private EventDispatcher m_eventDispatcher;
 		private PooledEventContainer m_pooledEventContainer;
@@ -32,6 +34,11 @@ namespace LayerBase.Layers
 			m_serviceCollection = new ServiceCollection();
 			LayerServiceRegistry.Apply(this);
 		}
+
+		public virtual void Update()
+		{
+			
+		}
 		
 		/// <summary>
 		/// 主要入口
@@ -41,6 +48,7 @@ namespace LayerBase.Layers
 		{
 			m_pooledEventContainer.Pump();
 			m_eventStateTracer?.Pump();
+			Update();
 		}
 		
 		// -----------------DI-------------------
@@ -226,12 +234,17 @@ namespace LayerBase.Layers
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkBubble();
-			TryAttachTrace(ref @event);
 			if (!EventMetaData<Value>.IsFrequencyGateOpen)
 			{
-				EventMetaData<Value>.TimerScheduler.FireOnFrequency(in @event, (@event) => PostBubble(in @event));
+				EventMetaData<Value>.TimerScheduler.FireOnFrequency(in value, (@event) =>
+				{
+					@event.MarkBubble();
+					TryAttachTrace(ref @event);
+					BubbleInternal(in @event);
+				});
 				return;
 			}
+			TryAttachTrace(ref @event);
 			BubbleInternal(@event);
 		}
 		
@@ -242,12 +255,17 @@ namespace LayerBase.Layers
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkDrop();
-			TryAttachTrace(ref @event);
 			if (!EventMetaData<Value>.IsFrequencyGateOpen)
 			{
-				EventMetaData<Value>.TimerScheduler.FireOnFrequency(in @event, (@event) => DropInternal(in @event));
+				EventMetaData<Value>.TimerScheduler.FireOnFrequency(in value, (@event) =>
+				{
+					@event.MarkDrop();
+					TryAttachTrace(ref @event);
+					DropInternal(in @event);
+				});
 				return;
 			}
+			TryAttachTrace(ref @event);
 			DropInternal(@event);
 		}
 		
@@ -260,9 +278,29 @@ namespace LayerBase.Layers
 		{
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkBroadCast();
-			TryAttachTrace(ref @event);		
-			BubbleInternal(@event);
+			
+			if (!EventMetaData<Value>.IsFrequencyGateOpen)
+			{
+				EventMetaData<Value>.TimerScheduler.FireOnFrequency(in value, (@event) =>
+				{
+					@event.MarkBroadCast();
+					TryAttachTrace(ref @event);
+					DropInternal(in @event);
+				});
+				EventMetaData<Value>.TimerScheduler.FireOnFrequency(in value, (@event) =>
+				{
+					@event.MarkBroadCast();
+					TryAttachTrace(ref @event);
+					BubbleInternal(in @event);
+				});
+				return;
+			}
+			
+			TryAttachTrace(ref @event);
 			DropInternal(@event);
+			
+			TryAttachTrace(ref @event);
+			BubbleInternal(@event);
 		}
 		
 		// 重新实现原有方法
@@ -280,7 +318,7 @@ namespace LayerBase.Layers
 		{
 		    ProcessEventDirectionally(
 		        @event,
-		        () => Next as Layer,
+		        () => NextNode as Layer,
 		        e => PostDrop(in e),
 		        (layer, e) => layer.DropInternal(e)
 		    );
@@ -309,7 +347,7 @@ namespace LayerBase.Layers
 				m_eventStateTracer?.TryComplete(@event.TraceToken);
 				return;
 			}
-
+			
 			if (targetLayer != null && targetLayer != this)
 			{
 				targetLayer.m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
@@ -323,7 +361,7 @@ namespace LayerBase.Layers
 		{
 			if (TargetLayer == null)
 			{
-				return false;
+				return true;
 			}
 			
 			var layerDispatchStrategy = GetLayerStrategy(@event);

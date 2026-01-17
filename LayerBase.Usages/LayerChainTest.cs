@@ -26,19 +26,19 @@ internal class GameLayer : Layer
 {
 	public GameLayer() 
 	{
-		Bind((in Event<eventTest> @event) => TestEvent(@event));
-		Bind(async ( Event<eventTest> @event) => await TestEventAsync(@event));
+		Bind((in eventTest @event) => TestEvent(@event));
+		Bind(async ( eventTest @event) => await TestEventAsync(@event));
 	}
-	public EventHandledState TestEvent(Event<eventTest> eventTest)
+	public EventHandledState TestEvent(eventTest eventTest)
 	{
-		Console.WriteLine(eventTest.Value.i);
+		Console.WriteLine(eventTest.i);
 		return EventHandledState.HandledAndContinue;
 	}
 	
-	public async LBTask TestEventAsync(Event<eventTest> eventTest)
+	public async LBTask TestEventAsync(eventTest eventTest)
 	{
 		await LBTask.Delay(new TimeSpan(0,0,5));
-		Console.WriteLine(eventTest.Value.i);
+		Console.WriteLine(eventTest.i);
 	}
 }
 

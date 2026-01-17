@@ -1,6 +1,8 @@
 ﻿using LayerBase.Async;
 using LayerBase.Core.ResponsibilityChain;
+using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
+using LayerBase.Layers.LayerMetaData;
 using LayerBase.Tools.Timer;
 
 namespace LayerBase.LayerHub
@@ -45,6 +47,17 @@ namespace LayerBase.LayerHub
 	{
 		private static List<LayerChain> s_responsibilityChains = new List<LayerChain>(4);
 		private static LayerBaseSynchronizationContext s_Context = LayerBaseSynchronizationContext.InstallAsCurrent();
+
+		/// <summary>
+		/// Test hook: reset global state between test runs.
+		/// </summary>
+		public static void Reset()
+		{
+			EventMetaDataHandler.Clear();
+			LayerMetaData.Clear();
+			s_responsibilityChains.Clear();
+			TimerSchedulers.Clear();
+		}
 
 		/// <summary>
 		/// 创建责任链

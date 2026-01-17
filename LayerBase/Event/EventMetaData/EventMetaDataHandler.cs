@@ -10,7 +10,13 @@ internal static class EventMetaDataHandler
     /// </summary>
     private static Dictionary<Type,IEventMetaData>  m_mapEventMetaDatas = new();
     
+    
     //----------------内部调用----------------------------------
+
+    internal static void Clear()
+    {
+        m_mapEventMetaDatas.Clear();
+    }
     
     /// <summary>
     /// 用于接受EvenTracer的特定类别事件创建的事件

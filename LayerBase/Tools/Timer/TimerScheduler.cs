@@ -18,13 +18,13 @@ namespace LayerBase.Tools.Timer
         private double _currentTime;
         private double _frequencySeconds;
         private double _frequencyAccumulator;
-        private bool _frequencyGateOpen;
+        private bool _frequencyGateOpen = true;
 
         public double CurrentTime => _currentTime;
         public bool IsFrequencyGateOpen => Volatile.Read(ref _frequencyGateOpen);
 
         /// <summary>
-        /// 设置频率（秒）。传入 0 关闭频率阀门。
+        /// 设置频率（秒）。传入 0 使频率阀门常开。
         /// </summary>
         public void SetFrequency(double seconds)
         {
@@ -37,7 +37,7 @@ namespace LayerBase.Tools.Timer
             {
                 _frequencySeconds = seconds;
                 _frequencyAccumulator = 0;
-                _frequencyGateOpen = false;
+                _frequencyGateOpen = seconds == 0;
             }
         }
 
@@ -47,9 +47,10 @@ namespace LayerBase.Tools.Timer
 
             List<(TimerToken token, ITimerQueue queue)> due = new();
             List<Action>? frequencyInvokes = null;
-            bool gateOpen = false;
+            bool gateOpen;
             lock (_lock)
             {
+                gateOpen = _frequencySeconds == 0;
                 _currentTime += deltaTime;
                 if (_frequencySeconds > 0)
                 {
