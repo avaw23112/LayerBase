@@ -1,6 +1,8 @@
 ﻿using LayerBase.Core;
 using LayerBase.Core.EventCatalogue;
 using LayerBase.Core.EventStateTrace;
+using LayerBase.Core.Event;
+using LayerBase.Tools.Timer;
 
 namespace LayerBase.Event.EventMetaData;
 
@@ -8,8 +10,14 @@ namespace LayerBase.Event.EventMetaData;
 public interface IEventMetaData
 {
     EventCategoryToken GetEventCategoryToken();
-    void OnEventCreated(ref EventState e);
-    void OnEventDestroyed(ref EventState e);
+    void OnEventCreated(ref                EventState e);
+    void OnEventDestroyed(ref              EventState e);
+    void OnEventExpectation<EventType>(EventType  e,Exception exception) where EventType : struct;
+    int MaxBufferSize { get; }
+    int EventHandlerJitter { get; }
+    EventQueueOverflowStrategy EventQueueOverflowStrategy { get; }
+    void EventMergeStrategy<EventType>(PooledChunkedOverwriteQueue<Event<EventType>>  queue) where EventType  : struct;
+    
 }
 
 
@@ -19,6 +27,14 @@ public interface IEventMetaData
 /// <typeparam name="EventType"></typeparam>
 public abstract class EventMetaData<EventType> :IEventMetaData where EventType : struct 
 {
+    public static TimerScheduler TimerScheduler = TimerSchedulers.GetOrCreate(nameof(EventType));
+    public static bool IsFrequencyGateOpen => TimerScheduler.IsFrequencyGateOpen;
+    
+    public EventMetaData()
+    {
+        TimerScheduler.SetFrequency(EventHandlerJitter);
+    }
+    
     // ---------------接口适配---------------------
     public EventCategoryToken GetEventCategoryToken()
     {
@@ -42,32 +58,21 @@ public abstract class EventMetaData<EventType> :IEventMetaData where EventType :
     {
         
     }
-    
-    
-    // ---------------事件配置---------------------
-    
-    
-    
-    /// <summary>
-    /// 当事件出现异常
-    /// </summary>
-    /// <param name="e"></param>
-    public virtual void OnEventExpectation(ref EventType e)
-    {
-        
-    }
-    
     /// <summary>
     /// 事件合并策略:只会在事件被处理时调用，对事件队列进行处理
     /// </summary>
-    public virtual void EventMergeStrategy()
+    public virtual void OnEventExpectation<EventType>(EventType e, Exception exception) where EventType : struct
     {
-        //需要提供可操作的命令
-        //取均值
-        //只保留最新
-        //保留最旧
-        //None
     }
+    /// <summary>
+    /// 事件合并策略:只会在事件被处理时调用，对事件队列进行处理
+    /// </summary>
+    public virtual void EventMergeStrategy<EventType>(PooledChunkedOverwriteQueue<Event<EventType>> queue) where EventType : struct
+    {
+    }
+    
+
+    // ---------------事件配置---------------------
     
     /// <summary>
     /// 事件类别定义
@@ -88,8 +93,7 @@ public abstract class EventMetaData<EventType> :IEventMetaData where EventType :
     /// 事件超限策略
     /// </summary>
     public virtual EventQueueOverflowStrategy EventQueueOverflowStrategy => EventQueueOverflowStrategy.OverWrite;
-    
-  
+
     // ---------------事件配置---------------------
     
 }

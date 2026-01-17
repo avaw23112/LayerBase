@@ -1,4 +1,3 @@
-using System;
 using System.Buffers;
 
 namespace LayerBase.Core
@@ -29,7 +28,7 @@ namespace LayerBase.Core
 	/// <summary>
 	/// 分段双端队列，支持覆盖写和多种溢出策略。
 	/// </summary>
-	internal sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struct
+	public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struct
 	{
 		private readonly ArrayPool<T> _pool;
 		private readonly int _chunkSize;
@@ -53,6 +52,14 @@ namespace LayerBase.Core
 			bool clearOnReturn = false)
 			: this(chunkSize, maxCapacity, pool, clearOnDequeue, clearOnReturn, EventQueueOverflowStrategy.OverWrite)
 		{
+		}
+
+		internal PooledChunkedOverwriteQueue(
+			int maxCapacity,
+			EventQueueOverflowStrategy overflowStrategy)
+			:this(256, maxCapacity, null, false, false, overflowStrategy)
+		{
+			
 		}
 
 		internal PooledChunkedOverwriteQueue(

@@ -1,6 +1,7 @@
 ﻿using LayerBase.Async;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.Layers;
+using LayerBase.Tools.Timer;
 
 namespace LayerBase.LayerHub
 {
@@ -60,11 +61,12 @@ namespace LayerBase.LayerHub
 			return new LayersBuilder(chainBundle);
 		}
 
-		public static void Pump()
+		public static void Pump(float deltaTime)
 		{
 			PumpLayers();
 			PumpAsyncEvents();
 			PumpEventLogs();
+			TimerSchedulers.TickAll(deltaTime);
 		}
 		
 		

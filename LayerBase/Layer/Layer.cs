@@ -4,7 +4,9 @@ using LayerBase.Core.EventHandler;
 using LayerBase.Core.EventStateTrace;
 using LayerBase.Core.PolledEventContainer;
 using LayerBase.Core.ResponsibilityChain;
+using LayerBase.Layers.LayerMetaData;
 using LayerBase.DI;
+using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Layers
 {
@@ -16,7 +18,7 @@ namespace LayerBase.Layers
 	{
 		private EventDispatcher m_eventDispatcher;
 		private PooledEventContainer m_pooledEventContainer;
-		private EventStateTracer? m_eventStateTracer;
+		internal EventStateTracer? m_eventStateTracer;
 		private EventLogTracer? m_eventLogTracer;
 		
 		//临时服务容器,存储由源生成器填充的Service
@@ -225,6 +227,11 @@ namespace LayerBase.Layers
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkBubble();
 			TryAttachTrace(ref @event);
+			if (!EventMetaData<Value>.IsFrequencyGateOpen)
+			{
+				EventMetaData<Value>.TimerScheduler.FireOnFrequency(in @event, (@event) => PostBubble(in @event));
+				return;
+			}
 			BubbleInternal(@event);
 		}
 		
@@ -236,6 +243,11 @@ namespace LayerBase.Layers
 			Event<Value> @event = new Event<Value>(value);
 			@event.MarkDrop();
 			TryAttachTrace(ref @event);
+			if (!EventMetaData<Value>.IsFrequencyGateOpen)
+			{
+				EventMetaData<Value>.TimerScheduler.FireOnFrequency(in @event, (@event) => DropInternal(in @event));
+				return;
+			}
 			DropInternal(@event);
 		}
 		
@@ -253,50 +265,93 @@ namespace LayerBase.Layers
 			DropInternal(@event);
 		}
 		
+		// 重新实现原有方法
 		private void BubbleInternal<Value>(in Event<Value> @event) where Value : struct
+		{
+		    ProcessEventDirectionally(
+		        @event,
+		        () => Previous as Layer,
+		        e => PostBubble(in e),
+		        (layer, e) => layer.BubbleInternal(e)
+		    );
+		}
+
+		private void DropInternal<Value>(in Event<Value> @event) where Value : struct
+		{
+		    ProcessEventDirectionally(
+		        @event,
+		        () => Next as Layer,
+		        e => PostDrop(in e),
+		        (layer, e) => layer.DropInternal(e)
+		    );
+		}
+		
+		private void ProcessEventDirectionally<Value>(
+			in Event<Value>             @event,
+			Func<Layer>                 getTargetLayer,
+			Action<Event<Value>>        postMethod,
+			Action<Layer, Event<Value>> recursiveMethod) 
+			where Value : struct
 		{
 			if (!@event.IsVaild())
 			{
 				return;
 			}
 			
-			EventHandledState eventHandledState = Dispatch(@event);
+			//根据层级策略进行处理
+			Layer targetLayer= getTargetLayer();
+			if (UsedLayerStrategy(@event, targetLayer, postMethod))
+				return;
+	
+			var eventHandledState = Dispatch(@event);
 			if (eventHandledState == EventHandledState.Handled)
 			{
 				m_eventStateTracer?.TryComplete(@event.TraceToken);
 				return;
 			}
 
-			//防空、防错、防循环
-			if (Previous != null && Previous is Layer preLayer && preLayer != this)
+			if (targetLayer != null && targetLayer != this)
 			{
-				preLayer.m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
-				preLayer.BubbleInternal(@event);
+				targetLayer.m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
+				recursiveMethod(targetLayer, @event);
 			}
 			m_eventStateTracer?.TryComplete(@event.TraceToken);
 		}
 
-		private void DropInternal<Value>(in Event<Value> @event) where Value : struct
+		private bool UsedLayerStrategy<Value>(Event<Value> @event, Layer TargetLayer, Action<Event<Value>> postMethod)
+			where Value : struct
 		{
-			if (!@event.IsVaild())
+			if (TargetLayer == null)
 			{
-				return;
+				return false;
 			}
-
-			EventHandledState eventHandledState = Dispatch(@event);
-			if (eventHandledState == EventHandledState.Handled)
+			
+			var layerDispatchStrategy = GetLayerStrategy(@event);
+			if (layerDispatchStrategy == LayerDispatchStrategy.Post)
+			{
+				m_pooledEventContainer.Post(@event);
+				return true;
+			}
+			if (layerDispatchStrategy == LayerDispatchStrategy.Ignore)
+			{
+				postMethod(@event);
+				return true;
+			}
+			if (layerDispatchStrategy == LayerDispatchStrategy.Throw)
 			{
 				m_eventStateTracer?.TryComplete(@event.TraceToken);
-				return;
+				return true;
 			}
 
-			//防空、防错、防循环
-			if (Next != null && Next is Layer nextLayer && nextLayer != this)
-			{
-				nextLayer.m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
-				nextLayer.DropInternal(@event);
-			}
-			m_eventStateTracer?.TryComplete(@event.TraceToken);
+			return false;
+		}
+
+		private LayerDispatchStrategy GetLayerStrategy<Value>(Event<Value> @event) where Value : struct
+		{
+			m_eventStateTracer.TryGet(@event.TraceToken, out var eventState);
+			var layerDispatchStrategy = LayerMetaData.LayerMetaData.GetDispatchStrategy(
+				this.GetType(), eventState.CatalogueToken);
+			return layerDispatchStrategy;
 		}
 
 		internal void NotifyEventProcessed<EventArg>(in Event<EventArg> @event) where EventArg : struct

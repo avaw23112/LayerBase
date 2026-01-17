@@ -14,7 +14,7 @@ LayerHub.CreateLayers()
 gameLayerHead.Drop(new eventTest { i = 1 });
 while (true)
 {
-	LayerHub.Pump();
+	LayerHub.Pump(0.2f);
 }
 
 internal struct eventTest

@@ -1,6 +1,7 @@
 ﻿using LayerBase.Async;
 using LayerBase.Core.EventHandler;
 using LayerBase.Core.EventStateTrace;
+using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Core.Event
 {
@@ -194,29 +195,38 @@ namespace LayerBase.Core.Event
 			for (int i = 0; i < list.Count; i++)
 			{
 				var d = list[i];
-				
-				//有序处理事件委托
-				if (d is EventHandlerDelegate<T> eventHandlerDelegate)
+				try
 				{
-					EventHandledState r = eventHandlerDelegate(@event);
-					LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(eventHandlerDelegate, i), r);
-					if (r == EventHandledState.Handled)
+					//有序处理事件委托
+					if (d is EventHandlerDelegate<T> eventHandlerDelegate)
 					{
-						@event.MarkHandled();
-						return EventHandledState.Handled;
+						EventHandledState r = eventHandlerDelegate(in @event.Value);
+						if (r == EventHandledState.Handled)
+						{
+							@event.MarkHandled();
+							return EventHandledState.Handled;
+						}
+
+						if (r == EventHandledState.HandledAndContinue)
+						{
+							@event.MarkHandledAndContinue();
+							handledAndContinueSeen = true;
+						}
+						else @event.MarkContinue();
+
+						LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(eventHandlerDelegate, i), r);
 					}
-					if (r == EventHandledState.HandledAndContinue)
+					//如果是异步事件,即发即忘不等待.
+					else if (d is EventHandlerDelegateAsync<T> eventHandlerDelegateAsync)
 					{
-						@event.MarkHandledAndContinue();
-						handledAndContinueSeen = true;
+						eventHandlerDelegateAsync(@event.Value).Forget();
+						LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(eventHandlerDelegateAsync, i),
+							EventHandledState.Continue);
 					}
-					else @event.MarkContinue();
 				}
-				//如果是异步事件,即发即忘不等待.
-				else if(d is EventHandlerDelegateAsync<T> eventHandlerDelegateAsync)
+				catch (Exception e)
 				{
-					LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(eventHandlerDelegateAsync, i), EventHandledState.Continue);
-					eventHandlerDelegateAsync(@event).Forget();
+					EventMetaDataHandler.OnEventExpectation(@event.Value,e);
 				}
 			}
 			return handledAndContinueSeen ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
@@ -232,15 +242,24 @@ namespace LayerBase.Core.Event
 				for (int i = 0; i < handlers.Count; i++)
 				{
 					var handler = handlers[i];
-					if (handler is IEventHandler<T> eventHandler)
+					try
 					{
-						eventHandler.Deal(@event);
-						LogTracer?.TryRecordHandler(ref state, handler.GetType().Name, EventHandledState.Continue);
+						if (handler is IEventHandler<T> eventHandler)
+						{
+							eventHandler.Deal(in @event.Value);
+						}
+						if(handler is IEventHandlerAsync<T> eventHandlerAsync)
+						{
+							eventHandlerAsync.Deal(@event.Value).Forget();
+						}
 					}
-					if(handler is IEventHandlerAsync<T> eventHandlerAsync)
+					catch (Exception e)
+					{
+						EventMetaDataHandler.OnEventExpectation(@event.Value,e);
+					}
+					finally
 					{
 						LogTracer?.TryRecordHandler(ref state, handler.GetType().Name, EventHandledState.Continue);
-						eventHandlerAsync.Deal(@event).Forget();
 					}
 				}
 			}

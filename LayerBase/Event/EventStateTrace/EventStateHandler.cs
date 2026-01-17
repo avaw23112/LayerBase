@@ -13,7 +13,3 @@ public delegate void ClassicEventCompletedHandler(
 public delegate void ClassicEventCreatedHandler(
     ref EventCategoryToken eventCategoryToken,ref EventState state
 );
-public class EventStateHandler
-{
-    
-}

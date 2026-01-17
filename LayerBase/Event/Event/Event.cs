@@ -32,17 +32,16 @@ namespace LayerBase.Core.Event
 		private EventStateToken _traceToken;
 		private EventHandledState _mEventHandledState;
 		private EventForwardDir _mForwardDir;
-		private EventArg m_value;
+		public EventArg Value;
 
 		public Event(EventArg value)
 		{
 			_mEventHandledState = EventHandledState.Created;
-			m_value = value;
+			Value = value;
 		}
 
 		public int Id => EventTypeId<EventArg>.Id;
 		public string Name => typeof(EventArg).Name;
-		public EventArg Value => m_value;
 		public EventForwardDir ForwardDir => _mForwardDir;
 		internal EventStateTrace.EventStateToken TraceToken => _traceToken;
 				

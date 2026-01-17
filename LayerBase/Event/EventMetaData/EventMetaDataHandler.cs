@@ -1,4 +1,5 @@
-﻿using LayerBase.Core.EventCatalogue;
+﻿using LayerBase.Core;
+using LayerBase.Core.EventCatalogue;
 
 namespace LayerBase.Event.EventMetaData;
 
@@ -72,4 +73,70 @@ internal static class EventMetaDataHandler
         }
         return EventCategoryToken.Empty;
     }
+    
+    public static int MaxBufferSize<EventType>() where EventType : struct
+    {
+        if (m_mapEventMetaDatas.TryGetValue(typeof(EventType), out IEventMetaData metaData))
+        {
+            return metaData.MaxBufferSize;
+        }
+        return 0;
+    }
+    public static int MaxBufferSize(Type eventType)
+    {
+        if (m_mapEventMetaDatas.TryGetValue(eventType, out IEventMetaData metaData))
+        {
+            return metaData.MaxBufferSize;
+        }
+        return 0;
+    }
+    public static int EventHandlerJitter<EventType>() where EventType : struct
+    {
+        if (m_mapEventMetaDatas.TryGetValue(typeof(EventType), out IEventMetaData metaData))
+        {
+            return metaData.EventHandlerJitter;
+        }
+        return 0;
+    }
+    public static int EventHandlerJitter(Type eventType)
+    {
+        if (m_mapEventMetaDatas.TryGetValue(eventType, out IEventMetaData metaData))
+        {
+            return metaData.EventHandlerJitter;
+        }
+        return 0;
+    }
+    public static EventQueueOverflowStrategy EventQueueOverflowStrategy<EventType>() where EventType : struct
+    {
+        if (m_mapEventMetaDatas.TryGetValue(typeof(EventType), out IEventMetaData metaData))
+        {
+            return metaData.EventQueueOverflowStrategy;
+        }
+        return LayerBase.Core.EventQueueOverflowStrategy.OverWrite;
+    }
+    public static EventQueueOverflowStrategy EventQueueOverflowStrategy(Type eventType)
+    {
+        if (m_mapEventMetaDatas.TryGetValue(eventType, out IEventMetaData metaData))
+        {
+            return metaData.EventQueueOverflowStrategy;
+        }
+        return LayerBase.Core.EventQueueOverflowStrategy.OverWrite;
+    }
+    
+    public static void OnEventExpectation<EventType>(EventType e, Exception exception) where EventType : struct
+    {
+        if (m_mapEventMetaDatas.TryGetValue(typeof(EventType), out IEventMetaData metaData))
+        {
+            metaData.OnEventExpectation( e,exception);
+        }
+    }
+    
+   public static void EventMergeStrategy<EventType>(PooledChunkedOverwriteQueue<Core.Event.Event<EventType>>  queue) where EventType  : struct
+    {
+        if (m_mapEventMetaDatas.TryGetValue(typeof(EventType), out IEventMetaData metaData))
+        {
+            metaData.EventMergeStrategy(queue);
+        }
+    }
+    
 }

@@ -11,12 +11,20 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="DataStruct\DictionaryTree\" />
       <Folder Include="Tools\" />
     </ItemGroup>
 
     <ItemGroup>
       <Compile Remove="DI\Service.cs" />
+      <Compile Remove="DataStruct\DictionaryTree\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="DataStruct\DictionaryTree\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="DataStruct\DictionaryTree\**" />
     </ItemGroup>
 
 </Project>

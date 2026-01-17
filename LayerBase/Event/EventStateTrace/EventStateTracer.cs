@@ -76,7 +76,7 @@ internal sealed class EventStateTracer
             return true;
         }
     }
-
+    
     internal bool TryComplete(in EventStateToken token)
     {
         lock (_lock)
