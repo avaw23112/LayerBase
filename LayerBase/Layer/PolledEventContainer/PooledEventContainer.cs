@@ -4,26 +4,24 @@ using LayerBase.Layers;
 
 namespace LayerBase.Core.PolledEventContainer
 {
+    /// <summary>
+    /// 按事件类型维护的队列容器。
+    /// </summary>
     internal class PooledEventContainer
     {
-        private Dictionary<int, IUnmanagedList> m_unmanagedDic = new();
-        private Layer Owner;
+        private readonly Dictionary<int, IUnmanagedList> _queuesByType = new();
+        private readonly Layer _owner;
 
         internal PooledEventContainer(Layer owner)
         {
-            if (owner == null)
-            {
-                throw new Exception("致命错误.使用错误层级构建");
-            }
-            this.Owner = owner;
+            _owner = owner ?? throw new Exception("致命错误.使用错误层级构建");
         }
 
         internal void Pump()
         {
-            var valSet = m_unmanagedDic.Values;
-            foreach (var val in valSet)
+            foreach (var queue in _queuesByType.Values)
             {
-                val.Pump();
+                queue.Pump();
             }
         }
         
@@ -31,18 +29,19 @@ namespace LayerBase.Core.PolledEventContainer
         {
             int typeId = EventTypeId<Value>.Id;
 
-            if (!m_unmanagedDic.TryGetValue(typeId,out IUnmanagedList list))
+            if (!_queuesByType.TryGetValue(typeId, out IUnmanagedList list))
             {
-                UnmanagedList<Value> listNewEventContainer = new UnmanagedList<Value>(Owner);
-                m_unmanagedDic.Add(typeId,listNewEventContainer);
-                list = listNewEventContainer;
+                var newQueue = new UnmanagedList<Value>(_owner);
+                _queuesByType.Add(typeId, newQueue);
+                list = newQueue;
             }
-            UnmanagedList<Value> listEventContainer = list as UnmanagedList<Value>;
-            if (listEventContainer == null)
+
+            if (list is not UnmanagedList<Value> typedQueue)
             {
-                throw new Exception($"typeId :{typeId} Type :{typeof(Value).Name} 对应了错误的UnmanagedList");
+                throw new Exception($"typeId:{typeId} Type:{typeof(Value).Name} 对应了错误的 UnmanagedList");
             }
-            listEventContainer.Post(@event);
+
+            typedQueue.Post(@event);
         }
     }
 }

@@ -1,95 +1,107 @@
-﻿using LayerBase.Core.Event;
+using System;
+using LayerBase.Core.Event;
+using LayerBase.Core.EventStateTrace;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 using LayerBase.Layers.LayerMetaData;
 
 namespace LayerBase.Core.UnmanagedList
 {
-	internal interface IUnmanagedList
-	{
-		void Pump();
-	}
+    internal interface IUnmanagedList
+    {
+        void Pump();
+    }
 
-	internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
-	{
-		private PooledChunkedOverwriteQueue<Event<Value>> m_pooledQueue ;
-		private Layer Owner;
+    internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
+    {
+        private readonly PooledChunkedOverwriteQueue<Event<Value>> _queue;
+        private readonly Layer _owner;
 
-		public UnmanagedList(Layer owner)
-		{
-			int MaxQueueSize = EventMetaDataHandler.MaxBufferSize<Value>();
-			EventQueueOverflowStrategy OverflowStrategy = EventMetaDataHandler.EventQueueOverflowStrategy<Value>();
-			m_pooledQueue = new PooledChunkedOverwriteQueue<Event<Value>>(maxCapacity:MaxQueueSize,overflowStrategy:OverflowStrategy);
-			this.Owner = owner;
-		}
-		
-		public void Pump()
-		{
-			//处理事件前,先调用元数据处理进行合并
-			EventMetaDataHandler.EventMergeStrategy<Value>(m_pooledQueue);
-			
-			//每次Pump只处理已经有事件,而不直接处理完毕,避免无限循环
-			int count = m_pooledQueue.Count;
-			while (count-- > 0)
-			{
-				if (m_pooledQueue.TryDequeue(out Event<Value> val))
-				{
-					//未满足该事件的定时策略，待定
-					if (!EventMetaData<Value>.IsFrequencyGateOpen)
-					{
-						m_pooledQueue.EnqueueOverwrite(val);
-						continue;
-					}
-					
-					LayerDispatchStrategy strategy = LayerDispatchStrategy.None;
-					GetStrategy(val, ref strategy);
-					
-					if (strategy == LayerDispatchStrategy.Throw)
-					{
-						Owner.NotifyEventProcessed(val);
-						return;
-					}
-					if (strategy == LayerDispatchStrategy.Post)
-					{
-						m_pooledQueue.EnqueueOverwrite(val);
-						continue;
-					}
-					if (strategy == LayerDispatchStrategy.None)
-					{
-						EventHandledState eventHandledState = Owner.Dispatch(in val);
-						if (eventHandledState == EventHandledState.Handled)
-						{
-							Owner.NotifyEventProcessed(val);
-						}
-					}
-					//Ignore :不处理，直接丢到下一层
-					
-					switch (val.ForwardDir)
-					{
-						case EventForwardDir.BroadCast: Owner.PostEventToDoubleSide(val); break;
-						case EventForwardDir.Bubble:    Owner.PostEventToHigherLayer(val);break;
-						case EventForwardDir.Drop:      Owner.PostEventToLowerLayer(val); break; 
-					}
-					Owner.NotifyEventProcessed(val);
-				}
-				else
-				{
-					throw new Exception("致命错误.内存管理队列错误.");
-				}
-			}
-		}
+        public UnmanagedList(Layer owner)
+        {
+            int maxQueueSize = EventMetaDataHandler.MaxBufferSize<Value>();
+            EventQueueOverflowStrategy overflowStrategy = EventMetaDataHandler.EventQueueOverflowStrategy<Value>();
+            _queue = new PooledChunkedOverwriteQueue<Event<Value>>(maxCapacity: maxQueueSize, overflowStrategy: overflowStrategy);
+            _owner = owner;
+        }
 
-		private void GetStrategy(Event<Value> val, ref LayerDispatchStrategy strategy)
-		{
-			Owner.m_eventStateTracer.TryGet(val.TraceToken, out var eventState);
-			var layerDispatchStrategy = LayerMetaData.GetDispatchStrategy(
-				this.GetType(), eventState.CatalogueToken);
-			strategy = layerDispatchStrategy;
-		}
+        public void Pump()
+        {
+            // 处理前先按照元数据策略进行合并，减少重复事件。
+            EventMetaDataHandler.EventMergeStrategy<Value>(_queue);
 
-		public void Post(in Event<Value> val)
-		{
-			m_pooledQueue.EnqueueOverwrite(val);
-		}
-	}
+            int count = _queue.Count;
+            while (count-- > 0)
+            {
+                if (!_queue.TryDequeue(out Event<Value> @event))
+                {
+                    throw new Exception("致命错误：内存队列读取失败。");
+                }
+
+                if (!EventMetaData<Value>.IsFrequencyGateOpen)
+                {
+                    _queue.EnqueueOverwrite(@event);
+                    continue;
+                }
+
+                var strategy = ResolveStrategy(@event);
+                if (strategy == LayerDispatchStrategy.Throw)
+                {
+                    _owner.NotifyEventProcessed(@event);
+                    continue;
+                }
+                if (strategy == LayerDispatchStrategy.Post)
+                {
+                    _queue.EnqueueOverwrite(@event);
+                    continue;
+                }
+                if (strategy == LayerDispatchStrategy.Ignore)
+                {
+                    Forward(@event);
+                    _owner.NotifyEventProcessed(@event);
+                    continue;
+                }
+
+                EventHandledState handledState = _owner.Dispatch(in @event);
+                if (handledState != EventHandledState.Handled)
+                {
+                    Forward(@event);
+                }
+
+                _owner.NotifyEventProcessed(@event);
+            }
+        }
+
+        private void Forward(in Event<Value> @event)
+        {
+            switch (@event.ForwardDir)
+            {
+                case EventForwardDir.BroadCast:
+                    _owner.PostEventToDoubleSide(@event);
+                    break;
+                case EventForwardDir.Bubble:
+                    _owner.PostEventToHigherLayer(@event);
+                    break;
+                case EventForwardDir.Drop:
+                    _owner.PostEventToLowerLayer(@event);
+                    break;
+            }
+        }
+
+        private LayerDispatchStrategy ResolveStrategy(in Event<Value> @event)
+        {
+            var tracer = _owner.m_eventStateTracer;
+            if (tracer != null && tracer.TryGet(@event.TraceToken, out var eventState))
+            {
+                return LayerMetaData.GetDispatchStrategy(_owner.GetType(), eventState.CatalogueToken);
+            }
+
+            return LayerDispatchStrategy.None;
+        }
+
+        public void Post(in Event<Value> val)
+        {
+            _queue.EnqueueOverwrite(val);
+        }
+    }
 }

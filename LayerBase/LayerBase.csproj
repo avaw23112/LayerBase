@@ -1,30 +1,28 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+    <!-- 基础工程配置 -->
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
+    <!-- 任务/工具依赖 -->
     <ItemGroup>
-      <ProjectReference Include="..\LayerBase.Task\LayerBase.Task.csproj" />
+        <ProjectReference Include="..\LayerBase.Task\LayerBase.Task.csproj" />
     </ItemGroup>
 
+    <!-- 保留工具目录结构 -->
     <ItemGroup>
-      <Folder Include="Tools\" />
+        <Folder Include="Tools\" />
     </ItemGroup>
 
+    <!-- 显式排除暂未启用的源/资源 -->
     <ItemGroup>
-      <Compile Remove="DI\Service.cs" />
-      <Compile Remove="DataStruct\DictionaryTree\**" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <EmbeddedResource Remove="DataStruct\DictionaryTree\**" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <None Remove="DataStruct\DictionaryTree\**" />
+        <Compile Remove="DI\Service.cs" />
+        <Compile Remove="DataStruct\DictionaryTree\**" />
+        <EmbeddedResource Remove="DataStruct\DictionaryTree\**" />
+        <None Remove="DataStruct\DictionaryTree\**" />
     </ItemGroup>
 
 </Project>

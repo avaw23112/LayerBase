@@ -2,9 +2,9 @@
 
 public class CatalogueNode
 {
-    private  Dictionary<string, CatalogueNode>? nextLayer;
-    public EventCategoryToken eventCategoryToken;
-    public string Catalogue;
+    private Dictionary<string, CatalogueNode>? _children;
+    public EventCategoryToken eventCategoryToken = EventCategoryToken.Empty;
+    public string Catalogue { get; set; } = string.Empty;
     public CatalogueNode? lastNode;
 
     public CatalogueNode Combine(string subCatalogue)
@@ -14,19 +14,18 @@ public class CatalogueNode
             throw new Exception("错误目录");
         }
         
-        if (nextLayer == null)
-        {
-            nextLayer = new Dictionary<string, CatalogueNode>(4);
-        }
+        _children ??= new Dictionary<string, CatalogueNode>(4);
 
-        CatalogueNode catalogueNode = new CatalogueNode();
-        catalogueNode.Catalogue = subCatalogue;
-        catalogueNode.lastNode = this;
-        catalogueNode.eventCategoryToken = new EventCategoryToken(catalogueNode.GetHashCode());
+        var node = new CatalogueNode
+        {
+            Catalogue = subCatalogue,
+            lastNode = this,
+            eventCategoryToken = new EventCategoryToken(subCatalogue.GetHashCode()),
+        };
         
-        nextLayer.Add(subCatalogue,catalogueNode);
-        EventCatalogue.RegisterNode(catalogueNode);
-        return catalogueNode;
+        _children.Add(subCatalogue, node);
+        EventCatalogue.RegisterNode(node);
+        return node;
     }
 
     public EventCategoryToken GetToken() => eventCategoryToken;

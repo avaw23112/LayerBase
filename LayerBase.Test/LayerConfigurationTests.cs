@@ -94,7 +94,7 @@ public class LayerConfigurationTests
 			PumpTwice();
 
 			Assert.That(first.ReceivedIds, Is.Empty);
-			Assert.That(second.ReceivedIds,  Is.Empty);
+			Assert.That(second.ReceivedIds, Is.Empty);
 		}
 		finally
 		{

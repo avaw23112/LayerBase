@@ -1,79 +1,65 @@
+using System;
+using System.Collections.Generic;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventCatalogue;
 using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Core.EventStateTrace;
 
-internal class EventGlobalInfo
+internal struct EventGlobalInfo
 {
-    public int eventTypeId;
-    public EventCategoryToken eventCategoryToken;
-    public int eventCount;
+    public int EventTypeId;
+    public EventCategoryToken EventCategoryToken;
+    public int EventCount;
 }
 
 /// <summary>
-/// 对每一类事件的数量进行统计
+/// 按分类统计活跃事件数量，用于触发分类创建/销毁回调。
 /// </summary>
-internal class EventCounter
+internal sealed class EventCounter
 {
-    Dictionary<EventCategoryToken,EventGlobalInfo> m_eventGlobalInfos = new();
-    
+    private readonly Dictionary<EventCategoryToken, EventGlobalInfo> _infoByCategory = new();
+
     public int Increment<T>() where T : struct
-    { 
-        if (EventMetaDataHandler.Category<T>().IsEmpty)
-        {
-            return -1;
-        }
-        var category = EventMetaDataHandler.Category<T>();
-        if (!m_eventGlobalInfos.TryGetValue(category,out EventGlobalInfo? info))
-        { 
-            info = new EventGlobalInfo
-            {
-                eventTypeId = EventTypeId<T>.Id,
-                eventCategoryToken = EventMetaDataHandler.Category<T>(),
-                eventCount = 0
-            };
-            m_eventGlobalInfos.Add(category, info);
-        }
-        info.eventCount++;
-        return info.eventCount;
-    }
-
-    public int Decrement<T>() where T : struct
     {
-        if (EventMetaDataHandler.Category<T>().IsEmpty)
-        {
-            return -1;
-        }
         var category = EventMetaDataHandler.Category<T>();
-        if (!m_eventGlobalInfos.TryGetValue(category, out EventGlobalInfo? info))
-        {
-            throw new Exception("不可能完成的事件");
-        }
-        if (info.eventCount <= 0)
-        {
-            throw new Exception("不可能完成的事件");
-        }
-        info.eventCount--;
-        return info.eventCount;
-    }
-
-    public int Decrement(Type type)
-    {
-        var  category = EventMetaDataHandler.Category(type);
         if (category.IsEmpty)
         {
             return -1;
         }
-        if (!m_eventGlobalInfos.TryGetValue(category, out EventGlobalInfo? info))
+
+        if (!_infoByCategory.TryGetValue(category, out var info))
         {
-            throw new Exception("不可能完成的事件");
+            info = new EventGlobalInfo
+            {
+                EventTypeId = EventTypeId<T>.Id,
+                EventCategoryToken = category,
+                EventCount = 0,
+            };
         }
-        if (info.eventCount <= 0)
+
+        info.EventCount += 1;
+        _infoByCategory[category] = info;
+        return info.EventCount;
+    }
+
+    public int Decrement(Type type)
+    {
+        if (type == null) throw new ArgumentNullException(nameof(type));
+
+        var category = EventMetaDataHandler.Category(type);
+        if (category.IsEmpty)
         {
-            throw new Exception("不可能完成的事件");
+            return -1;
         }
-        info.eventCount--;
-        return info.eventCount;
+
+        if (!_infoByCategory.TryGetValue(category, out var info) || info.EventCount <= 0)
+        {
+            throw new InvalidOperationException("事件计数异常，无法完成减计数。");
+        }
+
+        info.EventCount -= 1;
+        _infoByCategory[category] = info;
+        return info.EventCount;
     }
 }

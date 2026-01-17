@@ -100,54 +100,54 @@ namespace LayerBase.Tools.Timer
             Volatile.Write(ref _frequencyGateOpen, gateOpen);
         }
         
-        public TimerToken RegisterAfter<T>(double delay, in T value, EventHandlerDelegate<T> handler) where T : struct
+        public TimerToken RegisterAfter<T>(double delay, in T value, EventHandleDelegate<T> handle) where T : struct
         {
-            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            if (handle == null) throw new ArgumentNullException(nameof(handle));
             if (delay < 0) throw new ArgumentOutOfRangeException(nameof(delay));
             var payload = value;
-            return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleDelegate(due, payload, handler));
+            return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleDelegate(due, payload, handle));
         }
 
-        public void FireAfter<T>(double delay, in T value, EventHandlerDelegate<T> handler) where T : struct
+        public void FireAfter<T>(double delay, in T value, EventHandleDelegate<T> handle) where T : struct
         {
-            RegisterAfter(delay, in value, handler);
+            RegisterAfter(delay, in value, handle);
         }
 
-        public TimerToken RegisterAt<T>(double timePoint, in T value, EventHandlerDelegate<T> handler) where T : struct
+        public TimerToken RegisterAt<T>(double timePoint, in T value, EventHandleDelegate<T> handle) where T : struct
         {
-            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            if (handle == null) throw new ArgumentNullException(nameof(handle));
             var payload = value;
-            return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleDelegate(due, payload, handler));
+            return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleDelegate(due, payload, handle));
         }
 
-        public void FireAt<T>(double timePoint, in T value, EventHandlerDelegate<T> handler) where T : struct
+        public void FireAt<T>(double timePoint, in T value, EventHandleDelegate<T> handle) where T : struct
         {
-            RegisterAt(timePoint, in value, handler);
+            RegisterAt(timePoint, in value, handle);
         }
 
-        public TimerToken RegisterAfter<T>(double delay, in T value, EventHandlerDelegateAsync<T> handler) where T : struct
+        public TimerToken RegisterAfter<T>(double delay, in T value, EventHandleDelegateAsync<T> handle) where T : struct
         {
-            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            if (handle == null) throw new ArgumentNullException(nameof(handle));
             if (delay < 0) throw new ArgumentOutOfRangeException(nameof(delay));
             var payload = value;
-            return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleDelegateAsync(due, payload, handler));
+            return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleDelegateAsync(due, payload, handle));
         }
 
-        public void FireAfter<T>(double delay, in T value, EventHandlerDelegateAsync<T> handler) where T : struct
+        public void FireAfter<T>(double delay, in T value, EventHandleDelegateAsync<T> handle) where T : struct
         {
-            RegisterAfter(delay, in value, handler);
+            RegisterAfter(delay, in value, handle);
         }
 
-        public TimerToken RegisterAt<T>(double timePoint, in T value, EventHandlerDelegateAsync<T> handler) where T : struct
+        public TimerToken RegisterAt<T>(double timePoint, in T value, EventHandleDelegateAsync<T> handle) where T : struct
         {
-            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            if (handle == null) throw new ArgumentNullException(nameof(handle));
             var payload = value;
-            return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleDelegateAsync(due, payload, handler));
+            return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleDelegateAsync(due, payload, handle));
         }
 
-        public void FireAt<T>(double timePoint, in T value, EventHandlerDelegateAsync<T> handler) where T : struct
+        public void FireAt<T>(double timePoint, in T value, EventHandleDelegateAsync<T> handle) where T : struct
         {
-            RegisterAt(timePoint, in value, handler);
+            RegisterAt(timePoint, in value, handle);
         }
 
         public TimerToken RegisterAfter<T>(double delay, in T value, IEventHandler<T> handler) where T : struct
@@ -225,28 +225,28 @@ namespace LayerBase.Tools.Timer
             RegisterAt(timePoint, in value, action);
         }
 
-        public TimerToken RegisterOnFrequency<T>(in T value, EventHandlerDelegate<T> handler) where T : struct
+        public TimerToken RegisterOnFrequency<T>(in T value, EventHandleDelegate<T> handle) where T : struct
         {
-            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            if (handle == null) throw new ArgumentNullException(nameof(handle));
             var payload = value;
-            return RegisterFrequencyInternal<T>(queue => queue.RegisterDelegate(payload, handler));
+            return RegisterFrequencyInternal<T>(queue => queue.RegisterDelegate(payload, handle));
         }
 
-        public void FireOnFrequency<T>(in T value, EventHandlerDelegate<T> handler) where T : struct
+        public void FireOnFrequency<T>(in T value, EventHandleDelegate<T> handle) where T : struct
         {
-            RegisterOnFrequency(in value, handler);
+            RegisterOnFrequency(in value, handle);
         }
 
-        public TimerToken RegisterOnFrequency<T>(in T value, EventHandlerDelegateAsync<T> handler) where T : struct
+        public TimerToken RegisterOnFrequency<T>(in T value, EventHandleDelegateAsync<T> handle) where T : struct
         {
-            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            if (handle == null) throw new ArgumentNullException(nameof(handle));
             var payload = value;
-            return RegisterFrequencyInternal<T>(queue => queue.RegisterDelegateAsync(payload, handler));
+            return RegisterFrequencyInternal<T>(queue => queue.RegisterDelegateAsync(payload, handle));
         }
 
-        public void FireOnFrequency<T>(in T value, EventHandlerDelegateAsync<T> handler) where T : struct
+        public void FireOnFrequency<T>(in T value, EventHandleDelegateAsync<T> handle) where T : struct
         {
-            RegisterOnFrequency(in value, handler);
+            RegisterOnFrequency(in value, handle);
         }
 
         public TimerToken RegisterOnFrequency<T>(in T value, IEventHandler<T> handler) where T : struct
@@ -393,24 +393,24 @@ namespace LayerBase.Tools.Timer
         private readonly FreeList<TimerTask<T>> _tasks = new FreeList<TimerTask<T>>(slabSize: 128);
         private readonly object _lock = new();
 
-        internal TimerToken ScheduleDelegate(double executeAt, in T value, EventHandlerDelegate<T> handler)
+        internal TimerToken ScheduleDelegate(double executeAt, in T value, EventHandleDelegate<T> handle)
         {
             lock (_lock)
             {
                 var slotRef = _tasks.Rent();
                 ref var slot = ref _tasks.Resolve(slotRef);
-                slot.Value = TimerTask<T>.FromDelegate(executeAt, value, handler);
+                slot.Value = TimerTask<T>.FromDelegate(executeAt, value, handle);
                 return new TimerToken(EventTypeId<T>.Id, slotRef.GlobalIndex, slotRef.Version);
             }
         }
 
-        internal TimerToken ScheduleDelegateAsync(double executeAt, in T value, EventHandlerDelegateAsync<T> handler)
+        internal TimerToken ScheduleDelegateAsync(double executeAt, in T value, EventHandleDelegateAsync<T> handle)
         {
             lock (_lock)
             {
                 var slotRef = _tasks.Rent();
                 ref var slot = ref _tasks.Resolve(slotRef);
-                slot.Value = TimerTask<T>.FromDelegateAsync(executeAt, value, handler);
+                slot.Value = TimerTask<T>.FromDelegateAsync(executeAt, value, handle);
                 return new TimerToken(EventTypeId<T>.Id, slotRef.GlobalIndex, slotRef.Version);
             }
         }
@@ -535,22 +535,22 @@ namespace LayerBase.Tools.Timer
         private readonly Stack<int> _free = new();
         private readonly object _lock = new();
 
-        internal TimerToken RegisterDelegate(in T value, EventHandlerDelegate<T> handler)
+        internal TimerToken RegisterDelegate(in T value, EventHandleDelegate<T> handle)
         {
             lock (_lock)
             {
                 var (index, version) = Rent();
-                _tasks[index] = FrequencyTask<T>.FromDelegate(value, handler, version);
+                _tasks[index] = FrequencyTask<T>.FromDelegate(value, handle, version);
                 return new TimerToken(EventTypeId<T>.Id, index, version);
             }
         }
 
-        internal TimerToken RegisterDelegateAsync(in T value, EventHandlerDelegateAsync<T> handler)
+        internal TimerToken RegisterDelegateAsync(in T value, EventHandleDelegateAsync<T> handle)
         {
             lock (_lock)
             {
                 var (index, version) = Rent();
-                _tasks[index] = FrequencyTask<T>.FromDelegateAsync(value, handler, version);
+                _tasks[index] = FrequencyTask<T>.FromDelegateAsync(value, handle, version);
                 return new TimerToken(EventTypeId<T>.Id, index, version);
             }
         }
@@ -685,32 +685,32 @@ namespace LayerBase.Tools.Timer
         public ushort Version;
         public T Payload;
         public TimerTaskKind Kind;
-        public EventHandlerDelegate<T>? HandlerDelegate;
-        public EventHandlerDelegateAsync<T>? HandlerDelegateAsync;
+        public EventHandleDelegate<T>? HandlerDelegate;
+        public EventHandleDelegateAsync<T>? HandlerDelegateAsync;
         public IEventHandler<T>? Handler;
         public IEventHandlerAsync<T>? HandlerAsync;
         public Action<Event<T>>? EventAction;
 
-        public static FrequencyTask<T> FromDelegate(in T payload, EventHandlerDelegate<T> handler, ushort version)
+        public static FrequencyTask<T> FromDelegate(in T payload, EventHandleDelegate<T> handle, ushort version)
         {
             return new FrequencyTask<T>
             {
                 Active = true,
                 Version = version,
                 Payload = payload,
-                HandlerDelegate = handler,
+                HandlerDelegate = handle,
                 Kind = TimerTaskKind.EventHandlerDelegate,
             };
         }
 
-        public static FrequencyTask<T> FromDelegateAsync(in T payload, EventHandlerDelegateAsync<T> handler, ushort version)
+        public static FrequencyTask<T> FromDelegateAsync(in T payload, EventHandleDelegateAsync<T> handle, ushort version)
         {
             return new FrequencyTask<T>
             {
                 Active = true,
                 Version = version,
                 Payload = payload,
-                HandlerDelegateAsync = handler,
+                HandlerDelegateAsync = handle,
                 Kind = TimerTaskKind.EventHandlerDelegateAsync,
             };
         }
@@ -767,30 +767,30 @@ namespace LayerBase.Tools.Timer
         public double ExecuteAt;
         public T Payload;
         public TimerTaskKind Kind;
-        public EventHandlerDelegate<T>? HandlerDelegate;
-        public EventHandlerDelegateAsync<T>? HandlerDelegateAsync;
+        public EventHandleDelegate<T>? HandlerDelegate;
+        public EventHandleDelegateAsync<T>? HandlerDelegateAsync;
         public IEventHandler<T>? Handler;
         public IEventHandlerAsync<T>? HandlerAsync;
         public Action<Event<T>>? EventAction;
 
-        public static TimerTask<T> FromDelegate(double executeAt, in T payload, EventHandlerDelegate<T> handler)
+        public static TimerTask<T> FromDelegate(double executeAt, in T payload, EventHandleDelegate<T> handle)
         {
             return new TimerTask<T>
             {
                 ExecuteAt = executeAt,
                 Payload = payload,
-                HandlerDelegate = handler,
+                HandlerDelegate = handle,
                 Kind = TimerTaskKind.EventHandlerDelegate,
             };
         }
 
-        public static TimerTask<T> FromDelegateAsync(double executeAt, in T payload, EventHandlerDelegateAsync<T> handler)
+        public static TimerTask<T> FromDelegateAsync(double executeAt, in T payload, EventHandleDelegateAsync<T> handle)
         {
             return new TimerTask<T>
             {
                 ExecuteAt = executeAt,
                 Payload = payload,
-                HandlerDelegateAsync = handler,
+                HandlerDelegateAsync = handle,
                 Kind = TimerTaskKind.EventHandlerDelegateAsync,
             };
         }

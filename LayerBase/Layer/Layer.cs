@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
@@ -123,22 +123,22 @@ namespace LayerBase.Layers
 		/// 绑定当前层的事件处理器
 		/// </summary>
 		/// <typeparam name="Value"></typeparam>
-		/// <param name="eventHandlerDelegate"></param>
+		/// <param name="eventHandleDelegate"></param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected void Bind<Value>(EventHandlerDelegate<Value> eventHandlerDelegate) where Value : struct
+		protected void Bind<Value>(EventHandleDelegate<Value> eventHandleDelegate) where Value : struct
 		{
-			m_eventDispatcher.Subscribe(eventHandlerDelegate);
+			m_eventDispatcher.Subscribe(eventHandleDelegate);
 		}
 
 		/// <summary>
 		/// 绑定当前层的异步事件处理器
 		/// </summary>
 		/// <typeparam name="Value"></typeparam>
-		/// <param name="eventHandlerDelegateAsync"></param>
+		/// <param name="eventHandleDelegateAsync"></param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected void Bind<Value>(EventHandlerDelegateAsync<Value> eventHandlerDelegateAsync) where Value : struct
+		protected void Bind<Value>(EventHandleDelegateAsync<Value> eventHandleDelegateAsync) where Value : struct
 		{
-			m_eventDispatcher.Subscribe(eventHandlerDelegateAsync);
+			m_eventDispatcher.Subscribe(eventHandleDelegateAsync);
 		}
 		
 		/// <summary>

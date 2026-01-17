@@ -2,57 +2,66 @@
 
 namespace LayerBase.Core.Event
 {
-	public enum EventHandledState
-	{
-		// 创建
-		Created,
+    /// <summary>
+    /// 事件处理状态
+    /// </summary>
+    public enum EventHandledState
+    {
+        /// <summary>已创建，待处理</summary>
+        Created,
+        /// <summary>已处理并截断</summary>
+        Handled,
+        /// <summary>未处理，继续传播</summary>
+        Continue,
+        /// <summary>已处理但继续传播</summary>
+        HandledAndContinue,
+    }
 
-		// 已经被处理
-		Handled,
+    /// <summary>
+    /// 事件传播方向
+    /// </summary>
+    public enum EventForwardDir
+    {
+        BroadCast,
+        Bubble,
+        Drop,
+    }
 
-		// 不处理继续传播
-		Continue,
+    /// <summary>
+    /// 事件包装类型，携带元数据与追踪标记。
+    /// </summary>
+    public struct Event<EventArg> where EventArg : struct
+    {
+        private EventStateToken _traceToken;
+        private EventHandledState _handledState;
+        private EventForwardDir _forwardDirection;
 
-		// 处理但继续传播
-		HandledAndContinue,
-	}
+        public EventArg Value;
 
-	public enum EventForwardDir
-	{
-		BroadCast,
-		Bubble,
-		Drop,
-	}
+        public Event(EventArg value)
+        {
+            _handledState = EventHandledState.Created;
+            _forwardDirection = default;
+            _traceToken = default;
+            Value = value;
+        }
 
-	/// <summary>
-	/// TODO:记录事件传播过程（在哪一层被哪些handler处理过）
-	/// </summary>
-	public struct Event<EventArg> where EventArg : struct
-	{
-		private EventStateToken _traceToken;
-		private EventHandledState _mEventHandledState;
-		private EventForwardDir _mForwardDir;
-		public EventArg Value;
+        public int Id => EventTypeId<EventArg>.Id;
+        public string Name => typeof(EventArg).Name;
+        public EventForwardDir ForwardDir => _forwardDirection;
+        internal EventStateToken TraceToken => _traceToken;
 
-		public Event(EventArg value)
-		{
-			_mEventHandledState = EventHandledState.Created;
-			Value = value;
-		}
+        public bool IsVaild() => _handledState != EventHandledState.Handled;
+        public void MarkHandled() => _handledState = EventHandledState.Handled;
+        public void MarkContinue() => _handledState = EventHandledState.Continue;
+        public void MarkHandledAndContinue() => _handledState = EventHandledState.HandledAndContinue;
 
-		public int Id => EventTypeId<EventArg>.Id;
-		public string Name => typeof(EventArg).Name;
-		public EventForwardDir ForwardDir => _mForwardDir;
-		internal EventStateTrace.EventStateToken TraceToken => _traceToken;
-				
-		public bool IsVaild() => _mEventHandledState != EventHandledState.Handled;
-		public void MarkHandled()=>_mEventHandledState = EventHandledState.Handled;
-		public void MarkContinue() =>_mEventHandledState = EventHandledState.Continue;
-		public void MarkHandledAndContinue()=>_mEventHandledState = EventHandledState.HandledAndContinue;
-		public void MarkDrop() => _mForwardDir = EventForwardDir.Drop;
-		public void MarkBubble() => _mForwardDir = EventForwardDir.Bubble;
-		public void MarkBroadCast() => _mForwardDir = EventForwardDir.BroadCast;
-		public override string ToString() => Name;
-		internal void AttachTraceToken(EventStateToken token) => _traceToken = token;
-	}
+        public void MarkDrop() => _forwardDirection = EventForwardDir.Drop;
+        public void MarkBubble() => _forwardDirection = EventForwardDir.Bubble;
+        public void MarkBroadCast() => _forwardDirection = EventForwardDir.BroadCast;
+
+        public override string ToString() => Name;
+
+        internal void AttachTraceToken(EventStateToken token) => _traceToken = token;
+    }
 }

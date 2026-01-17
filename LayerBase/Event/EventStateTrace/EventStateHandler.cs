@@ -6,10 +6,10 @@ public delegate void EventCompletedHandler(
     ref EventState state
 );
 
-public delegate void ClassicEventCompletedHandler(
+public delegate void ClassifiedEventCompletedHandler(
     ref EventCategoryToken eventCategoryToken,ref EventState state 
 );
 
-public delegate void ClassicEventCreatedHandler(
+public delegate void ClassifiedEventCreatedHandler(
     ref EventCategoryToken eventCategoryToken,ref EventState state
 );

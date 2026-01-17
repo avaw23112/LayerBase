@@ -29,8 +29,8 @@ internal sealed class LayerChain
         eventStateTracer = new EventStateTracer(slabSize);
         
         // 注册事件元数据创建事件
-        eventStateTracer.OnClassicEventCompleted = EventMetaDataHandler.OnClassicEventDestroyed;
-        eventStateTracer.OnClassicEventCreated = EventMetaDataHandler.OnClassicEventCreated;
+        eventStateTracer.OnClassifiedEventCompleted = EventMetaDataHandler.OnClassicEventDestroyed;
+        eventStateTracer.OnClassifiedEventCreated = EventMetaDataHandler.OnClassicEventCreated;
         
         // 构建层级
         foreach (var node in responsibilityChain)

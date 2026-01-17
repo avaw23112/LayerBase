@@ -7,13 +7,13 @@ namespace LayerBase.Core.EventHandler
     /// 阻塞事件.可截断事件流
     /// </summary>
     /// <typeparam name="TValue"></typeparam>
-    public delegate EventHandledState EventHandlerDelegate<TValue>(in TValue  value) where TValue : struct;
+    public delegate EventHandledState EventHandleDelegate<TValue>(in TValue  value) where TValue : struct;
     
     /// <summary>
     /// 异步事件.不可截断事件流
     /// </summary>
     /// <typeparam name="TValue"></typeparam>
-    public delegate LBTask EventHandlerDelegateAsync<TValue>(TValue value) where TValue : struct;
+    public delegate LBTask EventHandleDelegateAsync<TValue>(TValue value) where TValue : struct;
     
     /// <summary>
     /// 事件处理器

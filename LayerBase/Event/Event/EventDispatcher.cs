@@ -1,288 +1,295 @@
-﻿using LayerBase.Async;
+using System;
+using LayerBase.Async;
 using LayerBase.Core.EventHandler;
 using LayerBase.Core.EventStateTrace;
 using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Core.Event
 {
-	/// <summary>
-	/// 每一层都有一个Dispatcher,负责管理所有绑定的事件handler
-	/// </summary>
-	internal class EventDispatcher
-	{
-		private readonly Dictionary<int, List<Delegate>> m_mapDelegate = new ();
-		private readonly Dictionary<int, List<IEventHandler>> m_handlerMap = new ();
-		private readonly object m_lock = new ();
-		
-		internal EventStateTracer? StateTracer { get; set; }
-		internal EventLogTracer? LogTracer { get; set; }
-		
-		/// <summary>
-		/// 所有处理器都是顺序无关的,它不跟踪事件的状态
-		/// </summary>
-		/// <param name="handler"></param>
-		/// <typeparam name="EventArg"></typeparam>
-		/// <exception cref="ArgumentNullException"></exception>
-		public void Subscribe<EventArg>(IEventHandler<EventArg> handler) where EventArg : struct
-		{
-			if (handler == null) throw new ArgumentNullException(nameof(handler));
-			int typeId = EventTypeId<EventArg>.Id;
-			lock (m_lock)
-			{
-				if (!m_handlerMap.TryGetValue(typeId, out var list))
-				{
-					list = new List<IEventHandler>(capacity: 4);
-					m_handlerMap[typeId] = list;
-				}
+    /// <summary>
+    /// 事件分发器：管理当前层绑定的处理器/委托并分发。
+    /// </summary>
+    internal class EventDispatcher
+    {
+        private readonly Dictionary<int, List<Delegate>> _orderedDelegates = new();
+        private readonly Dictionary<int, List<IEventHandler>> _unorderedHandlers = new();
+        private readonly object _lock = new();
 
-				list.Add(handler);
-			}
-		}
-		public void Subscribe<EventArg>(IEventHandlerAsync<EventArg> handler) where EventArg : struct
-		{
-			if (handler == null) throw new ArgumentNullException(nameof(handler));
-			int typeId = EventTypeId<EventArg>.Id;
-			lock (m_lock)
-			{
-				if (!m_handlerMap.TryGetValue(typeId, out var list))
-				{
-					list = new List<IEventHandler>(capacity: 4);
-					m_handlerMap[typeId] = list;
-				}
+        internal EventStateTracer? StateTracer { get; set; }
+        internal EventLogTracer? LogTracer { get; set; }
 
-				list.Add(handler);
-			}
-		}
-		/// <summary>
-		/// 所有处理方法都是顺序相关的,它跟踪事件状态
-		/// </summary>
-		/// <param name="handlerDelegate"></param>
-		/// <typeparam name="EventArg"></typeparam>
-		/// <exception cref="ArgumentNullException"></exception>
-		public void Subscribe<EventArg>(EventHandlerDelegate<EventArg> handlerDelegate) where EventArg : struct
-		{
-			if (handlerDelegate == null) throw new ArgumentNullException(nameof(handlerDelegate));
-			int typeId = EventTypeId<EventArg>.Id;
+        /// <summary>
+        /// 注册无序处理器（不控制传播）。
+        /// </summary>
+        public void Subscribe<EventArg>(IEventHandler<EventArg> handler) where EventArg : struct
+        {
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            int typeId = EventTypeId<EventArg>.Id;
+            lock (_lock)
+            {
+                if (!_unorderedHandlers.TryGetValue(typeId, out var list))
+                {
+                    list = new List<IEventHandler>(capacity: 4);
+                    _unorderedHandlers[typeId] = list;
+                }
 
-			lock (m_lock)
-			{
-				if (!m_mapDelegate.TryGetValue(typeId, out var list))
-				{
-					list = new List<Delegate>(capacity: 4);
-					m_mapDelegate[typeId] = list;
-				}
+                list.Add(handler);
+            }
+        }
 
-				list.Add(handlerDelegate);
-			}
-		}
-		public void Subscribe<EventArg>(EventHandlerDelegateAsync<EventArg> handlerDelegate) where EventArg : struct
-		{
-			if (handlerDelegate == null) throw new ArgumentNullException(nameof(handlerDelegate));
-			int typeId = EventTypeId<EventArg>.Id;
+        public void Subscribe<EventArg>(IEventHandlerAsync<EventArg> handler) where EventArg : struct
+        {
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            int typeId = EventTypeId<EventArg>.Id;
+            lock (_lock)
+            {
+                if (!_unorderedHandlers.TryGetValue(typeId, out var list))
+                {
+                    list = new List<IEventHandler>(capacity: 4);
+                    _unorderedHandlers[typeId] = list;
+                }
 
-			lock (m_lock)
-			{
-				if (!m_mapDelegate.TryGetValue(typeId, out var list))
-				{
-					list = new List<Delegate>(capacity: 4);
-					m_mapDelegate[typeId] = list;
-				}
+                list.Add(handler);
+            }
+        }
 
-				list.Add(handlerDelegate);
-			}
-		}
-		public bool Unsubscribe<T>(IEventHandler<T> handler) where T : struct
-		{
-			if (handler == null) return false;
-			int typeId = EventTypeId<T>.Id;
+        /// <summary>
+        /// 注册有序委托（返回值可截断传播）。
+        /// </summary>
+        public void Subscribe<EventArg>(EventHandleDelegate<EventArg> handleDelegate) where EventArg : struct
+        {
+            if (handleDelegate == null) throw new ArgumentNullException(nameof(handleDelegate));
+            int typeId = EventTypeId<EventArg>.Id;
 
-			lock (m_lock)
-			{
-				if (!m_handlerMap.TryGetValue(typeId, out var list) || list.Count == 0)
-					return false;
-				bool removed = list.Remove(handler);
+            lock (_lock)
+            {
+                if (!_orderedDelegates.TryGetValue(typeId, out var list))
+                {
+                    list = new List<Delegate>(capacity: 4);
+                    _orderedDelegates[typeId] = list;
+                }
 
-				if (removed && list.Count == 0)
-				{
-					m_handlerMap.Remove(typeId);
-				}
-				return removed;
-			}
-		}
-		public bool Unsubscribe<T>(IEventHandlerAsync<T> handler) where T : struct
-		{
-			if (handler == null) return false;
-			int typeId = EventTypeId<T>.Id;
+                list.Add(handleDelegate);
+            }
+        }
 
-			lock (m_lock)
-			{
-				if (!m_handlerMap.TryGetValue(typeId, out var list) || list.Count == 0)
-					return false;
-				bool removed = list.Remove(handler);
+        public void Subscribe<EventArg>(EventHandleDelegateAsync<EventArg> handleDelegate) where EventArg : struct
+        {
+            if (handleDelegate == null) throw new ArgumentNullException(nameof(handleDelegate));
+            int typeId = EventTypeId<EventArg>.Id;
 
-				if (removed && list.Count == 0)
-				{
-					m_handlerMap.Remove(typeId);
-				}
-				return removed;
-			}
-		}
-		public bool Unsubscribe<T>(EventHandlerDelegate<T> handlerDelegate) where T : struct
-		{
-			if (handlerDelegate == null) return false;
-			int typeId = EventTypeId<T>.Id;
+            lock (_lock)
+            {
+                if (!_orderedDelegates.TryGetValue(typeId, out var list))
+                {
+                    list = new List<Delegate>(capacity: 4);
+                    _orderedDelegates[typeId] = list;
+                }
 
-			lock (m_lock)
-			{
-				if (!m_mapDelegate.TryGetValue(typeId, out var list) || list.Count == 0)
-					return false;
-				bool removed = list.Remove(handlerDelegate);
+                list.Add(handleDelegate);
+            }
+        }
 
-				if (removed && list.Count == 0)
-				{
-					m_mapDelegate.Remove(typeId);
-				}
-				return removed;
-			}
-		}
-		public bool Unsubscribe<T>(EventHandlerDelegateAsync<T> handlerDelegateAsync) where T : struct
-		{
-			if (handlerDelegateAsync == null) return false;
+        public bool Unsubscribe<T>(IEventHandler<T> handler) where T : struct
+        {
+            if (handler == null) return false;
+            int typeId = EventTypeId<T>.Id;
 
-			int typeId = EventTypeId<T>.Id;
+            lock (_lock)
+            {
+                if (!_unorderedHandlers.TryGetValue(typeId, out var list) || list.Count == 0)
+                    return false;
+                bool removed = list.Remove(handler);
 
-			lock (m_lock)
-			{
-				if (!m_mapDelegate.TryGetValue(typeId, out var list) || list.Count == 0)
-					return false;
-				bool removed = list.Remove(handlerDelegateAsync);
+                if (removed && list.Count == 0)
+                {
+                    _unorderedHandlers.Remove(typeId);
+                }
+                return removed;
+            }
+        }
 
-				if (removed && list.Count == 0)
-				{
-					m_mapDelegate.Remove(typeId);
-				}
-				return removed;
-			}
-		}
-		public EventHandledState Dispatch<T>(in Event<T> @event) where T : struct
-		{
-			if (!@event.IsVaild())
-			{
-				return EventHandledState.Handled;
-			}
-			
-			int typeId = EventTypeId<T>.Id;
-			//先处理无顺序的Handler
-			DealHandlers(@event, typeId);
-			
-			//再处理有顺序的Delegate
-			return DealDelegates(@event, typeId);
-		}
+        public bool Unsubscribe<T>(IEventHandlerAsync<T> handler) where T : struct
+        {
+            if (handler == null) return false;
+            int typeId = EventTypeId<T>.Id;
 
-		private EventHandledState DealDelegates<T>(in Event<T> @event, int typeId) where T : struct
-		{
-			//有效性校验
-			if (!m_mapDelegate.TryGetValue(typeId, out var list) || list.Count == 0)
-			{
-				return EventHandledState.Continue;
-			}
+            lock (_lock)
+            {
+                if (!_unorderedHandlers.TryGetValue(typeId, out var list) || list.Count == 0)
+                    return false;
+                bool removed = list.Remove(handler);
 
-			//留个tag,最终决定是否继续传播事件
-			bool handledAndContinueSeen = false;
-			var token = @event.TraceToken;
-			ref EventState state = ref StateTracer.Resolve(token); 
-				
-			for (int i = 0; i < list.Count; i++)
-			{
-				var d = list[i];
-				try
-				{
-					//有序处理事件委托
-					if (d is EventHandlerDelegate<T> eventHandlerDelegate)
-					{
-						EventHandledState r = eventHandlerDelegate(in @event.Value);
-						if (r == EventHandledState.Handled)
-						{
-							@event.MarkHandled();
-							return EventHandledState.Handled;
-						}
+                if (removed && list.Count == 0)
+                {
+                    _unorderedHandlers.Remove(typeId);
+                }
+                return removed;
+            }
+        }
 
-						if (r == EventHandledState.HandledAndContinue)
-						{
-							@event.MarkHandledAndContinue();
-							handledAndContinueSeen = true;
-						}
-						else @event.MarkContinue();
+        public bool Unsubscribe<T>(EventHandleDelegate<T> handleDelegate) where T : struct
+        {
+            if (handleDelegate == null) return false;
+            int typeId = EventTypeId<T>.Id;
 
-						LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(eventHandlerDelegate, i), r);
-					}
-					//如果是异步事件,即发即忘不等待.
-					else if (d is EventHandlerDelegateAsync<T> eventHandlerDelegateAsync)
-					{
-						eventHandlerDelegateAsync(@event.Value).Forget();
-						LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(eventHandlerDelegateAsync, i),
-							EventHandledState.Continue);
-					}
-				}
-				catch (Exception e)
-				{
-					EventMetaDataHandler.OnEventExpectation(@event.Value,e);
-				}
-			}
-			return handledAndContinueSeen ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
-		}
+            lock (_lock)
+            {
+                if (!_orderedDelegates.TryGetValue(typeId, out var list) || list.Count == 0)
+                    return false;
+                bool removed = list.Remove(handleDelegate);
 
-		private void DealHandlers<T>(in Event<T> @event, int typeId) where T : struct
-		{
-			var token = @event.TraceToken;
-			ref EventState state = ref StateTracer.Resolve(token); 
-			
-			if (m_handlerMap.TryGetValue(typeId, out var handlers) && handlers.Count != 0)
-			{
-				for (int i = 0; i < handlers.Count; i++)
-				{
-					var handler = handlers[i];
-					try
-					{
-						if (handler is IEventHandler<T> eventHandler)
-						{
-							eventHandler.Deal(in @event.Value);
-						}
-						if(handler is IEventHandlerAsync<T> eventHandlerAsync)
-						{
-							eventHandlerAsync.Deal(@event.Value).Forget();
-						}
-					}
-					catch (Exception e)
-					{
-						EventMetaDataHandler.OnEventExpectation(@event.Value,e);
-					}
-					finally
-					{
-						LogTracer?.TryRecordHandler(ref state, handler.GetType().Name, EventHandledState.Continue);
-					}
-				}
-			}
-		}
+                if (removed && list.Count == 0)
+                {
+                    _orderedDelegates.Remove(typeId);
+                }
+                return removed;
+            }
+        }
 
-		private static string GetHandlerDisplayName(Delegate d, int index = -1)
-		{
-			var method = d.Method;
-			string typeName = method.DeclaringType?.Name ?? d.Target?.GetType()?.Name ?? "Global";
-			string methodName = method.Name;
+        public bool Unsubscribe<T>(EventHandleDelegateAsync<T> handleDelegateAsync) where T : struct
+        {
+            if (handleDelegateAsync == null) return false;
+            int typeId = EventTypeId<T>.Id;
 
-			// 编译器生成的闭包/局部函数名通常包含尖括号，替换成更友好的标识。
-			if (methodName.StartsWith("<") && methodName.Contains(">"))
-			{
-				methodName = "lambda";
-			}
+            lock (_lock)
+            {
+                if (!_orderedDelegates.TryGetValue(typeId, out var list) || list.Count == 0)
+                    return false;
+                bool removed = list.Remove(handleDelegateAsync);
 
-			string name = $"{typeName}.{methodName}";
-			if (index >= 0)
-			{
-				name = $"#{index}:{name}";
-			}
-			return name;
-		}
-	}
+                if (removed && list.Count == 0)
+                {
+                    _orderedDelegates.Remove(typeId);
+                }
+                return removed;
+            }
+        }
+
+        /// <summary>
+        /// 分发事件：先无序处理，再按序委托。
+        /// </summary>
+        public EventHandledState Dispatch<T>(in Event<T> @event) where T : struct
+        {
+            if (!@event.IsVaild())
+            {
+                return EventHandledState.Handled;
+            }
+
+            int typeId = EventTypeId<T>.Id;
+            HandleUnordered(@event, typeId);
+            return HandleOrdered(@event, typeId);
+        }
+
+        private EventHandledState HandleOrdered<T>(in Event<T> @event, int typeId) where T : struct
+        {
+            if (!_orderedDelegates.TryGetValue(typeId, out var list) || list.Count == 0)
+            {
+                return EventHandledState.Continue;
+            }
+
+            bool handledAndContinueSeen = false;
+            var tracer = RequireTracer();
+            var token = @event.TraceToken;
+            ref EventState state = ref tracer.Resolve(token);
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                var handler = list[i];
+                try
+                {
+                    if (handler is EventHandleDelegate<T> syncDelegate)
+                    {
+                        var result = syncDelegate(in @event.Value);
+                        if (result == EventHandledState.Handled)
+                        {
+                            @event.MarkHandled();
+                            return EventHandledState.Handled;
+                        }
+
+                        if (result == EventHandledState.HandledAndContinue)
+                        {
+                            @event.MarkHandledAndContinue();
+                            handledAndContinueSeen = true;
+                        }
+                        else
+                        {
+                            @event.MarkContinue();
+                        }
+
+                        LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(syncDelegate, i), result);
+                    }
+                    else if (handler is EventHandleDelegateAsync<T> asyncDelegate)
+                    {
+                        asyncDelegate(@event.Value).Forget();
+                        LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(asyncDelegate, i),
+                            EventHandledState.Continue);
+                    }
+                }
+                catch (Exception e)
+                {
+                    EventMetaDataHandler.OnEventExpectation(@event.Value, e);
+                }
+            }
+
+            return handledAndContinueSeen ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
+        }
+
+        private void HandleUnordered<T>(in Event<T> @event, int typeId) where T : struct
+        {
+            var token = @event.TraceToken;
+            var tracer = RequireTracer();
+            ref EventState state = ref tracer.Resolve(token);
+
+            if (_unorderedHandlers.TryGetValue(typeId, out var handlers) && handlers.Count != 0)
+            {
+                for (int i = 0; i < handlers.Count; i++)
+                {
+                    var handler = handlers[i];
+                    try
+                    {
+                        if (handler is IEventHandler<T> syncHandler)
+                        {
+                            syncHandler.Deal(in @event.Value);
+                        }
+                        if (handler is IEventHandlerAsync<T> asyncHandler)
+                        {
+                            asyncHandler.Deal(@event.Value).Forget();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        EventMetaDataHandler.OnEventExpectation(@event.Value, e);
+                    }
+                    finally
+                    {
+                        LogTracer?.TryRecordHandler(ref state, handler.GetType().Name, EventHandledState.Continue);
+                    }
+                }
+            }
+        }
+
+        private static string GetHandlerDisplayName(Delegate handler, int index = -1)
+        {
+            var method = handler.Method;
+            string typeName = method.DeclaringType?.Name ?? handler.Target?.GetType()?.Name ?? "Global";
+            string methodName = method.Name;
+
+            // 编译器生成的闭包/局部函数名通常包含尖括号，替换成更友好的标识。
+            if (methodName.StartsWith("<") && methodName.Contains(">"))
+            {
+                methodName = "lambda";
+            }
+
+            string name = $"{typeName}.{methodName}";
+            if (index >= 0)
+            {
+                name = $"#{index}:{name}";
+            }
+            return name;
+        }
+
+        private EventStateTracer RequireTracer() =>
+            StateTracer ?? throw new InvalidOperationException("事件追踪器未初始化。");
+    }
 }

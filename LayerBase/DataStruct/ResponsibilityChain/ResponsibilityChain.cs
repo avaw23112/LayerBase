@@ -3,19 +3,21 @@ using System.Collections;
 namespace LayerBase.Core.ResponsibilityChain
 {
 	/// <summary>
-	/// 一个“外界可控”的双向责任链：节点知道 Prev/Next，外界可插入/删除/移动节点。
+	/// 外部可控的双向责任链：节点知道前后指针，外部可插入/删除/移动节点。
 	/// </summary>
 	internal sealed class ResponsibilityChain : IEnumerable<Node>
 	{
-		private Node m_head;
-		private Node m_tail;
-		private RcOwnerToken m_OwnerToken;
+		private Node? m_head;
+		private Node? m_tail;
+		private readonly RcOwnerToken m_OwnerToken;
+
 		public ResponsibilityChain(RcOwnerToken token)
 		{
-			this.m_OwnerToken = token;
+			m_OwnerToken = token;
 		}
-		public Node Head => m_head;
-		public Node Tail => m_tail;
+
+		public Node? Head => m_head;
+		public Node? Tail => m_tail;
 	
 		public Node AddLast(Node node)
 		{
@@ -28,10 +30,9 @@ namespace LayerBase.Core.ResponsibilityChain
 				return node;
 			}
 
-			node.Prev = m_tail;       // ^ 新节点前驱 = 旧尾
-			m_tail.Next = node;       // ^ 旧尾后继 = 新节点
-			m_tail = node;            // ^ 更新尾指针
-			
+			node.Prev = m_tail;       // 新节点前驱 = 旧尾
+			m_tail.Next = node;       // 旧尾后继 = 新节点
+			m_tail = node;            // 更新尾指针
 			ValidateAcyclic();
 			return node;
 		}
@@ -47,9 +48,9 @@ namespace LayerBase.Core.ResponsibilityChain
 				return node;
 			}
 
-			node!.Next = m_head;       // ^ 新节点后继 = 旧头
-			m_head.Prev = node;       // ^ 旧头前驱 = 新节点
-			m_head = node;            // ^ 更新头指针
+			node.Next = m_head;       // 新节点后继 = 旧头
+			m_head.Prev = node;       // 旧头前驱 = 新节点
+			m_head = node;            // 更新头指针
 			ValidateAcyclic();
 			return node;
 		}
@@ -103,7 +104,6 @@ namespace LayerBase.Core.ResponsibilityChain
 			var next = node.Next;
 
 			if (prev != null) prev.Next = next; else m_head = next;
-
 			if (next != null) next.Prev = prev; else m_tail = prev;
 
 			node.Prev = null;
@@ -129,7 +129,7 @@ namespace LayerBase.Core.ResponsibilityChain
 			{
 				node.Prev = null;
 				node.Next = m_head;
-				m_head.Prev = node;
+				m_head!.Prev = node;
 				m_head = node;
 				return;
 			}
@@ -158,7 +158,7 @@ namespace LayerBase.Core.ResponsibilityChain
 			{
 				node.Next = null;
 				node.Prev = m_tail;
-				m_tail.Next = node;
+				m_tail!.Next = node;
 				m_tail = node;
 				return;
 			}
@@ -186,13 +186,13 @@ namespace LayerBase.Core.ResponsibilityChain
 
 		private void EnsureOwned(Node node)
 		{
-			if (node.OwnerToken.Equals(m_OwnerToken))
+			if (!node.OwnerToken.Equals(m_OwnerToken))
 				throw new InvalidOperationException("Node does not belong to this chain.");
 		}
 
 		private void DetermineOwned(Node node)
 		{
-			if (!node.OwnerToken.Equals((m_OwnerToken)))
+			if (!node.OwnerToken.Equals(m_OwnerToken))
 			{
 				node.OwnerToken = m_OwnerToken;
 			}
@@ -206,20 +206,20 @@ namespace LayerBase.Core.ResponsibilityChain
 			if (m_tail != null && m_tail.Next != null)
 				throw new InvalidOperationException("Invalid chain: Tail.Next must be null.");
 
-			Node slow = m_head;
-			Node fast = m_head;
+			Node? slow = m_head;
+			Node? fast = m_head;
 
 			while (fast != null && fast.Next != null)
 			{
-				slow = slow.Next;
+				slow = slow!.Next;
 				fast = fast.Next.Next;
 
 				if (ReferenceEquals(slow, fast))
 					throw new InvalidOperationException("Cycle detected in responsibility chain.");
 			}
 
-			Node prev = null;
-			Node cur = m_head;
+			Node? prev = null;
+			Node? cur = m_head;
 
 			while (cur != null)
 			{
