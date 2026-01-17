@@ -285,22 +285,44 @@ namespace LayerBase.Layers
 				{
 					@event.MarkBroadCast();
 					TryAttachTrace(ref @event);
-					DropInternal(in @event);
-				});
-				EventMetaData<Value>.TimerScheduler.FireOnFrequency(in value, (@event) =>
-				{
-					@event.MarkBroadCast();
-					TryAttachTrace(ref @event);
-					BubbleInternal(in @event);
+					BroadcastInternal(in @event);
 				});
 				return;
 			}
 			
 			TryAttachTrace(ref @event);
-			DropInternal(@event);
-			
-			TryAttachTrace(ref @event);
-			BubbleInternal(@event);
+			BroadcastInternal(@event);
+		}
+
+		private void BroadcastInternal<Value>(in Event<Value> @event) where Value : struct
+		{
+			if (!@event.IsVaild())
+			{
+				return;
+			}
+
+			EventHandledState currentState = Dispatch(@event);
+			if (currentState == EventHandledState.Handled)
+			{
+				m_eventStateTracer?.TryComplete(@event.TraceToken);
+				return;
+			}
+
+			Layer? higher = Previous as Layer;
+			Layer? lower = NextNode as Layer;
+		
+			if (higher != null && higher != this)
+			{
+				higher.m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
+				higher.BubbleInternal(@event);
+			}
+
+			if (lower != null && lower != this)
+			{
+				lower.m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
+				lower.DropInternal(@event);
+			}
+			m_eventStateTracer?.TryComplete(@event.TraceToken);
 		}
 		
 		// 重新实现原有方法
@@ -337,8 +359,7 @@ namespace LayerBase.Layers
 			}
 			
 			//根据层级策略进行处理
-			Layer targetLayer= getTargetLayer();
-			if (UsedLayerStrategy(@event, targetLayer, postMethod))
+			if (UsedLayerStrategy(@event, postMethod))
 				return;
 	
 			var eventHandledState = Dispatch(@event);
@@ -348,6 +369,7 @@ namespace LayerBase.Layers
 				return;
 			}
 			
+			Layer targetLayer= getTargetLayer();
 			if (targetLayer != null && targetLayer != this)
 			{
 				targetLayer.m_eventStateTracer?.TryIncrementPending(@event.TraceToken);
@@ -356,14 +378,9 @@ namespace LayerBase.Layers
 			m_eventStateTracer?.TryComplete(@event.TraceToken);
 		}
 
-		private bool UsedLayerStrategy<Value>(Event<Value> @event, Layer TargetLayer, Action<Event<Value>> postMethod)
+		private bool UsedLayerStrategy<Value>(Event<Value> @event, Action<Event<Value>> postMethod)
 			where Value : struct
 		{
-			if (TargetLayer == null)
-			{
-				return true;
-			}
-			
 			var layerDispatchStrategy = GetLayerStrategy(@event);
 			if (layerDispatchStrategy == LayerDispatchStrategy.Post)
 			{

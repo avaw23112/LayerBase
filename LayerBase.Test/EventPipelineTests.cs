@@ -32,8 +32,8 @@ public class EventPipelineTests
 
 		PumpTwice();
 
-		Assert.That(upper.ReceivedIds.Count,Is.EqualTo(0));
-		Assert.That(lower.ReceivedIds.Count,Is.EqualTo(1));
+		Assert.That(upper.ReceivedIds.Count, Is.EqualTo(0));
+		Assert.That(lower.ReceivedIds.Count, Is.EqualTo(1));
 	}
 
 	[Test]
