@@ -11,7 +11,7 @@ namespace LayerBase.Tools.Timer
     /// </summary>
     public sealed class TimerScheduler
     {
-        private readonly PriorityQueue<TimerToken, double> _timeline = new();
+        private readonly TimerTimeline _timeline = new();
         private readonly Dictionary<int, ITimerQueue> _queues = new();
         private readonly Dictionary<int, IFrequencyQueue> _frequencyQueues = new();
         private readonly object _lock = new();
@@ -75,10 +75,12 @@ namespace LayerBase.Tools.Timer
                 }
                 while (_timeline.TryPeek(out var token, out var dueTime) && dueTime <= _currentTime)
                 {
-                    _timeline.Dequeue();
-                    if (_queues.TryGetValue(token.TypeId, out var queue))
+                    if (_timeline.TryDequeue(out token, out _))
                     {
-                        due.Add((token, queue));
+                        if (_queues.TryGetValue(token.TypeId, out var queue))
+                        {
+                            due.Add((token, queue));
+                        }
                     }
                 }
             }
@@ -373,7 +375,109 @@ namespace LayerBase.Tools.Timer
             }
         }
 
- 
+        private sealed class TimerTimeline
+        {
+            private struct Entry
+            {
+                public TimerToken Token;
+                public double Due;
+            }
+
+            private readonly List<Entry> _items = new();
+
+            public void Enqueue(in TimerToken token, double due)
+            {
+                _items.Add(new Entry { Token = token, Due = due });
+                BubbleUp(_items.Count - 1);
+            }
+
+            public bool TryPeek(out TimerToken token, out double due)
+            {
+                if (_items.Count == 0)
+                {
+                    token = default;
+                    due = default;
+                    return false;
+                }
+
+                var entry = _items[0];
+                token = entry.Token;
+                due = entry.Due;
+                return true;
+            }
+
+            public bool TryDequeue(out TimerToken token, out double due)
+            {
+                if (_items.Count == 0)
+                {
+                    token = default;
+                    due = default;
+                    return false;
+                }
+
+                var root = _items[0];
+                int lastIndex = _items.Count - 1;
+                _items[0] = _items[lastIndex];
+                _items.RemoveAt(lastIndex);
+
+                if (_items.Count > 0)
+                {
+                    BubbleDown(0);
+                }
+
+                token = root.Token;
+                due = root.Due;
+                return true;
+            }
+
+            private void BubbleUp(int index)
+            {
+                while (index > 0)
+                {
+                    int parent = (index - 1) / 2;
+                    if (_items[parent].Due <= _items[index].Due)
+                    {
+                        break;
+                    }
+
+                    Swap(parent, index);
+                    index = parent;
+                }
+            }
+
+            private void BubbleDown(int index)
+            {
+                while (true)
+                {
+                    int left = (index * 2) + 1;
+                    if (left >= _items.Count)
+                    {
+                        break;
+                    }
+
+                    int right = left + 1;
+                    int smallest = right < _items.Count && _items[right].Due < _items[left].Due
+                        ? right
+                        : left;
+
+                    if (_items[index].Due <= _items[smallest].Due)
+                    {
+                        break;
+                    }
+
+                    Swap(index, smallest);
+                    index = smallest;
+                }
+            }
+
+            private void Swap(int a, int b)
+            {
+                var temp = _items[a];
+                _items[a] = _items[b];
+                _items[b] = temp;
+            }
+        }
+
     }
 
     internal interface ITimerQueue
