@@ -1,5 +1,6 @@
 using System;
 using LayerBase.Core.Event;
+using LayerBase.Core.EventCatalogue;
 using LayerBase.Core.EventStateTrace;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
@@ -16,26 +17,37 @@ namespace LayerBase.Core.UnmanagedList
     {
         private readonly PooledChunkedOverwriteQueue<Event<Value>> _queue;
         private readonly Layer _owner;
+        private EventCategoryToken _cachedCategory;
+        private LayerDispatchStrategy _cachedStrategy;
+        private bool _hasCachedStrategy;
 
         public UnmanagedList(Layer owner)
         {
             int maxQueueSize = EventMetaDataHandler.MaxBufferSize<Value>();
             EventQueueOverflowStrategy overflowStrategy = EventMetaDataHandler.EventQueueOverflowStrategy<Value>();
             _queue = new PooledChunkedOverwriteQueue<Event<Value>>(maxCapacity: maxQueueSize, overflowStrategy: overflowStrategy);
+            if (maxQueueSize > 0)
+            {
+                _queue.Prewarm(maxQueueSize);
+            }
             _owner = owner;
         }
 
         public void Pump()
         {
-            // 处理前先按照元数据策略进行合并，减少重复事件。
-            EventMetaDataHandler.EventMergeStrategy<Value>(_queue);
-
             int count = _queue.Count;
+            if (count > 1)
+            {
+                // 处理前先按照元数据策略进行合并，减少重复事件。
+                EventMetaDataHandler.EventMergeStrategy<Value>(_queue);
+                count = _queue.Count;
+            }
+
             while (count-- > 0)
             {
                 if (!_queue.TryDequeue(out Event<Value> @event))
                 {
-                    throw new Exception("致命错误：内存队列读取失败。");
+                    throw new Exception("致命错误：内存队列读取失败");
                 }
 
                 if (!EventMetaData<Value>.IsFrequencyGateOpen)
@@ -93,7 +105,17 @@ namespace LayerBase.Core.UnmanagedList
             var tracer = _owner.m_eventStateTracer;
             if (tracer != null && tracer.TryGet(@event.TraceToken, out var eventState))
             {
-                return LayerMetaData.GetDispatchStrategy(_owner.GetType(), eventState.CatalogueToken);
+                var category = eventState.CatalogueToken;
+                if (_hasCachedStrategy && category.Equals(_cachedCategory))
+                {
+                    return _cachedStrategy;
+                }
+
+                var strategy = LayerMetaData.GetDispatchStrategy(_owner.GetType(), category);
+                _cachedCategory = category;
+                _cachedStrategy = strategy;
+                _hasCachedStrategy = true;
+                return strategy;
             }
 
             return LayerDispatchStrategy.None;
