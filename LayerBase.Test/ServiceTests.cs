@@ -3,6 +3,7 @@ using LayerBase.Core.EventCatalogue;
 using LayerBase.Core.EventHandler;
 using LayerBase.DI;
 using LayerBase.Event.EventMetaData;
+using LayerBase.DI.Options;
 using LayerBase.LayerHub;
 using LayerBase.Layers;
 using LayerBase.Tools.Timer;
@@ -62,7 +63,6 @@ public class ServiceRegistrationTests
 		Assert.That(layer.Received.Count, Is.EqualTo(1));
 	}
 
-
 	[Test]
 	public void Timer_ticks_in_normal_mode()
 	{
@@ -80,6 +80,20 @@ public class ServiceRegistrationTests
 		LayerHub.Pump(0.02f);
 
 		Assert.That(fired, Is.True);
+	}
+
+	[Test]
+	public void IService_that_implements_IUpdate_is_pumped()
+	{
+		var layer = new ServiceUpdateLayer();
+		LayerHub.CreateLayers().Push(layer).Build();
+
+		var updater = layer.GetService<UpdatingService>();
+		Assert.That(updater.TickCount, Is.EqualTo(0));
+
+		LayerHub.Pump(0.02f);
+
+		Assert.That(updater.TickCount, Is.GreaterThanOrEqualTo(1));
 	}
 }
 
@@ -201,3 +215,23 @@ internal sealed class ReleaseStubLayer : Layer
 }
 
 internal readonly record struct ReleaseTimerEvent(int Id);
+
+internal partial class ServiceUpdateLayer : Layer
+{
+}
+
+[OwnerLayer(typeof(ServiceUpdateLayer))]
+internal sealed class UpdatingService : IService, IUpdate
+{
+	public int TickCount { get; private set; }
+
+	public void ConfigureServices(IServiceCollection services)
+	{
+		services.AddSingleton<UpdatingService>(_ => this);
+	}
+
+	public void Update()
+	{
+		TickCount++;
+	}
+}

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
@@ -22,6 +23,7 @@ namespace LayerBase.Layers
 		private PooledEventContainer m_pooledEventContainer;
 		internal EventStateTracer? m_eventStateTracer;
 		private EventLogTracer? m_eventLogTracer;
+		private readonly List<IUpdate> m_serviceUpdates = new List<IUpdate>();
 		
 		//临时服务容器,存储由源生成器填充的Service
 		private ServiceCollection? m_serviceCollection;
@@ -48,6 +50,7 @@ namespace LayerBase.Layers
 		{
 			m_pooledEventContainer.Pump();
 			m_eventStateTracer?.Pump();
+			PumpServices();
 			Update();
 		}
 		
@@ -70,6 +73,10 @@ namespace LayerBase.Layers
 			
 			ServiceLayerBinder.Attach(service, this);
 			service.ConfigureServices(m_serviceCollection);
+			if (service is IUpdate updatable && !m_serviceUpdates.Contains(updatable))
+			{
+				m_serviceUpdates.Add(updatable);
+			}
 		}
 		
 		/// <summary>
@@ -444,6 +451,14 @@ namespace LayerBase.Layers
 			if (token.IsValid)
 			{
 				@event.AttachTraceToken(token);
+			}
+		}
+
+		private void PumpServices()
+		{
+			for (int i = 0; i < m_serviceUpdates.Count; i++)
+			{
+				m_serviceUpdates[i].Update();
 			}
 		}
 	}

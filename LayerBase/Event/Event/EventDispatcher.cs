@@ -189,9 +189,13 @@ namespace LayerBase.Core.Event
             }
 
             bool handledAndContinueSeen = false;
-            var tracer = RequireTracer();
-            var token = @event.TraceToken;
-            ref EventState state = ref tracer.Resolve(token);
+            bool isReleaseMode = StateTracer == null;
+            var tracer = StateTracer;
+            EventState state = default;
+            if (tracer != null)
+            {
+                state = tracer.Resolve(@event.TraceToken);
+            }
 
             for (int i = 0; i < list.Count; i++)
             {
@@ -217,13 +221,19 @@ namespace LayerBase.Core.Event
                             @event.MarkContinue();
                         }
 
-                        LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(syncDelegate, i), result);
+                        if (!isReleaseMode && tracer != null)
+                        {
+                            LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(syncDelegate, i), result);
+                        }
                     }
                     else if (handler is EventHandleDelegateAsync<T> asyncDelegate)
                     {
                         asyncDelegate(@event.Value).Forget();
-                        LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(asyncDelegate, i),
-                            EventHandledState.Continue);
+                        if (!isReleaseMode && tracer != null)
+                        {
+                            LogTracer?.TryRecordHandler(ref state, GetHandlerDisplayName(asyncDelegate, i),
+                                EventHandledState.Continue);
+                        }
                     }
                 }
                 catch (Exception e)
@@ -237,9 +247,13 @@ namespace LayerBase.Core.Event
 
         private void HandleUnordered<T>(in Event<T> @event, int typeId) where T : struct
         {
-            var token = @event.TraceToken;
-            var tracer = RequireTracer();
-            ref EventState state = ref tracer.Resolve(token);
+            var tracer = StateTracer;
+            bool isReleaseMode = tracer == null;
+            EventState state = default;
+            if (tracer != null)
+            {
+                state = tracer.Resolve(@event.TraceToken);
+            }
 
             if (_unorderedHandlers.TryGetValue(typeId, out var handlers) && handlers.Count != 0)
             {
@@ -263,7 +277,10 @@ namespace LayerBase.Core.Event
                     }
                     finally
                     {
-                        LogTracer?.TryRecordHandler(ref state, handler.GetType().Name, EventHandledState.Continue);
+                        if (!isReleaseMode && tracer != null)
+                        {
+                            LogTracer?.TryRecordHandler(ref state, handler.GetType().Name, EventHandledState.Continue);
+                        }
                     }
                 }
             }
@@ -289,7 +306,5 @@ namespace LayerBase.Core.Event
             return name;
         }
 
-        private EventStateTracer RequireTracer() =>
-            StateTracer ?? throw new InvalidOperationException("事件追踪器未初始化。");
     }
 }
