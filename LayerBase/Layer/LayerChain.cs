@@ -24,18 +24,28 @@ internal sealed class LayerChain
         }
     }
 
-    internal void Build(int slabSize = 512)
+    internal void Build(int slabSize = 512, bool releaseMode = false)
     {
-        eventStateTracer = new EventStateTracer(slabSize);
-        
-        // 注册事件元数据创建事件
-        eventStateTracer.OnClassifiedEventCompleted = EventMetaDataHandler.OnClassicEventDestroyed;
-        eventStateTracer.OnClassifiedEventCreated = EventMetaDataHandler.OnClassicEventCreated;
-        
-        // 构建层级
+        if (!releaseMode)
+        {
+            eventStateTracer = new EventStateTracer(slabSize);
+            
+            // 注册事件元数据创建事件
+            eventStateTracer.OnClassifiedEventCompleted = EventMetaDataHandler.OnClassicEventDestroyed;
+            eventStateTracer.OnClassifiedEventCreated = EventMetaDataHandler.OnClassicEventCreated;
+            
+            // 构建层级
+            foreach (var node in responsibilityChain)
+            {
+                (node as Layer)?.SetEventTracer(eventStateTracer);
+                (node as Layer)?.Build();
+            }
+            return;
+        }
+
+        eventStateTracer = null;
         foreach (var node in responsibilityChain)
         {
-            (node as Layer)?.SetEventTracer(eventStateTracer);
             (node as Layer)?.Build();
         }
     }
@@ -52,11 +62,6 @@ internal sealed class LayerChain
 
     internal void Pump()
     {
-        if (eventStateTracer == null)
-        {
-            return;
-        }
-
         foreach (var node in responsibilityChain)
         {
             (node as Layer)?.Pump();

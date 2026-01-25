@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Reflection;
+using LayerBase.Layers;
 
 namespace LayerBase.DI
 {
@@ -9,6 +10,7 @@ namespace LayerBase.DI
         private readonly Dictionary<Type, ServiceDescriptor> _map;
         private readonly ConcurrentDictionary<Type, object> _singletons = new ConcurrentDictionary<Type, object>();
         private readonly object _sync = new object();
+        private readonly Layer? _ownerLayer;
         private static readonly ServiceProvider _root = new ServiceProvider();
         private bool _disposed;
 
@@ -17,12 +19,14 @@ namespace LayerBase.DI
         internal ServiceProvider()
         {
             _map = new Dictionary<Type, ServiceDescriptor>();
+            _ownerLayer = null;
         }
-        public ServiceProvider(IEnumerable<ServiceDescriptor> descriptors)
+        public ServiceProvider(IEnumerable<ServiceDescriptor> descriptors, Layer? ownerLayer = null)
         {
             if (descriptors == null) throw new ArgumentNullException(nameof(descriptors));
 
             _map = new Dictionary<Type, ServiceDescriptor>();
+            _ownerLayer = ownerLayer;
             foreach (var d in descriptors)
             {
                 if (d.Lifetime == ServiceLifetime.Singleton)
@@ -66,13 +70,14 @@ namespace LayerBase.DI
 
         private object Resolve(ServiceDescriptor desc, HashSet<Type> callstack)
         {
-            return desc.Lifetime switch
+            var instance = desc.Lifetime switch
             {
                 ServiceLifetime.Singleton => _root.GetOrCreateSingleton(desc, callstack),
                 ServiceLifetime.Transient => CreateInstance(desc, callstack),
                 ServiceLifetime.Scoped => GetOrCreateSingleton(desc, callstack),
                 _ => throw new NotSupportedException($"Unsupported lifetime {desc.Lifetime}")
             };
+            return AttachLayerIfNeeded(instance, desc.Lifetime);
         }
 
         private object GetOrCreateSingleton(ServiceDescriptor desc, HashSet<Type> callstack)
@@ -148,6 +153,16 @@ namespace LayerBase.DI
                 var dep = GetService(p.PropertyType);
                 if (dep != null) p.SetValue(instance, dep, null);
             }
+        }
+
+        private object AttachLayerIfNeeded(object instance, ServiceLifetime lifetime)
+        {
+            if (_ownerLayer != null && lifetime != ServiceLifetime.Singleton && instance is IService service)
+            {
+                ServiceLayerBinder.Attach(service, _ownerLayer);
+            }
+
+            return instance;
         }
 
         public void Dispose()

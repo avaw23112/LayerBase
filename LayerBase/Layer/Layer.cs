@@ -66,6 +66,9 @@ namespace LayerBase.Layers
 		/// <param name="service"></param>
 		public void RegisterService(IService service)
 		{
+			if (service == null) throw new ArgumentNullException(nameof(service));
+			
+			ServiceLayerBinder.Attach(service, this);
 			service.ConfigureServices(m_serviceCollection);
 		}
 		
@@ -75,7 +78,7 @@ namespace LayerBase.Layers
 		public void Build()
 		{
 			m_serviceProvider?.Dispose();
-			m_serviceProvider = new ServiceProvider(m_serviceCollection.ToDescriptors());
+			m_serviceProvider = new ServiceProvider(m_serviceCollection.ToDescriptors(), this);
 		}
 		
 		// -----------------追踪-------------------
@@ -194,6 +197,11 @@ namespace LayerBase.Layers
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal EventHandledState Dispatch<Value>(in Event<Value> @event) where Value : struct
 		{
+			if (m_eventStateTracer == null)
+			{
+				return m_eventDispatcher.Dispatch(@event);
+			}
+			
 			ref EventState eventState = ref m_eventStateTracer.Resolve(@event.TraceToken);
 			m_eventLogTracer?.TryBeginLayer(ref eventState, GetType().Name);
 			return m_eventDispatcher.Dispatch(@event);
@@ -403,6 +411,11 @@ namespace LayerBase.Layers
 
 		private LayerDispatchStrategy GetLayerStrategy<Value>(Event<Value> @event) where Value : struct
 		{
+			if (m_eventStateTracer == null)
+			{
+				return LayerDispatchStrategy.None;
+			}
+			
 			m_eventStateTracer.TryGet(@event.TraceToken, out var eventState);
 			var layerDispatchStrategy = LayerMetaData.LayerMetaData.GetDispatchStrategy(
 				this.GetType(), eventState.CatalogueToken);

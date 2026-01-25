@@ -13,6 +13,7 @@ namespace LayerBase.LayerHub
 		private Action<string>? _logger;
 		private int _logQueueCapacity = 256;
 		private int _eventStateSlabSize = 256;
+		private bool _releaseMode;
 		
 		internal LayersBuilder(LayerChain chain)
 		{
@@ -30,6 +31,12 @@ namespace LayerBase.LayerHub
 			return this;
 		}
 
+		public LayersBuilder SetRelease(bool release = true)
+		{
+			_releaseMode = release;
+			return this;
+		}
+
 		public LayersBuilder SetEventStateSlabSize(int eventStateSlabSize = 256)
 		{
 			this._eventStateSlabSize = eventStateSlabSize;
@@ -38,8 +45,11 @@ namespace LayerBase.LayerHub
 
 		public void Build()
 		{
-			_chain.Build(_eventStateSlabSize);
-			_chain.SetLogTracing(_logger,_logQueueCapacity);
+			_chain.Build(_eventStateSlabSize, _releaseMode);
+			if (!_releaseMode)
+			{
+				_chain.SetLogTracing(_logger,_logQueueCapacity);
+			}
 		}
 	}
 
