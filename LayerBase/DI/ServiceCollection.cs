@@ -18,6 +18,8 @@ public class ServiceCollection: IServiceCollection
 
     public IServiceCollection AddSingleton<TService, TImpl>() where TImpl : TService
         => Add(ServiceDescriptor.Singleton<TService, TImpl>());
+    public IServiceCollection AddSingleton<TService>(TService instance)
+        => Add(ServiceDescriptor.Singleton(instance));
 
     public IServiceCollection AddSingleton<TService>(Func<IServiceProvider, TService> factory)
         => Add(ServiceDescriptor.Singleton(factory));

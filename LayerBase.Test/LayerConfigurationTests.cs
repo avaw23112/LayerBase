@@ -125,7 +125,7 @@ public class LayerConfigurationTests
 			_result = result;
 			_idSelector = idSelector;
 			_assertion = assertion;
-			Bind<TEvent>(Handle);
+			Subscribe<TEvent>(Handle);
 		}
 
 		public List<int> ReceivedIds { get; } = new();

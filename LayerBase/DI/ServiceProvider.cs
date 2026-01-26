@@ -72,6 +72,7 @@ namespace LayerBase.DI
         {
             var instance = desc.Lifetime switch
             {
+                ServiceLifetime.Instance => desc.Instance!,
                 ServiceLifetime.Singleton => _root.GetOrCreateSingleton(desc, callstack),
                 ServiceLifetime.Transient => CreateInstance(desc, callstack),
                 ServiceLifetime.Scoped => GetOrCreateSingleton(desc, callstack),

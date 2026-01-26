@@ -135,7 +135,7 @@ namespace LayerBase.Layers
 		/// <typeparam name="Value"></typeparam>
 		/// <param name="eventHandleDelegate"></param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected void Bind<Value>(EventHandleDelegate<Value> eventHandleDelegate) where Value : struct
+		public void Subscribe<Value>(EventHandleDelegate<Value> eventHandleDelegate) where Value : struct
 		{
 			m_eventDispatcher.Subscribe(eventHandleDelegate);
 		}
@@ -146,7 +146,7 @@ namespace LayerBase.Layers
 		/// <typeparam name="Value"></typeparam>
 		/// <param name="eventHandleDelegateAsync"></param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected void Bind<Value>(EventHandleDelegateAsync<Value> eventHandleDelegateAsync) where Value : struct
+		public void Subscribe<Value>(EventHandleDelegateAsync<Value> eventHandleDelegateAsync) where Value : struct
 		{
 			m_eventDispatcher.Subscribe(eventHandleDelegateAsync);
 		}
@@ -157,7 +157,7 @@ namespace LayerBase.Layers
 		/// <param name="eventHandler"></param>
 		/// <typeparam name="Value"></typeparam>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected void Bind<Value>(IEventHandler<Value> eventHandler) where Value : struct
+		public void Subscribe<Value>(IEventHandler<Value> eventHandler) where Value : struct
 		{
 			m_eventDispatcher.Subscribe(eventHandler);
 		}
@@ -168,13 +168,12 @@ namespace LayerBase.Layers
 		/// <param name="eventHandler"></param>
 		/// <typeparam name="Value"></typeparam>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected void Bind<Value>(IEventHandlerAsync<Value> eventHandler) where Value : struct
+		public void Subscribe<Value>(IEventHandlerAsync<Value> eventHandler) where Value : struct
 		{
 			m_eventDispatcher.Subscribe(eventHandler);
 		}
 		
 		// --------------------------Buffer Events-------------------
-
 		internal void PostEventToDoubleSide<Value>(in Event<Value> @event) where Value : struct
 		{
 			PostEventToHigherLayer(in @event);

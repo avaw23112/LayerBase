@@ -163,7 +163,7 @@ internal partial class ServiceEventLayer : Layer
 
 	public ServiceEventLayer()
 	{
-		Bind<ServiceRaisedEvent>(Handle);
+		Subscribe<ServiceRaisedEvent>(Handle);
 	}
 
 	private EventHandledState Handle(in ServiceRaisedEvent evt)

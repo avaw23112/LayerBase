@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using LayerBase.Core.EventHandler;
 using LayerBase.Layers;
 
 namespace LayerBase.DI
@@ -8,6 +9,7 @@ namespace LayerBase.DI
     public enum ServiceLifetime
     {
         Singleton,
+        Instance,
         Transient,
         Scoped
     }
@@ -15,6 +17,7 @@ namespace LayerBase.DI
     public interface IServiceCollection
     {
         IServiceCollection Add(ServiceDescriptor descriptor);
+        IServiceCollection AddSingleton<TService>(TService instance);
         IServiceCollection AddSingleton<TService, TImpl>() where TImpl : TService;
         IServiceCollection AddSingleton<TService>(Func<IServiceProvider, TService> factory);
         IServiceCollection AddTransient<TService, TImpl>() where TImpl : TService;
@@ -58,7 +61,24 @@ namespace LayerBase.DI
     public static class ServiceExtensions
     {
         public static Layer GetLayer(this IService service) => ServiceLayerBinder.Require(service);
-
+        
+        public static void Subscribe<T>(this IService service, EventHandleDelegate<T> eventHandleDelegate) where T : struct
+        {
+            ServiceLayerBinder.Require(service).Subscribe<T>(eventHandleDelegate);
+        }
+        public static void Subscribe<T>(this IService service, IEventHandler<T> eventHandler) where T : struct
+        {
+            ServiceLayerBinder.Require(service).Subscribe<T>(eventHandler);
+        }
+        public static void Subscribe<T>(this IService service, IEventHandlerAsync<T> eventHandler) where T : struct
+        {
+            ServiceLayerBinder.Require(service).Subscribe<T>(eventHandler);
+        }
+        public static void Subscribe<T>(this IService service, EventHandleDelegateAsync<T> eventHandler) where T : struct
+        {
+            ServiceLayerBinder.Require(service).Subscribe<T>(eventHandler);
+        }
+ 
         public static T GetService<T>(this IService service)
         {
             return ServiceLayerBinder.Require(service).GetService<T>();

@@ -96,7 +96,7 @@ public class EventPipelineTests
 		{
 			_result = result;
 			_assertion = assertion;
-			Bind<RoutingEvent>(Handle);
+			Subscribe<RoutingEvent>(Handle);
 		}
 
 		public List<int> ReceivedIds { get; } = new();
