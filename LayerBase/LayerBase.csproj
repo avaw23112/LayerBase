@@ -8,10 +8,6 @@
         <LangVersion>12</LangVersion>
     </PropertyGroup>
 
-    <!-- 任务/工具依赖 -->
-    <ItemGroup>
-        <ProjectReference Include="..\LayerBase.Task\LayerBase.Task.csproj" />
-    </ItemGroup>
 
     <!-- 保留工具目录结构 -->
     <ItemGroup>
@@ -24,6 +20,9 @@
         <Compile Remove="DataStruct\DictionaryTree\**" />
         <EmbeddedResource Remove="DataStruct\DictionaryTree\**" />
         <None Remove="DataStruct\DictionaryTree\**" />
+    </ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="UniTask" Version="2.5.10" />
     </ItemGroup>
 
 </Project>

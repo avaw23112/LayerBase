@@ -1,5 +1,4 @@
-﻿using LayerBase.Async;
-using LayerBase.Core.ResponsibilityChain;
+﻿using LayerBase.Core.ResponsibilityChain;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 using LayerBase.Layers.LayerMetaData;
@@ -65,7 +64,6 @@ namespace LayerBase.LayerHub
 	public static class LayerHub
 	{
 		private static List<LayerChain> s_responsibilityChains = new List<LayerChain>(4);
-		private static LayerBaseSynchronizationContext s_Context = LayerBaseSynchronizationContext.InstallAsCurrent();
 		
         public static Dictionary<Type,Layer> InstanceLayers = new Dictionary<Type, Layer>();
 
@@ -116,7 +114,6 @@ namespace LayerBase.LayerHub
 		public static void Pump(float deltaTime)
 		{
 			PumpLayers();
-			PumpAsyncEvents();
 			PumpEventLogs();
 			TimerSchedulers.TickAll(deltaTime);
 		}
@@ -124,10 +121,6 @@ namespace LayerBase.LayerHub
 		
 		//---------------内部方法-------------------------------
 		
-		private static void PumpAsyncEvents()
-		{
-			s_Context.Update();
-		}
 		private static void PumpEventLogs()
 		{
 			foreach (var chainBundle in s_responsibilityChains)

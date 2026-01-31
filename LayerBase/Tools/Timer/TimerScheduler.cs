@@ -1,8 +1,7 @@
-﻿using LayerBase.Async;
-using LayerBase.Core.Event;
+﻿using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Core.EventStateTrace;
-using System.Threading;
+using Cysharp.Threading.Tasks;
 
 namespace LayerBase.Tools.Timer
 {
@@ -11,6 +10,10 @@ namespace LayerBase.Tools.Timer
     /// </summary>
     public sealed class TimerScheduler
     {
+        private readonly struct EmptyPayload
+        {
+        }
+
         private readonly TimerTimeline _timeline = new();
         private readonly Dictionary<int, ITimerQueue> _queues = new();
         private readonly Dictionary<int, IFrequencyQueue> _frequencyQueues = new();
@@ -101,7 +104,18 @@ namespace LayerBase.Tools.Timer
 
             Volatile.Write(ref _frequencyGateOpen, gateOpen);
         }
-        
+
+        public TimerToken RegisterAfter(double delay, Action action)
+        {
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            return RegisterAfter<EmptyPayload>(delay, default, _ => action());
+        }
+
+        public void FireAfter(double delay, Action action)
+        {
+            RegisterAfter(delay, action);
+        }
+
         public TimerToken RegisterAfter<T>(double delay, in T value, EventHandleDelegate<T> handle) where T : struct
         {
             if (handle == null) throw new ArgumentNullException(nameof(handle));
@@ -113,6 +127,17 @@ namespace LayerBase.Tools.Timer
         public void FireAfter<T>(double delay, in T value, EventHandleDelegate<T> handle) where T : struct
         {
             RegisterAfter(delay, in value, handle);
+        }
+
+        public TimerToken RegisterAt(double timePoint, Action action)
+        {
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            return RegisterAt<EmptyPayload>(timePoint, default, _ => action());
+        }
+
+        public void FireAt(double timePoint, Action action)
+        {
+            RegisterAt(timePoint, action);
         }
 
         public TimerToken RegisterAt<T>(double timePoint, in T value, EventHandleDelegate<T> handle) where T : struct
@@ -215,6 +240,7 @@ namespace LayerBase.Tools.Timer
             RegisterAfter(delay, in value, action);
         }
 
+
         public TimerToken RegisterAt<T>(double timePoint, in T value, Action<Event<T>> action) where T : struct
         {
             if (action == null) throw new ArgumentNullException(nameof(action));
@@ -237,6 +263,17 @@ namespace LayerBase.Tools.Timer
         public void FireOnFrequency<T>(in T value, EventHandleDelegate<T> handle) where T : struct
         {
             RegisterOnFrequency(in value, handle);
+        }
+
+        public TimerToken RegisterOnFrequency(Action action)
+        {
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            return RegisterFrequencyInternal<EmptyPayload>(queue => queue.RegisterEventAction(default, _ => action()));
+        }
+
+        public void FireOnFrequency(Action action)
+        {
+            RegisterOnFrequency(action);
         }
 
         public TimerToken RegisterOnFrequency<T>(in T value, EventHandleDelegateAsync<T> handle) where T : struct
