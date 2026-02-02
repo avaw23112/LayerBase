@@ -146,9 +146,9 @@ namespace LayerBase.Layers
 		/// <typeparam name="Value"></typeparam>
 		/// <param name="eventHandleDelegateAsync"></param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void Subscribe<Value>(EventHandleDelegateAsync<Value> eventHandleDelegateAsync) where Value : struct
+		public void SubscribeAsync<Value>(EventHandleDelegateAsync<Value> eventHandleDelegateAsync) where Value : struct
 		{
-			m_eventDispatcher.Subscribe(eventHandleDelegateAsync);
+			m_eventDispatcher.SubscribeAsync(eventHandleDelegateAsync);
 		}
 		
 		/// <summary>
@@ -168,9 +168,9 @@ namespace LayerBase.Layers
 		/// <param name="eventHandler"></param>
 		/// <typeparam name="Value"></typeparam>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void Subscribe<Value>(IEventHandlerAsync<Value> eventHandler) where Value : struct
+		public void SubscribeAsync<Value>(IEventHandlerAsync<Value> eventHandler) where Value : struct
 		{
-			m_eventDispatcher.Subscribe(eventHandler);
+			m_eventDispatcher.SubscribeAsync(eventHandler);
 		}
 		
 		// --------------------------Buffer Events-------------------

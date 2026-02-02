@@ -72,11 +72,11 @@ namespace LayerBase.DI
         }
         public static void Subscribe<T>(this IService service, IEventHandlerAsync<T> eventHandler) where T : struct
         {
-            ServiceLayerBinder.Require(service).Subscribe<T>(eventHandler);
+            ServiceLayerBinder.Require(service).SubscribeAsync<T>(eventHandler);
         }
         public static void Subscribe<T>(this IService service, EventHandleDelegateAsync<T> eventHandler) where T : struct
         {
-            ServiceLayerBinder.Require(service).Subscribe<T>(eventHandler);
+            ServiceLayerBinder.Require(service).SubscribeAsync<T>(eventHandler);
         }
  
         public static T GetService<T>(this IService service)

@@ -36,7 +36,7 @@ namespace LayerBase.Core.Event
             }
         }
 
-        public void Subscribe<EventArg>(IEventHandlerAsync<EventArg> handler) where EventArg : struct
+        public void SubscribeAsync<EventArg>(IEventHandlerAsync<EventArg> handler) where EventArg : struct
         {
             if (handler == null) throw new ArgumentNullException(nameof(handler));
             int typeId = EventTypeId<EventArg>.Id;
@@ -72,7 +72,7 @@ namespace LayerBase.Core.Event
             }
         }
 
-        public void Subscribe<EventArg>(EventHandleDelegateAsync<EventArg> handleDelegate) where EventArg : struct
+        public void SubscribeAsync<EventArg>(EventHandleDelegateAsync<EventArg> handleDelegate) where EventArg : struct
         {
             if (handleDelegate == null) throw new ArgumentNullException(nameof(handleDelegate));
             int typeId = EventTypeId<EventArg>.Id;
