@@ -70,7 +70,7 @@ namespace LayerBase.Layers
 		public void RegisterService(IService service)
 		{
 			if (service == null) throw new ArgumentNullException(nameof(service));
-			
+		
 			ServiceLayerBinder.Attach(service, this);
 			service.ConfigureServices(m_serviceCollection);
 			if (service is IUpdate updatable && !m_serviceUpdates.Contains(updatable))

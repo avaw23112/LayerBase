@@ -1,4 +1,5 @@
-﻿using LayerBase.Core.ResponsibilityChain;
+﻿using LayerBase.Async;
+using LayerBase.Core.ResponsibilityChain;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 using LayerBase.Layers.LayerMetaData;
@@ -66,6 +67,7 @@ namespace LayerBase.LayerHub
 		private static List<LayerChain> s_responsibilityChains = new List<LayerChain>(4);
 		
         public static Dictionary<Type,Layer> InstanceLayers = new Dictionary<Type, Layer>();
+		private static LayerBaseSynchronizationContext s_Context = LayerBaseSynchronizationContext.InstallAsCurrent();
 
 		/// <summary>
 		/// Test hook: reset global state between test runs.
@@ -75,7 +77,9 @@ namespace LayerBase.LayerHub
 			EventMetaDataHandler.Clear();
 			LayerMetaData.Clear();
 			s_responsibilityChains.Clear();
+			InstanceLayers.Clear();
 			TimerSchedulers.Clear();
+			s_Context.Dispose();
 		}
 
 		/// <summary>
@@ -95,14 +99,14 @@ namespace LayerBase.LayerHub
 		
 		internal static void PushInstanceLayer<T>(T layer) where T : Layer
 		{
-			var layerType = typeof(T);
+			var layerType = layer.GetType();
 			if (InstanceLayers.ContainsKey(layerType))
 			{
 				throw new Exception($"{layerType} has already been pushed.");
 			}
 			InstanceLayers.Add(layerType, layer);
 		}
-		public static Layer ResolveInstance<T>() where T : Layer
+		public static Layer ResolveInstance<T>()
 		{
 			if (!InstanceLayers.TryGetValue(typeof(T), out Layer layer))
 			{
@@ -113,6 +117,7 @@ namespace LayerBase.LayerHub
 
 		public static void Pump(float deltaTime)
 		{
+			s_Context.Update();
 			PumpLayers();
 			PumpEventLogs();
 			TimerSchedulers.TickAll(deltaTime);

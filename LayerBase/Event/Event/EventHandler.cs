@@ -1,4 +1,5 @@
 ﻿using Cysharp.Threading.Tasks;
+using LayerBase.Async;
 using LayerBase.Core.Event;
 
 namespace LayerBase.Core.EventHandler
@@ -13,7 +14,7 @@ namespace LayerBase.Core.EventHandler
     /// 异步事件.不可截断事件流
     /// </summary>
     /// <typeparam name="TValue"></typeparam>
-    public delegate UniTask EventHandleDelegateAsync<TValue>(TValue value) where TValue : struct;
+    public delegate LBTask EventHandleDelegateAsync<in TValue>(TValue value) where TValue : struct;
     
     /// <summary>
     /// 事件处理器
@@ -23,9 +24,9 @@ namespace LayerBase.Core.EventHandler
     {
         public void Deal(in TValue @event);
     } 
-    public interface IEventHandlerAsync<TValue> :IEventHandler where TValue : struct
+    public interface IEventHandlerAsync<in TValue> :IEventHandler where TValue : struct
     {
-        public UniTask Deal(TValue @event);
+        public LBTask Deal(TValue @event);
     } 
 }
 
