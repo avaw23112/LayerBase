@@ -6,6 +6,7 @@ using LayerBase.Core.EventHandler;
 using LayerBase.Core.EventStateTrace;
 using LayerBase.Core.PolledEventContainer;
 using LayerBase.Core.ResponsibilityChain;
+using LayerBase.Event.Delay;
 using LayerBase.Layers.LayerMetaData;
 using LayerBase.DI;
 using LayerBase.DI.Options;
@@ -24,6 +25,8 @@ namespace LayerBase.Layers
 		internal EventStateTracer? m_eventStateTracer;
 		private EventLogTracer? m_eventLogTracer;
 		private readonly List<IUpdate> m_serviceUpdates = new List<IUpdate>();
+		private readonly List<IDelayPublisherUpdater> m_delayPublisherUpdates = new List<IDelayPublisherUpdater>();
+		private readonly Dictionary<int, object> m_delayPublishers = new Dictionary<int, object>();
 		
 		//临时服务容器,存储由源生成器填充的Service
 		private ServiceCollection? m_serviceCollection;
@@ -61,7 +64,26 @@ namespace LayerBase.Layers
 				throw new NullReferenceException("层级未构建容器");
 			return m_serviceProvider.Get<T>();
 		}
-		public void Dispose() => m_serviceProvider?.Dispose();
+		public void Dispose()
+		{
+			m_serviceProvider?.Dispose();
+			DisposeDelayPublishers();
+		}
+		
+		private void DisposeDelayPublishers()
+		{
+			if (m_delayPublisherUpdates.Count == 0)
+			{
+				return;
+			}
+			DelayPublisherManager.Instance.UnregisterRange(m_delayPublisherUpdates);
+			for (int i = 0; i < m_delayPublisherUpdates.Count; i++)
+			{
+				m_delayPublisherUpdates[i].Reset();
+			}
+			m_delayPublisherUpdates.Clear();
+			m_delayPublishers.Clear();
+		}
 		
 		/// <summary>
 		/// 由源生成器代码调用,将服务注册服务到容器中
@@ -238,6 +260,61 @@ namespace LayerBase.Layers
 			TryAttachTrace(ref @event);
 			if (!@event.IsVaild()) return;
 			m_pooledEventContainer.Post(@event);
+		}
+		
+		// -----------------Delay Events-------------------
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public IDelayPublisher<T> SubscribeDelay<T>() where T : struct
+		{
+			return GetOrCreateDelayPublisher<T>();
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void Delay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
+		{
+			var publisher = GetOrCreateDelayPublisher<T>();
+			publisher.Publish(in value, ttlSeconds, DelayDirection.None, contractLayer);
+			DelayPublisherManager.Instance.NotifyPublished(this, contractLayer, publisher);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void BroadCastDelay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
+		{
+			var publisher = GetOrCreateDelayPublisher<T>();
+			publisher.Publish(in value, ttlSeconds, DelayDirection.BroadCast, contractLayer);
+			DelayPublisherManager.Instance.NotifyPublished(this, contractLayer, publisher);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void BubbleDelay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
+		{
+			var publisher = GetOrCreateDelayPublisher<T>();
+			publisher.Publish(in value, ttlSeconds, DelayDirection.Bubble, contractLayer);
+			DelayPublisherManager.Instance.NotifyPublished(this, contractLayer, publisher);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void DropDelay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
+		{
+			var publisher = GetOrCreateDelayPublisher<T>();
+			publisher.Publish(in value, ttlSeconds, DelayDirection.Drop, contractLayer);
+			DelayPublisherManager.Instance.NotifyPublished(this, contractLayer, publisher);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private DelayPublisher<T> GetOrCreateDelayPublisher<T>() where T : struct
+		{
+			int typeId = EventTypeId<T>.Id;
+			if (!m_delayPublishers.TryGetValue(typeId, out var publisherObj))
+			{
+				var publisher = new DelayPublisher<T>(this);
+				m_delayPublishers.Add(typeId, publisher);
+				m_delayPublisherUpdates.Add(publisher);
+				DelayPublisherManager.Instance.Register(publisher);
+				return publisher;
+			}
+
+			return (DelayPublisher<T>)publisherObj;
 		}
 		//------------------------------------------------------------
 		

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using LayerBase.Core.EventHandler;
+using LayerBase.Event.Delay;
 using LayerBase.Layers;
 
 namespace LayerBase.DI
@@ -78,6 +79,11 @@ namespace LayerBase.DI
         {
             ServiceLayerBinder.Require(service).SubscribeAsync<T>(eventHandler);
         }
+
+        public static IDelayPublisher<T> SubscribeDelay<T>(this IService service) where T : struct
+        {
+            return ServiceLayerBinder.Require(service).SubscribeDelay<T>();
+        }
    
  
         public static T GetService<T>(this IService service)
@@ -113,6 +119,26 @@ namespace LayerBase.DI
         public static void PostDrop<TValue>(this IService service, in TValue value) where TValue : struct
         {
             ServiceLayerBinder.Require(service).PostDrop(in value);
+        }
+
+        public static void Delay<TValue>(this IService service, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
+        {
+            ServiceLayerBinder.Require(service).Delay(in value, ttlSeconds, contractLayer);
+        }
+
+        public static void BroadCastDelay<TValue>(this IService service, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
+        {
+            ServiceLayerBinder.Require(service).BroadCastDelay(in value, ttlSeconds, contractLayer);
+        }
+
+        public static void BubbleDelay<TValue>(this IService service, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
+        {
+            ServiceLayerBinder.Require(service).BubbleDelay(in value, ttlSeconds, contractLayer);
+        }
+
+        public static void DropDelay<TValue>(this IService service, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
+        {
+            ServiceLayerBinder.Require(service).DropDelay(in value, ttlSeconds, contractLayer);
         }
     }
 

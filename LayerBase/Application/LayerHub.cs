@@ -1,5 +1,6 @@
 ﻿using LayerBase.Async;
 using LayerBase.Core.ResponsibilityChain;
+using LayerBase.Event.Delay;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 using LayerBase.Layers.LayerMetaData;
@@ -79,6 +80,7 @@ namespace LayerBase.LayerHub
 			s_responsibilityChains.Clear();
 			InstanceLayers.Clear();
 			TimerSchedulers.Clear();
+			DelayPublisherManager.Instance.Clear();
 			s_Context.Dispose();
 		}
 
@@ -118,6 +120,7 @@ namespace LayerBase.LayerHub
 		public static void Pump(float deltaTime)
 		{
 			s_Context.Update();
+			DelayPublisherManager.Instance.Update(deltaTime);
 			PumpLayers();
 			PumpEventLogs();
 			TimerSchedulers.TickAll(deltaTime);
