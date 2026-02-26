@@ -29,10 +29,14 @@
 
         public static Type? GetType(int id)
         {
-            if (s_idToType.TryGetValue(id, out Type type))
+            lock (s_lock)
             {
-                return type;
+                if (s_idToType.TryGetValue(id, out Type type))
+                {
+                    return type;
+                }
             }
+
             return null;
         }
     }

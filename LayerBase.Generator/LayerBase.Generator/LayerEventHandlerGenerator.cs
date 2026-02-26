@@ -253,8 +253,11 @@ namespace LayerBase.Generator
 				var interfaceName = binding.Kind == EventHandlerKind.Async
 					? "global::LayerBase.Core.EventHandler.IEventHandlerAsync"
 					: "global::LayerBase.Core.EventHandler.IEventHandler";
+				var subscribeMethod = binding.Kind == EventHandlerKind.Async
+					? "SubscribeAsync"
+					: "Subscribe";
 
-				builder.Append("            typedLayer.Bind<").Append(eventDisplay).Append(">((")
+				builder.Append("            typedLayer.").Append(subscribeMethod).Append("<").Append(eventDisplay).Append(">((")
 					.Append(interfaceName).Append("<").Append(eventDisplay).Append(">)new ")
 					.Append(handlerDisplay).AppendLine("());");
 			}

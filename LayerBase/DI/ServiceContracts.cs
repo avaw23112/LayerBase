@@ -61,6 +61,8 @@ namespace LayerBase.DI
 
     public static class ServiceExtensions
     {
+        
+        
         public static Layer GetLayer(this IService service) => ServiceLayerBinder.Require(service);
         
         public static void Subscribe<T>(this IService service, EventHandleDelegate<T> eventHandleDelegate) where T : struct
@@ -79,12 +81,19 @@ namespace LayerBase.DI
         {
             ServiceLayerBinder.Require(service).SubscribeAsync<T>(eventHandler);
         }
+        public static void SubscribeParallel<T>(this IService service, IEventHandler<T> eventHandler) where T : struct
+        {
+            ServiceLayerBinder.Require(service).SubscribeParallel<T>(eventHandler);
+        }
+        public static void SubscribeParallel<T>(this IService service, EventHandleDelegate<T> eventHandleDelegate) where T : struct
+        {
+            ServiceLayerBinder.Require(service).SubscribeParallel<T>(eventHandleDelegate);
+        }
 
         public static IDelayPublisher<T> SubscribeDelay<T>(this IService service) where T : struct
         {
             return ServiceLayerBinder.Require(service).SubscribeDelay<T>();
         }
-   
  
         public static T GetService<T>(this IService service)
         {

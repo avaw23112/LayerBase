@@ -201,7 +201,11 @@ namespace LayerBase.Core
 		internal void Clear()
 		{
 			ThrowIfDisposed();
+			ClearCore();
+		}
 
+		private void ClearCore()
+		{
 			var cur = _headSeg;
 			while (cur != null)
 			{
@@ -246,8 +250,8 @@ namespace LayerBase.Core
 			if (_disposed)
 				return;
 
+			ClearCore();
 			_disposed = true;
-			Clear();
 		}
 
 		private sealed class Segment

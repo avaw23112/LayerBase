@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Core.EventStateTrace;
@@ -15,8 +16,7 @@ using LayerBase.Event.EventMetaData;
 namespace LayerBase.Layers
 {
 	/// <summary>
-	/// 责任链式层级结构
-	/// TODO:将EventStateTracer改为必非空
+	/// Layer 基类，负责事件分发、DI 服务和延迟事件能力。
 	/// </summary>
 	public abstract class Layer : Node,IUpdate
 	{
@@ -28,13 +28,14 @@ namespace LayerBase.Layers
 		private readonly List<IDelayPublisherUpdater> m_delayPublisherUpdates = new List<IDelayPublisherUpdater>();
 		private readonly Dictionary<int, object> m_delayPublishers = new Dictionary<int, object>();
 		
-		//临时服务容器,存储由源生成器填充的Service
-		private ServiceCollection? m_serviceCollection;
+		// Layer 级 DI 容器配置与运行时 provider。
+		private readonly ServiceCollection m_serviceCollection;
 		private ServiceProvider? m_serviceProvider;
 		
 		protected Layer() 
 		{
-			m_eventDispatcher = new EventDispatcher();
+			m_eventDispatcher = new EventDispatcher(this.GetType().Name);
+			m_eventDispatcher.ErrorReporter = LayerBase.LayerHub.LayerHub.ReportLayerEventError;
 			m_pooledEventContainer = new PooledEventContainer(this);
 			m_serviceCollection = new ServiceCollection();
 			LayerServiceRegistry.Apply(this);
@@ -46,7 +47,7 @@ namespace LayerBase.Layers
 		}
 		
 		/// <summary>
-		/// 主要入口
+		/// 推进当前 Layer：事件容器、追踪器、服务更新和 Layer 更新。
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void Pump()
@@ -60,13 +61,15 @@ namespace LayerBase.Layers
 		// -----------------DI-------------------
 		public T GetService<T>()
 		{
-			if (m_serviceProvider == null)
-				throw new NullReferenceException("层级未构建容器");
-			return m_serviceProvider.Get<T>();
+			var provider = Volatile.Read(ref m_serviceProvider);
+			if (provider == null)
+				throw new NullReferenceException("DI 容器尚未构建，请在 Build 完成后再调用 GetService。");
+			return provider.Get<T>();
 		}
 		public void Dispose()
 		{
-			m_serviceProvider?.Dispose();
+			var provider = Interlocked.Exchange(ref m_serviceProvider, null);
+			provider?.Dispose();
 			DisposeDelayPublishers();
 		}
 		
@@ -86,7 +89,7 @@ namespace LayerBase.Layers
 		}
 		
 		/// <summary>
-		/// 由源生成器代码调用,将服务注册服务到容器中
+		/// 注册服务模块并收集该模块声明的依赖。
 		/// </summary>
 		/// <param name="service"></param>
 		public void RegisterService(IService service)
@@ -102,21 +105,22 @@ namespace LayerBase.Layers
 		}
 		
 		/// <summary>
-		/// 构建服务实例
+		/// 构建 Layer 级 DI 容器。
 		/// </summary>
 		public void Build()
 		{
-			m_serviceProvider?.Dispose();
-			m_serviceProvider = new ServiceProvider(m_serviceCollection.ToDescriptors(), this);
+			var newProvider = new ServiceProvider(m_serviceCollection.ToDescriptors(), this);
+			var oldProvider = Interlocked.Exchange(ref m_serviceProvider, newProvider);
+			oldProvider?.Dispose();
 		}
 		
-		// -----------------追踪-------------------
+		// -----------------Tracing-------------------
 		
 		internal void SetEventTracer(EventStateTracer stateTracer)
 		{
 			if (stateTracer == null)
 			{
-				throw new Exception("无效事件追踪器");
+				throw new ArgumentNullException(nameof(stateTracer));
 			}
 			m_eventStateTracer = stateTracer;
 			m_eventDispatcher.StateTracer = stateTracer;
@@ -126,11 +130,11 @@ namespace LayerBase.Layers
 		{
 			if (logTracer == null)
 			{
-				throw new Exception("无效日志追踪器");
+				throw new ArgumentNullException(nameof(logTracer));
 			}
 			if (m_eventStateTracer == null)
 			{
-				throw new Exception("无效事件追踪器");
+				throw new InvalidOperationException("请先设置 EventStateTracer，再设置 EventLogTracer。");
 			}
 			
 			m_eventLogTracer = logTracer;
@@ -149,10 +153,10 @@ namespace LayerBase.Layers
 			return m_eventLogTracer.TryExport(eventState,out log);
 		}
 		
-		// -----------------追踪-------------------
+		// -----------------Tracing-------------------
 		
 		/// <summary>
-		/// 绑定当前层的事件处理器
+		/// 订阅同步事件委托。
 		/// </summary>
 		/// <typeparam name="Value"></typeparam>
 		/// <param name="eventHandleDelegate"></param>
@@ -163,7 +167,7 @@ namespace LayerBase.Layers
 		}
 
 		/// <summary>
-		/// 绑定当前层的异步事件处理器
+		/// 订阅异步事件委托。
 		/// </summary>
 		/// <typeparam name="Value"></typeparam>
 		/// <param name="eventHandleDelegateAsync"></param>
@@ -174,7 +178,7 @@ namespace LayerBase.Layers
 		}
 		
 		/// <summary>
-		/// 绑定当前层的顺序无关事件处理器
+		/// 订阅同步事件处理器实例。
 		/// </summary>
 		/// <param name="eventHandler"></param>
 		/// <typeparam name="Value"></typeparam>
@@ -184,8 +188,20 @@ namespace LayerBase.Layers
 			m_eventDispatcher.Subscribe(eventHandler);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void SubscribeParallel<Value>(IEventHandler<Value> eventHandler) where Value : struct
+		{
+			m_eventDispatcher.SubscribeParallel(eventHandler);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void SubscribeParallel<Value>(EventHandleDelegate<Value> eventHandleDelegate) where Value : struct
+		{
+			m_eventDispatcher.SubscribeParallel(eventHandleDelegate);
+		}
+
 		/// <summary>
-		/// 绑定当前层的顺序无关异步事件处理器
+		/// 订阅异步事件处理器实例。
 		/// </summary>
 		/// <param name="eventHandler"></param>
 		/// <typeparam name="Value"></typeparam>
@@ -232,7 +248,7 @@ namespace LayerBase.Layers
 			
 			ref EventState eventState = ref m_eventStateTracer.Resolve(@event.TraceToken);
 			m_eventLogTracer?.TryBeginLayer(ref eventState, GetType().Name);
-			return m_eventDispatcher.Dispatch(@event);
+			return m_eventDispatcher.Dispatch(@event, ref eventState);
 		}
 		
 		public void Post<Value>(in Value value) where Value : struct
@@ -319,7 +335,7 @@ namespace LayerBase.Layers
 		//------------------------------------------------------------
 		
 		/// <summary>
-		/// 向上一层递送事件
+		/// 向上冒泡事件。
 		/// </summary>
 		public void Bubble<Value>(in Value value) where Value : struct
 		{
@@ -340,7 +356,7 @@ namespace LayerBase.Layers
 		}
 		
 		/// <summary>
-		/// 向下一层递送事件
+		/// 向下下沉事件。
 		/// </summary>
 		public void Drop<Value>(in Value value) where Value : struct
 		{
@@ -361,7 +377,7 @@ namespace LayerBase.Layers
 		}
 		
 		/// <summary>
-		/// 广播事件
+		/// 广播事件到上下相邻 Layer。
 		/// </summary>
 		/// <typeparam name="Value"></typeparam>
 		/// <param name="event"></param>
@@ -416,7 +432,7 @@ namespace LayerBase.Layers
 			m_eventStateTracer?.TryComplete(@event.TraceToken);
 		}
 		
-		// 重新实现原有方法
+		// 方向性事件的通用处理入口。
 		private void BubbleInternal<Value>(in Event<Value> @event) where Value : struct
 		{
 		    ProcessEventDirectionally(
@@ -449,7 +465,7 @@ namespace LayerBase.Layers
 				return;
 			}
 			
-			//根据层级策略进行处理
+			// 根据 Layer 策略决定是否改为 Post/Ignore/Throw。
 			if (UsedLayerStrategy(@event, postMethod))
 				return;
 	
@@ -539,3 +555,6 @@ namespace LayerBase.Layers
 		}
 	}
 }
+
+
+

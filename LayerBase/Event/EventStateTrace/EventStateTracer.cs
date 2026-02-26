@@ -5,12 +5,10 @@ using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Core.EventStateTrace;
 
-/// <summary>
-///     事件状态追踪器：负责事件生命周期、计数与分类回调。
-/// </summary>
 internal sealed class EventStateTracer
 {
-    private readonly List<SlotRef> _completed = new();
+    private List<SlotRef> _completed = new();
+    private List<SlotRef> _drainBuffer = new();
     private readonly EventCounter _counter = new();
     private readonly FreeList<EventState> _eventStates;
 
@@ -32,6 +30,7 @@ internal sealed class EventStateTracer
     {
         var handledState = @event.IsVaild() ? EventHandledState.Created : EventHandledState.Handled;
         var category = EventMetaDataHandler.Category<T>();
+        var now = Stopwatch.GetTimestamp();
 
         var slotRef = _eventStates.Rent();
         ref var slot = ref _eventStates.Resolve(slotRef);
@@ -41,13 +40,15 @@ internal sealed class EventStateTracer
             ForwardDir = @event.ForwardDir,
             HandledState = handledState,
             PendingCount = 1,
-            StartTimestamp = Stopwatch.GetTimestamp(),
-            CreatedTimestamp = Stopwatch.GetTimestamp(),
+            StartTimestamp = now,
+            CreatedTimestamp = now,
             CatalogueToken = category
         };
 
-        if (_counter.Increment<T>() == 1 && !category.IsEmpty)
+        if (_counter.Increment(category) == 1 && !category.IsEmpty)
+        {
             OnClassifiedEventCreated(ref slot.Value.CatalogueToken, ref slot.Value);
+        }
 
         return slotRef.ToToken();
     }
@@ -55,7 +56,6 @@ internal sealed class EventStateTracer
     internal bool TryIncrementPending(in EventStateToken token, int count = 1)
     {
         if (count <= 0) return false;
-
 
         if (!_eventStates.TryBorrow(token.Index, token.Version, out var slotRef)) return false;
 
@@ -84,25 +84,23 @@ internal sealed class EventStateTracer
 
     private void FinalizeClassification(ref EventState state)
     {
-        var type = EventTypeId.GetType(state.EventTypeId);
-        if (type == null) return;
-
-        if (_counter.Decrement(type) == 0 && !state.CatalogueToken.IsEmpty)
+        if (_counter.Decrement(state.CatalogueToken) == 0 && !state.CatalogueToken.IsEmpty)
+        {
             OnClassifiedEventCompleted(ref state.CatalogueToken, ref state);
+        }
     }
 
     public void Pump()
     {
-        List<SlotRef> completedCopy;
-
         if (_completed.Count == 0) return;
 
-        completedCopy = new List<SlotRef>(_completed);
-        _completed.Clear();
+        var drain = _drainBuffer;
+        _drainBuffer = _completed;
+        _completed = drain;
 
-        for (var i = 0; i < completedCopy.Count; i++)
+        for (var i = 0; i < _drainBuffer.Count; i++)
         {
-            var token = completedCopy[i].ToToken();
+            var token = _drainBuffer[i].ToToken();
 
             if (!_eventStates.TryBorrow(token.Index, token.Version, out var slotRef)) continue;
 
@@ -110,6 +108,8 @@ internal sealed class EventStateTracer
             OnEventCompleted(ref slot.Value);
             _eventStates.Release(slotRef);
         }
+
+        _drainBuffer.Clear();
     }
 
     public bool TryGet(in EventStateToken token, out EventState state)
@@ -127,7 +127,7 @@ internal sealed class EventStateTracer
     public ref EventState Resolve(in EventStateToken token)
     {
         if (!_eventStates.TryBorrow(token.Index, token.Version, out var slotRef))
-            throw new InvalidOperationException("EventStateToken 无效或事件已完成。");
+            throw new InvalidOperationException("Invalid EventStateToken or event already completed.");
 
         return ref _eventStates.Resolve(slotRef).Value;
     }
@@ -150,3 +150,4 @@ internal sealed class EventStateTracer
         return true;
     }
 }
+

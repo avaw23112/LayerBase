@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Linq;
+using System.Threading.Tasks;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventCatalogue;
 using LayerBase.Core.EventHandler;
@@ -95,6 +98,51 @@ public class ServiceRegistrationTests
 
 		Assert.That(updater.TickCount, Is.GreaterThanOrEqualTo(1));
 	}
+
+	[Test]
+	public void Layer_GetService_is_thread_safe_in_parallel_handlers()
+	{
+		var layer = new ConcurrentServiceLayer();
+		try
+		{
+			layer.Build();
+
+			const int concurrency = 16;
+			const int perWorkerIterations = 64;
+			var scopedRefs = new ConcurrentBag<IConcurrentScopedService>();
+			var singletonRefs = new ConcurrentBag<IConcurrentSingletonService>();
+			var errors = new ConcurrentQueue<Exception>();
+
+			Parallel.For(0, concurrency, _ =>
+			{
+				try
+				{
+					for (int i = 0; i < perWorkerIterations; i++)
+					{
+						scopedRefs.Add(layer.GetService<IConcurrentScopedService>());
+						singletonRefs.Add(layer.GetService<IConcurrentSingletonService>());
+					}
+				}
+				catch (Exception ex)
+				{
+					errors.Enqueue(ex);
+				}
+			});
+
+			Assert.That(errors, Is.Empty);
+
+			var scopedArray = scopedRefs.ToArray();
+			var singletonArray = singletonRefs.ToArray();
+			Assert.That(scopedArray.Length, Is.EqualTo(concurrency * perWorkerIterations));
+			Assert.That(singletonArray.Length, Is.EqualTo(concurrency * perWorkerIterations));
+			Assert.That(scopedArray.All(item => ReferenceEquals(item, scopedArray[0])), Is.True);
+			Assert.That(singletonArray.All(item => ReferenceEquals(item, singletonArray[0])), Is.True);
+		}
+		finally
+		{
+			layer.Dispose();
+		}
+	}
 }
 
 internal partial class ServiceDemoLayer : Layer
@@ -155,6 +203,36 @@ internal interface ITimeProvider
 internal sealed class SystemTimeProvider : ITimeProvider
 {
 	public DateTime Now => DateTime.Now;
+}
+
+internal partial class ConcurrentServiceLayer : Layer
+{
+}
+
+[OwnerLayer(typeof(ConcurrentServiceLayer))]
+internal sealed class ConcurrentServiceModule : IService
+{
+	public void ConfigureServices(IServiceCollection services)
+	{
+		services.AddScoped<IConcurrentScopedService, ConcurrentScopedService>();
+		services.AddSingleton<IConcurrentSingletonService, ConcurrentSingletonService>();
+	}
+}
+
+internal interface IConcurrentScopedService
+{
+}
+
+internal sealed class ConcurrentScopedService : IConcurrentScopedService
+{
+}
+
+internal interface IConcurrentSingletonService
+{
+}
+
+internal sealed class ConcurrentSingletonService : IConcurrentSingletonService
+{
 }
 
 internal partial class ServiceEventLayer : Layer

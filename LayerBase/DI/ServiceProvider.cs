@@ -1,31 +1,31 @@
 using System;
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Threading;
 using LayerBase.Layers;
 
 namespace LayerBase.DI
 {
     public sealed class ServiceProvider : IServiceProvider, IDisposable
     {
-        private readonly Dictionary<Type, ServiceDescriptor> _map;
-        private readonly ConcurrentDictionary<Type, object> _singletons = new ConcurrentDictionary<Type, object>();
-        private readonly object _sync = new object();
+        private readonly ConcurrentDictionary<Type, ServiceDescriptor> _map;
+        private readonly ConcurrentDictionary<Type, Lazy<object>> _singletons = new ConcurrentDictionary<Type, Lazy<object>>();
         private readonly Layer? _ownerLayer;
         private static readonly ServiceProvider _root = new ServiceProvider();
-        private bool _disposed;
+        private int _disposed;
 
-        public bool IsDisposed => _disposed;
+        public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
         internal ServiceProvider()
         {
-            _map = new Dictionary<Type, ServiceDescriptor>();
+            _map = new ConcurrentDictionary<Type, ServiceDescriptor>();
             _ownerLayer = null;
         }
         public ServiceProvider(IEnumerable<ServiceDescriptor> descriptors, Layer? ownerLayer = null)
         {
             if (descriptors == null) throw new ArgumentNullException(nameof(descriptors));
 
-            _map = new Dictionary<Type, ServiceDescriptor>();
+            _map = new ConcurrentDictionary<Type, ServiceDescriptor>();
             _ownerLayer = ownerLayer;
             foreach (var d in descriptors)
             {
@@ -55,7 +55,7 @@ namespace LayerBase.DI
 
         private object? GetServiceInternal(Type serviceType, HashSet<Type> callstack)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(ServiceProvider));
+            if (IsDisposed) throw new ObjectDisposedException(nameof(ServiceProvider));
             if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
 
             if (!_map.TryGetValue(serviceType, out var desc))
@@ -83,15 +83,22 @@ namespace LayerBase.DI
 
         private object GetOrCreateSingleton(ServiceDescriptor desc, HashSet<Type> callstack)
         {
-            return _singletons.GetOrAdd(desc.ServiceType, _ =>
+            var lazy = _singletons.GetOrAdd(desc.ServiceType, _ =>
             {
-                lock (_sync)
-                {
-                    if (_singletons.TryGetValue(desc.ServiceType, out var existing))
-                        return existing;
-                    return CreateInstance(desc, callstack);
-                }
+                return new Lazy<object>(
+                    () => CreateInstance(desc, callstack),
+                    LazyThreadSafetyMode.ExecutionAndPublication);
             });
+
+            try
+            {
+                return lazy.Value;
+            }
+            catch
+            {
+                _singletons.TryRemove(desc.ServiceType, out _);
+                throw;
+            }
         }
 
         private object CreateInstance(ServiceDescriptor desc, HashSet<Type> callstack)
@@ -168,11 +175,11 @@ namespace LayerBase.DI
 
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
-            foreach (var obj in _singletons.Values)
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            foreach (var lazy in _singletons.Values)
             {
-                if (obj is IDisposable disposable)
+                if (!lazy.IsValueCreated) continue;
+                if (lazy.Value is IDisposable disposable)
                     disposable.Dispose();
             }
         }
