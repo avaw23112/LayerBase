@@ -1,7 +1,7 @@
 namespace LayerBase.Event.Delay
 {
     /// <summary>
-    /// 延迟事件缓存的读取接口。
+    /// Delay event cache reader contract.
     /// </summary>
     public interface IDelayPublisher
     {
@@ -10,10 +10,13 @@ namespace LayerBase.Event.Delay
 
     public interface IDelayPublisher<T> : IDelayPublisher where T : struct
     {
-        /// <summary>尝试获取缓存的事件数据，成功后清空缓存。</summary>
+        /// <summary>Try get the latest cached value without consuming it.</summary>
         bool TryGet(out T value);
 
-        /// <summary>最近一次写入的方向标记。</summary>
+        /// <summary>Try get the latest cached value and consume it on success.</summary>
+        bool TryTake(out T value);
+
+        /// <summary>Direction marker of the most recent published delay value.</summary>
         DelayDirection Direction { get; }
     }
 }

@@ -55,6 +55,51 @@ public class DelayPublisherTests
 	}
 
 	[Test]
+	public void BroadCastDelay_propagates_to_upper_and_lower_layers()
+	{
+		var top = new DummyLayer();
+		var middle = new DummyLayer();
+		var bottom = new DummyLayer();
+		LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
+
+		middle.BroadCastDelay(new DelayPayload(30), 1f);
+
+		AssertDelay(top, 30, DelayDirection.BroadCast);
+		AssertDelay(middle, 30, DelayDirection.BroadCast);
+		AssertDelay(bottom, 30, DelayDirection.BroadCast);
+	}
+
+	[Test]
+	public void BubbleDelay_propagates_only_to_current_and_upper_layers()
+	{
+		var top = new DummyLayer();
+		var middle = new DummyLayer();
+		var bottom = new DummyLayer();
+		LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
+
+		middle.BubbleDelay(new DelayPayload(31), 1f);
+
+		AssertDelay(top, 31, DelayDirection.Bubble);
+		AssertDelay(middle, 31, DelayDirection.Bubble);
+		AssertDelayMissing(bottom);
+	}
+
+	[Test]
+	public void DropDelay_propagates_only_to_current_and_lower_layers()
+	{
+		var top = new DummyLayer();
+		var middle = new DummyLayer();
+		var bottom = new DummyLayer();
+		LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
+
+		middle.DropDelay(new DelayPayload(32), 1f);
+
+		AssertDelayMissing(top);
+		AssertDelay(middle, 32, DelayDirection.Drop);
+		AssertDelay(bottom, 32, DelayDirection.Drop);
+	}
+
+	[Test]
 	public void ContractLayer_discards_other_pending_events_with_same_contract()
 	{
 		var layer = new DummyLayer();
@@ -67,11 +112,42 @@ public class DelayPublisherTests
 		Assert.That(publisher.HasValue, Is.True);
 		Assert.That(publisher.TryGet(out var value), Is.True);
 		Assert.That(value.Id, Is.EqualTo(11));
-		Assert.That(publisher.TryGet(out _), Is.False); // previous cleared
+		Assert.That(publisher.TryGet(out var secondRead), Is.True);
+		Assert.That(secondRead.Id, Is.EqualTo(11));
+	}
+
+	[Test]
+	public void TryTake_consumes_latest_value()
+	{
+		var layer = new DummyLayer();
+		LayerHub.CreateLayers().Push(layer).Build();
+
+		layer.Delay(new DelayPayload(20), 1f);
+
+		var publisher = layer.SubscribeDelay<DelayPayload>();
+		Assert.That(publisher.TryTake(out var value), Is.True);
+		Assert.That(value.Id, Is.EqualTo(20));
+		Assert.That(publisher.TryGet(out _), Is.False);
+		Assert.That(publisher.HasValue, Is.False);
 	}
 
 	private sealed class DummyLayer : Layer
 	{
+	}
+
+	private static void AssertDelay(DummyLayer layer, int expectedId, DelayDirection expectedDirection)
+	{
+		var publisher = layer.SubscribeDelay<DelayPayload>();
+		Assert.That(publisher.Direction, Is.EqualTo(expectedDirection));
+		Assert.That(publisher.TryGet(out var value), Is.True);
+		Assert.That(value.Id, Is.EqualTo(expectedId));
+	}
+
+	private static void AssertDelayMissing(DummyLayer layer)
+	{
+		var publisher = layer.SubscribeDelay<DelayPayload>();
+		Assert.That(publisher.TryGet(out _), Is.False);
+		Assert.That(publisher.HasValue, Is.False);
 	}
 
 	private readonly struct DelayPayload

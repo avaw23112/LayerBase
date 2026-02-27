@@ -28,15 +28,22 @@ namespace LayerBase.Event.Delay
             if (_hasValue)
             {
                 value = _value;
-                _hasValue = false;
-                _ttl = 0;
-                _direction = DelayDirection.None;
-                _contractId = 0;
                 return true;
             }
 
             value = default;
             return false;
+        }
+
+        public bool TryTake(out T value)
+        {
+            if (!TryGet(out value))
+            {
+                return false;
+            }
+
+            ClearValue();
+            return true;
         }
 
         internal void Publish(in T value, float ttlSeconds, DelayDirection direction, int contractId)

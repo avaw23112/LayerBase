@@ -288,33 +288,57 @@ namespace LayerBase.Layers
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Delay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
 		{
-			var publisher = GetOrCreateDelayPublisher<T>();
-			publisher.Publish(in value, ttlSeconds, DelayDirection.None, contractLayer);
-			DelayPublisherManager.Instance.NotifyPublished(this, contractLayer, publisher);
+			PublishDelayLocal(in value, ttlSeconds, DelayDirection.None, contractLayer);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void BroadCastDelay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
 		{
-			var publisher = GetOrCreateDelayPublisher<T>();
-			publisher.Publish(in value, ttlSeconds, DelayDirection.BroadCast, contractLayer);
-			DelayPublisherManager.Instance.NotifyPublished(this, contractLayer, publisher);
+			PublishDelayLocal(in value, ttlSeconds, DelayDirection.BroadCast, contractLayer);
+			PublishDelayToHigherLayers(in value, ttlSeconds, DelayDirection.BroadCast, contractLayer);
+			PublishDelayToLowerLayers(in value, ttlSeconds, DelayDirection.BroadCast, contractLayer);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void BubbleDelay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
 		{
-			var publisher = GetOrCreateDelayPublisher<T>();
-			publisher.Publish(in value, ttlSeconds, DelayDirection.Bubble, contractLayer);
-			DelayPublisherManager.Instance.NotifyPublished(this, contractLayer, publisher);
+			PublishDelayLocal(in value, ttlSeconds, DelayDirection.Bubble, contractLayer);
+			PublishDelayToHigherLayers(in value, ttlSeconds, DelayDirection.Bubble, contractLayer);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void DropDelay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
 		{
+			PublishDelayLocal(in value, ttlSeconds, DelayDirection.Drop, contractLayer);
+			PublishDelayToLowerLayers(in value, ttlSeconds, DelayDirection.Drop, contractLayer);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private void PublishDelayLocal<T>(in T value, float ttlSeconds, DelayDirection direction, int contractLayer) where T : struct
+		{
 			var publisher = GetOrCreateDelayPublisher<T>();
-			publisher.Publish(in value, ttlSeconds, DelayDirection.Drop, contractLayer);
+			publisher.Publish(in value, ttlSeconds, direction, contractLayer);
 			DelayPublisherManager.Instance.NotifyPublished(this, contractLayer, publisher);
+		}
+
+		private void PublishDelayToHigherLayers<T>(in T value, float ttlSeconds, DelayDirection direction, int contractLayer) where T : struct
+		{
+			Layer? layer = Previous as Layer;
+			while (layer != null && !ReferenceEquals(layer, this))
+			{
+				layer.PublishDelayLocal(in value, ttlSeconds, direction, contractLayer);
+				layer = layer.Previous as Layer;
+			}
+		}
+
+		private void PublishDelayToLowerLayers<T>(in T value, float ttlSeconds, DelayDirection direction, int contractLayer) where T : struct
+		{
+			Layer? layer = NextNode as Layer;
+			while (layer != null && !ReferenceEquals(layer, this))
+			{
+				layer.PublishDelayLocal(in value, ttlSeconds, direction, contractLayer);
+				layer = layer.NextNode as Layer;
+			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
