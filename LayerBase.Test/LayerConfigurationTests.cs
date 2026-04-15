@@ -1,9 +1,6 @@
 using LayerBase.Core.Event;
-using LayerBase.Event.EventMetaData;
-using LayerBase.Core.EventCatalogue;
 using LayerBase.LayerHub;
 using LayerBase.Layers;
-using LayerBase.Layers.LayerMetaData;
 
 namespace EventsTest;
 
@@ -18,8 +15,6 @@ public class LayerConfigurationTests
 	[Test]
 	public void Broadcast_without_metadata_still_reaches_all_layers()
 	{
-		OpenGate<PlainEvent>();
-
 		const int eventId = 10;
 		var top = new RecordingLayer<PlainEvent>(
 			EventHandledState.Continue,
@@ -48,70 +43,30 @@ public class LayerConfigurationTests
 		Assert.That(bottom.ReceivedIds.Count, Is.EqualTo(1));
 	}
 
-	[Test]
-	public void Layer_strategy_throw_blocks_handling_and_forwarding()
-	{
-		OpenGate<StrategyEvent>();
-		LayerMetaData<RecordingLayer<StrategyEvent>>.SetDispatchStrategy(EventCategoryToken.Empty, LayerDispatchStrategy.Throw);
-		try
-		{
-			var first = new RecordingLayer<StrategyEvent>(EventHandledState.Continue, e => e.Id);
-			var second = new RecordingLayer<StrategyEvent>(EventHandledState.Continue, e => e.Id);
-
-			LayerHub.CreateLayers().Push(first).Push(second).Build();
-
-			first.Drop(new StrategyEvent(1));
-
-			PumpTwice();
-
-			Assert.That(first.ReceivedIds, Is.Empty);
-			Assert.That(second.ReceivedIds, Is.Empty);
-		}
-		finally
-		{
-			LayerMetaData<RecordingLayer<StrategyEvent>>.SetDispatchStrategy(EventCategoryToken.Empty, LayerDispatchStrategy.None);
-		}
-    }
-
     [Test]
-    public void Layer_strategy_ignore_skips_current_layer_but_forwards()
+    public void Direct_route_skips_layers_without_handlers()
 	{
-		OpenGate<StrategyEvent>();
-		LayerMetaData<RecordingLayer<StrategyEvent>>.SetDispatchStrategy(EventCategoryToken.Empty, LayerDispatchStrategy.Ignore);
-		try
-		{
-			var first = new RecordingLayer<StrategyEvent>(EventHandledState.Continue, e => e.Id);
-			var second = new RecordingLayer<StrategyEvent>(
-				EventHandledState.Continue,
-				e => e.Id,
-				e => Assert.That(e.Id, Is.EqualTo(2))
-			);
+		var first = new EmptyLayer();
+		var middle = new EmptyLayer();
+		var bottom = new RecordingLayer<PlainEvent>(
+			EventHandledState.Continue,
+			e => e.Id,
+			e => Assert.That(e.Id, Is.EqualTo(20))
+		);
 
-			LayerHub.CreateLayers().Push(first).Push(second).Build();
+		LayerHub.CreateLayers().Push(first).Push(middle).Push(bottom).Build();
 
-			first.Drop(new StrategyEvent(2));
+		first.Drop(new PlainEvent(20));
 
-			PumpTwice();
+		PumpTwice();
 
-			Assert.That(first.ReceivedIds, Is.Empty);
-			Assert.That(second.ReceivedIds, Is.Empty);
-		}
-		finally
-		{
-			LayerMetaData<RecordingLayer<StrategyEvent>>.SetDispatchStrategy(EventCategoryToken.Empty, LayerDispatchStrategy.None);
-		}
+		Assert.That(bottom.ReceivedIds, Is.EqualTo(new[] { 20 }));
     }
 
     private static void PumpTwice()
     {
         LayerHub.Pump(0.02f);
         LayerHub.Pump(0.02f);
-    }
-
-    private static void OpenGate<T>() where T : struct
-    {
-        EventMetaData<T>.TimerScheduler.SetFrequency(0.001);
-        EventMetaData<T>.TimerScheduler.Tick(0.01);
     }
 
 	private sealed class RecordingLayer<TEvent> : Layer where TEvent : struct
@@ -138,6 +93,10 @@ public class LayerConfigurationTests
 		}
 	}
 
+	private sealed class EmptyLayer : Layer
+	{
+	}
+
     public readonly struct PlainEvent
     {
         public PlainEvent(int id)
@@ -148,13 +107,4 @@ public class LayerConfigurationTests
         public int Id { get; }
     }
 
-    public readonly struct StrategyEvent
-    {
-        public StrategyEvent(int id)
-        {
-            Id = id;
-        }
-
-        public int Id { get; }
-    }
 }

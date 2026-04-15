@@ -1,63 +1,44 @@
-﻿using LayerBase.Core.EventStateTrace;
 using LayerBase.Core.ResponsibilityChain;
-using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Layers;
 
 internal sealed class LayerChain
 {
     private readonly ResponsibilityChain responsibilityChain;
-    private EventStateTracer? eventStateTracer;
-    private EventLogTracer? _eventLogTracer;
-    private Action<string>? logger;
+    private DirectEventBus? _eventBus;
+    private bool _built;
+
     internal LayerChain(ResponsibilityChain chain)
     {
         responsibilityChain = chain;
     }
+
     internal ResponsibilityChain Chain => responsibilityChain;
+
     internal void AddNode(Node node)
     {
         responsibilityChain.AddLast(node);
-        if (eventStateTracer != null && node is Layer layer)
+        if (_built)
         {
-            layer.SetEventTracer(eventStateTracer);
+            AssignEventBus();
         }
     }
 
     internal void Build(int slabSize = 512, bool releaseMode = false)
     {
-        if (!releaseMode)
-        {
-            eventStateTracer = new EventStateTracer(slabSize);
-            
-            // 注册事件元数据创建事件
-            eventStateTracer.OnClassifiedEventCompleted = EventMetaDataHandler.OnClassicEventDestroyed;
-            eventStateTracer.OnClassifiedEventCreated = EventMetaDataHandler.OnClassicEventCreated;
-            
-            // 构建层级
-            foreach (var node in responsibilityChain)
-            {
-                (node as Layer)?.SetEventTracer(eventStateTracer);
-                (node as Layer)?.Build();
-            }
-            return;
-        }
-
-        eventStateTracer = null;
+        AssignEventBus();
         foreach (var node in responsibilityChain)
         {
             (node as Layer)?.Build();
         }
+
+        _built = true;
     }
-    internal void SetLogTracing(Action<string>? logger = null,int logQueueCapacity = 256)
+
+    internal void SetLogTracing(Action<string>? logger = null, int logQueueCapacity = 256)
     {
-        this.logger = logger;
-        _eventLogTracer = new EventLogTracer(logQueueCapacity);
-        
-        foreach (var node in responsibilityChain)
-        {
-            (node as Layer)?.SetEventLogTracer(_eventLogTracer);
-        }
+        // Event path tracing was removed from the hot path. This method remains as a no-op
+        // so older builder calls do not break at compile time.
     }
 
     internal void Pump()
@@ -70,23 +51,23 @@ internal sealed class LayerChain
 
     internal void PrintLog()
     {
-        if (_eventLogTracer == null)
+    }
+
+    private void AssignEventBus()
+    {
+        var layers = new List<Layer>();
+        foreach (var node in responsibilityChain)
         {
-            return;
+            if (node is Layer layer)
+            {
+                layers.Add(layer);
+            }
         }
 
-        if (logger == null)
+        _eventBus = new DirectEventBus(layers);
+        for (int i = 0; i < layers.Count; i++)
         {
-            return;
-        }
-        
-        var logQueue = _eventLogTracer.Logs;
-        while (logQueue.Count > 0)
-        {
-            if (logQueue.TryDequeue(out string log))
-            {
-                logger(log);
-            }
+            layers[i].SetEventBus(_eventBus, i);
         }
     }
 }

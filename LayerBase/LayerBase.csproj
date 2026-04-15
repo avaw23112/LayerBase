@@ -20,6 +20,12 @@
         <Compile Remove="DataStruct\DictionaryTree\**" />
         <EmbeddedResource Remove="DataStruct\DictionaryTree\**" />
         <None Remove="DataStruct\DictionaryTree\**" />
+        <Compile Remove="Event\EventLogTracer\**" />
+        <EmbeddedResource Remove="Event\EventLogTracer\**" />
+        <None Remove="Event\EventLogTracer\**" />
+        <Compile Remove="Event\EventStateTrace\**" />
+        <EmbeddedResource Remove="Event\EventStateTrace\**" />
+        <None Remove="Event\EventStateTrace\**" />
     </ItemGroup>
     <ItemGroup>
       <PackageReference Include="UniTask" Version="2.5.10" />

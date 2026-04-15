@@ -115,11 +115,11 @@ namespace LayerBase.Async
             var ctx = _context;
             if (ctx != null)
             {
-                ctx.Post(_ => continuation(), null);
+                ctx.Post(static state => ((Action)state!).Invoke(), continuation);
             }
             else
             {
-                ThreadPool.QueueUserWorkItem(_ => continuation());
+                ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
             }
         }
 
@@ -225,11 +225,11 @@ namespace LayerBase.Async
             var ctx = _context;
             if (ctx != null)
             {
-                ctx.Post(_ => continuation(), null);
+                ctx.Post(static state => ((Action)state!).Invoke(), continuation);
             }
             else
             {
-                ThreadPool.QueueUserWorkItem(_ => continuation());
+                ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
             }
         }
 

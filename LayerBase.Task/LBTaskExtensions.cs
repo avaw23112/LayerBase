@@ -216,17 +216,7 @@ namespace LayerBase.Async
 
         public static void Forget<T>(this LBTask<T> task, Action<Exception>? onException = null)
         {
-            task.GetAwaiter().OnCompleted(() =>
-            {
-                try
-                {
-                    task.GetAwaiter().GetResult();
-                }
-                catch (Exception ex)
-                {
-                    onException?.Invoke(ex);
-                }
-            });
+            ForgetObserver<T>.Observe(task, onException);
         }
 
         public static LBTask WithCancellation(this LBTask task, CancellationToken token) => task.AttachExternalCancellation(token);
@@ -337,6 +327,47 @@ namespace LayerBase.Async
         {
             if (predicate == null) throw new ArgumentNullException(nameof(predicate));
             return WaitUntil(() => !predicate(), ctx, cancellationToken);
+        }
+
+        private sealed class ForgetObserver<T>
+        {
+            private static readonly ObjectPool<ForgetObserver<T>> Pool =
+                new ObjectPool<ForgetObserver<T>>(() => new ForgetObserver<T>());
+
+            private readonly Action _continuation;
+            private LBTask<T> _task;
+            private Action<Exception>? _onException;
+
+            private ForgetObserver()
+            {
+                _continuation = Complete;
+            }
+
+            public static void Observe(LBTask<T> task, Action<Exception>? onException)
+            {
+                var observer = Pool.Rent();
+                observer._task = task;
+                observer._onException = onException;
+                task.GetAwaiter().OnCompleted(observer._continuation);
+            }
+
+            private void Complete()
+            {
+                try
+                {
+                    _task.GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    _onException?.Invoke(ex);
+                }
+                finally
+                {
+                    _task = default;
+                    _onException = null;
+                    Pool.Return(this);
+                }
+            }
         }
     }
 }

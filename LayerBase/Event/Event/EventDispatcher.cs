@@ -1,10 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using LayerBase.Async;
 using LayerBase.Core.EventHandler;
-using LayerBase.Core.EventStateTrace;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Tools.Job;
 
@@ -23,8 +22,6 @@ namespace LayerBase.Core.Event
             _layerFullName = string.IsNullOrWhiteSpace(layerFullName) ? "UnknownLayer" : layerFullName;
         }
 
-        internal EventStateTracer? StateTracer { get; set; }
-        internal EventLogTracer? LogTracer { get; set; }
         internal Action<string, string, string, Exception>? ErrorReporter { get; set; }
 
         public void Subscribe<EventArg>(IEventHandler<EventArg> handler) where EventArg : struct
@@ -87,6 +84,11 @@ namespace LayerBase.Core.Event
             return TryGetBucket<T>(out var bucket) && bucket.Remove(handleDelegateAsync);
         }
 
+        public bool HasHandlers<T>() where T : struct
+        {
+            return TryGetBucket<T>(out var bucket) && bucket.HasHandlers;
+        }
+
         public EventHandledState Dispatch<T>(in Event<T> @event) where T : struct
         {
             if (!@event.IsVaild())
@@ -96,18 +98,6 @@ namespace LayerBase.Core.Event
 
             return TryGetBucket<T>(out var bucket)
                 ? bucket.Dispatch(this, in @event)
-                : EventHandledState.Continue;
-        }
-
-        public EventHandledState Dispatch<T>(in Event<T> @event, ref EventState eventState) where T : struct
-        {
-            if (!@event.IsVaild())
-            {
-                return EventHandledState.Handled;
-            }
-
-            return TryGetBucket<T>(out var bucket)
-                ? bucket.Dispatch(this, in @event, ref eventState)
                 : EventHandledState.Continue;
         }
 
@@ -200,6 +190,11 @@ namespace LayerBase.Core.Event
             private OrderedHandlerEntry<T>[] _orderedHandlers = Array.Empty<OrderedHandlerEntry<T>>();
             private UnorderedHandlerEntry<T>[] _unorderedHandlers = Array.Empty<UnorderedHandlerEntry<T>>();
             private ParallelHandlerEntry<T>[] _parallelHandlers = Array.Empty<ParallelHandlerEntry<T>>();
+
+            public bool HasHandlers =>
+                Volatile.Read(ref _orderedHandlers).Length != 0 ||
+                Volatile.Read(ref _unorderedHandlers).Length != 0 ||
+                Volatile.Read(ref _parallelHandlers).Length != 0;
 
             public void Add(IEventHandler<T> handler)
             {
@@ -367,29 +362,6 @@ namespace LayerBase.Core.Event
 
             public EventHandledState Dispatch(EventDispatcher dispatcher, in Event<T> @event)
             {
-                var tracer = dispatcher.StateTracer;
-                bool hasTracer = tracer != null;
-                EventState state = default;
-                if (hasTracer)
-                {
-                    state = tracer!.Resolve(@event.TraceToken);
-                }
-
-                return DispatchCore(dispatcher, in @event, hasTracer, ref state);
-            }
-
-            public EventHandledState Dispatch(EventDispatcher dispatcher, in Event<T> @event, ref EventState state)
-            {
-                bool hasTracer = dispatcher.StateTracer != null;
-                return DispatchCore(dispatcher, in @event, hasTracer, ref state);
-            }
-
-            private EventHandledState DispatchCore(
-                EventDispatcher dispatcher,
-                in Event<T> @event,
-                bool hasTracer,
-                ref EventState state)
-            {
                 var parallelHandlers = Volatile.Read(ref _parallelHandlers);
                 var unorderedHandlers = Volatile.Read(ref _unorderedHandlers);
                 var orderedHandlers = Volatile.Read(ref _orderedHandlers);
@@ -400,12 +372,7 @@ namespace LayerBase.Core.Event
 
                 for (int i = 0; i < parallelHandlers.Length; i++)
                 {
-                    var handler = parallelHandlers[i];
-                    handler.Enqueue(in @event);
-                    if (hasTracer)
-                    {
-                        dispatcher.LogTracer?.TryRecordHandler(ref state, handler.DisplayName, EventHandledState.Continue);
-                    }
+                    parallelHandlers[i].Enqueue(in @event);
                 }
 
                 for (int i = 0; i < unorderedHandlers.Length; i++)
@@ -421,16 +388,12 @@ namespace LayerBase.Core.Event
                         if (handler.IsAsync)
                         {
                             var payload = @event.Value;
-                            var circuit = handler.Circuit;
-                            var fullName = handler.FullName;
-                            handler.AsyncHandler!.Deal(payload).Forget(ex =>
-                            {
-                                EventMetaDataHandler.OnEventExpectation(payload, ex);
-                                if (circuit.TryDisable())
-                                {
-                                    dispatcher.ReportHandlerError(fullName, s_eventFullName, ex);
-                                }
-                            });
+                            AsyncFaultContext.Observe(
+                                dispatcher,
+                                handler.Circuit,
+                                handler.FullName,
+                                in payload,
+                                handler.AsyncHandler!.Deal(payload));
                         }
                         else
                         {
@@ -443,13 +406,6 @@ namespace LayerBase.Core.Event
                         if (handler.Circuit.TryDisable())
                         {
                             dispatcher.ReportHandlerError(handler.FullName, s_eventFullName, e);
-                        }
-                    }
-                    finally
-                    {
-                        if (hasTracer)
-                        {
-                            dispatcher.LogTracer?.TryRecordHandler(ref state, handler.DisplayName, EventHandledState.Continue);
                         }
                     }
                 }
@@ -468,31 +424,17 @@ namespace LayerBase.Core.Event
                         if (handler.IsAsync)
                         {
                             var payload = @event.Value;
-                            var circuit = handler.Circuit;
-                            var fullName = handler.FullName;
-                            handler.AsyncHandler!(payload).Forget(ex =>
-                            {
-                                EventMetaDataHandler.OnEventExpectation(payload, ex);
-                                if (circuit.TryDisable())
-                                {
-                                    dispatcher.ReportHandlerError(fullName, s_eventFullName, ex);
-                                }
-                            });
-                            if (hasTracer)
-                            {
-                                dispatcher.LogTracer?.TryRecordHandler(ref state, $"#{i}:{handler.DisplayName}",
-                                    EventHandledState.Continue);
-                            }
+                            AsyncFaultContext.Observe(
+                                dispatcher,
+                                handler.Circuit,
+                                handler.FullName,
+                                in payload,
+                                handler.AsyncHandler!(payload));
 
                             continue;
                         }
 
                         var result = handler.SyncHandler!(in @event.Value);
-                        if (hasTracer)
-                        {
-                            dispatcher.LogTracer?.TryRecordHandler(ref state, $"#{i}:{handler.DisplayName}", result);
-                        }
-
                         if (result == EventHandledState.Handled)
                         {
                             return EventHandledState.Handled;
@@ -514,6 +456,67 @@ namespace LayerBase.Core.Event
                 }
 
                 return handledAndContinueSeen ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
+            }
+
+            private sealed class AsyncFaultContext
+            {
+                private static readonly ConcurrentBag<AsyncFaultContext> s_pool = new();
+                private readonly Action _continuation;
+                private EventDispatcher? _dispatcher;
+                private HandlerCircuit? _circuit;
+                private string? _handlerFullName;
+                private T _payload;
+                private LBTask _task;
+
+                private AsyncFaultContext()
+                {
+                    _continuation = Complete;
+                }
+
+                public static void Observe(
+                    EventDispatcher dispatcher,
+                    HandlerCircuit circuit,
+                    string handlerFullName,
+                    in T payload,
+                    LBTask task)
+                {
+                    if (!s_pool.TryTake(out var context))
+                    {
+                        context = new AsyncFaultContext();
+                    }
+
+                    context._dispatcher = dispatcher;
+                    context._circuit = circuit;
+                    context._handlerFullName = handlerFullName;
+                    context._payload = payload;
+                    context._task = task;
+                    task.GetAwaiter().OnCompleted(context._continuation);
+                }
+
+                private void Complete()
+                {
+                    try
+                    {
+                        _task.GetAwaiter().GetResult();
+                    }
+                    catch (Exception ex)
+                    {
+                        EventMetaDataHandler.OnEventExpectation(_payload, ex);
+                        if (_circuit!.TryDisable())
+                        {
+                            _dispatcher!.ReportHandlerError(_handlerFullName!, s_eventFullName, ex);
+                        }
+                    }
+                    finally
+                    {
+                        _dispatcher = null;
+                        _circuit = null;
+                        _handlerFullName = null;
+                        _payload = default;
+                        _task = default;
+                        s_pool.Add(this);
+                    }
+                }
             }
 
             private static TEntry[] RemoveAt<TEntry>(TEntry[] current, int index)

@@ -19,9 +19,17 @@ namespace LayerBase.Core.PolledEventContainer
 
         internal void Pump()
         {
-            foreach (var queue in _queuesByType.Values)
+            if (_queuesByType.Count == 0)
             {
-                queue.Pump();
+                return;
+            }
+
+            var snapshot = new IUnmanagedList[_queuesByType.Count];
+            _queuesByType.Values.CopyTo(snapshot, 0);
+
+            for (int i = 0; i < snapshot.Length; i++)
+            {
+                snapshot[i].Pump();
             }
         }
         

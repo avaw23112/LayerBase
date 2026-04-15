@@ -8,25 +8,9 @@ namespace LayerBase.Async
     /// </summary>
     public readonly struct LBTaskVoid
     {
-        private readonly LBTask _inner;
-        private readonly Action<Exception>? _onException;
-
         internal LBTaskVoid(LBTask inner, Action<Exception>? onException)
         {
-            _inner = inner;
-            _onException = onException;
-            Observe();
-        }
-
-        private void Observe()
-        {
-            var inner = _inner;
-            var handler = _onException;
-            inner.GetAwaiter().OnCompleted(() =>
-            {
-                try { inner.GetAwaiter().GetResult(); }
-                catch (Exception ex) { handler?.Invoke(ex); }
-            });
+            Observer.Observe(inner, onException);
         }
 
         public static LBTaskVoid Run(Action action, Action<Exception>? onException = null)
@@ -39,6 +23,45 @@ namespace LayerBase.Async
         {
             var t = LBTask.RunOnMainThread(action, ctx);
             return new LBTaskVoid(t, onException);
+        }
+
+        private sealed class Observer
+        {
+            private static readonly ObjectPool<Observer> Pool = new ObjectPool<Observer>(() => new Observer());
+            private readonly Action _continuation;
+            private LBTask _task;
+            private Action<Exception>? _onException;
+
+            private Observer()
+            {
+                _continuation = Complete;
+            }
+
+            public static void Observe(LBTask task, Action<Exception>? onException)
+            {
+                var observer = Pool.Rent();
+                observer._task = task;
+                observer._onException = onException;
+                task.GetAwaiter().OnCompleted(observer._continuation);
+            }
+
+            private void Complete()
+            {
+                try
+                {
+                    _task.GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    _onException?.Invoke(ex);
+                }
+                finally
+                {
+                    _task = default;
+                    _onException = null;
+                    Pool.Return(this);
+                }
+            }
         }
     }
 }

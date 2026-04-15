@@ -1,5 +1,3 @@
-﻿using LayerBase.Core.EventStateTrace;
-
 namespace LayerBase.Core.Event
 {
     /// <summary>
@@ -28,13 +26,13 @@ namespace LayerBase.Core.Event
     }
 
     /// <summary>
-    /// 事件包装类型，携带元数据与追踪标记。
+    /// 事件包装类型，携带事件值与传播方向。
     /// </summary>
     public struct Event<EventArg> where EventArg : struct
     {
-        private EventStateToken _traceToken;
         private EventHandledState _handledState;
         private EventForwardDir _forwardDirection;
+        private bool _shouldForwardFromQueue;
 
         public EventArg Value;
 
@@ -42,14 +40,14 @@ namespace LayerBase.Core.Event
         {
             _handledState = EventHandledState.Created;
             _forwardDirection = default;
-            _traceToken = default;
+            _shouldForwardFromQueue = true;
             Value = value;
         }
 
         public int Id => EventTypeId<EventArg>.Id;
         public string Name => typeof(EventArg).Name;
         public EventForwardDir ForwardDir => _forwardDirection;
-        internal EventStateToken TraceToken => _traceToken;
+        internal bool ShouldForwardFromQueue => _shouldForwardFromQueue;
 
         public bool IsVaild() => _handledState != EventHandledState.Handled;
         public void MarkHandled() => _handledState = EventHandledState.Handled;
@@ -62,6 +60,6 @@ namespace LayerBase.Core.Event
 
         public override string ToString() => Name;
 
-        internal void AttachTraceToken(EventStateToken token) => _traceToken = token;
+        internal void DisableQueuedForwarding() => _shouldForwardFromQueue = false;
     }
 }

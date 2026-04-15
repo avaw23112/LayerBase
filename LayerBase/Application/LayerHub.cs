@@ -3,7 +3,6 @@ using LayerBase.Core.ResponsibilityChain;
 using LayerBase.Event.Delay;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
-using LayerBase.Layers.LayerMetaData;
 using LayerBase.Tools.Job;
 using LayerBase.Tools.Timer;
 
@@ -81,10 +80,7 @@ namespace LayerBase.LayerHub
         public void Build()
         {
             _chain.Build(_eventStateSlabSize, _releaseMode);
-            if (!_releaseMode)
-            {
-                _chain.SetLogTracing(_logger, _logQueueCapacity);
-            }
+            _chain.SetLogTracing(_logger, _logQueueCapacity);
         }
     }
 
@@ -103,7 +99,6 @@ namespace LayerBase.LayerHub
         public static void Reset()
         {
             EventMetaDataHandler.Clear();
-            LayerMetaData.Clear();
             s_responsibilityChains.Clear();
             OnLayerEventError = null;
             InstanceLayers.Clear();
@@ -161,7 +156,6 @@ namespace LayerBase.LayerHub
             DelayPublisherManager.Instance.Update(deltaTime);
             PumpLayers();
             EventMetaDataHandler.PumpExpectations();
-            PumpEventLogs();
             TimerSchedulers.TickAll(deltaTime);
         }
 
@@ -188,14 +182,6 @@ namespace LayerBase.LayerHub
                 {
                     // Error observers should not impact event dispatch.
                 }
-            }
-        }
-
-        private static void PumpEventLogs()
-        {
-            foreach (var chainBundle in s_responsibilityChains)
-            {
-                chainBundle.PrintLog();
             }
         }
 

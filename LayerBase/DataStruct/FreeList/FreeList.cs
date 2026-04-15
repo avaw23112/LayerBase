@@ -27,11 +27,6 @@
         /// </summary>
         public ushort Version { get; }
         
-        /// <summary>
-        /// EventStateToken和SlotRef共用同一组数据
-        /// </summary>
-        /// <returns></returns>
-        public EventStateToken ToToken() => new(GlobalIndex, Version);
     }
     
     /// <summary>
@@ -137,7 +132,7 @@
         }
         
         /// <summary>
-        /// 验证EventStateToken对应的SlotRef是否存在,如果存在则返回Slot的位置下标,否则返回0.
+        /// 验证索引和版本对应的 SlotRef 是否存在。
         /// </summary>
         /// <param name="token"></param>
         /// <param name="globalIndex"></param>

@@ -12,7 +12,7 @@ namespace LayerBase.Async
     public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IArchMainThreadPump, IDisposable
     {
         private readonly int _mainThreadId;
-        private readonly ConcurrentQueue<Action> _queue = new ConcurrentQueue<Action>();
+        private readonly ConcurrentQueue<WorkItem> _queue = new ConcurrentQueue<WorkItem>();
         private readonly List<FrameWorkItem> _frameWork = new List<FrameWorkItem>();
         private readonly object _lock = new object();
         private bool _disposed;
@@ -36,7 +36,7 @@ namespace LayerBase.Async
         public override void Post(SendOrPostCallback d, object? state)
         {
             if (_disposed) return;
-            _queue.Enqueue(() => d(state));
+            _queue.Enqueue(new WorkItem(d, state));
         }
 
         public override void Send(SendOrPostCallback d, object? state)
@@ -49,30 +49,37 @@ namespace LayerBase.Async
             }
 
             using var gate = new ManualResetEventSlim(false);
-            Exception? error = null;
-            _queue.Enqueue(() =>
+            var sendWork = new SendWorkItem(d, state, gate);
+            _queue.Enqueue(new WorkItem(static payload =>
             {
-                try { d(state); }
-                catch (Exception ex) { error = ex; }
-                finally { gate.Set(); }
-            });
+                var work = (SendWorkItem)payload!;
+                try { work.Callback(work.State); }
+                catch (Exception ex) { work.Error = ex; }
+                finally { work.Gate.Set(); }
+            }, sendWork));
             gate.Wait();
-            if (error != null) throw error;
+            if (sendWork.Error != null) throw sendWork.Error;
         }
 
         /// <summary>Schedule an action after the specified number of frames.</summary>
         internal void ScheduleInFrames(Action action, int frames)
         {
+            ScheduleInFrames(static state => ((Action)state!).Invoke(), action, frames);
+        }
+
+        internal void ScheduleInFrames(SendOrPostCallback callback, object? state, int frames)
+        {
             if (_disposed) return;
+            var workItem = new WorkItem(callback, state);
             if (frames <= 0)
             {
-                _queue.Enqueue(action);
+                _queue.Enqueue(workItem);
                 return;
             }
 
             lock (_lock)
             {
-                _frameWork.Add(new FrameWorkItem(frames, action));
+                _frameWork.Add(new FrameWorkItem(frames, workItem));
             }
         }
 
@@ -88,7 +95,7 @@ namespace LayerBase.Async
                     var item = _frameWork[i].Tick();
                     if (item.ShouldRun)
                     {
-                        _queue.Enqueue(item.Action);
+                        _queue.Enqueue(item.Work);
                         _frameWork.RemoveAt(i);
                     }
                     else
@@ -103,7 +110,7 @@ namespace LayerBase.Async
             {
                 try
                 {
-                    work();
+                    work.Invoke();
                 }
                 catch (Exception ex)
                 {
@@ -128,20 +135,53 @@ namespace LayerBase.Async
             while (_queue.TryDequeue(out _)) { }
         }
 
+        private readonly struct WorkItem
+        {
+            private readonly SendOrPostCallback _callback;
+            private readonly object? _state;
+
+            public WorkItem(SendOrPostCallback callback, object? state)
+            {
+                _callback = callback;
+                _state = state;
+            }
+
+            public void Invoke()
+            {
+                _callback(_state);
+            }
+        }
+
+        private sealed class SendWorkItem
+        {
+            public readonly SendOrPostCallback Callback;
+            public readonly object? State;
+            public readonly ManualResetEventSlim Gate;
+            public Exception? Error;
+
+            public SendWorkItem(SendOrPostCallback callback, object? state, ManualResetEventSlim gate)
+            {
+                Callback = callback;
+                State = state;
+                Gate = gate;
+            }
+        }
+
         private readonly struct FrameWorkItem
         {
-            public readonly Action Action;
+            public readonly WorkItem Work;
             public readonly int FramesRemaining;
-            public FrameWorkItem(int framesRemaining, Action action)
+
+            public FrameWorkItem(int framesRemaining, WorkItem work)
             {
                 FramesRemaining = framesRemaining;
-                Action = action;
+                Work = work;
             }
 
             public FrameWorkItem Tick()
             {
                 var next = Math.Max(FramesRemaining - 1, 0);
-                return new FrameWorkItem(next, Action);
+                return new FrameWorkItem(next, Work);
             }
 
             public bool ShouldRun => FramesRemaining <= 0;

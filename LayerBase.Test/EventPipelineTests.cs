@@ -21,8 +21,6 @@ public class EventPipelineTests
 	[Test]
 	public void Bubble_stops_at_current_layer_when_handled()
 	{
-		OpenGate<RoutingEvent>();
-
 		var upper = new RecordingLayer(EventHandledState.Continue);
 		var lower = new RecordingLayer(
 			EventHandledState.Handled,
@@ -40,10 +38,25 @@ public class EventPipelineTests
 	}
 
 	[Test]
+	public void Pump_does_not_throw_when_a_queued_event_creates_a_new_queue_type()
+	{
+		var layer = new ReentrantPostingLayer();
+		LayerHub.CreateLayers().Push(layer).Build();
+
+		layer.Post(new QueuedRootEvent(7));
+
+		Assert.That(() => LayerHub.Pump(0.02f), Throws.Nothing);
+		CollectionAssert.AreEqual(new[] { 7 }, layer.RootIds);
+		Assert.That(layer.FollowUpIds, Is.Empty);
+
+		LayerHub.Pump(0.02f);
+
+		CollectionAssert.AreEqual(new[] { 70 }, layer.FollowUpIds);
+	}
+
+	[Test]
 	public void Broadcast_hits_all_layers_when_not_handled()
 	{
-		OpenGate<RoutingEvent>();
-
 		const int eventId = 2;
 		var top = new RecordingLayer(
 			EventHandledState.Continue,
@@ -72,7 +85,6 @@ public class EventPipelineTests
 	[Test]
 	public void Ordered_handlers_keep_registration_order_when_sync_and_async_are_mixed()
 	{
-		OpenGate<RoutingEvent>();
 		var order = new List<string>();
 		var layer = new MixedOrderedLayer(order);
 
@@ -87,7 +99,6 @@ public class EventPipelineTests
 	[Test]
 	public void SubscribeParallel_dispatches_events_through_background_job_scheduler()
 	{
-		OpenGate<RoutingEvent>();
 		LayerHub.InitializeJobScheduler(workerCount: 2, queueCapacity: 256);
 
 		var latch = new CountdownEvent(6);
@@ -109,7 +120,6 @@ public class EventPipelineTests
 	[Test]
 	public void Faulted_handler_is_disabled_and_reported_without_blocking_other_handlers()
 	{
-		OpenGate<RoutingEvent>();
 		var layer = new FaultIsolationLayer();
 		int reportCount = 0;
 		LayerEventErrorInfo? reportedError = null;
@@ -151,7 +161,6 @@ public class EventPipelineTests
 	[Test]
 	public void Faulted_parallel_handler_is_disabled_and_reported_once()
 	{
-		OpenGate<RoutingEvent>();
 		LayerHub.InitializeJobScheduler(workerCount: 2, queueCapacity: 256);
 
 		var layer = new ParallelFaultIsolationLayer();
@@ -199,16 +208,6 @@ public class EventPipelineTests
 	private static void PumpOnce()
 	{
 		LayerHub.Pump(0.02f);
-		// LayerHub.Reset() clears TimerSchedulers, so tick the event-specific scheduler directly to flush any
-		// frequency-gated invocations that were queued during BroadCast/Bubble.
-		EventMetaData<RoutingEvent>.TimerScheduler.Tick(0.02);
-	}
-
-	private static void OpenGate<T>() where T : struct
-	{
-		// Event meta-data uses a per-event-type TimerScheduler; open its gate so pooled events can pump immediately.
-		EventMetaData<T>.TimerScheduler.SetFrequency(0.001);
-		EventMetaData<T>.TimerScheduler.Tick(0.01);
 	}
 
 	private sealed class RecordingLayer : Layer
@@ -285,6 +284,31 @@ public class EventPipelineTests
 		{
 			Interlocked.Increment(ref _delegateHandledCount);
 			_latch.Signal();
+			return EventHandledState.Continue;
+		}
+	}
+
+	private sealed class ReentrantPostingLayer : Layer
+	{
+		public ReentrantPostingLayer()
+		{
+			Subscribe<QueuedRootEvent>(OnRoot);
+			Subscribe<QueuedFollowUpEvent>(OnFollowUp);
+		}
+
+		public List<int> RootIds { get; } = new();
+		public List<int> FollowUpIds { get; } = new();
+
+		private EventHandledState OnRoot(in QueuedRootEvent evt)
+		{
+			RootIds.Add(evt.Id);
+			Post(new QueuedFollowUpEvent(evt.Id * 10));
+			return EventHandledState.Continue;
+		}
+
+		private EventHandledState OnFollowUp(in QueuedFollowUpEvent evt)
+		{
+			FollowUpIds.Add(evt.Id);
 			return EventHandledState.Continue;
 		}
 	}
@@ -372,6 +396,26 @@ public class EventPipelineTests
 	public partial struct RoutingEvent
 	{
 		public RoutingEvent(int id)
+		{
+			Id = id;
+		}
+
+		public int Id { get; }
+	}
+
+	private readonly struct QueuedRootEvent
+	{
+		public QueuedRootEvent(int id)
+		{
+			Id = id;
+		}
+
+		public int Id { get; }
+	}
+
+	private readonly struct QueuedFollowUpEvent
+	{
+		public QueuedFollowUpEvent(int id)
 		{
 			Id = id;
 		}
