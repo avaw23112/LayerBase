@@ -23,6 +23,10 @@ namespace LayerBase.Core.Event
         private readonly object _lock = new();
 
         private string[] _layerNames = Array.Empty<string>();
+        
+        // 预计算的位图掩码，用于极致优化 Post 速度
+        private ulong[] _bubbleMasks = Array.Empty<ulong>();
+        private ulong[] _dropMasks = Array.Empty<ulong>();
 
         internal void EnsureSlots(int count, string name)
         {
@@ -39,6 +43,17 @@ namespace LayerBase.Core.Event
                             newSlots[i] = new LayerEventQueue(this, i);
                         }
                         _layerSlots = newSlots;
+
+                        // 预计算掩码：Bubble(0->i), Drop(i->N)
+                        var newBubble = new ulong[count];
+                        var newDrop = new ulong[count];
+                        for (int i = 0; i < count; i++)
+                        {
+                            newBubble[i] = (1UL << (i + 1)) - 1;
+                            newDrop[i] = ~((1UL << i) - 1);
+                        }
+                        _bubbleMasks = newBubble;
+                        _dropMasks = newDrop;
                     }
 
                     if (_layerNames.Length < count)
@@ -123,6 +138,7 @@ namespace LayerBase.Core.Event
             return GetBucket<T>().DispatchLocal(layerIndex, in @event);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal int FindFirstBit(ulong mask)
         {
             if (mask == 0) return -1;
@@ -138,26 +154,38 @@ namespace LayerBase.Core.Event
             _eventBuckets.Clear();
             _layerSlots = Array.Empty<IEventQueue>();
             _layerNames = Array.Empty<string>();
+            _bubbleMasks = Array.Empty<ulong>();
+            _dropMasks = Array.Empty<ulong>();
         }
 
         private EventBucket<T> GetBucket<T>() where T : struct
         {
+            var bucket = BucketCache<T>.Instance;
+            if (bucket != null && bucket.Owner == this) return bucket;
+
             int typeId = EventTypeId<T>.Id;
-            return (EventBucket<T>)_eventBuckets.GetOrAdd(typeId, _ => new EventBucket<T>(this));
+            bucket = (EventBucket<T>)_eventBuckets.GetOrAdd(typeId, _ => new EventBucket<T>(this));
+            BucketCache<T>.Instance = bucket;
+            return bucket;
+        }
+
+        private static class BucketCache<T> where T : struct
+        {
+            public static EventBucket<T>? Instance;
         }
 
         private interface IEventBucket { }
 
         private sealed class EventBucket<T> : IEventBucket where T : struct
         {
-            private readonly GlobalEventCenter _center;
+            public readonly GlobalEventCenter Owner;
             private HandlerBucket<T>?[] _buckets = Array.Empty<HandlerBucket<T>>();
             private ulong _subscriberMask;
             private readonly object _lock = new();
 
             public EventBucket(GlobalEventCenter center)
             {
-                _center = center;
+                Owner = center;
             }
 
             public void Add(int layerIndex, IEventHandler<T> handler)
@@ -249,13 +277,13 @@ namespace LayerBase.Core.Event
                 bool handledAndContinueSeen = false;
                 var @event = new Event<T>(value);
                 
-                for (int i = start; step > 0 ? i <= end : i >= end; i += step)
+                for (int i = start; i <= end; i++)
                 {
                     if (i >= buckets.Length) break;
                     var bucket = buckets[i];
                     if (bucket == null) continue;
 
-                    string layerName = i < _center._layerNames.Length ? _center._layerNames[i] : "UnknownLayer";
+                    string layerName = i < Owner._layerNames.Length ? Owner._layerNames[i] : "UnknownLayer";
                     var state = bucket.Dispatch(layerName, in @event);
                     if (state == EventHandledState.Handled) return EventHandledState.Handled;
                     if (state == EventHandledState.HandledAndContinue) handledAndContinueSeen = true;
@@ -269,24 +297,26 @@ namespace LayerBase.Core.Event
                 ulong mask = Volatile.Read(ref _subscriberMask);
                 if (mask == 0) return;
 
-                int start, end, step;
-                GetRange(sourceIndex, propagation, 64, out start, out end, out step);
-
-                ulong targetMask = 0;
-                for (int i = start; step > 0 ? i <= end : i >= end; i += step)
+                // 极致优化：利用预计算掩码，跳过运行时范围计算
+                ulong targetMask = mask;
+                switch (propagation)
                 {
-                    if ((mask & (1UL << i)) != 0)
-                    {
-                        targetMask |= (1UL << i);
-                    }
+                    case Propagation.Bubble:
+                        if (sourceIndex < Owner._bubbleMasks.Length)
+                            targetMask &= Owner._bubbleMasks[sourceIndex];
+                        break;
+                    case Propagation.Drop:
+                        if (sourceIndex < Owner._dropMasks.Length)
+                            targetMask &= Owner._dropMasks[sourceIndex];
+                        break;
                 }
 
                 if (targetMask != 0)
                 {
-                    int firstLayer = _center.FindFirstBit(targetMask);
+                    int firstLayer = Owner.FindFirstBit(targetMask);
                     var @event = new Event<T>(value);
                     @event.TargetMask = targetMask;
-                    _center.EnqueueEventInternal(firstLayer, in @event);
+                    Owner.EnqueueEventInternal(firstLayer, in @event);
                 }
             }
 
@@ -297,7 +327,7 @@ namespace LayerBase.Core.Event
                 {
                     var @event = new Event<T>(value);
                     @event.TargetMask = (1UL << layerIndex);
-                    _center.EnqueueEventInternal(layerIndex, in @event);
+                    Owner.EnqueueEventInternal(layerIndex, in @event);
                 }
             }
 
@@ -309,7 +339,7 @@ namespace LayerBase.Core.Event
                     var bucket = buckets[layerIndex];
                     if (bucket != null)
                     {
-                        string layerName = layerIndex < _center._layerNames.Length ? _center._layerNames[layerIndex] : "UnknownLayer";
+                        string layerName = layerIndex < Owner._layerNames.Length ? Owner._layerNames[layerIndex] : "UnknownLayer";
                         return bucket.Dispatch(layerName, in @event);
                     }
                 }
@@ -318,6 +348,7 @@ namespace LayerBase.Core.Event
 
             private void GetRange(int sourceIndex, Propagation propagation, int max, out int start, out int end, out int step)
             {
+                // 注意：在统一线性架构下，step 始终为 1
                 step = 1;
                 switch (propagation)
                 {

@@ -23,11 +23,11 @@ namespace LayerBase.Core.Event
         private OrderedHandlerEntry<T>[] _orderedHandlers = Array.Empty<OrderedHandlerEntry<T>>();
         private UnorderedHandlerEntry<T>[] _unorderedHandlers = Array.Empty<UnorderedHandlerEntry<T>>();
         private ParallelHandlerEntry<T>[] _parallelHandlers = Array.Empty<ParallelHandlerEntry<T>>();
+        
+        // 快速路径计数器
+        private int _totalHandlerCount;
 
-        public bool HasHandlers =>
-            Volatile.Read(ref _orderedHandlers).Length != 0 ||
-            Volatile.Read(ref _unorderedHandlers).Length != 0 ||
-            Volatile.Read(ref _parallelHandlers).Length != 0;
+        public bool HasHandlers => Volatile.Read(ref _totalHandlerCount) > 0;
 
         public void Add(IEventHandler<T> handler)
         {
@@ -38,6 +38,7 @@ namespace LayerBase.Core.Event
                 Array.Copy(current, next, current.Length);
                 next[current.Length] = UnorderedHandlerEntry<T>.Create(handler);
                 Volatile.Write(ref _unorderedHandlers, next);
+                Interlocked.Increment(ref _totalHandlerCount);
             }
         }
 
@@ -50,6 +51,7 @@ namespace LayerBase.Core.Event
                 Array.Copy(current, next, current.Length);
                 next[current.Length] = UnorderedHandlerEntry<T>.Create(handler);
                 Volatile.Write(ref _unorderedHandlers, next);
+                Interlocked.Increment(ref _totalHandlerCount);
             }
         }
 
@@ -62,6 +64,7 @@ namespace LayerBase.Core.Event
                 Array.Copy(current, next, current.Length);
                 next[current.Length] = OrderedHandlerEntry<T>.Create(handler);
                 Volatile.Write(ref _orderedHandlers, next);
+                Interlocked.Increment(ref _totalHandlerCount);
             }
         }
 
@@ -74,6 +77,7 @@ namespace LayerBase.Core.Event
                 Array.Copy(current, next, current.Length);
                 next[current.Length] = OrderedHandlerEntry<T>.Create(handler);
                 Volatile.Write(ref _orderedHandlers, next);
+                Interlocked.Increment(ref _totalHandlerCount);
             }
         }
 
@@ -86,6 +90,7 @@ namespace LayerBase.Core.Event
                 Array.Copy(current, next, current.Length);
                 next[current.Length] = ParallelHandlerEntry<T>.Create(handler, reportError);
                 Volatile.Write(ref _parallelHandlers, next);
+                Interlocked.Increment(ref _totalHandlerCount);
             }
         }
 
@@ -98,18 +103,32 @@ namespace LayerBase.Core.Event
                 Array.Copy(current, next, current.Length);
                 next[current.Length] = ParallelHandlerEntry<T>.Create(handler, reportError);
                 Volatile.Write(ref _parallelHandlers, next);
+                Interlocked.Increment(ref _totalHandlerCount);
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public EventHandledState Dispatch(string layerFullName, in Event<T> @event)
+        {
+            int total = Volatile.Read(ref _totalHandlerCount);
+            if (total == 0) return EventHandledState.Continue;
+
+            // 快速路径：如果只有一个同步委托处理器
+            var ordered = _orderedHandlers;
+            if (total == 1 && ordered.Length == 1)
+            {
+                return InvokeOrdered(layerFullName, in @event, in ordered[0]);
+            }
+
+            // 慢速路径：标准全量分发
+            return DispatchFull(layerFullName, in @event);
+        }
+
+        private EventHandledState DispatchFull(string layerFullName, in Event<T> @event)
         {
             var parallelHandlers = Volatile.Read(ref _parallelHandlers);
             var unorderedHandlers = Volatile.Read(ref _unorderedHandlers);
             var orderedHandlers = Volatile.Read(ref _orderedHandlers);
-            if (parallelHandlers.Length == 0 && unorderedHandlers.Length == 0 && orderedHandlers.Length == 0)
-            {
-                return EventHandledState.Continue;
-            }
 
             for (int i = 0; i < parallelHandlers.Length; i++)
                 parallelHandlers[i].Enqueue(layerFullName, in @event);
@@ -142,31 +161,37 @@ namespace LayerBase.Core.Event
             bool handledAndContinueSeen = false;
             for (int i = 0; i < orderedHandlers.Length; i++)
             {
-                var handler = orderedHandlers[i];
-                if (handler.Circuit.IsDisabled) continue;
-
-                try
-                {
-                    if (handler.IsAsync)
-                    {
-                        var payload = @event.Value;
-                        AsyncFaultContext.Observe(layerFullName, handler.Circuit, handler.FullName, in payload, handler.AsyncHandler!(payload));
-                        continue;
-                    }
-
-                    var result = handler.SyncHandler!(in @event.Value);
-                    if (result == EventHandledState.Handled) return EventHandledState.Handled;
-                    if (result == EventHandledState.HandledAndContinue) handledAndContinueSeen = true;
-                }
-                catch (Exception e)
-                {
-                    EventMetaDataHandler.OnEventExpectation(@event.Value, e);
-                    if (handler.Circuit.TryDisable())
-                        LayerBase.LayerHub.LayerHub.ReportLayerEventError(layerFullName, handler.FullName, s_eventFullName, e);
-                }
+                var result = InvokeOrdered(layerFullName, in @event, in orderedHandlers[i]);
+                if (result == EventHandledState.Handled) return EventHandledState.Handled;
+                if (result == EventHandledState.HandledAndContinue) handledAndContinueSeen = true;
             }
 
             return handledAndContinueSeen ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private EventHandledState InvokeOrdered(string layerFullName, in Event<T> @event, in OrderedHandlerEntry<T> handler)
+        {
+            if (handler.Circuit.IsDisabled) return EventHandledState.Continue;
+
+            try
+            {
+                if (handler.IsAsync)
+                {
+                    var payload = @event.Value;
+                    AsyncFaultContext.Observe(layerFullName, handler.Circuit, handler.FullName, in payload, handler.AsyncHandler!(payload));
+                    return EventHandledState.Continue;
+                }
+
+                return handler.SyncHandler!(in @event.Value);
+            }
+            catch (Exception e)
+            {
+                EventMetaDataHandler.OnEventExpectation(@event.Value, e);
+                if (handler.Circuit.TryDisable())
+                    LayerBase.LayerHub.LayerHub.ReportLayerEventError(layerFullName, handler.FullName, s_eventFullName, e);
+                return EventHandledState.Continue;
+            }
         }
 
         private sealed class AsyncFaultContext
