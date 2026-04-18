@@ -49,7 +49,7 @@ namespace LayerBase.LayerHub
         {
             s_chain = null;
             s_layerIndexCounter = 0;
-            // 核心修复：物理断代重置，不留任何静态残余
+            // 物理重置：直接分配新实例，简单、稳定且高效
             EventCenter = new GlobalEventCenter();
             ServiceLayerBinder.Reset();
             OnLayerEventInfo = null;
