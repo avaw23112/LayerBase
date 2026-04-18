@@ -30,15 +30,23 @@ namespace LayerBase.DI
         void Reset();
     }
 
-    public interface IService : ILayerContext
-    {
-        void ConfigureServices(IServiceCollection services);
-    }
-
     /// <summary>
     /// 能力标记接口：只要实现此接口，即可通过扩展方法获得 Layer 级的事件分发能力。
     /// </summary>
     public interface ILayerContext { }
+
+    /// <summary>
+    /// 内部契约：用于 DI 容器自动注入层级上下文信息，避开字典查找。
+    /// </summary>
+    internal interface IInternalLayerContext : ILayerContext
+    {
+        int LayerIndex { get; set; }
+    }
+
+    public interface IService : ILayerContext
+    {
+        void ConfigureServices(IServiceCollection services);
+    }
 
     /// <summary>
     /// 自动订阅行为接口：由 Source Generator 自动生成，用于在构建期执行订阅连线。
@@ -57,11 +65,25 @@ namespace LayerBase.DI
             if (instance == null) throw new ArgumentNullException(nameof(instance));
             if (layer == null) throw new ArgumentNullException(nameof(layer));
 
+            if (instance is IInternalLayerContext internalCtx)
+            {
+                internalCtx.LayerIndex = layer.RouteIndex;
+            }
+
             lock (s_layerMap)
             {
                 s_layerMap.Remove(instance);
                 s_layerMap.Add(instance, layer);
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static int GetIndex(ILayerContext instance)
+        {
+            if (instance is IInternalLayerContext internalCtx) return internalCtx.LayerIndex;
+            
+            if (s_layerMap.TryGetValue(instance, out var layer)) return layer.RouteIndex;
+            return -1;
         }
 
         internal static Layer Require(object instance)
@@ -72,118 +94,119 @@ namespace LayerBase.DI
                 return layer;
             }
 
-            throw new InvalidOperationException($"Instance of {instance.GetType().Name} is not attached to a Layer. Ensure it is resolved from the Layer DI container.");
+            throw new InvalidOperationException($"Instance of {instance.GetType().Name} is not attached to a Layer.");
         }
     }
 
     public static class ServiceExtensions
     {
         public static Layer GetLayer(this ILayerContext self) => ServiceLayerBinder.Require(self);
-        
-        public static void Subscribe<T>(this IService service, EventHandleDelegate<T> eventHandleDelegate) where T : struct
-        {
-            ServiceLayerBinder.Require(service).Subscribe<T>(eventHandleDelegate);
-        }
-        public static void SubscribeAsync<T>(this IService service, EventHandleDelegateAsync<T> eventHandler) where T : struct
-        {
-            ServiceLayerBinder.Require(service).SubscribeAsync<T>(eventHandler);
-        }
-        public static void Subscribe<T>(this IService service, IEventHandler<T> eventHandler) where T : struct
-        {
-            ServiceLayerBinder.Require(service).Subscribe<T>(eventHandler);
-        }
-        public static void SubscribeAsync<T>(this IService service, IEventHandlerAsync<T> eventHandler) where T : struct
-        {
-            ServiceLayerBinder.Require(service).SubscribeAsync<T>(eventHandler);
-        }
-        public static void SubscribeParallel<T>(this IService service, IEventHandler<T> eventHandler) where T : struct
-        {
-            ServiceLayerBinder.Require(service).SubscribeParallel<T>(eventHandler);
-        }
-        public static void SubscribeParallel<T>(this IService service, EventHandleDelegate<T> eventHandleDelegate) where T : struct
-        {
-            ServiceLayerBinder.Require(service).SubscribeParallel<T>(eventHandleDelegate);
-        }
 
-        public static IDelayPublisher<T> SubscribeDelay<T>(this IService service) where T : struct
-        {
-            return ServiceLayerBinder.Require(service).SubscribeDelay<T>();
-        }
- 
-        public static T GetService<T>(this IService service)
-        {
-            return ServiceLayerBinder.Require(service).GetService<T>();
-        }
+        // ----------------- Events Dispatch (Synchronous) -----------------
 
-        // --- Synchronous Dispatch ---
-
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static EventHandledState SendLocal<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            return ServiceLayerBinder.Require(self).SendLocal(in value);
+            return LayerBase.LayerHub.LayerHub.EventCenter.SendLocal(ServiceLayerBinder.GetIndex(self), value);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SendBubble<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(self).SendBubble(in value);
+            LayerBase.LayerHub.LayerHub.EventCenter.Send(value, ServiceLayerBinder.GetIndex(self), Propagation.Bubble);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SendDrop<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(self).SendDrop(in value);
+            LayerBase.LayerHub.LayerHub.EventCenter.Send(value, ServiceLayerBinder.GetIndex(self), Propagation.Drop);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SendGlobal<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(self).SendGlobal(in value);
+            LayerBase.LayerHub.LayerHub.EventCenter.Send(value, 0, Propagation.Global);
         }
 
-        // --- Asynchronous Dispatch ---
+        // ----------------- Events Dispatch (Asynchronous) -----------------
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void PostLocal<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(self).PostLocal(in value);
+            LayerBase.LayerHub.LayerHub.EventCenter.PostLocal(ServiceLayerBinder.GetIndex(self), value);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void PostBubble<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(self).PostBubble(in value);
+            LayerBase.LayerHub.LayerHub.EventCenter.Post(value, ServiceLayerBinder.GetIndex(self), Propagation.Bubble);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void PostDrop<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(self).PostDrop(in value);
+            LayerBase.LayerHub.LayerHub.EventCenter.Post(value, ServiceLayerBinder.GetIndex(self), Propagation.Drop);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void PostGlobal<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(self).PostGlobal(in value);
+            LayerBase.LayerHub.LayerHub.EventCenter.Post(value, 0, Propagation.Global);
         }
 
-        // --- Delay Dispatch ---
+        // ----------------- Delay Events -----------------
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void DelayLocal<TValue>(this ILayerContext self, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
         {
             ServiceLayerBinder.Require(self).DelayLocal(in value, ttlSeconds, contractLayer);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void DelayGlobal<TValue>(this ILayerContext self, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
         {
             ServiceLayerBinder.Require(self).DelayGlobal(in value, ttlSeconds, contractLayer);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void DelayBubble<TValue>(this ILayerContext self, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
         {
             ServiceLayerBinder.Require(self).DelayBubble(in value, ttlSeconds, contractLayer);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void DelayDrop<TValue>(this ILayerContext self, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
         {
             ServiceLayerBinder.Require(self).DelayDrop(in value, ttlSeconds, contractLayer);
         }
+
+        // ----------------- DI & Subscription -----------------
+
+        public static void Subscribe<T>(this IService service, EventHandleDelegate<T> eventHandleDelegate) where T : struct
+            => ServiceLayerBinder.Require(service).Subscribe(eventHandleDelegate);
+
+        public static void SubscribeAsync<T>(this IService service, EventHandleDelegateAsync<T> eventHandler) where T : struct
+            => ServiceLayerBinder.Require(service).SubscribeAsync(eventHandler);
+
+        public static void Subscribe<T>(this IService service, IEventHandler<T> eventHandler) where T : struct
+            => ServiceLayerBinder.Require(service).Subscribe(eventHandler);
+
+        public static void SubscribeAsync<T>(this IService service, IEventHandlerAsync<T> eventHandler) where T : struct
+            => ServiceLayerBinder.Require(service).SubscribeAsync(eventHandler);
+
+        public static void SubscribeParallel<T>(this IService service, IEventHandler<T> eventHandler) where T : struct
+            => ServiceLayerBinder.Require(service).SubscribeParallel(eventHandler);
+
+        public static void SubscribeParallel<T>(this IService service, EventHandleDelegate<T> eventHandleDelegate) where T : struct
+            => ServiceLayerBinder.Require(service).SubscribeParallel(eventHandleDelegate);
+
+        public static IDelayPublisher<T> SubscribeDelay<T>(this IService service) where T : struct
+            => ServiceLayerBinder.Require(service).SubscribeDelay<T>();
+
+        public static T GetService<T>(this IService service)
+            => ServiceLayerBinder.Require(service).GetService<T>();
     }
 
     [AttributeUsage(AttributeTargets.Constructor | AttributeTargets.Field | AttributeTargets.Property)]
-    public sealed class InjectAttribute : Attribute
-    {
-    }
+    public sealed class InjectAttribute : Attribute { }
 }

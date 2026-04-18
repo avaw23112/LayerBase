@@ -126,8 +126,11 @@ using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 
 {ns}
-    partial class {classSymbol.Name} : ILayerContext, IAutoSubscribe
+    partial class {classSymbol.Name} : IInternalLayerContext, IAutoSubscribe
     {{
+        private int __routeIndex = -1;
+        int IInternalLayerContext.LayerIndex {{ get => __routeIndex; set => __routeIndex = value; }}
+
         void IAutoSubscribe.AutoBind(Layer layer)
         {{
             {string.Join("\n            ", bindings)}

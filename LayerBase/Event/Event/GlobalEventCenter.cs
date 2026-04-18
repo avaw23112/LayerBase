@@ -142,12 +142,27 @@ namespace LayerBase.Core.Event
         internal int FindFirstBit(ulong mask)
         {
             if (mask == 0) return -1;
-            for (int i = 0; i < 64; i++)
-            {
-                if ((mask & (1UL << i)) != 0) return i;
-            }
-            return -1;
+#if NETCOREAPP3_0_OR_GREATER || NET5_0_OR_GREATER || NET8_0_OR_GREATER
+            return System.Numerics.BitOperations.TrailingZeroCount(mask);
+#else
+            // 高性能 De Bruijn 序列回退算法 (netstandard2.1)
+            return TrailingZeroCountFallback(mask);
+#endif
         }
+
+#if !NETCOREAPP3_0_OR_GREATER && !NET5_0_OR_GREATER && !NET8_0_OR_GREATER
+        private static readonly byte[] DeBruijnTable = {
+            0, 1, 56, 2, 57, 49, 28, 3, 61, 58, 42, 50, 38, 29, 17, 4,
+            62, 47, 59, 36, 45, 43, 51, 22, 53, 39, 33, 30, 24, 18, 12, 5,
+            63, 55, 48, 27, 60, 41, 37, 16, 46, 35, 44, 21, 52, 32, 23, 11,
+            54, 26, 40, 15, 34, 20, 31, 10, 25, 14, 19, 9, 13, 8, 7, 6
+        };
+
+        private static int TrailingZeroCountFallback(ulong v)
+        {
+            return DeBruijnTable[((ulong)((long)v & -(long)v) * 0x03F79D71B4CB0A89UL) >> 58];
+        }
+#endif
 
         internal void Reset()
         {
