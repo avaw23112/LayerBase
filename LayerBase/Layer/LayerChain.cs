@@ -50,7 +50,7 @@ internal sealed class LayerChain
     {
     }
 
-    internal void Pump()
+    internal void Pump(float deltaTime)
     {
         // 1. 获取全局事件挂起状态（位图）
         ulong eventMask = LayerHub.LayerHub.EventCenter.GetEventPendingMask();
@@ -67,7 +67,7 @@ internal sealed class LayerChain
             if (index == -1 || index >= _indexedLayers.Length) break;
 
             var layer = _indexedLayers[index];
-            layer?.Pump();
+            layer?.Pump(deltaTime);
 
             activeMask &= ~(1UL << index);
         }
@@ -103,5 +103,25 @@ internal sealed class LayerChain
                 if (node is Layer layer) _indexedLayers[layer.RouteIndex] = layer;
             }
         }
+    }
+
+    internal string GetTopologySummary()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("LayerBase 拓扑结构审计报告：");
+        sb.AppendLine("------------------------------------------------");
+        for (int i = 0; i < _indexedLayers.Length; i++)
+        {
+            var layer = _indexedLayers[i];
+            if (layer == null) continue;
+
+            sb.AppendLine($"Layer {i}: {layer.GetType().Name} [{(layer.HasActiveLogic ? "Active" : "Passive")}]");
+            foreach (var sub in layer.DiscoveredSubscribers)
+            {
+                sb.AppendLine($"  -> [M] {sub.GetType().Name}");
+            }
+        }
+        sb.AppendLine("------------------------------------------------");
+        return sb.ToString();
     }
 }

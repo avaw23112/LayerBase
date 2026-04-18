@@ -15,18 +15,12 @@ namespace LayerBase.Generator
     {
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
-            // 1. 极速过滤：只看是不是 partial 类。
-            // 不再使用 node.ToString()，那太慢了。
-            IncrementalValuesProvider<ClassMeta> classProvider = context.SyntaxProvider.CreateSyntaxProvider(
+            var classProvider = context.SyntaxProvider.CreateSyntaxProvider(
                 predicate: static (node, _) => node is ClassDeclarationSyntax cds && cds.Modifiers.Any(SyntaxKind.PartialKeyword),
                 transform: static (ctx, _) => GetClassMeta(ctx))
                 .Where(static m => m != null)!;
 
-            // 2. 真正的增量输出：按类分发，不再 Combine 全量列表。
-            context.RegisterSourceOutput(classProvider, static (spc, meta) =>
-            {
-                GenerateCode(spc, meta);
-            });
+            context.RegisterSourceOutput(classProvider, static (spc, meta) => GenerateCode(spc, meta));
         }
 
         private static ClassMeta? GetClassMeta(GeneratorSyntaxContext ctx)
@@ -39,7 +33,6 @@ namespace LayerBase.Generator
             var handlers = new List<HandlerInfo>();
             var delayProps = new List<string>();
 
-            // 扫描成员
             foreach (var member in symbol.GetMembers())
             {
                 if (member is IMethodSymbol method)
@@ -54,13 +47,10 @@ namespace LayerBase.Generator
                             {
                                 var evtStr = evtParam.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                                 var deps = new List<string>();
-                                
-                                // 只有同步订阅才扫描方法体依赖
                                 if (!attrName.Contains("Async") && !attrName.Contains("Delay"))
                                 {
                                     ScanBody(ctx.SemanticModel, method, evtStr, deps);
                                 }
-                                
                                 handlers.Add(new HandlerInfo(method.Name, attrName, evtStr, deps));
                             }
                         }
@@ -80,13 +70,7 @@ namespace LayerBase.Generator
 
             if (handlers.Count > 0 || delayProps.Count > 0 || implementsCtx)
             {
-                return new ClassMeta(
-                    symbol.Name, 
-                    symbol.ContainingNamespace.ToDisplayString(), 
-                    symbol.ToDisplayString(),
-                    implementsCtx,
-                    handlers,
-                    delayProps);
+                return new ClassMeta(symbol.Name, symbol.ContainingNamespace.ToDisplayString(), symbol.ToDisplayString(), implementsCtx, handlers, delayProps);
             }
             return null;
         }
@@ -98,17 +82,11 @@ namespace LayerBase.Generator
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine();
-            
-            if (meta.Namespace != "<global namespace>")
-            {
-                sb.AppendLine($"namespace {meta.Namespace}");
-                sb.AppendLine("{");
-            }
+            if (meta.Namespace != "<global namespace>") { sb.AppendLine($"namespace {meta.Namespace}"); sb.AppendLine("{"); }
 
             var interfaces = new List<string>();
             if (meta.ImplementsLayerContext) interfaces.Add("global::LayerBase.DI.IInternalLayerContext");
             if (meta.Handlers.Count > 0 || meta.DelayProps.Count > 0) interfaces.Add("global::LayerBase.DI.IAutoSubscribe");
-            
             var interfaceDecl = interfaces.Count > 0 ? " : " + string.Join(", ", interfaces) : "";
 
             sb.AppendLine($"    partial class {meta.ClassName}{interfaceDecl}");
@@ -130,20 +108,22 @@ namespace LayerBase.Generator
                     string reg = h.Attr.Contains("Async") ? "SubscribeAsync" : (h.Attr.Contains("Parallel") ? "SubscribeParallel" : "Subscribe");
                     sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
                 }
-                foreach (var p in meta.DelayProps)
-                {
-                    var parts = p.Split('|');
-                    sb.AppendLine($"            this.{parts[0]} = layer.SubscribeDelay<{parts[1]}>();");
-                }
+                foreach (var p in meta.DelayProps) { var parts = p.Split('|'); sb.AppendLine($"            this.{parts[0]} = layer.SubscribeDelay<{parts[1]}>();"); }
                 sb.AppendLine("        }");
 
                 sb.AppendLine();
                 sb.AppendLine("        global::System.Collections.Generic.IEnumerable<global::LayerBase.DI.EventDependency> global::LayerBase.DI.IAutoSubscribe.GetEventDependencies()");
                 sb.AppendLine("        {");
-                foreach (var h in meta.Handlers)
-                {
-                    foreach (var d in h.Deps) sb.AppendLine($"            {d}");
-                }
+                foreach (var h in meta.Handlers) { foreach (var d in h.Deps) sb.AppendLine($"            {d}"); }
+                sb.AppendLine("            yield break;");
+                sb.AppendLine("        }");
+
+                sb.AppendLine();
+                // 重点添加：返回订阅的所有事件类型清单
+                sb.AppendLine("        global::System.Collections.Generic.IEnumerable<global::System.Type> global::LayerBase.DI.IAutoSubscribe.GetSubscribedEvents()");
+                sb.AppendLine("        {");
+                foreach (var h in meta.Handlers) { sb.AppendLine($"            yield return typeof({h.Evt});"); }
+                foreach (var p in meta.DelayProps) { var parts = p.Split('|'); sb.AppendLine($"            yield return typeof({parts[1]});"); }
                 sb.AppendLine("            yield break;");
                 sb.AppendLine("        }");
             }
@@ -159,46 +139,28 @@ namespace LayerBase.Generator
             var syntax = handler.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as MethodDeclarationSyntax;
             var body = (SyntaxNode?)syntax?.Body ?? syntax?.ExpressionBody;
             if (body == null) return;
-
             foreach (var inv in body.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                // 仅扫描可能是 Send 系列的调用
-                var exprStr = inv.Expression.ToString();
-                if (exprStr.Contains("Send"))
+                if (inv.Expression.ToString().Contains("Send"))
                 {
                     var info = model.GetSymbolInfo(inv);
                     var sym = info.Symbol as IMethodSymbol ?? info.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault();
                     if (sym?.IsGenericMethod == true && sym.Name.StartsWith("Send"))
                     {
                         var target = sym.TypeArguments.FirstOrDefault()?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                        if (target != null)
-                            deps.Add($"yield return new global::LayerBase.DI.EventDependency(typeof({srcEvt}), typeof({target}));");
+                        if (target != null) deps.Add($"yield return new global::LayerBase.DI.EventDependency(typeof({srcEvt}), typeof({target}));");
                     }
                 }
             }
         }
 
-        private class ClassMeta
-        {
-            public string ClassName { get; }
-            public string Namespace { get; }
-            public string Display { get; }
-            public bool ImplementsLayerContext { get; }
-            public List<HandlerInfo> Handlers { get; }
-            public List<string> DelayProps { get; }
-
-            public ClassMeta(string name, string ns, string display, bool ctx, List<HandlerInfo> handlers, List<string> delayProps)
-            {
-                ClassName = name; Namespace = ns; Display = display; ImplementsLayerContext = ctx; Handlers = handlers; DelayProps = delayProps;
-            }
+        private class ClassMeta {
+            public string ClassName { get; } public string Namespace { get; } public string Display { get; } public bool ImplementsLayerContext { get; } public List<HandlerInfo> Handlers { get; } public List<string> DelayProps { get; }
+            public ClassMeta(string name, string ns, string display, bool ctx, List<HandlerInfo> handlers, List<string> delayProps) { ClassName = name; Namespace = ns; Display = display; ImplementsLayerContext = ctx; Handlers = handlers; DelayProps = delayProps; }
         }
 
-        private class HandlerInfo
-        {
-            public string Name { get; }
-            public string Attr { get; }
-            public string Evt { get; }
-            public List<string> Deps { get; }
+        private class HandlerInfo {
+            public string Name { get; } public string Attr { get; } public string AttrType => Attr; public string Evt { get; } public List<string> Deps { get; }
             public HandlerInfo(string n, string a, string e, List<string> d) { Name = n; Attr = a; Evt = e; Deps = d; }
         }
     }

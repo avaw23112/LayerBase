@@ -1,4 +1,6 @@
 using System;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using LayerBase.Core.Event;
 using LayerBase.Layers;
 
@@ -9,86 +11,57 @@ namespace LayerBase.Event.Delay
         private readonly Layer _owner;
         private T _value;
         private float _ttl;
-        private bool _hasValue;
         private DelayDirection _direction;
         private int _contractId;
+        private int _hasValueInt; // 使用 int 以支持 Interlocked
 
-        internal DelayPublisher(Layer owner)
-        {
-            _owner = owner ?? throw new ArgumentNullException(nameof(owner));
-        }
-
-        public bool HasValue => _hasValue;
+        public bool HasValue => Volatile.Read(ref _hasValueInt) == 1 && Volatile.Read(ref _ttl) > 0;
         public DelayDirection Direction => _direction;
-        public Layer Owner => _owner;
         public int ContractId => _contractId;
+
+        public DelayPublisher(Layer owner) { _owner = owner; }
+        public Layer Owner => _owner;
 
         public bool TryGet(out T value)
         {
-            if (_hasValue)
-            {
-                value = _value;
-                return true;
-            }
-
-            value = default;
-            return false;
+            if (!HasValue) { value = default; return false; }
+            value = _value; return true;
         }
 
         public bool TryTake(out T value)
         {
-            if (!TryGet(out value))
-            {
-                return false;
-            }
-
-            ClearValue();
-            return true;
+            if (!HasValue) { value = default; return false; }
+            value = _value; ClearValue(); return true;
         }
 
-        internal void Publish(in T value, float ttlSeconds, DelayDirection direction, int contractId)
+        internal void Publish(in T value, float ttlSeconds, DelayDirection direction, int contractId = 0)
         {
-            if (ttlSeconds < 0)
-                throw new ArgumentOutOfRangeException(nameof(ttlSeconds));
-
             _value = value;
-            _ttl = ttlSeconds;
+            Volatile.Write(ref _ttl, ttlSeconds);
             _direction = direction;
             _contractId = contractId;
-            _hasValue = true;
+            Volatile.Write(ref _hasValueInt, 1);
         }
 
         public void Update(float deltaTime)
         {
-            if (!_hasValue)
-            {
-                return;
-            }
-
-            _ttl -= deltaTime;
-            if (_ttl <= 0)
-            {
-                _hasValue = false;
-                _ttl = 0;
-                _direction = DelayDirection.None;
-                _contractId = 0;
-            }
-        }
-
-        public void Reset()
-        {
-            _hasValue = false;
-            _ttl = 0;
-            _direction = DelayDirection.None;
-            _contractId = 0;
+            if (Volatile.Read(ref _hasValueInt) == 0) return;
+            
+            float newTtl = Volatile.Read(ref _ttl) - deltaTime;
+            Volatile.Write(ref _ttl, newTtl);
+            
+            if (newTtl <= 0) ClearValue();
         }
 
         public void ClearValue()
         {
-            _hasValue = false;
-            _ttl = 0;
+            Volatile.Write(ref _hasValueInt, 0);
+            Volatile.Write(ref _ttl, 0);
+            _value = default;
             _direction = DelayDirection.None;
             _contractId = 0;
         }
+
+        public void Reset() => ClearValue();
     }
 }

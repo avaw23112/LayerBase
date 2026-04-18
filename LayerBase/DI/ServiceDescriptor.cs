@@ -1,5 +1,15 @@
+using System;
+
 namespace LayerBase.DI
 {
+    public enum ServiceLifetime
+    {
+        Singleton,  // 全局唯一
+        Scoped,     // 层级唯一
+        Transient,  // 每次创建
+        Instance    // 外部预创建实例 (通常表现同 Scoped)
+    }
+
     public sealed class ServiceDescriptor
     {
         public Type ServiceType { get; }
@@ -10,8 +20,10 @@ namespace LayerBase.DI
 
         public static ServiceDescriptor Singleton<TService, TImpl>() where TImpl : TService
             => new ServiceDescriptor(typeof(TService), typeof(TImpl), ServiceLifetime.Singleton, null, null);
+        
         public static ServiceDescriptor Singleton<TService>(TService instance)
             => new ServiceDescriptor(typeof(TService), null, ServiceLifetime.Instance, null, instance!);
+        
         public static ServiceDescriptor Singleton<TService>(Func<IServiceProvider, TService> factory)
             => new ServiceDescriptor(typeof(TService), null, ServiceLifetime.Singleton, sp => factory(sp)!, null);
 

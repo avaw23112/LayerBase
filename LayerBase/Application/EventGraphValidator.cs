@@ -19,17 +19,20 @@ namespace LayerBase.LayerHub
         private enum NodeColor { White, Gray, Black }
 
         /// <summary>
-        /// 执行全局事件依赖审计，检测是否存在 A -> B -> A 形式的死循环。
-        /// 采用三色标记算法 (White-Gray-Black) 确保 100% 稳定性且防止递归挂起。
+        /// 执行全局事件依赖审计，检测环路并识别“无人订阅”的空事件。
         /// </summary>
         public static void Validate(IEnumerable<IAutoSubscribe> subscribers)
         {
-            // 1. 构建邻接表
+            var sentEvents = new HashSet<Type>();
+            var subscribedEvents = new HashSet<Type>();
             var adj = new Dictionary<Type, HashSet<Type>>();
+
             foreach (var sub in subscribers)
             {
+                // 1. 收集发送关系与环路图数据
                 foreach (var dep in sub.GetEventDependencies())
                 {
+                    sentEvents.Add(dep.Target);
                     if (!adj.TryGetValue(dep.Source, out var targets))
                     {
                         targets = new HashSet<Type>();
@@ -37,21 +40,36 @@ namespace LayerBase.LayerHub
                     }
                     targets.Add(dep.Target);
                 }
+
+                // 2. 收集订阅数据
+                foreach (var evtType in sub.GetSubscribedEvents())
+                {
+                    subscribedEvents.Add(evtType);
+                }
             }
 
-            if (adj.Count == 0) return;
-
-            // 2. 运行三色 DFS 算法
-            var colors = new Dictionary<Type, NodeColor>();
-            var pathStack = new List<Type>();
-
-            foreach (var startNode in adj.Keys)
+            // --- 审计 A: 环路检测 (三色算法) ---
+            if (adj.Count > 0)
             {
-                if (!colors.TryGetValue(startNode, out var color) || color == NodeColor.White)
+                var colors = new Dictionary<Type, NodeColor>();
+                var pathStack = new List<Type>();
+                foreach (var node in adj.Keys)
                 {
-                    if (CheckCycle(startNode, adj, colors, pathStack, out var cyclePath))
+                    if (!colors.TryGetValue(node, out var color) || color == NodeColor.White)
+                        if (CheckCycle(node, adj, colors, pathStack, out var cyclePath))
+                            ThrowCycleError(cyclePath!);
+                }
+            }
+
+            // --- 审计 B: Dead Letter 检测 (无人订阅预警) ---
+            if (LayerHub.IsDebugMode)
+            {
+                foreach (var sent in sentEvents)
+                {
+                    if (!subscribedEvents.Contains(sent))
                     {
-                        ThrowCycleError(cyclePath);
+                        LayerHub.ReportWarning(-1, "TopologyAudit", sent.Name, 
+                            $"该事件被某些组件同步分发，但在当前拓扑中没有任何订阅者。这可能导致逻辑空转。");
                     }
                 }
             }
