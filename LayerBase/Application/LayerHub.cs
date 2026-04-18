@@ -171,9 +171,15 @@ namespace LayerBase.LayerHub
             InstanceLayers[layer.GetType()] = layer;
         }
 
-        internal static void ReportLayerEventError(string layerFullName, string handlerFullName, string eventFullName, Exception exception)
+        internal static void ReportLayerEventError(int layerIndex, string handlerFullName, string eventFullName, Exception exception)
         {
-            OnLayerEventError?.Invoke(new LayerEventErrorInfo(layerFullName, handlerFullName, eventFullName, exception));
+            string layerName = GetLayerNameByIndex(layerIndex);
+            OnLayerEventError?.Invoke(new LayerEventErrorInfo(layerName, handlerFullName, eventFullName, exception));
+        }
+
+        internal static string GetLayerNameByIndex(int index)
+        {
+            return EventCenter.GetLayerName(index);
         }
 
         private static void PumpLayers()

@@ -25,6 +25,12 @@ namespace LayerBase.Core.UnmanagedList
         public void Pump()
         {
             int count = _queue.Count;
+            if (count <= 0) return;
+
+            bool forwarded = false;
+            int lastTargetLayer = -1;
+            ulong lastMask = 0;
+
             while (count-- > 0)
             {
                 if (!_queue.TryDequeue(out Event<Value> @event))
@@ -37,16 +43,31 @@ namespace LayerBase.Core.UnmanagedList
                 // 处理顺序传播
                 if (state != EventHandledState.Handled && @event.TargetMask != 0)
                 {
-                    // 移除当前层级的 Bit
                     ulong nextMask = @event.TargetMask & ~(1UL << _layerIndex);
                     if (nextMask != 0)
                     {
                         @event.TargetMask = nextMask;
-                        // 找到下一个目标层级
-                        int nextLayer = _center.FindFirstBit(nextMask);
-                        _center.EnqueueEventInternal(nextLayer, in @event);
+                        
+                        if (nextMask == lastMask)
+                        {
+                            _center.EnqueueEventInternal(lastTargetLayer, in @event);
+                        }
+                        else
+                        {
+                            int nextLayer = _center.FindFirstBit(nextMask);
+                            lastMask = nextMask;
+                            lastTargetLayer = nextLayer;
+                            _center.EnqueueEventInternal(nextLayer, in @event);
+                        }
+                        forwarded = true;
                     }
                 }
+            }
+
+            // 极致优化：仅在循环完全结束后，执行一次低频唤醒
+            if (forwarded)
+            {
+                _center.WakeLayer(lastTargetLayer);
             }
         }
 

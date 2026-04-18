@@ -1,5 +1,6 @@
 using LayerBase.Core.Event;
 using LayerBase.Core.ResponsibilityChain;
+using LayerBase.LayerHub;
 
 namespace LayerBase.Layers;
 
@@ -7,45 +8,66 @@ internal sealed class LayerChain
 {
     private readonly ResponsibilityChain responsibilityChain;
     private bool _built;
+    private ulong _logicActiveMask;
+    private Layer?[] _indexedLayers = Array.Empty<Layer?>();
 
     internal LayerChain(ResponsibilityChain chain)
     {
         responsibilityChain = chain;
     }
 
-    internal ResponsibilityChain Chain => responsibilityChain;
-
     internal void AddNode(Node node)
     {
         responsibilityChain.AddLast(node);
-        if (_built)
-        {
-            AssignEventBus();
-        }
     }
 
-    internal void Build(int slabSize = 512, bool releaseMode = false)
+    internal void Build(int eventStateSlabSize, bool releaseMode)
     {
         AssignEventBus();
+        
+        // 汇总逻辑活跃状态并构建各层的 DI 容器
+        _logicActiveMask = 0;
         foreach (var node in responsibilityChain)
         {
-            (node as Layer)?.Build();
-        }
+            if (node is Layer layer)
+            {
+                // 核心修复：自动构建每层的 DI 并激活订阅
+                layer.Build();
 
+                if (layer.HasActiveLogic)
+                {
+                    _logicActiveMask |= (1UL << layer.RouteIndex);
+                }
+            }
+        }
+        
         _built = true;
     }
 
-    internal void SetLogTracing(Action<string>? logger = null, int logQueueCapacity = 256)
+    internal void SetLogTracing(Action<string>? logger, int logQueueCapacity)
     {
-        // Event path tracing was removed from the hot path. This method remains as a no-op
-        // so older builder calls do not break at compile time.
     }
 
     internal void Pump()
     {
-        foreach (var node in responsibilityChain)
+        // 1. 获取全局事件挂起状态（位图）
+        ulong eventMask = LayerHub.LayerHub.EventCenter.GetEventPendingMask();
+        
+        // 2. 合并逻辑活跃状态
+        ulong activeMask = eventMask | _logicActiveMask;
+        if (activeMask == 0) return;
+
+        // 3. 高性能位图遍历：利用硬件指令彻底跳过空闲层级
+        var center = LayerHub.LayerHub.EventCenter;
+        while (activeMask != 0)
         {
-            (node as Layer)?.Pump();
+            int index = center.FindFirstBit(activeMask);
+            if (index == -1 || index >= _indexedLayers.Length) break;
+
+            var layer = _indexedLayers[index];
+            layer?.Pump();
+
+            activeMask &= ~(1UL << index);
         }
     }
 
@@ -55,5 +77,29 @@ internal sealed class LayerChain
 
     private void AssignEventBus()
     {
+        int maxIndex = -1;
+        foreach (var node in responsibilityChain)
+        {
+            if (node is Layer layer)
+            {
+                if (layer.RouteIndex == -1)
+                {
+                    int index = LayerHub.LayerHub.GetNextLayerIndex();
+                    layer.SetRouteIndex(index);
+                    LayerHub.LayerHub.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
+                }
+                if (layer.RouteIndex > maxIndex) maxIndex = layer.RouteIndex;
+            }
+        }
+
+        // 建立快速索引数组，确保 O(1) 获取层级实例
+        if (maxIndex != -1)
+        {
+            _indexedLayers = new Layer?[maxIndex + 1];
+            foreach (var node in responsibilityChain)
+            {
+                if (node is Layer layer) _indexedLayers[layer.RouteIndex] = layer;
+            }
+        }
     }
 }

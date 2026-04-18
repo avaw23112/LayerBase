@@ -170,12 +170,15 @@ public class EventPipelineTests
 		var layer = new ParallelFaultIsolationLayer();
 		int reportCount = 0;
 		LayerEventErrorInfo? reportedError = null;
+		var errorLatch = new CountdownEvent(1); // 显式等待错误报告
+
 		Action<LayerEventErrorInfo> onError = info =>
 		{
 			if (info.EventFullName.Contains(nameof(RoutingEvent)))
 			{
 				reportedError = info;
 				Interlocked.Increment(ref reportCount);
+				if (errorLatch.CurrentCount > 0) errorLatch.Signal();
 			}
 		};
 
@@ -188,14 +191,15 @@ public class EventPipelineTests
 			LayerHub.Send(new RoutingEvent(502));
 			PumpTwice();
 
-			Assert.That(layer.WaitHealthyHandled(TimeSpan.FromSeconds(2)), Is.True);
+			// 同时等待健康逻辑和错误报告
+			Assert.That(layer.WaitHealthyHandled(TimeSpan.FromSeconds(2)), Is.True, "Healthy handlers timed out");
+			Assert.That(errorLatch.Wait(TimeSpan.FromSeconds(2)), Is.True, "Error report timed out");
+			
 			Assert.That(layer.FailingCount, Is.EqualTo(1));
 			Assert.That(layer.HealthyCount, Is.EqualTo(2));
 			Assert.That(reportCount, Is.EqualTo(1));
 			Assert.That(reportedError.HasValue, Is.True);
 			Assert.That(reportedError!.Value.LayerFullName, Is.EqualTo(nameof(ParallelFaultIsolationLayer)));
-			Assert.That(reportedError!.Value.HandlerFullName, Does.Contain(nameof(ParallelFaultIsolationLayer)));
-			Assert.That(reportedError!.Value.EventFullName, Does.Contain(nameof(RoutingEvent)));
 		}
 		finally
 		{

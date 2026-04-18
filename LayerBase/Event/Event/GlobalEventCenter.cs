@@ -24,9 +24,20 @@ namespace LayerBase.Core.Event
 
         private string[] _layerNames = Array.Empty<string>();
         
-        // 预计算的位图掩码，用于极致优化 Post 速度
-        private ulong[] _bubbleMasks = Array.Empty<ulong>();
-        private ulong[] _dropMasks = Array.Empty<ulong>();
+        internal ulong[] _bubbleMasksArr = Array.Empty<ulong>();
+        internal ulong[] _dropMasksArr = Array.Empty<ulong>();
+
+        // 活跃层级位图
+        private long _eventPendingMask; 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal ulong GetEventPendingMask() => (ulong)Volatile.Read(ref _eventPendingMask);
+
+        internal string GetLayerName(int index)
+        {
+            if (index >= 0 && index < _layerNames.Length) return _layerNames[index];
+            return "UnknownLayer";
+        }
 
         internal void EnsureSlots(int count, string name)
         {
@@ -44,7 +55,6 @@ namespace LayerBase.Core.Event
                         }
                         _layerSlots = newSlots;
 
-                        // 预计算掩码：Bubble(0->i), Drop(i->N)
                         var newBubble = new ulong[count];
                         var newDrop = new ulong[count];
                         for (int i = 0; i < count; i++)
@@ -52,8 +62,8 @@ namespace LayerBase.Core.Event
                             newBubble[i] = (1UL << (i + 1)) - 1;
                             newDrop[i] = ~((1UL << i) - 1);
                         }
-                        _bubbleMasks = newBubble;
-                        _dropMasks = newDrop;
+                        _bubbleMasksArr = newBubble;
+                        _dropMasksArr = newDrop;
                     }
 
                     if (_layerNames.Length < count)
@@ -77,7 +87,7 @@ namespace LayerBase.Core.Event
         internal void SubscribeAsync<T>(int layerIndex, IEventHandlerAsync<T> handler) where T : struct
             => GetBucket<T>().Add(layerIndex, handler);
 
-        internal void SubscribeParallel<T>(int layerIndex, IEventHandler<T> handler, Action<string, string, string, Exception> reportError) where T : struct
+        internal void SubscribeParallel<T>(int layerIndex, IEventHandler<T> handler, Action<int, string, string, Exception> reportError) where T : struct
             => GetBucket<T>().AddParallel(layerIndex, handler, reportError);
 
         internal void Subscribe<T>(int layerIndex, EventHandleDelegate<T> handleDelegate) where T : struct
@@ -86,24 +96,28 @@ namespace LayerBase.Core.Event
         internal void SubscribeAsync<T>(int layerIndex, EventHandleDelegateAsync<T> handleDelegate) where T : struct
             => GetBucket<T>().Add(layerIndex, handleDelegate);
 
-        internal void SubscribeParallel<T>(int layerIndex, EventHandleDelegate<T> handleDelegate, Action<string, string, string, Exception> reportError) where T : struct
+        internal void SubscribeParallel<T>(int layerIndex, EventHandleDelegate<T> handleDelegate, Action<int, string, string, Exception> reportError) where T : struct
             => GetBucket<T>().AddParallel(layerIndex, handleDelegate, reportError);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal EventHandledState Send<T>(in T value, int sourceIndex, Propagation propagation) where T : struct
         {
             return GetBucket<T>().Dispatch(value, sourceIndex, propagation);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal EventHandledState SendLocal<T>(int layerIndex, in T value) where T : struct
         {
-            return GetBucket<T>().DispatchLocal(layerIndex, new Event<T>(value));
+            return GetBucket<T>().DispatchLocalDirect(layerIndex, value);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Post<T>(in T value, int sourceIndex, Propagation propagation) where T : struct
         {
             GetBucket<T>().Post(value, sourceIndex, propagation);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void PostLocal<T>(int layerIndex, in T value) where T : struct
         {
             GetBucket<T>().PostLocal(layerIndex, value);
@@ -114,15 +128,24 @@ namespace LayerBase.Core.Event
             if (layerIndex >= 0 && layerIndex < _layerSlots.Length)
             {
                 _layerSlots[layerIndex].Enqueue(value);
+                AtomicSetBit(ref _eventPendingMask, layerIndex);
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void EnqueueEventInternal<T>(int layerIndex, in Event<T> @event) where T : struct
         {
             if (layerIndex >= 0 && layerIndex < _layerSlots.Length)
             {
                 _layerSlots[layerIndex].EnqueueEvent(@event);
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WakeLayer(int layerIndex)
+        {
+            if (layerIndex >= 0 && layerIndex < 64)
+                AtomicSetBit(ref _eventPendingMask, layerIndex);
         }
 
         internal void PumpLayer(int layerIndex)
@@ -145,7 +168,6 @@ namespace LayerBase.Core.Event
 #if NETCOREAPP3_0_OR_GREATER || NET5_0_OR_GREATER || NET8_0_OR_GREATER
             return System.Numerics.BitOperations.TrailingZeroCount(mask);
 #else
-            // 高性能 De Bruijn 序列回退算法 (netstandard2.1)
             return TrailingZeroCountFallback(mask);
 #endif
         }
@@ -164,13 +186,42 @@ namespace LayerBase.Core.Event
         }
 #endif
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void AtomicSetBit(ref long mask, int bit)
+        {
+            long bitVal = 1L << bit;
+            if ((Volatile.Read(ref mask) & bitVal) != 0) return;
+
+            long initial, computed;
+            do {
+                initial = Volatile.Read(ref mask);
+                if ((initial & bitVal) != 0) return;
+                computed = initial | bitVal;
+            } while (Interlocked.CompareExchange(ref mask, computed, initial) != initial);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void AtomicClearBit(ref long mask, int bit)
+        {
+            long bitVal = 1L << bit;
+            if ((Volatile.Read(ref mask) & bitVal) == 0) return;
+
+            long initial, computed;
+            do {
+                initial = Volatile.Read(ref mask);
+                if ((initial & bitVal) == 0) return;
+                computed = initial & ~bitVal;
+            } while (Interlocked.CompareExchange(ref mask, computed, initial) != initial);
+        }
+
         internal void Reset()
         {
             _eventBuckets.Clear();
             _layerSlots = Array.Empty<IEventQueue>();
             _layerNames = Array.Empty<string>();
-            _bubbleMasks = Array.Empty<ulong>();
-            _dropMasks = Array.Empty<ulong>();
+            _bubbleMasksArr = Array.Empty<ulong>();
+            _dropMasksArr = Array.Empty<ulong>();
+            _eventPendingMask = 0;
         }
 
         private EventBucket<T> GetBucket<T>() where T : struct
@@ -215,7 +266,7 @@ namespace LayerBase.Core.Event
                 UpdateMask(layerIndex);
             }
 
-            public void AddParallel(int layerIndex, IEventHandler<T> handler, Action<string, string, string, Exception> reportError)
+            public void AddParallel(int layerIndex, IEventHandler<T> handler, Action<int, string, string, Exception> reportError)
             {
                 GetOrCreateHandlerBucket(layerIndex).AddParallel(handler, reportError);
                 UpdateMask(layerIndex);
@@ -233,7 +284,7 @@ namespace LayerBase.Core.Event
                 UpdateMask(layerIndex);
             }
 
-            public void AddParallel(int layerIndex, EventHandleDelegate<T> handleDelegate, Action<string, string, string, Exception> reportError)
+            public void AddParallel(int layerIndex, EventHandleDelegate<T> handleDelegate, Action<int, string, string, Exception> reportError)
             {
                 GetOrCreateHandlerBucket(layerIndex).AddParallel(handleDelegate, reportError);
                 UpdateMask(layerIndex);
@@ -281,27 +332,42 @@ namespace LayerBase.Core.Event
                 }
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public EventHandledState Dispatch(in T value, int sourceIndex, Propagation propagation)
             {
-                var buckets = Volatile.Read(ref _buckets);
-                if (buckets.Length == 0) return EventHandledState.Continue;
+                ulong mask = Volatile.Read(ref _subscriberMask);
+                if (mask == 0) return EventHandledState.Continue;
 
-                int start, end, step;
-                GetRange(sourceIndex, propagation, buckets.Length, out start, out end, out step);
+                ulong targetMask = mask;
+                switch (propagation)
+                {
+                    case Propagation.Bubble:
+                        if (sourceIndex < Owner._bubbleMasksArr.Length)
+                            targetMask &= Owner._bubbleMasksArr[sourceIndex];
+                        break;
+                    case Propagation.Drop:
+                        if (sourceIndex < Owner._dropMasksArr.Length)
+                            targetMask &= Owner._dropMasksArr[sourceIndex];
+                        break;
+                }
+
+                if (targetMask == 0) return EventHandledState.Continue;
 
                 bool handledAndContinueSeen = false;
-                var @event = new Event<T>(value);
-                
-                for (int i = start; i <= end; i++)
+                while (targetMask != 0)
                 {
-                    if (i >= buckets.Length) break;
-                    var bucket = buckets[i];
-                    if (bucket == null) continue;
+                    int i = Owner.FindFirstBit(targetMask);
+                    if (i == -1 || i >= _buckets.Length) break;
 
-                    string layerName = i < Owner._layerNames.Length ? Owner._layerNames[i] : "UnknownLayer";
-                    var state = bucket.Dispatch(layerName, in @event);
-                    if (state == EventHandledState.Handled) return EventHandledState.Handled;
-                    if (state == EventHandledState.HandledAndContinue) handledAndContinueSeen = true;
+                    var bucket = _buckets[i];
+                    if (bucket != null)
+                    {
+                        var state = bucket.Dispatch(i, in value);
+                        if (state == EventHandledState.Handled) return EventHandledState.Handled;
+                        if (state == EventHandledState.HandledAndContinue) handledAndContinueSeen = true;
+                    }
+
+                    targetMask &= ~(1UL << i);
                 }
 
                 return handledAndContinueSeen ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
@@ -312,17 +378,16 @@ namespace LayerBase.Core.Event
                 ulong mask = Volatile.Read(ref _subscriberMask);
                 if (mask == 0) return;
 
-                // 极致优化：利用预计算掩码，跳过运行时范围计算
                 ulong targetMask = mask;
                 switch (propagation)
                 {
                     case Propagation.Bubble:
-                        if (sourceIndex < Owner._bubbleMasks.Length)
-                            targetMask &= Owner._bubbleMasks[sourceIndex];
+                        if (sourceIndex < Owner._bubbleMasksArr.Length)
+                            targetMask &= Owner._bubbleMasksArr[sourceIndex];
                         break;
                     case Propagation.Drop:
-                        if (sourceIndex < Owner._dropMasks.Length)
-                            targetMask &= Owner._dropMasks[sourceIndex];
+                        if (sourceIndex < Owner._dropMasksArr.Length)
+                            targetMask &= Owner._dropMasksArr[sourceIndex];
                         break;
                 }
 
@@ -332,6 +397,7 @@ namespace LayerBase.Core.Event
                     var @event = new Event<T>(value);
                     @event.TargetMask = targetMask;
                     Owner.EnqueueEventInternal(firstLayer, in @event);
+                    Owner.WakeLayer(firstLayer);
                 }
             }
 
@@ -343,6 +409,7 @@ namespace LayerBase.Core.Event
                     var @event = new Event<T>(value);
                     @event.TargetMask = (1UL << layerIndex);
                     Owner.EnqueueEventInternal(layerIndex, in @event);
+                    Owner.WakeLayer(layerIndex);
                 }
             }
 
@@ -354,33 +421,24 @@ namespace LayerBase.Core.Event
                     var bucket = buckets[layerIndex];
                     if (bucket != null)
                     {
-                        string layerName = layerIndex < Owner._layerNames.Length ? Owner._layerNames[layerIndex] : "UnknownLayer";
-                        return bucket.Dispatch(layerName, in @event);
+                        return bucket.Dispatch(layerIndex, in @event.Value);
                     }
                 }
                 return EventHandledState.Continue;
             }
 
-            private void GetRange(int sourceIndex, Propagation propagation, int max, out int start, out int end, out int step)
+            internal EventHandledState DispatchLocalDirect(int layerIndex, in T value)
             {
-                // 注意：在统一线性架构下，step 始终为 1
-                step = 1;
-                switch (propagation)
+                var buckets = Volatile.Read(ref _buckets);
+                if (layerIndex >= 0 && layerIndex < buckets.Length)
                 {
-                    case Propagation.Bubble:
-                        start = 0;
-                        end = sourceIndex;
-                        break;
-                    case Propagation.Drop:
-                        start = sourceIndex;
-                        end = max - 1;
-                        break;
-                    case Propagation.Global:
-                    default:
-                        start = 0;
-                        end = max - 1;
-                        break;
+                    var bucket = buckets[layerIndex];
+                    if (bucket != null)
+                    {
+                        return bucket.Dispatch(layerIndex, in value);
+                    }
                 }
+                return EventHandledState.Continue;
             }
         }
 
@@ -426,6 +484,8 @@ namespace LayerBase.Core.Event
             public void Pump()
             {
                 if (_queuesByType.Count == 0) return;
+
+                AtomicClearBit(ref _center._eventPendingMask, _layerIndex);
 
                 foreach (var list in _queuesByType.Values)
                 {

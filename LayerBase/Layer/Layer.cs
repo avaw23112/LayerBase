@@ -1,10 +1,14 @@
+using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.Event.Delay;
+using LayerBase.LayerHub;
 
 namespace LayerBase.Layers
 {
@@ -29,6 +33,12 @@ namespace LayerBase.Layers
         }
 
         public int RouteIndex { get; private set; } = -1;
+
+        /// <summary>
+        /// 标记该层是否有活跃的逻辑更新（Service Update 或 Delay Publisher）。
+        /// 用于 Pump 阶段的位图屏蔽优化。
+        /// </summary>
+        public virtual bool HasActiveLogic => m_serviceUpdates.Count > 0 || m_delayPublishers.Count > 0;
 
         public virtual void Update()
         {
@@ -155,13 +165,13 @@ namespace LayerBase.Layers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SubscribeParallel<Value>(IEventHandler<Value> eventHandler) where Value : struct
         {
-            RegisterOrDelay(() => LayerHub.LayerHub.EventCenter.SubscribeParallel<Value>(RouteIndex, eventHandler, LayerHub.LayerHub.ReportLayerEventError));
+            RegisterOrDelay(() => LayerBase.LayerHub.LayerHub.EventCenter.SubscribeParallel<Value>(RouteIndex, eventHandler, LayerBase.LayerHub.LayerHub.ReportLayerEventError));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SubscribeParallel<Value>(EventHandleDelegate<Value> eventHandleDelegate) where Value : struct
         {
-            RegisterOrDelay(() => LayerHub.LayerHub.EventCenter.SubscribeParallel<Value>(RouteIndex, eventHandleDelegate, LayerHub.LayerHub.ReportLayerEventError));
+            RegisterOrDelay(() => LayerBase.LayerHub.LayerHub.EventCenter.SubscribeParallel<Value>(RouteIndex, eventHandleDelegate, LayerBase.LayerHub.LayerHub.ReportLayerEventError));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -172,33 +182,21 @@ namespace LayerBase.Layers
 
         // -----------------Events Dispatch (Synchronous)-------------------
 
-        /// <summary>
-        /// 仅在当前层级分发同步事件。
-        /// </summary>
         public EventHandledState SendLocal<Value>(in Value value) where Value : struct
         {
             return LayerHub.LayerHub.EventCenter.SendLocal(RouteIndex, value);
         }
 
-        /// <summary>
-        /// 向当前层及上方层级分发同步事件（0 -> RouteIndex）。
-        /// </summary>
         public void SendBubble<Value>(in Value value) where Value : struct
         {
             LayerHub.LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Bubble);
         }
 
-        /// <summary>
-        /// 向当前层及下方层级分发同步事件（RouteIndex -> N）。
-        /// </summary>
         public void SendDrop<Value>(in Value value) where Value : struct
         {
             LayerHub.LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Drop);
         }
 
-        /// <summary>
-        /// 发送全局同步广播（0 -> N）。
-        /// </summary>
         public void SendGlobal<Value>(in Value value) where Value : struct
         {
             LayerHub.LayerHub.EventCenter.Send(value, 0, Propagation.Global);
@@ -206,33 +204,21 @@ namespace LayerBase.Layers
 
         // -----------------Events Dispatch (Asynchronous)-------------------
 
-        /// <summary>
-        /// 仅在当前层级入队异步事件。
-        /// </summary>
         public void PostLocal<Value>(in Value value) where Value : struct
         {
             LayerHub.LayerHub.EventCenter.PostLocal(RouteIndex, value);
         }
 
-        /// <summary>
-        /// 向当前层及上方层级入队异步事件（0 -> RouteIndex）。
-        /// </summary>
         public void PostBubble<Value>(in Value value) where Value : struct
         {
             LayerHub.LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Bubble);
         }
 
-        /// <summary>
-        /// 向当前层及下方层级入队异步事件（RouteIndex -> N）。
-        /// </summary>
         public void PostDrop<Value>(in Value value) where Value : struct
         {
             LayerHub.LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Drop);
         }
 
-        /// <summary>
-        /// 入队全局异步广播（0 -> N）。
-        /// </summary>
         public void PostGlobal<Value>(in Value value) where Value : struct
         {
             LayerHub.LayerHub.EventCenter.Post(value, 0, Propagation.Global);
