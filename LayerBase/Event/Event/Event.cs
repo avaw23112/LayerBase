@@ -33,6 +33,7 @@ namespace LayerBase.Core.Event
         private EventHandledState _handledState;
         private EventForwardDir _forwardDirection;
         private bool _shouldForwardFromQueue;
+        internal ulong TargetMask;
 
         public EventArg Value;
 
@@ -41,6 +42,7 @@ namespace LayerBase.Core.Event
             _handledState = EventHandledState.Created;
             _forwardDirection = default;
             _shouldForwardFromQueue = true;
+            TargetMask = 0;
             Value = value;
         }
 
@@ -50,6 +52,7 @@ namespace LayerBase.Core.Event
         internal bool ShouldForwardFromQueue => _shouldForwardFromQueue;
 
         public bool IsVaild() => _handledState != EventHandledState.Handled;
+        public EventHandledState HandledState => _handledState;
         public void MarkHandled() => _handledState = EventHandledState.Handled;
         public void MarkContinue() => _handledState = EventHandledState.Continue;
         public void MarkHandledAndContinue() => _handledState = EventHandledState.HandledAndContinue;
@@ -62,4 +65,16 @@ namespace LayerBase.Core.Event
 
         internal void DisableQueuedForwarding() => _shouldForwardFromQueue = false;
     }
+
+    [AttributeUsage(AttributeTargets.Method)]
+    public sealed class SubscribeAttribute : Attribute { }
+
+    [AttributeUsage(AttributeTargets.Method)]
+    public sealed class SubscribeAsyncAttribute : Attribute { }
+
+    [AttributeUsage(AttributeTargets.Method)]
+    public sealed class SubscribeParallelAttribute : Attribute { }
+
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
+    public sealed class SubscribeDelayAttribute : Attribute { }
 }

@@ -18,8 +18,8 @@ public class DelayPublisherTests
 		var layer = new DummyLayer();
 		LayerHub.CreateLayers().Push(layer).Build();
 
-		layer.Delay(new DelayPayload(1), 1f);
-		layer.Delay(new DelayPayload(2), 1f);
+		layer.DelayLocal(new DelayPayload(1), 1f);
+		layer.DelayLocal(new DelayPayload(2), 1f);
 
 		var publisher = layer.SubscribeDelay<DelayPayload>();
 
@@ -33,7 +33,7 @@ public class DelayPublisherTests
 		var layer = new DummyLayer();
 		LayerHub.CreateLayers().Push(layer).Build();
 
-		layer.Delay(new DelayPayload(3), 0.05f);
+		layer.DelayLocal(new DelayPayload(3), 0.05f);
 
 		LayerHub.Pump(0.06f);
 
@@ -48,7 +48,7 @@ public class DelayPublisherTests
 		LayerHub.CreateLayers().Push(layer).Build();
 
 		var publisher = layer.SubscribeDelay<DelayPayload>();
-		layer.BroadCastDelay(new DelayPayload(5), 1f);
+		layer.DelayGlobal(new DelayPayload(5), 1f);
 
 		Assert.That(publisher.Direction, Is.EqualTo(DelayDirection.BroadCast));
 		Assert.That(publisher.TryGet(out _), Is.True);
@@ -62,7 +62,7 @@ public class DelayPublisherTests
 		var bottom = new DummyLayer();
 		LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
 
-		middle.BroadCastDelay(new DelayPayload(30), 1f);
+		middle.DelayGlobal(new DelayPayload(30), 1f);
 
 		AssertDelay(top, 30, DelayDirection.BroadCast);
 		AssertDelay(middle, 30, DelayDirection.BroadCast);
@@ -77,7 +77,7 @@ public class DelayPublisherTests
 		var bottom = new DummyLayer();
 		LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
 
-		middle.BubbleDelay(new DelayPayload(31), 1f);
+		middle.DelayBubble(new DelayPayload(31), 1f);
 
 		AssertDelay(top, 31, DelayDirection.Bubble);
 		AssertDelay(middle, 31, DelayDirection.Bubble);
@@ -92,7 +92,7 @@ public class DelayPublisherTests
 		var bottom = new DummyLayer();
 		LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
 
-		middle.DropDelay(new DelayPayload(32), 1f);
+		middle.DelayDrop(new DelayPayload(32), 1f);
 
 		AssertDelayMissing(top);
 		AssertDelay(middle, 32, DelayDirection.Drop);
@@ -105,8 +105,9 @@ public class DelayPublisherTests
 		var layer = new DummyLayer();
 		LayerHub.CreateLayers().Push(layer).Build();
 
-		layer.Delay(new DelayPayload(10), 1f, contractLayer: 7);
-		layer.BubbleDelay(new DelayPayload(11), 1f, contractLayer: 7); // should clear previous
+		layer.DelayLocal(new DelayPayload(10), 1f, contractLayer: 7);
+		layer.DelayBubble(new DelayPayload(11), 1f, contractLayer: 7);
+ // should clear previous
 
 		var publisher = layer.SubscribeDelay<DelayPayload>();
 		Assert.That(publisher.HasValue, Is.True);
@@ -122,7 +123,7 @@ public class DelayPublisherTests
 		var layer = new DummyLayer();
 		LayerHub.CreateLayers().Push(layer).Build();
 
-		layer.Delay(new DelayPayload(20), 1f);
+		layer.DelayLocal(new DelayPayload(20), 1f);
 
 		var publisher = layer.SubscribeDelay<DelayPayload>();
 		Assert.That(publisher.TryTake(out var value), Is.True);

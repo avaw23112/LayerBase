@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
@@ -29,41 +30,55 @@ namespace LayerBase.DI
         void Reset();
     }
 
-    public interface IService
+    public interface IService : ILayerContext
     {
         void ConfigureServices(IServiceCollection services);
     }
 
+    /// <summary>
+    /// 能力标记接口：只要实现此接口，即可通过扩展方法获得 Layer 级的事件分发能力。
+    /// </summary>
+    public interface ILayerContext { }
+
+    /// <summary>
+    /// 自动订阅行为接口：由 Source Generator 自动生成，用于在构建期执行订阅连线。
+    /// </summary>
+    public interface IAutoSubscribe
+    {
+        void AutoBind(Layer layer);
+    }
+
     internal static class ServiceLayerBinder
     {
-        private static readonly ConditionalWeakTable<IService, Layer> s_layerMap = new();
+        private static readonly ConditionalWeakTable<object, Layer> s_layerMap = new();
 
-        internal static void Attach(IService service, Layer layer)
+        internal static void Attach(object instance, Layer layer)
         {
-            if (service == null) throw new ArgumentNullException(nameof(service));
+            if (instance == null) throw new ArgumentNullException(nameof(instance));
             if (layer == null) throw new ArgumentNullException(nameof(layer));
 
-            s_layerMap.Remove(service);
-            s_layerMap.Add(service, layer);
+            lock (s_layerMap)
+            {
+                s_layerMap.Remove(instance);
+                s_layerMap.Add(instance, layer);
+            }
         }
 
-        internal static Layer Require(IService service)
+        internal static Layer Require(object instance)
         {
-            if (service == null) throw new ArgumentNullException(nameof(service));
-            if (s_layerMap.TryGetValue(service, out var layer))
+            if (instance == null) throw new ArgumentNullException(nameof(instance));
+            if (s_layerMap.TryGetValue(instance, out var layer))
             {
                 return layer;
             }
 
-            throw new InvalidOperationException("Service is not attached to a Layer.");
+            throw new InvalidOperationException($"Instance of {instance.GetType().Name} is not attached to a Layer. Ensure it is resolved from the Layer DI container.");
         }
     }
 
     public static class ServiceExtensions
     {
-        
-        
-        public static Layer GetLayer(this IService service) => ServiceLayerBinder.Require(service);
+        public static Layer GetLayer(this ILayerContext self) => ServiceLayerBinder.Require(self);
         
         public static void Subscribe<T>(this IService service, EventHandleDelegate<T> eventHandleDelegate) where T : struct
         {
@@ -100,54 +115,70 @@ namespace LayerBase.DI
             return ServiceLayerBinder.Require(service).GetService<T>();
         }
 
-        public static void BroadCast<TValue>(this IService service, in TValue value) where TValue : struct
+        // --- Synchronous Dispatch ---
+
+        public static EventHandledState SendLocal<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(service).BroadCast(in value);
+            return ServiceLayerBinder.Require(self).SendLocal(in value);
         }
 
-        public static void Drop<TValue>(this IService service, in TValue value) where TValue : struct
+        public static void SendBubble<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(service).Drop(in value);
+            ServiceLayerBinder.Require(self).SendBubble(in value);
         }
 
-        public static void Bubble<TValue>(this IService service, in TValue value) where TValue : struct
+        public static void SendDrop<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(service).Bubble(in value);
+            ServiceLayerBinder.Require(self).SendDrop(in value);
         }
 
-        public static void Post<TValue>(this IService service, in TValue value) where TValue : struct
+        public static void SendGlobal<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(service).Post(in value);
+            ServiceLayerBinder.Require(self).SendGlobal(in value);
         }
 
-        public static void PostBubble<TValue>(this IService service, in TValue value) where TValue : struct
+        // --- Asynchronous Dispatch ---
+
+        public static void PostLocal<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(service).PostBubble(in value);
+            ServiceLayerBinder.Require(self).PostLocal(in value);
         }
 
-        public static void PostDrop<TValue>(this IService service, in TValue value) where TValue : struct
+        public static void PostBubble<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(service).PostDrop(in value);
+            ServiceLayerBinder.Require(self).PostBubble(in value);
         }
 
-        public static void Delay<TValue>(this IService service, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
+        public static void PostDrop<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(service).Delay(in value, ttlSeconds, contractLayer);
+            ServiceLayerBinder.Require(self).PostDrop(in value);
         }
 
-        public static void BroadCastDelay<TValue>(this IService service, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
+        public static void PostGlobal<TValue>(this ILayerContext self, in TValue value) where TValue : struct
         {
-            ServiceLayerBinder.Require(service).BroadCastDelay(in value, ttlSeconds, contractLayer);
+            ServiceLayerBinder.Require(self).PostGlobal(in value);
         }
 
-        public static void BubbleDelay<TValue>(this IService service, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
+        // --- Delay Dispatch ---
+
+        public static void DelayLocal<TValue>(this ILayerContext self, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
         {
-            ServiceLayerBinder.Require(service).BubbleDelay(in value, ttlSeconds, contractLayer);
+            ServiceLayerBinder.Require(self).DelayLocal(in value, ttlSeconds, contractLayer);
         }
 
-        public static void DropDelay<TValue>(this IService service, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
+        public static void DelayGlobal<TValue>(this ILayerContext self, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
         {
-            ServiceLayerBinder.Require(service).DropDelay(in value, ttlSeconds, contractLayer);
+            ServiceLayerBinder.Require(self).DelayGlobal(in value, ttlSeconds, contractLayer);
+        }
+
+        public static void DelayBubble<TValue>(this ILayerContext self, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
+        {
+            ServiceLayerBinder.Require(self).DelayBubble(in value, ttlSeconds, contractLayer);
+        }
+
+        public static void DelayDrop<TValue>(this ILayerContext self, in TValue value, float ttlSeconds, int contractLayer = 0) where TValue : struct
+        {
+            ServiceLayerBinder.Require(self).DelayDrop(in value, ttlSeconds, contractLayer);
         }
     }
 

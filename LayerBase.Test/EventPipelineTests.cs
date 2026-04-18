@@ -5,6 +5,7 @@ using LayerBase.Core.EventHandler;
 using LayerBase.Event.EventMetaData;
 using LayerBase.LayerHub;
 using LayerBase.Layers;
+using NUnit.Framework;
 using NUnit.Framework.Legacy;
 
 namespace EventsTest;
@@ -19,22 +20,25 @@ public class EventPipelineTests
 
 
 	[Test]
-	public void Bubble_stops_at_current_layer_when_handled()
+	public void Bubble_stops_at_lower_priority_layer_when_handled_by_higher_priority()
 	{
-		var upper = new RecordingLayer(EventHandledState.Continue);
-		var lower = new RecordingLayer(
+		// In the new system, order is ALWAYS registration order (0 -> 1 -> 2).
+		// Higher priority (outer/registered first) handles it first.
+		var higher = new RecordingLayer(
 			EventHandledState.Handled,
 			evt => Assert.That(evt.Id, Is.EqualTo(1))
 		);
+		var lower = new RecordingLayer(EventHandledState.Continue);
 
-		LayerHub.CreateLayers().Push(upper).Push(lower).Build();
+		LayerHub.CreateLayers().Push(higher).Push(lower).Build();
 
-		lower.Bubble(new RoutingEvent(1));
+		// Event sent from lower, but higher is at index 0, so it gets it first.
+		lower.SendBubble(new RoutingEvent(1));
 
 		PumpTwice();
 
-		Assert.That(upper.ReceivedIds.Count, Is.EqualTo(0));
-		Assert.That(lower.ReceivedIds.Count, Is.EqualTo(1));
+		Assert.That(higher.ReceivedIds.Count, Is.EqualTo(1));
+		Assert.That(lower.ReceivedIds.Count, Is.EqualTo(0));
 	}
 
 	[Test]
@@ -43,7 +47,7 @@ public class EventPipelineTests
 		var layer = new ReentrantPostingLayer();
 		LayerHub.CreateLayers().Push(layer).Build();
 
-		layer.Post(new QueuedRootEvent(7));
+		LayerHub.Post(new QueuedRootEvent(7));
 
 		Assert.That(() => LayerHub.Pump(0.02f), Throws.Nothing);
 		CollectionAssert.AreEqual(new[] { 7 }, layer.RootIds);
@@ -73,7 +77,7 @@ public class EventPipelineTests
 
 		LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
 
-		middle.BroadCast(new RoutingEvent(eventId));
+		LayerHub.Send(new RoutingEvent(eventId));
 
 		PumpTwice();
 
@@ -89,7 +93,7 @@ public class EventPipelineTests
 		var layer = new MixedOrderedLayer(order);
 
 		LayerHub.CreateLayers().Push(layer).Build();
-		layer.BroadCast(new RoutingEvent(42));
+		LayerHub.Send(new RoutingEvent(42));
 
 		PumpTwice();
 
@@ -106,9 +110,9 @@ public class EventPipelineTests
 
 		LayerHub.CreateLayers().Push(layer).Build();
 
-		layer.BroadCast(new RoutingEvent(101));
-		layer.BroadCast(new RoutingEvent(102));
-		layer.BroadCast(new RoutingEvent(103));
+		LayerHub.Send(new RoutingEvent(101));
+		LayerHub.Send(new RoutingEvent(102));
+		LayerHub.Send(new RoutingEvent(103));
 
 		PumpTwice();
 
@@ -138,10 +142,10 @@ public class EventPipelineTests
 		{
 			LayerHub.CreateLayers().Push(layer).Build();
 
-			layer.BroadCast(new RoutingEvent(401));
+			LayerHub.Send(new RoutingEvent(401));
 			PumpTwice();
 
-			layer.BroadCast(new RoutingEvent(402));
+			LayerHub.Send(new RoutingEvent(402));
 			PumpTwice();
 
 			Assert.That(layer.FailingCount, Is.EqualTo(1));
@@ -180,8 +184,8 @@ public class EventPipelineTests
 		{
 			LayerHub.CreateLayers().Push(layer).Build();
 
-			layer.BroadCast(new RoutingEvent(501));
-			layer.BroadCast(new RoutingEvent(502));
+			LayerHub.Send(new RoutingEvent(501));
+			LayerHub.Send(new RoutingEvent(502));
 			PumpTwice();
 
 			Assert.That(layer.WaitHealthyHandled(TimeSpan.FromSeconds(2)), Is.True);
@@ -302,7 +306,7 @@ public class EventPipelineTests
 		private EventHandledState OnRoot(in QueuedRootEvent evt)
 		{
 			RootIds.Add(evt.Id);
-			Post(new QueuedFollowUpEvent(evt.Id * 10));
+			LayerHub.Post(new QueuedFollowUpEvent(evt.Id * 10));
 			return EventHandledState.Continue;
 		}
 

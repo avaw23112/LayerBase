@@ -273,7 +273,7 @@ internal sealed class ServiceEventEmitter : IServiceEventEmitter, IService
 
 	public void Emit(int id)
 	{
-		this.Bubble(new ServiceRaisedEvent(id));
+		this.SendBubble(new ServiceRaisedEvent(id));
 	}
 }
 

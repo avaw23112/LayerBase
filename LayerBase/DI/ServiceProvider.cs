@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using LayerBase.Layers;
@@ -21,6 +23,7 @@ namespace LayerBase.DI
             _map = new ConcurrentDictionary<Type, ServiceDescriptor>();
             _ownerLayer = null;
         }
+        
         public ServiceProvider(IEnumerable<ServiceDescriptor> descriptors, Layer? ownerLayer = null)
         {
             if (descriptors == null) throw new ArgumentNullException(nameof(descriptors));
@@ -36,6 +39,23 @@ namespace LayerBase.DI
                 else
                 {
                     _map[d.ServiceType] = d;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 严格按照注册顺序初始化所有服务，并激活它们的自动订阅。
+        /// </summary>
+        internal void InitializeAutoSubscriptions(Layer owner, IEnumerable<ServiceDescriptor> orderedDescriptors)
+        {
+            foreach (var desc in orderedDescriptors)
+            {
+                // 强制解析实例（如果是单例则会创建，并自动染色）
+                var instance = GetService(desc.ServiceType);
+                if (instance is IAutoSubscribe auto)
+                {
+                    // 激活由 Generator 生成的订阅逻辑
+                    auto.AutoBind(owner);
                 }
             }
         }
@@ -78,7 +98,14 @@ namespace LayerBase.DI
                 ServiceLifetime.Scoped => GetOrCreateSingleton(desc, callstack),
                 _ => throw new NotSupportedException($"Unsupported lifetime {desc.Lifetime}")
             };
-            return AttachLayerIfNeeded(instance, desc.Lifetime);
+            
+            // 只要是从本容器（Layer 绑定）解析出来的对象，就自动绑定到该层，解锁 this.SendLocal 等 API
+            if (_ownerLayer != null)
+            {
+                ServiceLayerBinder.Attach(instance, _ownerLayer);
+            }
+            
+            return instance;
         }
 
         private object GetOrCreateSingleton(ServiceDescriptor desc, HashSet<Type> callstack)
@@ -161,16 +188,6 @@ namespace LayerBase.DI
                 var dep = GetService(p.PropertyType);
                 if (dep != null) p.SetValue(instance, dep, null);
             }
-        }
-
-        private object AttachLayerIfNeeded(object instance, ServiceLifetime lifetime)
-        {
-            if (_ownerLayer != null && lifetime != ServiceLifetime.Singleton && instance is IService service)
-            {
-                ServiceLayerBinder.Attach(service, _ownerLayer);
-            }
-
-            return instance;
         }
 
         public void Dispose()

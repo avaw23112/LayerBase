@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Threading;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
-using LayerBase.Core.PolledEventContainer;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.DI.Options;
@@ -13,43 +9,38 @@ using LayerBase.Event.Delay;
 namespace LayerBase.Layers
 {
     /// <summary>
-    /// Layer 基类，负责事件分发、DI 服务和延迟事件能力。
+    /// Layer 基类，负责事件订阅、DI 服务和延迟事件能力。
     /// </summary>
     public abstract class Layer : Node, IUpdate
     {
-        private readonly EventDispatcher m_eventDispatcher;
-        private readonly PooledEventContainer m_pooledEventContainer;
         private readonly List<IUpdate> m_serviceUpdates = new List<IUpdate>();
         private readonly List<IDelayPublisherUpdater> m_delayPublisherUpdates = new List<IDelayPublisherUpdater>();
         private readonly Dictionary<int, object> m_delayPublishers = new Dictionary<int, object>();
+        private List<Action>? m_pendingSubscriptions;
 
         // Layer 级 DI 容器配置与运行时 provider。
         private readonly ServiceCollection m_serviceCollection;
         private ServiceProvider? m_serviceProvider;
-        private DirectEventBus? m_eventBus;
 
         protected Layer()
         {
-            m_eventDispatcher = new EventDispatcher(GetType().Name);
-            m_eventDispatcher.ErrorReporter = LayerBase.LayerHub.LayerHub.ReportLayerEventError;
-            m_pooledEventContainer = new PooledEventContainer(this);
             m_serviceCollection = new ServiceCollection();
             LayerServiceRegistry.Apply(this);
         }
 
-        internal int RouteIndex { get; private set; } = -1;
+        public int RouteIndex { get; private set; } = -1;
 
         public virtual void Update()
         {
         }
 
         /// <summary>
-        /// 推进当前 Layer：事件容器、服务更新和 Layer 更新。
+        /// 推进当前 Layer：事件槽位、服务更新和 Layer 更新。
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Pump()
         {
-            m_pooledEventContainer.Pump();
+            LayerHub.LayerHub.EventCenter.PumpLayer(RouteIndex);
             PumpServices();
             Update();
         }
@@ -103,187 +94,152 @@ namespace LayerBase.Layers
         }
 
         /// <summary>
-        /// 构建 Layer 级 DI 容器。
+        /// 构建 Layer 级 DI 容器，并激活所有自动订阅。
         /// </summary>
         public void Build()
         {
-            var newProvider = new ServiceProvider(m_serviceCollection.ToDescriptors(), this);
+            var descriptors = m_serviceCollection.ToDescriptors();
+            var newProvider = new ServiceProvider(descriptors, this);
             var oldProvider = Interlocked.Exchange(ref m_serviceProvider, newProvider);
             oldProvider?.Dispose();
+
+            // 核心步骤：严格按注册顺序触发所有 Manager 的自动绑定
+            newProvider.InitializeAutoSubscriptions(this, descriptors);
         }
 
-        internal void SetEventBus(DirectEventBus eventBus, int routeIndex)
+        internal void SetRouteIndex(int routeIndex)
         {
-            m_eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
             RouteIndex = routeIndex;
+            if (m_pendingSubscriptions != null)
+            {
+                foreach (var sub in m_pendingSubscriptions)
+                {
+                    sub();
+                }
+                m_pendingSubscriptions = null;
+            }
         }
 
-        private void InvalidateRoutes()
+        // -----------------Events Subscription-------------------
+        private void RegisterOrDelay(Action sub)
         {
-            m_eventBus?.Invalidate();
+            if (RouteIndex == -1)
+            {
+                m_pendingSubscriptions ??= new List<Action>();
+                m_pendingSubscriptions.Add(sub);
+            }
+            else
+            {
+                sub();
+            }
         }
 
-        // -----------------Events-------------------
-        /// <summary>
-        /// 订阅同步事件委托。
-        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Subscribe<Value>(EventHandleDelegate<Value> eventHandleDelegate) where Value : struct
         {
-            m_eventDispatcher.Subscribe(eventHandleDelegate);
-            InvalidateRoutes();
+            RegisterOrDelay(() => LayerHub.LayerHub.EventCenter.Subscribe<Value>(RouteIndex, eventHandleDelegate));
         }
 
-        /// <summary>
-        /// 订阅异步事件委托。
-        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SubscribeAsync<Value>(EventHandleDelegateAsync<Value> eventHandleDelegateAsync) where Value : struct
         {
-            m_eventDispatcher.SubscribeAsync(eventHandleDelegateAsync);
-            InvalidateRoutes();
+            RegisterOrDelay(() => LayerHub.LayerHub.EventCenter.SubscribeAsync<Value>(RouteIndex, eventHandleDelegateAsync));
         }
 
-        /// <summary>
-        /// 订阅同步事件处理器实例。
-        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Subscribe<Value>(IEventHandler<Value> eventHandler) where Value : struct
         {
-            m_eventDispatcher.Subscribe(eventHandler);
-            InvalidateRoutes();
+            RegisterOrDelay(() => LayerHub.LayerHub.EventCenter.Subscribe<Value>(RouteIndex, eventHandler));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SubscribeParallel<Value>(IEventHandler<Value> eventHandler) where Value : struct
         {
-            m_eventDispatcher.SubscribeParallel(eventHandler);
-            InvalidateRoutes();
+            RegisterOrDelay(() => LayerHub.LayerHub.EventCenter.SubscribeParallel<Value>(RouteIndex, eventHandler, LayerHub.LayerHub.ReportLayerEventError));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SubscribeParallel<Value>(EventHandleDelegate<Value> eventHandleDelegate) where Value : struct
         {
-            m_eventDispatcher.SubscribeParallel(eventHandleDelegate);
-            InvalidateRoutes();
+            RegisterOrDelay(() => LayerHub.LayerHub.EventCenter.SubscribeParallel<Value>(RouteIndex, eventHandleDelegate, LayerHub.LayerHub.ReportLayerEventError));
         }
 
-        /// <summary>
-        /// 订阅异步事件处理器实例。
-        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SubscribeAsync<Value>(IEventHandlerAsync<Value> eventHandler) where Value : struct
         {
-            m_eventDispatcher.SubscribeAsync(eventHandler);
-            InvalidateRoutes();
+            RegisterOrDelay(() => LayerHub.LayerHub.EventCenter.SubscribeAsync<Value>(RouteIndex, eventHandler));
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal EventHandledState Dispatch<Value>(in Event<Value> @event) where Value : struct
+        // -----------------Events Dispatch (Synchronous)-------------------
+
+        /// <summary>
+        /// 仅在当前层级分发同步事件。
+        /// </summary>
+        public EventHandledState SendLocal<Value>(in Value value) where Value : struct
         {
-            return m_eventDispatcher.Dispatch(@event);
+            return LayerHub.LayerHub.EventCenter.SendLocal(RouteIndex, value);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal bool HasHandlers<Value>() where Value : struct
+        /// <summary>
+        /// 向当前层及上方层级分发同步事件（0 -> RouteIndex）。
+        /// </summary>
+        public void SendBubble<Value>(in Value value) where Value : struct
         {
-            return m_eventDispatcher.HasHandlers<Value>();
+            LayerHub.LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Bubble);
         }
 
-        internal void EnqueueEvent<Value>(in Event<Value> @event) where Value : struct
+        /// <summary>
+        /// 向当前层及下方层级分发同步事件（RouteIndex -> N）。
+        /// </summary>
+        public void SendDrop<Value>(in Value value) where Value : struct
         {
-            m_pooledEventContainer.Post(@event);
+            LayerHub.LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Drop);
         }
 
-        internal void NotifyQueuedEventProcessed<Value>(
-            in Event<Value> @event,
-            EventHandledState handledState) where Value : struct
+        /// <summary>
+        /// 发送全局同步广播（0 -> N）。
+        /// </summary>
+        public void SendGlobal<Value>(in Value value) where Value : struct
         {
-            if (handledState == EventHandledState.Handled)
-            {
-                return;
-            }
-
-            m_eventBus?.PostContinuation(this, in @event);
+            LayerHub.LayerHub.EventCenter.Send(value, 0, Propagation.Global);
         }
 
-        public void Post<Value>(in Value value) where Value : struct
+        // -----------------Events Dispatch (Asynchronous)-------------------
+
+        /// <summary>
+        /// 仅在当前层级入队异步事件。
+        /// </summary>
+        public void PostLocal<Value>(in Value value) where Value : struct
         {
-            Event<Value> @event = new Event<Value>(value);
-            @event.MarkBroadCast();
-            PostInternal(in @event);
+            LayerHub.LayerHub.EventCenter.PostLocal(RouteIndex, value);
         }
 
-        public void PostDrop<Value>(in Value value) where Value : struct
-        {
-            Event<Value> @event = new Event<Value>(value);
-            @event.MarkDrop();
-            PostInternal(in @event);
-        }
-
+        /// <summary>
+        /// 向当前层及上方层级入队异步事件（0 -> RouteIndex）。
+        /// </summary>
         public void PostBubble<Value>(in Value value) where Value : struct
         {
-            Event<Value> @event = new Event<Value>(value);
-            @event.MarkBubble();
-            PostInternal(in @event);
-        }
-
-        private void PostInternal<Value>(in Event<Value> @event) where Value : struct
-        {
-            if (!@event.IsVaild()) return;
-
-            if (m_eventBus != null)
-            {
-                m_eventBus.PostLocal(this, in @event);
-                return;
-            }
-
-            EnqueueEvent(in @event);
+            LayerHub.LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Bubble);
         }
 
         /// <summary>
-        /// 向上冒泡事件。
+        /// 向当前层及下方层级入队异步事件（RouteIndex -> N）。
         /// </summary>
-        public void Bubble<Value>(in Value value) where Value : struct
+        public void PostDrop<Value>(in Value value) where Value : struct
         {
-            Event<Value> @event = new Event<Value>(value);
-            @event.MarkBubble();
-            PublishInternal(in @event);
+            LayerHub.LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Drop);
         }
 
         /// <summary>
-        /// 向下下沉事件。
+        /// 入队全局异步广播（0 -> N）。
         /// </summary>
-        public void Drop<Value>(in Value value) where Value : struct
+        public void PostGlobal<Value>(in Value value) where Value : struct
         {
-            Event<Value> @event = new Event<Value>(value);
-            @event.MarkDrop();
-            PublishInternal(in @event);
-        }
-
-        /// <summary>
-        /// 广播事件到当前 Layer、上层和下层。
-        /// </summary>
-        public void BroadCast<Value>(in Value value) where Value : struct
-        {
-            Event<Value> @event = new Event<Value>(value);
-            @event.MarkBroadCast();
-            PublishInternal(in @event);
-        }
-
-        private EventHandledState PublishInternal<Value>(in Event<Value> @event) where Value : struct
-        {
-            if (!@event.IsVaild())
-            {
-                return EventHandledState.Handled;
-            }
-
-            return m_eventBus != null
-                ? m_eventBus.Publish(this, in @event)
-                : Dispatch(in @event);
+            LayerHub.LayerHub.EventCenter.Post(value, 0, Propagation.Global);
         }
 
         // -----------------Delay Events-------------------
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IDelayPublisher<T> SubscribeDelay<T>() where T : struct
         {
@@ -291,13 +247,13 @@ namespace LayerBase.Layers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Delay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
+        public void DelayLocal<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
         {
             PublishDelayLocal(in value, ttlSeconds, DelayDirection.None, contractLayer);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void BroadCastDelay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
+        public void DelayGlobal<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
         {
             PublishDelayLocal(in value, ttlSeconds, DelayDirection.BroadCast, contractLayer);
             PublishDelayToHigherLayers(in value, ttlSeconds, DelayDirection.BroadCast, contractLayer);
@@ -305,14 +261,14 @@ namespace LayerBase.Layers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void BubbleDelay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
+        public void DelayBubble<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
         {
             PublishDelayLocal(in value, ttlSeconds, DelayDirection.Bubble, contractLayer);
             PublishDelayToHigherLayers(in value, ttlSeconds, DelayDirection.Bubble, contractLayer);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DropDelay<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
+        public void DelayDrop<T>(in T value, float ttlSeconds, int contractLayer = 0) where T : struct
         {
             PublishDelayLocal(in value, ttlSeconds, DelayDirection.Drop, contractLayer);
             PublishDelayToLowerLayers(in value, ttlSeconds, DelayDirection.Drop, contractLayer);

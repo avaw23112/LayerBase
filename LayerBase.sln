@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayerBase.Generator", "Laye
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayerBase.Task", "LayerBase.Task\LayerBase.Task.csproj", "{AF114CE5-A9E9-4A28-89D1-4FAA5F52A0CF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayerBase.Template", "LayerBase.Template\LayerBase.Template.csproj", "{A2FC76F4-6978-4A79-B0A4-D51E04BEC62F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{AF114CE5-A9E9-4A28-89D1-4FAA5F52A0CF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AF114CE5-A9E9-4A28-89D1-4FAA5F52A0CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AF114CE5-A9E9-4A28-89D1-4FAA5F52A0CF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2FC76F4-6978-4A79-B0A4-D51E04BEC62F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2FC76F4-6978-4A79-B0A4-D51E04BEC62F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2FC76F4-6978-4A79-B0A4-D51E04BEC62F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2FC76F4-6978-4A79-B0A4-D51E04BEC62F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

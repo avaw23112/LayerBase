@@ -15,7 +15,7 @@ var bottom = new RecordingLayer();
 
 LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
 
-middle.BroadCast(new PlainEvent(10));
+LayerHub.Send(new PlainEvent(10));
 
 LayerHub.Pump(0.02f);
 LayerHub.Pump(0.02f);

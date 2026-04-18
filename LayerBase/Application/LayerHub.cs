@@ -1,4 +1,5 @@
-﻿using LayerBase.Async;
+using LayerBase.Async;
+using LayerBase.Core.Event;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.Event.Delay;
 using LayerBase.Event.EventMetaData;
@@ -50,9 +51,19 @@ namespace LayerBase.LayerHub
         public LayersBuilder Push(Node node, LayerType layerType = LayerType.Scope)
         {
             _chain.AddNode(node);
-            if (layerType == LayerType.Singleton && node is Layer layer)
+            if (node is Layer layer)
             {
-                LayerHub.PushInstanceLayer(layer);
+                if (layer.RouteIndex == -1)
+                {
+                    int index = LayerHub.GetNextLayerIndex();
+                    layer.SetRouteIndex(index);
+                    LayerHub.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
+                }
+
+                if (layerType == LayerType.Singleton)
+                {
+                    LayerHub.PushInstanceLayer(layer);
+                }
             }
 
             return this;
@@ -86,9 +97,12 @@ namespace LayerBase.LayerHub
 
     public static class LayerHub
     {
+        private static GlobalEventCenter? s_eventCenter;
+        internal static GlobalEventCenter EventCenter => s_eventCenter ??= new();
+
         private static readonly List<LayerChain> s_responsibilityChains = new(4);
         private static LayerBaseSynchronizationContext s_context = LayerBaseSynchronizationContext.InstallAsCurrent();
-        
+        private static int s_nextLayerIndex = 0;
         
         public static event Action<LayerEventErrorInfo>? OnLayerEventError;
 
@@ -100,6 +114,7 @@ namespace LayerBase.LayerHub
         public static void Reset()
         {
             EventMetaDataHandler.Clear();
+            s_eventCenter = null;
             s_responsibilityChains.Clear();
             OnLayerEventError = null;
             InstanceLayers.Clear();
@@ -107,90 +122,65 @@ namespace LayerBase.LayerHub
             JobSchedulers.ResetDefault();
             DelayPublisherManager.Instance.Clear();
             s_context.Dispose();
+            s_nextLayerIndex = 0;
+        }
+
+        internal static int GetNextLayerIndex() => Interlocked.Increment(ref s_nextLayerIndex) - 1;
+
+        // -----------------Global Event APIs-------------------
+
+        /// <summary>
+        /// 同步发送全局广播事件（从 Layer 0 开始）。
+        /// </summary>
+        public static void Send<T>(T value) where T : struct
+        {
+            EventCenter.Send(value, 0, Propagation.Global);
         }
 
         /// <summary>
-        /// Initialize the global scheduler for parallel handlers.
+        /// 异步入队全局广播事件（从 Layer 0 开始）。
         /// </summary>
+        public static void Post<T>(T value) where T : struct
+        {
+            EventCenter.Post(value, 0, Propagation.Global);
+        }
+    
         public static void InitializeJobScheduler(int workerCount = 0, int queueCapacity = 0)
         {
             JobSchedulers.ConfigureDefault(workerCount, queueCapacity);
         }
 
-        /// <summary>
-        /// Create a new layer chain.
-        /// </summary>
-        public static LayersBuilder CreateLayers(int eventStateSlabSize = 512)
+        public static LayersBuilder CreateLayers()
         {
-            var rcToken = RcOwnerToken.CreateId();
-            var rc = new ResponsibilityChain(rcToken);
+            var rc = new ResponsibilityChain(RcOwnerToken.CreateId());
             var chainBundle = new LayerChain(rc);
-
             s_responsibilityChains.Add(chainBundle);
-            return new LayersBuilder(chainBundle).SetEventStateSlabSize(eventStateSlabSize);
-        }
-
-        internal static void PushInstanceLayer<T>(T layer) where T : Layer
-        {
-            var layerType = layer.GetType();
-            if (InstanceLayers.ContainsKey(layerType))
-            {
-                throw new Exception($"{layerType} has already been pushed.");
-            }
-
-            InstanceLayers.Add(layerType, layer);
-        }
-
-        public static Layer ResolveInstance<T>()
-        {
-            if (!InstanceLayers.TryGetValue(typeof(T), out Layer layer))
-            {
-                throw new ArgumentException($"{typeof(T).Name} does not exist.");
-            }
-
-            return layer;
+            return new LayersBuilder(chainBundle);
         }
 
         public static void Pump(float deltaTime)
         {
             s_context.Update();
-            DelayPublisherManager.Instance.Update(deltaTime);
             PumpLayers();
-            EventMetaDataHandler.PumpExpectations();
             TimerSchedulers.TickAll(deltaTime);
+            DelayPublisherManager.Instance.Update(deltaTime);
         }
 
-        internal static void ReportLayerEventError(
-            string layerFullName,
-            string handlerFullName,
-            string eventFullName,
-            Exception exception)
+        internal static void PushInstanceLayer(Layer layer)
         {
-            var callbacks = OnLayerEventError;
-            if (callbacks == null)
-            {
-                return;
-            }
+            InstanceLayers[layer.GetType()] = layer;
+        }
 
-            var errorInfo = new LayerEventErrorInfo(layerFullName, handlerFullName, eventFullName, exception);
-            foreach (Action<LayerEventErrorInfo> callback in callbacks.GetInvocationList())
-            {
-                try
-                {
-                    callback(errorInfo);
-                }
-                catch
-                {
-                    // Error observers should not impact event dispatch.
-                }
-            }
+        internal static void ReportLayerEventError(string layerFullName, string handlerFullName, string eventFullName, Exception exception)
+        {
+            OnLayerEventError?.Invoke(new LayerEventErrorInfo(layerFullName, handlerFullName, eventFullName, exception));
         }
 
         private static void PumpLayers()
         {
-            foreach (var chainBundle in s_responsibilityChains)
+            for (int i = 0; i < s_responsibilityChains.Count; i++)
             {
-                chainBundle.Pump();
+                s_responsibilityChains[i].Pump();
             }
         }
     }

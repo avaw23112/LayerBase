@@ -34,7 +34,7 @@ public class LayerConfigurationTests
 
 		LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
 
-		middle.BroadCast(new PlainEvent(eventId));
+		LayerHub.Send(new PlainEvent(eventId));
 
 		PumpTwice();
 
@@ -56,7 +56,7 @@ public class LayerConfigurationTests
 
 		LayerHub.CreateLayers().Push(first).Push(middle).Push(bottom).Build();
 
-		first.Drop(new PlainEvent(20));
+		first.SendDrop(new PlainEvent(20));
 
 		PumpTwice();
 

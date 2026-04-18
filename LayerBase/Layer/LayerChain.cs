@@ -1,3 +1,4 @@
+using LayerBase.Core.Event;
 using LayerBase.Core.ResponsibilityChain;
 
 namespace LayerBase.Layers;
@@ -5,7 +6,6 @@ namespace LayerBase.Layers;
 internal sealed class LayerChain
 {
     private readonly ResponsibilityChain responsibilityChain;
-    private DirectEventBus? _eventBus;
     private bool _built;
 
     internal LayerChain(ResponsibilityChain chain)
@@ -55,19 +55,5 @@ internal sealed class LayerChain
 
     private void AssignEventBus()
     {
-        var layers = new List<Layer>();
-        foreach (var node in responsibilityChain)
-        {
-            if (node is Layer layer)
-            {
-                layers.Add(layer);
-            }
-        }
-
-        _eventBus = new DirectEventBus(layers);
-        for (int i = 0; i < layers.Count; i++)
-        {
-            layers[i].SetEventBus(_eventBus, i);
-        }
     }
 }
