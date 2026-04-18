@@ -1,5 +1,6 @@
 using LayerBase.Core.Event;
 using LayerBase.Core.ResponsibilityChain;
+using LayerBase.DI;
 using LayerBase.LayerHub;
 
 namespace LayerBase.Layers;
@@ -7,7 +8,6 @@ namespace LayerBase.Layers;
 internal sealed class LayerChain
 {
     private readonly ResponsibilityChain responsibilityChain;
-    private bool _built;
     private ulong _logicActiveMask;
     private Layer?[] _indexedLayers = Array.Empty<Layer?>();
 
@@ -24,15 +24,16 @@ internal sealed class LayerChain
     internal void Build(int eventStateSlabSize, bool releaseMode)
     {
         AssignEventBus();
-        
+
         // 汇总逻辑活跃状态并构建各层的 DI 容器
         _logicActiveMask = 0;
+        var allSubscribers = new List<IAutoSubscribe>();
         foreach (var node in responsibilityChain)
         {
             if (node is Layer layer)
             {
-                // 核心修复：自动构建每层的 DI 并激活订阅
                 layer.Build();
+                allSubscribers.AddRange(layer.DiscoveredSubscribers);
 
                 if (layer.HasActiveLogic)
                 {
@@ -40,8 +41,9 @@ internal sealed class LayerChain
                 }
             }
         }
-        
-        _built = true;
+
+        // 核心步骤：启动期全量环路审计
+        EventGraphValidator.Validate(allSubscribers);
     }
 
     internal void SetLogTracing(Action<string>? logger, int logQueueCapacity)

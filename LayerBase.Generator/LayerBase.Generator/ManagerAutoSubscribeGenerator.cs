@@ -13,186 +13,193 @@ namespace LayerBase.Generator
     [Generator(LanguageNames.CSharp)]
     public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
     {
-        private const string SubscribeAttr = "LayerBase.Core.Event.SubscribeAttribute";
-        private const string SubscribeAsyncAttr = "LayerBase.Core.Event.SubscribeAsyncAttribute";
-        private const string SubscribeParallelAttr = "LayerBase.Core.Event.SubscribeParallelAttribute";
-        private const string SubscribeDelayAttr = "LayerBase.Core.Event.SubscribeDelayAttribute";
-
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
-            var classDeclarations = context.SyntaxProvider
-                .CreateSyntaxProvider(
-                    predicate: static (s, _) => s is ClassDeclarationSyntax,
-                    transform: static (ctx, _) => GetClassWithAttributes(ctx))
-                .Where(static c => c is not null);
+            // 1. 极速过滤：只看是不是 partial 类。
+            // 不再使用 node.ToString()，那太慢了。
+            IncrementalValuesProvider<ClassMeta> classProvider = context.SyntaxProvider.CreateSyntaxProvider(
+                predicate: static (node, _) => node is ClassDeclarationSyntax cds && cds.Modifiers.Any(SyntaxKind.PartialKeyword),
+                transform: static (ctx, _) => GetClassMeta(ctx))
+                .Where(static m => m != null)!;
 
-            var compilationAndClasses = context.CompilationProvider.Combine(classDeclarations.Collect());
-
-            context.RegisterSourceOutput(compilationAndClasses, static (spc, source) =>
+            // 2. 真正的增量输出：按类分发，不再 Combine 全量列表。
+            context.RegisterSourceOutput(classProvider, static (spc, meta) =>
             {
-                var compilation = source.Left;
-                var classes = source.Right;
-
-                foreach (var classSymbol in classes.OfType<INamedTypeSymbol>())
-                {
-                    GenerateAutoSubscribePartial(spc, compilation, classSymbol);
-                }
+                GenerateCode(spc, meta);
             });
         }
 
-        private static INamedTypeSymbol? GetClassWithAttributes(GeneratorSyntaxContext context)
+        private static ClassMeta? GetClassMeta(GeneratorSyntaxContext ctx)
         {
-            var classDeclaration = (ClassDeclarationSyntax)context.Node;
-            foreach (var member in classDeclaration.Members)
+            var cds = (ClassDeclarationSyntax)ctx.Node;
+            var symbol = ctx.SemanticModel.GetDeclaredSymbol(cds) as INamedTypeSymbol;
+            if (symbol == null) return null;
+
+            bool implementsCtx = symbol.AllInterfaces.Any(i => i.Name.Contains("ILayerContext"));
+            var handlers = new List<HandlerInfo>();
+            var delayProps = new List<string>();
+
+            // 扫描成员
+            foreach (var member in symbol.GetMembers())
             {
-                if (member.AttributeLists.Count > 0)
+                if (member is IMethodSymbol method)
                 {
-                    var symbol = context.SemanticModel.GetDeclaredSymbol(classDeclaration);
-                    return symbol as INamedTypeSymbol;
+                    foreach (var attr in method.GetAttributes())
+                    {
+                        var attrName = attr.AttributeClass?.Name ?? "";
+                        if (attrName.StartsWith("Subscribe"))
+                        {
+                            var evtParam = method.Parameters.FirstOrDefault();
+                            if (evtParam != null)
+                            {
+                                var evtStr = evtParam.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                var deps = new List<string>();
+                                
+                                // 只有同步订阅才扫描方法体依赖
+                                if (!attrName.Contains("Async") && !attrName.Contains("Delay"))
+                                {
+                                    ScanBody(ctx.SemanticModel, method, evtStr, deps);
+                                }
+                                
+                                handlers.Add(new HandlerInfo(method.Name, attrName, evtStr, deps));
+                            }
+                        }
+                    }
                 }
+                else if (member is IPropertySymbol prop)
+                {
+                    if (prop.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("SubscribeDelay") == true))
+                    {
+                        if (prop.Type is INamedTypeSymbol ts && ts.IsGenericType)
+                        {
+                            delayProps.Add($"{prop.Name}|{ts.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}");
+                        }
+                    }
+                }
+            }
+
+            if (handlers.Count > 0 || delayProps.Count > 0 || implementsCtx)
+            {
+                return new ClassMeta(
+                    symbol.Name, 
+                    symbol.ContainingNamespace.ToDisplayString(), 
+                    symbol.ToDisplayString(),
+                    implementsCtx,
+                    handlers,
+                    delayProps);
             }
             return null;
         }
 
-        private static void GenerateAutoSubscribePartial(SourceProductionContext spc, Compilation compilation, INamedTypeSymbol classSymbol)
+        private static void GenerateCode(SourceProductionContext spc, ClassMeta meta)
         {
-            var methods = classSymbol.GetMembers().OfType<IMethodSymbol>().ToList();
-            var properties = classSymbol.GetMembers().OfType<IPropertySymbol>().ToList();
-            var fields = classSymbol.GetMembers().OfType<IFieldSymbol>().ToList();
-
-            var bindings = new List<string>();
-            bool hasAny = false;
-
-            foreach (var method in methods)
-            {
-                foreach (var attr in method.GetAttributes())
-                {
-                    string? attrName = attr.AttributeClass?.ToDisplayString();
-                    if (attrName == SubscribeAttr)
-                    {
-                        if (ValidateSyncMethod(spc, method))
-                        {
-                            var eventType = method.Parameters[0].Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                            bindings.Add($"layer.Subscribe<{eventType}>({method.Name});");
-                            hasAny = true;
-                        }
-                    }
-                    else if (attrName == SubscribeAsyncAttr)
-                    {
-                        if (ValidateAsyncMethod(spc, method))
-                        {
-                            var eventType = method.Parameters[0].Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                            bindings.Add($"layer.SubscribeAsync<{eventType}>({method.Name});");
-                            hasAny = true;
-                        }
-                    }
-                    else if (attrName == SubscribeParallelAttr)
-                    {
-                        if (ValidateSyncMethod(spc, method))
-                        {
-                            var eventType = method.Parameters[0].Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                            bindings.Add($"layer.SubscribeParallel<{eventType}>({method.Name});");
-                            hasAny = true;
-                        }
-                    }
-                }
-            }
-
-            foreach (var prop in properties)
-            {
-                if (prop.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == SubscribeDelayAttr))
-                {
-                    // Assume property is IDelayPublisher<T>
-                    var type = prop.Type as INamedTypeSymbol;
-                    if (type != null && type.IsGenericType && type.TypeArguments.Length == 1)
-                    {
-                        var eventType = type.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                        bindings.Add($"this.{prop.Name} = layer.SubscribeDelay<{eventType}>();");
-                        hasAny = true;
-                    }
-                }
-            }
-
-            if (!hasAny) return;
-
-            // Generate the partial class
-            var ns = classSymbol.ContainingNamespace.IsGlobalNamespace ? "" : $"namespace {classSymbol.ContainingNamespace.ToDisplayString()}\n{{";
-            var endNs = classSymbol.ContainingNamespace.IsGlobalNamespace ? "" : "}";
+            var sb = new StringBuilder();
+            sb.AppendLine("// <auto-generated />");
+            sb.AppendLine("using System;");
+            sb.AppendLine("using System.Collections.Generic;");
+            sb.AppendLine();
             
-            var code = $@"// <auto-generated />
-using LayerBase.Layers;
-using LayerBase.DI;
-using LayerBase.Core.Event;
-using LayerBase.Core.EventHandler;
+            if (meta.Namespace != "<global namespace>")
+            {
+                sb.AppendLine($"namespace {meta.Namespace}");
+                sb.AppendLine("{");
+            }
 
-{ns}
-    partial class {classSymbol.Name} : IInternalLayerContext, IAutoSubscribe
-    {{
-        private int __routeIndex = -1;
-        int IInternalLayerContext.LayerIndex {{ get => __routeIndex; set => __routeIndex = value; }}
+            var interfaces = new List<string>();
+            if (meta.ImplementsLayerContext) interfaces.Add("global::LayerBase.DI.IInternalLayerContext");
+            if (meta.Handlers.Count > 0 || meta.DelayProps.Count > 0) interfaces.Add("global::LayerBase.DI.IAutoSubscribe");
+            
+            var interfaceDecl = interfaces.Count > 0 ? " : " + string.Join(", ", interfaces) : "";
 
-        void IAutoSubscribe.AutoBind(Layer layer)
-        {{
-            {string.Join("\n            ", bindings)}
-        }}
-    }}
-{endNs}";
+            sb.AppendLine($"    partial class {meta.ClassName}{interfaceDecl}");
+            sb.AppendLine("    {");
 
-            spc.AddSource($"{classSymbol.ToDisplayString().Replace(".", "_")}.AutoSubscribe.g.cs", SourceText.From(code, Encoding.UTF8));
+            if (meta.ImplementsLayerContext)
+            {
+                sb.AppendLine("        private int __routeIndex = -1;");
+                sb.AppendLine("        int global::LayerBase.DI.IInternalLayerContext.LayerIndex { get => __routeIndex; set => __routeIndex = value; }");
+            }
+
+            if (meta.Handlers.Count > 0 || meta.DelayProps.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("        void global::LayerBase.DI.IAutoSubscribe.AutoBind(global::LayerBase.Layers.Layer layer)");
+                sb.AppendLine("        {");
+                foreach (var h in meta.Handlers)
+                {
+                    string reg = h.Attr.Contains("Async") ? "SubscribeAsync" : (h.Attr.Contains("Parallel") ? "SubscribeParallel" : "Subscribe");
+                    sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
+                }
+                foreach (var p in meta.DelayProps)
+                {
+                    var parts = p.Split('|');
+                    sb.AppendLine($"            this.{parts[0]} = layer.SubscribeDelay<{parts[1]}>();");
+                }
+                sb.AppendLine("        }");
+
+                sb.AppendLine();
+                sb.AppendLine("        global::System.Collections.Generic.IEnumerable<global::LayerBase.DI.EventDependency> global::LayerBase.DI.IAutoSubscribe.GetEventDependencies()");
+                sb.AppendLine("        {");
+                foreach (var h in meta.Handlers)
+                {
+                    foreach (var d in h.Deps) sb.AppendLine($"            {d}");
+                }
+                sb.AppendLine("            yield break;");
+                sb.AppendLine("        }");
+            }
+
+            sb.AppendLine("    }");
+            if (meta.Namespace != "<global namespace>") sb.AppendLine("}");
+
+            spc.AddSource($"{meta.Display.Replace(".", "_")}.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
         }
 
-        private static bool ValidateSyncMethod(SourceProductionContext spc, IMethodSymbol method)
+        private static void ScanBody(SemanticModel model, IMethodSymbol handler, string srcEvt, List<string> deps)
         {
-            if (method.Parameters.Length != 1)
+            var syntax = handler.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as MethodDeclarationSyntax;
+            var body = (SyntaxNode?)syntax?.Body ?? syntax?.ExpressionBody;
+            if (body == null) return;
+
+            foreach (var inv in body.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidParameterCount, method.Locations[0], method.Name));
-                return false;
+                // 仅扫描可能是 Send 系列的调用
+                var exprStr = inv.Expression.ToString();
+                if (exprStr.Contains("Send"))
+                {
+                    var info = model.GetSymbolInfo(inv);
+                    var sym = info.Symbol as IMethodSymbol ?? info.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault();
+                    if (sym?.IsGenericMethod == true && sym.Name.StartsWith("Send"))
+                    {
+                        var target = sym.TypeArguments.FirstOrDefault()?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        if (target != null)
+                            deps.Add($"yield return new global::LayerBase.DI.EventDependency(typeof({srcEvt}), typeof({target}));");
+                    }
+                }
             }
-            if (method.Parameters[0].RefKind != RefKind.In)
-            {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MissingInModifier, method.Parameters[0].Locations[0], method.Parameters[0].Name));
-                return false;
-            }
-            // Check return type for EventHandledState
-            if (method.ReturnType.Name != "EventHandledState" && method.ReturnType.SpecialType != SpecialType.System_Void)
-            {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidReturnTypeSync, method.Locations[0], method.Name));
-                return false;
-            }
-            return true;
         }
 
-        private static bool ValidateAsyncMethod(SourceProductionContext spc, IMethodSymbol method)
+        private class ClassMeta
         {
-            if (method.Parameters.Length != 1)
+            public string ClassName { get; }
+            public string Namespace { get; }
+            public string Display { get; }
+            public bool ImplementsLayerContext { get; }
+            public List<HandlerInfo> Handlers { get; }
+            public List<string> DelayProps { get; }
+
+            public ClassMeta(string name, string ns, string display, bool ctx, List<HandlerInfo> handlers, List<string> delayProps)
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidParameterCount, method.Locations[0], method.Name));
-                return false;
+                ClassName = name; Namespace = ns; Display = display; ImplementsLayerContext = ctx; Handlers = handlers; DelayProps = delayProps;
             }
-            var returnType = method.ReturnType.ToDisplayString();
-            if (!returnType.Contains("LBTask"))
-            {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidReturnTypeAsync, method.Locations[0], method.Name));
-                return false;
-            }
-            return true;
         }
 
-        private static class Diagnostics
+        private class HandlerInfo
         {
-            private const string Category = "ManagerAutoSubscribeGenerator";
-
-            public static readonly DiagnosticDescriptor InvalidParameterCount = new DiagnosticDescriptor(
-                "LBG201", "Invalid parameter count", "Event handler '{0}' must have exactly one parameter.", Category, DiagnosticSeverity.Error, true);
-
-            public static readonly DiagnosticDescriptor MissingInModifier = new DiagnosticDescriptor(
-                "LBG202", "Missing 'in' modifier", "Parameter '{0}' must have the 'in' modifier for synchronous event handlers.", Category, DiagnosticSeverity.Error, true);
-
-            public static readonly DiagnosticDescriptor InvalidReturnTypeSync = new DiagnosticDescriptor(
-                "LBG203", "Invalid return type", "Synchronous event handler '{0}' must return void or EventHandledState.", Category, DiagnosticSeverity.Error, true);
-
-            public static readonly DiagnosticDescriptor InvalidReturnTypeAsync = new DiagnosticDescriptor(
-                "LBG204", "Invalid return type", "Async event handler '{0}' must return LBTask.", Category, DiagnosticSeverity.Error, true);
+            public string Name { get; }
+            public string Attr { get; }
+            public string Evt { get; }
+            public List<string> Deps { get; }
+            public HandlerInfo(string n, string a, string e, List<string> d) { Name = n; Attr = a; Evt = e; Deps = d; }
         }
     }
 }

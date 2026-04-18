@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.LayerHub;
@@ -5,6 +6,56 @@ using LayerBase.Layers;
 using NUnit.Framework;
 
 namespace EventsTest;
+
+// --- Test Events ---
+public struct OrderEvent { }
+public struct CapabilityEvent { }
+
+// --- Test Managers (Top Level) ---
+
+public partial class TestManagerA : ILayerContext
+{
+    private readonly List<string> _trace;
+    public TestManagerA(List<string> trace) => _trace = trace;
+
+    [Subscribe]
+    public EventHandledState OnOrder(in OrderEvent e)
+    {
+        _trace.Add("ManagerA");
+        return EventHandledState.Continue;
+    }
+}
+
+public partial class TestManagerB : ILayerContext
+{
+    private readonly List<string> _trace;
+    public TestManagerB(List<string> trace) => _trace = trace;
+
+    [Subscribe]
+    public EventHandledState OnOrder(in OrderEvent e)
+    {
+        _trace.Add("ManagerB");
+        return EventHandledState.Continue;
+    }
+}
+
+public partial class TestManagerC : ILayerContext
+{
+    private readonly List<string> _trace;
+    public TestManagerC(List<string> trace) => _trace = trace;
+
+    [Subscribe]
+    public EventHandledState OnCap(in CapabilityEvent e)
+    {
+        _trace.Add("HandledByManager");
+        return EventHandledState.Continue;
+    }
+
+    public void DoLocalSend()
+    {
+        this.SendLocal(new CapabilityEvent());
+    }
+}
 
 [TestFixture]
 public class ManagerAutoSubscriptionTests
@@ -21,17 +72,14 @@ public class ManagerAutoSubscriptionTests
     [Test]
     public void Subscriptions_Should_Follow_Registration_Order()
     {
-        var layer = new TestLayer();
+        var layer = new GameLayer();
         var service = new OrderTestService(_trace);
         layer.RegisterService(service);
         
-        // Build the layer. 
         LayerHub.CreateLayers().Push(layer).Build();
 
-        // Send a global event
         LayerHub.Send(new OrderEvent());
 
-        // Check sequence
         Assert.That(_trace, Is.EqualTo(new[] { "ManagerA", "ManagerB" }), 
             "Subscription order should match registration order in ConfigureServices");
     }
@@ -39,20 +87,19 @@ public class ManagerAutoSubscriptionTests
     [Test]
     public void Managers_Should_Inherit_Layer_Context_Capability()
     {
-        var layer = new TestLayer();
+        var layer = new GameLayer();
         var service = new CapabilityTestService(_trace);
         layer.RegisterService(service);
 
         LayerHub.CreateLayers().Push(layer).Build();
 
-        // Get the manager and trigger a local send
-        var manager = layer.GetService<TestManager>();
+        var manager = layer.GetService<TestManagerC>();
         manager.DoLocalSend();
 
         Assert.That(_trace, Is.EqualTo(new[] { "HandledByManager" }));
     }
 
-    private class TestLayer : Layer { }
+    private class GameLayer : Layer { }
 
     private class OrderTestService : IService
     {
@@ -61,9 +108,9 @@ public class ManagerAutoSubscriptionTests
 
         public void ConfigureServices(IServiceCollection services)
         {
-            // Register in specific order
-            services.AddSingleton(new TestManagerA(_trace));
-            services.AddSingleton(new TestManagerB(_trace));
+            // 使用工厂模式注册，解决构造函数注入 Trace 的问题
+            services.AddSingleton<TestManagerA>(new TestManagerA(_trace));
+            services.AddSingleton<TestManagerB>(new TestManagerB(_trace));
         }
     }
 
@@ -73,58 +120,7 @@ public class ManagerAutoSubscriptionTests
         public CapabilityTestService(List<string> trace) => _trace = trace;
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddSingleton(new TestManager(_trace));
+            services.AddSingleton<TestManagerC>(new TestManagerC(_trace));
         }
     }
-
-    // --- Mocking Generator Output ---
-
-    private class TestManagerA : ILayerContext, IAutoSubscribe
-    {
-        private readonly List<string> _trace;
-        public TestManagerA(List<string> trace) => _trace = trace;
-        void IAutoSubscribe.AutoBind(Layer layer)
-        {
-            layer.Subscribe<OrderEvent>((in OrderEvent _) => {
-                _trace.Add("ManagerA");
-                return EventHandledState.Continue;
-            });
-        }
-    }
-
-    private class TestManagerB : ILayerContext, IAutoSubscribe
-    {
-        private readonly List<string> _trace;
-        public TestManagerB(List<string> trace) => _trace = trace;
-        void IAutoSubscribe.AutoBind(Layer layer)
-        {
-            layer.Subscribe<OrderEvent>((in OrderEvent _) => {
-                _trace.Add("ManagerB");
-                return EventHandledState.Continue;
-            });
-        }
-    }
-
-    private class TestManager : ILayerContext, IAutoSubscribe
-    {
-        private readonly List<string> _trace;
-        public TestManager(List<string> trace) => _trace = trace;
-
-        void IAutoSubscribe.AutoBind(Layer layer)
-        {
-            layer.Subscribe<CapabilityEvent>((in CapabilityEvent _) => {
-                _trace.Add("HandledByManager");
-                return EventHandledState.Continue;
-            });
-        }
-
-        public void DoLocalSend()
-        {
-            // Verifying the extension method is accessible and works
-            this.SendLocal(new CapabilityEvent());
-        }
-    }
-
-    public struct OrderEvent { }
-    public struct CapabilityEvent { }
 }

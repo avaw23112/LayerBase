@@ -1,5 +1,6 @@
 using System.Reflection;
 using LayerBase.Core;
+using NUnit.Framework;
 
 namespace EventsTest;
 

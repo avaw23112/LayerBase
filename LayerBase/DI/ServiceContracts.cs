@@ -38,7 +38,7 @@ namespace LayerBase.DI
     /// <summary>
     /// 内部契约：用于 DI 容器自动注入层级上下文信息，避开字典查找。
     /// </summary>
-    internal interface IInternalLayerContext : ILayerContext
+    public interface IInternalLayerContext : ILayerContext
     {
         int LayerIndex { get; set; }
     }
@@ -49,11 +49,26 @@ namespace LayerBase.DI
     }
 
     /// <summary>
-    /// 自动订阅行为接口：由 Source Generator 自动生成，用于在构建期执行订阅连线。
+    /// 事件依赖关系，描述处理 Source 事件时可能会同步触发 Target 事件。
+    /// </summary>
+    public readonly struct EventDependency
+    {
+        public readonly Type Source;
+        public readonly Type Target;
+        public EventDependency(Type source, Type target) { Source = source; Target = target; }
+    }
+
+    /// <summary>
+    /// 自动订阅行为接口：由 Source Generator 自动生成，用于在构建期执行订阅连线与依赖审计。
     /// </summary>
     public interface IAutoSubscribe
     {
         void AutoBind(Layer layer);
+
+        /// <summary>
+        /// 获取当前组件中声明的同步事件依赖关系（用于启动期环路审计）。
+        /// </summary>
+        IEnumerable<EventDependency> GetEventDependencies();
     }
 
     internal static class ServiceLayerBinder

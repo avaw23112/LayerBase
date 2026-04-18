@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using LayerBase.Layers;
 
@@ -11,8 +12,9 @@ namespace LayerBase.DI
     public sealed class ServiceProvider : IServiceProvider, IDisposable
     {
         private readonly ConcurrentDictionary<Type, ServiceDescriptor> _map;
-        private readonly ConcurrentDictionary<Type, Lazy<object>> _singletons = new ConcurrentDictionary<Type, Lazy<object>>();
+        private readonly ConcurrentDictionary<Type, Lazy<object>> _instances = new();
         private readonly Layer? _ownerLayer;
+        
         private static readonly ServiceProvider _root = new ServiceProvider();
         private int _disposed;
 
@@ -34,30 +36,30 @@ namespace LayerBase.DI
             {
                 if (d.Lifetime == ServiceLifetime.Singleton)
                 {
+                    // 真正的全局单例进 Root
                     _root._map[d.ServiceType] = d;
                 }
                 else
                 {
+                    // 局部单例 (Scoped) 或瞬时态进局部 Map
                     _map[d.ServiceType] = d;
                 }
             }
         }
 
-        /// <summary>
-        /// 严格按照注册顺序初始化所有服务，并激活它们的自动订阅。
-        /// </summary>
-        internal void InitializeAutoSubscriptions(Layer owner, IEnumerable<ServiceDescriptor> orderedDescriptors)
+        internal List<IAutoSubscribe> InitializeAutoSubscriptions(Layer owner, IEnumerable<ServiceDescriptor> orderedDescriptors)
         {
+            var discovered = new List<IAutoSubscribe>();
             foreach (var desc in orderedDescriptors)
             {
-                // 强制解析实例（如果是单例则会创建，并自动染色）
                 var instance = GetService(desc.ServiceType);
                 if (instance is IAutoSubscribe auto)
                 {
-                    // 激活由 Generator 生成的订阅逻辑
                     auto.AutoBind(owner);
+                    discovered.Add(auto);
                 }
             }
+            return discovered;
         }
 
         public object? GetService(Type serviceType)
@@ -78,14 +80,19 @@ namespace LayerBase.DI
             if (IsDisposed) throw new ObjectDisposedException(nameof(ServiceProvider));
             if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
 
-            if (!_map.TryGetValue(serviceType, out var desc))
+            // 1. 尝试从本地 Map 解析 (Scoped, Transient, Instance)
+            if (_map.TryGetValue(serviceType, out var desc))
             {
-                if (_root != this && _root._map.TryGetValue(serviceType, out var parentDesc))
-                    return _root.Resolve(parentDesc, callstack);
-                return null;
+                return Resolve(desc, callstack);
             }
 
-            return Resolve(desc, callstack);
+            // 2. 尝试从 Root 解析 (Global Singleton)
+            if (this != _root && _root._map.TryGetValue(serviceType, out var parentDesc))
+            {
+                return _root.Resolve(parentDesc, callstack);
+            }
+
+            return null;
         }
 
         private object Resolve(ServiceDescriptor desc, HashSet<Type> callstack)
@@ -93,13 +100,13 @@ namespace LayerBase.DI
             var instance = desc.Lifetime switch
             {
                 ServiceLifetime.Instance => desc.Instance!,
-                ServiceLifetime.Singleton => _root.GetOrCreateSingleton(desc, callstack),
+                ServiceLifetime.Singleton => GetOrCreateCached(desc, callstack),
+                ServiceLifetime.Scoped => GetOrCreateCached(desc, callstack),
                 ServiceLifetime.Transient => CreateInstance(desc, callstack),
-                ServiceLifetime.Scoped => GetOrCreateSingleton(desc, callstack),
                 _ => throw new NotSupportedException($"Unsupported lifetime {desc.Lifetime}")
             };
             
-            // 只要是从本容器（Layer 绑定）解析出来的对象，就自动绑定到该层，解锁 this.SendLocal 等 API
+            // 只要是从本容器解析出来的对象，就自动绑定到该层
             if (_ownerLayer != null)
             {
                 ServiceLayerBinder.Attach(instance, _ownerLayer);
@@ -108,9 +115,10 @@ namespace LayerBase.DI
             return instance;
         }
 
-        private object GetOrCreateSingleton(ServiceDescriptor desc, HashSet<Type> callstack)
+        private object GetOrCreateCached(ServiceDescriptor desc, HashSet<Type> callstack)
         {
-            var lazy = _singletons.GetOrAdd(desc.ServiceType, _ =>
+            // 注意：Singleton 在 _root 实例中调用此方法，Scoped 在局部实例中调用
+            var lazy = _instances.GetOrAdd(desc.ServiceType, _ =>
             {
                 return new Lazy<object>(
                     () => CreateInstance(desc, callstack),
@@ -123,7 +131,7 @@ namespace LayerBase.DI
             }
             catch
             {
-                _singletons.TryRemove(desc.ServiceType, out _);
+                _instances.TryRemove(desc.ServiceType, out _);
                 throw;
             }
         }
@@ -193,7 +201,7 @@ namespace LayerBase.DI
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            foreach (var lazy in _singletons.Values)
+            foreach (var lazy in _instances.Values)
             {
                 if (!lazy.IsValueCreated) continue;
                 if (lazy.Value is IDisposable disposable)

@@ -103,6 +103,8 @@ namespace LayerBase.Layers
             }
         }
 
+        public List<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = new List<IAutoSubscribe>();
+
         /// <summary>
         /// 构建 Layer 级 DI 容器，并激活所有自动订阅。
         /// </summary>
@@ -113,8 +115,19 @@ namespace LayerBase.Layers
             var oldProvider = Interlocked.Exchange(ref m_serviceProvider, newProvider);
             oldProvider?.Dispose();
 
-            // 核心步骤：严格按注册顺序触发所有 Manager 的自动绑定
-            newProvider.InitializeAutoSubscriptions(this, descriptors);
+            // 1. 严格按注册顺序触发所有 Manager 的自动绑定
+            DiscoveredSubscribers = newProvider.InitializeAutoSubscriptions(this, descriptors);
+
+            // 2. 扫描并缓存所有实现了 IUpdate 的服务实例，用于后续 Pump
+            m_serviceUpdates.Clear();
+            foreach (var desc in descriptors)
+            {
+                var instance = newProvider.GetService(desc.ServiceType);
+                if (instance is IUpdate updatable)
+                {
+                    m_serviceUpdates.Add(updatable);
+                }
+            }
         }
 
         internal void SetRouteIndex(int routeIndex)

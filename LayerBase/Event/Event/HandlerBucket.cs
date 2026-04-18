@@ -9,10 +9,17 @@ namespace LayerBase.Core.Event
 {
     internal interface IHandlerBucket { }
 
+    /// <summary>
+    /// 熔断器：用于物理级屏蔽发生故障的 Handler。
+    /// </summary>
     internal sealed class HandlerCircuit
     {
         private int _disabled;
         public bool IsDisabled => Volatile.Read(ref _disabled) == 1;
+        
+        /// <summary>
+        /// 尝试熔断。如果已经是熔断状态，返回 false。
+        /// </summary>
         public bool TryDisable() => Interlocked.Exchange(ref _disabled, 1) == 0;
     }
 
@@ -20,6 +27,8 @@ namespace LayerBase.Core.Event
     {
         private static readonly string s_eventFullName = typeof(T).FullName ?? typeof(T).Name;
         private readonly object _lock = new();
+        
+        // 使用数组以获得极致的遍历性能
         private OrderedHandlerEntry<T>[] _orderedHandlers = Array.Empty<OrderedHandlerEntry<T>>();
         private UnorderedHandlerEntry<T>[] _unorderedHandlers = Array.Empty<UnorderedHandlerEntry<T>>();
         private ParallelHandlerEntry<T>[] _parallelHandlers = Array.Empty<ParallelHandlerEntry<T>>();
@@ -113,6 +122,7 @@ namespace LayerBase.Core.Event
             if (total == 0) return EventHandledState.Continue;
 
             var ordered = _orderedHandlers;
+            // 快速路径：仅一个有序 Handler 时避开 FullDispatch 复杂开销
             if (total == 1 && ordered.Length == 1)
             {
                 return InvokeOrderedDirect(layerIndex, in value, in ordered[0]);
@@ -123,21 +133,22 @@ namespace LayerBase.Core.Event
 
         private EventHandledState DispatchFullDirect(int layerIndex, in T value)
         {
-            var parallelHandlers = Volatile.Read(ref _parallelHandlers);
-            var unorderedHandlers = Volatile.Read(ref _unorderedHandlers);
-            var orderedHandlers = Volatile.Read(ref _orderedHandlers);
+            var parallel = Volatile.Read(ref _parallelHandlers);
+            var unordered = Volatile.Read(ref _unorderedHandlers);
+            var ordered = Volatile.Read(ref _orderedHandlers);
 
-            if (parallelHandlers.Length > 0)
+            // 1. 并行分发
+            for (int i = 0; i < parallel.Length; i++)
             {
-                var @event = new Event<T>(value);
-                for (int i = 0; i < parallelHandlers.Length; i++)
-                    parallelHandlers[i].Enqueue(layerIndex, in @event);
+                parallel[i].Enqueue(layerIndex, in value);
             }
 
-            for (int i = 0; i < unorderedHandlers.Length; i++)
+            // 2. 无序分发 (快速)
+            for (int i = 0; i < unordered.Length; i++)
             {
-                var handler = unorderedHandlers[i];
+                var handler = unordered[i];
                 if (handler.Circuit.IsDisabled) continue;
+
                 try
                 {
                     if (handler.IsAsync)
@@ -147,16 +158,20 @@ namespace LayerBase.Core.Event
                 }
                 catch (Exception e)
                 {
+                    // 核心修复：一旦抛出异常，立即触发永久熔断，且本次分发直接跳过该 Handler
                     EventMetaDataHandler.OnEventExpectation(value, e);
                     if (handler.Circuit.TryDisable())
+                    {
                         LayerBase.LayerHub.LayerHub.ReportLayerEventError(layerIndex, handler.FullName, s_eventFullName, e);
+                    }
                 }
             }
 
+            // 3. 有序分发 (拦截)
             bool handledAndContinueSeen = false;
-            for (int i = 0; i < orderedHandlers.Length; i++)
+            for (int i = 0; i < ordered.Length; i++)
             {
-                var result = InvokeOrderedDirect(layerIndex, in value, in orderedHandlers[i]);
+                var result = InvokeOrderedDirect(layerIndex, in value, in ordered[i]);
                 if (result == EventHandledState.Handled) return EventHandledState.Handled;
                 if (result == EventHandledState.HandledAndContinue) handledAndContinueSeen = true;
             }
@@ -167,7 +182,9 @@ namespace LayerBase.Core.Event
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private EventHandledState InvokeOrderedDirect(int layerIndex, in T value, in OrderedHandlerEntry<T> handler)
         {
+            // 物理级检查：如果已熔断，0 开销跳过
             if (handler.Circuit.IsDisabled) return EventHandledState.Continue;
+            
             try
             {
                 if (handler.IsAsync)
@@ -179,13 +196,19 @@ namespace LayerBase.Core.Event
             }
             catch (Exception e)
             {
+                // 核心修复：同步有序 Handler 崩溃时，记录并永久禁用
                 EventMetaDataHandler.OnEventExpectation(value, e);
                 if (handler.Circuit.TryDisable())
+                {
                     LayerBase.LayerHub.LayerHub.ReportLayerEventError(layerIndex, handler.FullName, s_eventFullName, e);
+                }
                 return EventHandledState.Continue;
             }
         }
 
+        /// <summary>
+        /// 异步故障观测器：用于监控异步 LBTask 的最终结果。
+        /// </summary>
         private sealed class AsyncFaultContext
         {
             private static readonly ConcurrentBag<AsyncFaultContext> s_pool = new();
@@ -214,9 +237,12 @@ namespace LayerBase.Core.Event
                 try { _task.GetAwaiter().GetResult(); }
                 catch (Exception ex)
                 {
+                    // 异步崩溃：同样触发熔断
                     EventMetaDataHandler.OnEventExpectation(_payload, ex);
-                    if (_circuit!.TryDisable())
+                    if (_circuit != null && _circuit.TryDisable())
+                    {
                         LayerBase.LayerHub.LayerHub.ReportLayerEventError(_layerIndex, _handlerFullName!, s_eventFullName, ex);
+                    }
                 }
                 finally
                 {
@@ -282,14 +308,15 @@ namespace LayerBase.Core.Event
         private ParallelHandlerEntry(ParallelSubscriptionQueue<T> subscriptionQueue) { _subscriptionQueue = subscriptionQueue; }
         public static ParallelHandlerEntry<T> Create(IEventHandler<T> handler, Action<int, string, string, Exception> reportError) => new(new ParallelSubscriptionQueue<T>(handler, reportError));
         public static ParallelHandlerEntry<T> Create(EventHandleDelegate<T> handler, Action<int, string, string, Exception> reportError) => new(new ParallelSubscriptionQueue<T>(handler, reportError));
-        public void Enqueue(int layerIndex, in Event<T> @event) => _subscriptionQueue.Enqueue(layerIndex, in @event);
+        
+        public void Enqueue(int layerIndex, in T value) => _subscriptionQueue.Enqueue(layerIndex, in value);
         public bool TryMatch(IEventHandler<T> handler) => _subscriptionQueue.TryMatch(handler);
         public bool TryMatch(EventHandleDelegate<T> handler) => _subscriptionQueue.TryMatch(handler);
     }
 
     internal sealed class ParallelSubscriptionQueue<T> where T : struct
     {
-        private readonly ConcurrentQueue<Event<T>> _events = new();
+        private readonly ConcurrentQueue<T> _events = new();
         private readonly IEventHandler<T>? _syncHandler;
         private readonly EventHandleDelegate<T>? _syncDelegate;
         private readonly HandlerCircuit _circuit;
@@ -313,10 +340,10 @@ namespace LayerBase.Core.Event
             _fullName = GetHandlerFullName(handler); _eventFullName = typeof(T).FullName ?? typeof(T).Name; _drainAction = Drain;
         }
 
-        public void Enqueue(int layerIndex, in Event<T> @event) 
+        public void Enqueue(int layerIndex, in T value) 
         { 
             _layerIndex = layerIndex;
-            if (!_circuit.IsDisabled) { _events.Enqueue(@event); TryScheduleDrain(); } 
+            if (!_circuit.IsDisabled) { _events.Enqueue(value); TryScheduleDrain(); } 
         }
         public bool TryMatch(IEventHandler<T> handler) => _syncHandler != null && EqualityComparer<IEventHandler<T>>.Default.Equals(_syncHandler, handler);
         public bool TryMatch(EventHandleDelegate<T> handler) => _syncDelegate != null && Equals(_syncDelegate, handler);
@@ -335,13 +362,13 @@ namespace LayerBase.Core.Event
         {
             try
             {
-                while (_events.TryDequeue(out var @event))
+                while (_events.TryDequeue(out var payload))
                 {
                     if (_circuit.IsDisabled) { ClearPending(); break; }
-                    try { if (_syncHandler != null) _syncHandler.Deal(in @event.Value); else _syncDelegate!(in @event.Value); }
+                    try { if (_syncHandler != null) _syncHandler.Deal(in payload); else _syncDelegate!(in payload); }
                     catch (Exception e)
                     {
-                        EventMetaDataHandler.OnEventExpectation(@event.Value, e);
+                        EventMetaDataHandler.OnEventExpectation(payload, e);
                         if (_circuit.TryDisable()) 
                             _reportError(_layerIndex, _fullName, _eventFullName, e);
                         ClearPending(); break;
