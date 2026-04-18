@@ -1,117 +1,147 @@
-# 🚀 LayerBase: 下一代高性能 C# 游戏开发全能架构框架
+# 🚀 LayerBase: 高性能一体化游戏架构总线
 
-**LayerBase** 是一款专为 Godot、Unity 等 C# 驱动的游戏引擎设计的核心架构基座。它打破了传统开发中模块化、依赖注入与事件系统割裂的状态，将 **项目组织（Layering）**、**轻量级 DI 容器**、**异步任务（LBTask）** 与 **超极速事件总线** 深度融合。
-
-针对大型游戏项目中的“事件风暴”与“复杂依赖网”，LayerBase 提供了一个极简、高性能且时序完全确定的通讯底座。
+**LayerBase** 是一款专为 Godot、Unity 等 C# 驱动的游戏引擎设计的“四合一”架构框架。它打破了层级组织、依赖注入与事件通讯的界限，提供了一个**极致性能、时序确定、零空转损耗**的通讯底座。
 
 ---
 
-## 🌟 核心特性
+## ⚡ 性能王牌：百万级事件总线
 
-*   **📦 一体化集成**：告别碎片化插件，一个框架解决模块解耦、依赖注入与异步通讯。
-*   **⚡ 极致分发性能**：基于位图跳转（Bitmask）与硬件加速指令，同步分发吞吐量平均达 **25,000,000+ TPS**。
-*   **🪄 声明式开发**：配合 **Source Generator**，使用 `[Subscribe]` 等特性即可完成自动连线，无需手动注册。
-*   **🔄 严格时序保证**：事件注册顺序严格对齐配置顺序，彻底消灭异步环境下的执行顺序陷阱。
-*   **💎 零损耗空转**：采用活跃层级屏蔽技术，自动跳过空闲层级，Pump 开销低至 **260 纳秒**。
-*   **🔋 内存零压力**：全链路采用懒加载（Lazy Loading）与分段对象池，稳态运行下实现 **Zero-GC**。
+LayerBase 的核心竞争力在于其**性能触及天花板的事件分发引擎**。通过位图跳转（Bitmask）与零查找字段注入技术，它彻底消灭了分发路径上的所有字典查找与结构体包装开销。
 
----
-
-## 📊 性能表现：突破“音障”
-
-LayerBase 专为高压事件流优化，成功通过了 **“10,000 个同步事件 1ms 内分发”** 的严苛挑战。
-
-| 指标 (每 1,000,000 次操作) | 表现数据 | 平均延迟 (单次) |
-| :--- | :--- | :--- |
-| **同步广播 (Sync Global)** | **~25,140,000 TPS** | **~40 ns** |
-| **异步端到端 (Async Relay)** | **~3,070,000 TPS** | **~325 ns** |
-| **异步入队 (Enqueue)** | **~20,000,000 Ops** | **~50 ns** |
-| **空载循环 (Idle Pump)** | **~260 ns / Pump** | **≈ 0% CPU 占用** |
-
-> **开发建议**：即便你的系统每帧产生 1,000 个同步事件，LayerBase 也仅占用不到 0.1ms 的主线程时间，为你昂贵的渲染与 AI 逻辑留出充足余量。
+### 📊 性能实测 (Windows 10 / .NET 8)
+| 指标 | 表现数据 | 平均延迟 | 说明 |
+| :--- | :--- | :--- | :--- |
+| **同步分发 (Sync)** | **~25,140,000 TPS** | **~40 ns** | 适用于高频战斗、物理反馈 |
+| **1ms 极限挑战** | **10,000 个事件 / 0.4ms** | **达标** | 轻松承载极大规模事件风暴 |
+| **异步接力 (Async)** | **~3,070,000 TPS** | **~325 ns** | 跨层级分帧解耦的最佳实践 |
+| **空载损耗 (Idle)** | **~260 ns / Pump** | **≈ 0% CPU** | 64个空层级依然保持零占用 |
 
 ---
 
-## 🛠️ 快速上手
+## 🛠️ 功能详解与使用指南
 
-### 1. 声明事件与组件
-利用 `partial` 类与 `[Subscribe]` 特性，让业务逻辑自动感知层级上下文。
-
+### 1. 基础：定义事件 (Events)
+推荐使用 `struct` 定义事件，以获得极致的内存性能。
 ```csharp
 public struct DamageEvent { public int Value; }
+public struct LogEvent { public string Text; }
+```
 
-public partial class CombatManager : ILayerContext
+### 2. 核心：层级构建 (Layering)
+层级是逻辑的容器。通过 `LayerHub` 组织它们的上下游关系（如：UI层 -> 逻辑层 -> 物理层）。
+```csharp
+// 1. 定义具体层级
+public class GameLogicLayer : Layer { }
+public class UILayer : Layer { }
+
+// 2. 构建并初始化链条 (UI -> Logic)
+LayerHub.CreateLayers()
+    .Push(new UILayer())         
+    .Push(new GameLogicLayer())  
+    .Build();                    
+
+// 3. 在引擎 Update 中驱动
+public void OnUpdate(float delta) => LayerHub.Pump(delta);
+```
+
+### 3. 组织：服务系统与自动化注册 (OwnerLayer)
+Service 是功能的组织者。通过 `[OwnerLayer]` 特性，你可以将 Service 自动挂载到指定层级，**无需在 Layer 类中手动编写注册代码**。
+```csharp
+// 使用特性自动绑定到 GameLogicLayer
+[OwnerLayer(typeof(GameLogicLayer))]
+public class CombatService : IService
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // 关键规则：注册顺序 = 事件处理优先级顺序。
+        // MessageManager 会比 DamageManager 先处理同一个事件。
+        services.AddSingleton<MessageManager, MessageManager>();
+        services.AddSingleton<DamageManager, DamageManager>();
+    }
+}
+```
+
+### 4. 逻辑：智能插件 (Managers)
+Manager 是业务实现者。只需标记 `ILayerContext` 即可自动感知所属层级（由宿主 Service 决定），并解锁所有发送 API。
+```csharp
+// 必须标记 partial 供 Source Generator 植入代码
+public partial class DamageManager : ILayerContext
 {
     // 同步订阅：支持返回 EventHandledState 执行层级拦截
     [Subscribe]
     private EventHandledState OnDamage(in DamageEvent evt)
     {
-        Console.WriteLine($"处理伤害: {evt.Value}");
-        // 利用 ILayerContext 自动获得的 API 进行本地分发
-        this.SendLocal(new VfxEvent { Type = "Blood" });
+        // 【能力 1】本地分发：仅在当前层级内部流转
+        this.SendLocal(new LogEvent { Text = "本层内部逻辑" });
+        
+        // 【能力 2】向上冒泡：发送给当前层及所有上层
+        this.SendBubble(new LogEvent { Text = "通知 UI 层更新显示" });
+        
         return EventHandledState.Continue;
     }
-
-    [SubscribeAsync] // 异步接力处理，不阻塞主线程
-    private async LBTask OnLevelLoad(LevelLoadEvent evt) => await LBTask.Delay(100);
 }
 ```
 
-### 2. 配置服务 (注册即顺序)
-代码的物理编写顺序即为事件处理的优先级。想要谁先拦截事件，就把它排在前面。
+### 5. 通讯：API 矩阵 [Verb][Scope] 模式
+LayerBase 提供了一套清晰、一致的 API 命名规范：
 
-```csharp
-public class CombatService : IService
-{
-    public void ConfigureServices(IServiceCollection services)
-    {
-        services.AddSingleton<LogManager, LogManager>(); 
-        services.AddSingleton<CombatManager, CombatManager>(); 
-    }
-}
-```
-
-### 3. 初始化并运行
-```csharp
-// 构建层级链条
-var logicLayer = new GameLogicLayer();
-logicLayer.RegisterService(new CombatService());
-
-LayerHub.CreateLayers().Push(logicLayer).Build();
-
-// 在游戏引擎的每帧更新中调用
-public void OnUpdate(float deltaTime) => LayerHub.Pump(deltaTime);
-```
-
----
-
-## 📡 极简 API 设计: [Verb][Scope] 模式
-
-LayerBase 弃用了模糊的命名，采用统一的 **动作 + 作用域** 模式，让每一条信息的流向一目了然：
-
-| 作用域 (Scope) | 同步 (Sync) | 异步 (Async/分帧) | 延迟 (Delay) |
+| 作用域 (Scope) | 同步 (立即执行) | 异步 (分帧执行) | 说明 |
 | :--- | :--- | :--- | :--- |
-| **Local** (仅当前层) | `SendLocal` | `PostLocal` | `DelayLocal` |
-| **Bubble** (向上冒泡) | `SendBubble` | `PostBubble` | `DelayBubble` |
-| **Drop** (向下下沉) | `SendDrop` | `PostDrop` | `DelayDrop` |
-| **Global** (全局广播) | `SendGlobal` | `PostGlobal` | `DelayGlobal` |
+| **Local** | `SendLocal` | `PostLocal` | 仅限当前层级 |
+| **Bubble** | `SendBubble` | `PostBubble` | 向上冒泡（往 Layer 0 方向） |
+| **Drop** | `SendDrop` | `PostDrop` | 向下下沉（往底层方向） |
+| **Global** | `SendGlobal` | `PostGlobal` | 全局有序广播 |
+
+### 6. 异步：专用任务系统 (LBTask)
+**LBTask** 是专为游戏设计的轻量化异步任务模型，完美适配游戏 Pump 循环。
+```csharp
+[SubscribeAsync]
+private async LBTask OnLevelLoad(LevelLoadEvent evt)
+{
+    // 分帧等待：让出当前帧，下一帧继续执行
+    await LBTask.Yield();
+    
+    // 逻辑计时等待
+    await LBTask.Delay(TimeSpan.FromSeconds(1));
+    
+    // 异步全局广播
+    this.PostGlobal(new MsgEvent { Text = "异步处理完成" });
+}
+```
+
+### 7. 进阶：并行线路 (Parallel Handlers)
+对于耗时任务（IO/复杂计算），可使用脱离主线程的并行线路。
+```csharp
+// 1. 初始化后台调度器
+LayerHub.InitializeJobScheduler(workerCount: 4);
+
+// 2. 标记并行处理 (后台线程执行，不卡顿主帧)
+[SubscribeParallel]
+private EventHandledState OnHeavyCalculation(in DataEvent evt) => EventHandledState.Continue;
+```
 
 ---
 
-## 💎 核心技术黑科技
+## 💎 技术黑科技
 
-*   **Zero-Lookup Injection**：通过 Source Generator 在编译期将层级索引注入对象私有字段，彻底消灭运行时字典查找。
-*   **Hardware bit-scanning**：利用 CPU 原生指令 `TZCNT` 优化位图扫描，实现 $O(1)$ 的跳转速度。
-*   **Implicit Context Propagation**：利用 DI 容器解析链路，自动为 Manager 及其子对象“染色”所属层级信息。
-*   **Active-Only Pumping**：只有真正有待处理任务的层级才会进入 Pump 循环，大幅压低大规模项目中的背景开销。
+*   **Zero-Lookup Injection**：通过 Source Generator 在编译期将层级索引注入字段，分发时**零字典查找**。
+*   **Active-Only Pumping**：实时监控活跃度，**自动跳过空闲层级**，Pump 损耗仅 **260ns**。
+*   **Implicit Context Propagation**：利用 DI 解析链路，让 Manager 无感获得层级上下文。
+*   **Auto-Registration**：基于特性的 Service 发现机制，大幅简化层级组织代码。
 
 ---
 
 ## 📥 安装
 
-1.  克隆本项目或引用 `LayerBase.dll`。
-2.  在 `.csproj` 中将 `LayerBase.Generator` 添加为 `Analyzer`。
-3.  开启你的高性能开发之旅。
+1.  通过 NuGet 或引用 DLL 引入 `LayerBase`。
+2.  在 `.csproj` 中配置 **LayerBase.Generator** 作为 Analyzer (核心依赖)：
+    ```xml
+    <ItemGroup>
+        <ProjectReference Include="LayerBase.Generator.csproj" 
+                          OutputItemType="Analyzer" 
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+    ```
 
 ---
 **LayerBase** - *Powering the next generation of C# Game Architecture.*

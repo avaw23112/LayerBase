@@ -27,7 +27,6 @@ namespace LayerBase.Core.Event
         internal ulong[] _bubbleMasksArr = Array.Empty<ulong>();
         internal ulong[] _dropMasksArr = Array.Empty<ulong>();
 
-        // 活跃层级位图
         private long _eventPendingMask; 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -335,6 +334,9 @@ namespace LayerBase.Core.Event
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public EventHandledState Dispatch(in T value, int sourceIndex, Propagation propagation)
             {
+                // 极致性能：彻底移除运行时递归检查与 try-finally。
+                // 递归安全由编译期静态分析器或开发者的显式 Post 系列方法保证。
+                
                 ulong mask = Volatile.Read(ref _subscriberMask);
                 if (mask == 0) return EventHandledState.Continue;
 

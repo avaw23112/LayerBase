@@ -8,15 +8,20 @@
         <LangVersion>12</LangVersion>
         <Title>LayerBase</Title>
         <Authors>扭矩不足</Authors>
-        <Description>分层式DI依赖注入框架,附加层级式事件总线与异步事件总线支持</Description>
+        <Description>高性能一体化游戏架构框架。集成模块化层级、轻量级 DI、异步任务(LBTask)与超极速事件总线。专为 Godot/Unity 优化。</Description>
         <Copyright>MIT</Copyright>
-        <PackageProjectUrl>https://github.com/avaw23112/LayerBase.git</PackageProjectUrl>
-        <PackageLicenseUrl>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</PackageLicenseUrl>
-        <RepositoryUrl>https://github.com/avaw23112/LayerBase.git</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/avaw23112/LayerBase</PackageProjectUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryUrl>https://github.com/avaw23112/LayerBase</RepositoryUrl>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Version>1.0.1</Version>
+        <Version>1.1.0</Version>
     </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="..\README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
 
 
     <!-- 保留工具目录结构 -->
