@@ -1,13 +1,10 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Threading;
 using LayerBase.Core.EventCatalogue;
 
 namespace LayerBase.Event.EventMetaData;
 
 /// <summary>
-/// 事件元数据调度：注册、查询以及异常回调。
+///     事件元数据调度：注册、查询以及异常回调。
 /// </summary>
 internal static class EventMetaDataHandler
 {
@@ -15,36 +12,6 @@ internal static class EventMetaDataHandler
     private static readonly object s_lock = new();
     private static int s_registryVersion;
     private static readonly ConcurrentQueue<IEventExpectation> s_pendingExpectations = new();
-
-    private interface IEventExpectation
-    {
-        void Invoke();
-    }
-
-    private readonly struct EventExpectation<TEvent> : IEventExpectation where TEvent : struct
-    {
-        private readonly IEventMetaData _metaData;
-        private readonly TEvent _eventValue;
-        private readonly Exception _exception;
-
-        public EventExpectation(IEventMetaData metaData, in TEvent eventValue, Exception exception)
-        {
-            _metaData = metaData;
-            _eventValue = eventValue;
-            _exception = exception;
-        }
-
-        public void Invoke()
-        {
-            _metaData.OnEventExpectation(_eventValue, _exception);
-        }
-    }
-
-    private static class MetaDataCache<TEvent> where TEvent : struct
-    {
-        public static int Version = -1;
-        public static IEventMetaData? MetaData;
-    }
 
     internal static void Clear()
     {
@@ -62,7 +29,6 @@ internal static class EventMetaDataHandler
     internal static void PumpExpectations()
     {
         while (s_pendingExpectations.TryDequeue(out var expectation))
-        {
             try
             {
                 expectation.Invoke();
@@ -71,7 +37,6 @@ internal static class EventMetaDataHandler
             {
                 // Exception observers should not break the layer pump loop.
             }
-        }
     }
 
     public static void RegisterMetaData<EventType>(IEventMetaData metaData)
@@ -106,26 +71,50 @@ internal static class EventMetaDataHandler
     public static void OnEventExpectation<EventType>(EventType e, Exception exception) where EventType : struct
     {
         var metaData = ResolveMetaData<EventType>();
-        if (metaData == null)
-        {
-            return;
-        }
+        if (metaData == null) return;
 
         s_pendingExpectations.Enqueue(new EventExpectation<EventType>(metaData, in e, exception));
     }
 
     private static IEventMetaData? ResolveMetaData<EventType>() where EventType : struct
     {
-        int version = Volatile.Read(ref s_registryVersion);
-        if (MetaDataCache<EventType>.Version == version)
-        {
-            return MetaDataCache<EventType>.MetaData;
-        }
+        var version = Volatile.Read(ref s_registryVersion);
+        if (MetaDataCache<EventType>.Version == version) return MetaDataCache<EventType>.MetaData;
 
         var byType = Volatile.Read(ref s_metaDataByType);
         byType.TryGetValue(typeof(EventType), out var metaData);
         MetaDataCache<EventType>.MetaData = metaData;
         MetaDataCache<EventType>.Version = version;
         return metaData;
+    }
+
+    private interface IEventExpectation
+    {
+        void Invoke();
+    }
+
+    private readonly struct EventExpectation<TEvent> : IEventExpectation where TEvent : struct
+    {
+        private readonly IEventMetaData _metaData;
+        private readonly TEvent _eventValue;
+        private readonly Exception _exception;
+
+        public EventExpectation(IEventMetaData metaData, in TEvent eventValue, Exception exception)
+        {
+            _metaData = metaData;
+            _eventValue = eventValue;
+            _exception = exception;
+        }
+
+        public void Invoke()
+        {
+            _metaData.OnEventExpectation(_eventValue, _exception);
+        }
+    }
+
+    private static class MetaDataCache<TEvent> where TEvent : struct
+    {
+        public static int Version = -1;
+        public static IEventMetaData? MetaData;
     }
 }

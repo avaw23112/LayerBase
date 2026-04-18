@@ -1,22 +1,29 @@
-using System.Collections.Generic;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.LayerHub;
 using LayerBase.Layers;
-using NUnit.Framework;
 
 namespace EventsTest;
 
 // --- Test Events ---
-public struct OrderEvent { }
-public struct CapabilityEvent { }
+public struct OrderEvent
+{
+}
+
+public struct CapabilityEvent
+{
+}
 
 // --- Test Managers (Top Level) ---
 
 public partial class TestManagerA : ILayerContext
 {
     private readonly List<string> _trace;
-    public TestManagerA(List<string> trace) => _trace = trace;
+
+    public TestManagerA(List<string> trace)
+    {
+        _trace = trace;
+    }
 
     [Subscribe]
     public EventHandledState OnOrder(in OrderEvent e)
@@ -29,7 +36,11 @@ public partial class TestManagerA : ILayerContext
 public partial class TestManagerB : ILayerContext
 {
     private readonly List<string> _trace;
-    public TestManagerB(List<string> trace) => _trace = trace;
+
+    public TestManagerB(List<string> trace)
+    {
+        _trace = trace;
+    }
 
     [Subscribe]
     public EventHandledState OnOrder(in OrderEvent e)
@@ -42,7 +53,11 @@ public partial class TestManagerB : ILayerContext
 public partial class TestManagerC : ILayerContext
 {
     private readonly List<string> _trace;
-    public TestManagerC(List<string> trace) => _trace = trace;
+
+    public TestManagerC(List<string> trace)
+    {
+        _trace = trace;
+    }
 
     [Subscribe]
     public EventHandledState OnCap(in CapabilityEvent e)
@@ -60,8 +75,6 @@ public partial class TestManagerC : ILayerContext
 [TestFixture]
 public class ManagerAutoSubscriptionTests
 {
-    private List<string> _trace;
-
     [SetUp]
     public void SetUp()
     {
@@ -69,18 +82,20 @@ public class ManagerAutoSubscriptionTests
         _trace = new List<string>();
     }
 
+    private List<string> _trace;
+
     [Test]
     public void Subscriptions_Should_Follow_Registration_Order()
     {
         var layer = new GameLayer();
         var service = new OrderTestService(_trace);
         layer.RegisterService(service);
-        
+
         LayerHub.CreateLayers().Push(layer).Build();
 
         LayerHub.Send(new OrderEvent());
 
-        Assert.That(_trace, Is.EqualTo(new[] { "ManagerA", "ManagerB" }), 
+        Assert.That(_trace, Is.EqualTo(new[] { "ManagerA", "ManagerB" }),
             "Subscription order should match registration order in ConfigureServices");
     }
 
@@ -99,12 +114,18 @@ public class ManagerAutoSubscriptionTests
         Assert.That(_trace, Is.EqualTo(new[] { "HandledByManager" }));
     }
 
-    private class GameLayer : Layer { }
+    private class GameLayer : Layer
+    {
+    }
 
     private class OrderTestService : IService
     {
         private readonly List<string> _trace;
-        public OrderTestService(List<string> trace) => _trace = trace;
+
+        public OrderTestService(List<string> trace)
+        {
+            _trace = trace;
+        }
 
         public void ConfigureServices(IServiceCollection services)
         {
@@ -117,7 +138,12 @@ public class ManagerAutoSubscriptionTests
     private class CapabilityTestService : IService
     {
         private readonly List<string> _trace;
-        public CapabilityTestService(List<string> trace) => _trace = trace;
+
+        public CapabilityTestService(List<string> trace)
+        {
+            _trace = trace;
+        }
+
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddSingleton<TestManagerC>(new TestManagerC(_trace));

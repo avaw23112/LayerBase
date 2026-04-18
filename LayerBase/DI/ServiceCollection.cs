@@ -1,15 +1,11 @@
-using System;
-using System.Collections.Generic;
-using LayerBase.DI.Options;
-
 namespace LayerBase.DI;
 
 /// <summary>
-/// 切片服务容器
+///     切片服务容器
 /// </summary>
-public class ServiceCollection: IServiceCollection
+public class ServiceCollection : IServiceCollection
 {
-    private readonly List<ServiceDescriptor> _descriptors = new List<ServiceDescriptor>();
+    private readonly List<ServiceDescriptor> _descriptors = new();
 
     public IServiceCollection Add(ServiceDescriptor descriptor)
     {
@@ -18,27 +14,47 @@ public class ServiceCollection: IServiceCollection
     }
 
     public IServiceCollection AddSingleton<TService>(TService instance)
-        => Add(ServiceDescriptor.Singleton(instance));
+    {
+        return Add(ServiceDescriptor.Singleton(instance));
+    }
 
     public IServiceCollection AddSingleton<TService, TImpl>() where TImpl : TService
-        => Add(ServiceDescriptor.LayerScoped<TService, TImpl>());
+    {
+        return Add(ServiceDescriptor.LayerScoped<TService, TImpl>());
+    }
 
     public IServiceCollection AddSingleton<TService>(Func<IServiceProvider, TService> factory)
-        => Add(ServiceDescriptor.LayerScoped(factory));
+    {
+        return Add(ServiceDescriptor.LayerScoped(factory));
+    }
 
     public IServiceCollection AddTransient<TService, TImpl>() where TImpl : TService
-        => Add(ServiceDescriptor.Transient<TService, TImpl>());
+    {
+        return Add(ServiceDescriptor.Transient<TService, TImpl>());
+    }
 
     public IServiceCollection AddTransient<TService>(Func<IServiceProvider, TService> factory)
-        => Add(ServiceDescriptor.Transient(factory));
+    {
+        return Add(ServiceDescriptor.Transient(factory));
+    }
 
     public IServiceCollection AddScoped<TService, TImpl>() where TImpl : TService
-        => Add(ServiceDescriptor.LayerScoped<TService, TImpl>());
+    {
+        return Add(ServiceDescriptor.LayerScoped<TService, TImpl>());
+    }
 
     public IServiceCollection AddScoped<TService>(Func<IServiceProvider, TService> factory)
-        => Add(ServiceDescriptor.LayerScoped(factory));
+    {
+        return Add(ServiceDescriptor.LayerScoped(factory));
+    }
 
-    public IReadOnlyList<ServiceDescriptor> ToDescriptors() => _descriptors;
+    public IReadOnlyList<ServiceDescriptor> ToDescriptors()
+    {
+        return _descriptors;
+    }
 
-    public void Reset() => _descriptors.Clear();
+    public void Reset()
+    {
+        _descriptors.Clear();
+    }
 }

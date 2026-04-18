@@ -1,5 +1,4 @@
 using LayerBase.Core.EventCatalogue;
-using NUnit.Framework;
 
 namespace EventsTest;
 

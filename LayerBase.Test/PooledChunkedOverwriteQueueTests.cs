@@ -1,6 +1,5 @@
 using System.Reflection;
 using LayerBase.Core;
-using NUnit.Framework;
 
 namespace EventsTest;
 
@@ -19,9 +18,9 @@ public class PooledChunkedOverwriteQueueTests
     {
         var ctor = typeof(PooledChunkedOverwriteQueue<int>).GetConstructor(
             BindingFlags.Instance | BindingFlags.NonPublic,
-            binder: null,
-            types: new[] { typeof(int), typeof(EventQueueOverflowStrategy) },
-            modifiers: null);
+            null,
+            new[] { typeof(int), typeof(EventQueueOverflowStrategy) },
+            null);
 
         Assert.That(ctor, Is.Not.Null, "Expected internal constructor to exist.");
         return (PooledChunkedOverwriteQueue<int>)ctor!.Invoke(new object[] { 8, EventQueueOverflowStrategy.OverWrite });

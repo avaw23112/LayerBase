@@ -1,22 +1,20 @@
-using System.Collections.Generic;
 using LayerBase.Core.Event;
 using LayerBase.LayerHub;
 using LayerBase.Layers;
-using NUnit.Framework;
 
 namespace EventsTest;
 
 [TestFixture]
 public class LocalEventTests
 {
-    private List<string> _trace;
-
     [SetUp]
     public void SetUp()
     {
         LayerHub.Reset();
         _trace = new List<string>();
     }
+
+    private List<string> _trace;
 
     [Test]
     public void SendLocal_only_hits_current_layer()
@@ -58,7 +56,7 @@ public class LocalEventTests
         {
             _name = name;
             _trace = trace;
-            Subscribe<LocalEvent>((in LocalEvent evt) =>
+            Subscribe((in LocalEvent evt) =>
             {
                 _trace.Add(_name);
                 return EventHandledState.Continue;
@@ -66,5 +64,7 @@ public class LocalEventTests
         }
     }
 
-    public struct LocalEvent { }
+    public struct LocalEvent
+    {
+    }
 }

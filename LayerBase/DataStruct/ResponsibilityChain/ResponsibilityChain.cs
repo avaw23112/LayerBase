@@ -1,285 +1,291 @@
 using System.Collections;
 
-namespace LayerBase.Core.ResponsibilityChain
+namespace LayerBase.Core.ResponsibilityChain;
+
+/// <summary>
+///     外部可控的双向责任链：节点知道前后指针，外部可插入/删除/移动节点。
+/// </summary>
+internal sealed class ResponsibilityChain : IEnumerable<Node>
 {
-	/// <summary>
-	/// 外部可控的双向责任链：节点知道前后指针，外部可插入/删除/移动节点。
-	/// </summary>
-	internal sealed class ResponsibilityChain : IEnumerable<Node>
-	{
-		private Node? m_head;
-		private Node? m_tail;
-		private readonly RcOwnerToken m_OwnerToken;
+    private readonly RcOwnerToken m_OwnerToken;
 
-		public ResponsibilityChain(RcOwnerToken token)
-		{
-			m_OwnerToken = token;
-		}
+    public ResponsibilityChain(RcOwnerToken token)
+    {
+        m_OwnerToken = token;
+    }
 
-		public Node? Head => m_head;
-		public Node? Tail => m_tail;
-	
-		public Node AddLast(Node node)
-		{
-			if (node == null) throw new ArgumentNullException(nameof(node));
-			DetermineOwned(node);
+    public Node? Head { get; private set; }
 
-			if (m_tail == null)
-			{
-				m_head = m_tail = node;
-				return node;
-			}
+    public Node? Tail { get; private set; }
 
-			node.Prev = m_tail;       // 新节点前驱 = 旧尾
-			m_tail.Next = node;       // 旧尾后继 = 新节点
-			m_tail = node;            // 更新尾指针
-			ValidateAcyclic();
-			return node;
-		}
+    IEnumerator<Node> IEnumerable<Node>.GetEnumerator()
+    {
+        return new Enumerator(Head);
+    }
 
-		public Node AddFirst(Node node)
-		{
-			if (node == null) throw new ArgumentNullException(nameof(node));
-			DetermineOwned(node);
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return new Enumerator(Head);
+    }
 
-			if (m_head == null)
-			{
-				m_head = m_tail = node;
-				return node;
-			}
+    public Node AddLast(Node node)
+    {
+        if (node == null) throw new ArgumentNullException(nameof(node));
+        DetermineOwned(node);
 
-			node.Next = m_head;       // 新节点后继 = 旧头
-			m_head.Prev = node;       // 旧头前驱 = 新节点
-			m_head = node;            // 更新头指针
-			ValidateAcyclic();
-			return node;
-		}
+        if (Tail == null)
+        {
+            Head = Tail = node;
+            return node;
+        }
 
-		public Node InsertBefore(Node anchor, Node target)
-		{
-			if (anchor == null) throw new ArgumentNullException(nameof(anchor));
-			if (target == null) throw new ArgumentNullException(nameof(target));
-			EnsureOwned(anchor);
+        node.Prev = Tail; // 新节点前驱 = 旧尾
+        Tail.Next = node; // 旧尾后继 = 新节点
+        Tail = node;      // 更新尾指针
+        ValidateAcyclic();
+        return node;
+    }
 
-			if (anchor == m_head)
-				return AddFirst(target);
+    public Node AddFirst(Node node)
+    {
+        if (node == null) throw new ArgumentNullException(nameof(node));
+        DetermineOwned(node);
 
-			var prev = anchor.Prev;
-			target.Prev = prev;
-			target.Next = anchor;
+        if (Head == null)
+        {
+            Head = Tail = node;
+            return node;
+        }
 
-			prev!.Next = target;
-			anchor.Prev = target;
-			ValidateAcyclic();
-			return target;
-		}
+        node.Next = Head; // 新节点后继 = 旧头
+        Head.Prev = node; // 旧头前驱 = 新节点
+        Head = node;      // 更新头指针
+        ValidateAcyclic();
+        return node;
+    }
 
-		public Node InsertAfter(Node anchor, Node target)
-		{
-			if (anchor == null) throw new ArgumentNullException(nameof(anchor));
-			if (target == null) throw new ArgumentNullException(nameof(target));
-			EnsureOwned(anchor);
+    public Node InsertBefore(Node anchor, Node target)
+    {
+        if (anchor == null) throw new ArgumentNullException(nameof(anchor));
+        if (target == null) throw new ArgumentNullException(nameof(target));
+        EnsureOwned(anchor);
 
-			if (anchor == m_tail)
-				return AddLast(target);
+        if (anchor == Head)
+            return AddFirst(target);
 
-			var next = anchor.Next;
-			target.Next = next;
-			target.Prev = anchor;
+        var prev = anchor.Prev;
+        target.Prev = prev;
+        target.Next = anchor;
 
-			next!.Prev = target;
-			anchor.Next = target;
-			ValidateAcyclic();
-			return target;
-		}
+        prev!.Next = target;
+        anchor.Prev = target;
+        ValidateAcyclic();
+        return target;
+    }
 
-		public void Remove(Node node)
-		{
-			if (node == null) throw new ArgumentNullException(nameof(node));
-			EnsureOwned(node);
-			
-			node.OwnerToken.Reset();
-			
-			var prev = node.Prev;
-			var next = node.Next;
+    public Node InsertAfter(Node anchor, Node target)
+    {
+        if (anchor == null) throw new ArgumentNullException(nameof(anchor));
+        if (target == null) throw new ArgumentNullException(nameof(target));
+        EnsureOwned(anchor);
 
-			if (prev != null) prev.Next = next; else m_head = next;
-			if (next != null) next.Prev = prev; else m_tail = prev;
+        if (anchor == Tail)
+            return AddLast(target);
 
-			node.Prev = null;
-			node.Next = null;
-			ValidateAcyclic();
-		}
+        var next = anchor.Next;
+        target.Next = next;
+        target.Prev = anchor;
 
-		public void MoveBefore(Node node, Node anchor)
-		{
-			if (node == null) throw new ArgumentNullException(nameof(node));
-			if (anchor == null) throw new ArgumentNullException(nameof(anchor));
-			EnsureOwned(node);
-			EnsureOwned(anchor);
+        next!.Prev = target;
+        anchor.Next = target;
+        ValidateAcyclic();
+        return target;
+    }
 
-			if (node == anchor) return;
-			if (node.Next == anchor) return;
+    public void Remove(Node node)
+    {
+        if (node == null) throw new ArgumentNullException(nameof(node));
+        EnsureOwned(node);
 
-			// 先摘除 node（但不清 Owner）
-			Detach(node);
+        node.OwnerToken.Reset();
 
-			// 再插入到 anchor 前
-			if (anchor == m_head)
-			{
-				node.Prev = null;
-				node.Next = m_head;
-				m_head!.Prev = node;
-				m_head = node;
-				return;
-			}
+        var prev = node.Prev;
+        var next = node.Next;
 
-			var prev = anchor.Prev;
-			node.Prev = prev;
-			node.Next = anchor;
-			prev!.Next = node;
-			anchor.Prev = node;
-			ValidateAcyclic();
-		}
+        if (prev != null) prev.Next = next;
+        else Head = next;
+        if (next != null) next.Prev = prev;
+        else Tail = prev;
 
-		public void MoveAfter(Node node, Node anchor)
-		{
-			if (node == null) throw new ArgumentNullException(nameof(node));
-			if (anchor == null) throw new ArgumentNullException(nameof(anchor));
-			EnsureOwned(node);
-			EnsureOwned(anchor);
+        node.Prev = null;
+        node.Next = null;
+        ValidateAcyclic();
+    }
 
-			if (node == anchor) return;
-			if (node.Prev == anchor) return;
+    public void MoveBefore(Node node, Node anchor)
+    {
+        if (node == null) throw new ArgumentNullException(nameof(node));
+        if (anchor == null) throw new ArgumentNullException(nameof(anchor));
+        EnsureOwned(node);
+        EnsureOwned(anchor);
 
-			Detach(node);
+        if (node == anchor) return;
+        if (node.Next == anchor) return;
 
-			if (anchor == m_tail)
-			{
-				node.Next = null;
-				node.Prev = m_tail;
-				m_tail!.Next = node;
-				m_tail = node;
-				return;
-			}
+        // 先摘除 node（但不清 Owner）
+        Detach(node);
 
-			var next = anchor.Next;
-			node.Next = next;
-			node.Prev = anchor;
-			next!.Prev = node;
-			anchor.Next = node;
-			ValidateAcyclic();
-		}
+        // 再插入到 anchor 前
+        if (anchor == Head)
+        {
+            node.Prev = null;
+            node.Next = Head;
+            Head!.Prev = node;
+            Head = node;
+            return;
+        }
 
-		private void Detach(Node node)
-		{
-			var prev = node.Prev;
-			var next = node.Next;
+        var prev = anchor.Prev;
+        node.Prev = prev;
+        node.Next = anchor;
+        prev!.Next = node;
+        anchor.Prev = node;
+        ValidateAcyclic();
+    }
 
-			if (prev != null) prev.Next = next; else m_head = next;
-			if (next != null) next.Prev = prev; else m_tail = prev;
+    public void MoveAfter(Node node, Node anchor)
+    {
+        if (node == null) throw new ArgumentNullException(nameof(node));
+        if (anchor == null) throw new ArgumentNullException(nameof(anchor));
+        EnsureOwned(node);
+        EnsureOwned(anchor);
 
-			node.Prev = null;
-			node.Next = null;
-			ValidateAcyclic();
-		}
+        if (node == anchor) return;
+        if (node.Prev == anchor) return;
 
-		private void EnsureOwned(Node node)
-		{
-			if (!node.OwnerToken.Equals(m_OwnerToken))
-				throw new InvalidOperationException("Node does not belong to this chain.");
-		}
+        Detach(node);
 
-		private void DetermineOwned(Node node)
-		{
-			if (!node.OwnerToken.Equals(m_OwnerToken))
-			{
-				node.OwnerToken = m_OwnerToken;
-			}
-		}
+        if (anchor == Tail)
+        {
+            node.Next = null;
+            node.Prev = Tail;
+            Tail!.Next = node;
+            Tail = node;
+            return;
+        }
 
-		private void ValidateAcyclic()
-		{
-			if (m_head != null && m_head.Prev != null)
-				throw new InvalidOperationException("Invalid chain: Head.Prev must be null.");
+        var next = anchor.Next;
+        node.Next = next;
+        node.Prev = anchor;
+        next!.Prev = node;
+        anchor.Next = node;
+        ValidateAcyclic();
+    }
 
-			if (m_tail != null && m_tail.Next != null)
-				throw new InvalidOperationException("Invalid chain: Tail.Next must be null.");
+    private void Detach(Node node)
+    {
+        var prev = node.Prev;
+        var next = node.Next;
 
-			Node? slow = m_head;
-			Node? fast = m_head;
+        if (prev != null) prev.Next = next;
+        else Head = next;
+        if (next != null) next.Prev = prev;
+        else Tail = prev;
 
-			while (fast != null && fast.Next != null)
-			{
-				slow = slow!.Next;
-				fast = fast.Next.Next;
+        node.Prev = null;
+        node.Next = null;
+        ValidateAcyclic();
+    }
 
-				if (ReferenceEquals(slow, fast))
-					throw new InvalidOperationException("Cycle detected in responsibility chain.");
-			}
+    private void EnsureOwned(Node node)
+    {
+        if (!node.OwnerToken.Equals(m_OwnerToken))
+            throw new InvalidOperationException("Node does not belong to this chain.");
+    }
 
-			Node? prev = null;
-			Node? cur = m_head;
+    private void DetermineOwned(Node node)
+    {
+        if (!node.OwnerToken.Equals(m_OwnerToken)) node.OwnerToken = m_OwnerToken;
+    }
 
-			while (cur != null)
-			{
-				if (!cur.OwnerToken.Equals(m_OwnerToken))
-					throw new InvalidOperationException("Invalid chain: node.Owner mismatch.");
+    private void ValidateAcyclic()
+    {
+        if (Head != null && Head.Prev != null)
+            throw new InvalidOperationException("Invalid chain: Head.Prev must be null.");
 
-				if (!ReferenceEquals(cur.Prev, prev))
-					throw new InvalidOperationException("Invalid chain: Prev/Next symmetry broken.");
+        if (Tail != null && Tail.Next != null)
+            throw new InvalidOperationException("Invalid chain: Tail.Next must be null.");
 
-				// 防止自环（最常见 bug：cur.Next = cur）
-				if (ReferenceEquals(cur.Next, cur))
-					throw new InvalidOperationException("Invalid chain: self-loop detected (node.Next == node).");
+        var slow = Head;
+        var fast = Head;
 
-				prev = cur;
-				cur = cur.Next;
-			}
+        while (fast != null && fast.Next != null)
+        {
+            slow = slow!.Next;
+            fast = fast.Next.Next;
 
-			if (!ReferenceEquals(prev, m_tail))
-				throw new InvalidOperationException("Invalid chain: Tail pointer mismatch.");
-		}
+            if (ReferenceEquals(slow, fast))
+                throw new InvalidOperationException("Cycle detected in responsibility chain.");
+        }
 
-		public Enumerator GetEnumerator() => new Enumerator(m_head);
-		IEnumerator<Node> IEnumerable<Node>.GetEnumerator() => new Enumerator(m_head);
-		IEnumerator IEnumerable.GetEnumerator() => new Enumerator(m_head);
+        Node? prev = null;
+        var cur = Head;
 
-		public struct Enumerator : IEnumerator<Node>
-		{
-			private readonly Node? m_start;
-			private Node? m_current;
+        while (cur != null)
+        {
+            if (!cur.OwnerToken.Equals(m_OwnerToken))
+                throw new InvalidOperationException("Invalid chain: node.Owner mismatch.");
 
-			internal Enumerator(Node? start)
-			{
-				m_start = start;
-				m_current = null;
-			}
+            if (!ReferenceEquals(cur.Prev, prev))
+                throw new InvalidOperationException("Invalid chain: Prev/Next symmetry broken.");
 
-			public Node Current => m_current!;
-			object IEnumerator.Current => m_current!;
+            // 防止自环（最常见 bug：cur.Next = cur）
+            if (ReferenceEquals(cur.Next, cur))
+                throw new InvalidOperationException("Invalid chain: self-loop detected (node.Next == node).");
 
-			public bool MoveNext()
-			{
-				if (m_current == null)
-				{
-					m_current = m_start;
-				}
-				else
-				{
-					m_current = m_current.Next;
-				}
-				return m_current != null;
-			}
+            prev = cur;
+            cur = cur.Next;
+        }
 
-			public void Reset()
-			{
-				m_current = null;
-			}
+        if (!ReferenceEquals(prev, Tail))
+            throw new InvalidOperationException("Invalid chain: Tail pointer mismatch.");
+    }
 
-			public void Dispose()
-			{
-			}
-		}
-	}
+    public Enumerator GetEnumerator()
+    {
+        return new Enumerator(Head);
+    }
+
+    public struct Enumerator : IEnumerator<Node>
+    {
+        private readonly Node? m_start;
+        private Node? m_current;
+
+        internal Enumerator(Node? start)
+        {
+            m_start = start;
+            m_current = null;
+        }
+
+        public Node Current => m_current!;
+        object IEnumerator.Current => m_current!;
+
+        public bool MoveNext()
+        {
+            if (m_current == null)
+                m_current = m_start;
+            else
+                m_current = m_current.Next;
+            return m_current != null;
+        }
+
+        public void Reset()
+        {
+            m_current = null;
+        }
+
+        public void Dispose()
+        {
+        }
+    }
 }

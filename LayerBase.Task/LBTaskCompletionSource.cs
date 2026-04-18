@@ -1,79 +1,135 @@
-using System;
-using System.Threading;
+namespace LayerBase.Async;
 
-namespace LayerBase.Async
+/// <summary>Manual completion for ArchTask.</summary>
+public sealed class LBTaskCompletionSource
 {
-    /// <summary>Manual completion for ArchTask.</summary>
-    public sealed class LBTaskCompletionSource
+    private readonly ArchTaskSource _source;
+
+    public LBTaskCompletionSource()
     {
-        private readonly ArchTaskSource _source;
+        _source = ArchTaskSource.Rent();
+    }
 
-        public LBTaskCompletionSource()
+    public LBTask Task => new(_source);
+
+    public void SetResult()
+    {
+        _source.SetResult();
+    }
+
+    public void SetException(Exception ex)
+    {
+        _source.SetException(ex);
+    }
+
+    public void SetCanceled(CancellationToken token = default)
+    {
+        _source.SetCanceled(token);
+    }
+
+    public bool TrySetResult()
+    {
+        try
         {
-            _source = ArchTaskSource.Rent();
+            _source.SetResult();
+            return true;
         }
-
-        public LBTask Task => new LBTask(_source);
-
-        public void SetResult() => _source.SetResult();
-
-        public void SetException(Exception ex) => _source.SetException(ex);
-
-        public void SetCanceled(CancellationToken token = default) => _source.SetCanceled(token);
-
-        public bool TrySetResult()
+        catch
         {
-            try { _source.SetResult(); return true; }
-            catch { return false; }
-        }
-
-        public bool TrySetException(Exception ex)
-        {
-            try { _source.SetException(ex); return true; }
-            catch { return false; }
-        }
-
-        public bool TrySetCanceled(CancellationToken token = default)
-        {
-            try { _source.SetCanceled(token); return true; }
-            catch { return false; }
+            return false;
         }
     }
 
-    /// <summary>Manual completion for ArchTask{T}.</summary>
-    public sealed class LBTaskCompletionSource<T>
+    public bool TrySetException(Exception ex)
     {
-        private readonly ArchTaskSource<T> _source;
-
-        public LBTaskCompletionSource()
+        try
         {
-            _source = ArchTaskSource<T>.Rent();
+            _source.SetException(ex);
+            return true;
         }
-
-        public LBTask<T> Task => new LBTask<T>(_source);
-
-        public void SetResult(T value) => _source.SetResult(value);
-
-        public void SetException(Exception ex) => _source.SetException(ex);
-
-        public void SetCanceled(CancellationToken token = default) => _source.SetCanceled(token);
-
-        public bool TrySetResult(T value)
+        catch
         {
-            try { _source.SetResult(value); return true; }
-            catch { return false; }
+            return false;
         }
+    }
 
-        public bool TrySetException(Exception ex)
+    public bool TrySetCanceled(CancellationToken token = default)
+    {
+        try
         {
-            try { _source.SetException(ex); return true; }
-            catch { return false; }
+            _source.SetCanceled(token);
+            return true;
         }
-
-        public bool TrySetCanceled(CancellationToken token = default)
+        catch
         {
-            try { _source.SetCanceled(token); return true; }
-            catch { return false; }
+            return false;
+        }
+    }
+}
+
+/// <summary>Manual completion for ArchTask{T}.</summary>
+public sealed class LBTaskCompletionSource<T>
+{
+    private readonly ArchTaskSource<T> _source;
+
+    public LBTaskCompletionSource()
+    {
+        _source = ArchTaskSource<T>.Rent();
+    }
+
+    public LBTask<T> Task => new(_source);
+
+    public void SetResult(T value)
+    {
+        _source.SetResult(value);
+    }
+
+    public void SetException(Exception ex)
+    {
+        _source.SetException(ex);
+    }
+
+    public void SetCanceled(CancellationToken token = default)
+    {
+        _source.SetCanceled(token);
+    }
+
+    public bool TrySetResult(T value)
+    {
+        try
+        {
+            _source.SetResult(value);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public bool TrySetException(Exception ex)
+    {
+        try
+        {
+            _source.SetException(ex);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public bool TrySetCanceled(CancellationToken token = default)
+    {
+        try
+        {
+            _source.SetCanceled(token);
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

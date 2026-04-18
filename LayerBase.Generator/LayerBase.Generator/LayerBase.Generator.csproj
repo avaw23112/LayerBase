@@ -32,17 +32,17 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Remove="SourceGeneratorWithAdditionalFiles.cs" />
-      <Compile Remove="SourceGeneratorWithAttributes.cs" />
+        <Compile Remove="SourceGeneratorWithAdditionalFiles.cs"/>
+        <Compile Remove="SourceGeneratorWithAttributes.cs"/>
     </ItemGroup>
     <ItemGroup>
         <None Include="$(OutputPath)$(AssemblyName).dll"
               Pack="true"
-              PackagePath="analyzers/dotnet/cs" />
+              PackagePath="analyzers/dotnet/cs"/>
         <None Include="$(OutputPath)$(AssemblyName).pdb"
               Pack="true"
               PackagePath="analyzers/dotnet/cs"
-              Condition="Exists('$(OutputPath)$(AssemblyName).pdb')" />
+              Condition="Exists('$(OutputPath)$(AssemblyName).pdb')"/>
     </ItemGroup>
 
 

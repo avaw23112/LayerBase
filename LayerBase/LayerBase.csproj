@@ -20,30 +20,30 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="..\README.md" Pack="true" PackagePath="\" />
+        <None Include="..\README.md" Pack="true" PackagePath="\"/>
     </ItemGroup>
 
 
     <!-- 保留工具目录结构 -->
     <ItemGroup>
-        <Folder Include="Tools\" />
+        <Folder Include="Tools\"/>
     </ItemGroup>
 
     <!-- 显式排除暂未启用的源/资源 -->
     <ItemGroup>
-        <Compile Remove="DI\Service.cs" />
-        <Compile Remove="DataStruct\DictionaryTree\**" />
-        <EmbeddedResource Remove="DataStruct\DictionaryTree\**" />
-        <None Remove="DataStruct\DictionaryTree\**" />
-        <Compile Remove="Event\EventLogTracer\**" />
-        <EmbeddedResource Remove="Event\EventLogTracer\**" />
-        <None Remove="Event\EventLogTracer\**" />
-        <Compile Remove="Event\EventStateTrace\**" />
-        <EmbeddedResource Remove="Event\EventStateTrace\**" />
-        <None Remove="Event\EventStateTrace\**" />
+        <Compile Remove="DI\Service.cs"/>
+        <Compile Remove="DataStruct\DictionaryTree\**"/>
+        <EmbeddedResource Remove="DataStruct\DictionaryTree\**"/>
+        <None Remove="DataStruct\DictionaryTree\**"/>
+        <Compile Remove="Event\EventLogTracer\**"/>
+        <EmbeddedResource Remove="Event\EventLogTracer\**"/>
+        <None Remove="Event\EventLogTracer\**"/>
+        <Compile Remove="Event\EventStateTrace\**"/>
+        <EmbeddedResource Remove="Event\EventStateTrace\**"/>
+        <None Remove="Event\EventStateTrace\**"/>
     </ItemGroup>
     <ItemGroup>
-      <ProjectReference Include="..\LayerBase.Task\LayerBase.Task.csproj" />
+        <ProjectReference Include="..\LayerBase.Task\LayerBase.Task.csproj"/>
     </ItemGroup>
 
 </Project>

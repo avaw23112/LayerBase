@@ -1,117 +1,94 @@
-namespace LayerBase.Core.EventCatalogue
+namespace LayerBase.Core.EventCatalogue;
+
+public static class EventCatalogue
 {
-	public static class EventCatalogue
-	{
-		private static Dictionary<string, CatalogueNode> s_mapCatalogueNodes = new Dictionary<string, CatalogueNode>();
+    private static readonly Dictionary<string, CatalogueNode> s_mapCatalogueNodes = new();
 
-		private static Dictionary<EventCategoryToken, CatalogueNode> s_mapTokenWithNode =
-			new Dictionary<EventCategoryToken, CatalogueNode>();
+    private static readonly Dictionary<EventCategoryToken, CatalogueNode> s_mapTokenWithNode = new();
 
-		private static Dictionary<string, EventCategoryToken> s_mapCategoryNameWithToken = new Dictionary<string, EventCategoryToken>();
+    private static readonly Dictionary<string, EventCategoryToken> s_mapCategoryNameWithToken = new();
 
-		public static bool IsSameCategory(EventCategoryToken origin, string categoryName)
-		{
-			if (!s_mapCategoryNameWithToken.TryGetValue(categoryName, out var token))
-			{
-				return false;
-			}
+    public static bool IsSameCategory(EventCategoryToken origin, string categoryName)
+    {
+        if (!s_mapCategoryNameWithToken.TryGetValue(categoryName, out var token)) return false;
 
-			return IsSameCategory(origin,token);
-		}
-		
-		/// <summary>
-		/// 查找两个Token是否有同一个父节点
-		/// </summary>
-		/// <param name="origin"></param>
-		/// <param name="target"></param>
-		/// <returns></returns>
-		public static bool IsSameCategory(EventCategoryToken origin,EventCategoryToken target)
-		{
-			if (!s_mapTokenWithNode.TryGetValue(origin, out var originNode) ||
-			    !s_mapTokenWithNode.TryGetValue(target, out var targetNode))
-			{
-				return false;
-			}
+        return IsSameCategory(origin, token);
+    }
 
-			if (origin == target)
-				return true;
+    /// <summary>
+    ///     查找两个Token是否有同一个父节点
+    /// </summary>
+    /// <param name="origin"></param>
+    /// <param name="target"></param>
+    /// <returns></returns>
+    public static bool IsSameCategory(EventCategoryToken origin, EventCategoryToken target)
+    {
+        if (!s_mapTokenWithNode.TryGetValue(origin, out var originNode) ||
+            !s_mapTokenWithNode.TryGetValue(target, out var targetNode))
+            return false;
 
-			if (originNode.lastNode == null || targetNode.lastNode == null)
-			{
-				return false;
-			}
+        if (origin == target)
+            return true;
 
-			return originNode.lastNode.eventCategoryToken == targetNode.lastNode.eventCategoryToken;
-		}
-		
-		/// <summary>
-		/// 查找origin是否是categoryName目录的子节点
-		/// </summary>
-		/// <param name="categoryName"></param>
-		/// <param name="target"></param>
-		/// <returns></returns>
-		public static bool IsBelongCategory(EventCategoryToken origin,string categoryName)
-		{
-			if (!s_mapCategoryNameWithToken.TryGetValue(categoryName, out var token))
-			{
-				return false;
-			}
+        if (originNode.lastNode == null || targetNode.lastNode == null) return false;
 
-			return IsBelongCategory(token, origin);
-		}
-		/// <summary>
-		/// 查找target是否是origin的子节点
-		/// </summary>
-		/// <param name="origin"></param>
-		/// <param name="target"></param>
-		/// <returns></returns>
-		public static bool IsBelongCategory(EventCategoryToken origin,EventCategoryToken target)
-		{
-			if (!s_mapTokenWithNode.TryGetValue(target, out var targetNode))
-			{
-				return false;
-			}
+        return originNode.lastNode.eventCategoryToken == targetNode.lastNode.eventCategoryToken;
+    }
 
-			CatalogueNode? currentNode = targetNode;
-			while (currentNode != null)
-			{
-				if (currentNode.eventCategoryToken == origin)
-				{
-					return true;
-				}
+    /// <summary>
+    ///     查找origin是否是categoryName目录的子节点
+    /// </summary>
+    /// <param name="categoryName"></param>
+    /// <param name="target"></param>
+    /// <returns></returns>
+    public static bool IsBelongCategory(EventCategoryToken origin, string categoryName)
+    {
+        if (!s_mapCategoryNameWithToken.TryGetValue(categoryName, out var token)) return false;
 
-				currentNode = currentNode.lastNode;
-			}
+        return IsBelongCategory(token, origin);
+    }
 
-			return false;
-		}
-		public static CatalogueNode Path(string originalCatalogue)
-		{
-			string catalogue = originalCatalogue;
-			if (string.IsNullOrEmpty(originalCatalogue))
-			{
-				throw new Exception("错误目录");
-			}
-			
-			if (s_mapCatalogueNodes.TryGetValue(catalogue, out var node))
-			{
-				return node;
-			}
+    /// <summary>
+    ///     查找target是否是origin的子节点
+    /// </summary>
+    /// <param name="origin"></param>
+    /// <param name="target"></param>
+    /// <returns></returns>
+    public static bool IsBelongCategory(EventCategoryToken origin, EventCategoryToken target)
+    {
+        if (!s_mapTokenWithNode.TryGetValue(target, out var targetNode)) return false;
 
-			CatalogueNode catalogueNode = new CatalogueNode();
-			catalogueNode.Catalogue = catalogue;
-			catalogueNode.eventCategoryToken = new EventCategoryToken(catalogueNode.GetHashCode());
-			catalogueNode.lastNode = null;
-			
-			RegisterNode(catalogueNode);
-			return catalogueNode;
-		}
-		
-		internal static void RegisterNode(CatalogueNode node)
-		{
-			s_mapCatalogueNodes.Add(node.Catalogue,node);
-			s_mapTokenWithNode.Add(node.GetToken(),node);
-			s_mapCategoryNameWithToken.Add(node.Catalogue,node.GetToken());
-		}
-	}
+        var currentNode = targetNode;
+        while (currentNode != null)
+        {
+            if (currentNode.eventCategoryToken == origin) return true;
+
+            currentNode = currentNode.lastNode;
+        }
+
+        return false;
+    }
+
+    public static CatalogueNode Path(string originalCatalogue)
+    {
+        var catalogue = originalCatalogue;
+        if (string.IsNullOrEmpty(originalCatalogue)) throw new Exception("错误目录");
+
+        if (s_mapCatalogueNodes.TryGetValue(catalogue, out var node)) return node;
+
+        var catalogueNode = new CatalogueNode();
+        catalogueNode.Catalogue = catalogue;
+        catalogueNode.eventCategoryToken = new EventCategoryToken(catalogueNode.GetHashCode());
+        catalogueNode.lastNode = null;
+
+        RegisterNode(catalogueNode);
+        return catalogueNode;
+    }
+
+    internal static void RegisterNode(CatalogueNode node)
+    {
+        s_mapCatalogueNodes.Add(node.Catalogue, node);
+        s_mapTokenWithNode.Add(node.GetToken(), node);
+        s_mapCategoryNameWithToken.Add(node.Catalogue, node.GetToken());
+    }
 }

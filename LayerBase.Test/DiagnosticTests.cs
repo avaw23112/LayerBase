@@ -2,25 +2,31 @@ using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.LayerHub;
 using LayerBase.Layers;
-using NUnit.Framework;
-using System.Collections.Generic;
 
 namespace EventsTest;
 
 // --- Test Items (Defined at Top-Level for Stability) ---
 
-public struct SomeEvent { }
-public struct UnsubscribedEvent { }
-
-public partial class TestDiagManager : ILayerContext 
+public struct SomeEvent
 {
-    [Subscribe] 
-    public EventHandledState OnEvent(in SomeEvent e) => EventHandledState.Continue;
+}
+
+public struct UnsubscribedEvent
+{
+}
+
+public partial class TestDiagManager : ILayerContext
+{
+    [Subscribe]
+    public EventHandledState OnEvent(in SomeEvent e)
+    {
+        return EventHandledState.Continue;
+    }
 }
 
 public partial class ProducerManager : ILayerContext
 {
-    [Subscribe] 
+    [Subscribe]
     public EventHandledState OnStart(in SomeEvent e)
     {
         this.SendGlobal(new UnsubscribedEvent());
@@ -28,30 +34,38 @@ public partial class ProducerManager : ILayerContext
     }
 }
 
-public class TestDiagLayer : Layer { }
+public class TestDiagLayer : Layer
+{
+}
 
 public class TestDiagService : IService
 {
-    public void ConfigureServices(IServiceCollection services) => services.AddSingleton<TestDiagManager>(new TestDiagManager());
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<TestDiagManager>(new TestDiagManager());
+    }
 }
 
 public class ProducerService : IService
 {
-    public void ConfigureServices(IServiceCollection services) => services.AddSingleton<ProducerManager>(new ProducerManager());
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<ProducerManager>(new ProducerManager());
+    }
 }
 
 [TestFixture]
 public class DiagnosticTests
 {
-    private List<LayerEventInfo> _logs;
-
     [SetUp]
     public void SetUp()
     {
         LayerHub.Reset();
         _logs = new List<LayerEventInfo>();
-        LayerHub.OnLayerEventInfo += (info) => _logs.Add(info);
+        LayerHub.OnLayerEventInfo += info => _logs.Add(info);
     }
+
+    private List<LayerEventInfo> _logs;
 
     [Test]
     public void DebugMode_Should_Report_Topology_On_Build()
@@ -60,14 +74,14 @@ public class DiagnosticTests
         layer.RegisterService(new TestDiagService());
 
         LayerHub.CreateLayers()
-            .Push(layer)
-            .SetDebugMode(true)
-            .Build();
+                .Push(layer)
+                .SetDebugMode(true)
+                .Build();
 
         var topologyLog = _logs.Find(l => l.Source == "System" && l.EventName == "Topology");
         Assert.That(topologyLog.Message, Does.Contain("Layer 0: TestDiagLayer"));
         Assert.That(topologyLog.Message, Does.Contain("-> [M] TestDiagManager"));
-        
+
         TestContext.Out.WriteLine("Captured Topology Log:\n" + topologyLog.Message);
     }
 
@@ -78,15 +92,15 @@ public class DiagnosticTests
         layer.RegisterService(new ProducerService()); // ProducerManager 发送但没人订阅 UnsubscribedEvent
 
         LayerHub.CreateLayers()
-            .Push(layer)
-            .SetDebugMode(true)
-            .Build(); // 期待在此处触发 TopologyAudit
+                .Push(layer)
+                .SetDebugMode(true)
+                .Build(); // 期待在此处触发 TopologyAudit
 
         var warningLog = _logs.Find(l => l.Source == "TopologyAudit" && l.Type == LayerEventInfoType.Warning);
-        
+
         // 验证警告内容 (LayerEventInfo 是 struct，所以查 EventName 是否被填入)
         Assert.That(warningLog.EventName, Is.EqualTo("UnsubscribedEvent"));
-        
+
         TestContext.Out.WriteLine("Captured Build-Time Dead Letter Log: " + warningLog.Message);
     }
 }

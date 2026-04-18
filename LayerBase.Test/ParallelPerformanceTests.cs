@@ -1,11 +1,7 @@
+using System.Diagnostics;
 using LayerBase.Core.Event;
-using LayerBase.DI;
 using LayerBase.LayerHub;
 using LayerBase.Layers;
-using NUnit.Framework;
-using System.Diagnostics;
-using System.Collections.Concurrent;
-using System.Threading;
 
 namespace EventsTest;
 
@@ -16,17 +12,17 @@ public class ParallelPerformanceTests
     public void SetUp()
     {
         LayerHub.Reset();
-        LayerHub.InitializeJobScheduler(workerCount: 4);
+        LayerHub.InitializeJobScheduler(4);
     }
 
     [Test]
     public void ParallelHandlers_Should_Run_Concurrently_And_Not_Block_MainThread()
     {
         var layer = new ParallelLayer();
-        int processedCount = 0;
+        var processedCount = 0;
         var countdown = new CountdownEvent(100);
 
-        layer.SubscribeParallel<WorkEvent>((in WorkEvent e) =>
+        layer.SubscribeParallel((in WorkEvent e) =>
         {
             Thread.Sleep(5);
             Interlocked.Increment(ref processedCount);
@@ -37,15 +33,12 @@ public class ParallelPerformanceTests
         LayerHub.CreateLayers().Push(layer).Build();
 
         var sw = Stopwatch.StartNew();
-        for (int i = 0; i < 100; i++)
-        {
-            LayerHub.Send(new WorkEvent());
-        }
+        for (var i = 0; i < 100; i++) LayerHub.Send(new WorkEvent());
         sw.Stop();
 
         Assert.That(sw.ElapsedMilliseconds, Is.LessThan(500));
 
-        bool finished = countdown.Wait(5000);
+        var finished = countdown.Wait(5000);
         Assert.That(finished, Is.True, $"Parallel tasks timed out. Processed: {processedCount}/100");
     }
 
@@ -54,22 +47,31 @@ public class ParallelPerformanceTests
     {
         var layer = new ParallelLayer();
         var errorOccurred = new ManualResetEventSlim(false);
-        
-        LayerHub.OnLayerEventInfo += (info) => { 
-            if (info.Type == LayerEventInfoType.Error) errorOccurred.Set(); 
+
+        LayerHub.OnLayerEventInfo += info =>
+        {
+            if (info.Type == LayerEventInfoType.Error) errorOccurred.Set();
         };
 
-        layer.SubscribeParallel<FaultEvent>((in FaultEvent e) => throw new Exception("Parallel fault"));
+        layer.SubscribeParallel((in FaultEvent e) => throw new Exception("Parallel fault"));
 
         LayerHub.CreateLayers().Push(layer).Build();
         LayerHub.Send(new FaultEvent());
-        
+
         // Wait for the signal instead of arbitrary sleep
-        bool reported = errorOccurred.Wait(2000);
+        var reported = errorOccurred.Wait(2000);
         Assert.That(reported, Is.True, "Parallel fault signal was never received.");
     }
 
-    private class ParallelLayer : Layer { }
-    public struct WorkEvent { }
-    public struct FaultEvent { }
+    private class ParallelLayer : Layer
+    {
+    }
+
+    public struct WorkEvent
+    {
+    }
+
+    public struct FaultEvent
+    {
+    }
 }
