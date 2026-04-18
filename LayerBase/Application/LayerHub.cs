@@ -88,7 +88,8 @@ namespace LayerBase.LayerHub
     {
         private static readonly List<LayerChain> s_responsibilityChains = new(4);
         private static LayerBaseSynchronizationContext s_context = LayerBaseSynchronizationContext.InstallAsCurrent();
-
+        
+        
         public static event Action<LayerEventErrorInfo>? OnLayerEventError;
 
         public static Dictionary<Type, Layer> InstanceLayers = new();

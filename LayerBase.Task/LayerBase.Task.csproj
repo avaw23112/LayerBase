@@ -6,6 +6,15 @@
         <Nullable>enable</Nullable>
         <LangVersion>12</LangVersion>
         <RootNamespace>LayerBaseTask</RootNamespace>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+        <Title>LayerBase.Task</Title>
+        <Authors>扭矩不足</Authors>
+        <Description>分层式DI依赖注入框架,附加层级式事件总线与异步事件总线支持</Description>
+        <PackageProjectUrl>https://github.com/avaw23112/LayerBase.git</PackageProjectUrl>
+        <PackageLicenseUrl>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</PackageLicenseUrl>
+        <RepositoryUrl>https://github.com/avaw23112/LayerBase.git</RepositoryUrl>
+        <Version>1.0.1</Version>
     </PropertyGroup>
 
 </Project>

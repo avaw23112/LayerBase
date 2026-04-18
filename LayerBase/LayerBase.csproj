@@ -6,6 +6,16 @@
         <Nullable>enable</Nullable>
         <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
         <LangVersion>12</LangVersion>
+        <Title>LayerBase</Title>
+        <Authors>扭矩不足</Authors>
+        <Description>分层式DI依赖注入框架,附加层级式事件总线与异步事件总线支持</Description>
+        <Copyright>MIT</Copyright>
+        <PackageProjectUrl>https://github.com/avaw23112/LayerBase.git</PackageProjectUrl>
+        <PackageLicenseUrl>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</PackageLicenseUrl>
+        <RepositoryUrl>https://github.com/avaw23112/LayerBase.git</RepositoryUrl>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Version>1.0.1</Version>
     </PropertyGroup>
 
 
@@ -26,9 +36,6 @@
         <Compile Remove="Event\EventStateTrace\**" />
         <EmbeddedResource Remove="Event\EventStateTrace\**" />
         <None Remove="Event\EventStateTrace\**" />
-    </ItemGroup>
-    <ItemGroup>
-      <PackageReference Include="UniTask" Version="2.5.10" />
     </ItemGroup>
     <ItemGroup>
       <ProjectReference Include="..\LayerBase.Task\LayerBase.Task.csproj" />

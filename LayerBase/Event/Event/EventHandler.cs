@@ -1,5 +1,4 @@
-﻿using Cysharp.Threading.Tasks;
-using LayerBase.Async;
+﻿using LayerBase.Async;
 using LayerBase.Core.Event;
 
 namespace LayerBase.Core.EventHandler
