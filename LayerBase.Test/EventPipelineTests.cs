@@ -83,6 +83,7 @@ public class EventPipelineTests
         LayerHub.OnLayerEventInfo += handler;
         try
         {
+            // 注册一个会报错的 Handler 和一个安全的 Handler
             layer.Subscribe((in TestEvent e) => throw new Exception("Boom"));
             layer.Subscribe((in TestEvent e) =>
             {
@@ -91,16 +92,20 @@ public class EventPipelineTests
             });
             LayerHub.CreateLayers().Push(layer).Build();
 
+            // 第一次分发：
+            // try-catch 在循环外，报错会立即中断当前循环的执行流。
             LayerHub.Send(new TestEvent());
             Assert.That(errorCount, Is.EqualTo(1));
-            // New behavior: Pipeline is interrupted on error, so 'Safe' is not executed.
-            Assert.That(_trace, Is.EqualTo(new[] { "L1_Recv" }));
+            // 预期：只有第一个（TraceLayer自带的订阅）跑到了，之后我们手动加的那个报错了，Safe 没跑到。
+            // 注意：TraceLayer 构造函数里默认订阅了一个 TestEvent
+            Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv" }));
 
             _trace.Clear();
+            // 第二次分发：
+            // 重建数组后，故障 Handler 消失，Safe 终于可以跑到了。
             LayerHub.Send(new TestEvent());
-            Assert.That(errorCount, Is.EqualTo(1), "Should fuse");
-            // After fusion, the faulted handler is skipped, so the pipeline continues to 'Safe'.
-            Assert.That(_trace, Is.EqualTo(new[] { "L1_Recv", "Safe" }));
+            Assert.That(errorCount, Is.EqualTo(1), "Should fuse and not report again");
+            Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv", "Safe" }));
         }
         finally
         {

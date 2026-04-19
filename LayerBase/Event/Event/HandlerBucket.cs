@@ -32,30 +32,57 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
 {
     private static readonly string s_eventFullName = typeof(T).FullName ?? typeof(T).Name;
     private readonly object _lock = new();
-    private OrderedHandlerEntry<T>[] _orderedHandlers = Array.Empty<OrderedHandlerEntry<T>>();
+    
+    private OrderedHandlerEntry<T>[] _allOrdered = Array.Empty<OrderedHandlerEntry<T>>();
+    private UnorderedHandlerEntry<T>[] _allUnordered = Array.Empty<UnorderedHandlerEntry<T>>();
+    
+    private OrderedHandlerEntry<T>[] _activeOrdered = Array.Empty<OrderedHandlerEntry<T>>();
+    private UnorderedHandlerEntry<T>[] _activeUnordered = Array.Empty<UnorderedHandlerEntry<T>>();
+    
     private ParallelHandlerEntry<T>[] _parallelHandlers = Array.Empty<ParallelHandlerEntry<T>>();
     private int _totalHandlerCount;
-    private UnorderedHandlerEntry<T>[] _unorderedHandlers = Array.Empty<UnorderedHandlerEntry<T>>();
+    private int _isDirty;
 
     public bool HasHandlers => Volatile.Read(ref _totalHandlerCount) > 0;
 
     public void Reset()
     {
-        foreach (var h in _orderedHandlers) h.Circuit.Reset();
-        foreach (var h in _unorderedHandlers) h.Circuit.Reset();
-        foreach (var h in _parallelHandlers) h.Reset(); // 递归重置并行队列
+        lock (_lock)
+        {
+            foreach (var h in _allOrdered) h.Circuit.Reset();   
+            foreach (var h in _allUnordered) h.Circuit.Reset(); 
+            foreach (var h in _parallelHandlers) h.Reset();     
+            RebuildActiveArrays();
+            Volatile.Write(ref _isDirty, 0);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void EnsureClean()
+    {
+        if (Interlocked.CompareExchange(ref _isDirty, 0, 1) == 1)
+        {
+            lock (_lock)
+            {
+                RebuildActiveArrays();
+            }
+        }
+    }
+
+    private void RebuildActiveArrays()
+    {
+        _activeOrdered = _allOrdered.Where(h => !h.Circuit.IsDisabled).ToArray();
+        _activeUnordered = _allUnordered.Where(h => !h.Circuit.IsDisabled).ToArray();
     }
 
     public void Add(IEventHandler<T> handler)
     {
         lock (_lock)
         {
-            var current = _unorderedHandlers;
-            var next = new UnorderedHandlerEntry<T>[current.Length + 1];
-            Array.Copy(current, next, current.Length);
-            next[current.Length] = UnorderedHandlerEntry<T>.Create(handler);
-            Volatile.Write(ref _unorderedHandlers, next);
-            Interlocked.Increment(ref _totalHandlerCount);
+            var entry = UnorderedHandlerEntry<T>.Create(handler);
+            _allUnordered = AddToArray(_allUnordered, entry);   
+            RebuildActiveArrays();
+            Interlocked.Increment(ref _totalHandlerCount);      
         }
     }
 
@@ -63,12 +90,10 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            var current = _unorderedHandlers;
-            var next = new UnorderedHandlerEntry<T>[current.Length + 1];
-            Array.Copy(current, next, current.Length);
-            next[current.Length] = UnorderedHandlerEntry<T>.Create(handler);
-            Volatile.Write(ref _unorderedHandlers, next);
-            Interlocked.Increment(ref _totalHandlerCount);
+            var entry = UnorderedHandlerEntry<T>.Create(handler);
+            _allUnordered = AddToArray(_allUnordered, entry);   
+            RebuildActiveArrays();
+            Interlocked.Increment(ref _totalHandlerCount);      
         }
     }
 
@@ -76,12 +101,10 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            var current = _orderedHandlers;
-            var next = new OrderedHandlerEntry<T>[current.Length + 1];
-            Array.Copy(current, next, current.Length);
-            next[current.Length] = OrderedHandlerEntry<T>.Create(handler);
-            Volatile.Write(ref _orderedHandlers, next);
-            Interlocked.Increment(ref _totalHandlerCount);
+            var entry = OrderedHandlerEntry<T>.Create(handler); 
+            _allOrdered = AddToArray(_allOrdered, entry);       
+            RebuildActiveArrays();
+            Interlocked.Increment(ref _totalHandlerCount);      
         }
     }
 
@@ -89,12 +112,10 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            var current = _orderedHandlers;
-            var next = new OrderedHandlerEntry<T>[current.Length + 1];
-            Array.Copy(current, next, current.Length);
-            next[current.Length] = OrderedHandlerEntry<T>.Create(handler);
-            Volatile.Write(ref _orderedHandlers, next);
-            Interlocked.Increment(ref _totalHandlerCount);
+            var entry = OrderedHandlerEntry<T>.Create(handler); 
+            _allOrdered = AddToArray(_allOrdered, entry);       
+            RebuildActiveArrays();
+            Interlocked.Increment(ref _totalHandlerCount);      
         }
     }
 
@@ -102,12 +123,8 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            var current = _parallelHandlers;
-            var next = new ParallelHandlerEntry<T>[current.Length + 1];
-            Array.Copy(current, next, current.Length);
-            next[current.Length] = ParallelHandlerEntry<T>.Create(handler, reportError);
-            Volatile.Write(ref _parallelHandlers, next);
-            Interlocked.Increment(ref _totalHandlerCount);
+            _parallelHandlers = AddToArray(_parallelHandlers, ParallelHandlerEntry<T>.Create(handler, reportError));
+            Interlocked.Increment(ref _totalHandlerCount);      
         }
     }
 
@@ -115,95 +132,158 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            var current = _parallelHandlers;
-            var next = new ParallelHandlerEntry<T>[current.Length + 1];
-            Array.Copy(current, next, current.Length);
-            next[current.Length] = ParallelHandlerEntry<T>.Create(handler, reportError);
-            Volatile.Write(ref _parallelHandlers, next);
-            Interlocked.Increment(ref _totalHandlerCount);
+            _parallelHandlers = AddToArray(_parallelHandlers, ParallelHandlerEntry<T>.Create(handler, reportError));
+            Interlocked.Increment(ref _totalHandlerCount);      
         }
+    }
+
+    private TEntry[] AddToArray<TEntry>(TEntry[] old, TEntry entry)
+    {
+        var next = new TEntry[old.Length + 1];
+        Array.Copy(old, next, old.Length);
+        next[old.Length] = entry;
+        return next;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventHandledState Dispatch(int layerIndex, in T value)
     {
-        var total = Volatile.Read(ref _totalHandlerCount);
-        if (total == 0) return EventHandledState.Continue;
-        var ordered = _orderedHandlers;
-        if (total == 1 && ordered.Length == 1) return InvokeOrderedDirect(layerIndex, in value, in ordered[0]);
-        return DispatchFullDirect(layerIndex, in value);
+        if (Volatile.Read(ref _isDirty) == 1) EnsureClean();    
+
+        var activeOrdered = Volatile.Read(ref _activeOrdered);  
+        var total = Volatile.Read(ref _totalHandlerCount);      
+        
+        if (total == 0) return EventHandledState.Continue;      
+        
+        if (total == 1 && activeOrdered.Length == 1)
+        {
+            try
+            {
+                return InvokeOrderedDirect(layerIndex, in value, in activeOrdered[0]);
+            }
+            catch (Exception e)
+            {
+                HandleOrderedFault(layerIndex, in value, in activeOrdered[0], e);
+                return EventHandledState.Continue;
+            }
+        }
+        
+        return DispatchFullDirect(layerIndex, in value);        
     }
 
     private EventHandledState DispatchFullDirect(int layerIndex, in T value)
     {
-        var parallel = Volatile.Read(ref _parallelHandlers);
-        var unordered = Volatile.Read(ref _unorderedHandlers);
-        var ordered = Volatile.Read(ref _orderedHandlers);
+        var parallel = Volatile.Read(ref _parallelHandlers);    
+        var unordered = Volatile.Read(ref _activeUnordered);    
+        var ordered = Volatile.Read(ref _activeOrdered);        
 
-        for (var i = 0; i < parallel.Length; i++) 
-            parallel[i].Enqueue(layerIndex, in value);
-        
-        int unorderedCount = 0;
+        for (var i = 0; i < parallel.Length; i++) parallel[i].Enqueue(layerIndex, in value);
+
+        int uIdx = 0;
+        int uLen = unordered.Length;
         try
         {
-            for (unorderedCount = 0; unorderedCount < unordered.Length; unorderedCount++)
+            for (; uIdx <= uLen - 2; uIdx += 2)
             {
-                ref var handler = ref unordered[unorderedCount];
-                if (handler.Circuit.IsDisabled) continue;
+                ref var h1 = ref unordered[uIdx];
+                if (h1.IsAsync) AsyncFaultContext.Observe(this, layerIndex, h1.Circuit, h1.FullName, in value, h1.AsyncHandler!.Deal(value));
+                else h1.SyncHandler!.Deal(in value);
+
+                uIdx++; // 👈 推进索引，以防第二个报错
+                ref var h2 = ref unordered[uIdx];
+                if (h2.IsAsync) AsyncFaultContext.Observe(this, layerIndex, h2.Circuit, h2.FullName, in value, h2.AsyncHandler!.Deal(value));
+                else h2.SyncHandler!.Deal(in value);
+                uIdx--; // 👈 还原，配合循环步长
+            }
+
+            for (; uIdx < uLen; uIdx++)
+            {
+                ref var handler = ref unordered[uIdx];
                 if (handler.IsAsync)
-                    AsyncFaultContext.Observe(layerIndex, handler.Circuit, handler.FullName, in value,
+                    AsyncFaultContext.Observe(this, layerIndex, handler.Circuit, handler.FullName, in value,
                         handler.AsyncHandler!.Deal(value));
                 else handler.SyncHandler!.Deal(in value);
             }
         }
         catch (Exception e)
         {
-            ref var handler = ref unordered[unorderedCount];
-            EventMetaDataHandler.OnEventExpectation(value, e);
-            if (handler.Circuit.TryDisable())
-                LayerHub.LayerHub.ReportLayerEventError(layerIndex, handler.FullName, s_eventFullName, e);
+            HandleUnorderedFault(layerIndex, in value, in unordered[uIdx], e);
             return EventHandledState.Continue;
         }
-        
-        int orderedCount = 0;
-        EventHandledState handledState = EventHandledState.Continue;
+
+        int oIdx = 0;
+        int oLen = ordered.Length;
+        EventHandledState handledAndContinueSeen = EventHandledState.Continue;
         try
         {
-            for (orderedCount = 0; orderedCount < ordered.Length; orderedCount++)
+            for (; oIdx <= oLen - 2; oIdx += 2)
             {
-                handledState = InvokeOrderedDirect(layerIndex, in value, in ordered[orderedCount]);
-                if (handledState == EventHandledState.Handled) return EventHandledState.Handled;
+                var r1 = InvokeOrderedDirect(layerIndex, in value, in ordered[oIdx]);
+                if (r1 == EventHandledState.Handled) return EventHandledState.Handled;
+                if (r1 == EventHandledState.HandledAndContinue) handledAndContinueSeen = EventHandledState.HandledAndContinue;
+
+                oIdx++; // 👈 推进索引
+                var r2 = InvokeOrderedDirect(layerIndex, in value, in ordered[oIdx]);
+                if (r2 == EventHandledState.Handled) return EventHandledState.Handled;
+                if (r2 == EventHandledState.HandledAndContinue) handledAndContinueSeen = EventHandledState.HandledAndContinue;
+                oIdx--; // 👈 还原
+            }
+
+            for (; oIdx < oLen; oIdx++)
+            {
+                var result = InvokeOrderedDirect(layerIndex, in value, in ordered[oIdx]);
+                if (result == EventHandledState.Handled) return EventHandledState.Handled;
+                if (result == EventHandledState.HandledAndContinue) handledAndContinueSeen = EventHandledState.HandledAndContinue;
             }
         }
         catch (Exception e)
         {
-            ref var handler = ref ordered[orderedCount];
-            EventMetaDataHandler.OnEventExpectation(value, e);
-            if (handler.Circuit.TryDisable())
-                LayerHub.LayerHub.ReportLayerEventError(layerIndex, handler.FullName, s_eventFullName, e);
+            HandleOrderedFault(layerIndex, in value, in ordered[oIdx], e);
             return EventHandledState.Continue;
         }
-        
-        return handledState == EventHandledState.HandledAndContinue ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
+
+        return handledAndContinueSeen;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private EventHandledState InvokeOrderedDirect(int layerIndex, in T value, in OrderedHandlerEntry<T> handler)
     {
-        if (handler.Circuit.IsDisabled) return EventHandledState.Continue;
         if (handler.IsAsync)
         {
-            AsyncFaultContext.Observe(layerIndex, handler.Circuit, handler.FullName, in value,
+            AsyncFaultContext.Observe(this, layerIndex, handler.Circuit, handler.FullName, in value,
                 handler.AsyncHandler!(value));
             return EventHandledState.Continue;
         }
         return handler.SyncHandler!(in value);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void HandleUnorderedFault(int layerIndex, in T value, in UnorderedHandlerEntry<T> handler, Exception e)
+    {
+        EventMetaDataHandler.OnEventExpectation(value, e);      
+        if (handler.Circuit.TryDisable())
+        {
+            LayerHub.LayerHub.ReportLayerEventError(layerIndex, handler.FullName, s_eventFullName, e);
+            Interlocked.Exchange(ref _isDirty, 1);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void HandleOrderedFault(int layerIndex, in T value, in OrderedHandlerEntry<T> handler, Exception e)
+    {
+        EventMetaDataHandler.OnEventExpectation(value, e);      
+        if (handler.Circuit.TryDisable())
+        {
+            LayerHub.LayerHub.ReportLayerEventError(layerIndex, handler.FullName, s_eventFullName, e);
+            Interlocked.Exchange(ref _isDirty, 1);
+        }
+    }
+
     private sealed class AsyncFaultContext
     {
         private static readonly ConcurrentBag<AsyncFaultContext> s_pool = new();
         private readonly Action _continuation;
+        private HandlerBucket<T>? _owner;
         private HandlerCircuit? _circuit;
         private string? _handlerFullName;
         private int _layerIndex;
@@ -215,10 +295,11 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             _continuation = Complete;
         }
 
-        public static void Observe(int    layerIndex, HandlerCircuit circuit, string handlerFullName, in T payload,
+        public static void Observe(HandlerBucket<T> owner, int layerIndex, HandlerCircuit circuit, string handlerFullName, in T payload,
                                    LBTask task)
         {
             if (!s_pool.TryTake(out var context)) context = new AsyncFaultContext();
+            context._owner = owner;
             context._layerIndex = layerIndex;
             context._circuit = circuit;
             context._handlerFullName = handlerFullName;
@@ -236,11 +317,15 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             catch (Exception ex)
             {
                 EventMetaDataHandler.OnEventExpectation(_payload, ex);
-                if (_circuit != null && _circuit.TryDisable())
+                if (_circuit != null && _circuit.TryDisable())  
+                {
                     LayerHub.LayerHub.ReportLayerEventError(_layerIndex, _handlerFullName!, s_eventFullName, ex);
+                    if (_owner != null) Interlocked.Exchange(ref _owner._isDirty, 1);
+                }
             }
             finally
             {
+                _owner = null;
                 _circuit = null;
                 _handlerFullName = null;
                 _payload = default;
@@ -430,6 +515,7 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
                 {
                     EventMetaDataHandler.OnEventExpectation(payload, e);
                     if (Circuit.TryDisable()) _reportError(_layerIndex, _fullName, _eventFullName, e);
+                    Interlocked.Exchange(ref _scheduled, 0);    
                     ClearPending();
                     break;
                 }
