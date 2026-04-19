@@ -140,60 +140,64 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         var unordered = Volatile.Read(ref _unorderedHandlers);
         var ordered = Volatile.Read(ref _orderedHandlers);
 
-        for (var i = 0; i < parallel.Length; i++) parallel[i].Enqueue(layerIndex, in value);
-
-        for (var i = 0; i < unordered.Length; i++)
+        for (var i = 0; i < parallel.Length; i++) 
+            parallel[i].Enqueue(layerIndex, in value);
+        
+        int unorderedCount = 0;
+        try
         {
-            var handler = unordered[i];
-            if (handler.Circuit.IsDisabled) continue;
-            try
+            for (unorderedCount = 0; unorderedCount < unordered.Length; unorderedCount++)
             {
+                ref var handler = ref unordered[unorderedCount];
+                if (handler.Circuit.IsDisabled) continue;
                 if (handler.IsAsync)
                     AsyncFaultContext.Observe(layerIndex, handler.Circuit, handler.FullName, in value,
                         handler.AsyncHandler!.Deal(value));
                 else handler.SyncHandler!.Deal(in value);
             }
-            catch (Exception e)
+        }
+        catch (Exception e)
+        {
+            ref var handler = ref unordered[unorderedCount];
+            EventMetaDataHandler.OnEventExpectation(value, e);
+            if (handler.Circuit.TryDisable())
+                LayerHub.LayerHub.ReportLayerEventError(layerIndex, handler.FullName, s_eventFullName, e);
+            return EventHandledState.Continue;
+        }
+        
+        int orderedCount = 0;
+        EventHandledState handledState = EventHandledState.Continue;
+        try
+        {
+            for (orderedCount = 0; orderedCount < ordered.Length; orderedCount++)
             {
-                EventMetaDataHandler.OnEventExpectation(value, e);
-                if (handler.Circuit.TryDisable())
-                    LayerHub.LayerHub.ReportLayerEventError(layerIndex, handler.FullName, s_eventFullName, e);
+                handledState = InvokeOrderedDirect(layerIndex, in value, in ordered[orderedCount]);
+                if (handledState == EventHandledState.Handled) return EventHandledState.Handled;
             }
         }
-
-        var handledAndContinueSeen = false;
-        for (var i = 0; i < ordered.Length; i++)
+        catch (Exception e)
         {
-            var result = InvokeOrderedDirect(layerIndex, in value, in ordered[i]);
-            if (result == EventHandledState.Handled) return EventHandledState.Handled;
-            if (result == EventHandledState.HandledAndContinue) handledAndContinueSeen = true;
+            ref var handler = ref ordered[orderedCount];
+            EventMetaDataHandler.OnEventExpectation(value, e);
+            if (handler.Circuit.TryDisable())
+                LayerHub.LayerHub.ReportLayerEventError(layerIndex, handler.FullName, s_eventFullName, e);
+            return EventHandledState.Continue;
         }
-
-        return handledAndContinueSeen ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
+        
+        return handledState == EventHandledState.HandledAndContinue ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private EventHandledState InvokeOrderedDirect(int layerIndex, in T value, in OrderedHandlerEntry<T> handler)
     {
         if (handler.Circuit.IsDisabled) return EventHandledState.Continue;
-        try
+        if (handler.IsAsync)
         {
-            if (handler.IsAsync)
-            {
-                AsyncFaultContext.Observe(layerIndex, handler.Circuit, handler.FullName, in value,
-                    handler.AsyncHandler!(value));
-                return EventHandledState.Continue;
-            }
-
-            return handler.SyncHandler!(in value);
-        }
-        catch (Exception e)
-        {
-            EventMetaDataHandler.OnEventExpectation(value, e);
-            if (handler.Circuit.TryDisable())
-                LayerHub.LayerHub.ReportLayerEventError(layerIndex, handler.FullName, s_eventFullName, e);
+            AsyncFaultContext.Observe(layerIndex, handler.Circuit, handler.FullName, in value,
+                handler.AsyncHandler!(value));
             return EventHandledState.Continue;
         }
+        return handler.SyncHandler!(in value);
     }
 
     private sealed class AsyncFaultContext

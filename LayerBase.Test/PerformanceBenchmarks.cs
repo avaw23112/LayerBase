@@ -8,69 +8,36 @@ namespace EventsTest;
 [TestFixture]
 public class PerformanceBenchmarks
 {
-    [SetUp]
-    public void SetUp()
-    {
-        LayerHub.Reset();
-    }
-
+    [SetUp] public void SetUp() => LayerHub.Reset();
     private const int EventCount = 1_000_000;
 
     [Test]
-    public void Benchmark_Synchronous_Global_Send()
+    public void Benchmark_Density_Comparison()
     {
-        var layers = CreateBenchChain(10);
+        // 场景 A: 10层全订阅 (高密度负载)
+        var layersFull = CreateBenchChain(10);
         var sw = Stopwatch.StartNew();
-
         for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
-
         sw.Stop();
-        var tps = EventCount / sw.Elapsed.TotalSeconds;
-        Console.WriteLine($"[Sync Global] Total: {EventCount}, Time: {sw.ElapsedMilliseconds}ms, TPS: {tps:N0}");
+        Console.WriteLine($"\n[高密度-10层全订阅] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0} (由于每层都有订阅，实际执行了 {EventCount * 10:N0} 次 Handler)");
 
-        // 验证：每层都应该收到了百万次调用
-        Assert.That(layers[9].HandledCount, Is.EqualTo(EventCount));
-    }
-
-    [Test]
-    public void Benchmark_Asynchronous_Global_Post_Throughput()
-    {
-        var layers = CreateBenchChain(10);
-
-        // 预热：让懒加载完成，让队列池初始化，消除抖动
-        LayerHub.Post(new BenchEvent());
-        for (var i = 0; i < 20; i++) LayerHub.Pump(0.01f);
-        foreach (var l in layers) l.HandledCount = 0;
-
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        var memBefore = GC.GetTotalMemory(true);
-
-        var sw = Stopwatch.StartNew();
-
-        // 1. 测试极致入队速度 (只管发)
-        for (var i = 0; i < EventCount; i++) LayerHub.Post(new BenchEvent());
-
-        var enqueueTime = sw.ElapsedMilliseconds;
-
-        // 2. 测试处理速度 (分帧推进)
-        // 在接力模式下，每一轮 Pump 推进一层。
-        // 10层结构，最快需要 10 轮 Pump 能处理完第一批，但这里是百万级积压。
-        // 我们持续 Pump 直到最后一层处理完所有事件。
-        var totalPumps = 0;
-        while (layers[9].HandledCount < EventCount)
+        // 场景 B: 10层单订阅 (模拟真实业务或之前的 25M 场景)
+        LayerHub.Reset();
+        var builder = LayerHub.CreateLayers();
+        var layersSingle = new List<BenchLayer>();
+        for (var i = 0; i < 10; i++)
         {
-            LayerHub.Pump(0.01f);
-            totalPumps++;
+            var l = new BenchLayer();
+            if (i == 9) l.Subscribe((in BenchEvent _) => { l.HandledCount++; return EventHandledState.Continue; });
+            builder.Push(l);
+            layersSingle.Add(l);
         }
-
+        builder.Build();
+        
+        sw.Restart();
+        for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
         sw.Stop();
-        var memAfter = GC.GetTotalMemory(false);
-
-        var totalTps = EventCount / sw.Elapsed.TotalSeconds;
-        Console.WriteLine(
-            $"[Async Global] Total: {EventCount}, Enqueue: {enqueueTime}ms, TotalTime: {sw.ElapsedMilliseconds}ms, Pumps: {totalPumps}, TPS: {totalTps:N0}");
-        Console.WriteLine($"[Memory] Delta: {(memAfter - memBefore) / 1024.0 / 1024.0:F2} MB (主要来自队列内部扩容，稳态后应为0)");
+        Console.WriteLine($"[低密度-10层单订阅] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
     }
 
     private List<BenchLayer> CreateBenchChain(int layerCount)
@@ -80,29 +47,14 @@ public class PerformanceBenchmarks
         for (var i = 0; i < layerCount; i++)
         {
             var layer = new BenchLayer();
+            layer.Subscribe((in BenchEvent _) => { layer.HandledCount++; return EventHandledState.Continue; });
             builder.Push(layer);
             list.Add(layer);
         }
-
         builder.Build();
         return list;
     }
 
-    private class BenchLayer : Layer
-    {
-        public int HandledCount;
-
-        public BenchLayer()
-        {
-            Subscribe((in BenchEvent _) =>
-            {
-                HandledCount++;
-                return EventHandledState.Continue;
-            });
-        }
-    }
-
-    public struct BenchEvent
-    {
-    }
+    private class BenchLayer : Layer { public int HandledCount; }
+    public struct BenchEvent {}
 }

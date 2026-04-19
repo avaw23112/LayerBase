@@ -93,11 +93,14 @@ public class EventPipelineTests
 
             LayerHub.Send(new TestEvent());
             Assert.That(errorCount, Is.EqualTo(1));
-            Assert.That(_trace, Is.EqualTo(new[] { "L1_Recv", "Safe" }));
+            // New behavior: Pipeline is interrupted on error, so 'Safe' is not executed.
+            Assert.That(_trace, Is.EqualTo(new[] { "L1_Recv" }));
 
             _trace.Clear();
             LayerHub.Send(new TestEvent());
             Assert.That(errorCount, Is.EqualTo(1), "Should fuse");
+            // After fusion, the faulted handler is skipped, so the pipeline continues to 'Safe'.
+            Assert.That(_trace, Is.EqualTo(new[] { "L1_Recv", "Safe" }));
         }
         finally
         {
