@@ -1,9 +1,14 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using LayerBase.Async;
 using LayerBase.Core.Event;
-using LayerBase.Core.ResponsibilityChain;
-using LayerBase.DI;
 using LayerBase.Layers;
+using LayerBase.Core.ResponsibilityChain;
 using LayerBase.Tools.Job;
+using LayerBase.DI;
 
 namespace LayerBase.LayerHub;
 
@@ -44,16 +49,17 @@ public readonly struct LayerEventInfo
 public static class LayerHub
 {
     private static LayerChain? s_chain;
+    private static LayerBaseSynchronizationContext? s_context;
 
     private static int s_layerIndexCounter;
 
     /// <summary>
-    ///     核心事件中心。设为可写是为了支持测试环境的物理断代重置。
+    ///     核心事件中心。设为可写是为了支持测试环境的物理断代重置。    
     /// </summary>
     internal static GlobalEventCenter EventCenter { get; private set; } = new();
 
     public static bool IsDebugMode { get; private set; }
-    public static event Action<LayerEventInfo>? OnLayerEventInfo;
+    public static event Action<LayerEventInfo>? OnLayerEventInfo;       
 
     internal static int GetNextLayerIndex()
     {
@@ -62,11 +68,23 @@ public static class LayerHub
 
     public static LayersBuilder CreateLayers()
     {
+        // 智能上下文装载：如果不处于 Unity/Godot 等自带同步上下文的引擎环境，
+        // 则自动安装并托管 LayerBaseSynchronizationContext 以驱动 LBTask 和异步状态机。
+        if (SynchronizationContext.Current == null)
+        {
+            s_context = LayerBaseSynchronizationContext.InstallAsCurrent();
+        }
+        else if (SynchronizationContext.Current is LayerBaseSynchronizationContext ctx)
+        {
+            s_context = ctx;
+        }
+
         return new LayersBuilder();
     }
 
     public static void Pump(float deltaTime)
     {
+        s_context?.Update();
         s_chain?.Pump(deltaTime);
     }
 
@@ -79,6 +97,13 @@ public static class LayerHub
         ServiceLayerBinder.Reset();
         OnLayerEventInfo = null;
         IsDebugMode = false;
+
+        s_context?.Dispose();
+        if (SynchronizationContext.Current == s_context)
+        {
+            SynchronizationContext.SetSynchronizationContext(null);
+        }
+        s_context = null;
     }
 
     internal static void ReportInfo(LayerEventInfo info)
@@ -122,7 +147,7 @@ public static class LayerHub
 
         public LayersBuilder Push(Layer layer)
         {
-            if (s_chain == null) s_chain = new LayerChain(_chain);
+            if (s_chain == null) s_chain = new LayerChain(_chain);      
             s_chain.AddNode(layer);
             return this;
         }
