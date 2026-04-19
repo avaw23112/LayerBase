@@ -27,7 +27,6 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
 {
     private readonly object _lock = new();
     
-    // Master 存根：仅在 Rebuild 时读取
     internal List<OrderedHandlerEntry<T>> MasterOrdered = new();
     internal List<UnorderedHandlerEntry<T>> MasterUnordered = new();
     internal List<ParallelHandlerEntry<T>> MasterParallel = new();

@@ -67,7 +67,9 @@ public class EventPipelineTests
 
         // Wait for trace to fill
         for (var i = 0; i < 50 && _trace.Count < 4; i++) Thread.Sleep(5);
-        Assert.That(_trace, Is.EqualTo(new[] { "L1_Recv", "First", "Second", "Third" }));
+        // New Timing: Sync handlers are batched first, then Async handlers are started.
+        // Third is sync, Second is async. So Third executes before Second starts.
+        Assert.That(_trace, Is.EqualTo(new[] { "L1_Recv", "First", "Third", "Second" }));
     }
 
     [Test]
