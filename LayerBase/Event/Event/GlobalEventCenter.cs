@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 #if NETCOREAPP || NET5_0_OR_GREATER
 using System.Numerics;
@@ -132,26 +133,56 @@ public sealed class GlobalEventCenter
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal int FindFirstBit(ulong mask)
+    internal static int InternalFindFirstBit(ulong mask)
     {
-        if (mask == 0) return -1;
 #if NETCOREAPP || NET5_0_OR_GREATER
         return BitOperations.TrailingZeroCount(mask);
 #else
-        return TrailingZeroCountFallback(mask);
+        if (mask == 0) return 64;
+        int count = 0;
+        if ((mask & 0xFFFFFFFF) == 0) { mask >>= 32; count += 32; }
+        if ((mask & 0xFFFF) == 0) { mask >>= 16; count += 16; }
+        if ((mask & 0xFF) == 0) { mask >>= 8; count += 8; }
+        if ((mask & 0xF) == 0) { mask >>= 4; count += 4; }
+        if ((mask & 0x3) == 0) { mask >>= 2; count += 2; }
+        if ((mask & 0x1) == 0) { count += 1; }
+        return count;
 #endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal int FindLastBit(ulong mask)
+    internal static int InternalFindLastBit(ulong mask)
     {
-        if (mask == 0) return -1;
 #if NETCOREAPP || NET5_0_OR_GREATER
         return 63 - BitOperations.LeadingZeroCount(mask);
 #else
-        return 63 - LeadingZeroCountFallback(mask);
+        if (mask == 0) return -1;
+        int count = 0;
+        if ((mask & 0xFFFFFFFF00000000UL) == 0) { mask <<= 32; count += 32; }
+        if ((mask & 0xFFFF000000000000UL) == 0) { mask <<= 16; count += 16; }
+        if ((mask & 0xFF00000000000000UL) == 0) { mask <<= 8; count += 8; }
+        if ((mask & 0xF000000000000000UL) == 0) { mask <<= 4; count += 4; }
+        if ((mask & 0xC000000000000000UL) == 0) { mask <<= 2; count += 2; }
+        if ((mask & 0x8000000000000000UL) == 0) { count += 1; }
+        return 63 - count;
 #endif
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static ref TElement GetArrayDataRef<TElement>(TElement[] array) 
+    {
+#if NET5_0_OR_GREATER
+        return ref MemoryMarshal.GetArrayDataReference(array);
+#else
+        return ref MemoryMarshal.GetReference(array.AsSpan());
+#endif
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int FindFirstBit(ulong mask) => InternalFindFirstBit(mask);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int FindLastBit(ulong mask) => InternalFindLastBit(mask);
 
     private static void AtomicSetBit(ref long mask, int bit)
     {
@@ -266,32 +297,6 @@ public sealed class GlobalEventCenter
                 list.Pump();
             }
         }
-    }
-
-    private static int TrailingZeroCountFallback(ulong v)
-    {
-        if (v == 0) return 64;
-        int count = 0;
-        if ((v & 0xFFFFFFFF) == 0) { v >>= 32; count += 32; }
-        if ((v & 0xFFFF) == 0) { v >>= 16; count += 16; }
-        if ((v & 0xFF) == 0) { v >>= 8; count += 8; }
-        if ((v & 0xF) == 0) { v >>= 4; count += 4; }
-        if ((v & 0x3) == 0) { v >>= 2; count += 2; }
-        if ((v & 0x1) == 0) { count += 1; }
-        return count;
-    }
-
-    private static int LeadingZeroCountFallback(ulong v)
-    {
-        if (v == 0) return 64;
-        int count = 0;
-        if ((v & 0xFFFFFFFF00000000UL) == 0) { v <<= 32; count += 32; }
-        if ((v & 0xFFFF000000000000UL) == 0) { v <<= 16; count += 16; }
-        if ((v & 0xFF00000000000000UL) == 0) { v <<= 8; count += 8; }
-        if ((v & 0xF000000000000000UL) == 0) { v <<= 4; count += 4; }
-        if ((v & 0xC000000000000000UL) == 0) { v <<= 2; count += 2; }
-        if ((v & 0x8000000000000000UL) == 0) { count += 1; }
-        return count;
     }
 
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
@@ -427,7 +432,6 @@ public sealed class GlobalEventCenter
         public void Add(int layerIndex, EventHandleDelegateAsync<T> h) { GetOrCreate(layerIndex).Add(h); MarkDirty(); }
         public void AddParallel(int layerIndex, EventHandleDelegate<T> h, Action<int, string, string, Exception> re) { GetOrCreate(layerIndex).AddParallel(h, re); }
         
-        // --- 透明优化：Generator 专属订阅 ---
         internal void AddOptimized(int layerIndex, IntPtr ptr, object target, string name) { GetOrCreate(layerIndex).MasterOrdered.Add(OrderedHandlerEntry<T>.CreateOptimized(ptr, target, name)); MarkDirty(); }
 
         public void Remove(int layerIndex, IEventHandler<T> h) { if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null) { _buckets[layerIndex]!.Remove(h); MarkDirty(); } }
@@ -459,13 +463,18 @@ public sealed class GlobalEventCenter
             
             if (targetMask == 0) return EventHandledState.Continue;
 
+            ref var rangesRef = ref GlobalEventCenter.GetArrayDataRef(_ranges);
+            ref var flatParallelRef = ref GlobalEventCenter.GetArrayDataRef(_flatParallel);
+
             if (propagation == Propagation.Bubble)
             {
                 while (targetMask != 0)
                 {
-                    int l = Owner.FindLastBit(targetMask);
-                    var r = _ranges[l];
-                    for(int j = 0; j < r.ParallelCount; j++) _flatParallel[r.ParallelStart + j].Enqueue(l, in value);
+                    int l = GlobalEventCenter.InternalFindLastBit(targetMask);
+                    ref var r = ref Unsafe.Add(ref rangesRef, l);
+                    for(int j = 0; j < r.ParallelCount; j++) 
+                        Unsafe.Add(ref flatParallelRef, r.ParallelStart + j).Enqueue(l, in value);
+                    
                     var s = DispatchSyncBackward(r.SyncStart, r.SyncStart + r.SyncCount, in value);
                     if (s == EventHandledState.Handled) return s;
                     DispatchAsyncBackward(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
@@ -477,13 +486,15 @@ public sealed class GlobalEventCenter
             {
                 while (targetMask != 0)
                 {
-                    int l = Owner.FindFirstBit(targetMask);
-                    var r = _ranges[l];
-                    for(int j = 0; j < r.ParallelCount; j++) _flatParallel[r.ParallelStart + j].Enqueue(l, in value);
+                    int l = GlobalEventCenter.InternalFindFirstBit(targetMask);
+                    ref var r = ref Unsafe.Add(ref rangesRef, l);
+                    for(int j = 0; j < r.ParallelCount; j++) 
+                        Unsafe.Add(ref flatParallelRef, r.ParallelStart + j).Enqueue(l, in value);
+                    
                     var s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value);
                     if (s == EventHandledState.Handled) return s;
                     DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
-                    targetMask &= ~(1UL << l);
+                    targetMask &= (targetMask - 1);
                 }
                 return EventHandledState.Continue;
             }
@@ -505,23 +516,24 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe EventHandledState DispatchSync(int start, int end, in T value)
         {
-            var hs = _syncHandlers;
-            var bridges = _syncBridges;
-            var targets = _syncTargets;
+            if (start >= end) return EventHandledState.Continue;
+
+            ref var hBase = ref GlobalEventCenter.GetArrayDataRef(_syncHandlers);
+            ref var bBase = ref GlobalEventCenter.GetArrayDataRef(_syncBridges);
+            ref var tBase = ref GlobalEventCenter.GetArrayDataRef(_syncTargets);
 
             int combinedState = 0; int i = start;
             try {
                 for (; i < end; i++) {
                     EventHandledState res;
-                    var b = bridges[i];
+                    IntPtr b = Unsafe.Add(ref bBase, i);
                     if (b != IntPtr.Zero)
                     {
-                        // 🚀 极致桥接调用：没有任何委托开销
-                        res = ((delegate*<object, in T, EventHandledState>)b)(targets[i]!, in value);
+                        res = ((delegate*<object, in T, EventHandledState>)b)(Unsafe.Add(ref tBase, i)!, in value);
                     }
                     else
                     {
-                        res = hs[i](in value);
+                        res = Unsafe.Add(ref hBase, i)(in value);
                     }
                     combinedState |= (int)res;
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
@@ -542,22 +554,24 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe EventHandledState DispatchSyncBackward(int start, int end, in T value)
         {
-            var hs = _syncHandlers;
-            var bridges = _syncBridges;
-            var targets = _syncTargets;
+            if (start >= end) return EventHandledState.Continue;
+
+            ref var hBase = ref GlobalEventCenter.GetArrayDataRef(_syncHandlers);
+            ref var bBase = ref GlobalEventCenter.GetArrayDataRef(_syncBridges);
+            ref var tBase = ref GlobalEventCenter.GetArrayDataRef(_syncTargets);
 
             int combinedState = 0; int i = end - 1;
             try {
                 for (; i >= start; i--) {
                     EventHandledState res;
-                    var b = bridges[i];
+                    IntPtr b = Unsafe.Add(ref bBase, i);
                     if (b != IntPtr.Zero)
                     {
-                        res = ((delegate*<object, in T, EventHandledState>)b)(targets[i]!, in value);
+                        res = ((delegate*<object, in T, EventHandledState>)b)(Unsafe.Add(ref tBase, i)!, in value);
                     }
                     else
                     {
-                        res = hs[i](in value);
+                        res = Unsafe.Add(ref hBase, i)(in value);
                     }
                     combinedState |= (int)res;
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
