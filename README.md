@@ -504,24 +504,26 @@ public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
 
 ## ⚠️ 核心设计边界与时序约束 (Core Design Boundaries)
 
-为了在 managed 环境下压榨出极致性能，LayerBase 在设计上做了一些权衡，开发者**必须**了解这些物理边界：
+LayerBase v1.6.0+ 在追求极致性能的同时，实现了工业级的鲁棒性与运行域隔离，开发者**必须**了解以下最新的架构特性：
 
-### 1. 故障隔离：单帧中断，次帧自愈
-LayerBase 采用了高效的 SOA 批量分发引擎。为了保证极致的 CPU 缓存亲和力，同步分发循环中未对每一个 Handler 包裹 `try-catch`。
-*   **行为**：如果某个 Handler 抛出未处理异常，**本次分发的后续 Handler 将被跳过**以保护调用栈。
-*   **自愈**：系统会立即熔断故障节点，在**下一帧（或下一次分发）**，故障节点将被彻底剔除，系统恢复正常。
-*   **建议**：关键业务请自行包裹 `try-catch`，或利用 `EventMetaData` 进行全局观察。
+### 1. 故障隔离：单帧内完全隔离，次帧自愈
+LayerBase 采用了极致优化的高性能分发引擎，在确保分发链路高效的同时，实现了**单帧内的无损故障隔离**。
+*   **行为**：如果某个 Handler 抛出未处理异常，系统会立即执行熔断并将其跳过，分发链将在**当前帧内**原地复活并继续执行后续 Handler。
+*   **自愈**：该故障节点被熔断后，在**下一帧**会被彻底剔除出分发队列，实现架构级的稳健性。
+*   **优势**：真正的业务隔离，单个模块的 Bug 不会导致整帧结算逻辑的丢失。
 
-### 2. 时序约定：同步永远领先于异步
-在一个 Event 类型下，无论注册顺序如何：
-*   **同步 Handler** 总是会被优先批量执行，并具备截断事件（Handled）的能力。
-*   **异步 Handler** 只有在所有同步逻辑跑完后，才会统一启动。
-*   **结论**：不要依赖同步与异步之间的混合注册顺序。
+### 2. 多运行域 (Multi-Runtime) 范式
+LayerBase v1.6.0+ 彻底去除了全局静态状态的束缚，支持在同一进程中运行多个隔离的 `LayerRuntime`。
+*   **隔离性**：每个 `LayerRuntime` 拥有完全独立的事件总线、拓扑结构和依赖注入容器。
+*   **应用场景**：完美支持多世界同步模拟、独立的单元测试、以及编辑器态/运行态的热重载切换。
+*   **全局驱动**：通过 `LayerHub.Pump()` 可统一驱动进程内所有活跃的运行时。
 
-### 3. 层级上限：64 层物理硬限制
-为了实现 O(1) 的跨层位图路由，LayerBase 内部使用了 `ulong` 位图标记层状态。
-*   **物理限制**：单实例支持的最大 Layer 数量为 **64**。
-*   **溢出处理**：尝试 `Push` 第 65 层时会抛出 `InvalidOperationException`。
+### 3. 时序约定：同步永远领先于异步
+无论注册顺序如何，同步 Handler 总是优先于异步 Handler 执行，同步处理具备截断事件的能力。
+*   **最佳实践**：保持“同步处理状态，异步处理延后动作”的开发模式，以获得最可控的时序表现。
+
+### 4. 层级上限：64 层物理硬限制
+基于 `ulong` 位图的高效路由，单运行域最多支持 **64 层** 深度。
 
 ---
 
@@ -534,24 +536,26 @@ LayerBase 采用了高效的 SOA 批量分发引擎。为了保证极致的 CPU 
 
 ## ⚠️ Core Design Boundaries and Timing Constraints
 
-To squeeze out extreme performance in a managed environment, LayerBase makes specific design trade-offs. Developers **must** be aware of these physical boundaries:
+LayerBase v1.6.0+ achieves industrial-grade robustness and environment isolation while pursuing extreme performance. Developers **must** be aware of these physical boundaries:
 
-### 1. Fault Isolation: Single-Frame Interruption, Next-Frame Self-Healing
-LayerBase utilizes a high-efficiency SOA batch dispatch engine. To maintain peak CPU cache affinity, the synchronous dispatch loop does not wrap every individual Handler in a `try-catch`.
-*   **Behavior**: If a Handler throws an unhandled exception, **subsequent Handlers in the current dispatch will be skipped** to protect the call stack.
-*   **Healing**: The system instantly trips the breaker for the faulty node. In the **next frame (or next dispatch)**, the faulty node is purged, and the system restores normal operation.
-*   **Recommendation**: Wrap critical business logic in `try-catch` manually, or use `EventMetaData` for global observation.
+### 1. Fault Isolation: Single-Frame Isolation, Next-Frame Self-Healing
+LayerBase features a robust dispatch engine that ensures single-frame execution integrity.
+*   **Behavior**: If a Handler throws an unhandled exception, the system instantly isolates the fault and **continues dispatching subsequent Handlers within the same frame**.
+*   **Healing**: The faulty node is tripped and will be purged in the **next frame**, ensuring long-term system stability.
+*   **Advantage**: True business isolation; module-level bugs will not corrupt critical settlement logic in the same frame.
 
-### 2. Timing Contract: Synchronous Always Precedes Asynchronous
-For any given Event type, regardless of registration order:
-*   **Synchronous Handlers** are always batch-executed first and have the authority to truncate the event (Handled).
-*   **Asynchronous Handlers** are only triggered after all synchronous logic has completed.
-*   **Conclusion**: Do not rely on a mixed registration order between sync and async handlers.
+### 2. Multi-Runtime Paradigm
+LayerBase v1.6.0+ is fully de-staticized, supporting isolated `LayerRuntime` instances in a single process.
+*   **Isolation**: Every `LayerRuntime` possesses its own event bus, topological structure, and DI container.
+*   **Application**: Perfect for multi-world simulation, isolated unit testing, and dynamic hot-reloading.
+*   **Centralized Driving**: Use `LayerHub.Pump()` to drive all active runtimes seamlessly.
 
-### 3. Layer Limit: Hard 64-Layer Boundary
-To achieve O(1) cross-layer bitmap routing, LayerBase internally uses a `ulong` bitmap to track layer states.
-*   **Physical Limit**: A single instance supports a maximum of **64 Layers**.
-*   **Overflow Handling**: Attempting to `Push` a 65th layer will throw an `InvalidOperationException`.
+### 3. Timing Contract: Synchronous Always Precedes Asynchronous
+For any given Event type, Synchronous Handlers always execute first, with the authority to truncate events.
+*   **Recommendation**: Follow the "Sync-state, Async-effect" pattern for deterministic timing.
+
+### 4. Layer Limit: Hard 64-Layer Boundary
+Internally uses a `ulong` bitmap for O(1) routing; a single `LayerRuntime` instance supports a maximum of **64 Layers**.
 
 
 **LayerBase** is a high-performance event architecture and communication bus framework designed specifically for Unity,
