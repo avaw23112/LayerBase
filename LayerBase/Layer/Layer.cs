@@ -102,6 +102,14 @@ public abstract class Layer : Node, ILayerContext
         else m_pendingOps.Add(l => l.SubscribeAsync(handler));
     }
 
+    /// <summary>
+    /// 获取针对特定事件的链式 API 流。
+    /// </summary>
+    public LayerEventStream<T> OnEvent<T>() where T : struct
+    {
+        return new LayerEventStream<T>(this);
+    }
+
     public void SubscribeParallel<T>(EventHandleDelegate<T>                  handler,
                                      Action<int, string, string, Exception>? reportError = null) where T : struct
     {

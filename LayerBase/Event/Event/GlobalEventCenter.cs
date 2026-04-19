@@ -408,10 +408,12 @@ internal sealed class GlobalEventCenter
             int combinedState = 0;
             int i = start;
             try {
-                for (; i <= end - 2; i += 2) {
+                for (; i <= end - 2; ) {
                     var r1 = hs[i](in value);
-                    var r2 = hs[i+1](in value);
+                    i++;
+                    var r2 = hs[i](in value);
                     combinedState |= (int)r1 | (int)r2;
+                    i++;
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
                 }
                 for (; i < end; i++) {

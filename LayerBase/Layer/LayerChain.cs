@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
@@ -109,7 +110,17 @@ internal sealed class LayerChain
             if (layer == null) continue;
 
             sb.AppendLine($"Layer {i}: {layer.GetType().Name} [{(layer.HasActiveLogic ? "Active" : "Passive")}]");
-            foreach (var sub in layer.DiscoveredSubscribers) sb.AppendLine($"  -> [M] {sub.GetType().Name}");
+            foreach (var sub in layer.DiscoveredSubscribers)
+            {
+                sb.AppendLine($"  -> [M] {sub.GetType().Name}");
+                var subs = sub.GetSubscribedEvents().ToList();
+                if (subs.Count > 0)
+                    sb.AppendLine($"       |-- 订阅: {string.Join(", ", subs.Select(t => t.Name))}");
+                
+                var deps = sub.GetEventDependencies().ToList();
+                if (deps.Count > 0)
+                    sb.AppendLine($"       |-- 派发: {string.Join(", ", deps.Select(d => d.Target.Name))}");
+            }
         }
 
         sb.AppendLine("------------------------------------------------");
