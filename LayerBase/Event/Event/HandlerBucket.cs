@@ -20,27 +20,18 @@ internal sealed class HandlerCircuit
     public void Reset() => Volatile.Write(ref _disabled, 0);
 }
 
-/// <summary>
-/// 结构调度器：仅负责原始注册元数据的存储，不再持有执行态数据。
-/// </summary>
 internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
 {
     private readonly object _lock = new();
-    
     internal List<OrderedHandlerEntry<T>> MasterOrdered = new();
     internal List<UnorderedHandlerEntry<T>> MasterUnordered = new();
     internal List<ParallelHandlerEntry<T>> MasterParallel = new();
-    
     private readonly Action _onDirty;
-
     public bool HasHandlers => MasterOrdered.Count > 0 || MasterUnordered.Count > 0 || MasterParallel.Count > 0;
-
     public HandlerBucket(Action onDirty) => _onDirty = onDirty;
 
-    public void Reset()
-    {
-        lock (_lock)
-        {
+    public void Reset() {
+        lock (_lock) {
             foreach (var h in MasterOrdered) h.Circuit.Reset();   
             foreach (var h in MasterUnordered) h.Circuit.Reset(); 
             foreach (var h in MasterParallel) h.Reset();
@@ -55,7 +46,6 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     public void AddParallel(EventHandleDelegate<T> h, Action<int, string, string, Exception> re) { lock(_lock) { MasterParallel.Add(ParallelHandlerEntry<T>.Create(h, re)); _onDirty(); } }
 }
 
-// 基础 Entry 结构，仅作为注册时的搬运工
 internal readonly struct OrderedHandlerEntry<T> where T : struct
 {
     public readonly EventHandleDelegate<T>? SyncHandler;
@@ -68,18 +58,7 @@ internal readonly struct OrderedHandlerEntry<T> where T : struct
 
     public static OrderedHandlerEntry<T> Create(EventHandleDelegate<T> h) => new(h, null, GetName(h), new HandlerCircuit());
     public static OrderedHandlerEntry<T> Create(EventHandleDelegateAsync<T> h) => new(null, h, GetName(h), new HandlerCircuit());
-    
-    public static OrderedHandlerEntry<T> Convert(in UnorderedHandlerEntry<T> e)
-    {
-        var sync = e.SyncHandler;
-        var async = e.AsyncHandler;
-        return new OrderedHandlerEntry<T>(
-            sync != null ? (EventHandleDelegate<T>)((in T val) => { sync.Deal(in val); return EventHandledState.Continue; }) : null,
-            async != null ? (EventHandleDelegateAsync<T>)(async val => async.Deal(val)) : null,
-            e.FullName,
-            e.Circuit);
-    }
-    
+
     private static string GetName(Delegate d) {
         var m = d.Method;
         var t = m.DeclaringType?.FullName ?? d.Target?.GetType()?.FullName ?? "Global";
@@ -91,16 +70,25 @@ internal readonly struct OrderedHandlerEntry<T> where T : struct
 
 internal readonly struct UnorderedHandlerEntry<T> where T : struct
 {
-    public readonly IEventHandler<T>? SyncHandler;
-    public readonly IEventHandlerAsync<T>? AsyncHandler;
+    // 🚀 核心优化：预生成并持有包装委托，避免 Rebuild 时重复分配
+    public readonly EventHandleDelegate<T>? SyncWrapper;
+    public readonly EventHandleDelegateAsync<T>? AsyncWrapper;
     public readonly string FullName;
     public readonly HandlerCircuit Circuit;
 
-    private UnorderedHandlerEntry(IEventHandler<T>? s, IEventHandlerAsync<T>? a, string n, HandlerCircuit c)
-    { SyncHandler = s; AsyncHandler = a; FullName = n; Circuit = c; }
+    private UnorderedHandlerEntry(EventHandleDelegate<T>? s, EventHandleDelegateAsync<T>? a, string n, HandlerCircuit c)
+    { SyncWrapper = s; AsyncWrapper = a; FullName = n; Circuit = c; }
 
-    public static UnorderedHandlerEntry<T> Create(IEventHandler<T> h) => new(h, null, h.GetType().FullName ?? h.GetType().Name, new HandlerCircuit());
-    public static UnorderedHandlerEntry<T> Create(IEventHandlerAsync<T> h) => new(null, h, h.GetType().FullName ?? h.GetType().Name, new HandlerCircuit());
+    public static UnorderedHandlerEntry<T> Create(IEventHandler<T> h) {
+        // 在注册时进行一次性包装
+        EventHandleDelegate<T> wrapper = (in T val) => { h.Deal(in val); return EventHandledState.Continue; };
+        return new UnorderedHandlerEntry<T>(wrapper, null, h.GetType().Name, new HandlerCircuit());
+    }
+
+    public static UnorderedHandlerEntry<T> Create(IEventHandlerAsync<T> h) {
+        EventHandleDelegateAsync<T> wrapper = val => h.Deal(val);
+        return new UnorderedHandlerEntry<T>(null, wrapper, h.GetType().Name, new HandlerCircuit());
+    }
 }
 
 internal readonly struct ParallelHandlerEntry<T> where T : struct

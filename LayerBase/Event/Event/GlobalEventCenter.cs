@@ -16,6 +16,8 @@ public enum Propagation
     Drop
 }
 
+internal interface IEventBucket { void Reset(); void MarkDirty(); }
+
 internal sealed class GlobalEventCenter
 {
     private readonly ConcurrentDictionary<int, IEventBucket> _eventBuckets = new();
@@ -140,7 +142,7 @@ internal sealed class GlobalEventCenter
         var cached = BucketCache<T>.Instance;
         if (cached != null && cached.Owner == this) return cached;
         var typeId = EventTypeId<T>.Id;
-        var bucket = (EventBucket<T>)_eventBuckets.GetOrAdd(typeId, _ => new EventBucket<T>(this));
+        var bucket = (EventBucket<T>)_eventBuckets.GetOrAdd(typeId, _ => (IEventBucket)new EventBucket<T>(this));
         BucketCache<T>.Instance = bucket;
         return bucket;
     }
@@ -153,7 +155,7 @@ internal sealed class GlobalEventCenter
 
     private static class BucketCache<T> where T : struct { public static EventBucket<T>? Instance; }
 
-    internal interface IEventBucket { void Reset(); void MarkDirty(); }
+    internal interface IResetable { void Reset(); }
 
     private interface IEventQueue { void EnqueueEvent<T>(in Event<T> @event) where T : struct; void Pump(); }
     private sealed class LayerEventQueue : IEventQueue
@@ -197,15 +199,13 @@ internal sealed class GlobalEventCenter
         if ((v & 0x8000000000000000UL) == 0) { count += 1; }
         return count;
     }
-
-    public interface IResetable { void Reset(); }
 }
 
 internal sealed class AsyncFaultContext<T> where T : struct
 {
     private static readonly ConcurrentBag<AsyncFaultContext<T>> s_pool = new();
     private readonly Action _continuation;
-    private GlobalEventCenter.IEventBucket? _owner;
+    private IEventBucket? _owner;
     private HandlerCircuit? _circuit;
     private string? _handlerFullName;
     private int _layerIndex;
@@ -214,7 +214,7 @@ internal sealed class AsyncFaultContext<T> where T : struct
 
     private AsyncFaultContext() => _continuation = Complete;
 
-    public static void Observe(GlobalEventCenter.IEventBucket owner, int layerIndex, HandlerCircuit circuit, string handlerFullName, in T payload, LBTask task)
+    public static void Observe(IEventBucket owner, int layerIndex, HandlerCircuit circuit, string handlerFullName, in T payload, LBTask task)
     {
         if (!s_pool.TryTake(out var context)) context = new AsyncFaultContext<T>();
         context._owner = owner; context._layerIndex = layerIndex; context._circuit = circuit;
