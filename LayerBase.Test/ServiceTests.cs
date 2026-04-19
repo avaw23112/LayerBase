@@ -45,16 +45,30 @@ public class ServiceRegistrationTests
         Assert.That(ReferenceEquals(s1, s2), Is.False);
     }
 
+    private class InstanceServiceModule : IService
+    {
+        private readonly object _instance;
+        public InstanceServiceModule(object instance) => _instance = instance;
+        public void ConfigureServices(IServiceCollection services)
+        {
+            if (_instance is IDemoService ds) services.AddSingleton<IDemoService>(ds);
+        }
+    }
+
     [Test]
     public void Singleton_service_from_root_is_shared_across_layers()
     {
+        var rootInstance = new DemoService();
+        
         var layer1 = new DemoLayer();
+        layer1.RegisterService(new InstanceServiceModule(rootInstance));
+        
         var layer2 = new DemoLayer();
+        layer2.RegisterService(new InstanceServiceModule(rootInstance));
 
         LayerHub.CreateLayers().Push(layer1).Push(layer2).Build();
 
-        // Manually registering a shared singleton to root provider simulation
-        // Note: The framework usually handles this via GlobalHub-level services.
+        Assert.That(layer1.GetService<IDemoService>(), Is.SameAs(layer2.GetService<IDemoService>()));
     }
 
     [Test]

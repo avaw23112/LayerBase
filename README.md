@@ -710,6 +710,7 @@ By using the `[OwnerLayer]` attribute, a Service can be statically bound to a sp
 
 ```csharp
 using LayerBase.DI;
+using LayerBase.Layers;
 
 // Bound to the GameLogicLayer
 [OwnerLayer(typeof(GameLogicLayer))]
