@@ -25,14 +25,13 @@ public interface IServiceCollection
 {
     IServiceCollection Add(ServiceDescriptor           descriptor);
     IServiceCollection AddSingleton<TService>(TService instance);
-    IServiceCollection AddSingleton<TService, TImpl>() where TImpl : TService;
-    IServiceCollection AddSingleton<TService>(Func<IServiceProvider, TService> factory);
     IServiceCollection AddTransient<TService, TImpl>() where TImpl : TService;
     IServiceCollection AddTransient<TService>(Func<IServiceProvider, TService> factory);
     IServiceCollection AddScoped<TService, TImpl>() where TImpl : TService;
     IServiceCollection AddScoped<TService>(Func<IServiceProvider, TService> factory);
     IReadOnlyList<ServiceDescriptor> ToDescriptors();
 }
+
 
 public interface IServiceProvider
 {
@@ -316,15 +315,4 @@ public static class LayerContextExtensions
 [AttributeUsage(AttributeTargets.Constructor | AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class InjectAttribute : Attribute
 {
-}
-
-[AttributeUsage(AttributeTargets.Class)]
-public sealed class OwnerLayerAttribute : Attribute
-{
-    public OwnerLayerAttribute(Type layerType)
-    {
-        LayerType = layerType;
-    }
-
-    public Type LayerType { get; }
 }

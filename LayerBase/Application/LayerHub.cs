@@ -130,17 +130,23 @@ public static class LayerHub
 
         public LayersBuilder Push(Layer layer)
         {
+            if (s_layerIndexCounter >= 64)
+                throw new InvalidOperationException("LayerBase currently supports a maximum of 64 layers due to bitmap routing constraints.");
+            
             if (s_chain == null) s_chain = new LayerChain(_chain);
             s_chain.AddNode(layer);
             return this;
         }
 
-        public LayersBuilder SetDebugMode(bool enabled)
+        public LayersBuilder SetDebug(bool enabled = true)
         {
             _debugMode = enabled;
             IsDebugMode = enabled;
             return this;
         }
+
+        [Obsolete("Use SetDebug(bool) instead.")]
+        public LayersBuilder SetDebugMode(bool enabled) => SetDebug(enabled);
 
         public void Build()
         {

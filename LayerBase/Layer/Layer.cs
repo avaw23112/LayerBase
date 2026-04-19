@@ -9,6 +9,17 @@ using LayerBase.Event.Delay;
 
 namespace LayerBase.Layers;
 
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class OwnerLayerAttribute : Attribute
+{
+    public OwnerLayerAttribute(Type layerType)
+    {
+        LayerType = layerType;
+    }
+
+    public Type LayerType { get; }
+}
+
 public abstract class Layer : Node, ILayerContext, IDisposable, IService
 {
     private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();

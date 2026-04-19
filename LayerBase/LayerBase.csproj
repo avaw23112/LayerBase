@@ -10,9 +10,9 @@
         <Title>LayerBase</Title>
         <Authors>扭矩不足</Authors>
         <Description>高性能一体化游戏架构框架。集成模块化层级、轻量级 DI、异步任务(LBTask)与超极速事件总线。专为 Godot/Unity 优化。</Description>
-        <Copyright>MIT</Copyright>
+        <Copyright>Apache-2.0</Copyright>
         <PackageProjectUrl>https://github.com/avaw23112/LayerBase</PackageProjectUrl>
-        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
         <RepositoryUrl>https://github.com/avaw23112/LayerBase</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

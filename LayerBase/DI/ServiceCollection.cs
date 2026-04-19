@@ -13,19 +13,12 @@ public class ServiceCollection : IServiceCollection
         return this;
     }
 
+    /// <summary>
+    ///     注册一个全局单例 (Global Singleton)。
+    /// </summary>
     public IServiceCollection AddSingleton<TService>(TService instance)
     {
         return Add(ServiceDescriptor.Singleton(instance));
-    }
-
-    public IServiceCollection AddSingleton<TService, TImpl>() where TImpl : TService
-    {
-        return Add(ServiceDescriptor.LayerScoped<TService, TImpl>());
-    }
-
-    public IServiceCollection AddSingleton<TService>(Func<IServiceProvider, TService> factory)
-    {
-        return Add(ServiceDescriptor.LayerScoped(factory));
     }
 
     public IServiceCollection AddTransient<TService, TImpl>() where TImpl : TService

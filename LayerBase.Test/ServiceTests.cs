@@ -161,7 +161,7 @@ public class ServiceRegistrationTests
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddSingleton<IDemoService, DemoService>();
+            services.AddScoped<IDemoService, DemoService>();
         }
     }
 
@@ -169,7 +169,7 @@ public class ServiceRegistrationTests
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddSingleton<IDemoService, DemoService>();
+            services.AddScoped<IDemoService, DemoService>();
         }
     }
 
@@ -181,7 +181,7 @@ public class ServiceRegistrationTests
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddSingleton<ServiceEventEmitter, ServiceEventEmitter>();
+            services.AddScoped<ServiceEventEmitter, ServiceEventEmitter>();
         }
     }
 
@@ -206,7 +206,7 @@ public class ServiceRegistrationTests
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddSingleton<UpdatingService, UpdatingService>();
+            services.AddScoped<UpdatingService, UpdatingService>();
         }
     }
 

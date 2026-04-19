@@ -232,7 +232,7 @@ public class CombatService : IService
     public void ConfigureServices(IServiceCollection services) 
     { 
         // 注册 Manager。此处注册的先后顺序即决定了同层级内事件响应的优先级。
-        services.AddSingleton<DamageManager, DamageManager>();
+        services.AddScoped<DamageManager, DamageManager>();
     }
 }
 ```
@@ -403,9 +403,57 @@ public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
 ---
 ---
 
-<a id="english"></a>
+## ⚠️ 核心设计边界与时序约束 (Core Design Boundaries)
 
+为了在 managed 环境下压榨出极致性能，LayerBase 在设计上做了一些权衡，开发者**必须**了解这些物理边界：
+
+### 1. 故障隔离：单帧中断，次帧自愈
+LayerBase 采用了高效的 SOA 批量分发引擎。为了保证极致的 CPU 缓存亲和力，同步分发循环中未对每一个 Handler 包裹 `try-catch`。
+*   **行为**：如果某个 Handler 抛出未处理异常，**本次分发的后续 Handler 将被跳过**以保护调用栈。
+*   **自愈**：系统会立即熔断故障节点，在**下一帧（或下一次分发）**，故障节点将被彻底剔除，系统恢复正常。
+*   **建议**：关键业务请自行包裹 `try-catch`，或利用 `EventMetaData` 进行全局观察。
+
+### 2. 时序约定：同步永远领先于异步
+在一个 Event 类型下，无论注册顺序如何：
+*   **同步 Handler** 总是会被优先批量执行，并具备截断事件（Handled）的能力。
+*   **异步 Handler** 只有在所有同步逻辑跑完后，才会统一启动。
+*   **结论**：不要依赖同步与异步之间的混合注册顺序。
+
+### 3. 层级上限：64 层物理硬限制
+为了实现 O(1) 的跨层位图路由，LayerBase 内部使用了 `ulong` 位图标记层状态。
+*   **物理限制**：单实例支持的最大 Layer 数量为 **64**。
+*   **溢出处理**：尝试 `Push` 第 65 层时会抛出 `InvalidOperationException`。
+
+---
+
+<a id="english"></a>
 # 🚀 LayerBase: Data-Oriented High-Performance C# Game Architecture Bus
+...
+...
+...
+---
+
+## ⚠️ Core Design Boundaries and Timing Constraints
+
+To squeeze out extreme performance in a managed environment, LayerBase makes specific design trade-offs. Developers **must** be aware of these physical boundaries:
+
+### 1. Fault Isolation: Single-Frame Interruption, Next-Frame Self-Healing
+LayerBase utilizes a high-efficiency SOA batch dispatch engine. To maintain peak CPU cache affinity, the synchronous dispatch loop does not wrap every individual Handler in a `try-catch`.
+*   **Behavior**: If a Handler throws an unhandled exception, **subsequent Handlers in the current dispatch will be skipped** to protect the call stack.
+*   **Healing**: The system instantly trips the breaker for the faulty node. In the **next frame (or next dispatch)**, the faulty node is purged, and the system restores normal operation.
+*   **Recommendation**: Wrap critical business logic in `try-catch` manually, or use `EventMetaData` for global observation.
+
+### 2. Timing Contract: Synchronous Always Precedes Asynchronous
+For any given Event type, regardless of registration order:
+*   **Synchronous Handlers** are always batch-executed first and have the authority to truncate the event (Handled).
+*   **Asynchronous Handlers** are only triggered after all synchronous logic has completed.
+*   **Conclusion**: Do not rely on a mixed registration order between sync and async handlers.
+
+### 3. Layer Limit: Hard 64-Layer Boundary
+To achieve O(1) cross-layer bitmap routing, LayerBase internally uses a `ulong` bitmap to track layer states.
+*   **Physical Limit**: A single instance supports a maximum of **64 Layers**.
+*   **Overflow Handling**: Attempting to `Push` a 65th layer will throw an `InvalidOperationException`.
+
 
 **LayerBase** is a high-performance event architecture and communication bus framework designed specifically for Unity,
 Godot, and pure C# servers.
@@ -670,7 +718,7 @@ public class CombatService : IService
     public void ConfigureServices(IServiceCollection services) 
     { 
         // Register Managers. The order of registration dictates the priority of event responses within this layer.
-        services.AddSingleton<DamageManager, DamageManager>();
+        services.AddScoped<DamageManager, DamageManager>();
     }
 }
 ```
