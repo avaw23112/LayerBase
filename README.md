@@ -1,3 +1,6 @@
+[English](#english) | [中文](#中文)
+
+<a id="中文"></a>
 # 🚀 LayerBase: 面向数据的高性能 C# 游戏架构总线
 
 **LayerBase** 是一款专为 Unity、Godot 及纯 C# 服务端打造的高性能事件架构与通讯总线框架。
@@ -112,7 +115,7 @@ EventBucket<T>
        <ProjectReference Include="LayerBase.Generator\LayerBase.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
    </ItemGroup>
    ```
-3. **环境要求**：支持 `.NET Standard 2.1`（完美兼容 Unity/Godot），建议在 `.NET 8.0/9.0` 环境下运行以解锁完整的 `Unsafe` 硬件加速。
+4. **环境要求**：支持 `.NET Standard 2.1`（完美兼容 Unity/Godot），建议在 `.NET 8.0/9.0` 环境下运行以解锁完整的 `Unsafe` 硬件加速。
 
 ---
 
@@ -346,6 +349,362 @@ public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
     {
         // 在这里进行统一的容错处理、日志打点或崩溃上报
         Console.WriteLine($"[严重错误] 同步事件处理失败: {exception.Message}");
+    }
+}
+```
+
+---
+---
+
+<a id="english"></a>
+# 🚀 LayerBase: Data-Oriented High-Performance C# Game Architecture Bus
+
+**LayerBase** is a high-performance event architecture and communication bus framework tailored for Unity, Godot, and pure C# servers.
+
+It shatters the performance bottlenecks of traditional Object-Oriented Programming (OOP) event buses by adopting **Data-Oriented Design (DOD)** and **SOA (Structure of Arrays)** memory layout at its core. While keeping your business code minimal and decoupled, it provides standardized event flow control for medium-to-large projects, achieving an impressive physical throughput of **over 150 million TPS (Transactions Per Second)** on a single core.
+
+---
+
+## 🤔 Architecture Evolution: Why Do We Need LayerBase?
+
+Throughout the lifecycle of a game project, the growth in business complexity inevitably drives the evolution of the communication architecture. Looking back at common technology choices, the pain points become clear:
+
+### 1. The Singleton Coupling Dilemma
+In the early stages of a project, direct invocation is the most intuitive approach (e.g., `GameManager.Instance.UpdateHealth()`). However, in medium-to-large projects, when hundreds or thousands of Managers exist, this approach degrades into an extremely complex web of references. The tight coupling between modules makes refactoring and isolated testing nearly impossible.
+
+### 2. The Timing and Performance Bottlenecks of Traditional EventBuses
+To decouple modules, the industry widely adopted `Action` delegates, `UniRx`, or various generic `EventBus` implementations. While this cuts off hard references, it introduces two hidden engineering disasters:
+
+*   **Implicit Timing Traps**: Without a unified architectural guideline, developers usually register events scattered across the lifecycles of various components (like `Awake` or `Start`). This **unordered registration behavior** turns the execution order of event responses into a black box. When an event is fired, you cannot guarantee the deterministic order of data settlement versus UI updates, making it a hotbed for sporadic bugs.
+*   **Underlying Performance Reefs**: The core implementation of traditional event buses generally relies on `Dictionary<Type, List<Delegate>>`. When faced with high-frequency interactions among massive numbers of entities, frequent dictionary hashing, delegate chain iteration, and crucially—**CPU Cache Misses caused by the lack of memory contiguity**—often restrict the system's processing ceiling to just a few million TPS.
+
+### 3. The Breakthrough: Reconstructing Order and Speed
+LayerBase's design philosophy is: **Tame chaotic registrations with a strongly constrained framework, and shatter performance shackles with data-oriented reconstruction.**
+
+1.  **On Macro Architecture**: Abandon the free-for-all subscription pattern and introduce a strongly constrained `Layer -> Service -> Manager` three-tier progressive architecture. Through Dependency Injection (DI) and explicit topology layers, the flow and processing order of events return to absolute determinism.
+2.  **On Micro Execution**: Draw inspiration from ECS frameworks. Adopt pure SOA array layouts for event routing at the lowest level. This ensures that the architecture not only standardizes the code but also achieves cache hit rates on par with top-tier C++/C# ECS frameworks.
+
+---
+
+## 📊 Visual Breakdown: Why Are We So Fast?
+
+To break through the performance ceiling of traditional architectures, LayerBase implements comprehensive physical-level optimizations at the bottom layer:
+
+### 1. SOA Data-Oriented Layout (Structure of Arrays)
+A traditional EventBus uses a typical **AOS (Array of Structures)** layout in memory. When dispatching an event, the CPU must perform multiple expensive, non-contiguous memory jumps:
+
+```text
+❌ Traditional EventBus Dispatch Path (Severe Cache Misses)
+EventBus 
+  └─> [Hash calculation to locate Bucket] 
+        └─> [Read List memory block] 
+              └─> [Jump to Handler Object memory (Contains Context/Delegate)] 
+                    └─> Virtual function Invoke 
+```
+
+In contrast, LayerBase uses source generators during the build phase to "dismantle and dehydrate" all handlers for the same event type, transforming them into contiguous native arrays (**SOA Layout**):
+
+```text
+✅ LayerBase Branchless Dispatch Engine (Perfect Cache Affinity)
+EventBucket<T>
+ ├── Delegate[] SyncHandlers  [ ptr | ptr | ptr | ptr ] -> Pure contiguous function pointers, CPU ultra-fast sequential prefetch
+ ├── Delegate[] AsyncHandlers [ ptr | ptr | ptr | ptr ] -> Physically isolated sync & async, eliminating branch checks
+ └── Circuit[]  FaultCircuits [ 0 | 0 | 1 | 0 ] -> Accessed ONLY when exceptions are thrown, never polluting the hot path
+```
+Since only compact delegate pointers remain in the hot path, the CPU's L1/L2 cache achieves near-perfect sequential prefetching.
+
+### 2. Hardware-Level Bitmask Skipping
+When dispatching across layers (e.g., global broadcast), LayerBase does not iterate through any dictionaries. The active state of each layer is mapped into a single `ulong` integer. Utilizing modern CPU instructions (`BitOperations.TrailingZeroCount`), **a single clock cycle of bitwise operation** can precisely calculate the next layer containing a subscriber, minimizing inter-layer jump overhead.
+
+### 3. Branchless and Unsafe Bounds Check Elimination
+*   **Bitwise State Aggregation**: In the core loop, the return states of multiple Handlers are merged using bitwise OR (`|`), drastically compressing branch prediction instructions.
+*   **Pointer Offsets**: In supported runtimes, the underlying engine directly acquires the native pointer of the array and steps through it via `Unsafe.Add`, completely eliminating JIT array bounds check (BCE) instructions inside the loop.
+
+---
+
+## ⚡ Standard Benchmarks (BenchmarkDotNet)
+
+Testing Environment: `BenchmarkDotNet v0.15.8`, `Windows 11`, `.NET 8.0 (X64 RyuJIT)`, `Intel Core i7-12650H`.
+
+| Method | Mean | Error | StdDev | Gen0 | Gen1 | Gen2 | Allocated |
+|------------------------------- |-------------:|-----------:|-------------:|--------:|--------:|-------:|----------:|
+| 'Single Layer Low Load (1 layer, 1 sub) - 1M times' | 8,197.72 us | 231.042 us | 681.233 us | - | - | - | 8.51 KB |
+| 'Single Layer High Load (1 layer, 10 subs) - 1M times' | 19,898.70 us | 601.152 us | 1,763.076 us | - | - | - | 12.15 KB |
+| 'Multi-layer Low Load (10 layers, tail sub only) - 1M times' | 7,462.16 us | 208.456 us | 604.768 us | - | - | - | 59.4 KB |
+| 'Multi-layer Full Load (10 layers, sub on every layer) - 1M times'| 19,114.17 us | 536.572 us | 1,565.206 us | - | - | - | 67.75 KB |
+| 'Multi-layer Random Load (10 layers, 5 random subs) - 1M times'| 13,634.22 us | 350.394 us | 1,033.144 us | - | - | - | 63.36 KB |
+| 'Extreme Empty Load (64 layers, 0 subs) - 1M times' | 1,811.59 us | 36.105 us | 99.445 us | 44.9219 | 19.5313 | 7.8125 | 496.54 KB |
+| 'Classic 1ms Challenge (3 tiers, fully subbed) - 10k times' | 97.83 us | 2.244 us | 6.617 us | 1.7090 | 0.1221 | - | 21.28 KB |
+| 'Typical Mid-Heavy Load (5 tiers: 1 has 100 subs, 4 have 20) - 10k times' | 2,807.12 us | 55.601 us | 139.493 us | 7.8125 | - | - | 105.72 KB |
+
+> 💡 **Data Interpretation**:
+> *   **Allocated (Memory Allocation)**: All `Allocated` values in the table are **one-time memory overhead** generated during `GlobalSetup` (build phase) to initialize layer containers and pre-allocate underlying SOA arrays. In the **runtime hot path (Run)** of event dispatching, all scenarios achieved **0 GC Memory Allocation** (`-` denotes no GC triggered).
+> *   **Throughput Limits**: Under the most common "10 Layers Low Load (head and tail subs only)" scenario, 1 million dispatches took merely ~7.4ms, equaling an astonishing throughput of **134 million times/sec**. This proves that the architectural routing overhead across 10 physical layers is practically zero.
+> *   **High Load Resilience**: In a heavy-duty test mimicking medium-to-large projects ("5-tier architecture, single event triggering 180 Handlers"), routing one event and triggering 180 callbacks took about 0.28 microseconds. Dispatching 10,000 times (executing 1.8 million business callbacks) took only 2.8 milliseconds.
+> *   **1ms Challenge**: In the mainstream 3-tier (UI-Logic-Data) fully-subscribed game architecture, dispatching 10,000 events consumes a mere 97.8 microseconds.
+> *   **Zero-Cost Idling**: Under extreme empty loading with 64 layers, the routing probe time for 1 million events is less than 2ms, implying that a massive number of idle layers will not impose any burden on the main frame rate.
+
+---
+
+## 🛡️ Industrial-Grade Infrastructure Guarantees
+
+Beyond pursuing extreme execution efficiency, LayerBase also provides a complete suite of facilities for engineering robustness:
+
+- **Self-Healing Circuit Breaker**: When an event Handler throws an unhandled exception, the system instantly locates and physically trips the breaker for that specific node. Local failures will never block other businesses in the same layer. In the next frame, the engine smoothly purges the invalid node via a "Two-Pass Zero-Allocation Rebuild", achieving system self-healing.
+- **Zero-Allocation Asynchronous Ecosystem (`LBTask`)**: Modern game development relies heavily on async operations. The framework comes with `LBTask`, a struct-based task model specifically tuned for the game loop. It achieves **0 GC Heap Allocation** on synchronously completed paths, freeing your async logic from memory jitter nightmares.
+- **Static Topology Audit**: During `Build()` to construct the layers, the underlying Three-Color Algorithm statically scans the entire event network. If a **synchronous infinite loop** risk is detected, a loop warning is printed directly to the console, refusing black-box execution.
+
+---
+
+## 📦 Installation Guide
+
+1. **Quick Install via NuGet (Recommended)**:
+   You can easily install LayerBase through the NuGet Package Manager:
+   ```bash
+   dotnet add package LayerBase --version 1.3.2
+   ```
+2. **Source Code Integration**: Add the `LayerBase` and `LayerBase.Task` project directories from the repository directly to your solution and reference them.
+3. **Configure Source Generator**:
+   The framework relies on Source Generators to achieve zero-reflection attribute binding. Ensure the analyzer is referenced in your main project:
+   ```xml
+   <ItemGroup>
+       <ProjectReference Include="LayerBase.Generator\LayerBase.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+   </ItemGroup>
+   ```
+4. **Environment Requirements**: Supports `.NET Standard 2.1` (perfectly compatible with Unity/Godot). It's recommended to run in a `.NET 8.0/9.0` environment to unlock full hardware acceleration via `Unsafe`.
+
+---
+
+## 📖 Best Practices Manual: Building a Clear Architecture
+
+In large projects, flat architectures easily lead to convoluted module dependencies. LayerBase's three-tier structure manages this complexity through spatial isolation:
+
+*   🌍 **Layer (Macro Level)**: **Handles processing priorities and physical boundaries.**
+    *   **Role**: Represents different tiers of the system (e.g., `RenderLayer`, `PhysicsLayer`, `CoreLogicLayer`). It contains no specific business logic but defines the boundaries for event flow (Bubble up, Drop down), ensuring determinism in overall system timing.
+*   🏢 **Service (Business Service)**: **Function aggregation and scheduling.**
+    *   **Role**: Groups related functional modules (e.g., `PlayerService` grouping input, movement, animation). It handles Dependency Injection (DI) configurations, exposes coarse-grained interfaces outwardly, and manages Managers inwardly to achieve high cohesion.
+*   ⚙️ **Manager (Specific Logic Block)**: **The carrier of concrete business.**
+    *   **Role**: Adheres to the Single Responsibility Principle (SRP) to implement a specific micro-feature (like handling damage calculations). Managers generally avoid referencing each other directly, communicating entirely through the event bus to achieve low coupling.
+
+Through this structure, the project's directory layout transparently reflects its system architecture.
+
+---
+
+### Step 1: Define Events (Event Structs)
+To avoid GC pressure when events are triggered frequently, the framework requires all event objects to be declared as `struct`:
+
+```csharp
+public struct DamageEvent
+{
+    public int TargetId;
+    public float Amount;
+}
+public struct PlayerDeathEvent { }
+```
+
+### Step 2: Write Business Logic (Manager)
+Managers inherit from `ILayerContext`, allowing them to perceive their layer and providing powerful event sending and receiving capabilities. It is highly recommended to use attributes for binding; the compiler will automatically generate the code to avoid reflection overhead.
+
+```csharp
+using LayerBase.DI;
+using LayerBase.Core.Event;
+using LayerBase.Async;
+
+// The class must be marked as partial to work with the source generator
+public partial class DamageManager : ILayerContext
+{
+    // [Synchronous Event Handling]: using the [Subscribe] attribute
+    [Subscribe]
+    private EventHandledState OnTakeDamage(in DamageEvent e)
+    {
+        // Business logic handling...
+        
+        if (e.Amount > 100)
+        {
+            // Drop down: Pass the event to lower-level systems
+            this.SendDrop(new PlayerDeathEvent()); 
+        }
+        
+        // Return Continue: allow other Managers in the same or subsequent layers to process this event
+        // Return Handled: truncate further propagation of this event
+        return EventHandledState.Continue;
+    }
+
+    // [Asynchronous Event Handling]: using the [SubscribeAsync] attribute
+    [SubscribeAsync]
+    private async LBTask OnPlayerDeath(PlayerDeathEvent e)
+    {
+        // Supports GC-free delays using LBTask.Delay
+        await LBTask.Delay(TimeSpan.FromSeconds(3f)); 
+    }
+}
+```
+
+### Step 3: Organize Business Modules (Service)
+Services are responsible for registering related Managers into the DI container.
+By using the `[OwnerLayer]` attribute, a Service can be statically bound to a specific Layer.
+
+```csharp
+using LayerBase.DI;
+
+// Bound to the GameLogicLayer
+[OwnerLayer(typeof(GameLogicLayer))]
+public class CombatService : IService 
+{
+    public void ConfigureServices(IServiceCollection services) 
+    { 
+        // Register Managers. The order of registration dictates the priority of event responses within this layer.
+        services.AddSingleton<DamageManager, DamageManager>();
+    }
+}
+```
+
+### Step 4: Spatial Event Triggering
+LayerBase provides APIs for precise propagation direction control. Within a `Layer`, `Service`, or `Manager`, you can call extension methods directly to dispatch events:
+
+```csharp
+// ⚔️ [Send Family: Synchronous execution, the current thread blocks until dispatch finishes]
+this.SendLocal(new DamageEvent());  // [Local] Broadcast only within the current layer
+this.SendBubble(new DamageEvent()); // [Bubble] Throw upward to a smaller index (e.g., Logic sending to UI)
+this.SendDrop(new DamageEvent());   // [Drop] Throw downward to a larger index (e.g., UI sending to Logic)
+this.SendGlobal(new DamageEvent()); // [Global] Penetrate and broadcast across all layers
+
+// 📨 [Post Family: Asynchronous delivery, enqueues the event to be processed by the next Pump]
+this.PostBubble(new DamageEvent());
+this.PostGlobal(new DamageEvent()); 
+
+// ⏳ [Delay Family: Timed delivery]
+this.DelayDrop(new PlayerDeathEvent(), 3.5f); // Dispatch downward after specified seconds
+```
+This design helps prevent the circular triggers and unnecessary performance overhead caused by undirected global broadcasting.
+
+### Step 5: Engine Lifecycle Integration
+When integrating LayerBase into a specific game engine (e.g., Unity's `MonoBehaviour`), two key lifecycles must be handled: Build and Pump.
+
+*   **Build**: Called during the game's initialization phase to scan attributes, allocate SOA arrays, and statically audit infinite loops.
+*   **Pump**: Called in the per-frame update phase to process queued asynchronous events and delayed tasks.
+
+```csharp
+using UnityEngine;
+using LayerBase.Layers;
+using LayerBase.LayerHub;
+
+public class GameRoot : MonoBehaviour
+{
+    // Define Layers
+    public class InteractionLayer : Layer { }
+    public class CoreLogicLayer : Layer { }
+
+    void Awake()
+    {
+        // 1. Initialization phase: Construct topology
+        LayerHub.CreateLayers()
+                .Push(new InteractionLayer()) // Index 0: Upper Interaction Layer
+                .Push(new CoreLogicLayer())   // Index 1: Lower Logic Layer
+                .SetDebug()                   // Enable Debug mode to obtain the build graph via GetTopologySummary(). Minimal performance impact.
+                .Build();                     // Automatically scan [OwnerLayer] and assemble
+
+        // Register the global message channel to capture framework exceptions
+        LayerHub.OnLayerEventInfo +=
+            info =>
+            {
+                GD.PrintErr($"[{info.LayerIndex}][{info.EventName}][{info.Type}]: {info.Source}{info.Message}");
+            };
+    }
+
+    void Update()
+    {
+        // 2. Runtime phase: Drive the event pump
+        // Under idle states, the cost of calling Pump is negligible
+        LayerHub.Pump(Time.deltaTime);
+    }
+}
+```
+
+---
+
+## 🛠 Advanced Features Guide
+
+### 1. Fluent Filtering and Interception (Fluent API)
+For scenarios requiring dynamic subscription conditions, LayerBase offers an elegant chainable API. Its greatest advantage is that interception conditions are evaluated at the earliest possible stage in routing (inside the wrapper delegate). Unqualified events are short-circuited immediately, preventing the awakening of massive business logic blocks.
+
+```csharp
+public partial class PlayerManager : ILayerContext
+{
+    private int _myEntityId = 10;
+
+    public void Initialize()
+    {
+        // Chainable calls: Subscribe -> Filter -> Handle
+        this.OnEvent<DamageEvent>()
+            .Where((in DamageEvent e) => e.TargetId == _myEntityId) 
+            .Handle((in DamageEvent e) => 
+            {
+                // Handle damage...
+                return EventHandledState.Handled;
+            });
+    }
+}
+```
+
+### 2. Background Parallel Processing (Parallel Handlers)
+When dealing with logic that consumes high CPU and **does not rely on or modify the main thread state** (such as pathfinding data packaging or heavy log serialization), parallel subscriptions can be utilized. Events will enter a lock-free queue and be processed asynchronously by the ThreadPool in the background, ensuring main thread frame rate stability.
+
+```csharp
+// Quickly bind parallel methods via attribute
+[SubscribeParallel]
+private EventHandledState OnHeavyComputeTask(in ComputeEvent e)
+{
+    // This method is safely scheduled in a multi-threaded environment
+    return EventHandledState.Continue;
+}
+```
+
+### 3. Topology Audit
+By enabling Debug mode, you can call `GetTopologySummary()` to output a clear text structural graph in the console, showcasing which Managers are mounted on which Layers across the system, as well as what specific events they subscribe to or dispatch. This is an indispensable tool for debugging system coupling in large projects.
+
+### 4. Slice-based Standalone Processors (Standalone EventHandler)
+Sometimes you might have highly independent logic dedicated to a single event, making it too bloated to cram into a massive Manager. LayerBase supports "slice-based" standalone processors.
+Simply implement the `IEventHandler<T>` or `IEventHandlerAsync<T>` interface and attach the `[OwnerLayer]` attribute. The source generator will automatically register it to the corresponding layer at compile time:
+
+```csharp
+// A standalone, slice-based event handler
+[OwnerLayer(typeof(GameLogicLayer))] 
+public class PlayerDamageHandler : IEventHandler<DamageEvent>
+{
+    public EventHandledState Deal(in DamageEvent e)
+    {
+        // Focus solely on damage logic...
+        return EventHandledState.Continue;
+    }
+}
+```
+
+### 5. Event MetaData and Global Exception Observation
+For critical events (like network sync packets or core state transitions), if any Handler throws an exception during dispatch, we generally want to catch it globally and immediately for unified logging or crash reporting.
+
+LayerBase provides a **non-intrusive, zero-reflection** MetaData registration solution:
+You simply define a class inheriting from `EventMetaData<T>`. The source generator will automatically bind it to your event at compile time (**Note: the event `struct` must be declared as `partial`**).
+
+```csharp
+// 1. The event must be declared as a partial struct
+public partial struct CoreSyncEvent 
+{ 
+    public byte[] Data; 
+}
+
+// 2. Define the metadata configuration for the event
+public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
+{
+    // [Optional]: Define a category tree for the event, useful for topological categorization or module retrieval
+    public override EventCategoryToken Category => EventCatalogue.Path("Network", "Sync").GetToken();
+
+    // 🏆 Global Exception Interception Point
+    // Any unhandled exception thrown by a Handler processing CoreSyncEvent will be automatically routed here!
+    public override void OnEventExpectation(CoreSyncEvent e, Exception exception)
+    {
+        // Handle fault tolerance, logging, or crash reporting here
+        Console.WriteLine($"[Critical Error] Sync event processing failed: {exception.Message}");
     }
 }
 ```
