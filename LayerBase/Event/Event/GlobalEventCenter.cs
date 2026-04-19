@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading;
+#if NETCOREAPP || NET5_0_OR_GREATER
+using System.Numerics;
+#endif
 using LayerBase.Async;
 using LayerBase.Core.EventHandler;
 using LayerBase.Core.UnmanagedList;
@@ -26,7 +29,7 @@ internal sealed class GlobalEventCenter
     private long _eventPendingMask;
     private string[] _layerNames = Array.Empty<string>();
     private IEventQueue[] _layerSlots = Array.Empty<IEventQueue>();
-    private int _isResetting; // 🚀 状态标记，防止 Reset 期间的 NRE
+    private int _isResetting; 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ulong GetEventPendingMask() => (ulong)Volatile.Read(ref _eventPendingMask);
@@ -41,7 +44,6 @@ internal sealed class GlobalEventCenter
                     var newSlots = new IEventQueue[count];
                     Array.Copy(_layerSlots, newSlots, _layerSlots.Length);
                     for (var i = _layerSlots.Length; i < count; i++) newSlots[i] = new LayerEventQueue(this, i);
-                    // 只有在确定不再使用旧 slots 时才销毁（EnsureSlots 期间如果有 Post 会访问旧数组，所以我们在这里不立即 Dispose 旧的，依赖 Reset 或 GC）
                     _layerSlots = newSlots;
                     var newBubble = new ulong[count];
                     var newDrop = new ulong[count];
@@ -116,7 +118,7 @@ internal sealed class GlobalEventCenter
     internal void PumpLayer(int layerIndex) 
     { 
         if (Volatile.Read(ref _isResetting) == 1) return;
-        var slots = _layerSlots; // 局部引用快照，防止 Reset 瞬间置空
+        var slots = _layerSlots; 
         if (layerIndex >= 0 && layerIndex < slots.Length) slots[layerIndex]?.Pump(); 
     }
 
@@ -134,7 +136,7 @@ internal sealed class GlobalEventCenter
     {
         if (mask == 0) return -1;
 #if NETCOREAPP || NET5_0_OR_GREATER
-        return System.Numerics.BitOperations.TrailingZeroCount(mask);
+        return BitOperations.TrailingZeroCount(mask);
 #else
         return TrailingZeroCountFallback(mask);
 #endif
@@ -145,7 +147,7 @@ internal sealed class GlobalEventCenter
     {
         if (mask == 0) return -1;
 #if NETCOREAPP || NET5_0_OR_GREATER
-        return 63 - System.Numerics.BitOperations.LeadingZeroCount(mask);
+        return 63 - BitOperations.LeadingZeroCount(mask);
 #else
         return 63 - LeadingZeroCountFallback(mask);
 #endif
@@ -203,8 +205,18 @@ internal sealed class GlobalEventCenter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void EnqueueEventInternal<T>(int layerIndex, in Event<T> @event) where T : struct
     {
-        var slots = _layerSlots; // 🚀 快照
+        var slots = _layerSlots; 
         if (layerIndex >= 0 && layerIndex < slots.Length) slots[layerIndex]?.EnqueueEvent(@event);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void EnqueueEventBatchInternal<T>(int layerIndex, ReadOnlySpan<Event<T>> events) where T : struct
+    {
+        var slots = _layerSlots;
+        if (layerIndex >= 0 && layerIndex < slots.Length) {
+            var s = slots[layerIndex];
+            if (s != null) for (int i = 0; i < events.Length; i++) s.EnqueueEvent(events[i]);
+        }
     }
 
     private static class BucketCache<T> where T : struct { public static EventBucket<T>? Instance; }
@@ -298,12 +310,10 @@ internal sealed class GlobalEventCenter
         public readonly GlobalEventCenter Owner;
         private HandlerBucket<T>?[] _buckets = Array.Empty<HandlerBucket<T>>();
 
-        // 🚀 SOA: 同步分发引擎 (极致连续指针)
         private EventHandleDelegate<T>[] _syncHandlers = Array.Empty<EventHandleDelegate<T>>();
         private HandlerCircuit[] _syncCircuits = Array.Empty<HandlerCircuit>();
         private string[] _syncNames = Array.Empty<string>();
 
-        // 🚀 SOA: 异步分发引擎 (极致连续指针)
         private EventHandleDelegateAsync<T>[] _asyncHandlers = Array.Empty<EventHandleDelegateAsync<T>>();
         private HandlerCircuit[] _asyncCircuits = Array.Empty<HandlerCircuit>();
         private string[] _asyncNames = Array.Empty<string>();
@@ -318,7 +328,6 @@ internal sealed class GlobalEventCenter
 
         public void Reset() 
         { 
-            // 🚀 消除锁嵌套环路：先锁自身获取快照，释放锁后再调用子项重置
             HandlerBucket<T>?[] snapshot;
             lock (_lock) 
             { 
@@ -350,7 +359,6 @@ internal sealed class GlobalEventCenter
                 if (bSync > 0 || bAsync > 0 || b.MasterParallel.Count > 0) newMask |= (1UL << i);
             }
 
-            // 🚀 优化：复用缓冲区，仅在容量不足时重新分配
             if (_syncHandlers.Length < totalSync) {
                 _syncHandlers = new EventHandleDelegate<T>[Math.Max(totalSync, _syncHandlers.Length * 2)];
                 _syncCircuits = new HandlerCircuit[_syncHandlers.Length];
@@ -425,39 +433,38 @@ internal sealed class GlobalEventCenter
             }
 
             var targetMask = mask;
-            var bubble = Owner._bubbleMasksArr; // 快照
-            var drop = Owner._dropMasksArr;     // 快照
+            var bubble = Owner._bubbleMasksArr; 
+            var drop = Owner._dropMasksArr;     
             if (propagation == Propagation.Bubble && sourceIndex < bubble.Length) targetMask &= bubble[sourceIndex];
             else if (propagation == Propagation.Drop && sourceIndex < drop.Length) targetMask &= drop[sourceIndex];
             
             if (targetMask == 0) return EventHandledState.Continue;
 
-            int first = Owner.FindFirstBit(targetMask);
-            int last = Owner.FindLastBit(targetMask);
-
             if (propagation == Propagation.Bubble)
             {
-                for (int l = last; l >= first; l--)
+                while (targetMask != 0)
                 {
-                    if ((targetMask & (1UL << l)) == 0) continue;
+                    int l = Owner.FindLastBit(targetMask);
                     var r = _ranges[l];
                     for(int j = 0; j < r.ParallelCount; j++) _flatParallel[r.ParallelStart + j].Enqueue(l, in value);
                     var s = DispatchSyncBackward(r.SyncStart, r.SyncStart + r.SyncCount, in value);
                     if (s == EventHandledState.Handled) return s;
                     DispatchAsyncBackward(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
+                    targetMask &= ~(1UL << l);
                 }
                 return EventHandledState.Continue;
             }
             else
             {
-                for (int l = first; l <= last; l++)
+                while (targetMask != 0)
                 {
-                    if ((targetMask & (1UL << l)) == 0) continue;
+                    int l = Owner.FindFirstBit(targetMask);
                     var r = _ranges[l];
                     for(int j = 0; j < r.ParallelCount; j++) _flatParallel[r.ParallelStart + j].Enqueue(l, in value);
                     var s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value);
                     if (s == EventHandledState.Handled) return s;
                     DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
+                    targetMask &= ~(1UL << l);
                 }
                 return EventHandledState.Continue;
             }

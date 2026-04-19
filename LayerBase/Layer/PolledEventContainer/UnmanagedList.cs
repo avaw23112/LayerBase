@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using LayerBase.Core.Event;
 
 namespace LayerBase.Core.UnmanagedList;
@@ -17,6 +19,8 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     private int _isDirty;
     private bool _disposed;
 
+    private readonly List<Event<Value>> _forwardBuffer = new(256);
+
     public UnmanagedList(GlobalEventCenter center, int layerIndex, Action<IUnmanagedList> onDirty)
     {
         _center = center;
@@ -30,41 +34,91 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
         if (_disposed) return;
         _disposed = true;
         _queue.Dispose();
+        _forwardBuffer.Clear();
     }
 
-    public void MarkClean()
-    {
-        Interlocked.Exchange(ref _isDirty, 0);
-    }
+    public void MarkClean() => Interlocked.Exchange(ref _isDirty, 0);
 
     public void Pump()
     {
         MarkClean();
-        var count = _queue.Count;
-        if (count <= 0) return;
+        if (_queue.IsEmpty) return;
 
         var forwarded = false;
         var lastTargetLayer = -1;
+        var myMask = 1UL << _layerIndex;
 
-        for (var i = 0; i < count; i++)
-        {
-            if (!_queue.TryDequeue(out var @event)) break;
+        _queue.ProcessBatch(span => {
+            int len = span.Length;
+            int i = 0;
 
-            var state = _center.DispatchLocal(_layerIndex, in @event);
-
-            if (state == EventHandledState.Continue)
+            for (; i <= len - 4; i += 4)
             {
-                var nextLayer = @event.FindNextTarget(_layerIndex, _center);
-                if (nextLayer != -1)
+                ref readonly var e0 = ref span[i];
+                ref readonly var e1 = ref span[i + 1];
+                ref readonly var e2 = ref span[i + 2];
+                ref readonly var e3 = ref span[i + 3];
+
+                if (((e0.TargetMask | e1.TargetMask | e2.TargetMask | e3.TargetMask) & myMask) != 0)
                 {
-                    _center.EnqueueEventInternal(nextLayer, in @event);
-                    forwarded = true;
-                    lastTargetLayer = nextLayer;
+                    ProcessEvent(in e0, ref forwarded, ref lastTargetLayer);
+                    ProcessEvent(in e1, ref forwarded, ref lastTargetLayer);
+                    ProcessEvent(in e2, ref forwarded, ref lastTargetLayer);
+                    ProcessEvent(in e3, ref forwarded, ref lastTargetLayer);
+                }
+                else
+                {
+                    ForwardOnly(in e0, ref forwarded, ref lastTargetLayer);
+                    ForwardOnly(in e1, ref forwarded, ref lastTargetLayer);
+                    ForwardOnly(in e2, ref forwarded, ref lastTargetLayer);
+                    ForwardOnly(in e3, ref forwarded, ref lastTargetLayer);
                 }
             }
-        }
+
+            for (; i < len; i++) ProcessEvent(in span[i], ref forwarded, ref lastTargetLayer);
+            
+            FlushForwardBuffer(ref forwarded);
+        });
 
         if (forwarded) _center.WakeLayer(lastTargetLayer);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ProcessEvent(in Event<Value> @event, ref bool forwarded, ref int lastTargetLayer)
+    {
+        var state = ((@event.TargetMask & (1UL << _layerIndex)) != 0) 
+            ? _center.DispatchLocal(_layerIndex, in @event) 
+            : EventHandledState.Continue;
+
+        if (state == EventHandledState.Continue) ForwardOnly(in @event, ref forwarded, ref lastTargetLayer);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ForwardOnly(in Event<Value> @event, ref bool forwarded, ref int lastTargetLayer)
+    {
+        var nextLayer = @event.FindNextTarget(_layerIndex, _center);
+        if (nextLayer != -1)
+        {
+            if (lastTargetLayer != -1 && lastTargetLayer != nextLayer) FlushForwardBuffer(ref forwarded);
+            lastTargetLayer = nextLayer;
+            _forwardBuffer.Add(@event);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void FlushForwardBuffer(ref bool forwarded)
+    {
+        if (_forwardBuffer.Count == 0) return;
+        var target = _forwardBuffer[0].FindNextTarget(_layerIndex, _center);
+        
+#if NETCOREAPP || NET5_0_OR_GREATER
+        _center.EnqueueEventBatchInternal<Value>(target, CollectionsMarshal.AsSpan(_forwardBuffer));
+#else
+        // Fallback for netstandard2.1
+        foreach (var ev in _forwardBuffer) _center.EnqueueEventInternal(target, in ev);
+#endif
+        _forwardBuffer.Clear();
+        forwarded = true;
     }
 
     public void Post(in Event<Value> val)

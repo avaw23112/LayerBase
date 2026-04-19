@@ -196,6 +196,32 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
         return true;
     }
 
+    internal delegate void SpanAction<T>(ReadOnlySpan<T> span);
+
+    internal void ProcessBatch(SpanAction<T> action)
+    {
+        ThrowIfDisposed();
+        while (Count > 0)
+        {
+            var seg = _headSeg!;
+            // 确定当前段内可读取的上限：如果是尾段，读到 tailIndex；否则读到 chunkSize
+            int upper = (seg == _tailSeg) ? _tailIndex : _chunkSize;
+            int available = upper - _headIndex;
+            
+            if (available <= 0) break;
+
+            action(new ReadOnlySpan<T>(seg.Buffer, _headIndex, available));
+
+            if (_clearOnDequeue) Array.Clear(seg.Buffer, _headIndex, available);
+
+            _headIndex += available;
+            Count -= available;
+
+            if (Count == 0) ResetToEmpty();
+            else if (_headIndex >= _chunkSize) AdvanceHeadSegment();
+        }
+    }
+
     internal void Clear()
     {
         ThrowIfDisposed();
