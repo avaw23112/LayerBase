@@ -9,11 +9,13 @@ using LayerBase.Event.Delay;
 
 namespace LayerBase.Layers;
 
-public abstract class Layer : Node, ILayerContext
+public abstract class Layer : Node, ILayerContext, IDisposable
 {
     private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
+    private readonly List<IDisposable> m_subscriptions = new();
+    private bool m_disposed;
 
     // 挂起队列：用于在 Build 完成前暂存操作
     private List<Action<Layer>> m_pendingOps = new();
@@ -90,21 +92,48 @@ public abstract class Layer : Node, ILayerContext
         for (var i = 0; i < m_serviceUpdates.Count; i++) m_serviceUpdates[i].Update();
     }
 
+    public void Dispose()
+    {
+        if (m_disposed) return;
+        m_disposed = true;
+
+        lock (m_subscriptions)
+        {
+            foreach (var sub in m_subscriptions) sub.Dispose();
+            m_subscriptions.Clear();
+        }
+
+        m_serviceProvider?.Dispose();
+        m_serviceProvider = null;
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (m_disposed) throw new ObjectDisposedException(nameof(Layer));
+    }
+
     public void Subscribe<T>(EventHandleDelegate<T> handler) where T : struct
     {
-        if (RouteIndex != -1) LayerHub.LayerHub.EventCenter.Subscribe(RouteIndex, handler);
+        ThrowIfDisposed();
+        if (RouteIndex != -1)
+        {
+            LayerHub.LayerHub.EventCenter.Subscribe(RouteIndex, handler);
+            lock (m_subscriptions) m_subscriptions.Add(new UnsubscribeDelegateToken<T>(LayerHub.LayerHub.EventCenter, RouteIndex, handler));
+        }
         else m_pendingOps.Add(l => l.Subscribe(handler));
     }
 
     public void SubscribeAsync<T>(EventHandleDelegateAsync<T> handler) where T : struct
     {
-        if (RouteIndex != -1) LayerHub.LayerHub.EventCenter.SubscribeAsync(RouteIndex, handler);
+        ThrowIfDisposed();
+        if (RouteIndex != -1)
+        {
+            LayerHub.LayerHub.EventCenter.SubscribeAsync(RouteIndex, handler);
+            lock (m_subscriptions) m_subscriptions.Add(new UnsubscribeDelegateAsyncToken<T>(LayerHub.LayerHub.EventCenter, RouteIndex, handler));
+        }
         else m_pendingOps.Add(l => l.SubscribeAsync(handler));
     }
 
-    /// <summary>
-    /// 获取针对特定事件的链式 API 流。
-    /// </summary>
     public LayerEventStream<T> OnEvent<T>() where T : struct
     {
         return new LayerEventStream<T>(this);
@@ -113,9 +142,14 @@ public abstract class Layer : Node, ILayerContext
     public void SubscribeParallel<T>(EventHandleDelegate<T>                  handler,
                                      Action<int, string, string, Exception>? reportError = null) where T : struct
     {
+        ThrowIfDisposed();
         if (RouteIndex != -1)
+        {
             LayerHub.LayerHub.EventCenter.SubscribeParallel(RouteIndex, handler,
                 reportError ?? LayerHub.LayerHub.ReportLayerEventError);
+            // Parallel unsub logic could be added here if needed, but parallel handlers are often global-lifetime.
+            // For now, we skip parallel auto-unsub to keep it simple, or implement if required.
+        }
         else
             m_pendingOps.Add(l => l.SubscribeParallel(handler, reportError));
     }
@@ -171,5 +205,23 @@ public abstract class Layer : Node, ILayerContext
     public void PostGlobal<T>(in T value) where T : struct
     {
         LayerHub.LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Global);
+    }
+
+    private sealed class UnsubscribeDelegateToken<T> : IDisposable where T : struct
+    {
+        private readonly GlobalEventCenter _center;
+        private readonly int _layerIndex;
+        private readonly EventHandleDelegate<T> _handler;
+        public UnsubscribeDelegateToken(GlobalEventCenter c, int l, EventHandleDelegate<T> h) { _center = c; _layerIndex = l; _handler = h; }
+        public void Dispose() => _center.Unsubscribe(_layerIndex, _handler);
+    }
+
+    private sealed class UnsubscribeDelegateAsyncToken<T> : IDisposable where T : struct
+    {
+        private readonly GlobalEventCenter _center;
+        private readonly int _layerIndex;
+        private readonly EventHandleDelegateAsync<T> _handler;
+        public UnsubscribeDelegateAsyncToken(GlobalEventCenter c, int l, EventHandleDelegateAsync<T> h) { _center = c; _layerIndex = l; _handler = h; }
+        public void Dispose() => _center.UnsubscribeAsync(_layerIndex, _handler);
     }
 }

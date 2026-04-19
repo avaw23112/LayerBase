@@ -78,11 +78,18 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     {
         if (Current is LayerBaseSynchronizationContext existing)
             return existing;
-
+        
         var ctx = new LayerBaseSynchronizationContext(Thread.CurrentThread.ManagedThreadId);
         SetSynchronizationContext(ctx);
         return ctx;
     }
+    public static LayerBaseSynchronizationContext Install()
+    {
+        if (Current is LayerBaseSynchronizationContext existing)
+            return existing;
+        return new LayerBaseSynchronizationContext(Thread.CurrentThread.ManagedThreadId);
+    }
+    
 
     public override void Post(SendOrPostCallback d, object? state)
     {

@@ -1,0 +1,177 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1776601060760,
+  "projectRoot": "D:\\RiderProject\\Events",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "BenchmarkDotNet.Artifacts": {
+      "path": "BenchmarkDotNet.Artifacts",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1776601060730,
+      "keyFiles": [
+        "Benchmarks.EventBusBenchmarks-20260419-160235.log",
+        "Benchmarks.EventBusBenchmarks-20260419-181950.log",
+        "Benchmarks.EventBusBenchmarks-20260419-184457.log"
+      ]
+    },
+    "LayerBase": {
+      "path": "LayerBase",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1776601060730,
+      "keyFiles": [
+        "LayerBase.csproj"
+      ]
+    },
+    "LayerBase.Generator": {
+      "path": "LayerBase.Generator",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1776601060730,
+      "keyFiles": [
+        "README.md"
+      ]
+    },
+    "LayerBase.Task": {
+      "path": "LayerBase.Task",
+      "purpose": null,
+      "fileCount": 9,
+      "lastAccessed": 1776601060731,
+      "keyFiles": [
+        "LayerBase.Task.csproj",
+        "LayerBaseSynchronizationContext.cs",
+        "LBTask.cs",
+        "LBTaskCompletionSource.cs",
+        "LBTaskExtensions.cs"
+      ]
+    },
+    "LayerBase.Template": {
+      "path": "LayerBase.Template",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1776601060731,
+      "keyFiles": [
+        "Class1.cs",
+        "LayerBase.Template.csproj",
+        "Program.cs"
+      ]
+    },
+    "LayerBase.Test": {
+      "path": "LayerBase.Test",
+      "purpose": null,
+      "fileCount": 16,
+      "lastAccessed": 1776601060732,
+      "keyFiles": [
+        "CycleDetectionTests.cs",
+        "DelayPublisherTests.cs",
+        "DiagnosticTests.cs",
+        "EventCatalogueTests.cs",
+        "EventPipelineTests.cs"
+      ]
+    },
+    "LayerBase.Usages": {
+      "path": "LayerBase.Usages",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1776601060732,
+      "keyFiles": []
+    },
+    "nupkg": {
+      "path": "nupkg",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1776601060733,
+      "keyFiles": [
+        "LayerBase.1.1.0.nupkg"
+      ]
+    },
+    "packages": {
+      "path": "packages",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1776601060733,
+      "keyFiles": []
+    },
+    "testrun": {
+      "path": "testrun",
+      "purpose": null,
+      "fileCount": 30,
+      "lastAccessed": 1776601060734,
+      "keyFiles": [
+        "CoverletSourceRootsMapping_LayerBase.Test",
+        "LayerBase.dll",
+        "LayerBase.pdb",
+        "LayerBase.Task.dll",
+        "LayerBase.Task.pdb"
+      ]
+    },
+    "tmpconsole": {
+      "path": "tmpconsole",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1776601060734,
+      "keyFiles": [
+        "build_tmpconsole_diag2.log",
+        "global.json",
+        "Program.cs",
+        "tmpconsole.csproj"
+      ]
+    },
+    "LayerBase\\bin": {
+      "path": "LayerBase\\bin",
+      "purpose": "Executable scripts",
+      "fileCount": 0,
+      "lastAccessed": 1776601060735,
+      "keyFiles": []
+    },
+    "LayerBase.Task\\bin": {
+      "path": "LayerBase.Task\\bin",
+      "purpose": "Executable scripts",
+      "fileCount": 0,
+      "lastAccessed": 1776601060735,
+      "keyFiles": []
+    },
+    "LayerBase.Test\\bin": {
+      "path": "LayerBase.Test\\bin",
+      "purpose": "Executable scripts",
+      "fileCount": 0,
+      "lastAccessed": 1776601060736,
+      "keyFiles": []
+    },
+    "tmpconsole\\bin": {
+      "path": "tmpconsole\\bin",
+      "purpose": "Executable scripts",
+      "fileCount": 0,
+      "lastAccessed": 1776601060737,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [],
+  "userDirectives": []
+}

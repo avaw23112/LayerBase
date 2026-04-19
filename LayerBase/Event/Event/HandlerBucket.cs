@@ -44,6 +44,11 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     public void Add(EventHandleDelegateAsync<T> h) { lock(_lock) { MasterOrdered.Add(OrderedHandlerEntry<T>.Create(h)); _onDirty(); } }
     public void AddParallel(IEventHandler<T> h, Action<int, string, string, Exception> re) { lock(_lock) { MasterParallel.Add(ParallelHandlerEntry<T>.Create(h, re)); _onDirty(); } }
     public void AddParallel(EventHandleDelegate<T> h, Action<int, string, string, Exception> re) { lock(_lock) { MasterParallel.Add(ParallelHandlerEntry<T>.Create(h, re)); _onDirty(); } }
+
+    public void Remove(IEventHandler<T> h) { lock(_lock) { MasterUnordered.RemoveAll(x => x.Source == (object)h); _onDirty(); } }
+    public void Remove(IEventHandlerAsync<T> h) { lock(_lock) { MasterUnordered.RemoveAll(x => x.Source == (object)h); _onDirty(); } }
+    public void Remove(EventHandleDelegate<T> h) { lock(_lock) { MasterOrdered.RemoveAll(x => x.SyncHandler == h); MasterParallel.RemoveAll(x => x.Source == (object)h); _onDirty(); } }
+    public void Remove(EventHandleDelegateAsync<T> h) { lock(_lock) { MasterOrdered.RemoveAll(x => x.AsyncHandler == h); _onDirty(); } }
 }
 
 internal readonly struct OrderedHandlerEntry<T> where T : struct
@@ -75,25 +80,27 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
     public readonly EventHandleDelegateAsync<T>? AsyncWrapper;
     public readonly string FullName;
     public readonly HandlerCircuit Circuit;
+    public readonly object Source;
 
-    private UnorderedHandlerEntry(EventHandleDelegate<T>? s, EventHandleDelegateAsync<T>? a, string n, HandlerCircuit c)
-    { SyncWrapper = s; AsyncWrapper = a; FullName = n; Circuit = c; }
+    private UnorderedHandlerEntry(EventHandleDelegate<T>? s, EventHandleDelegateAsync<T>? a, string n, HandlerCircuit c, object src)
+    { SyncWrapper = s; AsyncWrapper = a; FullName = n; Circuit = c; Source = src; }
 
     public static UnorderedHandlerEntry<T> Create(IEventHandler<T> h) {
         // 在注册时进行一次性包装
         EventHandleDelegate<T> wrapper = (in T val) => { h.Deal(in val); return EventHandledState.Continue; };
-        return new UnorderedHandlerEntry<T>(wrapper, null, h.GetType().Name, new HandlerCircuit());
+        return new UnorderedHandlerEntry<T>(wrapper, null, h.GetType().Name, new HandlerCircuit(), h);
     }
 
     public static UnorderedHandlerEntry<T> Create(IEventHandlerAsync<T> h) {
         EventHandleDelegateAsync<T> wrapper = val => h.Deal(val);
-        return new UnorderedHandlerEntry<T>(null, wrapper, h.GetType().Name, new HandlerCircuit());
+        return new UnorderedHandlerEntry<T>(null, wrapper, h.GetType().Name, new HandlerCircuit(), h);
     }
 }
 
 internal readonly struct ParallelHandlerEntry<T> where T : struct
 {
     private readonly ParallelSubscriptionQueue<T> _q;
+    public object Source => _q.Source;
     private ParallelHandlerEntry(ParallelSubscriptionQueue<T> q) => _q = q;
     public static ParallelHandlerEntry<T> Create(IEventHandler<T> h, Action<int, string, string, Exception> re) => new(new ParallelSubscriptionQueue<T>(h, re));
     public static ParallelHandlerEntry<T> Create(EventHandleDelegate<T> h, Action<int, string, string, Exception> re) => new(new ParallelSubscriptionQueue<T>(h, re));
@@ -110,6 +117,7 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
     private readonly Action<int, string, string, Exception> _err;
     private readonly EventHandleDelegate<T>? _sd;
     private readonly IEventHandler<T>? _sh;
+    public object Source => (object?)_sh ?? _sd!;
     public readonly HandlerCircuit Circuit = new();
     private int _lIdx, _sched;
 

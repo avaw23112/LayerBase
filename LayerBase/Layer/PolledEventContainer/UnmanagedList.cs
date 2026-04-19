@@ -2,7 +2,7 @@ using LayerBase.Core.Event;
 
 namespace LayerBase.Core.UnmanagedList;
 
-internal interface IUnmanagedList
+internal interface IUnmanagedList : IDisposable
 {
     void Pump();
     void MarkClean();
@@ -15,6 +15,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     private readonly PooledChunkedOverwriteQueue<Event<Value>> _queue;
     private readonly Action<IUnmanagedList> _onDirty;
     private int _isDirty;
+    private bool _disposed;
 
     public UnmanagedList(GlobalEventCenter center, int layerIndex, Action<IUnmanagedList> onDirty)
     {
@@ -22,6 +23,13 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
         _queue = new PooledChunkedOverwriteQueue<Event<Value>>();
         _layerIndex = layerIndex;
         _onDirty = onDirty;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _queue.Dispose();
     }
 
     public void MarkClean()

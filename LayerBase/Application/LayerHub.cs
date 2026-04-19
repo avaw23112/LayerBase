@@ -54,7 +54,7 @@ public static class LayerHub
     private static int s_layerIndexCounter;
 
     /// <summary>
-    ///     核心事件中心。设为可写是为了支持测试环境的物理断代重置。    
+    /// 核心事件中心。设为可写是为了支持测试环境的物理断代重置。    
     /// </summary>
     internal static GlobalEventCenter EventCenter { get; private set; } = new();
 
@@ -68,15 +68,14 @@ public static class LayerHub
 
     public static LayersBuilder CreateLayers()
     {
-        // 智能上下文装载：如果不处于 Unity/Godot 等自带同步上下文的引擎环境，
-        // 则自动安装并托管 LayerBaseSynchronizationContext 以驱动 LBTask 和异步状态机。
+        // 如果不处于 Unity/Godot 等自带同步上下文的引擎环境，则自动安装并托管 LayerBaseSynchronizationContext 以驱动 LBTask 和异步状态机。
         if (SynchronizationContext.Current == null)
         {
             s_context = LayerBaseSynchronizationContext.InstallAsCurrent();
         }
-        else if (SynchronizationContext.Current is LayerBaseSynchronizationContext ctx)
+        else if (s_context == null && SynchronizationContext.Current is not LayerBaseSynchronizationContext ctx)
         {
-            s_context = ctx;
+            s_context = LayerBaseSynchronizationContext.Install();
         }
 
         return new LayersBuilder();

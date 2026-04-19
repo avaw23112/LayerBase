@@ -26,6 +26,7 @@ internal sealed class GlobalEventCenter
     private long _eventPendingMask;
     private string[] _layerNames = Array.Empty<string>();
     private IEventQueue[] _layerSlots = Array.Empty<IEventQueue>();
+    private int _isResetting; // 🚀 状态标记，防止 Reset 期间的 NRE
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ulong GetEventPendingMask() => (ulong)Volatile.Read(ref _eventPendingMask);
@@ -40,6 +41,7 @@ internal sealed class GlobalEventCenter
                     var newSlots = new IEventQueue[count];
                     Array.Copy(_layerSlots, newSlots, _layerSlots.Length);
                     for (var i = _layerSlots.Length; i < count; i++) newSlots[i] = new LayerEventQueue(this, i);
+                    // 只有在确定不再使用旧 slots 时才销毁（EnsureSlots 期间如果有 Post 会访问旧数组，所以我们在这里不立即 Dispose 旧的，依赖 Reset 或 GC）
                     _layerSlots = newSlots;
                     var newBubble = new ulong[count];
                     var newDrop = new ulong[count];
@@ -69,9 +71,15 @@ internal sealed class GlobalEventCenter
     internal void SubscribeAsync<T>(int layerIndex, EventHandleDelegateAsync<T> handleDelegate) where T : struct => GetBucket<T>().Add(layerIndex, handleDelegate);
     internal void SubscribeParallel<T>(int layerIndex, EventHandleDelegate<T> handleDelegate, Action<int, string, string, Exception> reportError) where T : struct => GetBucket<T>().AddParallel(layerIndex, handleDelegate, reportError);
 
+    internal void Unsubscribe<T>(int layerIndex, IEventHandler<T> handler) where T : struct => GetBucket<T>().Remove(layerIndex, handler);
+    internal void UnsubscribeAsync<T>(int layerIndex, IEventHandlerAsync<T> handler) where T : struct => GetBucket<T>().Remove(layerIndex, handler);
+    internal void Unsubscribe<T>(int layerIndex, EventHandleDelegate<T> handleDelegate) where T : struct => GetBucket<T>().Remove(layerIndex, handleDelegate);
+    internal void UnsubscribeAsync<T>(int layerIndex, EventHandleDelegateAsync<T> handleDelegate) where T : struct => GetBucket<T>().Remove(layerIndex, handleDelegate);
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal EventHandledState Send<T>(in T value, int sourceIndex, Propagation propagation) where T : struct
     {
+        if (Volatile.Read(ref _isResetting) == 1) return EventHandledState.Continue;
         var cached = BucketCache<T>.Instance;
         if (cached != null && cached.Owner == this) return cached.Dispatch(in value, sourceIndex, propagation);
         return GetBucket<T>().Dispatch(in value, sourceIndex, propagation);
@@ -80,6 +88,7 @@ internal sealed class GlobalEventCenter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal EventHandledState SendLocal<T>(int layerIndex, in T value) where T : struct
     {
+        if (Volatile.Read(ref _isResetting) == 1) return EventHandledState.Continue;
         var cached = BucketCache<T>.Instance;
         if (cached != null && cached.Owner == this) return cached.DispatchLocal(layerIndex, in value);
         return GetBucket<T>().DispatchLocal(layerIndex, in value);
@@ -88,6 +97,7 @@ internal sealed class GlobalEventCenter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Post<T>(in T value, int sourceIndex, Propagation propagation) where T : struct
     {
+        if (Volatile.Read(ref _isResetting) == 1) return;
         var cached = BucketCache<T>.Instance;
         if (cached != null && cached.Owner == this) { cached.Post(in value, sourceIndex, propagation); return; }
         GetBucket<T>().Post(in value, sourceIndex, propagation);
@@ -96,17 +106,24 @@ internal sealed class GlobalEventCenter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void PostLocal<T>(int layerIndex, in T value) where T : struct
     {
+        if (Volatile.Read(ref _isResetting) == 1) return;
         var cached = BucketCache<T>.Instance;
         if (cached != null && cached.Owner == this) { cached.PostLocal(layerIndex, in value); return; }
         GetBucket<T>().PostLocal(layerIndex, in value);
     }
 
     internal void WakeLayer(int layerIndex) { if (layerIndex >= 0 && layerIndex < 64) AtomicSetBit(ref _eventPendingMask, layerIndex); }
-    internal void PumpLayer(int layerIndex) { if (layerIndex >= 0 && layerIndex < _layerSlots.Length) _layerSlots[layerIndex].Pump(); }
+    internal void PumpLayer(int layerIndex) 
+    { 
+        if (Volatile.Read(ref _isResetting) == 1) return;
+        var slots = _layerSlots; // 局部引用快照，防止 Reset 瞬间置空
+        if (layerIndex >= 0 && layerIndex < slots.Length) slots[layerIndex]?.Pump(); 
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal EventHandledState DispatchLocal<T>(int layerIndex, in Event<T> @event) where T : struct
     {
+        if (Volatile.Read(ref _isResetting) == 1) return EventHandledState.Continue;
         var cached = BucketCache<T>.Instance;
         if (cached != null && cached.Owner == this) return cached.DispatchLocal(layerIndex, in @event.Value);
         return GetBucket<T>().DispatchLocal(layerIndex, in @event.Value);
@@ -152,15 +169,24 @@ internal sealed class GlobalEventCenter
 
     internal void Reset()
     {
-        foreach (var bucket in _eventBuckets.Values) {
-            if (bucket is IResetable b) b.Reset();
+        if (Interlocked.Exchange(ref _isResetting, 1) == 1) return;
+        
+        lock (_lock)
+        {
+            foreach (var bucket in _eventBuckets.Values) {
+                if (bucket is IResetable b) b.Reset();
+            }
+            _eventBuckets.Clear();
+            var oldSlots = _layerSlots;
+            _layerSlots = Array.Empty<IEventQueue>();
+            foreach (var slot in oldSlots) slot?.Dispose();
+            _layerNames = Array.Empty<string>();
+            _bubbleMasksArr = Array.Empty<ulong>();
+            _dropMasksArr = Array.Empty<ulong>();
+            _eventPendingMask = 0;
         }
-        _eventBuckets.Clear();
-        _layerSlots = Array.Empty<IEventQueue>();
-        _layerNames = Array.Empty<string>();
-        _bubbleMasksArr = Array.Empty<ulong>();
-        _dropMasksArr = Array.Empty<ulong>();
-        _eventPendingMask = 0;
+
+        Volatile.Write(ref _isResetting, 0);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -177,14 +203,15 @@ internal sealed class GlobalEventCenter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void EnqueueEventInternal<T>(int layerIndex, in Event<T> @event) where T : struct
     {
-        if (layerIndex >= 0 && layerIndex < _layerSlots.Length) _layerSlots[layerIndex].EnqueueEvent(@event);
+        var slots = _layerSlots; // 🚀 快照
+        if (layerIndex >= 0 && layerIndex < slots.Length) slots[layerIndex]?.EnqueueEvent(@event);
     }
 
     private static class BucketCache<T> where T : struct { public static EventBucket<T>? Instance; }
 
     private interface IResetable { void Reset(); }
 
-    private interface IEventQueue { void EnqueueEvent<T>(in Event<T> @event) where T : struct; void Pump(); }
+    private interface IEventQueue : IDisposable { void EnqueueEvent<T>(in Event<T> @event) where T : struct; void Pump(); }
     private sealed class LayerEventQueue : IEventQueue
     {
         private readonly GlobalEventCenter _center;
@@ -192,16 +219,26 @@ internal sealed class GlobalEventCenter
         private readonly ConcurrentDictionary<int, IUnmanagedList> _queuesByType = new();
         private readonly ConcurrentQueue<IUnmanagedList> _dirtyQueues = new();
         private readonly Action<IUnmanagedList> _onDirtyCallback;
+        private bool _disposed;
 
-        public LayerEventQueue(GlobalEventCenter center, int layerIndex) 
-        { 
-            _center = center; 
+        public LayerEventQueue(GlobalEventCenter center, int layerIndex)
+        {
+            _center = center;
             _layerIndex = layerIndex;
             _onDirtyCallback = list => _dirtyQueues.Enqueue(list);
         }
 
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            foreach (var q in _queuesByType.Values) q.Dispose();
+            _queuesByType.Clear();
+        }
+
         public void EnqueueEvent<T>(in Event<T> @event) where T : struct
         {
+            if (_disposed) return;
             var typeId = EventTypeId<T>.Id;
             if (!_queuesByType.TryGetValue(typeId, out var list))
                 list = _queuesByType.GetOrAdd(typeId, _ => new UnmanagedList<T>(_center, _layerIndex, _onDirtyCallback));
@@ -210,7 +247,7 @@ internal sealed class GlobalEventCenter
 
         public void Pump() 
         { 
-            if (_dirtyQueues.IsEmpty) return; 
+            if (_disposed || _dirtyQueues.IsEmpty) return; 
             AtomicClearBit(ref _center._eventPendingMask, _layerIndex); 
             while (_dirtyQueues.TryDequeue(out var list))
             {
@@ -275,10 +312,24 @@ internal sealed class GlobalEventCenter
         private LayerRange[] _ranges = Array.Empty<LayerRange>();
         private ulong _subscriberMask;
         private int _isDirty;
+        private int _syncCountTotal, _asyncCountTotal, _parallelCountTotal;
 
         public EventBucket(GlobalEventCenter center) => Owner = center;
 
-        public void Reset() { lock (_lock) { foreach (var b in _buckets) b?.Reset(); Rebuild(); } }
+        public void Reset() 
+        { 
+            // 🚀 消除锁嵌套环路：先锁自身获取快照，释放锁后再调用子项重置
+            HandlerBucket<T>?[] snapshot;
+            lock (_lock) 
+            { 
+                snapshot = new HandlerBucket<T>?[_buckets.Length];
+                Array.Copy(_buckets, snapshot, _buckets.Length);
+            } 
+            
+            foreach (var b in snapshot) b?.Reset(); 
+            
+            lock (_lock) Rebuild(); 
+        }
 
         public void MarkDirty() => Interlocked.Exchange(ref _isDirty, 1);
 
@@ -299,31 +350,49 @@ internal sealed class GlobalEventCenter
                 if (bSync > 0 || bAsync > 0 || b.MasterParallel.Count > 0) newMask |= (1UL << i);
             }
 
-            var sH = new EventHandleDelegate<T>[totalSync];
-            var sC = new HandlerCircuit[totalSync];
-            var sN = new string[totalSync];
-            var aH = new EventHandleDelegateAsync<T>[totalAsync];
-            var aC = new HandlerCircuit[totalAsync];
-            var aN = new string[totalAsync];
-            var pH = new ParallelHandlerEntry<T>[totalParallel];
-            var newRanges = new LayerRange[_buckets.Length];
+            // 🚀 优化：复用缓冲区，仅在容量不足时重新分配
+            if (_syncHandlers.Length < totalSync) {
+                _syncHandlers = new EventHandleDelegate<T>[Math.Max(totalSync, _syncHandlers.Length * 2)];
+                _syncCircuits = new HandlerCircuit[_syncHandlers.Length];
+                _syncNames = new string[_syncHandlers.Length];
+            }
+            if (_asyncHandlers.Length < totalAsync) {
+                _asyncHandlers = new EventHandleDelegateAsync<T>[Math.Max(totalAsync, _asyncHandlers.Length * 2)];
+                _asyncCircuits = new HandlerCircuit[_asyncHandlers.Length];
+                _asyncNames = new string[_asyncHandlers.Length];
+            }
+            if (_flatParallel.Length < totalParallel) {
+                _flatParallel = new ParallelHandlerEntry<T>[Math.Max(totalParallel, _flatParallel.Length * 2)];
+            }
+            if (_ranges.Length < _buckets.Length) {
+                _ranges = new LayerRange[Math.Max(_buckets.Length, _ranges.Length * 2)];
+            }
 
             int sIdx = 0, aIdx = 0, pIdx = 0;
             for (int i = 0; i < _buckets.Length; i++) {
                 var b = _buckets[i];
-                if (b == null || !b.HasHandlers) continue;
-                newRanges[i].SyncStart = sIdx; newRanges[i].AsyncStart = aIdx; newRanges[i].ParallelStart = pIdx;
-                foreach (var h in b.MasterOrdered) { if (!h.Circuit.IsDisabled && h.SyncHandler != null) { sH[sIdx] = h.SyncHandler; sC[sIdx] = h.Circuit; sN[sIdx] = h.FullName; sIdx++; } }
-                foreach (var h in b.MasterUnordered) { if (!h.Circuit.IsDisabled && h.SyncWrapper != null) { sH[sIdx] = h.SyncWrapper; sC[sIdx] = h.Circuit; sN[sIdx] = h.FullName; sIdx++; } }
-                foreach (var h in b.MasterOrdered) { if (!h.Circuit.IsDisabled && h.AsyncHandler != null) { aH[aIdx] = h.AsyncHandler; aC[aIdx] = h.Circuit; aN[aIdx] = h.FullName; aIdx++; } }
-                foreach (var h in b.MasterUnordered) { if (!h.Circuit.IsDisabled && h.AsyncWrapper != null) { aH[aIdx] = h.AsyncWrapper; aC[aIdx] = h.Circuit; aN[aIdx] = h.FullName; aIdx++; } }
-                foreach (var h in b.MasterParallel) { pH[pIdx++] = h; }
-                newRanges[i].SyncCount = sIdx - newRanges[i].SyncStart; newRanges[i].AsyncCount = aIdx - newRanges[i].AsyncStart; newRanges[i].ParallelCount = pIdx - newRanges[i].ParallelStart;
+                if (b == null) { if (i < _ranges.Length) _ranges[i] = default; continue; }
+                _ranges[i].SyncStart = sIdx; _ranges[i].AsyncStart = aIdx; _ranges[i].ParallelStart = pIdx;
+                if (b.HasHandlers) {
+                    foreach (var h in b.MasterOrdered) { if (!h.Circuit.IsDisabled && h.SyncHandler != null) { _syncHandlers[sIdx] = h.SyncHandler; _syncCircuits[sIdx] = h.Circuit; _syncNames[sIdx] = h.FullName; sIdx++; } }
+                    foreach (var h in b.MasterUnordered) { if (!h.Circuit.IsDisabled && h.SyncWrapper != null) { _syncHandlers[sIdx] = h.SyncWrapper; _syncCircuits[sIdx] = h.Circuit; _syncNames[sIdx] = h.FullName; sIdx++; } }
+                    foreach (var h in b.MasterOrdered) { if (!h.Circuit.IsDisabled && h.AsyncHandler != null) { _asyncHandlers[aIdx] = h.AsyncHandler; _asyncCircuits[aIdx] = h.Circuit; _asyncNames[aIdx] = h.FullName; aIdx++; } }
+                    foreach (var h in b.MasterUnordered) { if (!h.Circuit.IsDisabled && h.AsyncWrapper != null) { _asyncHandlers[aIdx] = h.AsyncWrapper; _asyncCircuits[aIdx] = h.Circuit; _asyncNames[aIdx] = h.FullName; aIdx++; } }
+                    foreach (var h in b.MasterParallel) { _flatParallel[pIdx++] = h; }
+                }
+                _ranges[i].SyncCount = sIdx - _ranges[i].SyncStart; _ranges[i].AsyncCount = aIdx - _ranges[i].AsyncStart; _ranges[i].ParallelCount = pIdx - _ranges[i].ParallelStart;
             }
 
-            _syncHandlers = sH; _syncCircuits = sC; _syncNames = sN;
-            _asyncHandlers = aH; _asyncCircuits = aC; _asyncNames = aN;
-            _flatParallel = pH; _ranges = newRanges; _subscriberMask = newMask;
+            Array.Clear(_syncHandlers, sIdx, _syncHandlers.Length - sIdx);
+            Array.Clear(_syncCircuits, sIdx, _syncCircuits.Length - sIdx);
+            Array.Clear(_syncNames, sIdx, _syncNames.Length - sIdx);
+            Array.Clear(_asyncHandlers, aIdx, _asyncHandlers.Length - aIdx);
+            Array.Clear(_asyncCircuits, aIdx, _asyncCircuits.Length - aIdx);
+            Array.Clear(_asyncNames, aIdx, _asyncNames.Length - aIdx);
+            Array.Clear(_flatParallel, pIdx, _flatParallel.Length - pIdx);
+
+            _syncCountTotal = sIdx; _asyncCountTotal = aIdx; _parallelCountTotal = pIdx;
+            _subscriberMask = newMask;
             Volatile.Write(ref _isDirty, 0);
         }
 
@@ -334,6 +403,11 @@ internal sealed class GlobalEventCenter
         public void Add(int layerIndex, EventHandleDelegateAsync<T> h) { GetOrCreate(layerIndex).Add(h); MarkDirty(); }
         public void AddParallel(int layerIndex, EventHandleDelegate<T> h, Action<int, string, string, Exception> re) { GetOrCreate(layerIndex).AddParallel(h, re); }
 
+        public void Remove(int layerIndex, IEventHandler<T> h) { if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null) { _buckets[layerIndex]!.Remove(h); MarkDirty(); } }
+        public void Remove(int layerIndex, IEventHandlerAsync<T> h) { if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null) { _buckets[layerIndex]!.Remove(h); MarkDirty(); } }
+        public void Remove(int layerIndex, EventHandleDelegate<T> h) { if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null) { _buckets[layerIndex]!.Remove(h); MarkDirty(); } }
+        public void Remove(int layerIndex, EventHandleDelegateAsync<T> h) { if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null) { _buckets[layerIndex]!.Remove(h); MarkDirty(); } }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public EventHandledState Dispatch(in T value, int sourceIndex, Propagation propagation)
         {
@@ -343,17 +417,19 @@ internal sealed class GlobalEventCenter
 
             if (propagation == Propagation.Global)
             {
-                var ps = _flatParallel;
-                for (int j = 0; j < ps.Length; j++) ps[j].Enqueue(-1, in value);
-                var res = DispatchSync(0, _syncHandlers.Length, in value);
+                for (int j = 0; j < _parallelCountTotal; j++) _flatParallel[j].Enqueue(-1, in value);
+                var res = DispatchSync(0, _syncCountTotal, in value);
                 if (res == EventHandledState.Handled) return res;
-                DispatchAsync(0, _asyncHandlers.Length, in value);
+                DispatchAsync(0, _asyncCountTotal, in value);
                 return res;
             }
 
             var targetMask = mask;
-            if (propagation == Propagation.Bubble) targetMask &= Owner._bubbleMasksArr[sourceIndex];
-            else targetMask &= Owner._dropMasksArr[sourceIndex];
+            var bubble = Owner._bubbleMasksArr; // 快照
+            var drop = Owner._dropMasksArr;     // 快照
+            if (propagation == Propagation.Bubble && sourceIndex < bubble.Length) targetMask &= bubble[sourceIndex];
+            else if (propagation == Propagation.Drop && sourceIndex < drop.Length) targetMask &= drop[sourceIndex];
+            
             if (targetMask == 0) return EventHandledState.Continue;
 
             int first = Owner.FindFirstBit(targetMask);
@@ -400,20 +476,16 @@ internal sealed class GlobalEventCenter
             return s;
         }
 
-        // 🚀 核心优化：全量 Inlining + 位运算 + 原生数组读取，彻底消灭接口及虚调用
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private EventHandledState DispatchSync(int start, int end, in T value)
         {
             var hs = _syncHandlers;
-            int combinedState = 0;
-            int i = start;
+            int combinedState = 0; int i = start;
             try {
                 for (; i <= end - 2; ) {
-                    var r1 = hs[i](in value);
-                    i++;
+                    var r1 = hs[i](in value); i++;
                     var r2 = hs[i](in value);
-                    combinedState |= (int)r1 | (int)r2;
-                    i++;
+                    combinedState |= (int)r1 | (int)r2; i++;
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
                 }
                 for (; i < end; i++) {
@@ -428,8 +500,7 @@ internal sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DispatchAsync(int start, int end, in T value)
         {
-            var hs = _asyncHandlers;
-            int i = start;
+            var hs = _asyncHandlers; int i = start;
             try { for (; i < end; i++) AsyncFaultContext<T>.Observe(this, -1, _asyncCircuits[i], _asyncNames[i], in value, hs[i](value)); }
             catch (Exception e) { HandleFault(i, false, in value, e); }
         }
@@ -438,8 +509,7 @@ internal sealed class GlobalEventCenter
         private EventHandledState DispatchSyncBackward(int start, int end, in T value)
         {
             var hs = _syncHandlers;
-            int combinedState = 0;
-            int i = end - 1;
+            int combinedState = 0; int i = end - 1;
             try {
                 for (; i >= start; i--) {
                     combinedState |= (int)hs[i](in value);
@@ -453,29 +523,32 @@ internal sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DispatchAsyncBackward(int start, int end, in T value)
         {
-            var hs = _asyncHandlers;
-            int i = end - 1;
+            var hs = _asyncHandlers; int i = end - 1;
             try { for (; i >= start; i--) AsyncFaultContext<T>.Observe(this, -1, _asyncCircuits[i], _asyncNames[i], in value, hs[i](value)); }
             catch (Exception e) { HandleFault(i, false, in value, e); }
         }
 
         private void HandleFault(int index, bool isSync, in T value, Exception e)
         {
-            HandlerCircuit circuit; string name;
-            if (isSync) { if (index < 0 || index >= _syncCircuits.Length) return; circuit = _syncCircuits[index]; name = _syncNames[index]; }
-            else { if (index < 0 || index >= _asyncCircuits.Length) return; circuit = _asyncCircuits[index]; name = _asyncNames[index]; }
+            HandlerCircuit? circuit = null; string? name = null;
+            if (isSync) { if (index >= 0 && index < _syncCountTotal) { circuit = _syncCircuits[index]; name = _syncNames[index]; } }
+            else { if (index >= 0 && index < _asyncCountTotal) { circuit = _asyncCircuits[index]; name = _asyncNames[index]; } }
             EventMetaDataHandler.OnEventExpectation(value, e);
-            if (circuit.TryDisable()) { LayerHub.LayerHub.ReportLayerEventError(-1, name, typeof(T).Name, e); MarkDirty(); }
+            if (circuit != null && circuit.TryDisable()) { LayerHub.LayerHub.ReportLayerEventError(-1, name ?? "Unknown", typeof(T).Name, e); MarkDirty(); }
         }
 
         public void Post(in T value, int sourceIndex, Propagation propagation)
         {
+            if (Volatile.Read(ref Owner._isResetting) == 1) return;
             EnsureClean();
             var mask = Volatile.Read(ref _subscriberMask);
             if (mask == 0) return;
             var targetMask = mask;
-            if (propagation == Propagation.Bubble) targetMask &= Owner._bubbleMasksArr[sourceIndex];
-            else if (propagation == Propagation.Drop) targetMask &= Owner._dropMasksArr[sourceIndex];
+            var bubble = Owner._bubbleMasksArr;
+            var drop = Owner._dropMasksArr;
+            if (propagation == Propagation.Bubble && sourceIndex < bubble.Length) targetMask &= bubble[sourceIndex];
+            else if (propagation == Propagation.Drop && sourceIndex < drop.Length) targetMask &= drop[sourceIndex];
+            
             if (targetMask != 0) {
                 var firstLayer = (propagation == Propagation.Bubble) ? Owner.FindLastBit(targetMask) : Owner.FindFirstBit(targetMask);
                 var @event = new Event<T>(value) { TargetMask = targetMask, Propagation = (int)propagation };
@@ -486,8 +559,9 @@ internal sealed class GlobalEventCenter
 
         public void PostLocal(int layerIndex, in T value)
         {
+            if (Volatile.Read(ref Owner._isResetting) == 1) return;
             EnsureClean();
-            if ((_subscriberMask & (1UL << layerIndex)) != 0) {
+            if (layerIndex >= 0 && layerIndex < 64 && (_subscriberMask & (1UL << layerIndex)) != 0) {
                 var @event = new Event<T>(value) { TargetMask = 1UL << layerIndex, Propagation = (int)Propagation.Global };
                 Owner.EnqueueEventInternal(layerIndex, in @event);
                 Owner.WakeLayer(layerIndex);

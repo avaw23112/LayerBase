@@ -1,4 +1,4 @@
-﻿namespace LayerBase.Core.EventStateTrace;
+namespace LayerBase.Core.EventStateTrace;
 
 internal struct Slot<T> where T : struct
 {
@@ -48,6 +48,8 @@ internal sealed class FreeList<T> where T : struct
     /// </summary>
     private int _freeHead = -1;
 
+    private readonly object _syncLock = new();
+
     public FreeList(int slabSize)
     {
         _slabSize = slabSize;
@@ -60,77 +62,78 @@ internal sealed class FreeList<T> where T : struct
     /// <returns></returns>
     public SlotRef Rent()
     {
-        //当目前空间不足时,即_freeHead指向最后一个节点的nextFree时,重新开辟内存
-        if (_freeHead == -1) AllocateSlab();
+        lock (_syncLock)
+        {
+            //当目前空间不足时,即_freeHead指向最后一个节点的nextFree时,重新开辟内存
+            if (_freeHead == -1) AllocateSlabInternal();
 
-        //取出最新可用空闲节点
-        var globalIndex = _freeHead;
-        ref var slot = ref GetSlot(globalIndex);
-        _freeHead = slot.NextFree;
+            //取出最新可用空闲节点
+            var globalIndex = _freeHead;
+            ref var slot = ref GetSlotInternal(globalIndex);
+            _freeHead = slot.NextFree;
 
-        //将已经分配的slot移除出空闲链表
-        slot.NextFree = -1;
-        slot.InUse = true;
-        slot.Completed = false;
-        slot.Version = NextVersion(slot.Version);
+            //将已经分配的slot移除出空闲链表
+            slot.NextFree = -1;
+            slot.InUse = true;
+            slot.Completed = false;
+            slot.Version = NextVersion(slot.Version);
 
-        //返回slot引用
-        return new SlotRef(globalIndex, slot.Version);
+            //返回slot引用
+            return new SlotRef(globalIndex, slot.Version);
+        }
     }
 
     /// <summary>
     ///     使用原始方式直接获取Slot
     /// </summary>
-    /// <param name="token"></param>
-    /// <param name="slotRef"></param>
-    /// <returns></returns>
     public bool TryBorrow(int GlobalIndex, int Version, out SlotRef slotRef)
     {
-        if (!TryValidate(GlobalIndex, Version, out var globalIndex))
+        lock (_syncLock)
         {
-            slotRef = default;
-            return false;
-        }
+            if (!TryValidateInternal(GlobalIndex, Version, out var globalIndex))
+            {
+                slotRef = default;
+                return false;
+            }
 
-        ref var slot = ref GetSlot(globalIndex);
-        slotRef = new SlotRef(globalIndex, slot.Version);
-        return true;
+            ref var slot = ref GetSlotInternal(globalIndex);
+            slotRef = new SlotRef(globalIndex, slot.Version);
+            return true;
+        }
     }
 
     public ref Slot<T> Resolve(SlotRef slotRef)
     {
-        return ref GetSlot(slotRef.GlobalIndex);
+        lock (_syncLock)
+        {
+            return ref GetSlotInternal(slotRef.GlobalIndex);
+        }
     }
 
     /// <summary>
     ///     回收Slot
     /// </summary>
-    /// <param name="slotRef"></param>
-    /// <param name="pathPool"></param>
     public void Release(in SlotRef slotRef)
     {
-        ref var slot = ref GetSlot(slotRef.GlobalIndex);
+        lock (_syncLock)
+        {
+            ref var slot = ref GetSlotInternal(slotRef.GlobalIndex);
 
-        if (!slot.InUse || slot.Version != slotRef.Version) return;
+            if (!slot.InUse || slot.Version != slotRef.Version) return;
 
-        //重置当前Slot
-        slot.Value = default;
-        slot.InUse = false;
-        slot.Completed = false;
-        slot.Version = NextVersion(slot.Version);
+            //重置当前Slot
+            slot.Value = default;
+            slot.InUse = false;
+            slot.Completed = false;
+            slot.Version = NextVersion(slot.Version);
 
-        //延申freeList,使当前已经被释放的slot成为freeList的头节点.
-        slot.NextFree = _freeHead;
-        _freeHead = slotRef.GlobalIndex;
+            //延申freeList,使当前已经被释放的slot成为freeList的头节点.
+            slot.NextFree = _freeHead;
+            _freeHead = slotRef.GlobalIndex;
+        }
     }
 
-    /// <summary>
-    ///     验证索引和版本对应的 SlotRef 是否存在。
-    /// </summary>
-    /// <param name="token"></param>
-    /// <param name="globalIndex"></param>
-    /// <returns></returns>
-    private bool TryValidate(int GlobalIndex, int Version, out int globalIndex)
+    private bool TryValidateInternal(int GlobalIndex, int Version, out int globalIndex)
     {
         var slabIndex = GlobalIndex / _slabSize;
         if (slabIndex < 0 || slabIndex >= _slabs.Count)
@@ -139,7 +142,7 @@ internal sealed class FreeList<T> where T : struct
             return false;
         }
 
-        var slotIndex = GlobalIndex - slabIndex * _slabSize;
+        var slotIndex = GlobalIndex % _slabSize;
         ref var slot = ref _slabs[slabIndex][slotIndex];
         if (!slot.InUse || slot.Version != Version)
         {
@@ -151,27 +154,20 @@ internal sealed class FreeList<T> where T : struct
         return true;
     }
 
-    private ref Slot<T> GetSlot(int globalIndex)
+    private ref Slot<T> GetSlotInternal(int globalIndex)
     {
         var slabIndex = globalIndex / _slabSize;
-        var slotIndex = globalIndex - slabIndex * _slabSize;
+        var slotIndex = globalIndex % _slabSize;
         return ref _slabs[slabIndex][slotIndex];
     }
 
-    /// <summary>
-    ///     slab扩容
-    /// </summary>
-    private void AllocateSlab()
+    private void AllocateSlabInternal()
     {
-        //计算目前容器的总大小
         var baseIndex = _slabs.Count * _slabSize;
         var slab = new Slot<T>[_slabSize];
 
-        //倒序配置内存
         for (var i = _slabSize - 1; i >= 0; i--)
         {
-            //新内存中正序的最后一个节点的NextFree指向-1,代表新空间的尽头
-            //倒数第二个节点的NextFree指向最后一个节点,后续以此类推.假设slabSize=6,则新内存的NextFree如下: 1,2,3,4,5,-1
             slab[i].NextFree = _freeHead;
             _freeHead = baseIndex + i;
         }
@@ -179,11 +175,6 @@ internal sealed class FreeList<T> where T : struct
         _slabs.Add(slab);
     }
 
-    /// <summary>
-    ///     递进当前Slot的版本
-    /// </summary>
-    /// <param name="current"></param>
-    /// <returns></returns>
     private static ushort NextVersion(ushort current)
     {
         var next = (ushort)(current + 1);
