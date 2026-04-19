@@ -1,47 +1,79 @@
+using System;
 using System.Collections.Generic;
+using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Running;
 using LayerBase.Core.Event;
-using LayerBase.Event.EventMetaData;
 using LayerBase.LayerHub;
 using LayerBase.Layers;
 
-LayerHub.Reset();
-
-EventMetaData<PlainEvent>.TimerScheduler.SetFrequency(0.001);
-EventMetaData<PlainEvent>.TimerScheduler.Tick(0.01);
-
-var top = new RecordingLayer();
-var middle = new RecordingLayer();
-var bottom = new RecordingLayer();
-
-LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
-
-LayerHub.Send(new PlainEvent(10));
-
-LayerHub.Pump(0.02f);
-LayerHub.Pump(0.02f);
-
-Console.WriteLine($"top:{string.Join(",", top.ReceivedIds)}");
-Console.WriteLine($"middle:{string.Join(",", middle.ReceivedIds)}");
-Console.WriteLine($"bottom:{string.Join(",", bottom.ReceivedIds)}");
-
-public sealed class RecordingLayer : Layer
+namespace Benchmarks
 {
-    public List<int> ReceivedIds { get; } = new();
-
-    public RecordingLayer()
+    [MemoryDiagnoser]
+    public class EventBusBenchmarks
     {
-        Bind<PlainEvent>(Handle);
+        private const int EventCount = 1_000_000;
+        
+        [GlobalSetup]
+        public void Setup()
+        {
+            LayerHub.Reset();
+        }
+
+        [Benchmark]
+        public void HighDensity_10Layers_AllSubscribe()
+        {
+            LayerHub.Reset();
+            var builder = LayerHub.CreateLayers();
+            for (var i = 0; i < 10; i++)
+            {
+                var layer = new BenchLayer();
+                layer.Subscribe((in BenchEvent _) => { layer.HandledCount++; return EventHandledState.Continue; });
+                builder.Push(layer);
+            }
+            builder.Build();
+
+            for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
+        }
+
+        [Benchmark]
+        public void LowDensity_10Layers_SingleSubscribe()
+        {
+            LayerHub.Reset();
+            var builder = LayerHub.CreateLayers();
+            for (int i = 0; i < 10; i++) {
+                var l = new BenchLayer();
+                if (i == 9) l.Subscribe((in BenchEvent _) => { l.HandledCount++; return EventHandledState.Continue; });
+                builder.Push(l);
+            }
+            builder.Build();
+
+            for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
+        }
+        
+        [Benchmark]
+        public void Challenge_10k_Events_3Layers()
+        {
+            LayerHub.Reset();
+            var builder = LayerHub.CreateLayers();
+            for (int i = 0; i < 3; i++) {
+                var l = new BenchLayer();
+                l.Subscribe((in BenchEvent _) => { l.HandledCount++; return EventHandledState.Continue; });
+                builder.Push(l);
+            }
+            builder.Build();
+
+            for (var i = 0; i < 10_000; i++) LayerHub.Send(new BenchEvent());
+        }
     }
 
-    private EventHandledState Handle(in PlainEvent evt)
-    {
-        ReceivedIds.Add(evt.Id);
-        return EventHandledState.Continue;
-    }
-}
+    class BenchLayer : Layer { public int HandledCount; }
+    public struct BenchEvent {}
 
-public readonly struct PlainEvent
-{
-    public PlainEvent(int id) => Id = id;
-    public int Id { get; }
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            BenchmarkRunner.Run<EventBusBenchmarks>();
+        }
+    }
 }

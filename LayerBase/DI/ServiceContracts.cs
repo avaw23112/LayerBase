@@ -16,7 +16,7 @@ public interface IInternalLayerContext : ILayerContext
     int LayerIndex { get; set; }
 }
 
-public interface IService : ILayerContext
+public interface IService 
 {
     void ConfigureServices(IServiceCollection services);
 }
@@ -90,6 +90,118 @@ internal static class ServiceLayerBinder
 }
 
 public static class ServiceExtensions
+{
+    private static Layer GetLayer(this IService service)
+    {
+        return ServiceLayerBinder.Require(service);
+    }
+
+    public static EventHandledState SendLocal<TValue>(this IService service, in TValue value) where TValue : struct
+    {
+        return service.GetLayer().SendLocal(value);
+    }
+
+    public static EventHandledState SendGlobal<TValue>(this IService service, in TValue value)
+        where TValue : struct
+    {
+        return service.GetLayer().SendGlobal(value);
+    }
+
+    public static EventHandledState SendBubble<TValue>(this IService service, in TValue value)
+        where TValue : struct
+    {
+        return service.GetLayer().SendBubble(value);
+    }
+
+    public static EventHandledState SendDrop<TValue>(this IService service, in TValue value) where TValue : struct
+    {
+        return service.GetLayer().SendDrop(value);
+    }
+
+    public static void PostLocal<TValue>(this IService service, in TValue value) where TValue : struct
+    {
+        service.GetLayer().PostLocal(value);
+    }
+
+    public static void PostGlobal<TValue>(this IService service, in TValue value) where TValue : struct
+    {
+        service.GetLayer().PostGlobal(value);
+    }
+
+    public static void PostBubble<TValue>(this IService service, in TValue value) where TValue : struct
+    {
+        service.GetLayer().PostBubble(value);
+    }
+
+    public static void PostDrop<TValue>(this IService service, in TValue value) where TValue : struct
+    {
+        service.GetLayer().PostDrop(value);
+    }
+
+    // 核心修复：通过内部转换调用 Publish
+    public static void DelayLocal<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
+        where TValue : struct
+    {
+        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl, DelayDirection.Local,
+            contractId);
+    }
+
+    public static void DelayGlobal<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
+        where TValue : struct
+    {
+        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl,
+            DelayDirection.BroadCast, contractId);
+    }
+
+    public static void DelayBubble<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
+        where TValue : struct
+    {
+        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl, DelayDirection.Bubble,
+            contractId);
+    }
+
+    public static void DelayDrop<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
+        where TValue : struct
+    {
+        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl, DelayDirection.Drop,
+            contractId);
+    }
+
+    public static void Subscribe<TValue>(this IService service, EventHandleDelegate<TValue> handler)
+        where TValue : struct
+    {
+        service.GetLayer().Subscribe(handler);
+    }
+
+    public static void SubscribeAsync<TValue>(this IService service, EventHandleDelegateAsync<TValue> handler)
+        where TValue : struct
+    {
+        service.GetLayer().SubscribeAsync(handler);
+    }
+
+    public static void SubscribeParallel<TValue>(this IService service, EventHandleDelegate<TValue> handler,
+                                                 Action<int, string, string, Exception>? reportError = null)
+        where TValue : struct
+    {
+        service.GetLayer()
+               .SubscribeParallel(handler, reportError ?? LayerHub.LayerHub.ReportLayerEventError);
+    }
+
+    /// <summary>
+    /// 获取针对特定事件的链式 API 流。
+    /// </summary>
+    public static LayerEventStream<TValue> OnEvent<TValue>(this IService service) where TValue : struct
+    {
+        return service.GetLayer().OnEvent<TValue>();
+    }
+
+    public static T GetService<T>(this IService service) where T : class
+    {
+        return service.GetLayer().GetService<T>();
+    }
+}
+
+public static class LayerContextExtensions
 {
     private static Layer GetLayer(this ILayerContext service)
     {
@@ -187,12 +299,19 @@ public static class ServiceExtensions
                .SubscribeParallel(handler, reportError ?? LayerHub.LayerHub.ReportLayerEventError);
     }
 
+    /// <summary>
+    /// 获取针对特定事件的链式 API 流。
+    /// </summary>
+    public static LayerEventStream<TValue> OnEvent<TValue>(this ILayerContext service) where TValue : struct
+    {
+        return service.GetLayer().OnEvent<TValue>();
+    }
+
     public static T GetService<T>(this ILayerContext service) where T : class
     {
         return service.GetLayer().GetService<T>();
     }
 }
-
 [AttributeUsage(AttributeTargets.Constructor | AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class InjectAttribute : Attribute
 {
