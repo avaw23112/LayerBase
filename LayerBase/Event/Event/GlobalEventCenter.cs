@@ -158,20 +158,42 @@ internal sealed class GlobalEventCenter
     internal interface IResetable { void Reset(); }
 
     private interface IEventQueue { void EnqueueEvent<T>(in Event<T> @event) where T : struct; void Pump(); }
+    
     private sealed class LayerEventQueue : IEventQueue
     {
         private readonly GlobalEventCenter _center;
         private readonly int _layerIndex;
         private readonly ConcurrentDictionary<int, IUnmanagedList> _queuesByType = new();
-        public LayerEventQueue(GlobalEventCenter center, int layerIndex) { _center = center; _layerIndex = layerIndex; }
+        // 🚀 核心优化：脏队列列表
+        private readonly ConcurrentQueue<IUnmanagedList> _dirtyQueues = new();
+        private readonly Action<IUnmanagedList> _onDirtyCallback;
+
+        public LayerEventQueue(GlobalEventCenter center, int layerIndex) 
+        { 
+            _center = center; 
+            _layerIndex = layerIndex;
+            _onDirtyCallback = list => _dirtyQueues.Enqueue(list);
+        }
+
         public void EnqueueEvent<T>(in Event<T> @event) where T : struct
         {
             var typeId = EventTypeId<T>.Id;
             if (!_queuesByType.TryGetValue(typeId, out var list))
-                list = _queuesByType.GetOrAdd(typeId, _ => new UnmanagedList<T>(_center, _layerIndex));
+                list = _queuesByType.GetOrAdd(typeId, _ => new UnmanagedList<T>(_center, _layerIndex, _onDirtyCallback));
             ((UnmanagedList<T>)list).Post(@event);
         }
-        public void Pump() { if (_queuesByType.Count == 0) return; AtomicClearBit(ref _center._eventPendingMask, _layerIndex); foreach (var list in _queuesByType.Values) list.Pump(); }
+
+        public void Pump() 
+        { 
+            if (_dirtyQueues.IsEmpty) return; 
+            AtomicClearBit(ref _center._eventPendingMask, _layerIndex); 
+            
+            // 🚀 只处理真正脏了的队列
+            while (_dirtyQueues.TryDequeue(out var list))
+            {
+                list.Pump();
+            }
+        }
     }
 
     private static int TrailingZeroCountFallback(ulong v)

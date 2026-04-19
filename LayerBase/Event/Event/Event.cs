@@ -37,4 +37,21 @@ public struct Event<T> where T : struct
         TargetMask = 0;
         Propagation = 0; // 默认 Global
     }
+
+    internal int FindNextTarget(int currentLayer, GlobalEventCenter center)
+    {
+        ulong nextMask;
+        if (Propagation == (int)Core.Event.Propagation.Bubble)
+        {
+            // 向上冒泡：找比当前层更小的位
+            nextMask = TargetMask & ((1UL << currentLayer) - 1);
+            return center.FindLastBit(nextMask);
+        }
+        else
+        {
+            // 向下坠落：找比当前层更大的位
+            nextMask = TargetMask & ~((1UL << (currentLayer + 1)) - 1);
+            return center.FindFirstBit(nextMask);
+        }
+    }
 }

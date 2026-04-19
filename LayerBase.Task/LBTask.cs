@@ -21,11 +21,6 @@ public readonly struct LBTask
 
     public static LBTask CompletedTask => new(null);
 
-    public static LBTask FromResult()
-    {
-        return CompletedTask;
-    }
-
     public static LBTask FromException(Exception ex)
     {
         if (ex == null) throw new ArgumentNullException(nameof(ex));
@@ -38,6 +33,44 @@ public readonly struct LBTask
     {
         var src = ArchTaskSource.Rent();
         src.SetCanceled(token);
+        return new LBTask(src);
+    }
+
+    public static LBTask Yield()
+    {
+        var src = ArchTaskSource.Rent();
+        ThreadPool.QueueUserWorkItem(static state => ((ArchTaskSource)state!).SetResult(), src);
+        return new LBTask(src);
+    }
+
+    public static LBTask NextFrame(SynchronizationContext? ctx = null, CancellationToken token = default)
+    {
+        if (token.IsCancellationRequested) return FromCanceled(token);
+        ctx ??= SynchronizationContext.Current;
+        var src = ArchTaskSource.Rent();
+        if (ctx is LayerBaseSynchronizationContext lbCtx)
+        {
+            lbCtx.ScheduleInFrames(static state => ((ArchTaskSource)state!).SetResult(), src, 1);
+        }
+        else if (ctx != null)
+        {
+            ctx.Post(static state => ((ArchTaskSource)state!).SetResult(), src);
+        }
+        else
+        {
+            ThreadPool.QueueUserWorkItem(static state => ((ArchTaskSource)state!).SetResult(), src);
+        }
+        return new LBTask(src);
+    }
+
+    public static LBTask Delay(TimeSpan delay, CancellationToken token = default)
+    {
+        if (delay <= TimeSpan.Zero) return CompletedTask;
+        if (token.IsCancellationRequested) return FromCanceled(token);
+
+        var src = ArchTaskSource.Rent();
+        var work = DelayWorkItem.Rent(src, token);
+        DelayScheduler.Schedule(work, delay);
         return new LBTask(src);
     }
 
@@ -58,123 +91,7 @@ public readonly struct LBTask
         var src = ArchTaskSource.Rent();
         var work = RunActionWorkItem.Rent(action, src);
         ctx.Post(RunActionWorkItem.InvokeOnContext, work);
-
         return new LBTask(src);
-    }
-
-    public static LBTask Delay(TimeSpan delay, CancellationToken cancellationToken = default)
-    {
-        var src = ArchTaskSource.Rent();
-        var work = DelayWorkItem.Rent(src, cancellationToken);
-
-        if (cancellationToken.CanBeCanceled)
-            work.CancellationRegistration = cancellationToken.Register(DelayWorkItem.OnCanceled, work);
-
-        DelayScheduler.Schedule(work, delay);
-        return new LBTask(src);
-    }
-
-    /// <summary>Yield back to the current synchronization context or thread pool once.</summary>
-    public static LBTask Yield(SynchronizationContext? ctx = null, CancellationToken cancellationToken = default)
-    {
-        ctx ??= SynchronizationContext.Current;
-        var src = ArchTaskSource.Rent();
-
-        if (cancellationToken.IsCancellationRequested)
-        {
-            src.SetCanceled(cancellationToken);
-            return new LBTask(src);
-        }
-
-        if (cancellationToken.CanBeCanceled)
-            cancellationToken.Register(static state =>
-            {
-                var work = (CancellationWorkItem)state!;
-                work.Source.SetCanceled(work.Token);
-            }, new CancellationWorkItem(src, cancellationToken));
-
-        if (ctx != null)
-            ctx.Post(static state => ((ArchTaskSource)state!).SetResult(), src);
-        else
-            ThreadPool.QueueUserWorkItem(static state => ((ArchTaskSource)state!).SetResult(), src);
-
-        return new LBTask(src);
-    }
-
-    public static LBTask DelayFrame(int               frames, SynchronizationContext? ctx = null,
-                                    CancellationToken cancellationToken = default)
-    {
-        if (frames <= 0) return CompletedTask;
-
-        ctx ??= SynchronizationContext.Current;
-        var src = ArchTaskSource.Rent();
-        DelayFrameWorkItem? delayFrameWork = null;
-
-        if (cancellationToken.CanBeCanceled)
-        {
-            delayFrameWork = new DelayFrameWorkItem(src, cancellationToken);
-            cancellationToken.Register(static state =>
-            {
-                var work = (DelayFrameWorkItem)state!;
-                Interlocked.Exchange(ref work.Canceled, 1);
-                work.Source.SetCanceled(work.Token);
-            }, delayFrameWork);
-        }
-
-        if (ctx is LayerBaseSynchronizationContext archCtx)
-        {
-            if (!cancellationToken.CanBeCanceled)
-                archCtx.ScheduleInFrames(
-                    static state => ((ArchTaskSource)state!).SetResult(),
-                    src,
-                    frames);
-            else
-                archCtx.ScheduleInFrames(
-                    static state =>
-                    {
-                        var work = (DelayFrameWorkItem)state!;
-                        if (Interlocked.CompareExchange(ref work.Canceled, 0, 0) == 0) work.Source.SetResult();
-                    },
-                    delayFrameWork!,
-                    frames);
-        }
-        else
-        {
-            // Fallback: approximate with timer
-            return Delay(TimeSpan.FromMilliseconds(Math.Max(frames, 1)), cancellationToken);
-        }
-
-        return new LBTask(src);
-    }
-
-    public static LBTask NextFrame(SynchronizationContext? ctx = null, CancellationToken cancellationToken = default)
-    {
-        return DelayFrame(1, ctx, cancellationToken);
-    }
-
-    private sealed class DelayFrameWorkItem
-    {
-        public readonly ArchTaskSource Source;
-        public readonly CancellationToken Token;
-        public int Canceled;
-
-        public DelayFrameWorkItem(ArchTaskSource source, CancellationToken token)
-        {
-            Source = source;
-            Token = token;
-        }
-    }
-
-    private sealed class CancellationWorkItem
-    {
-        public readonly ArchTaskSource Source;
-        public readonly CancellationToken Token;
-
-        public CancellationWorkItem(ArchTaskSource source, CancellationToken token)
-        {
-            Source = source;
-            Token = token;
-        }
     }
 
     private sealed class DelayWorkItem
@@ -184,16 +101,11 @@ public readonly struct LBTask
         public static readonly WaitCallback OnTimer = static state =>
             ((DelayWorkItem)state!).TryComplete(false);
 
-        public static readonly Action<object?> OnCanceled = static state =>
-            ((DelayWorkItem)state!).TryComplete(true);
-
+        public CancellationTokenRegistration CancellationRegistration;
         private int _completed;
         private long _dueTimestamp;
-
         private ArchTaskSource? _source;
         private CancellationToken _token;
-
-        public CancellationTokenRegistration CancellationRegistration;
 
         public long DueTimestamp
         {
@@ -430,22 +342,31 @@ public readonly struct LBTask
 public readonly struct LBTask<T>
 {
     internal readonly IArchTaskSource<T>? Source;
+    internal readonly T? Result;
+    internal readonly bool HasResult;
 
     internal LBTask(IArchTaskSource<T>? source)
     {
         Source = source;
+        Result = default;
+        HasResult = false;
+    }
+
+    internal LBTask(T result)
+    {
+        Source = null;
+        Result = result;
+        HasResult = true;
     }
 
     public Awaiter GetAwaiter()
     {
-        return new Awaiter(Source);
+        return new Awaiter(this);
     }
 
     public static LBTask<T> FromResult(T value)
     {
-        var src = ArchTaskSource<T>.Rent();
-        src.SetResult(value);
-        return new LBTask<T>(src);
+        return new LBTask<T>(value);
     }
 
     public static LBTask<T> FromException(Exception ex)
@@ -525,29 +446,30 @@ public readonly struct LBTask<T>
 
     public readonly struct Awaiter : INotifyCompletion
     {
-        private readonly IArchTaskSource<T>? _source;
+        private readonly LBTask<T> _task;
 
-        internal Awaiter(IArchTaskSource<T>? source)
+        internal Awaiter(LBTask<T> task)
         {
-            _source = source;
+            _task = task;
         }
 
-        public bool IsCompleted => _source == null || _source.IsCompleted;
+        public bool IsCompleted => _task.HasResult || _task.Source == null || _task.Source.IsCompleted;
 
         public void OnCompleted(Action continuation)
         {
-            if (_source == null)
+            if (_task.HasResult || _task.Source == null)
             {
                 continuation();
                 return;
             }
 
-            _source.OnCompleted(continuation);
+            _task.Source.OnCompleted(continuation);
         }
 
         public T GetResult()
         {
-            return _source == null ? default! : _source.GetResult();
+            if (_task.HasResult) return _task.Result!;
+            return _task.Source == null ? default! : _task.Source.GetResult();
         }
     }
 }

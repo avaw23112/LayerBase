@@ -4,21 +4,22 @@ namespace LayerBase.Async;
 
 /// <summary>Async method builder for ArchTask.</summary>
 [AsyncMethodBuilder(typeof(LBTaskMethodBuilder))]
-public readonly struct LBTaskMethodBuilder
+public struct LBTaskMethodBuilder
 {
-    private readonly ArchTaskSource _source;
+    private ArchTaskSource? _source;
+    private bool _earlyCompleted;
 
-    private LBTaskMethodBuilder(ArchTaskSource source)
+    public static LBTaskMethodBuilder Create() => default;
+
+    public LBTask Task
     {
-        _source = source;
+        get
+        {
+            if (_earlyCompleted) return LBTask.CompletedTask;
+            if (_source == null) _source = ArchTaskSource.Rent();
+            return new LBTask(_source);
+        }
     }
-
-    public static LBTaskMethodBuilder Create()
-    {
-        return new LBTaskMethodBuilder(ArchTaskSource.Rent());
-    }
-
-    public LBTask Task => new(_source);
 
     public void Start<TStateMachine>(ref TStateMachine stateMachine)
         where TStateMachine : IAsyncStateMachine
@@ -28,23 +29,23 @@ public readonly struct LBTaskMethodBuilder
 
     public void SetResult()
     {
-        _source.SetResult();
+        if (_source == null) _earlyCompleted = true;
+        else _source.SetResult();
     }
 
     public void SetException(Exception exception)
     {
+        if (_source == null) _source = ArchTaskSource.Rent();
         _source.SetException(exception ?? throw new ArgumentNullException(nameof(exception)));
     }
 
-    public void SetStateMachine(IAsyncStateMachine stateMachine)
-    {
-        // no tracking needed
-    }
+    public void SetStateMachine(IAsyncStateMachine stateMachine) { }
 
     public void AwaitOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
         where TAwaiter : INotifyCompletion
         where TStateMachine : IAsyncStateMachine
     {
+        if (_source == null) _source = ArchTaskSource.Rent();
         awaiter.OnCompleted(stateMachine.MoveNext);
     }
 
@@ -52,27 +53,30 @@ public readonly struct LBTaskMethodBuilder
         where TAwaiter : ICriticalNotifyCompletion
         where TStateMachine : IAsyncStateMachine
     {
+        if (_source == null) _source = ArchTaskSource.Rent();
         awaiter.UnsafeOnCompleted(stateMachine.MoveNext);
     }
 }
 
 /// <summary>Async method builder for ArchTask{T}.</summary>
 [AsyncMethodBuilder(typeof(LBTaskMethodBuilder<>))]
-public readonly struct LBTaskMethodBuilder<T>
+public struct LBTaskMethodBuilder<T>
 {
-    private readonly ArchTaskSource<T> _source;
+    private ArchTaskSource<T>? _source;
+    private T _result;
+    private bool _earlyCompleted;
 
-    private LBTaskMethodBuilder(ArchTaskSource<T> source)
+    public static LBTaskMethodBuilder<T> Create() => default;
+
+    public LBTask<T> Task
     {
-        _source = source;
+        get
+        {
+            if (_earlyCompleted) return new LBTask<T>(_result);
+            if (_source == null) _source = ArchTaskSource<T>.Rent();
+            return new LBTask<T>(_source);
+        }
     }
-
-    public static LBTaskMethodBuilder<T> Create()
-    {
-        return new LBTaskMethodBuilder<T>(ArchTaskSource<T>.Rent());
-    }
-
-    public LBTask<T> Task => new(_source);
 
     public void Start<TStateMachine>(ref TStateMachine stateMachine)
         where TStateMachine : IAsyncStateMachine
@@ -82,23 +86,23 @@ public readonly struct LBTaskMethodBuilder<T>
 
     public void SetResult(T result)
     {
-        _source.SetResult(result);
+        if (_source == null) { _result = result; _earlyCompleted = true; }
+        else _source.SetResult(result);
     }
 
     public void SetException(Exception exception)
     {
+        if (_source == null) _source = ArchTaskSource<T>.Rent();
         _source.SetException(exception ?? throw new ArgumentNullException(nameof(exception)));
     }
 
-    public void SetStateMachine(IAsyncStateMachine stateMachine)
-    {
-        // no tracking needed
-    }
+    public void SetStateMachine(IAsyncStateMachine stateMachine) { }
 
     public void AwaitOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
         where TAwaiter : INotifyCompletion
         where TStateMachine : IAsyncStateMachine
     {
+        if (_source == null) _source = ArchTaskSource<T>.Rent();
         awaiter.OnCompleted(stateMachine.MoveNext);
     }
 
@@ -106,6 +110,7 @@ public readonly struct LBTaskMethodBuilder<T>
         where TAwaiter : ICriticalNotifyCompletion
         where TStateMachine : IAsyncStateMachine
     {
+        if (_source == null) _source = ArchTaskSource<T>.Rent();
         awaiter.UnsafeOnCompleted(stateMachine.MoveNext);
     }
 }
