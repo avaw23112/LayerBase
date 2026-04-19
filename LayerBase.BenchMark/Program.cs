@@ -12,14 +12,12 @@ namespace Benchmarks
     {
         static void Main(string[] args)
         {
-            // 运行所有定义的基准测试类
             BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
         }
     }
 
-    // 定义一个公共基类，开启内存诊断
     [MemoryDiagnoser]
-    [HideColumns("Error", "StdDev", "Median", "RatioSD")]
+    // 🚀 移除 HideColumns，确保输出最完整的原始报表
     public abstract class EventBenchmarkBase
     {
         protected const int OneMillion = 1_000_000;
@@ -29,7 +27,7 @@ namespace Benchmarks
     public class SingleLayer_Low_Bench : EventBenchmarkBase {
         [GlobalSetup] public void Setup() { 
             LayerHub.Reset(); 
-            var l = new BenchLayer(); l.RegisterService(new OptimizedManager());
+            var l = new BenchLayer(); l.RegisterService(new BenchManager());
             LayerHub.CreateLayers().Push(l).Build(); 
         }
         [Benchmark(Description = "单层低压 (1层/1订阅) - 100万次")]
@@ -39,7 +37,7 @@ namespace Benchmarks
     public class SingleLayer_High_Bench : EventBenchmarkBase {
         [GlobalSetup] public void Setup() { 
             LayerHub.Reset(); 
-            var l = new BenchLayer(); for (int i = 0; i < 10; i++) l.RegisterService(new OptimizedManager());
+            var l = new BenchLayer(); for (int i = 0; i < 10; i++) l.RegisterService(new BenchManager());
             LayerHub.CreateLayers().Push(l).Build(); 
         }
         [Benchmark(Description = "单层高压 (1层/10订阅) - 100万次")]
@@ -51,10 +49,10 @@ namespace Benchmarks
             LayerHub.Reset(); 
             var builder = LayerHub.CreateLayers();
             for (int i = 0; i < 9; i++) builder.Push(new BenchLayer());
-            var tail = new BenchLayer(); tail.RegisterService(new OptimizedManager());
+            var tail = new BenchLayer(); tail.RegisterService(new BenchManager());
             builder.Push(tail).Build(); 
         }
-        [Benchmark(Description = "多层低压 (10层/尾订阅) - 100万次")]
+        [Benchmark(Description = "多层低压 (10层/仅尾层) - 100万次")]
         public void Run() { for (int i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent()); }
     }
 
@@ -62,10 +60,25 @@ namespace Benchmarks
         [GlobalSetup] public void Setup() { 
             LayerHub.Reset(); 
             var builder = LayerHub.CreateLayers();
-            for (int i = 0; i < 10; i++) { var l = new BenchLayer(); l.RegisterService(new OptimizedManager()); builder.Push(l); }
+            for (int i = 0; i < 10; i++) { var l = new BenchLayer(); l.RegisterService(new BenchManager()); builder.Push(l); }
             builder.Build(); 
         }
         [Benchmark(Description = "多层高压 (10层/全订阅) - 100万次")]
+        public void Run() { for (int i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent()); }
+    }
+
+    public class MultiLayer_Random_Bench : EventBenchmarkBase {
+        [GlobalSetup] public void Setup() { 
+            LayerHub.Reset(); 
+            var builder = LayerHub.CreateLayers();
+            for (int i = 0; i < 10; i++) { 
+                var l = new BenchLayer(); 
+                if (i % 2 == 0) l.RegisterService(new BenchManager()); 
+                builder.Push(l); 
+            }
+            builder.Build(); 
+        }
+        [Benchmark(Description = "多层随机负载 (10层/5层订阅) - 100万次")]
         public void Run() { for (int i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent()); }
     }
 
@@ -80,6 +93,17 @@ namespace Benchmarks
         public void Run() { for (int i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent()); }
     }
 
+    public class Classic_1ms_Bench : EventBenchmarkBase {
+        [GlobalSetup] public void Setup() { 
+            LayerHub.Reset(); 
+            var builder = LayerHub.CreateLayers();
+            for (int i = 0; i < 3; i++) { var l = new BenchLayer(); l.RegisterService(new BenchManager()); builder.Push(l); }
+            builder.Build(); 
+        }
+        [Benchmark(Description = "经典 1ms 挑战 (3层全订阅) - 1万次")]
+        public void Run() { for (int i = 0; i < TenThousand; i++) LayerHub.Send(new BenchEvent()); }
+    }
+
     public class Typical_Heavy_180_Bench : EventBenchmarkBase {
         [GlobalSetup] public void Setup() { 
             LayerHub.Reset(); 
@@ -87,17 +111,16 @@ namespace Benchmarks
             for (int i = 0; i < 5; i++) {
                 var l = new BenchLayer();
                 int count = (i == 0) ? 100 : 20;
-                for (int j = 0; j < count; j++) l.RegisterService(new OptimizedManager());
+                for (int j = 0; j < count; j++) l.RegisterService(new BenchManager());
                 builder.Push(l);
             }
             builder.Build(); 
         }
-        [Benchmark(Description = "中重度实战 (5层/180订阅) - 1万次")]
+        [Benchmark(Description = "中重度负载 (180订阅) - 1万次")]
         public void Run() { for (int i = 0; i < TenThousand; i++) LayerHub.Send(new BenchEvent()); }
     }
 
-    // 辅助类
-    public partial class OptimizedManager : LayerBase.DI.IService {
+    public partial class BenchManager : LayerBase.DI.IService {
         public void ConfigureServices(LayerBase.DI.IServiceCollection s) => s.AddSingleton(this);
         [Subscribe] public EventHandledState Handle(in BenchEvent e) => EventHandledState.Continue;
     }
