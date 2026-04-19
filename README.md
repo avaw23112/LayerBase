@@ -101,13 +101,27 @@ EventBucket<T>
 
 ---
 
-## 📖 最佳实践手册
+## 📖 最佳实践手册：构建秩序的堡垒
 
-LayerBase 强烈推荐使用 `Layer -> Service -> Manager` 的三层递进架构。这种结构能让代码保持高内聚、低耦合的健康形态，即使项目膨胀到百万行代码，依然清晰可溯源。
+性能只是底座，工程的长期可维护性才是大型项目的生命线。LayerBase 强烈推荐使用 **`Layer -> Service -> Manager`** 的三层递进架构。
 
-*   **Layer（层级）**：最顶层的宏观组织者，代表系统的处理优先级界限。负责将一整类性质相同的内容聚集起来（例如：`RenderLayer`、`PhysicsLayer`、`CoreLogicLayer`、`InteractionLayer`）。
-*   **Service（服务）**：中层的业务组织者，负责将同属一个大功能的模块聚合在一起（例如：`PlayerService` 负责组织 `PlayerInput`、`PlayerMove`、`PlayerAnimation` 等模块）。它本身不写太多具体逻辑，而是负责依赖注入（DI）和模块调度。
-*   **Manager（管理器）**：底层的具体承载者。遵循单一职责原则（SRP），专注于实现一个具体的微观功能（例如：处理角色受击）。它通过事件总线与外界通讯。
+为什么要这么设计？在传统的 ECS 或纯 EventBus 架构中，系统往往是扁平的。当你的项目膨胀到百万行代码、成百上千个模块时，扁平架构会导致模块之间的依赖关系像一团乱麻，新人接手根本无从下手。
+
+LayerBase 的三层约束，本质上是在用**物理空间的隔离**来对抗代码的熵增：
+
+*   🌍 **Layer（宏观层级）**：**最顶层的时序与边界组织者。**
+    *   **角色**：它不写具体的业务，而是代表了系统的处理优先级和物理界限（如：`RenderLayer`、`PhysicsLayer`、`CoreLogicLayer`、`InteractionLayer`）。
+    *   **好处**：通过定义 Layer 的上下层关系，你可以极其明确地控制事件的流向（Bubble 向上，Drop 向下）。这就保证了无论底层业务怎么乱，整体系统运转的“绝对时序”是永远确定的。
+*   🏢 **Service（业务服务）**：**中层的功能聚合器。**
+    *   **角色**：它负责将同属一个大功能的细碎模块聚合在一起（例如：`PlayerService` 负责将 `PlayerInput`、`PlayerMove`、`PlayerAnimation` 圈在一起）。
+    *   **好处**：Service 承担了依赖注入（DI）的装配工作。对外，它暴露粗粒度的接口；对内，它隐藏了 Manager 的复杂性。这实现了完美的“高内聚”。
+*   ⚙️ **Manager（具体逻辑块）**：**底层的微观承载者。**
+    *   **角色**：遵循**单一职责原则 (SRP)**，专注干好一件事（例如：仅处理角色受击）。
+    *   **好处**：Manager 不直接引用任何其他 Manager，它们之间的通讯全部交由事件总线（EventBus）完成。这种设计实现了真正的“低耦合”，让你随时可以拔掉一个 Manager 而不导致编译报错。
+
+通过这套架构，**你的代码目录结构，就是你的系统架构图。**
+
+---
 
 ### Step 1: 定义您的事件 (Event Structs)
 为避免产生运行时垃圾，框架强制要求所有的事件对象必须声明为 `struct`：
@@ -178,27 +192,32 @@ public class CombatService : IService
 }
 ```
 
-### Step 4: 触发事件 (全能的 Event API)
-不仅是 `LayerHub`，你的 `Layer`、`Service` 甚至是底层的 `Manager`，都随时可以通过扩展方法调用极其丰富的事件 API 来与外界通讯：
+### Step 4: 全空间维度的事件触发 (Send / Post / Delay)
+传统的框架通常只能通过一个全局单例（如 `EventBus.Publish`）来发消息，这会导致事件瞬间弥漫到整个系统，引发未知的蝴蝶效应。
+
+在 LayerBase 中，**不仅是 `LayerHub`，你代码里的大多数对象（`Layer`、`Service`、`Manager`）都能直接感知自身在架构中的坐标，并向外界派发事件。** 这赋予了你极度精细的“火力覆盖”能力：
 
 ```csharp
-// 【Send 族：同步执行，立刻阻塞当前执行流】
-this.SendGlobal(new DamageEvent()); // 穿透全局所有层级
-this.SendLocal(new DamageEvent());  // 仅在自己所在的同层级内广播
-this.SendBubble(new DamageEvent()); // 向上冒泡（发给比自己 Index 更小的顶层，如逻辑抛给 UI）
-this.SendDrop(new DamageEvent());   // 向下坠落（发给比自己 Index 更大的底层，如 UI 下发给逻辑）
+// ⚔️ 【Send 族：同步执行，立刻阻塞当前执行流，适合强依赖时序的逻辑】
+this.SendLocal(new DamageEvent());  // 【精准打击】仅在自己所在的同层级内广播
+this.SendBubble(new DamageEvent()); // 【向上冒泡】抛给比自己更“上层”的系统（例如：底层逻辑把数据丢给 UI 渲染）
+this.SendDrop(new DamageEvent());   // 【向下坠落】抛给比自己更“下层”的系统（例如：UI 接收输入后下发给物理引擎）
+this.SendGlobal(new DamageEvent()); // 【全图穿透】无视界限，穿透所有层级
 
-// 【Post 族：异步投递，不阻塞代码，推入脏队列等待 Pump 处理】
-this.PostGlobal(new DamageEvent()); 
+// 📨 【Post 族：异步投递，不阻塞代码，推入脏队列等待下一帧统一处理，适合非紧急状态同步】
 this.PostBubble(new DamageEvent());
+this.PostGlobal(new DamageEvent()); 
 
-// 【Delay 族：定时投递，支持延迟 N 秒后派发】
-this.DelayDrop(new PlayerDeathEvent(), 3.5f); // 3.5秒后向下层级派发死亡事件
+// ⏳ 【Delay 族：定时投递，内置的零分配计时器】
+this.DelayDrop(new PlayerDeathEvent(), 3.5f); // 3.5秒后，自动向下层级派发死亡事件
 ```
+**好处**：这套丰富的 API 让“事件”拥有了真正的物理方向（上下左右）。通过明确的传播路径（比如严禁逻辑层向上传递物理数据，只能用 Bubble），你能从根源上斩断那种“循环触发”的面条代码。
 
-### Step 5: 游戏引擎整合 (Build & Pump)
-将 LayerBase 的生命周期接入您所使用的引擎（如 Unity 的 `MonoBehaviour` 或 Godot 的 `Node`）。
-所有的初始化操作（`Build`）应放在引擎的启动期，所有的事件心跳（`Pump`）应放在引擎的帧更新中。
+### Step 5: 游戏引擎生命周期整合 (Build & Pump)
+LayerBase 是纯 C# 的，它不依赖任何特定的游戏引擎。你只需要在你的引擎（Unity 的 `MonoBehaviour`、Godot 的 `Node` 或纯 C# 的主循环）中，接入它的**构建（Build）**与**心跳（Pump）**。
+
+*   **Build（构建拓扑）**：应放在引擎的最早启动期。此时框架会扫描特性、预分配 SOA 内存，并静态审计整个拓扑的死循环风险。
+*   **Pump（驱动心跳）**：应放在引擎的帧更新（Update）中。它负责消费所有的 `Post` 异步事件、`Delay` 定时任务以及推动 `LBTask` 状态机。
 
 ```csharp
 using UnityEngine;
@@ -213,18 +232,18 @@ public class GameRoot : MonoBehaviour
 
     void Awake()
     {
-        // 1. 初始化架构拓扑
+        // 1. 启动期：构建架构大厦
         LayerHub.CreateLayers()
                 .Push(new InteractionLayer()) // Index 0: 顶层交互层
                 .Push(new CoreLogicLayer())   // Index 1: 核心逻辑层
-                .Build();                     // 自动扫描 [OwnerLayer] 并装配
+                .Build();                     // 自动扫描程序集中的 [OwnerLayer] 并极速装配
     }
 
     void Update()
     {
-        // 2. 驱动主循环
-        // 处理所有 Post 的异步事件、Delay 定时任务以及 LBTask 状态机
-        // 如果脏队列为空，此调用的耗时仅为几个纳秒！
+        // 2. 运行时：驱动系统心跳
+        // 放心，如果脏队列是空的，这一行代码的耗时只有区区几个纳秒（~8ns），
+        // 绝对不会对你的帧率造成任何负担！
         LayerHub.Pump(Time.deltaTime);
     }
 }
