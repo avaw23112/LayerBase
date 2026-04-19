@@ -91,11 +91,8 @@ public class EventPipelineTests
             var rt = LayerHub.CreateLayers().Push(layer).Build();
 
             rt.Send(new TestEvent());
-            Assert.That(errorCount, Is.EqualTo(1));
-            Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv" }));
-
-            _trace.Clear();
-            rt.Send(new TestEvent());
+            // 🚀 在 v1.5.0 "原地复活"机制下，异常发生时 errorCount 增加，
+            // 但后续的 "Safe" Handler 在同一帧内也应该被执行！
             Assert.That(errorCount, Is.EqualTo(1));
             Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv", "Safe" }));
         }
