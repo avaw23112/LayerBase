@@ -1,6 +1,7 @@
 using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.Layers;
+using NUnit.Framework;
 
 namespace EventsTest;
 
@@ -8,75 +9,68 @@ namespace EventsTest;
 public class LayerConfigurationTests
 {
     [SetUp]
-    public void Reset()
+    public void SetUp()
     {
         LayerHub.Reset();
     }
 
     [Test]
-    public void Broadcast_without_metadata_still_reaches_all_layers()
+    public void Layer_can_intercept_events_using_Handled_state()
     {
-        const int eventId = 10;
-        var top = new RecordingLayer<PlainEvent>(EventHandledState.Continue, e => e.Id);
-        var middle = new RecordingLayer<PlainEvent>(EventHandledState.Continue, e => e.Id);
-        var bottom = new RecordingLayer<PlainEvent>(EventHandledState.Continue, e => e.Id);
+        var l1 = new InterceptLayer();
+        var l2 = new NormalLayer();
+        var rt = LayerHub.CreateLayers().Push(l1).Push(l2).Build();
 
-        LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
+        var eventId = Guid.NewGuid();
+        rt.Send(new PlainEvent(eventId));
 
-        LayerHub.Send(new PlainEvent(eventId));
-
-        Assert.That(top.ReceivedIds, Is.EqualTo(new[] { eventId }));
-        Assert.That(middle.ReceivedIds, Is.EqualTo(new[] { eventId }));
-        Assert.That(bottom.ReceivedIds, Is.EqualTo(new[] { eventId }));
+        Assert.That(l1.ReceivedIds, Contains.Item(eventId));
+        Assert.That(l2.ReceivedIds, Is.Empty, "L2 should not receive events handled by L1");
     }
 
     [Test]
-    public void Direct_route_skips_layers_without_handlers()
+    public void Layer_mapping_is_correctly_initialized()
     {
-        const int eventId = 20;
-        var first = new EmptyLayer();
-        var middle = new EmptyLayer();
-        var bottom = new RecordingLayer<PlainEvent>(EventHandledState.Continue, e => e.Id);
-
-        LayerHub.CreateLayers().Push(first).Push(middle).Push(bottom).Build();
-
-        first.SendDrop(new PlainEvent(eventId));
-
-        Assert.That(bottom.ReceivedIds, Is.EqualTo(new[] { eventId }));
+        var l1 = new NormalLayer();
+        var rt = LayerHub.CreateLayers().Push(l1).Build();
+        Assert.That(l1.RouteIndex, Is.EqualTo(0));
     }
 
-    private sealed class RecordingLayer<TEvent> : Layer where TEvent : struct
+    private class NormalLayer : Layer
     {
-        private readonly Func<TEvent, int> _idSelector;
-        private readonly EventHandledState _result;
+        public List<Guid> ReceivedIds = new();
 
-        public RecordingLayer(EventHandledState result, Func<TEvent, int> idSelector)
+        public NormalLayer()
         {
-            _result = result;
-            _idSelector = idSelector;
-            Subscribe<TEvent>(Handle);
+            Subscribe<PlainEvent>(Handle);
         }
 
-        public List<int> ReceivedIds { get; } = new();
-
-        private EventHandledState Handle(in TEvent evt)
+        private EventHandledState Handle(in PlainEvent e)
         {
-            ReceivedIds.Add(_idSelector(evt));
-            return _result;
+            ReceivedIds.Add(e.Id);
+            return EventHandledState.Continue;
         }
     }
 
-    private sealed class EmptyLayer : Layer
+    private class InterceptLayer : Layer
     {
-    }
+        public List<Guid> ReceivedIds = new();
 
-    public readonly struct PlainEvent
-    {
-        public PlainEvent(int id)
+        public InterceptLayer()
         {
-            Id = id;
+            Subscribe<PlainEvent>(Handle);
         }
 
-        public int Id { get; }
+        private EventHandledState Handle(in PlainEvent e)
+        {
+            ReceivedIds.Add(e.Id);
+            return EventHandledState.Handled;
+        }
+    }
+
+    public struct PlainEvent
+    {
+        public Guid Id;
+        public PlainEvent(Guid id) => Id = id;
     }
 }

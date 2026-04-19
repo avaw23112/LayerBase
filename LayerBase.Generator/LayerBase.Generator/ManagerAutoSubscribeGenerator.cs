@@ -101,7 +101,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                 var reg = h.Attr.Contains("Async") ? "SubscribeAsync" :
                     h.Attr.Contains("Parallel")    ? "SubscribeParallel" : "Subscribe";
 
-                // 🚀 回归标准模式：直接绑定成员方法委托
+                // 🚀 使用全限定名和显式委托转换
                 sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
             }
 

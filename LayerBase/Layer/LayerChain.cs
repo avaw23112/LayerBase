@@ -6,13 +6,15 @@ namespace LayerBase.Layers;
 
 internal sealed class LayerChain
 {
+    private readonly LayerRuntime _owner;
     private readonly ResponsibilityChain responsibilityChain;
     private Layer?[] _indexedLayers = Array.Empty<Layer?>();
     private ulong _logicActiveMask;
 
-    internal LayerChain(ResponsibilityChain chain)
+    internal LayerChain(ResponsibilityChain chain, LayerRuntime owner)
     {
         responsibilityChain = chain;
+        _owner = owner;
     }
 
     internal void AddNode(Node node)
@@ -24,7 +26,6 @@ internal sealed class LayerChain
     {
         AssignEventBus();
 
-        // 汇总逻辑活跃状态并构建各层的 DI 容器
         _logicActiveMask = 0;
         var allSubscribers = new List<IAutoSubscribe>();
         foreach (var node in responsibilityChain)
@@ -36,25 +37,18 @@ internal sealed class LayerChain
                 if (layer.HasActiveLogic) _logicActiveMask |= 1UL << layer.RouteIndex;
             }
 
-        // 核心步骤：启动期全量环路审计
-        EventGraphValidator.Validate(allSubscribers);
-    }
-
-    internal void SetLogTracing(Action<string>? logger, int logQueueCapacity)
-    {
+        // 环路审计需要 runtime 的状态
+        EventGraphValidator.Validate(allSubscribers, _owner);
     }
 
     internal void Pump(float deltaTime)
     {
-        // 1. 获取全局事件挂起状态（位图）
-        var eventMask = LayerHub.EventCenter.GetEventPendingMask();
+        var center = _owner.EventCenter;
+        var eventMask = center.GetEventPendingMask();
 
-        // 2. 合并逻辑活跃状态
         var activeMask = eventMask | _logicActiveMask;
         if (activeMask == 0) return;
 
-        // 3. 高性能位图遍历：利用硬件指令彻底跳过空闲层级
-        var center = LayerHub.EventCenter;
         while (activeMask != 0)
         {
             var index = center.FindFirstBit(activeMask);
@@ -67,10 +61,6 @@ internal sealed class LayerChain
         }
     }
 
-    internal void PrintLog()
-    {
-    }
-
     private void AssignEventBus()
     {
         var maxIndex = -1;
@@ -79,15 +69,14 @@ internal sealed class LayerChain
             {
                 if (layer.RouteIndex == -1)
                 {
-                    var index = LayerHub.GetNextLayerIndex();
+                    var index = _owner.GetNextLayerIndex();
                     layer.SetRouteIndex(index);
-                    LayerHub.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
+                    _owner.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
                 }
 
                 if (layer.RouteIndex > maxIndex) maxIndex = layer.RouteIndex;
             }
 
-        // 建立快速索引数组，确保 O(1) 获取层级实例
         if (maxIndex != -1)
         {
             _indexedLayers = new Layer?[maxIndex + 1];

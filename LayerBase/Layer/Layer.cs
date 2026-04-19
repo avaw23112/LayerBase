@@ -26,17 +26,24 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
     private readonly List<IDisposable> m_subscriptions = new();
-    private GlobalEventCenter _center;
+    private GlobalEventCenter? _center;
     private bool m_disposed;
 
     private List<Action<Layer>> m_pendingOps = new();
     private ServiceProvider? m_serviceProvider;
 
+    public LayerRuntime? OwnerContext { get; private set; }
+
+    internal void AttachToContext(LayerRuntime context)
+    {
+        OwnerContext = context;
+        _center = context.EventCenter;
+        ServiceLayerBinder.Attach(this, this);
+    }
+
     protected Layer()
     {
-        _center = LayerHub.EventCenter;
         m_serviceCollection = new ServiceCollection();
-        ServiceLayerBinder.Attach(this, this);
     }
 
     public int RouteIndex { get; private set; } = -1;
@@ -107,7 +114,7 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
     public virtual void Pump(float deltaTime)
     {
         if (RouteIndex == -1) return;
-        LayerHub.EventCenter.PumpLayer(RouteIndex);
+        _center!.PumpLayer(RouteIndex);
         foreach (var updater in m_delayPublishers.Values) updater.Update(deltaTime);
         for (var i = 0; i < m_serviceUpdates.Count; i++) m_serviceUpdates[i].Update();
     }
@@ -122,10 +129,10 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
         ThrowIfDisposed();
         if (RouteIndex != -1)
         {
-            LayerHub.EventCenter.Subscribe(RouteIndex, handler);
+            _center!.Subscribe(RouteIndex, handler);
             lock (m_subscriptions)
             {
-                m_subscriptions.Add(UnsubscribeDelegateToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+                m_subscriptions.Add(UnsubscribeDelegateToken<T>.Rent(_center!, RouteIndex, handler));
             }
         }
         else
@@ -139,10 +146,10 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
         ThrowIfDisposed();
         if (RouteIndex != -1)
         {
-            LayerHub.EventCenter.SubscribeAsync(RouteIndex, handler);
+            _center!.SubscribeAsync(RouteIndex, handler);
             lock (m_subscriptions)
             {
-                m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+                m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(_center!, RouteIndex, handler));
             }
         }
         else
@@ -160,8 +167,8 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
                                      Action<int, string, string, Exception>? reportError = null) where T : struct
     {
         ThrowIfDisposed();
-        if (RouteIndex != -1)
-            LayerHub.EventCenter.SubscribeParallel(RouteIndex, handler, reportError ?? LayerHub.ReportLayerEventError);
+        if (RouteIndex != -1 && _center != null)
+            _center!.SubscribeParallel(RouteIndex, handler, reportError ?? OwnerContext!.ReportError);
         else m_pendingOps.Add(l => l.SubscribeParallel(handler, reportError));
     }
 
@@ -173,49 +180,49 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventHandledState SendLocal<T>(in T value) where T : struct
     {
-        return LayerHub.EventCenter.SendLocal(RouteIndex, value);
+        return _center!.SendLocal(RouteIndex, value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventHandledState SendBubble<T>(in T value) where T : struct
     {
-        return LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Bubble);
+        return _center!.Send(value, RouteIndex, Propagation.Bubble);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventHandledState SendDrop<T>(in T value) where T : struct
     {
-        return LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Drop);
+        return _center!.Send(value, RouteIndex, Propagation.Drop);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventHandledState SendGlobal<T>(in T value) where T : struct
     {
-        return LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Global);
+        return _center!.Send(value, RouteIndex, Propagation.Global);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostLocal<T>(in T value) where T : struct
     {
-        LayerHub.EventCenter.PostLocal(RouteIndex, value);
+        _center!.PostLocal(RouteIndex, value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostBubble<T>(in T value) where T : struct
     {
-        LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Bubble);
+        _center!.Post(value, RouteIndex, Propagation.Bubble);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostDrop<T>(in T value) where T : struct
     {
-        LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Drop);
+        _center!.Post(value, RouteIndex, Propagation.Drop);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostGlobal<T>(in T value) where T : struct
     {
-        LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Global);
+        _center!.Post(value, RouteIndex, Propagation.Global);
     }
 
     private sealed class UnsubscribeDelegateToken<T> : IDisposable where T : struct
@@ -227,7 +234,7 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
 
         public void Dispose()
         {
-            _center.Unsubscribe(_layerIndex, _handler);
+            _center!.Unsubscribe(_layerIndex, _handler);
             _center = null!;
             _handler = null!;
             Pool.Add(this);
@@ -252,7 +259,7 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
 
         public void Dispose()
         {
-            _center.UnsubscribeAsync(_layerIndex, _handler);
+            _center!.UnsubscribeAsync(_layerIndex, _handler);
             _center = null!;
             _handler = null!;
             Pool.Add(this);

@@ -20,7 +20,15 @@ public enum Propagation
 
 public sealed class GlobalEventCenter
 {
+    private readonly Action<int, string, string, Exception>? _onError;
     private readonly ConcurrentDictionary<int, object> _eventBuckets = new();
+
+    public GlobalEventCenter(Action<int, string, string, Exception>? onError = null)
+    {
+        _onError = onError;
+    }
+
+    internal void ReportError(int l, string s, string e, Exception ex) => _onError?.Invoke(l, s, e, ex);
     private readonly object _lock = new();
     internal ulong[] _bubbleMasksArr = Array.Empty<ulong>();
     internal ulong[] _dropMasksArr = Array.Empty<ulong>();
@@ -858,7 +866,7 @@ public sealed class GlobalEventCenter
             EventMetaDataHandler.OnEventExpectation(value, e);
             if (circuit != null && circuit.TryDisable())
             {
-                LayerHub.ReportLayerEventError(-1, name ?? "Unknown", typeof(T).Name, e);
+                Owner.ReportError(-1, name ?? "Unknown", typeof(T).Name, e);
                 MarkDirty();
             }
         }
@@ -962,7 +970,7 @@ public sealed class GlobalEventCenter
                 EventMetaDataHandler.OnEventExpectation(_payload, ex);
                 if (_circuit != null && _circuit.TryDisable())
                 {
-                    LayerHub.ReportLayerEventError(_layerIndex, _handlerFullName!, typeof(T).Name, ex);
+                    _owner?.Owner.ReportError(_layerIndex, _handlerFullName!, typeof(T).Name, ex);
                     _owner?.MarkDirty();
                 }
             }

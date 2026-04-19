@@ -18,7 +18,7 @@ internal static class EventGraphValidator
     /// <summary>
     ///     执行全局事件依赖审计，检测环路并识别“无人订阅”的空事件。
     /// </summary>
-    public static void Validate(IEnumerable<IAutoSubscribe> subscribers)
+    public static void Validate(IEnumerable<IAutoSubscribe> subscribers, LayerRuntime runtime)
     {
         var sentEvents = new HashSet<Type>();
         var subscribedEvents = new HashSet<Type>();
@@ -26,7 +26,6 @@ internal static class EventGraphValidator
 
         foreach (var sub in subscribers)
         {
-            // 1. 收集发送关系与环路图数据
             foreach (var dep in sub.GetEventDependencies())
             {
                 sentEvents.Add(dep.Target);
@@ -35,15 +34,11 @@ internal static class EventGraphValidator
                     targets = new HashSet<Type>();
                     adj[dep.Source] = targets;
                 }
-
                 targets.Add(dep.Target);
             }
-
-            // 2. 收集订阅数据
             foreach (var evtType in sub.GetSubscribedEvents()) subscribedEvents.Add(evtType);
         }
 
-        // --- 审计 A: 环路检测 (三色算法) ---
         if (adj.Count > 0)
         {
             var colors = new Dictionary<Type, NodeColor>();
@@ -54,18 +49,18 @@ internal static class EventGraphValidator
                         ThrowCycleError(cyclePath!);
         }
 
-        // --- 审计 B: Dead Letter 检测 (无人订阅预警) ---
-        if (LayerHub.IsDebugMode)
+        // 🚀 使用传入的 runtime 进行报错，不再依赖静态 LayerHub
+        if (runtime.IsDebugMode)
             foreach (var sent in sentEvents)
                 if (!subscribedEvents.Contains(sent))
-                    LayerHub.ReportWarning(-1, "TopologyAudit", sent.Name,
+                    runtime.ReportWarning(-1, "TopologyAudit", sent.Name,
                         "该事件被某些组件同步分发，但在当前拓扑中没有任何订阅者。这可能导致逻辑空转。");
     }
 
     private static bool CheckCycle(Type u, Dictionary<Type, HashSet<Type>> adj, Dictionary<Type, NodeColor> colors,
                                    List<Type> path, out List<Type>? cyclePath)
     {
-        colors[u] = NodeColor.Gray; // 标记为正在访问
+        colors[u] = NodeColor.Gray; 
         path.Add(u);
         cyclePath = null;
 
@@ -73,23 +68,20 @@ internal static class EventGraphValidator
             foreach (var v in neighbors)
             {
                 if (!colors.TryGetValue(v, out var vColor)) vColor = NodeColor.White;
-
                 if (vColor == NodeColor.Gray)
                 {
-                    // 发现回边！从 v 开始截取环路
                     var startIndex = path.IndexOf(v);
                     cyclePath = path.Skip(startIndex).ToList();
-                    cyclePath.Add(v); // 闭合环路
+                    cyclePath.Add(v);
                     return true;
                 }
-
                 if (vColor == NodeColor.White)
                     if (CheckCycle(v, adj, colors, path, out cyclePath))
                         return true;
             }
 
         path.RemoveAt(path.Count - 1);
-        colors[u] = NodeColor.Black; // 标记为完全访问
+        colors[u] = NodeColor.Black; 
         return false;
     }
 
@@ -97,24 +89,15 @@ internal static class EventGraphValidator
     {
         var sb = new StringBuilder();
         sb.AppendLine("检测到同步事件分发死循环！");
-        sb.AppendLine("为了保证极致性能，系统禁止在 Handler 内部同步分发可能导致回环的事件。");
-        sb.Append("环路路径: ");
+        sb.AppendLine("环路路径: ");
         for (var i = 0; i < path.Count; i++)
         {
             sb.Append(path[i].Name);
             if (i < path.Count - 1) sb.Append(" -> ");
         }
-
         sb.AppendLine();
-        sb.AppendLine("解决方案：请将环路中任意一处 [Send] 改为 [Post] (异步分发)，以打破同步调用栈。");
-
         throw new EventCycleException(sb.ToString());
     }
 
-    private enum NodeColor
-    {
-        White,
-        Gray,
-        Black
-    }
+    private enum NodeColor { White, Gray, Black }
 }

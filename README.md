@@ -268,36 +268,38 @@ this.DelayDrop(new PlayerDeathEvent(), 3.5f); // 在指定秒数后向下层级�
 ```csharp
 using UnityEngine;
 using LayerBase.Layers;
-using LayerBase.LayerHub;
+using LayerBase; // 引用核心命名空间
 
 public class GameRoot : MonoBehaviour
 {
+    // 1. 定义运行时 (Runtime)
+    private LayerRuntime _runtime = new LayerRuntime();
+
     // 定义层级
     public class InteractionLayer : Layer { }
     public class CoreLogicLayer : Layer { }
 
     void Awake()
     {
-        // 1. 初始化期：构建拓扑
-        LayerHub.CreateLayers()
+        // 2. 初始化期：构建拓扑
+        _runtime.CreateLayers()
                 .Push(new InteractionLayer()) // 索引 0: 上层交互
                 .Push(new CoreLogicLayer())   // 索引 1: 下层逻辑
-                .SetDebug()                   // 开启Debug模式可以从GetTopologySummary()获得整个系统的构建图。对性能影响不大。
+                .SetDebug()                   // 开启Debug模式
                 .Build();                     // 自动扫描 [OwnerLayer] 并装配
 
-        //注册全局消息通道，用于捕获框架的异常
-        LayerHub.OnLayerEventInfo +=
-            info =>
-            {
-                GD.PrintErr($"[{info.LayerIndex}][{info.EventName}][{info.Type}]: {info.Source}{info.Message}");
-            };
+        // 注册事件信息回调
+        _runtime.OnLayerEventInfo += info => { /* Log info... */ };
     }
 
     void Update()
     {
-        // 2. 运行期：驱动事件泵
-        // 在空闲状态下，Pump 的调用开销极小
-        LayerHub.Pump(Time.deltaTime);
+        // 3. 运行期：驱动。
+        // 方式 A：单独驱动特定运行时（推荐用于多世界）
+        _runtime.Pump(Time.deltaTime);
+        
+        // 方式 B：通过全局中心统一驱动所有活跃运行时
+        // LayerHub.Pump(Time.deltaTime);
     }
 }
 ```
@@ -749,46 +751,46 @@ broadcasting.
 
 ### Step 5: Engine Lifecycle Integration
 
-When integrating LayerBase into a specific game engine (e.g., Unity's `MonoBehaviour`), two key lifecycles must be
-handled: Build and Pump.
+When integrating LayerBase into a specific game engine (e.g., Unity's `MonoBehaviour`), two key lifecycles must be handled: Build and Pump.
 
-* **Build**: Called during the game's initialization phase to scan attributes, allocate SOA arrays, and statically audit
-  infinite loops.
-* **Pump**: Called in the per-frame update phase to process queued asynchronous events and delayed tasks.
+*   **Build**: Called during the game's initialization phase to scan attributes, allocate SOA arrays, and statically audit infinite loops.
+*   **Pump**: Called in the per-frame update phase to process queued asynchronous events and delayed tasks.
 
 ```csharp
 using UnityEngine;
 using LayerBase.Layers;
-using LayerBase.LayerHub;
+using LayerBase; // Reference core namespace
 
 public class GameRoot : MonoBehaviour
 {
+    // 1. Define the Runtime instance
+    private LayerRuntime _runtime = new LayerRuntime();
+
     // Define Layers
     public class InteractionLayer : Layer { }
     public class CoreLogicLayer : Layer { }
 
     void Awake()
     {
-        // 1. Initialization phase: Construct topology
-        LayerHub.CreateLayers()
+        // 2. Initialization phase: Construct topology
+        _runtime.CreateLayers()
                 .Push(new InteractionLayer()) // Index 0: Upper Interaction Layer
                 .Push(new CoreLogicLayer())   // Index 1: Lower Logic Layer
-                .SetDebug()                   // Enable Debug mode to obtain the build graph via GetTopologySummary(). Minimal performance impact.
+                .SetDebug()                   // Enable Debug mode
                 .Build();                     // Automatically scan [OwnerLayer] and assemble
 
-        // Register the global message channel to capture framework exceptions
-        LayerHub.OnLayerEventInfo +=
-            info =>
-            {
-                GD.PrintErr($"[{info.LayerIndex}][{info.EventName}][{info.Type}]: {info.Source}{info.Message}");
-            };
+        // Register the info channel to capture framework events/errors
+        _runtime.OnLayerEventInfo += info => { /* Handle logging... */ };
     }
 
     void Update()
     {
-        // 2. Runtime phase: Drive the event pump
-        // Under idle states, the cost of calling Pump is negligible
-        LayerHub.Pump(Time.deltaTime);
+        // 3. Runtime phase: Drive the engine.
+        // Option A: Drive a specific runtime independently (Recommended for Multi-World)
+        _runtime.Pump(Time.deltaTime);
+        
+        // Option B: Drive all active runtimes via the central Hub
+        // LayerHub.Pump(Time.deltaTime);
     }
 }
 ```

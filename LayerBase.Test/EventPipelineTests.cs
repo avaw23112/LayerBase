@@ -2,6 +2,7 @@ using LayerBase;
 using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Layers;
+using NUnit.Framework;
 
 namespace EventsTest;
 
@@ -22,9 +23,9 @@ public class EventPipelineTests
     {
         var l1 = new TraceLayer("L1", _trace);
         var l2 = new TraceLayer("L2", _trace);
-        LayerHub.CreateLayers().Push(l1).Push(l2).Build();
+        var rt = LayerHub.CreateLayers().Push(l1).Push(l2).Build();
 
-        LayerHub.Send(new TestEvent { Value = 1 });
+        rt.Send(new TestEvent { Value = 1 });
         Assert.That(_trace, Is.EqualTo(new[] { "L1_Recv", "L2_Recv" }));
     }
 
@@ -44,8 +45,7 @@ public class EventPipelineTests
     {
         var layer = new TraceLayer("L1", _trace);
 
-        // Use Test method context to create fresh layer
-        LayerHub.CreateLayers().Push(layer).Build();
+        var rt = LayerHub.CreateLayers().Push(layer).Build();
 
         layer.Subscribe((in TestEvent e) =>
         {
@@ -63,12 +63,9 @@ public class EventPipelineTests
             return EventHandledState.Continue;
         });
 
-        LayerHub.Send(new TestEvent());
+        rt.Send(new TestEvent());
 
-        // Wait for trace to fill
         for (var i = 0; i < 50 && _trace.Count < 4; i++) Thread.Sleep(5);
-        // New Timing: Sync handlers are batched first, then Async handlers are started.
-        // Third is sync, Second is async. So Third executes before Second starts.
         Assert.That(_trace, Is.EqualTo(new[] { "L1_Recv", "First", "Third", "Second" }));
     }
 
@@ -85,28 +82,21 @@ public class EventPipelineTests
         LayerHub.OnLayerEventInfo += handler;
         try
         {
-            // 注册一个会报错的 Handler 和一个安全的 Handler
             layer.Subscribe((in TestEvent e) => throw new Exception("Boom"));
             layer.Subscribe((in TestEvent e) =>
             {
                 _trace.Add("Safe");
                 return EventHandledState.Continue;
             });
-            LayerHub.CreateLayers().Push(layer).Build();
+            var rt = LayerHub.CreateLayers().Push(layer).Build();
 
-            // 第一次分发：
-            // try-catch 在循环外，报错会立即中断当前循环的执行流。
-            LayerHub.Send(new TestEvent());
+            rt.Send(new TestEvent());
             Assert.That(errorCount, Is.EqualTo(1));
-            // 预期：只有第一个（TraceLayer自带的订阅）跑到了，之后我们手动加的那个报错了，Safe 没跑到。
-            // 注意：TraceLayer 构造函数里默认订阅了一个 TestEvent
             Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv" }));
 
             _trace.Clear();
-            // 第二次分发：
-            // 重建数组后，故障 Handler 消失，Safe 终于可以跑到了。
-            LayerHub.Send(new TestEvent());
-            Assert.That(errorCount, Is.EqualTo(1), "Should fuse and not report again");
+            rt.Send(new TestEvent());
+            Assert.That(errorCount, Is.EqualTo(1));
             Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv", "Safe" }));
         }
         finally
@@ -130,13 +120,13 @@ public class EventPipelineTests
         try
         {
             layer.SubscribeParallel((in TestEvent e) => throw new Exception("ParallelBoom"));
-            LayerHub.CreateLayers().Push(layer).Build();
+            var rt = LayerHub.CreateLayers().Push(layer).Build();
 
-            LayerHub.Send(new TestEvent());
+            rt.Send(new TestEvent());
             Assert.That(errorOccurred.Wait(1000), Is.True, "Error signal timeout");
 
             errorOccurred.Reset();
-            LayerHub.Send(new TestEvent());
+            rt.Send(new TestEvent());
             Assert.That(errorOccurred.Wait(100), Is.False, "Should have fused");
         }
         finally

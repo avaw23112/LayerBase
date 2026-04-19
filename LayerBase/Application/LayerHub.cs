@@ -8,16 +8,11 @@ using LayerBase.Tools.Job;
 
 namespace LayerBase;
 
-public enum LayerEventInfoType
-{
-    Debug,
-    Info,
-    Warning,
-    Error
-}
+public enum LayerEventInfoType { Debug, Info, Warning, Error }
 
 public readonly struct LayerEventInfo
 {
+    public readonly LayerRuntime Runtime;
     public readonly int LayerIndex;
     public readonly string Source;
     public readonly string EventName;
@@ -25,9 +20,10 @@ public readonly struct LayerEventInfo
     public readonly Exception? Exception;
     public readonly LayerEventInfoType Type;
 
-    public LayerEventInfo(int layerIndex, string source, string eventName, string message, LayerEventInfoType type,
-                          Exception? exception = null)
+    public LayerEventInfo(LayerRuntime runtime, int layerIndex, string source, string eventName, string message, 
+                          LayerEventInfoType type, Exception? exception = null)
     {
+        Runtime = runtime;
         LayerIndex = layerIndex;
         Source = source;
         EventName = eventName;
@@ -36,130 +32,174 @@ public readonly struct LayerEventInfo
         Exception = exception;
     }
 
-    public override string ToString()
-    {
-        return $"[{Type}] [Layer {LayerIndex}] {Source} -> {EventName}: {Message}";
-    }
+    public override string ToString() => $"[Runtime:{Runtime.GetHashCode():X}] [{Type}] [Layer {LayerIndex}] {Source} -> {EventName}: {Message}";
 }
 
-public static class LayerHub
+/// <summary>
+///     LayerBase 运行环境。
+/// </summary>
+public sealed class LayerRuntime : IDisposable
 {
-    private static LayerChain? s_chain;
-    private static LayerBaseSynchronizationContext? s_context;
+    private LayerChain? _chain;
+    private LayerBaseSynchronizationContext? _context;
+    private int _layerIndexCounter;
+    private bool _disposed;
 
-    private static int s_layerIndexCounter;
+    public GlobalEventCenter EventCenter { get; internal set; }
+    public bool IsDebugMode { get; internal set; }
+    public event Action<LayerEventInfo>? OnEventInfo;
 
-    public static GlobalEventCenter EventCenter { get; internal set; } = new();
-
-    public static bool IsDebugMode { get; private set; }
-    public static event Action<LayerEventInfo>? OnLayerEventInfo;
-
-    internal static int GetNextLayerIndex()
+    internal LayerRuntime()
     {
-        return s_layerIndexCounter++;
+        EventCenter = new GlobalEventCenter((l, s, e, ex) => ReportError(l, s, e, ex));
+        LayerHub.Internal_Register(this);
     }
 
-    public static LayersBuilder CreateLayers()
-    {
-        if (SynchronizationContext.Current == null)
-            s_context = LayerBaseSynchronizationContext.InstallAsCurrent();
-        else if (s_context == null && SynchronizationContext.Current is not LayerBaseSynchronizationContext ctx)
-            s_context = LayerBaseSynchronizationContext.Install();
+    internal int GetNextLayerIndex() => _layerIndexCounter++;
 
-        return new LayersBuilder();
+    public void Pump(float deltaTime)
+    {
+        if (_disposed) return;
+        _context?.Update();
+        _chain?.Pump(deltaTime);
     }
 
-    public static void Pump(float deltaTime)
+    public void ReportInfo(int layerIndex, string source, string eventName, string message, LayerEventInfoType type = LayerEventInfoType.Info, Exception? ex = null)
     {
-        s_context?.Update();
-        s_chain?.Pump(deltaTime);
-    }
-
-    public static void Reset()
-    {
-        s_chain = null;
-        s_layerIndexCounter = 0;
-        EventCenter = new GlobalEventCenter();
-        ServiceLayerBinder.Reset();
-        OnLayerEventInfo = null;
-        IsDebugMode = false;
-
-        s_context?.Dispose();
-        if (SynchronizationContext.Current == s_context) SynchronizationContext.SetSynchronizationContext(null);
-        s_context = null;
-    }
-
-    internal static void ReportInfo(LayerEventInfo info)
-    {
-        OnLayerEventInfo?.Invoke(info);
+        var info = new LayerEventInfo(this, layerIndex, source, eventName, message, type, ex);
+        OnEventInfo?.Invoke(info);
+        LayerHub.Internal_NotifyEvent(info);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void ReportLayerEventError(int layerIndex, string source, string eventName, Exception ex)
+    internal void ReportError(int layerIndex, string source, string eventName, Exception ex)
     {
-        ReportInfo(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
+        ReportInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void ReportWarning(int layerIndex, string source, string eventName, string message)
+    internal void ReportWarning(int layerIndex, string source, string eventName, string message)
     {
-        ReportInfo(new LayerEventInfo(layerIndex, source, eventName, message, LayerEventInfoType.Warning));
+        ReportInfo(layerIndex, source, eventName, message, LayerEventInfoType.Warning);
     }
 
-    public static void InitializeJobScheduler(int workerCount)
-    {
-        JobSchedulers.ConfigureDefault(workerCount);
-    }
-
+    /// <summary>
+    ///     向该运行环境发送一个全局事件。
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static EventHandledState Send<T>(in T value) where T : struct
+    public EventHandledState Send<T>(in T value) where T : struct
     {
         return EventCenter.Send(value, 0, Propagation.Global);
     }
 
+    /// <summary>
+    ///     向该运行环境投递一个异步全局事件。
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Post<T>(in T value) where T : struct
+    public void Post<T>(in T value) where T : struct
     {
         EventCenter.Post(value, 0, Propagation.Global);
     }
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _chain = null;
+        EventCenter = null!;
+        _context?.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
     public sealed class LayersBuilder
     {
+        private readonly LayerRuntime _runtime;
         private readonly ResponsibilityChain _chain = new(new RcOwnerToken());
         private bool _debugMode;
 
+        internal LayersBuilder() => _runtime = new LayerRuntime();
+
         public LayersBuilder Push(Layer layer)
         {
-            if (s_layerIndexCounter >= 64)
-                throw new InvalidOperationException("LayerBase currently supports a maximum of 64 layers due to bitmap routing constraints.");
+            if (_runtime._layerIndexCounter >= 64)
+                throw new InvalidOperationException("LayerBase supports max 64 layers.");
             
-            if (s_chain == null) s_chain = new LayerChain(_chain);
-            s_chain.AddNode(layer);
+            layer.AttachToContext(_runtime);
+            if (_runtime._chain == null) _runtime._chain = new LayerChain(_chain, _runtime);
+            _runtime._chain.AddNode(layer);
             return this;
         }
 
         public LayersBuilder SetDebug(bool enabled = true)
         {
             _debugMode = enabled;
-            IsDebugMode = enabled;
+            _runtime.IsDebugMode = enabled;
             return this;
         }
 
-        [Obsolete("Use SetDebug(bool) instead.")]
-        public LayersBuilder SetDebugMode(bool enabled) => SetDebug(enabled);
-
-        public void Build()
+        public LayerRuntime Build()
         {
-            if (s_chain == null) throw new InvalidOperationException("No layers added.");
-            s_chain.Build(1024, true);
+            if (_runtime._chain == null) throw new InvalidOperationException("No layers.");
+            if (SynchronizationContext.Current == null)
+                _runtime._context = LayerBaseSynchronizationContext.InstallAsCurrent();
+            else if (_runtime._context == null && SynchronizationContext.Current is not LayerBaseSynchronizationContext)
+                _runtime._context = LayerBaseSynchronizationContext.Install();
+
+            _runtime._chain.Build(1024, true);
             if (_debugMode) ReportTopology();
+            return _runtime;
         }
 
         private void ReportTopology()
         {
-            if (s_chain == null) return;
-            var summary = s_chain.GetTopologySummary();
-            ReportInfo(new LayerEventInfo(-1, "System", "Topology", summary, LayerEventInfoType.Info));
+            if (_runtime._chain == null) return;
+            _runtime.ReportInfo(-1, "System", "Topology", _runtime._chain.GetTopologySummary());
+        }
+    }
+}
+
+/// <summary>
+///     LayerBase 全局中心。负责管理所有 LayerRuntime 实例及其全局驱动。
+/// </summary>
+public static class LayerHub
+{
+    private static readonly List<WeakReference<LayerRuntime>> s_runtimes = new();
+    private static readonly object s_lock = new();
+
+    public static event Action<LayerEventInfo>? OnLayerEventInfo;
+
+    public static LayerRuntime.LayersBuilder CreateLayers() => new();
+
+    /// <summary>
+    ///     驱动进程内所有活跃的 LayerRuntime。
+    /// </summary>
+    public static void Pump(float deltaTime)
+    {
+        lock (s_lock)
+        {
+            for (int i = s_runtimes.Count - 1; i >= 0; i--)
+            {
+                if (s_runtimes[i].TryGetTarget(out var runtime)) runtime.Pump(deltaTime);
+                else s_runtimes.RemoveAt(i);
+            }
+        }
+    }
+
+    internal static void Internal_Register(LayerRuntime runtime)
+    {
+        lock (s_lock) s_runtimes.Add(new WeakReference<LayerRuntime>(runtime));
+    }
+
+    internal static void Internal_NotifyEvent(LayerEventInfo info) => OnLayerEventInfo?.Invoke(info);
+
+    public static void InitializeJobScheduler(int workerCount) => JobSchedulers.ConfigureDefault(workerCount);
+
+    public static void Reset()
+    {
+        lock (s_lock)
+        {
+            s_runtimes.Clear();
+            ServiceLayerBinder.Reset();
         }
     }
 }
