@@ -1083,3 +1083,11 @@ secring.*
 *.vsidx
 obj
 .vs
+
+# Local cache and environment folders
+.dotnet/
+.idea/
+.omg/
+.omx/
+nupkg/
+BenchmarkDotNet.Artifacts/
