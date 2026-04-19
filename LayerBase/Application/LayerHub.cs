@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading;
 using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Layers;
@@ -10,7 +6,7 @@ using LayerBase.Core.ResponsibilityChain;
 using LayerBase.Tools.Job;
 using LayerBase.DI;
 
-namespace LayerBase.LayerHub;
+namespace LayerBase;
 
 public enum LayerEventInfoType
 {
@@ -53,9 +49,6 @@ public static class LayerHub
 
     private static int s_layerIndexCounter;
 
-    /// <summary>
-    /// 核心事件中心。设为可写是为了支持测试环境的物理断代重置。    
-    /// </summary>
     public static global::LayerBase.Core.Event.GlobalEventCenter EventCenter { get; internal set; } = new();
 
     public static bool IsDebugMode { get; private set; }
@@ -68,7 +61,6 @@ public static class LayerHub
 
     public static LayersBuilder CreateLayers()
     {
-        // 如果不处于 Unity/Godot 等自带同步上下文的引擎环境，则自动安装并托管 LayerBaseSynchronizationContext 以驱动 LBTask 和异步状态机。
         if (SynchronizationContext.Current == null)
         {
             s_context = LayerBaseSynchronizationContext.InstallAsCurrent();
@@ -91,7 +83,6 @@ public static class LayerHub
     {
         s_chain = null;
         s_layerIndexCounter = 0;
-        // 物理重置：直接分配新实例，简单、稳定且高效
         EventCenter = new GlobalEventCenter();
         ServiceLayerBinder.Reset();
         OnLayerEventInfo = null;

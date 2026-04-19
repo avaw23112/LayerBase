@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayerBase.Task", "LayerBase
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayerBase.BenchMark", "LayerBase.BenchMark\LayerBase.BenchMark.csproj", "{8ED8A60B-4614-42E8-BEB0-D23E27A3763A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayerBase.Usage", "LayerBase.Usage\LayerBase.Usage.csproj", "{EB95D77D-B7FD-4D21-B9E7-7874E90B0E4F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{8ED8A60B-4614-42E8-BEB0-D23E27A3763A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8ED8A60B-4614-42E8-BEB0-D23E27A3763A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8ED8A60B-4614-42E8-BEB0-D23E27A3763A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB95D77D-B7FD-4D21-B9E7-7874E90B0E4F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB95D77D-B7FD-4D21-B9E7-7874E90B0E4F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB95D77D-B7FD-4D21-B9E7-7874E90B0E4F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB95D77D-B7FD-4D21-B9E7-7874E90B0E4F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

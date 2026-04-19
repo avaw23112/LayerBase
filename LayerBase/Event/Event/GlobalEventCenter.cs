@@ -305,6 +305,7 @@ public sealed class GlobalEventCenter
         GetBucket<T>().AddOptimized(layerIndex, ptr, target, name);
     }
 
+
     private struct LayerRange
     {
         public int SyncStart;
@@ -639,7 +640,7 @@ public sealed class GlobalEventCenter
             if (isSync) { if (index >= 0 && index < _syncCountTotal) { circuit = _syncCircuits[index]; name = _syncNames[index]; } }
             else { if (index >= 0 && index < _asyncCountTotal) { circuit = _asyncCircuits[index]; name = _asyncNames[index]; } }
             EventMetaDataHandler.OnEventExpectation(value, e);
-            if (circuit != null && circuit.TryDisable()) { LayerHub.LayerHub.ReportLayerEventError(-1, name ?? "Unknown", typeof(T).Name, e); MarkDirty(); }
+            if (circuit != null && circuit.TryDisable()) { LayerBase.LayerHub.ReportLayerEventError(-1, name ?? "Unknown", typeof(T).Name, e); MarkDirty(); }
         }
 
         public void Post(in T value, int sourceIndex, Propagation propagation)
@@ -713,7 +714,7 @@ public sealed class GlobalEventCenter
             catch (Exception ex)
             {
                 EventMetaDataHandler.OnEventExpectation(_payload, ex);
-                if (_circuit != null && _circuit.TryDisable()) { LayerHub.LayerHub.ReportLayerEventError(_layerIndex, _handlerFullName!, typeof(T).Name, ex); _owner?.MarkDirty(); }
+                if (_circuit != null && _circuit.TryDisable()) { LayerBase.LayerHub.ReportLayerEventError(_layerIndex, _handlerFullName!, typeof(T).Name, ex); _owner?.MarkDirty(); }
             }
             finally { _owner = null; _circuit = null; _handlerFullName = null; _payload = default; _task = default; s_pool.Add(this); }
         }

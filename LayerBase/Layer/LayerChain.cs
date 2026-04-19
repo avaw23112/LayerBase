@@ -2,7 +2,7 @@ using System.Linq;
 using System.Text;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
-using LayerBase.LayerHub;
+using LayerBase;
 
 namespace LayerBase.Layers;
 
@@ -49,14 +49,14 @@ internal sealed class LayerChain
     internal void Pump(float deltaTime)
     {
         // 1. 获取全局事件挂起状态（位图）
-        var eventMask = LayerHub.LayerHub.EventCenter.GetEventPendingMask();
+        var eventMask = LayerBase.LayerHub.EventCenter.GetEventPendingMask();
 
         // 2. 合并逻辑活跃状态
         var activeMask = eventMask | _logicActiveMask;
         if (activeMask == 0) return;
 
         // 3. 高性能位图遍历：利用硬件指令彻底跳过空闲层级
-        var center = LayerHub.LayerHub.EventCenter;
+        var center = LayerBase.LayerHub.EventCenter;
         while (activeMask != 0)
         {
             var index = center.FindFirstBit(activeMask);
@@ -81,9 +81,9 @@ internal sealed class LayerChain
             {
                 if (layer.RouteIndex == -1)
                 {
-                    var index = LayerHub.LayerHub.GetNextLayerIndex();
+                    var index = LayerBase.LayerHub.GetNextLayerIndex();
                     layer.SetRouteIndex(index);
-                    LayerHub.LayerHub.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
+                    LayerBase.LayerHub.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
                 }
 
                 if (layer.RouteIndex > maxIndex) maxIndex = layer.RouteIndex;

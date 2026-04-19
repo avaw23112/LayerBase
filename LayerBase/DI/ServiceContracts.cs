@@ -184,7 +184,7 @@ public static class ServiceExtensions
         where TValue : struct
     {
         service.GetLayer()
-               .SubscribeParallel(handler, reportError ?? LayerHub.LayerHub.ReportLayerEventError);
+               .SubscribeParallel(handler, reportError ?? LayerBase.LayerHub.ReportLayerEventError);
     }
 
     /// <summary>
@@ -296,7 +296,7 @@ public static class LayerContextExtensions
         where TValue : struct
     {
         service.GetLayer()
-               .SubscribeParallel(handler, reportError ?? LayerHub.LayerHub.ReportLayerEventError);
+               .SubscribeParallel(handler, reportError ?? LayerBase.LayerHub.ReportLayerEventError);
     }
 
     /// <summary>

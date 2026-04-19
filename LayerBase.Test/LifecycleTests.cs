@@ -1,6 +1,6 @@
 using LayerBase.DI;
 using LayerBase.DI.Options;
-using LayerBase.LayerHub;
+using LayerBase;
 using LayerBase.Layers;
 
 namespace EventsTest;

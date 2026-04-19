@@ -1,7 +1,7 @@
 using System.Text;
 using LayerBase.DI;
 
-namespace LayerBase.LayerHub;
+namespace LayerBase;
 
 /// <summary>
 ///     事件环路异常：在启动期检测到同步事件分发存在死循环风险时抛出。

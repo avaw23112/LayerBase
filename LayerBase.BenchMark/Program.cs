@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using LayerBase.Core.Event;
-using LayerBase.LayerHub;
+using LayerBase;
 using LayerBase.Layers;
 using LayerBase.Core.EventHandler;
 

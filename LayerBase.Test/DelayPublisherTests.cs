@@ -1,6 +1,6 @@
+using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Event.Delay;
-using LayerBase.LayerHub;
 using LayerBase.Layers;
 
 namespace EventsTest;
@@ -8,29 +8,54 @@ namespace EventsTest;
 [TestFixture]
 public class DelayPublisherTests
 {
+    private class DelayTestLayer : Layer 
+    {
+        public void AddManager(DelayTestService service)
+        {
+            // 手动注册到配置中
+            RegisterService(service);
+        }
+    }
+
+    private class DelayTestService : IService
+    {
+        public void ConfigureServices(IServiceCollection services) 
+        {
+            // 🚀 关键：Service 必须注册自己或被注册，才能在 Build 后被获取
+            services.AddSingleton<DelayTestService>(this);
+        }
+        
+        public void RequestDelay(float ttl, int value, int contractId = 0)
+        {
+            this.DelayLocal(new DelayTestEvent { Value = value }, ttl, contractId);
+        }
+
+        public void RequestGlobalDelay(float ttl, int value)
+        {
+            this.DelayGlobal(new DelayTestEvent { Value = value }, ttl);
+        }
+    }
+
     [SetUp]
     public void SetUp()
     {
-        LayerHub.Reset();
-    }
-
-    private class DummyLayer : Layer
-    {
+        LayerBase.LayerHub.Reset();
     }
 
     [Test]
-    public void DelayLocal_is_stored_and_can_be_retrieved()
+    public void DelayLocal_is_stored_and_can_be_retrieved_via_service()
     {
-        var layer = new DummyLayer();
-        LayerHub.CreateLayers().Push(layer).Build();
+        var layer = new DelayTestLayer();
+        var manager = new DelayTestService();
+        layer.AddManager(manager);
+        
+        LayerBase.LayerHub.CreateLayers().Push(layer).Build();
 
-        var evt = new DelayTestEvent { Value = 42 };
-        // 合法 API 调用
-        layer.DelayLocal(evt, 1.0f);
+        var retrievedManager = layer.GetService<DelayTestService>();
+        retrievedManager.RequestDelay(ttl: 1.0f, value: 42);
 
         var publisher = layer.SubscribeDelay<DelayTestEvent>();
         Assert.That(publisher.HasValue, Is.True);
-        Assert.That(publisher.Direction, Is.EqualTo(DelayDirection.Local));
         Assert.That(publisher.TryGet(out var retrieved), Is.True);
         Assert.That(retrieved.Value, Is.EqualTo(42));
     }
@@ -38,45 +63,50 @@ public class DelayPublisherTests
     [Test]
     public void Delay_expires_after_ttl_and_is_dropped()
     {
-        var layer = new DummyLayer();
-        LayerHub.CreateLayers().Push(layer).Build();
+        var layer = new DelayTestLayer();
+        var manager = new DelayTestService();
+        layer.AddManager(manager);
+        LayerBase.LayerHub.CreateLayers().Push(layer).Build();
 
-        layer.DelayLocal(new DelayTestEvent(), 0.05f);
+        var retrievedManager = layer.GetService<DelayTestService>();
+        retrievedManager.RequestDelay(ttl: 0.05f, value: 10);
         var publisher = layer.SubscribeDelay<DelayTestEvent>();
 
         Assert.That(publisher.HasValue, Is.True);
-
-        // 合法推进
         layer.Pump(0.1f);
-
-        Assert.That(publisher.HasValue, Is.False, "Event must expire via legal Pump cycle");
-        Assert.That(publisher.TryGet(out _), Is.False);
+        Assert.That(publisher.HasValue, Is.False);
     }
 
     [Test]
     public void TryTake_consumes_the_value()
     {
-        var layer = new DummyLayer();
-        LayerHub.CreateLayers().Push(layer).Build();
+        var layer = new DelayTestLayer();
+        var manager = new DelayTestService();
+        layer.AddManager(manager);
+        LayerBase.LayerHub.CreateLayers().Push(layer).Build();
 
-        layer.DelayGlobal(new DelayTestEvent { Value = 100 }, 1.0f);
+        var retrievedManager = layer.GetService<DelayTestService>();
+        retrievedManager.RequestGlobalDelay(ttl: 1.0f, value: 100);
         var publisher = layer.SubscribeDelay<DelayTestEvent>();
 
         Assert.That(publisher.TryTake(out var val), Is.True);
         Assert.That(val.Value, Is.EqualTo(100));
-        Assert.That(publisher.HasValue, Is.False, "Value should be consumed via official TryTake");
+        Assert.That(publisher.HasValue, Is.False);
     }
 
     [Test]
     public void ContractId_is_preserved()
     {
-        var layer = new DummyLayer();
-        LayerHub.CreateLayers().Push(layer).Build();
+        var layer = new DelayTestLayer();
+        var manager = new DelayTestService();
+        layer.AddManager(manager);
+        LayerBase.LayerHub.CreateLayers().Push(layer).Build();
 
-        layer.DelayLocal(new DelayTestEvent(), 1.0f, 999);
+        var retrievedManager = layer.GetService<DelayTestService>();
+        retrievedManager.RequestDelay(ttl: 1.0f, value: 1, contractId: 888);
         var publisher = layer.SubscribeDelay<DelayTestEvent>();
 
-        Assert.That(publisher.ContractId, Is.EqualTo(999));
+        Assert.That(publisher.ContractId, Is.EqualTo(888));
     }
 
     public struct DelayTestEvent

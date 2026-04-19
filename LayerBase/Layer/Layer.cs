@@ -9,7 +9,7 @@ using LayerBase.Event.Delay;
 
 namespace LayerBase.Layers;
 
-public abstract class Layer : Node, ILayerContext, IDisposable
+public abstract partial class Layer : Node, IDisposable
 {
     private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();
     private readonly ServiceCollection m_serviceCollection;
@@ -19,12 +19,16 @@ public abstract class Layer : Node, ILayerContext, IDisposable
 
     private List<Action<Layer>> m_pendingOps = new();
     private ServiceProvider? m_serviceProvider;
+    private GlobalEventCenter _center = null!; // 由 Build 或初始化时关联
 
     protected Layer()
     {
+        _center = LayerHub.EventCenter; // 默认关联全局中心
         m_serviceCollection = new ServiceCollection();
         ServiceLayerBinder.Attach(this, this);
     }
+
+    public virtual void ConfigureServices(IServiceCollection services) { }
 
     public int RouteIndex { get; private set; } = -1;
     public List<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = new();
@@ -53,17 +57,11 @@ public abstract class Layer : Node, ILayerContext, IDisposable
         }
     }
     
-    /// <summary>
-    /// 不要手动调用，该方法是给源生成器使用的！
-    /// </summary>
-    /// <param name="ptr"></param>
-    /// <param name="target"></param>
-    /// <param name="name"></param>
-    /// <typeparam name="T"></typeparam>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public void SubscribeOptimized<T>(IntPtr ptr, object target, string name) where T : struct
     {
         ThrowIfDisposed();
-        if (RouteIndex != -1) LayerHub.LayerHub.EventCenter.AddOptimized<T>(RouteIndex, ptr, target, name);
+        if (RouteIndex != -1) LayerHub.EventCenter.AddOptimized<T>(RouteIndex, ptr, target, name);
         else m_pendingOps.Add(l => l.SubscribeOptimized<T>(ptr, target, name));
     }
 
@@ -72,7 +70,7 @@ public abstract class Layer : Node, ILayerContext, IDisposable
     public virtual void Pump(float deltaTime)
     {
         if (RouteIndex == -1) return;
-        LayerHub.LayerHub.EventCenter.PumpLayer(RouteIndex);
+        LayerHub.EventCenter.PumpLayer(RouteIndex);
         foreach (var updater in m_delayPublishers.Values) updater.Update(deltaTime);
         for (var i = 0; i < m_serviceUpdates.Count; i++) m_serviceUpdates[i].Update();
     }
@@ -92,8 +90,8 @@ public abstract class Layer : Node, ILayerContext, IDisposable
     {
         ThrowIfDisposed();
         if (RouteIndex != -1) {
-            LayerHub.LayerHub.EventCenter.Subscribe(RouteIndex, handler);
-            lock (m_subscriptions) m_subscriptions.Add(UnsubscribeDelegateToken<T>.Rent(LayerHub.LayerHub.EventCenter, RouteIndex, handler));
+            LayerHub.EventCenter.Subscribe(RouteIndex, handler);
+            lock (m_subscriptions) m_subscriptions.Add(UnsubscribeDelegateToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
         } else m_pendingOps.Add(l => l.Subscribe(handler));
     }
 
@@ -101,8 +99,8 @@ public abstract class Layer : Node, ILayerContext, IDisposable
     {
         ThrowIfDisposed();
         if (RouteIndex != -1) {
-            LayerHub.LayerHub.EventCenter.SubscribeAsync(RouteIndex, handler);
-            lock (m_subscriptions) m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(LayerHub.LayerHub.EventCenter, RouteIndex, handler));
+            LayerHub.EventCenter.SubscribeAsync(RouteIndex, handler);
+            lock (m_subscriptions) m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
         } else m_pendingOps.Add(l => l.SubscribeAsync(handler));
     }
 
@@ -111,20 +109,20 @@ public abstract class Layer : Node, ILayerContext, IDisposable
     public void SubscribeParallel<T>(EventHandleDelegate<T> handler, Action<int, string, string, Exception>? reportError = null) where T : struct
     {
         ThrowIfDisposed();
-        if (RouteIndex != -1) LayerHub.LayerHub.EventCenter.SubscribeParallel(RouteIndex, handler, reportError ?? LayerHub.LayerHub.ReportLayerEventError);
+        if (RouteIndex != -1) LayerHub.EventCenter.SubscribeParallel(RouteIndex, handler, reportError ?? LayerHub.ReportLayerEventError);
         else m_pendingOps.Add(l => l.SubscribeParallel(handler, reportError));
     }
 
     public IDelayPublisher<T> SubscribeDelay<T>() where T : struct => (IDelayPublisher<T>)m_delayPublishers.GetOrAdd(typeof(T), _ => new DelayPublisher<T>(this));
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public EventHandledState SendLocal<T>(in T value) where T : struct => LayerHub.LayerHub.EventCenter.SendLocal(RouteIndex, value);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public EventHandledState SendBubble<T>(in T value) where T : struct => LayerHub.LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Bubble);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public EventHandledState SendDrop<T>(in T value) where T : struct => LayerHub.LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Drop);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public EventHandledState SendGlobal<T>(in T value) where T : struct => LayerHub.LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Global);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public void PostLocal<T>(in T value) where T : struct => LayerHub.LayerHub.EventCenter.PostLocal(RouteIndex, value);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public void PostBubble<T>(in T value) where T : struct => LayerHub.LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Bubble);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public void PostDrop<T>(in T value) where T : struct => LayerHub.LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Drop);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public void PostGlobal<T>(in T value) where T : struct => LayerHub.LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Global);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public EventHandledState SendLocal<T>(in T value) where T : struct => LayerHub.EventCenter.SendLocal(RouteIndex, value);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public EventHandledState SendBubble<T>(in T value) where T : struct => LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Bubble);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public EventHandledState SendDrop<T>(in T value) where T : struct => LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Drop);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public EventHandledState SendGlobal<T>(in T value) where T : struct => LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Global);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public void PostLocal<T>(in T value) where T : struct => LayerHub.EventCenter.PostLocal(RouteIndex, value);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public void PostBubble<T>(in T value) where T : struct => LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Bubble);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public void PostDrop<T>(in T value) where T : struct => LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Drop);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public void PostGlobal<T>(in T value) where T : struct => LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Global);
 
     private sealed class UnsubscribeDelegateToken<T> : IDisposable where T : struct
     {
