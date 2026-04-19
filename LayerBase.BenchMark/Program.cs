@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using LayerBase.Core.Event;
-using LayerBase;
 using LayerBase.Layers;
-using LayerBase.Core.EventHandler;
+using LayerBase;
 
 namespace Benchmarks
 {
@@ -13,108 +12,95 @@ namespace Benchmarks
     {
         static void Main(string[] args)
         {
-            if (args.Length > 0 && args[0].Equals("--full", StringComparison.OrdinalIgnoreCase))
-            {
-                BenchmarkRunner.Run<FullBenchmarks>();
-            }
-            else if (args.Length > 0 && args[0].Equals("--compare", StringComparison.OrdinalIgnoreCase))
-            {
-                BenchmarkRunner.Run<EvolutionBenchmarks>();
-            }
-            else
-            {
-                BenchmarkRunner.Run<QuickBenchmarks>();
-            }
+            // 运行所有定义的基准测试类
+            BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
         }
     }
 
+    // 定义一个公共基类，开启内存诊断
     [MemoryDiagnoser]
     [HideColumns("Error", "StdDev", "Median", "RatioSD")]
-    public class EvolutionBenchmarks
+    public abstract class EventBenchmarkBase
     {
-        private const int Iterations = 1_000_000;
-
-        [Benchmark(Baseline = true, Description = "标准模式 (100万次)")]
-        public void Standard_Dispatch()
-        {
-            LayerHub.Reset();
-            var layer = new BenchLayer();
-            // 使用 Lambda 订阅 (走传统委托路径)
-            layer.Subscribe((in BenchEvent _) => { return EventHandledState.Continue; });
-            LayerHub.CreateLayers().Push(layer).Build();
-            
-            for (var i = 0; i < Iterations; i++) LayerHub.Send(new BenchEvent());
-        }
-
-        [Benchmark(Description = "透明桥接模式 (100万次)")]
-        public unsafe void Optimized_Dispatch()
-        {
-            LayerHub.Reset();
-            var layer = new OptimizedBenchLayer();
-            LayerHub.CreateLayers().Push(layer).Build();
-            
-            // 🚀 手动模拟 Generator 注入 (确保在 Benchmark 项目中生效)
-            delegate*<object, in BenchEvent, EventHandledState> ptr = &OptimizedBenchLayer.StaticBridge;
-            layer.SubscribeOptimized<BenchEvent>((IntPtr)ptr, layer, "OptimizedBenchLayer.OnRecv");
-
-            // 强制 Rebuild 位图
-            LayerHub.Send(new BenchEvent());
-
-            for (var i = 0; i < Iterations; i++) LayerHub.Send(new BenchEvent());
-        }
+        protected const int OneMillion = 1_000_000;
+        protected const int TenThousand = 10_000;
     }
 
-    [MemoryDiagnoser]
-    public class QuickBenchmarks
-    {
-        private const int ChallengeCount = 10_000;
+    public class SingleLayer_Low_Bench : EventBenchmarkBase {
+        [GlobalSetup] public void Setup() { 
+            LayerHub.Reset(); 
+            var l = new BenchLayer(); l.RegisterService(new OptimizedManager());
+            LayerHub.CreateLayers().Push(l).Build(); 
+        }
+        [Benchmark(Description = "单层低压 (1层/1订阅) - 100万次")]
+        public void Run() { for (int i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent()); }
+    }
 
-        [Benchmark(Description = "⚡ 典型中重度负载 - 1万次")]
-        public void Typical_5Layers_HeavyLoad_Quick()
-        {
-            LayerHub.Reset();
+    public class SingleLayer_High_Bench : EventBenchmarkBase {
+        [GlobalSetup] public void Setup() { 
+            LayerHub.Reset(); 
+            var l = new BenchLayer(); for (int i = 0; i < 10; i++) l.RegisterService(new OptimizedManager());
+            LayerHub.CreateLayers().Push(l).Build(); 
+        }
+        [Benchmark(Description = "单层高压 (1层/10订阅) - 100万次")]
+        public void Run() { for (int i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent()); }
+    }
+
+    public class MultiLayer_Low_Bench : EventBenchmarkBase {
+        [GlobalSetup] public void Setup() { 
+            LayerHub.Reset(); 
             var builder = LayerHub.CreateLayers();
-            for (int i = 0; i < 5; i++)
-            {
-                var layer = new BenchLayer();
-                int subCount = (i == 2) ? 100 : 20;
-                for (int j = 0; j < subCount; j++)
-                {
-                    layer.Subscribe((in BenchEvent _) => { return EventHandledState.Continue; });
-                }
-                builder.Push(layer);
+            for (int i = 0; i < 9; i++) builder.Push(new BenchLayer());
+            var tail = new BenchLayer(); tail.RegisterService(new OptimizedManager());
+            builder.Push(tail).Build(); 
+        }
+        [Benchmark(Description = "多层低压 (10层/尾订阅) - 100万次")]
+        public void Run() { for (int i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent()); }
+    }
+
+    public class MultiLayer_Full_Bench : EventBenchmarkBase {
+        [GlobalSetup] public void Setup() { 
+            LayerHub.Reset(); 
+            var builder = LayerHub.CreateLayers();
+            for (int i = 0; i < 10; i++) { var l = new BenchLayer(); l.RegisterService(new OptimizedManager()); builder.Push(l); }
+            builder.Build(); 
+        }
+        [Benchmark(Description = "多层高压 (10层/全订阅) - 100万次")]
+        public void Run() { for (int i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent()); }
+    }
+
+    public class Extreme_Empty_64_Bench : EventBenchmarkBase {
+        [GlobalSetup] public void Setup() { 
+            LayerHub.Reset(); 
+            var builder = LayerHub.CreateLayers();
+            for (int i = 0; i < 64; i++) builder.Push(new BenchLayer());
+            builder.Build(); 
+        }
+        [Benchmark(Description = "极限空负载 (64层/0订阅) - 100万次")]
+        public void Run() { for (int i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent()); }
+    }
+
+    public class Typical_Heavy_180_Bench : EventBenchmarkBase {
+        [GlobalSetup] public void Setup() { 
+            LayerHub.Reset(); 
+            var builder = LayerHub.CreateLayers();
+            for (int i = 0; i < 5; i++) {
+                var l = new BenchLayer();
+                int count = (i == 0) ? 100 : 20;
+                for (int j = 0; j < count; j++) l.RegisterService(new OptimizedManager());
+                builder.Push(l);
             }
-            builder.Build();
-
-            for (var i = 0; i < ChallengeCount; i++) LayerHub.Send(new BenchEvent());
+            builder.Build(); 
         }
+        [Benchmark(Description = "中重度实战 (5层/180订阅) - 1万次")]
+        public void Run() { for (int i = 0; i < TenThousand; i++) LayerHub.Send(new BenchEvent()); }
     }
 
-    [MemoryDiagnoser]
-    public class FullBenchmarks
-    {
-        private const int EventCount = 1_000_000;
-
-        [Benchmark(Description = "单层低压 - 100万次")]
-        public void SingleLayer_LowDensity()
-        {
-            LayerHub.Reset();
-            var layer = new BenchLayer();
-            layer.Subscribe((in BenchEvent _) => { return EventHandledState.Continue; });
-            LayerHub.CreateLayers().Push(layer).Build();
-            for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
-        }
+    // 辅助类
+    public partial class OptimizedManager : LayerBase.DI.IService {
+        public void ConfigureServices(LayerBase.DI.IServiceCollection s) => s.AddSingleton(this);
+        [Subscribe] public EventHandledState Handle(in BenchEvent e) => EventHandledState.Continue;
     }
-
     public class BenchLayer : Layer { }
-
-    public partial class OptimizedBenchLayer : Layer 
-    {
-        [Subscribe]
-        internal EventHandledState OnRecv(in BenchEvent e) => EventHandledState.Continue;
-
-        internal static EventHandledState StaticBridge(object ins, in BenchEvent e) => ((OptimizedBenchLayer)ins).OnRecv(in e);
-    }
-
-    public struct BenchEvent {}
+    public struct BenchEvent { }
 }

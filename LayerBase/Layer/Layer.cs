@@ -9,7 +9,7 @@ using LayerBase.Event.Delay;
 
 namespace LayerBase.Layers;
 
-public abstract partial class Layer : Node, IDisposable
+public abstract partial class Layer : Node, ILayerContext, IDisposable, IService
 {
     private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();
     private readonly ServiceCollection m_serviceCollection;
@@ -19,11 +19,11 @@ public abstract partial class Layer : Node, IDisposable
 
     private List<Action<Layer>> m_pendingOps = new();
     private ServiceProvider? m_serviceProvider;
-    private GlobalEventCenter _center = null!; // 由 Build 或初始化时关联
+    private GlobalEventCenter _center;
 
     protected Layer()
     {
-        _center = LayerHub.EventCenter; // 默认关联全局中心
+        _center = LayerHub.EventCenter;
         m_serviceCollection = new ServiceCollection();
         ServiceLayerBinder.Attach(this, this);
     }
@@ -55,14 +55,6 @@ public abstract partial class Layer : Node, IDisposable
             var instance = newProvider.GetService(desc.ServiceType);
             if (instance is IUpdate up) m_serviceUpdates.Add(up);
         }
-    }
-    
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    public void SubscribeOptimized<T>(IntPtr ptr, object target, string name) where T : struct
-    {
-        ThrowIfDisposed();
-        if (RouteIndex != -1) LayerHub.EventCenter.AddOptimized<T>(RouteIndex, ptr, target, name);
-        else m_pendingOps.Add(l => l.SubscribeOptimized<T>(ptr, target, name));
     }
 
     internal void SetRouteIndex(int routeIndex) { RouteIndex = routeIndex; ServiceLayerBinder.Attach(this, this); }
@@ -130,17 +122,11 @@ public abstract partial class Layer : Node, IDisposable
         private GlobalEventCenter _center;
         private int _layerIndex;
         private EventHandleDelegate<T> _handler;
-
         public static UnsubscribeDelegateToken<T> Rent(GlobalEventCenter c, int l, EventHandleDelegate<T> h) {
             if (!Pool.TryTake(out var t)) t = new UnsubscribeDelegateToken<T>();
             t._center = c; t._layerIndex = l; t._handler = h; return t;
         }
-
-        public void Dispose() {
-            _center.Unsubscribe(_layerIndex, _handler);
-            _center = null!; _handler = null!;
-            Pool.Add(this);
-        }
+        public void Dispose() { _center.Unsubscribe(_layerIndex, _handler); _center = null!; _handler = null!; Pool.Add(this); }
     }
 
     private sealed class UnsubscribeDelegateAsyncToken<T> : IDisposable where T : struct
@@ -149,16 +135,10 @@ public abstract partial class Layer : Node, IDisposable
         private GlobalEventCenter _center;
         private int _layerIndex;
         private EventHandleDelegateAsync<T> _handler;
-
         public static UnsubscribeDelegateAsyncToken<T> Rent(GlobalEventCenter c, int l, EventHandleDelegateAsync<T> h) {
             if (!Pool.TryTake(out var t)) t = new UnsubscribeDelegateAsyncToken<T>();
             t._center = c; t._layerIndex = l; t._handler = h; return t;
         }
-
-        public void Dispose() {
-            _center.UnsubscribeAsync(_layerIndex, _handler);
-            _center = null!; _handler = null!;
-            Pool.Add(this);
-        }
+        public void Dispose() { _center.UnsubscribeAsync(_layerIndex, _handler); _center = null!; _handler = null!; Pool.Add(this); }
     }
 }

@@ -299,21 +299,9 @@ public sealed class GlobalEventCenter
         }
     }
 
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    public void AddOptimized<T>(int layerIndex, IntPtr ptr, object target, string name) where T : struct
-    {
-        GetBucket<T>().AddOptimized(layerIndex, ptr, target, name);
-    }
-
-
     private struct LayerRange
     {
-        public int SyncStart;
-        public int SyncCount;
-        public int AsyncStart;
-        public int AsyncCount;
-        public int ParallelStart;
-        public int ParallelCount;
+        public int SyncStart, SyncCount, AsyncStart, AsyncCount, ParallelStart, ParallelCount;
     }
 
     private sealed class EventBucket<T> : IResetable where T : struct
@@ -323,9 +311,6 @@ public sealed class GlobalEventCenter
         private HandlerBucket<T>?[] _buckets = Array.Empty<HandlerBucket<T>>();
 
         private EventHandleDelegate<T>[] _syncHandlers = Array.Empty<EventHandleDelegate<T>>();
-        private IntPtr[] _syncBridges = Array.Empty<IntPtr>();
-        private object?[] _syncTargets = Array.Empty<object?>();
-
         private HandlerCircuit[] _syncCircuits = Array.Empty<HandlerCircuit>();
         private string[] _syncNames = Array.Empty<string>();
 
@@ -336,28 +321,16 @@ public sealed class GlobalEventCenter
         private ParallelHandlerEntry<T>[] _flatParallel = Array.Empty<ParallelHandlerEntry<T>>();
         private LayerRange[] _ranges = Array.Empty<LayerRange>();
         
-        // 🚀 核心优化：位图分层
-        private ulong _subscriberMask;
-        private ulong _syncMask;
-        private ulong _asyncMask;
-        private ulong _parallelMask;
-
-        private int _isDirty;
-        private int _syncCountTotal, _asyncCountTotal, _parallelCountTotal;
+        private ulong _subscriberMask, _syncMask, _asyncMask, _parallelMask;
+        private int _isDirty, _syncCountTotal, _asyncCountTotal, _parallelCountTotal;
 
         public EventBucket(GlobalEventCenter center) => Owner = center;
 
         public void Reset() 
         { 
             HandlerBucket<T>?[] snapshot;
-            lock (_lock) 
-            { 
-                snapshot = new HandlerBucket<T>?[_buckets.Length];
-                Array.Copy(_buckets, snapshot, _buckets.Length);
-            } 
-            
+            lock (_lock) { snapshot = new HandlerBucket<T>?[_buckets.Length]; Array.Copy(_buckets, snapshot, _buckets.Length); } 
             foreach (var b in snapshot) b?.Reset(); 
-            
             lock (_lock) Rebuild(); 
         }
 
@@ -376,7 +349,7 @@ public sealed class GlobalEventCenter
                 int bSync = 0, bAsync = 0;
                 foreach (var h in b.MasterOrdered) { 
                     if (!h.Circuit.IsDisabled) { 
-                        if (h.SyncHandler != null || h.StaticBridgePtr != IntPtr.Zero) bSync++; 
+                        if (h.SyncHandler != null) bSync++; 
                         else if (h.AsyncHandler != null) bAsync++; 
                     } 
                 }
@@ -386,21 +359,15 @@ public sealed class GlobalEventCenter
                         else if (h.AsyncWrapper != null) bAsync++; 
                     } 
                 }
-                
                 int bParallel = b.MasterParallel.Count;
                 totalSync += bSync; totalAsync += bAsync; totalParallel += bParallel;
-                
                 var bit = 1UL << i;
-                if (bSync > 0) newSyncMask |= bit;
-                if (bAsync > 0) newAsyncMask |= bit;
-                if (bParallel > 0) newParallelMask |= bit;
+                if (bSync > 0) newSyncMask |= bit; if (bAsync > 0) newAsyncMask |= bit; if (bParallel > 0) newParallelMask |= bit;
                 if (bSync > 0 || bAsync > 0 || bParallel > 0) newMask |= bit;
             }
 
             if (_syncHandlers.Length < totalSync) {
                 _syncHandlers = new EventHandleDelegate<T>[Math.Max(totalSync, _syncHandlers.Length * 2)];
-                _syncBridges = new IntPtr[_syncHandlers.Length];
-                _syncTargets = new object[_syncHandlers.Length];
                 _syncCircuits = new HandlerCircuit[_syncHandlers.Length];
                 _syncNames = new string[_syncHandlers.Length];
             }
@@ -409,12 +376,8 @@ public sealed class GlobalEventCenter
                 _asyncCircuits = new HandlerCircuit[_asyncHandlers.Length];
                 _asyncNames = new string[_asyncHandlers.Length];
             }
-            if (_flatParallel.Length < totalParallel) {
-                _flatParallel = new ParallelHandlerEntry<T>[Math.Max(totalParallel, _flatParallel.Length * 2)];
-            }
-            if (_ranges.Length < _buckets.Length) {
-                _ranges = new LayerRange[Math.Max(_buckets.Length, _ranges.Length * 2)];
-            }
+            if (_flatParallel.Length < totalParallel) _flatParallel = new ParallelHandlerEntry<T>[Math.Max(totalParallel, _flatParallel.Length * 2)];
+            if (_ranges.Length < _buckets.Length) _ranges = new LayerRange[Math.Max(_buckets.Length, _ranges.Length * 2)];
 
             int sIdx = 0, aIdx = 0, pIdx = 0;
             for (int i = 0; i < _buckets.Length; i++) {
@@ -422,21 +385,16 @@ public sealed class GlobalEventCenter
                 if (b == null) { if (i < _ranges.Length) _ranges[i] = default; continue; }
                 _ranges[i].SyncStart = sIdx; _ranges[i].AsyncStart = aIdx; _ranges[i].ParallelStart = pIdx;
                 if (b.HasHandlers) {
-                    foreach (var h in b.MasterOrdered) { if (!h.Circuit.IsDisabled) {
-                        if (h.SyncHandler != null) { _syncHandlers[sIdx] = h.SyncHandler; _syncBridges[sIdx] = IntPtr.Zero; _syncTargets[sIdx] = null; _syncCircuits[sIdx] = h.Circuit; _syncNames[sIdx] = h.FullName; sIdx++; }
-                        else if (h.StaticBridgePtr != IntPtr.Zero) { _syncHandlers[sIdx] = null!; _syncBridges[sIdx] = h.StaticBridgePtr; _syncTargets[sIdx] = h.Target; _syncCircuits[sIdx] = h.Circuit; _syncNames[sIdx] = h.FullName; sIdx++; }
-                    } }
-                    foreach (var h in b.MasterUnordered) { if (!h.Circuit.IsDisabled && h.SyncWrapper != null) { _syncHandlers[sIdx] = h.SyncWrapper; _syncBridges[sIdx] = IntPtr.Zero; _syncTargets[sIdx] = null; _syncCircuits[sIdx] = h.Circuit; _syncNames[sIdx] = h.FullName; sIdx++; } }
+                    foreach (var h in b.MasterOrdered) { if (!h.Circuit.IsDisabled && h.SyncHandler != null) { _syncHandlers[sIdx] = h.SyncHandler; _syncCircuits[sIdx] = h.Circuit; _syncNames[sIdx] = h.FullName; sIdx++; } }
+                    foreach (var h in b.MasterUnordered) { if (!h.Circuit.IsDisabled && h.SyncWrapper != null) { _syncHandlers[sIdx] = h.SyncWrapper; _syncCircuits[sIdx] = h.Circuit; _syncNames[sIdx] = h.FullName; sIdx++; } }
                     foreach (var h in b.MasterOrdered) { if (!h.Circuit.IsDisabled && h.AsyncHandler != null) { _asyncHandlers[aIdx] = h.AsyncHandler; _asyncCircuits[aIdx] = h.Circuit; _asyncNames[aIdx] = h.FullName; aIdx++; } }
                     foreach (var h in b.MasterUnordered) { if (!h.Circuit.IsDisabled && h.AsyncWrapper != null) { _asyncHandlers[aIdx] = h.AsyncWrapper; _asyncCircuits[aIdx] = h.Circuit; _asyncNames[aIdx] = h.FullName; aIdx++; } }
-                    foreach (var h in b.MasterParallel) { _flatParallel[pIdx++] = h; }
+                    foreach (var h in b.MasterParallel) _flatParallel[pIdx++] = h;
                 }
                 _ranges[i].SyncCount = sIdx - _ranges[i].SyncStart; _ranges[i].AsyncCount = aIdx - _ranges[i].AsyncStart; _ranges[i].ParallelCount = pIdx - _ranges[i].ParallelStart;
             }
 
             Array.Clear(_syncHandlers, sIdx, _syncHandlers.Length - sIdx);
-            Array.Clear(_syncBridges, sIdx, _syncBridges.Length - sIdx);
-            Array.Clear(_syncTargets, sIdx, _syncTargets.Length - sIdx);
             Array.Clear(_syncCircuits, sIdx, _syncCircuits.Length - sIdx);
             Array.Clear(_syncNames, sIdx, _syncNames.Length - sIdx);
             Array.Clear(_asyncHandlers, aIdx, _asyncHandlers.Length - aIdx);
@@ -445,10 +403,7 @@ public sealed class GlobalEventCenter
             Array.Clear(_flatParallel, pIdx, _flatParallel.Length - pIdx);
 
             _syncCountTotal = sIdx; _asyncCountTotal = aIdx; _parallelCountTotal = pIdx;
-            _subscriberMask = newMask;
-            _syncMask = newSyncMask;
-            _asyncMask = newAsyncMask;
-            _parallelMask = newParallelMask;
+            _subscriberMask = newMask; _syncMask = newSyncMask; _asyncMask = newAsyncMask; _parallelMask = newParallelMask;
             Volatile.Write(ref _isDirty, 0);
         }
 
@@ -459,8 +414,6 @@ public sealed class GlobalEventCenter
         public void Add(int layerIndex, EventHandleDelegateAsync<T> h) { GetOrCreate(layerIndex).Add(h); MarkDirty(); }
         public void AddParallel(int layerIndex, EventHandleDelegate<T> h, Action<int, string, string, Exception> re) { GetOrCreate(layerIndex).AddParallel(h, re); }
         
-        internal void AddOptimized(int layerIndex, IntPtr ptr, object target, string name) { GetOrCreate(layerIndex).MasterOrdered.Add(OrderedHandlerEntry<T>.CreateOptimized(ptr, target, name)); MarkDirty(); }
-
         public void Remove(int layerIndex, IEventHandler<T> h) { if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null) { _buckets[layerIndex]!.Remove(h); MarkDirty(); } }
         public void Remove(int layerIndex, IEventHandlerAsync<T> h) { if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null) { _buckets[layerIndex]!.Remove(h); MarkDirty(); } }
         public void Remove(int layerIndex, EventHandleDelegate<T> h) { if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null) { _buckets[layerIndex]!.Remove(h); MarkDirty(); } }
@@ -472,72 +425,35 @@ public sealed class GlobalEventCenter
             EnsureClean();
             var mask = Volatile.Read(ref _subscriberMask);
             if (mask == 0) return EventHandledState.Continue;
-
-            // 🚀 核心优化点 1：Global 快速路径分层
             if (propagation == Propagation.Global)
             {
                 if ((_parallelMask) != 0) { for (int j = 0; j < _parallelCountTotal; j++) _flatParallel[j].Enqueue(-1, in value); }
                 EventHandledState res = EventHandledState.Continue;
-                if ((_syncMask) != 0) {
-                    res = DispatchSync(0, _syncCountTotal, in value);
-                    if (res == EventHandledState.Handled) return res;
-                }
-                if ((_asyncMask) != 0) { DispatchAsync(0, _asyncCountTotal, in value); }
+                if ((_syncMask) != 0) { res = DispatchSync(0, _syncCountTotal, in value); if (res == EventHandledState.Handled) return res; }
+                if ((_asyncMask) != 0) DispatchAsync(0, _asyncCountTotal, in value);
                 return res;
             }
-
-            var targetMask = mask;
-            var bubble = Owner._bubbleMasksArr; 
-            var drop = Owner._dropMasksArr;     
+            var targetMask = mask; var bubble = Owner._bubbleMasksArr; var drop = Owner._dropMasksArr;     
             if (propagation == Propagation.Bubble && sourceIndex < bubble.Length) targetMask &= bubble[sourceIndex];
             else if (propagation == Propagation.Drop && sourceIndex < drop.Length) targetMask &= drop[sourceIndex];
-            
             if (targetMask == 0) return EventHandledState.Continue;
-
             ref var rangesRef = ref GlobalEventCenter.GetArrayDataRef(_ranges);
             ref var flatParallelRef = ref GlobalEventCenter.GetArrayDataRef(_flatParallel);
-
-            // 🚀 核心优化点 2：Bubble/Drop 路径分层
-            if (propagation == Propagation.Bubble)
-            {
-                while (targetMask != 0)
-                {
-                    int l = GlobalEventCenter.InternalFindLastBit(targetMask);
-                    ref var r = ref Unsafe.Add(ref rangesRef, l);
-                    
-                    if (r.ParallelCount > 0) {
-                        for(int j = 0; j < r.ParallelCount; j++) Unsafe.Add(ref flatParallelRef, r.ParallelStart + j).Enqueue(l, in value);
-                    }
-                    if (r.SyncCount > 0) {
-                        var s = DispatchSyncBackward(r.SyncStart, r.SyncStart + r.SyncCount, in value);
-                        if (s == EventHandledState.Handled) return s;
-                    }
-                    if (r.AsyncCount > 0) {
-                        DispatchAsyncBackward(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
-                    }
-                    
+            if (propagation == Propagation.Bubble) {
+                while (targetMask != 0) {
+                    int l = GlobalEventCenter.InternalFindLastBit(targetMask); ref var r = ref Unsafe.Add(ref rangesRef, l);
+                    if (r.ParallelCount > 0) { for(int j = 0; j < r.ParallelCount; j++) Unsafe.Add(ref flatParallelRef, r.ParallelStart + j).Enqueue(l, in value); }
+                    if (r.SyncCount > 0) { var s = DispatchSyncBackward(r.SyncStart, r.SyncStart + r.SyncCount, in value); if (s == EventHandledState.Handled) return s; }
+                    if (r.AsyncCount > 0) DispatchAsyncBackward(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
                     targetMask &= ~(1UL << l);
                 }
                 return EventHandledState.Continue;
-            }
-            else
-            {
-                while (targetMask != 0)
-                {
-                    int l = GlobalEventCenter.InternalFindFirstBit(targetMask);
-                    ref var r = ref Unsafe.Add(ref rangesRef, l);
-
-                    if (r.ParallelCount > 0) {
-                        for(int j = 0; j < r.ParallelCount; j++) Unsafe.Add(ref flatParallelRef, r.ParallelStart + j).Enqueue(l, in value);
-                    }
-                    if (r.SyncCount > 0) {
-                        var s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value);
-                        if (s == EventHandledState.Handled) return s;
-                    }
-                    if (r.AsyncCount > 0) {
-                        DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
-                    }
-                    
+            } else {
+                while (targetMask != 0) {
+                    int l = GlobalEventCenter.InternalFindFirstBit(targetMask); ref var r = ref Unsafe.Add(ref rangesRef, l);
+                    if (r.ParallelCount > 0) { for(int j = 0; j < r.ParallelCount; j++) Unsafe.Add(ref flatParallelRef, r.ParallelStart + j).Enqueue(l, in value); }
+                    if (r.SyncCount > 0) { var s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value); if (s == EventHandledState.Handled) return s; }
+                    if (r.AsyncCount > 0) DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
                     targetMask &= (targetMask - 1);
                 }
                 return EventHandledState.Continue;
@@ -547,14 +463,13 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public EventHandledState DispatchLocal(int layerIndex, in T value)
         {
-            EnsureClean();
-            if (layerIndex >= _ranges.Length) return EventHandledState.Continue;
+            EnsureClean(); if (layerIndex >= _ranges.Length) return EventHandledState.Continue;
             var r = _ranges[layerIndex];
             if (r.ParallelCount > 0) { for (int j = 0; j < r.ParallelCount; j++) _flatParallel[r.ParallelStart + j].Enqueue(layerIndex, in value); }
             EventHandledState s = EventHandledState.Continue;
-            if (r.SyncCount > 0) { s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value); }
+            if (r.SyncCount > 0) s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value);
             if (s == EventHandledState.Handled) return s;
-            if (r.AsyncCount > 0) { DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value); }
+            if (r.AsyncCount > 0) DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
             return s;
         }
 
@@ -562,29 +477,23 @@ public sealed class GlobalEventCenter
         private unsafe EventHandledState DispatchSync(int start, int end, in T value)
         {
             if (start >= end) return EventHandledState.Continue;
-
             ref var hBase = ref GlobalEventCenter.GetArrayDataRef(_syncHandlers);
-            ref var bBase = ref GlobalEventCenter.GetArrayDataRef(_syncBridges);
-            ref var tBase = ref GlobalEventCenter.GetArrayDataRef(_syncTargets);
-
             int combinedState = 0; int i = start;
             try {
-                for (; i < end; i++) {
-                    EventHandledState res;
-                    IntPtr b = Unsafe.Add(ref bBase, i);
-                    if (b != IntPtr.Zero)
-                    {
-                        res = ((delegate*<object, in T, EventHandledState>)b)(Unsafe.Add(ref tBase, i)!, in value);
-                    }
-                    else
-                    {
-                        res = Unsafe.Add(ref hBase, i)(in value);
-                    }
-                    combinedState |= (int)res;
+                // 🚀 4x 循环展开：显著降低循环开销，提升 CPU 吞吐
+                for (; i <= end - 4; i += 4) {
+                    var r1 = Unsafe.Add(ref hBase, i)(in value);
+                    var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
+                    var r3 = Unsafe.Add(ref hBase, i + 2)(in value);
+                    var r4 = Unsafe.Add(ref hBase, i + 3)(in value);
+                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4;
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
                 }
-            }
-            catch (Exception e) { HandleFault(i, true, in value, e); return EventHandledState.Continue; }
+                for (; i < end; i++) {
+                    combinedState |= (int)Unsafe.Add(ref hBase, i)(in value);
+                    if ((combinedState & 1) != 0) return EventHandledState.Handled;
+                }
+            } catch (Exception e) { HandleFault(i, true, in value, e); return EventHandledState.Continue; }
             return (combinedState & 2) != 0 ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
         }
 
@@ -600,29 +509,22 @@ public sealed class GlobalEventCenter
         private unsafe EventHandledState DispatchSyncBackward(int start, int end, in T value)
         {
             if (start >= end) return EventHandledState.Continue;
-
             ref var hBase = ref GlobalEventCenter.GetArrayDataRef(_syncHandlers);
-            ref var bBase = ref GlobalEventCenter.GetArrayDataRef(_syncBridges);
-            ref var tBase = ref GlobalEventCenter.GetArrayDataRef(_syncTargets);
-
             int combinedState = 0; int i = end - 1;
             try {
-                for (; i >= start; i--) {
-                    EventHandledState res;
-                    IntPtr b = Unsafe.Add(ref bBase, i);
-                    if (b != IntPtr.Zero)
-                    {
-                        res = ((delegate*<object, in T, EventHandledState>)b)(Unsafe.Add(ref tBase, i)!, in value);
-                    }
-                    else
-                    {
-                        res = Unsafe.Add(ref hBase, i)(in value);
-                    }
-                    combinedState |= (int)res;
+                for (; i >= start + 3; i -= 4) {
+                    var r1 = Unsafe.Add(ref hBase, i)(in value);
+                    var r2 = Unsafe.Add(ref hBase, i - 1)(in value);
+                    var r3 = Unsafe.Add(ref hBase, i - 2)(in value);
+                    var r4 = Unsafe.Add(ref hBase, i - 3)(in value);
+                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4;
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
                 }
-            }
-            catch (Exception e) { HandleFault(i, true, in value, e); return EventHandledState.Continue; }
+                for (; i >= start; i--) {
+                    combinedState |= (int)Unsafe.Add(ref hBase, i)(in value);
+                    if ((combinedState & 1) != 0) return EventHandledState.Handled;
+                }
+            } catch (Exception e) { HandleFault(i, true, in value, e); return EventHandledState.Continue; }
             return (combinedState & 2) != 0 ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
         }
 
@@ -640,37 +542,29 @@ public sealed class GlobalEventCenter
             if (isSync) { if (index >= 0 && index < _syncCountTotal) { circuit = _syncCircuits[index]; name = _syncNames[index]; } }
             else { if (index >= 0 && index < _asyncCountTotal) { circuit = _asyncCircuits[index]; name = _asyncNames[index]; } }
             EventMetaDataHandler.OnEventExpectation(value, e);
-            if (circuit != null && circuit.TryDisable()) { LayerBase.LayerHub.ReportLayerEventError(-1, name ?? "Unknown", typeof(T).Name, e); MarkDirty(); }
+            if (circuit != null && circuit.TryDisable()) { LayerHub.ReportLayerEventError(-1, name ?? "Unknown", typeof(T).Name, e); MarkDirty(); }
         }
 
         public void Post(in T value, int sourceIndex, Propagation propagation)
         {
             if (Volatile.Read(ref Owner._isResetting) == 1) return;
-            EnsureClean();
-            var mask = Volatile.Read(ref _subscriberMask);
-            if (mask == 0) return;
-            var targetMask = mask;
-            var bubble = Owner._bubbleMasksArr;
-            var drop = Owner._dropMasksArr;
+            EnsureClean(); var mask = Volatile.Read(ref _subscriberMask); if (mask == 0) return;
+            var targetMask = mask; var bubble = Owner._bubbleMasksArr; var drop = Owner._dropMasksArr;
             if (propagation == Propagation.Bubble && sourceIndex < bubble.Length) targetMask &= bubble[sourceIndex];
             else if (propagation == Propagation.Drop && sourceIndex < drop.Length) targetMask &= drop[sourceIndex];
-            
             if (targetMask != 0) {
                 var firstLayer = (propagation == Propagation.Bubble) ? Owner.FindLastBit(targetMask) : Owner.FindFirstBit(targetMask);
                 var @event = new Event<T>(value) { TargetMask = targetMask, Propagation = (int)propagation };
-                Owner.EnqueueEventInternal(firstLayer, in @event);
-                Owner.WakeLayer(firstLayer);
+                Owner.EnqueueEventInternal(firstLayer, in @event); Owner.WakeLayer(firstLayer);
             }
         }
 
         public void PostLocal(int layerIndex, in T value)
         {
             if (Volatile.Read(ref Owner._isResetting) == 1) return;
-            EnsureClean();
-            if (layerIndex >= 0 && layerIndex < 64 && (_subscriberMask & (1UL << layerIndex)) != 0) {
+            EnsureClean(); if (layerIndex >= 0 && layerIndex < 64 && (_subscriberMask & (1UL << layerIndex)) != 0) {
                 var @event = new Event<T>(value) { TargetMask = 1UL << layerIndex, Propagation = (int)Propagation.Global };
-                Owner.EnqueueEventInternal(layerIndex, in @event);
-                Owner.WakeLayer(layerIndex);
+                Owner.EnqueueEventInternal(layerIndex, in @event); Owner.WakeLayer(layerIndex);
             }
         }
 
@@ -678,11 +572,9 @@ public sealed class GlobalEventCenter
         {
             if (layerIndex >= _buckets.Length) lock (_lock) { if (layerIndex >= _buckets.Length) {
                 var next = new HandlerBucket<T>?[Math.Max(layerIndex + 1, _buckets.Length * 2)];
-                Array.Copy(_buckets, next, _buckets.Length);
-                _buckets = next;
+                Array.Copy(_buckets, next, _buckets.Length); _buckets = next;
             } }
-            var b = _buckets[layerIndex];
-            if (b == null) lock (_lock) { b = _buckets[layerIndex] ??= new HandlerBucket<T>(MarkDirty); }
+            var b = _buckets[layerIndex]; if (b == null) lock (_lock) { b = _buckets[layerIndex] ??= new HandlerBucket<T>(MarkDirty); }
             return b;
         }
     }
@@ -697,26 +589,18 @@ public sealed class GlobalEventCenter
         private int _layerIndex;
         private T _payload;
         private LBTask _task;
-
         private AsyncFaultContext() => _continuation = Complete;
-
-        public static void Observe(EventBucket<T> owner, int layerIndex, HandlerCircuit circuit, string handlerFullName, in T payload, LBTask task)
-        {
+        public static void Observe(EventBucket<T> owner, int layerIndex, HandlerCircuit circuit, string handlerFullName, in T payload, LBTask task) {
             if (!s_pool.TryTake(out var context)) context = new AsyncFaultContext<T>();
-            context._owner = owner; context._layerIndex = layerIndex; context._circuit = circuit;
-            context._handlerFullName = handlerFullName; context._payload = payload; context._task = task;
+            context._owner = owner; context._layerIndex = layerIndex; context._circuit = circuit; context._handlerFullName = handlerFullName; context._payload = payload; context._task = task;
             task.GetAwaiter().OnCompleted(context._continuation);
         }
-
-        private void Complete()
-        {
+        private void Complete() {
             try { _task.GetAwaiter().GetResult(); }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 EventMetaDataHandler.OnEventExpectation(_payload, ex);
-                if (_circuit != null && _circuit.TryDisable()) { LayerBase.LayerHub.ReportLayerEventError(_layerIndex, _handlerFullName!, typeof(T).Name, ex); _owner?.MarkDirty(); }
-            }
-            finally { _owner = null; _circuit = null; _handlerFullName = null; _payload = default; _task = default; s_pool.Add(this); }
+                if (_circuit != null && _circuit.TryDisable()) { LayerHub.ReportLayerEventError(_layerIndex, _handlerFullName!, typeof(T).Name, ex); _owner?.MarkDirty(); }
+            } finally { _owner = null; _circuit = null; _handlerFullName = null; _payload = default; _task = default; s_pool.Add(this); }
         }
     }
 }
