@@ -103,10 +103,14 @@ EventBucket<T>
 
 ## 📖 最佳实践手册
 
-LayerBase 推荐的 `Layer -> Service -> Manager` 结构，能让代码保持高内聚、低耦合的健康形态。
+LayerBase 强烈推荐使用 `Layer -> Service -> Manager` 的三层递进架构。这种结构能让代码保持高内聚、低耦合的健康形态，即使项目膨胀到百万行代码，依然清晰可溯源。
+
+*   **Layer（层级）**：最顶层的宏观组织者，代表系统的处理优先级界限。负责将一整类性质相同的内容聚集起来（例如：`RenderLayer`、`PhysicsLayer`、`CoreLogicLayer`、`InteractionLayer`）。
+*   **Service（服务）**：中层的业务组织者，负责将同属一个大功能的模块聚合在一起（例如：`PlayerService` 负责组织 `PlayerInput`、`PlayerMove`、`PlayerAnimation` 等模块）。它本身不写太多具体逻辑，而是负责依赖注入（DI）和模块调度。
+*   **Manager（管理器）**：底层的具体承载者。遵循单一职责原则（SRP），专注于实现一个具体的微观功能（例如：处理角色受击）。它通过事件总线与外界通讯。
 
 ### Step 1: 定义您的事件 (Event Structs)
-为避免产生运行时垃圾，框架要求所有的事件对象必须声明为 `struct`：
+为避免产生运行时垃圾，框架强制要求所有的事件对象必须声明为 `struct`：
 
 ```csharp
 public struct DamageEvent
@@ -118,8 +122,7 @@ public struct PlayerDeathEvent { }
 ```
 
 ### Step 2: 编写具体的业务逻辑 (Manager)
-Manager 专注于单一业务的实现。继承 `ILayerContext` 即可自动感知自身层级，并获得事件的发送（Send）与投递（Post）能力。
-推荐使用 `[Subscribe]` 和 `[SubscribeAsync]` 特性，编译器将自动为您生成无反射的绑定逻辑。
+Manager 专注于单一业务的实现。继承 `ILayerContext` 即可自动感知自身层级，并获得强大的事件处理能力。推荐使用 `[Subscribe]` 等特性，编译器将自动生成无反射的绑定逻辑。
 
 ```csharp
 using LayerBase.DI;
@@ -157,7 +160,7 @@ public partial class DamageManager : ILayerContext
 ```
 
 ### Step 3: 组织业务模块 (Service)
-Service 扮演装配者的角色，负责将相关联的 Manager 注册至所属层级。
+Service 扮演装配者的角色，将相关的 Manager 注册至所属层级。
 使用 `[OwnerLayer]` 特性，能够将服务强约束到特定的物理层级上，使项目的结构一目了然。
 
 ```csharp
@@ -175,43 +178,55 @@ public class CombatService : IService
 }
 ```
 
-### Step 4: 定义层级容器 (Layer) & 初始化拓扑 (LayerHub)
-Layer 构成了系统处理的宏观屏障。在程序的入口处（如 Unity 的 `Awake`），通过 `LayerHub` 将它们构建起来。
+### Step 4: 触发事件 (全能的 Event API)
+不仅是 `LayerHub`，你的 `Layer`、`Service` 甚至是底层的 `Manager`，都随时可以通过扩展方法调用极其丰富的事件 API 来与外界通讯：
 
 ```csharp
+// 【Send 族：同步执行，立刻阻塞当前执行流】
+this.SendGlobal(new DamageEvent()); // 穿透全局所有层级
+this.SendLocal(new DamageEvent());  // 仅在自己所在的同层级内广播
+this.SendBubble(new DamageEvent()); // 向上冒泡（发给比自己 Index 更小的顶层，如逻辑抛给 UI）
+this.SendDrop(new DamageEvent());   // 向下坠落（发给比自己 Index 更大的底层，如 UI 下发给逻辑）
+
+// 【Post 族：异步投递，不阻塞代码，推入脏队列等待 Pump 处理】
+this.PostGlobal(new DamageEvent()); 
+this.PostBubble(new DamageEvent());
+
+// 【Delay 族：定时投递，支持延迟 N 秒后派发】
+this.DelayDrop(new PlayerDeathEvent(), 3.5f); // 3.5秒后向下层级派发死亡事件
+```
+
+### Step 5: 游戏引擎整合 (Build & Pump)
+将 LayerBase 的生命周期接入您所使用的引擎（如 Unity 的 `MonoBehaviour` 或 Godot 的 `Node`）。
+所有的初始化操作（`Build`）应放在引擎的启动期，所有的事件心跳（`Pump`）应放在引擎的帧更新中。
+
+```csharp
+using UnityEngine;
 using LayerBase.Layers;
 using LayerBase.LayerHub;
 
-// 定义层级标识
-public class UILayer : Layer { }
-public class GameLogicLayer : Layer { }
-
-public void InitGame()
+public class GameRoot : MonoBehaviour
 {
-    LayerHub.CreateLayers()
-            .Push(new UILayer())          // Index 0: 顶端层 (最先收到 Bubble, 最后收到 Drop)
-            .Push(new GameLogicLayer())   // Index 1: 逻辑层
-            .Build();                     // Build() 会自动扫描程序集中的 [OwnerLayer] 特性并装配
-}
-```
+    // 定义层级标识
+    public class InteractionLayer : Layer { }
+    public class CoreLogicLayer : Layer { }
 
-### Step 5: 触发事件与驱动循环 (Send/Post/Pump)
+    void Awake()
+    {
+        // 1. 初始化架构拓扑
+        LayerHub.CreateLayers()
+                .Push(new InteractionLayer()) // Index 0: 顶层交互层
+                .Push(new CoreLogicLayer())   // Index 1: 核心逻辑层
+                .Build();                     // 自动扫描 [OwnerLayer] 并装配
+    }
 
-**派发事件：**
-```csharp
-// 【同步派发】立即阻塞当前执行流，并穿透相应的层级
-LayerHub.Send(new DamageEvent { TargetId = 99, Amount = 50f });
-
-// 【异步投递】将事件压入脏队列，不阻塞当前代码，等待下一帧的 Pump() 集中处理
-LayerHub.Post(new DamageEvent { TargetId = 1, Amount = 10f });
-```
-
-**心跳驱动：**
-如使用了异步投递 (`Post`) 或 `LBTask`，需在游戏的主循环中调用 `Pump`。在脏队列为空时，该函数的调用耗时仅为数纳秒。
-```csharp
-void Update(float deltaTime)
-{
-    LayerHub.Pump(deltaTime);
+    void Update()
+    {
+        // 2. 驱动主循环
+        // 处理所有 Post 的异步事件、Delay 定时任务以及 LBTask 状态机
+        // 如果脏队列为空，此调用的耗时仅为几个纳秒！
+        LayerHub.Pump(Time.deltaTime);
+    }
 }
 ```
 
