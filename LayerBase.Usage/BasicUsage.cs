@@ -29,15 +29,15 @@ public static class BasicUsage
     public static void Run()
     {
         Console.WriteLine("--- Basic Usage ---");
-        
+
         // 重置/初始化环境
         LayerHub.Reset();
-        
+
         // 3. 构建层级拓扑
         var gameplay = new GameplayLayer();
         LayerHub.CreateLayers()
-            .Push(gameplay)
-            .Build();
+                .Push(gameplay)
+                .Build();
 
         // 4. 发送同步事件
         LayerHub.Send(new PlayerSpawnEvent { Name = "Hero", Level = 1 });

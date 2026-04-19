@@ -16,7 +16,7 @@ public interface IInternalLayerContext : ILayerContext
     int LayerIndex { get; set; }
 }
 
-public interface IService 
+public interface IService
 {
     void ConfigureServices(IServiceCollection services);
 }
@@ -184,11 +184,11 @@ public static class ServiceExtensions
         where TValue : struct
     {
         service.GetLayer()
-               .SubscribeParallel(handler, reportError ?? LayerBase.LayerHub.ReportLayerEventError);
+               .SubscribeParallel(handler, reportError ?? LayerHub.ReportLayerEventError);
     }
 
     /// <summary>
-    /// 获取针对特定事件的链式 API 流。
+    ///     获取针对特定事件的链式 API 流。
     /// </summary>
     public static LayerEventStream<TValue> OnEvent<TValue>(this IService service) where TValue : struct
     {
@@ -296,11 +296,11 @@ public static class LayerContextExtensions
         where TValue : struct
     {
         service.GetLayer()
-               .SubscribeParallel(handler, reportError ?? LayerBase.LayerHub.ReportLayerEventError);
+               .SubscribeParallel(handler, reportError ?? LayerHub.ReportLayerEventError);
     }
 
     /// <summary>
-    /// 获取针对特定事件的链式 API 流。
+    ///     获取针对特定事件的链式 API 流。
     /// </summary>
     public static LayerEventStream<TValue> OnEvent<TValue>(this ILayerContext service) where TValue : struct
     {
@@ -312,6 +312,7 @@ public static class LayerContextExtensions
         return service.GetLayer().GetService<T>();
     }
 }
+
 [AttributeUsage(AttributeTargets.Constructor | AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class InjectAttribute : Attribute
 {

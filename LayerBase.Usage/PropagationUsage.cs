@@ -3,7 +3,10 @@ using LayerBase.Layers;
 
 namespace LayerBase.Usage;
 
-public struct UIEvent { public string Text; }
+public struct UIEvent
+{
+    public string Text;
+}
 
 public partial class TopLayer : Layer
 {
@@ -21,7 +24,7 @@ public partial class MiddleLayer : Layer
     private EventHandledState OnUI(in UIEvent e)
     {
         Console.WriteLine($"[MiddleLayer] Received: {e.Text}");
-        return EventHandledState.Handled; 
+        return EventHandledState.Handled;
     }
 }
 
@@ -47,10 +50,10 @@ public static class PropagationUsage
         var bot = new BottomLayer();
 
         LayerHub.CreateLayers()
-            .Push(top)
-            .Push(mid)
-            .Push(bot)
-            .Build();
+                .Push(top)
+                .Push(mid)
+                .Push(bot)
+                .Build();
 
         Console.WriteLine("\nSending Global:");
         LayerHub.Send(new UIEvent { Text = "Global Hello" });

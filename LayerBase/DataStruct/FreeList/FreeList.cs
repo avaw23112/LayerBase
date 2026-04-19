@@ -43,12 +43,12 @@ internal sealed class FreeList<T> where T : struct
     /// </summary>
     private readonly int _slabSize;
 
+    private readonly object _syncLock = new();
+
     /// <summary>
     ///     空闲节点头指针
     /// </summary>
     private int _freeHead = -1;
-
-    private readonly object _syncLock = new();
 
     public FreeList(int slabSize)
     {

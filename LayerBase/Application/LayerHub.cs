@@ -1,10 +1,10 @@
 using System.Runtime.CompilerServices;
 using LayerBase.Async;
 using LayerBase.Core.Event;
-using LayerBase.Layers;
 using LayerBase.Core.ResponsibilityChain;
-using LayerBase.Tools.Job;
 using LayerBase.DI;
+using LayerBase.Layers;
+using LayerBase.Tools.Job;
 
 namespace LayerBase;
 
@@ -49,10 +49,10 @@ public static class LayerHub
 
     private static int s_layerIndexCounter;
 
-    public static global::LayerBase.Core.Event.GlobalEventCenter EventCenter { get; internal set; } = new();
+    public static GlobalEventCenter EventCenter { get; internal set; } = new();
 
     public static bool IsDebugMode { get; private set; }
-    public static event Action<LayerEventInfo>? OnLayerEventInfo;       
+    public static event Action<LayerEventInfo>? OnLayerEventInfo;
 
     internal static int GetNextLayerIndex()
     {
@@ -62,13 +62,9 @@ public static class LayerHub
     public static LayersBuilder CreateLayers()
     {
         if (SynchronizationContext.Current == null)
-        {
             s_context = LayerBaseSynchronizationContext.InstallAsCurrent();
-        }
         else if (s_context == null && SynchronizationContext.Current is not LayerBaseSynchronizationContext ctx)
-        {
             s_context = LayerBaseSynchronizationContext.Install();
-        }
 
         return new LayersBuilder();
     }
@@ -89,10 +85,7 @@ public static class LayerHub
         IsDebugMode = false;
 
         s_context?.Dispose();
-        if (SynchronizationContext.Current == s_context)
-        {
-            SynchronizationContext.SetSynchronizationContext(null);
-        }
+        if (SynchronizationContext.Current == s_context) SynchronizationContext.SetSynchronizationContext(null);
         s_context = null;
     }
 
@@ -137,7 +130,7 @@ public static class LayerHub
 
         public LayersBuilder Push(Layer layer)
         {
-            if (s_chain == null) s_chain = new LayerChain(_chain);      
+            if (s_chain == null) s_chain = new LayerChain(_chain);
             s_chain.AddNode(layer);
             return this;
         }

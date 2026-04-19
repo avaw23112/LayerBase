@@ -4,25 +4,25 @@ namespace LayerBase.Core;
 
 public enum EventQueueOverflowStrategy
 {
-	/// <summary>
-	///     溢出报错
-	/// </summary>
-	ThrowException,
+    /// <summary>
+    ///     溢出报错
+    /// </summary>
+    ThrowException,
 
-	/// <summary>
-	///     抛弃新进事件
-	/// </summary>
-	Throw,
+    /// <summary>
+    ///     抛弃新进事件
+    /// </summary>
+    Throw,
 
-	/// <summary>
-	///     丢弃最老元素
-	/// </summary>
-	OverWrite,
+    /// <summary>
+    ///     丢弃最老元素
+    /// </summary>
+    OverWrite,
 
-	/// <summary>
-	///     队列扩容
-	/// </summary>
-	Scaling
+    /// <summary>
+    ///     队列扩容
+    /// </summary>
+    Scaling
 }
 
 /// <summary>
@@ -196,8 +196,6 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
         return true;
     }
 
-    internal delegate void SpanAction<T>(ReadOnlySpan<T> span);
-
     internal void ProcessBatch(SpanAction<T> action)
     {
         ThrowIfDisposed();
@@ -205,9 +203,9 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
         {
             var seg = _headSeg!;
             // 确定当前段内可读取的上限：如果是尾段，读到 tailIndex；否则读到 chunkSize
-            int upper = (seg == _tailSeg) ? _tailIndex : _chunkSize;
-            int available = upper - _headIndex;
-            
+            var upper = seg == _tailSeg ? _tailIndex : _chunkSize;
+            var available = upper - _headIndex;
+
             if (available <= 0) break;
 
             action(new ReadOnlySpan<T>(seg.Buffer, _headIndex, available));
@@ -490,6 +488,8 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
         if (_disposed)
             throw new ObjectDisposedException(nameof(PooledChunkedOverwriteQueue<T>));
     }
+
+    internal delegate void SpanAction<T>(ReadOnlySpan<T> span);
 
     private sealed class Segment
     {

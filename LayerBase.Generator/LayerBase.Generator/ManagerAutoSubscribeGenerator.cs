@@ -34,7 +34,6 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
 
         foreach (var member in symbol.GetMembers())
             if (member is IMethodSymbol method)
-            {
                 foreach (var attr in method.GetAttributes())
                 {
                     var attrName = attr.AttributeClass?.Name ?? "";
@@ -51,15 +50,11 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                         }
                     }
                 }
-            }
             else if (member is IPropertySymbol prop)
-            {
                 if (prop.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("SubscribeDelay") == true))
-                {
                     if (prop.Type is INamedTypeSymbol ts && ts.IsGenericType)
-                        delayProps.Add($"{prop.Name}|{ts.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}");
-                }
-            }
+                        delayProps.Add(
+                            $"{prop.Name}|{ts.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}");
 
         if (handlers.Count > 0 || delayProps.Count > 0 || implementsCtx)
             return new ClassMeta(symbol.Name, symbol.ContainingNamespace.ToDisplayString(), symbol.ToDisplayString(),
@@ -105,7 +100,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
             {
                 var reg = h.Attr.Contains("Async") ? "SubscribeAsync" :
                     h.Attr.Contains("Parallel")    ? "SubscribeParallel" : "Subscribe";
-                
+
                 // 🚀 回归标准模式：直接绑定成员方法委托
                 sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
             }
@@ -115,6 +110,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                 var parts = p.Split('|');
                 sb.AppendLine($"            this.{parts[0]} = layer.SubscribeDelay<{parts[1]}>();");
             }
+
             sb.AppendLine("        }");
 
             sb.AppendLine();
@@ -132,7 +128,12 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                 "        global::System.Collections.Generic.IEnumerable<global::System.Type> global::LayerBase.DI.IAutoSubscribe.GetSubscribedEvents()");
             sb.AppendLine("        {");
             foreach (var h in meta.Handlers) sb.AppendLine($"            yield return typeof({h.Evt});");
-            foreach (var p in meta.DelayProps) { var parts = p.Split('|'); sb.AppendLine($"            yield return typeof({parts[1]});"); }
+            foreach (var p in meta.DelayProps)
+            {
+                var parts = p.Split('|');
+                sb.AppendLine($"            yield return typeof({parts[1]});");
+            }
+
             sb.AppendLine("            yield break;");
             sb.AppendLine("        }");
         }
@@ -152,22 +153,32 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
             if (inv.Expression.ToString().Contains("Send"))
             {
                 var info = model.GetSymbolInfo(inv);
-                var sym = info.Symbol as IMethodSymbol ?? info.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault();
+                var sym = info.Symbol as IMethodSymbol ??
+                          info.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault();
                 if (sym?.IsGenericMethod == true && sym.Name.StartsWith("Send"))
                 {
-                    var target = sym.TypeArguments.FirstOrDefault()?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    if (target != null) deps.Add($"yield return new global::LayerBase.DI.EventDependency(typeof({srcEvt}), typeof({target}));");
+                    var target = sym.TypeArguments.FirstOrDefault()
+                                    ?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    if (target != null)
+                        deps.Add(
+                            $"yield return new global::LayerBase.DI.EventDependency(typeof({srcEvt}), typeof({target}));");
                 }
             }
     }
 
     private class ClassMeta
     {
-        public ClassMeta(string name, string ns, string display, bool ctx, List<HandlerInfo> handlers, List<string> delayProps)
+        public ClassMeta(string       name, string ns, string display, bool ctx, List<HandlerInfo> handlers,
+                         List<string> delayProps)
         {
-            ClassName = name; Namespace = ns; Display = display; ImplementsLayerContext = ctx;
-            Handlers = handlers; DelayProps = delayProps;
+            ClassName = name;
+            Namespace = ns;
+            Display = display;
+            ImplementsLayerContext = ctx;
+            Handlers = handlers;
+            DelayProps = delayProps;
         }
+
         public string ClassName { get; }
         public string Namespace { get; }
         public string Display { get; }
@@ -180,8 +191,12 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
     {
         public HandlerInfo(string n, string a, string e, List<string> d)
         {
-            Name = n; Attr = a; Evt = e; Deps = d;
+            Name = n;
+            Attr = a;
+            Evt = e;
+            Deps = d;
         }
+
         public string Name { get; }
         public string Attr { get; }
         public string AttrType => Attr;

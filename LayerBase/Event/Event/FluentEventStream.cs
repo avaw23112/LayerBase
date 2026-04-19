@@ -27,7 +27,7 @@ public readonly struct LayerEventStream<T> where T : struct
     {
         if (predicate == null) throw new ArgumentNullException(nameof(predicate));
         var current = _predicate;
-        EventFilterDelegate<T> next = current == null ? predicate : (in T e) => current(in e) && predicate(in e);
+        var next = current == null ? predicate : (in T e) => current(in e) && predicate(in e);
         return new LayerEventStream<T>(_layer, next);
     }
 
@@ -78,7 +78,11 @@ public readonly struct LayerEventStream<T> where T : struct
         else
         {
             var pred = _predicate;
-            _layer.SubscribeParallel((in T e) => { if (pred(in e)) handler(in e); return EventHandledState.Continue; }, reportError);
+            _layer.SubscribeParallel((in T e) =>
+            {
+                if (pred(in e)) handler(in e);
+                return EventHandledState.Continue;
+            }, reportError);
         }
     }
 }

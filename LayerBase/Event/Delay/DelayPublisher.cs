@@ -1,11 +1,10 @@
 using LayerBase.Layers;
-using System.Runtime.CompilerServices;
 
 namespace LayerBase.Event.Delay;
 
 internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherUpdater where T : struct
 {
-    private int _hasValueInt; 
+    private int _hasValueInt;
     private int _ttlBits; // 使用 int 存储 float 的位模式以支持 Interlocked
     private T _value;
 
@@ -14,7 +13,9 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherUpd
         Owner = owner;
     }
 
-    public bool HasValue => Volatile.Read(ref _hasValueInt) == 1 && BitConverter.Int32BitsToSingle(Volatile.Read(ref _ttlBits)) > 0;
+    public bool HasValue => Volatile.Read(ref _hasValueInt) == 1 &&
+                            BitConverter.Int32BitsToSingle(Volatile.Read(ref _ttlBits)) > 0;
+
     public DelayDirection Direction { get; private set; }
 
     public int ContractId { get; private set; }

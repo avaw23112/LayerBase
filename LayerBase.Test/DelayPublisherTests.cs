@@ -1,6 +1,5 @@
-using LayerBase.Core.Event;
+using LayerBase;
 using LayerBase.DI;
-using LayerBase.Event.Delay;
 using LayerBase.Layers;
 
 namespace EventsTest;
@@ -8,7 +7,13 @@ namespace EventsTest;
 [TestFixture]
 public class DelayPublisherTests
 {
-    private class DelayTestLayer : Layer 
+    [SetUp]
+    public void SetUp()
+    {
+        LayerHub.Reset();
+    }
+
+    private class DelayTestLayer : Layer
     {
         public void AddManager(DelayTestService service)
         {
@@ -19,12 +24,12 @@ public class DelayPublisherTests
 
     private class DelayTestService : IService
     {
-        public void ConfigureServices(IServiceCollection services) 
+        public void ConfigureServices(IServiceCollection services)
         {
             // 🚀 关键：Service 必须注册自己或被注册，才能在 Build 后被获取
             services.AddSingleton<DelayTestService>(this);
         }
-        
+
         public void RequestDelay(float ttl, int value, int contractId = 0)
         {
             this.DelayLocal(new DelayTestEvent { Value = value }, ttl, contractId);
@@ -36,23 +41,17 @@ public class DelayPublisherTests
         }
     }
 
-    [SetUp]
-    public void SetUp()
-    {
-        LayerBase.LayerHub.Reset();
-    }
-
     [Test]
     public void DelayLocal_is_stored_and_can_be_retrieved_via_service()
     {
         var layer = new DelayTestLayer();
         var manager = new DelayTestService();
         layer.AddManager(manager);
-        
-        LayerBase.LayerHub.CreateLayers().Push(layer).Build();
+
+        LayerHub.CreateLayers().Push(layer).Build();
 
         var retrievedManager = layer.GetService<DelayTestService>();
-        retrievedManager.RequestDelay(ttl: 1.0f, value: 42);
+        retrievedManager.RequestDelay(1.0f, 42);
 
         var publisher = layer.SubscribeDelay<DelayTestEvent>();
         Assert.That(publisher.HasValue, Is.True);
@@ -66,10 +65,10 @@ public class DelayPublisherTests
         var layer = new DelayTestLayer();
         var manager = new DelayTestService();
         layer.AddManager(manager);
-        LayerBase.LayerHub.CreateLayers().Push(layer).Build();
+        LayerHub.CreateLayers().Push(layer).Build();
 
         var retrievedManager = layer.GetService<DelayTestService>();
-        retrievedManager.RequestDelay(ttl: 0.05f, value: 10);
+        retrievedManager.RequestDelay(0.05f, 10);
         var publisher = layer.SubscribeDelay<DelayTestEvent>();
 
         Assert.That(publisher.HasValue, Is.True);
@@ -83,10 +82,10 @@ public class DelayPublisherTests
         var layer = new DelayTestLayer();
         var manager = new DelayTestService();
         layer.AddManager(manager);
-        LayerBase.LayerHub.CreateLayers().Push(layer).Build();
+        LayerHub.CreateLayers().Push(layer).Build();
 
         var retrievedManager = layer.GetService<DelayTestService>();
-        retrievedManager.RequestGlobalDelay(ttl: 1.0f, value: 100);
+        retrievedManager.RequestGlobalDelay(1.0f, 100);
         var publisher = layer.SubscribeDelay<DelayTestEvent>();
 
         Assert.That(publisher.TryTake(out var val), Is.True);
@@ -100,10 +99,10 @@ public class DelayPublisherTests
         var layer = new DelayTestLayer();
         var manager = new DelayTestService();
         layer.AddManager(manager);
-        LayerBase.LayerHub.CreateLayers().Push(layer).Build();
+        LayerHub.CreateLayers().Push(layer).Build();
 
         var retrievedManager = layer.GetService<DelayTestService>();
-        retrievedManager.RequestDelay(ttl: 1.0f, value: 1, contractId: 888);
+        retrievedManager.RequestDelay(1.0f, 1, 888);
         var publisher = layer.SubscribeDelay<DelayTestEvent>();
 
         Assert.That(publisher.ContractId, Is.EqualTo(888));

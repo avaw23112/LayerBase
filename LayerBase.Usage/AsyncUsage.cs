@@ -17,7 +17,7 @@ public partial class ResourceLayer : Layer
     private async LBTask OnLoadAsset(AssetLoadRequest e)
     {
         Console.WriteLine($"[Resource] Starting load: {e.AssetPath}");
-        await LBTask.Delay(TimeSpan.FromMilliseconds(500)); 
+        await LBTask.Delay(TimeSpan.FromMilliseconds(500));
         Console.WriteLine($"[Resource] Finished load: {e.AssetPath}");
         IsLoadFinished = true;
     }
@@ -29,15 +29,15 @@ public static class AsyncUsage
     {
         Console.WriteLine("--- Async Usage ---");
         LayerHub.Reset();
-        
+
         var resource = new ResourceLayer();
         LayerHub.CreateLayers().Push(resource).Build();
 
         // 1. 发送异步事件
         LayerHub.Send(new AssetLoadRequest { AssetPath = "Textures/Player.png" });
-        
+
         // 2. 核心：驱动循环 (Main Loop)
-        int timeout = 0;
+        var timeout = 0;
         while (!resource.IsLoadFinished && timeout < 20)
         {
             LayerHub.Pump(0.1f);

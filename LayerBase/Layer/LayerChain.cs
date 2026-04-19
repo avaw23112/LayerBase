@@ -1,8 +1,6 @@
-using System.Linq;
 using System.Text;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
-using LayerBase;
 
 namespace LayerBase.Layers;
 
@@ -49,14 +47,14 @@ internal sealed class LayerChain
     internal void Pump(float deltaTime)
     {
         // 1. 获取全局事件挂起状态（位图）
-        var eventMask = LayerBase.LayerHub.EventCenter.GetEventPendingMask();
+        var eventMask = LayerHub.EventCenter.GetEventPendingMask();
 
         // 2. 合并逻辑活跃状态
         var activeMask = eventMask | _logicActiveMask;
         if (activeMask == 0) return;
 
         // 3. 高性能位图遍历：利用硬件指令彻底跳过空闲层级
-        var center = LayerBase.LayerHub.EventCenter;
+        var center = LayerHub.EventCenter;
         while (activeMask != 0)
         {
             var index = center.FindFirstBit(activeMask);
@@ -81,9 +79,9 @@ internal sealed class LayerChain
             {
                 if (layer.RouteIndex == -1)
                 {
-                    var index = LayerBase.LayerHub.GetNextLayerIndex();
+                    var index = LayerHub.GetNextLayerIndex();
                     layer.SetRouteIndex(index);
-                    LayerBase.LayerHub.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
+                    LayerHub.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
                 }
 
                 if (layer.RouteIndex > maxIndex) maxIndex = layer.RouteIndex;
@@ -116,7 +114,7 @@ internal sealed class LayerChain
                 var subs = sub.GetSubscribedEvents().ToList();
                 if (subs.Count > 0)
                     sb.AppendLine($"       |-- 订阅: {string.Join(", ", subs.Select(t => t.Name))}");
-                
+
                 var deps = sub.GetEventDependencies().ToList();
                 if (deps.Count > 0)
                     sb.AppendLine($"       |-- 派发: {string.Join(", ", deps.Select(d => d.Target.Name))}");

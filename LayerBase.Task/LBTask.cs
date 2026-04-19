@@ -49,17 +49,11 @@ public readonly struct LBTask
         ctx ??= SynchronizationContext.Current;
         var src = ArchTaskSource.Rent();
         if (ctx is LayerBaseSynchronizationContext lbCtx)
-        {
             lbCtx.ScheduleInFrames(static state => ((ArchTaskSource)state!).SetResult(), src, 1);
-        }
         else if (ctx != null)
-        {
             ctx.Post(static state => ((ArchTaskSource)state!).SetResult(), src);
-        }
         else
-        {
             ThreadPool.QueueUserWorkItem(static state => ((ArchTaskSource)state!).SetResult(), src);
-        }
         return new LBTask(src);
     }
 
@@ -101,11 +95,12 @@ public readonly struct LBTask
         public static readonly WaitCallback OnTimer = static state =>
             ((DelayWorkItem)state!).TryComplete(false);
 
-        public CancellationTokenRegistration CancellationRegistration;
         private int _completed;
         private long _dueTimestamp;
         private ArchTaskSource? _source;
         private CancellationToken _token;
+
+        public CancellationTokenRegistration CancellationRegistration;
 
         public long DueTimestamp
         {

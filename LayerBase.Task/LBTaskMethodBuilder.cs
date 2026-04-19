@@ -9,7 +9,10 @@ public struct LBTaskMethodBuilder
     private ArchTaskSource? _source;
     private bool _earlyCompleted;
 
-    public static LBTaskMethodBuilder Create() => default;
+    public static LBTaskMethodBuilder Create()
+    {
+        return default;
+    }
 
     public LBTask Task
     {
@@ -39,7 +42,9 @@ public struct LBTaskMethodBuilder
         _source.SetException(exception ?? throw new ArgumentNullException(nameof(exception)));
     }
 
-    public void SetStateMachine(IAsyncStateMachine stateMachine) { }
+    public void SetStateMachine(IAsyncStateMachine stateMachine)
+    {
+    }
 
     public void AwaitOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
         where TAwaiter : INotifyCompletion
@@ -66,7 +71,10 @@ public struct LBTaskMethodBuilder<T>
     private T _result;
     private bool _earlyCompleted;
 
-    public static LBTaskMethodBuilder<T> Create() => default;
+    public static LBTaskMethodBuilder<T> Create()
+    {
+        return default;
+    }
 
     public LBTask<T> Task
     {
@@ -86,8 +94,15 @@ public struct LBTaskMethodBuilder<T>
 
     public void SetResult(T result)
     {
-        if (_source == null) { _result = result; _earlyCompleted = true; }
-        else _source.SetResult(result);
+        if (_source == null)
+        {
+            _result = result;
+            _earlyCompleted = true;
+        }
+        else
+        {
+            _source.SetResult(result);
+        }
     }
 
     public void SetException(Exception exception)
@@ -96,7 +111,9 @@ public struct LBTaskMethodBuilder<T>
         _source.SetException(exception ?? throw new ArgumentNullException(nameof(exception)));
     }
 
-    public void SetStateMachine(IAsyncStateMachine stateMachine) { }
+    public void SetStateMachine(IAsyncStateMachine stateMachine)
+    {
+    }
 
     public void AwaitOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
         where TAwaiter : INotifyCompletion

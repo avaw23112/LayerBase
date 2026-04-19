@@ -47,7 +47,7 @@
         <ProjectReference Include="..\LayerBase.Task\LayerBase.Task.csproj"/>
     </ItemGroup>
     <ItemGroup>
-      <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
+        <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0"/>
     </ItemGroup>
 
 </Project>

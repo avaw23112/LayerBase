@@ -13,13 +13,13 @@ internal interface IUnmanagedList : IDisposable
 internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
 {
     private readonly GlobalEventCenter _center;
-    private readonly int _layerIndex;
-    private readonly PooledChunkedOverwriteQueue<Event<Value>> _queue;
-    private readonly Action<IUnmanagedList> _onDirty;
-    private int _isDirty;
-    private bool _disposed;
 
     private readonly List<Event<Value>> _forwardBuffer = new(256);
+    private readonly int _layerIndex;
+    private readonly Action<IUnmanagedList> _onDirty;
+    private readonly PooledChunkedOverwriteQueue<Event<Value>> _queue;
+    private bool _disposed;
+    private int _isDirty;
 
     public UnmanagedList(GlobalEventCenter center, int layerIndex, Action<IUnmanagedList> onDirty)
     {
@@ -37,7 +37,10 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
         _forwardBuffer.Clear();
     }
 
-    public void MarkClean() => Interlocked.Exchange(ref _isDirty, 0);
+    public void MarkClean()
+    {
+        Interlocked.Exchange(ref _isDirty, 0);
+    }
 
     public void Pump()
     {
@@ -48,9 +51,10 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
         var lastTargetLayer = -1;
         var myMask = 1UL << _layerIndex;
 
-        _queue.ProcessBatch(span => {
-            int len = span.Length;
-            int i = 0;
+        _queue.ProcessBatch(span =>
+        {
+            var len = span.Length;
+            var i = 0;
 
             for (; i <= len - 4; i += 4)
             {
@@ -76,7 +80,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
             }
 
             for (; i < len; i++) ProcessEvent(in span[i], ref forwarded, ref lastTargetLayer);
-            
+
             FlushForwardBuffer(ref forwarded);
         });
 
@@ -86,8 +90,8 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void ProcessEvent(in Event<Value> @event, ref bool forwarded, ref int lastTargetLayer)
     {
-        var state = ((@event.TargetMask & (1UL << _layerIndex)) != 0) 
-            ? _center.DispatchLocal(_layerIndex, in @event) 
+        var state = (@event.TargetMask & (1UL << _layerIndex)) != 0
+            ? _center.DispatchLocal(_layerIndex, in @event)
             : EventHandledState.Continue;
 
         if (state == EventHandledState.Continue) ForwardOnly(in @event, ref forwarded, ref lastTargetLayer);
@@ -110,7 +114,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     {
         if (_forwardBuffer.Count == 0) return;
         var target = _forwardBuffer[0].FindNextTarget(_layerIndex, _center);
-        
+
 #if NETCOREAPP || NET5_0_OR_GREATER
         _center.EnqueueEventBatchInternal<Value>(target, CollectionsMarshal.AsSpan(_forwardBuffer));
 #else
@@ -124,10 +128,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     public void Post(in Event<Value> val)
     {
         _queue.EnqueueOverwrite(val);
-        if (Interlocked.CompareExchange(ref _isDirty, 1, 0) == 0)
-        {
-            _onDirty(this);
-        }
+        if (Interlocked.CompareExchange(ref _isDirty, 1, 0) == 0) _onDirty(this);
     }
 
     public bool TryDequeue(out Event<Value> @event)

@@ -41,17 +41,15 @@ public struct Event<T> where T : struct
     internal int FindNextTarget(int currentLayer, GlobalEventCenter center)
     {
         ulong nextMask;
-        if (Propagation == (int)Core.Event.Propagation.Bubble)
+        if (Propagation == (int)Event.Propagation.Bubble)
         {
             // 向上冒泡：找比当前层更小的位
             nextMask = TargetMask & ((1UL << currentLayer) - 1);
             return center.FindLastBit(nextMask);
         }
-        else
-        {
-            // 向下坠落：找比当前层更大的位
-            nextMask = TargetMask & ~((1UL << (currentLayer + 1)) - 1);
-            return center.FindFirstBit(nextMask);
-        }
+
+        // 向下坠落：找比当前层更大的位
+        nextMask = TargetMask & ~((1UL << (currentLayer + 1)) - 1);
+        return center.FindFirstBit(nextMask);
     }
 }

@@ -3,7 +3,10 @@ using LayerBase.Layers;
 
 namespace LayerBase.Usage;
 
-public struct HeavyComputeEvent { public int Data; }
+public struct HeavyComputeEvent
+{
+    public int Data;
+}
 
 public partial class ComputeLayer : Layer
 {
@@ -13,7 +16,7 @@ public partial class ComputeLayer : Layer
     private EventHandledState DoWork(in HeavyComputeEvent e)
     {
         if (e.Data < 0) throw new Exception("Compute Error!"); // 故意制造异常
-        
+
         Console.WriteLine($"[Parallel] Processing data: {e.Data} on thread {Thread.CurrentThread.ManagedThreadId}");
         return EventHandledState.Continue;
     }
@@ -24,10 +27,10 @@ public static class ParallelUsage
     public static void Run()
     {
         Console.WriteLine("--- Parallel Usage ---");
-        
+
         // 1. 初始化并行调度器（指定工作线程数）
-        LayerHub.InitializeJobScheduler(workerCount: 4);
-        
+        LayerHub.InitializeJobScheduler(4);
+
         var compute = new ComputeLayer();
         LayerHub.CreateLayers().Push(compute).Build();
 
@@ -40,7 +43,7 @@ public static class ParallelUsage
 
         // 3. 正常分发
         LayerHub.Send(new HeavyComputeEvent { Data = 100 });
-        
+
         // 4. 触发异常分发：该 Handler 会被自动“熔断”并上报，不影响后续分发
         LayerHub.Send(new HeavyComputeEvent { Data = -1 });
 
