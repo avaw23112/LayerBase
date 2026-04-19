@@ -11,40 +11,54 @@
 
 `LBTask` 专为此而生：
 1. **同步路径零 GC 分配**：通过内置的池化技术与状态机机机制，如果一个异步任务是同步完成的，它将**绝对不会**在堆上产生任何 GC Allocation。
-2. **完美融合引擎心跳**：LBTask 深度集成于 `LayerBase.LayerHub.Pump(deltaTime)`。它拥有自己的 `LayerBaseSynchronizationContext`，无需依赖引擎原生的同步上下文即可实现安全的线程回归和时间调度。
-3. **极简 API**：保留了原生 Task 的手感，支持 `await LBTask.Delay()`、`await LBTask.NextFrame()` 等游戏级特性。
+2. **双核驱动机制 (自驱动延迟 + 帧同步)**：
+   - **自驱动的 `Delay`**：`LBTask.Delay` 底层自带了一个基于最小堆（Min-Heap）和 `System.Threading.Timer` 的高精度调度器。它完全是自驱动的，跑在线程池中，**不需要**依赖主循环的 `Pump` 来推进时间，这意味着即便主线程卡死，您的异步超时逻辑依然精准。
+   - **帧同步与线程回归**：对于 `NextFrame()` 或回到主线程的操作，`LBTask` 依赖标准的 `SynchronizationContext`。如果您在 Unity 中，它会自动使用 Unity 的上下文；如果您在纯 C# 服务端，可以手动调用 `LayerBaseSynchronizationContext.InstallAsCurrent()` 并在您的主循环中驱动它。
+3. **极简 API**：保留了原生 Task 的手感，支持 `await LBTask.Delay()`、`await LBTask.NextFrame()` 等特性。
 
 ---
 
-## 📦 如何使用？
+## 📦 如何单独使用？
 
-本包默认已随主库 `LayerBase` 自动集成，无需单独配置。如果您需要单独使用或查看依赖，请参考以下方式。
+虽然本包默认已随主库 `LayerBase` 自动集成，但您完全可以**将它剥离出来单独使用**，作为原生 `Task` 的零 GC 替代品。
 
-### 基本异步处理
+### 1. 基础的异步延迟 (自驱动)
 
-通过在 `Manager` 或 `Service` 的事件处理器上挂载 `[SubscribeAsync]` 特性，即可轻松使用 `LBTask` 编写全异步逻辑，且全程 0 GC：
+`LBTask.Delay` 不需要任何外部驱动，直接 `await` 即可享受 0 GC 的延迟：
 
 ```csharp
-using LayerBase.Async;
-using LayerBase.Core.Event;
-using LayerBase.DI;
-
-public partial class BattleManager : ILayerContext
+public async LBTask DoSomethingDelay()
 {
-    [SubscribeAsync]
-    private async LBTask OnPlayerDead(PlayerDeathEvent e)
-    {
-        // 游戏级的延迟等待：此处的 Delay 完全依托于 LayerHub.Pump 的驱动，
-        // 且不会产生标准的 Task GC 垃圾
-        await LBTask.Delay(TimeSpan.FromSeconds(3f));
-        
-        Console.WriteLine("3 秒后，玩家重生逻辑触发...");
-        
-        // 甚至可以等待下一帧
-        await LBTask.NextFrame();
-        
-        Console.WriteLine("这是下一帧...");
-    }
+    // 底层由内置的 DelayScheduler 处理，不产生 Task 堆分配
+    await LBTask.Delay(TimeSpan.FromSeconds(3f));
+    Console.WriteLine("3 秒后触发...");
+}
+```
+
+### 2. 帧同步与上下文配置 (如需独立驱动)
+
+如果您想使用 `LBTask.NextFrame()`，或者希望确保 `await` 之后的代码回到您的主线程，您需要一个同步上下文。
+
+*   **在 Unity / Godot 中**：引擎已经为您配置好了原生的上下文，直接使用即可。
+*   **在纯 C# 环境中**：您可以使用内置的 `LayerBaseSynchronizationContext`：
+
+```csharp
+// 1. 在游戏/服务器启动时，安装上下文
+var ctx = LayerBaseSynchronizationContext.InstallAsCurrent();
+
+// 2. 编写分帧逻辑
+public async LBTask FrameLogic()
+{
+    Console.WriteLine("第一帧");
+    await LBTask.NextFrame();
+    Console.WriteLine("第二帧 (已回到主线程)");
+}
+
+// 3. 在您的主循环 (如 while (true) 或者是 Update) 中驱动它
+public void GameLoop()
+{
+    // 调用 Update 消费 NextFrame 与 Post 进来的回调
+    ctx.Update(); 
 }
 ```
 
