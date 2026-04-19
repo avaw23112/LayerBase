@@ -55,14 +55,23 @@ internal readonly struct OrderedHandlerEntry<T> where T : struct
 {
     public readonly EventHandleDelegate<T>? SyncHandler;
     public readonly EventHandleDelegateAsync<T>? AsyncHandler;
+    
+    // --- 透明优化：静态桥接器 ---
+    // 虽然 IntPtr 在此不安全，但在生成的代码中会被正确转换为 delegate*
+    public readonly IntPtr StaticBridgePtr;
+    public readonly object? Target;
+
     public readonly string FullName;
     public readonly HandlerCircuit Circuit;
 
-    private OrderedHandlerEntry(EventHandleDelegate<T>? s, EventHandleDelegateAsync<T>? a, string n, HandlerCircuit c)
-    { SyncHandler = s; AsyncHandler = a; FullName = n; Circuit = c; }
+    private OrderedHandlerEntry(EventHandleDelegate<T>? s, EventHandleDelegateAsync<T>? a, IntPtr ptr, object? target, string n, HandlerCircuit c)
+    { SyncHandler = s; AsyncHandler = a; StaticBridgePtr = ptr; Target = target; FullName = n; Circuit = c; }
 
-    public static OrderedHandlerEntry<T> Create(EventHandleDelegate<T> h) => new(h, null, GetName(h), new HandlerCircuit());
-    public static OrderedHandlerEntry<T> Create(EventHandleDelegateAsync<T> h) => new(null, h, GetName(h), new HandlerCircuit());
+    public static OrderedHandlerEntry<T> Create(EventHandleDelegate<T> h) => new(h, null, IntPtr.Zero, null, GetName(h), new HandlerCircuit());
+    public static OrderedHandlerEntry<T> Create(EventHandleDelegateAsync<T> h) => new(null, h, IntPtr.Zero, null, GetName(h), new HandlerCircuit());
+    
+    // 专门给 Generator 使用的注入入口
+    public static OrderedHandlerEntry<T> CreateOptimized(IntPtr ptr, object target, string name) => new(null, null, ptr, target, name, new HandlerCircuit());
 
     private static string GetName(Delegate d) {
         var m = d.Method;

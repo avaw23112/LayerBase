@@ -52,6 +52,20 @@ public abstract class Layer : Node, ILayerContext, IDisposable
             if (instance is IUpdate up) m_serviceUpdates.Add(up);
         }
     }
+    
+    /// <summary>
+    /// 不要手动调用，该方法是给源生成器使用的！
+    /// </summary>
+    /// <param name="ptr"></param>
+    /// <param name="target"></param>
+    /// <param name="name"></param>
+    /// <typeparam name="T"></typeparam>
+    public void SubscribeOptimized<T>(IntPtr ptr, object target, string name) where T : struct
+    {
+        ThrowIfDisposed();
+        if (RouteIndex != -1) LayerHub.LayerHub.EventCenter.AddOptimized<T>(RouteIndex, ptr, target, name);
+        else m_pendingOps.Add(l => l.SubscribeOptimized<T>(ptr, target, name));
+    }
 
     internal void SetRouteIndex(int routeIndex) { RouteIndex = routeIndex; ServiceLayerBinder.Attach(this, this); }
 

@@ -56,7 +56,7 @@ public static class LayerHub
     /// <summary>
     /// 核心事件中心。设为可写是为了支持测试环境的物理断代重置。    
     /// </summary>
-    internal static GlobalEventCenter EventCenter { get; private set; } = new();
+    public static global::LayerBase.Core.Event.GlobalEventCenter EventCenter { get; internal set; } = new();
 
     public static bool IsDebugMode { get; private set; }
     public static event Action<LayerEventInfo>? OnLayerEventInfo;       

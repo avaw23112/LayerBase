@@ -5,6 +5,7 @@ using BenchmarkDotNet.Running;
 using LayerBase.Core.Event;
 using LayerBase.LayerHub;
 using LayerBase.Layers;
+using LayerBase.Core.EventHandler;
 
 namespace Benchmarks
 {
@@ -14,14 +15,52 @@ namespace Benchmarks
         {
             if (args.Length > 0 && args[0].Equals("--full", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("🚀 Running Full Benchmarks...");
                 BenchmarkRunner.Run<FullBenchmarks>();
+            }
+            else if (args.Length > 0 && args[0].Equals("--compare", StringComparison.OrdinalIgnoreCase))
+            {
+                BenchmarkRunner.Run<EvolutionBenchmarks>();
             }
             else
             {
-                Console.WriteLine("⚡ Running Quick Benchmarks...");
                 BenchmarkRunner.Run<QuickBenchmarks>();
             }
+        }
+    }
+
+    [MemoryDiagnoser]
+    [HideColumns("Error", "StdDev", "Median", "RatioSD")]
+    public class EvolutionBenchmarks
+    {
+        private const int Iterations = 1_000_000;
+
+        [Benchmark(Baseline = true, Description = "标准模式 (100万次)")]
+        public void Standard_Dispatch()
+        {
+            LayerHub.Reset();
+            var layer = new BenchLayer();
+            // 使用 Lambda 订阅 (走传统委托路径)
+            layer.Subscribe((in BenchEvent _) => { return EventHandledState.Continue; });
+            LayerHub.CreateLayers().Push(layer).Build();
+            
+            for (var i = 0; i < Iterations; i++) LayerHub.Send(new BenchEvent());
+        }
+
+        [Benchmark(Description = "透明桥接模式 (100万次)")]
+        public unsafe void Optimized_Dispatch()
+        {
+            LayerHub.Reset();
+            var layer = new OptimizedBenchLayer();
+            LayerHub.CreateLayers().Push(layer).Build();
+            
+            // 🚀 手动模拟 Generator 注入 (确保在 Benchmark 项目中生效)
+            delegate*<object, in BenchEvent, EventHandledState> ptr = &OptimizedBenchLayer.StaticBridge;
+            layer.SubscribeOptimized<BenchEvent>((IntPtr)ptr, layer, "OptimizedBenchLayer.OnRecv");
+
+            // 强制 Rebuild 位图
+            LayerHub.Send(new BenchEvent());
+
+            for (var i = 0; i < Iterations; i++) LayerHub.Send(new BenchEvent());
         }
     }
 
@@ -30,7 +69,7 @@ namespace Benchmarks
     {
         private const int ChallengeCount = 10_000;
 
-        [Benchmark(Description = "⚡ 典型中重度负载 (5层: 1层100订阅, 4层各20订阅) - 1万次")]
+        [Benchmark(Description = "⚡ 典型中重度负载 - 1万次")]
         public void Typical_5Layers_HeavyLoad_Quick()
         {
             LayerHub.Reset();
@@ -41,7 +80,7 @@ namespace Benchmarks
                 int subCount = (i == 2) ? 100 : 20;
                 for (int j = 0; j < subCount; j++)
                 {
-                    layer.Subscribe((in BenchEvent _) => { layer.HandledCount++; return EventHandledState.Continue; });
+                    layer.Subscribe((in BenchEvent _) => { return EventHandledState.Continue; });
                 }
                 builder.Push(layer);
             }
@@ -55,105 +94,27 @@ namespace Benchmarks
     public class FullBenchmarks
     {
         private const int EventCount = 1_000_000;
-        private const int ChallengeCount = 10_000;
 
-        [Benchmark(Description = "单层低压 (1层, 1个订阅) - 100万次")]
+        [Benchmark(Description = "单层低压 - 100万次")]
         public void SingleLayer_LowDensity()
         {
             LayerHub.Reset();
             var layer = new BenchLayer();
-            layer.Subscribe((in BenchEvent _) => { layer.HandledCount++; return EventHandledState.Continue; });
+            layer.Subscribe((in BenchEvent _) => { return EventHandledState.Continue; });
             LayerHub.CreateLayers().Push(layer).Build();
             for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
-        }
-
-        [Benchmark(Description = "单层高压 (1层, 10个订阅) - 100万次")]
-        public void SingleLayer_HighDensity()
-        {
-            LayerHub.Reset();
-            var layer = new BenchLayer();
-            for(int i=0; i<10; i++) layer.Subscribe((in BenchEvent _) => { layer.HandledCount++; return EventHandledState.Continue; });
-            LayerHub.CreateLayers().Push(layer).Build();
-            for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
-        }
-
-        [Benchmark(Description = "多层低压 (10层, 仅尾层订阅) - 100万次")]
-        public void MultiLayer_LowDensity_TailLoad()
-        {
-            LayerHub.Reset();
-            var builder = LayerHub.CreateLayers();
-            for (int i = 0; i < 10; i++) {
-                var l = new BenchLayer();
-                if (i == 9) l.Subscribe((in BenchEvent _) => { l.HandledCount++; return EventHandledState.Continue; });
-                builder.Push(l);
-            }
-            builder.Build();
-            for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
-        }
-
-        [Benchmark(Description = "多层高压/全负载 (10层, 层层订阅) - 100万次")]
-        public void MultiLayer_HighDensity_FullLoad()
-        {
-            LayerHub.Reset();
-            var builder = LayerHub.CreateLayers();
-            for (var i = 0; i < 10; i++)
-            {
-                var layer = new BenchLayer();
-                layer.Subscribe((in BenchEvent _) => { layer.HandledCount++; return EventHandledState.Continue; });
-                builder.Push(layer);
-            }
-            builder.Build();
-            for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
-        }
-
-        [Benchmark(Description = "多层随机负载 (10层, 随机5层订阅) - 100万次")]
-        public void MultiLayer_RandomLoad()
-        {
-            LayerHub.Reset();
-            var builder = LayerHub.CreateLayers();
-            var activeLayers = new HashSet<int> { 1, 4, 5, 7, 8 };
-            for (var i = 0; i < 10; i++)
-            {
-                var layer = new BenchLayer();
-                if (activeLayers.Contains(i)) {
-                    layer.Subscribe((in BenchEvent _) => { layer.HandledCount++; return EventHandledState.Continue; });
-                }
-                builder.Push(layer);
-            }
-            builder.Build();
-            for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
-        }
-
-        [Benchmark(Description = "极限空负载 (64层, 0订阅) - 100万次")]
-        public void MaxLayers_EmptyLoad()
-        {
-            LayerHub.Reset();
-            var builder = LayerHub.CreateLayers();
-            for (var i = 0; i < 64; i++) builder.Push(new BenchLayer());
-            builder.Build();
-            for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
-        }
-
-        [Benchmark(Description = "典型中重度负载 (5层: 1层100订阅, 4层各20订阅) - 1万次")]
-        public void Typical_5Layers_HeavyLoad()
-        {
-            LayerHub.Reset();
-            var builder = LayerHub.CreateLayers();
-            for (int i = 0; i < 5; i++)
-            {
-                var layer = new BenchLayer();
-                int subCount = (i == 2) ? 100 : 20;
-                for (int j = 0; j < subCount; j++)
-                {
-                    layer.Subscribe((in BenchEvent _) => { layer.HandledCount++; return EventHandledState.Continue; });
-                }
-                builder.Push(layer);
-            }
-            builder.Build();
-            for (var i = 0; i < ChallengeCount; i++) LayerHub.Send(new BenchEvent());
         }
     }
 
-    class BenchLayer : Layer { public int HandledCount; }
+    public class BenchLayer : Layer { }
+
+    public partial class OptimizedBenchLayer : Layer 
+    {
+        [Subscribe]
+        internal EventHandledState OnRecv(in BenchEvent e) => EventHandledState.Continue;
+
+        internal static EventHandledState StaticBridge(object ins, in BenchEvent e) => ((OptimizedBenchLayer)ins).OnRecv(in e);
+    }
+
     public struct BenchEvent {}
 }
