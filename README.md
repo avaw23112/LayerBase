@@ -227,7 +227,15 @@ public class GameRoot : MonoBehaviour
         LayerHub.CreateLayers()
                 .Push(new InteractionLayer()) // 索引 0: 上层交互
                 .Push(new CoreLogicLayer())   // 索引 1: 下层逻辑
+                .SetDebug()                   // 开启Debug模式可以从GetTopologySummary()获得整个系统的构建图。对性能影响不大。
                 .Build();                     // 自动扫描 [OwnerLayer] 并装配
+
+        //注册全局消息通道，用于捕获框架的异常
+        LayerHub.OnLayerEventInfo +=
+            info =>
+            {
+                GD.PrintErr($"[{info.LayerIndex}][{info.EventName}][{info.Type}]: {info.Source}{info.Message}");
+            };
     }
 
     void Update()
