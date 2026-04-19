@@ -12,47 +12,35 @@ public class PerformanceBenchmarks
     private const int EventCount = 1_000_000;
 
     [Test]
-    public void Benchmark_Density_Comparison()
+    public void Benchmark_Memory_Locality_Impact()
     {
-        // 场景 A: 10层全订阅 (高密度负载)
-        var layersFull = CreateBenchChain(10);
+        const int totalHandlers = 10;
+        
+        // 场景 A: 集中式 (1层 x 10个Handler) - 内存极致连续
+        LayerHub.Reset();
+        var lA = new BenchLayer();
+        for(int i=0; i<totalHandlers; i++) lA.Subscribe((in BenchEvent _) => { lA.HandledCount++; return EventHandledState.Continue; });
+        LayerHub.CreateLayers().Push(lA).Build();
+        
         var sw = Stopwatch.StartNew();
         for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
         sw.Stop();
-        Console.WriteLine($"\n[高密度-10层全订阅] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0} (由于每层都有订阅，实际执行了 {EventCount * 10:N0} 次 Handler)");
+        Console.WriteLine($"\n[内存密集型-集中分发] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
 
-        // 场景 B: 10层单订阅 (模拟真实业务或之前的 25M 场景)
+        // 场景 B: 碎片式 (10层 x 1个Handler) - 跨对象跳转
         LayerHub.Reset();
         var builder = LayerHub.CreateLayers();
-        var layersSingle = new List<BenchLayer>();
-        for (var i = 0; i < 10; i++)
-        {
+        for (int i = 0; i < totalHandlers; i++) {
             var l = new BenchLayer();
-            if (i == 9) l.Subscribe((in BenchEvent _) => { l.HandledCount++; return EventHandledState.Continue; });
+            l.Subscribe((in BenchEvent _) => { l.HandledCount++; return EventHandledState.Continue; });
             builder.Push(l);
-            layersSingle.Add(l);
         }
         builder.Build();
-        
+
         sw.Restart();
         for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
         sw.Stop();
-        Console.WriteLine($"[低密度-10层单订阅] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
-    }
-
-    private List<BenchLayer> CreateBenchChain(int layerCount)
-    {
-        var builder = LayerHub.CreateLayers();
-        var list = new List<BenchLayer>();
-        for (var i = 0; i < layerCount; i++)
-        {
-            var layer = new BenchLayer();
-            layer.Subscribe((in BenchEvent _) => { layer.HandledCount++; return EventHandledState.Continue; });
-            builder.Push(layer);
-            list.Add(layer);
-        }
-        builder.Build();
-        return list;
+        Console.WriteLine($"[内存碎片型-跨桶分发] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
     }
 
     private class BenchLayer : Layer { public int HandledCount; }
