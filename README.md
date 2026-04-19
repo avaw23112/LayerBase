@@ -281,29 +281,47 @@ private EventHandledState OnHeavyComputeTask(in ComputeEvent e)
 ### 3. 拓扑结构可视化 (Topology Audit)
 开启 Debug 模式后，调用 `GetTopologySummary()` 即可在控制台输出一张清晰的文本结构图，展示整个系统内各个 Layer 挂载了哪些 Manager，以及它们具体订阅/派发了什么事件。这在大型项目中是排查系统耦合度不可或缺的工具。
 
-### 4. 事件元数据与全局异常观察 (Event MetaData)
-在极其复杂的业务中，某些核心事件（如网络同步包、核心状态流转）如果发生异常，我们希望能在全局第一时间捕获并进行打点上报。LayerBase 提供了基于源生成器的无侵入式元数据注册方案。
-
-只需定义一个继承自 `EventMetaData<T>` 的类，框架会在编译期自动将其与您的事件绑定（要求事件 `struct` 必须声明为 `partial`），无需任何运行时反射扫描：
+### 4. 切片式独立处理器 (Standalone EventHandler)
+有时候，您可能有一段非常独立的逻辑，它只处理某一个特定事件，将其塞入一个庞大的 Manager 显得过于臃肿。LayerBase 支持“切片式”的独立处理器。
+只需实现 `IEventHandler<T>` 或 `IEventHandlerAsync<T>` 接口，并挂载 `[OwnerLayer]` 特性，源生成器就会在编译期自动将其注册到对应的层级中：
 
 ```csharp
-// 注意：事件必须标记为 partial
+// 这是一个独立的、切片式的事件处理器
+[OwnerLayer(typeof(GameLogicLayer))] 
+public class PlayerDamageHandler : IEventHandler<DamageEvent>
+{
+    public EventHandledState Deal(in DamageEvent e)
+    {
+        // 专注处理伤害逻辑...
+        return EventHandledState.Continue;
+    }
+}
+```
+
+### 5. 事件元数据与全局异常观察 (Event MetaData)
+对于某些核心事件（如网络同步包或核心状态流转），如果在分发过程中有任何 Handler 抛出了异常，我们通常希望能在全局第一时间捕获，以进行统一的日志打点或崩溃上报。
+
+LayerBase 提供了一套**无侵入式、零反射**的元数据（MetaData）注册方案：
+您只需定义一个继承自 `EventMetaData<T>` 的类。源生成器会在编译期自动将其与您的事件绑定（**注：要求事件 `struct` 必须声明为 `partial`**）。
+
+```csharp
+// 1. 事件必须声明为 partial struct
 public partial struct CoreSyncEvent 
 { 
     public byte[] Data; 
 }
 
-// 定义元数据观察者
+// 2. 定义该事件的元数据配置
 public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
 {
-    // 定义事件所属分类（可选）
+    // [可选]：定义事件所属的分类树，方便进行拓扑分类或模块检索
     public override EventCategoryToken Category => EventCatalogue.Path("Network", "Sync").GetToken();
 
     // 🏆 全局异常拦截点
+    // 任何 Handler 在处理 CoreSyncEvent 抛出异常时，都会自动路由到这里！
     public override void OnEventExpectation(CoreSyncEvent e, Exception exception)
     {
-        // 任何 Handler 在处理 CoreSyncEvent 时抛出的异常，都会被路由到这里！
-        // 您可以在这里进行统一的日志打点或崩溃上报
+        // 在这里进行统一的容错处理、日志打点或崩溃上报
         Console.WriteLine($"[严重错误] 同步事件处理失败: {exception.Message}");
     }
 }
