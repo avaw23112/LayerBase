@@ -334,7 +334,13 @@ public sealed class GlobalEventCenter
 
         private ParallelHandlerEntry<T>[] _flatParallel = Array.Empty<ParallelHandlerEntry<T>>();
         private LayerRange[] _ranges = Array.Empty<LayerRange>();
+        
+        // 🚀 核心优化：位图分层
         private ulong _subscriberMask;
+        private ulong _syncMask;
+        private ulong _asyncMask;
+        private ulong _parallelMask;
+
         private int _isDirty;
         private int _syncCountTotal, _asyncCountTotal, _parallelCountTotal;
 
@@ -362,15 +368,32 @@ public sealed class GlobalEventCenter
         private void Rebuild()
         {
             int totalSync = 0, totalAsync = 0, totalParallel = 0;
-            ulong newMask = 0;
+            ulong newMask = 0, newSyncMask = 0, newAsyncMask = 0, newParallelMask = 0;
             for (int i = 0; i < _buckets.Length; i++) {
                 var b = _buckets[i];
                 if (b == null || !b.HasHandlers) continue;
                 int bSync = 0, bAsync = 0;
-                foreach (var h in b.MasterOrdered) { if (!h.Circuit.IsDisabled) { if (h.SyncHandler != null || h.StaticBridgePtr != IntPtr.Zero) bSync++; else if (h.AsyncHandler != null) bAsync++; } }
-                foreach (var h in b.MasterUnordered) { if (!h.Circuit.IsDisabled) { if (h.SyncWrapper != null) bSync++; else if (h.AsyncWrapper != null) bAsync++; } }
-                totalSync += bSync; totalAsync += bAsync; totalParallel += b.MasterParallel.Count;
-                if (bSync > 0 || bAsync > 0 || b.MasterParallel.Count > 0) newMask |= (1UL << i);
+                foreach (var h in b.MasterOrdered) { 
+                    if (!h.Circuit.IsDisabled) { 
+                        if (h.SyncHandler != null || h.StaticBridgePtr != IntPtr.Zero) bSync++; 
+                        else if (h.AsyncHandler != null) bAsync++; 
+                    } 
+                }
+                foreach (var h in b.MasterUnordered) { 
+                    if (!h.Circuit.IsDisabled) { 
+                        if (h.SyncWrapper != null) bSync++; 
+                        else if (h.AsyncWrapper != null) bAsync++; 
+                    } 
+                }
+                
+                int bParallel = b.MasterParallel.Count;
+                totalSync += bSync; totalAsync += bAsync; totalParallel += bParallel;
+                
+                var bit = 1UL << i;
+                if (bSync > 0) newSyncMask |= bit;
+                if (bAsync > 0) newAsyncMask |= bit;
+                if (bParallel > 0) newParallelMask |= bit;
+                if (bSync > 0 || bAsync > 0 || bParallel > 0) newMask |= bit;
             }
 
             if (_syncHandlers.Length < totalSync) {
@@ -422,6 +445,9 @@ public sealed class GlobalEventCenter
 
             _syncCountTotal = sIdx; _asyncCountTotal = aIdx; _parallelCountTotal = pIdx;
             _subscriberMask = newMask;
+            _syncMask = newSyncMask;
+            _asyncMask = newAsyncMask;
+            _parallelMask = newParallelMask;
             Volatile.Write(ref _isDirty, 0);
         }
 
@@ -446,12 +472,16 @@ public sealed class GlobalEventCenter
             var mask = Volatile.Read(ref _subscriberMask);
             if (mask == 0) return EventHandledState.Continue;
 
+            // 🚀 核心优化点 1：Global 快速路径分层
             if (propagation == Propagation.Global)
             {
-                for (int j = 0; j < _parallelCountTotal; j++) _flatParallel[j].Enqueue(-1, in value);
-                var res = DispatchSync(0, _syncCountTotal, in value);
-                if (res == EventHandledState.Handled) return res;
-                DispatchAsync(0, _asyncCountTotal, in value);
+                if ((_parallelMask) != 0) { for (int j = 0; j < _parallelCountTotal; j++) _flatParallel[j].Enqueue(-1, in value); }
+                EventHandledState res = EventHandledState.Continue;
+                if ((_syncMask) != 0) {
+                    res = DispatchSync(0, _syncCountTotal, in value);
+                    if (res == EventHandledState.Handled) return res;
+                }
+                if ((_asyncMask) != 0) { DispatchAsync(0, _asyncCountTotal, in value); }
                 return res;
             }
 
@@ -466,18 +496,25 @@ public sealed class GlobalEventCenter
             ref var rangesRef = ref GlobalEventCenter.GetArrayDataRef(_ranges);
             ref var flatParallelRef = ref GlobalEventCenter.GetArrayDataRef(_flatParallel);
 
+            // 🚀 核心优化点 2：Bubble/Drop 路径分层
             if (propagation == Propagation.Bubble)
             {
                 while (targetMask != 0)
                 {
                     int l = GlobalEventCenter.InternalFindLastBit(targetMask);
                     ref var r = ref Unsafe.Add(ref rangesRef, l);
-                    for(int j = 0; j < r.ParallelCount; j++) 
-                        Unsafe.Add(ref flatParallelRef, r.ParallelStart + j).Enqueue(l, in value);
                     
-                    var s = DispatchSyncBackward(r.SyncStart, r.SyncStart + r.SyncCount, in value);
-                    if (s == EventHandledState.Handled) return s;
-                    DispatchAsyncBackward(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
+                    if (r.ParallelCount > 0) {
+                        for(int j = 0; j < r.ParallelCount; j++) Unsafe.Add(ref flatParallelRef, r.ParallelStart + j).Enqueue(l, in value);
+                    }
+                    if (r.SyncCount > 0) {
+                        var s = DispatchSyncBackward(r.SyncStart, r.SyncStart + r.SyncCount, in value);
+                        if (s == EventHandledState.Handled) return s;
+                    }
+                    if (r.AsyncCount > 0) {
+                        DispatchAsyncBackward(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
+                    }
+                    
                     targetMask &= ~(1UL << l);
                 }
                 return EventHandledState.Continue;
@@ -488,12 +525,18 @@ public sealed class GlobalEventCenter
                 {
                     int l = GlobalEventCenter.InternalFindFirstBit(targetMask);
                     ref var r = ref Unsafe.Add(ref rangesRef, l);
-                    for(int j = 0; j < r.ParallelCount; j++) 
-                        Unsafe.Add(ref flatParallelRef, r.ParallelStart + j).Enqueue(l, in value);
+
+                    if (r.ParallelCount > 0) {
+                        for(int j = 0; j < r.ParallelCount; j++) Unsafe.Add(ref flatParallelRef, r.ParallelStart + j).Enqueue(l, in value);
+                    }
+                    if (r.SyncCount > 0) {
+                        var s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value);
+                        if (s == EventHandledState.Handled) return s;
+                    }
+                    if (r.AsyncCount > 0) {
+                        DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
+                    }
                     
-                    var s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value);
-                    if (s == EventHandledState.Handled) return s;
-                    DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
                     targetMask &= (targetMask - 1);
                 }
                 return EventHandledState.Continue;
@@ -506,10 +549,11 @@ public sealed class GlobalEventCenter
             EnsureClean();
             if (layerIndex >= _ranges.Length) return EventHandledState.Continue;
             var r = _ranges[layerIndex];
-            for (int j = 0; j < r.ParallelCount; j++) _flatParallel[r.ParallelStart + j].Enqueue(layerIndex, in value);
-            var s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value);
+            if (r.ParallelCount > 0) { for (int j = 0; j < r.ParallelCount; j++) _flatParallel[r.ParallelStart + j].Enqueue(layerIndex, in value); }
+            EventHandledState s = EventHandledState.Continue;
+            if (r.SyncCount > 0) { s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value); }
             if (s == EventHandledState.Handled) return s;
-            DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
+            if (r.AsyncCount > 0) { DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value); }
             return s;
         }
 
