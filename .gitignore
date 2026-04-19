@@ -1091,3 +1091,6 @@ obj
 .omx/
 nupkg/
 BenchmarkDotNet.Artifacts/
+packages/
+LayerBase.Template/
+testrun/
