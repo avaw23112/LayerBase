@@ -96,3 +96,105 @@ public async LBTask RunTest()
 `LayerBase.Task` 是 LayerBase 高性能架构生态的一环，配合底层总线（1.5亿 TPS 分发）和源生成器（零反射依赖注入）使用，可解锁完整的工业级能力。
 
 项目主页：[LayerBase GitHub 仓库](https://github.com/avaw23112/LayerBase)
+
+---
+---
+
+# 🚀 LayerBase.Task: Industrial-Grade Game Async Task System
+
+**LayerBase.Task** is one of the core infrastructure components of the [LayerBase Architecture Bus](https://github.com/avaw23112/LayerBase). It provides `LBTask`, a Zero-Allocation asynchronous task model deeply optimized for game engine (e.g., Unity, Godot) heartbeat loops (Pump).
+
+---
+
+## 🎯 Why Develop LBTask?
+
+In modern game development, asynchronous operations (such as waiting for animations, network request callbacks, and frame-split loading) are everywhere. Using standard C# `Task` or `Task<T>` faces an unavoidable pain point:
+**Every `await Task` allocates memory on the managed heap.** In a game main loop running at 60 or 120 FPS, these high-frequency heap allocations lead to severe Garbage Collection (GC) spikes, causing stutters and frame drops.
+
+`LBTask` was born to solve this:
+1. **Zero GC Allocation on Synchronous Paths**: Through built-in pooling and state machine mechanisms, if an async task completes synchronously, it will **absolutely not** produce any GC Allocation on the heap.
+2. **Dual-Core Drive Mechanism (Self-Driven Delay + Frame Sync)**:
+   - **Self-Driven `Delay`**: `LBTask.Delay` features an underlying high-precision scheduler based on a Min-Heap and `System.Threading.Timer`. It is entirely self-driven, running on the ThreadPool, and **does not** rely on the main loop's `Pump` to advance time. This means even if the main thread hangs, your async timeout logic remains precise.
+   - **Frame Sync & Thread Regression**: For `NextFrame()` or operations returning to the main thread, `LBTask` relies on the standard `SynchronizationContext`. In Unity, it automatically uses Unity's context; in pure C# servers, you can manually call `LayerBaseSynchronizationContext.InstallAsCurrent()` and drive it within your main loop.
+3. **Minimal API**: Maintains the "feel" of native Tasks, supporting features like `await LBTask.Delay()`, `await LBTask.NextFrame()`, etc.
+
+---
+
+## 📦 How to Use Standalone?
+
+While this package is integrated by default with the main `LayerBase` library, you can **strip it out and use it independently** as a Zero-GC replacement for native `Task`.
+
+### 1. Basic Async Delay (Self-Driven)
+
+`LBTask.Delay` requires no external driver; simply `await` it to enjoy 0-GC delays:
+
+```csharp
+public async LBTask DoSomethingDelay()
+{
+    // Handled by the built-in DelayScheduler, no Task heap allocation
+    await LBTask.Delay(TimeSpan.FromSeconds(3f));
+    Console.WriteLine("Triggered after 3 seconds...");
+}
+```
+
+### 2. Frame Sync & Context Configuration (For Independent Driving)
+
+If you want to use `LBTask.NextFrame()`, or ensure code after `await` returns to your main thread, you need a synchronization context.
+
+*   **In Unity / Godot**: The engine has already configured the native context for you; just use it directly.
+*   **In Pure C# Environments**: You can use the built-in `LayerBaseSynchronizationContext`:
+
+```csharp
+// 1. Install the context at game/server startup
+var ctx = LayerBaseSynchronizationContext.InstallAsCurrent();
+
+// 2. Write frame-split logic
+public async LBTask FrameLogic()
+{
+    Console.WriteLine("Frame 1");
+    await LBTask.NextFrame();
+    Console.WriteLine("Frame 2 (Returned to main thread)");
+}
+
+// 3. Drive it in your main loop (e.g., while(true) or Update)
+public void GameLoop()
+{
+    // Call Update to consume NextFrame and Post-ed callbacks
+    ctx.Update(); 
+}
+```
+
+### Async Tasks with Return Values (`LBTask<T>`)
+
+In addition to void tasks, `LBTask` also supports generic return values. It uses `LBTaskCompletionSource<T>` internally to implement zero-allocation cache recycling:
+
+```csharp
+public async LBTask<int> CalculateHeavyDataAsync()
+{
+    await LBTask.Delay(TimeSpan.FromSeconds(1));
+    return 42;
+}
+
+public async LBTask RunTest()
+{
+    int result = await CalculateHeavyDataAsync();
+    Console.WriteLine(result);
+}
+```
+
+---
+
+## ⚙️ Core API Overview
+
+*   **`LBTask.CompletedTask`**: Returns a completed LBTask (Zero-Allocation).
+*   **`LBTask.Delay(TimeSpan)`**: Provides delay operations based on engine time.
+*   **`LBTask.Delay(int milliseconds)`**: Millisecond-based delay.
+*   **`LBTask.NextFrame()`**: Waits until the next engine-driven frame.
+*   **`LBTaskCompletionSource<T>`**: An async state source for manual lifecycle control, recommended for wrapping external cross-thread callbacks.
+
+---
+
+## 🔗 About LayerBase
+`LayerBase.Task` is part of the LayerBase high-performance architecture ecosystem. Used alongside the core bus (150M TPS distribution) and Source Generators (Zero-Reflection DI), it unlocks full industrial-grade capabilities.
+
+Project Homepage: [LayerBase GitHub Repository](https://github.com/avaw23112/LayerBase)

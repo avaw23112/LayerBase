@@ -15,7 +15,7 @@
         <PackageLicenseUrl>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</PackageLicenseUrl>
         <RepositoryUrl>https://github.com/avaw23112/LayerBase.git</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <Version>1.3.2</Version>
+        <Version>1.3.3</Version>
     </PropertyGroup>
 
     <ItemGroup>

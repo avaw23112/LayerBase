@@ -111,7 +111,7 @@ EventBucket<T>
 1. **NuGet 快速安装 (推荐)**：
    您可以通过 NuGet 包管理器直接安装 LayerBase：
    ```bash
-   dotnet add package LayerBase --version 1.3.2
+   dotnet add package LayerBase --version 1.3.3
    ```
 2. **源码引入**：将仓库中的 `LayerBase` 和 `LayerBase.Task` 项目目录直接添加到您的解决方案中并建立引用。
 3. **配置源生成器 (Source Generator)**：
@@ -365,7 +365,7 @@ public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
 <a id="english"></a>
 # 🚀 LayerBase: Data-Oriented High-Performance C# Game Architecture Bus
 
-**LayerBase** is a high-performance event architecture and communication bus framework tailored for Unity, Godot, and pure C# servers.
+**LayerBase** is a high-performance event architecture and communication bus framework designed specifically for Unity, Godot, and pure C# servers.
 
 It shatters the performance bottlenecks of traditional Object-Oriented Programming (OOP) event buses by adopting **Data-Oriented Design (DOD)** and **SOA (Structure of Arrays)** memory layout at its core. While keeping your business code minimal and decoupled, it provides standardized event flow control for medium-to-large projects, achieving an impressive physical throughput of **over 150 million TPS (Transactions Per Second)** on a single core.
 
@@ -389,6 +389,36 @@ LayerBase's design philosophy is: **Tame chaotic registrations with a strongly c
 
 1.  **On Macro Architecture**: Abandon the free-for-all subscription pattern and introduce a strongly constrained `Layer -> Service -> Manager` three-tier progressive architecture. Through Dependency Injection (DI) and explicit topology layers, the flow and processing order of events return to absolute determinism.
 2.  **On Micro Execution**: Draw inspiration from ECS frameworks. Adopt pure SOA array layouts for event routing at the lowest level. This ensures that the architecture not only standardizes the code but also achieves cache hit rates on par with top-tier C++/C# ECS frameworks.
+
+---
+
+## ⚡ Standard Benchmarks (BenchmarkDotNet)
+
+### 1. Original Benchmark Report
+
+Testing Environment: `BenchmarkDotNet v0.15.8`, `Windows 11`, `.NET 8.0 (X64 RyuJIT)`, `Intel Core i7-12650H`.
+
+| Type | Method | Mean | Error | StdDev | Allocated |
+|--- |--- |---:|---:|---:|---:|
+| **Classic_1ms_Bench** | **'Classic 1ms Challenge (3 layers fully subscribed) - 10k ops'** | **61.32 us** | **1.223 us** | **2.415 us** | **-** |
+| **Extreme_Empty_64_Bench** | **'Extreme Empty Load (64 layers/0 subs) - 1M ops'** | **1,516.91 us** | **30.175 us** | **64.955 us** | **-** |
+| **MultiLayer_Full_Bench** | **'Multi-Layer High Pressure (10 layers/fully subbed) - 1M ops'** | **9,170.90 us** | **180.520 us** | **306.536 us** | **-** |
+| **MultiLayer_Low_Bench** | **'Multi-Layer Low Pressure (10 layers/tail sub only) - 1M ops'** | **4,598.08 us** | **91.886 us** | **197.794 us** | **-** |
+| **MultiLayer_Random_Bench** | **'Multi-Layer Random Load (10 layers/5 random subs) - 1M ops'** | **6,222.94 us** | **123.069 us** | **272.714 us** | **-** |
+| **SingleLayer_High_Bench** | **'Single Layer High Pressure (1 layer/10 subs) - 1M ops'** | **9,053.39 us** | **174.913 us** | **460.791 us** | **-** |
+| **SingleLayer_Low_Bench** | **'Single Layer Low Pressure (1 layer/1 sub) - 1M ops'** | **4,453.57 us** | **87.153 us** | **169.985 us** | **-** |
+| **Typical_Heavy_180_Bench** | **'Medium-Heavy Load (180 subs) - 10k ops'** | **894.46 us** | **17.772 us** | **44.260 us** | **-** |
+
+### 2. Performance Analysis Map
+
+We have converted the raw timing into throughput (TPS) to more intuitively demonstrate the performance dividends of the framework:
+
+| Core Dimension | Key Metric | Actual Performance | Converted TPS (Throughput) | Engineering Value |
+| :--- | :--- | :--- | :--- | :--- |
+| **Single Point Burst** | Single Dispatch Limit | **4.45 ns** | **🚀 224 Million/sec** | Squeezes the physical limit of managed environment dispatching |
+| **Complex Logic Throughput** | 180 Subscriptions Load | **89.4 ns** | **🚀 11.18 Million/sec** | Supports real-time response under extremely complex business logic |
+| **Hierarchical Penetration** | 64-layer Deep Routing | **1.51 ns** | **🚀 659 Million/sec** | Proves layered bitmap filtering has near-zero overhead |
+| **Real-time Guarantee** | 10k 1ms Challenge | **61.32 us** | **🚀 163 Million/sec** | Complex propagation is completely transparent to the logic layer |
 
 ---
 
@@ -428,30 +458,6 @@ When dispatching across layers (e.g., global broadcast), LayerBase does not iter
 
 ---
 
-## ⚡ Standard Benchmarks (BenchmarkDotNet)
-
-Testing Environment: `BenchmarkDotNet v0.15.8`, `Windows 11`, `.NET 8.0 (X64 RyuJIT)`, `Intel Core i7-12650H`.
-
-| Method | Mean | Error | StdDev | Gen0 | Gen1 | Gen2 | Allocated |
-|------------------------------- |-------------:|-----------:|-------------:|--------:|--------:|-------:|----------:|
-| 'Single Layer Low Load (1 layer, 1 sub) - 1M times' | 8,197.72 us | 231.042 us | 681.233 us | - | - | - | 8.51 KB |
-| 'Single Layer High Load (1 layer, 10 subs) - 1M times' | 19,898.70 us | 601.152 us | 1,763.076 us | - | - | - | 12.15 KB |
-| 'Multi-layer Low Load (10 layers, tail sub only) - 1M times' | 7,462.16 us | 208.456 us | 604.768 us | - | - | - | 59.4 KB |
-| 'Multi-layer Full Load (10 layers, sub on every layer) - 1M times'| 19,114.17 us | 536.572 us | 1,565.206 us | - | - | - | 67.75 KB |
-| 'Multi-layer Random Load (10 layers, 5 random subs) - 1M times'| 13,634.22 us | 350.394 us | 1,033.144 us | - | - | - | 63.36 KB |
-| 'Extreme Empty Load (64 layers, 0 subs) - 1M times' | 1,811.59 us | 36.105 us | 99.445 us | 44.9219 | 19.5313 | 7.8125 | 496.54 KB |
-| 'Classic 1ms Challenge (3 tiers, fully subbed) - 10k times' | 97.83 us | 2.244 us | 6.617 us | 1.7090 | 0.1221 | - | 21.28 KB |
-| 'Typical Mid-Heavy Load (5 tiers: 1 has 100 subs, 4 have 20) - 10k times' | 2,807.12 us | 55.601 us | 139.493 us | 7.8125 | - | - | 105.72 KB |
-
-> 💡 **Data Interpretation**:
-> *   **Allocated (Memory Allocation)**: All `Allocated` values in the table are **one-time memory overhead** generated during `GlobalSetup` (build phase) to initialize layer containers and pre-allocate underlying SOA arrays. In the **runtime hot path (Run)** of event dispatching, all scenarios achieved **0 GC Memory Allocation** (`-` denotes no GC triggered).
-> *   **Throughput Limits**: Under the most common "10 Layers Low Load (head and tail subs only)" scenario, 1 million dispatches took merely ~7.4ms, equaling an astonishing throughput of **134 million times/sec**. This proves that the architectural routing overhead across 10 physical layers is practically zero.
-> *   **High Load Resilience**: In a heavy-duty test mimicking medium-to-large projects ("5-tier architecture, single event triggering 180 Handlers"), routing one event and triggering 180 callbacks took about 0.28 microseconds. Dispatching 10,000 times (executing 1.8 million business callbacks) took only 2.8 milliseconds.
-> *   **1ms Challenge**: In the mainstream 3-tier (UI-Logic-Data) fully-subscribed game architecture, dispatching 10,000 events consumes a mere 97.8 microseconds.
-> *   **Zero-Cost Idling**: Under extreme empty loading with 64 layers, the routing probe time for 1 million events is less than 2ms, implying that a massive number of idle layers will not impose any burden on the main frame rate.
-
----
-
 ## 🛡️ Industrial-Grade Infrastructure Guarantees
 
 Beyond pursuing extreme execution efficiency, LayerBase also provides a complete suite of facilities for engineering robustness:
@@ -467,7 +473,7 @@ Beyond pursuing extreme execution efficiency, LayerBase also provides a complete
 1. **Quick Install via NuGet (Recommended)**:
    You can easily install LayerBase through the NuGet Package Manager:
    ```bash
-   dotnet add package LayerBase --version 1.3.2
+   dotnet add package LayerBase --version 1.3.3
    ```
 2. **Source Code Integration**: Add the `LayerBase` and `LayerBase.Task` project directories from the repository directly to your solution and reference them.
 3. **Configure Source Generator**:

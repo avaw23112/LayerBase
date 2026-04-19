@@ -29,13 +29,13 @@
 
 1. **NuGet 快速安装**：
    ```bash
-   dotnet add package LayerBase.Generator --version 1.3.2
+   dotnet add package LayerBase.Generator --version 1.3.3
    ```
 2. **正确配置 .csproj 引用**：
    当您在项目中使用该生成器时，确保它的 `OutputItemType` 设置为 `Analyzer`，且不输出运行时程序集：
    ```xml
    <ItemGroup>
-       <PackageReference Include="LayerBase.Generator" Version="1.3.2" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+       <PackageReference Include="LayerBase.Generator" Version="1.3.3" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
    </ItemGroup>
    ```
    *(如果您使用的是本地源码依赖，配置方法类似)*：
@@ -66,3 +66,75 @@ public partial struct PlayerDeadEvent { ... }
 `LayerBase.Generator` 是 LayerBase 极限性能生态的最后一块拼图。结合 `LBTask` 的零分配异步和底层的 SOA 零分支引擎，构建您的工业级架构。
 
 项目主页：[LayerBase GitHub 仓库](https://github.com/avaw23112/LayerBase)
+
+---
+---
+
+# 🚀 LayerBase.Generator: Industrial-Grade Architecture Source Generator
+
+**LayerBase.Generator** is the exclusive **C# Source Generator** plugin for the [LayerBase High-Performance Architecture Bus](https://github.com/avaw23112/LayerBase).
+
+It is responsible for transforming high-level abstractions like Dependency Injection (DI) and event subscription attributes into direct, contiguous low-level delegates (**SOA Array Layout**) during **compile-time**. This enables LayerBase to achieve **zero runtime reflection overhead** and extreme throughput of up to 150 million ops/sec.
+
+---
+
+## 🎯 Core Features & Highlights
+
+By attaching simple attributes, `LayerBase.Generator` silently generates all the boilerplate code in the background:
+
+1. **Automatic Dependency Injection & Layer Mounting (`[OwnerLayer]`)**
+   - Simply tag your `Service` or slice-based `EventHandler` with the `[OwnerLayer(typeof(YourLayer))]` attribute, and the generator will produce the auto-registration logic.
+   - `LayerHub.CreateLayers().Build()` can fully automatically scan and complete service dependency resolution, instance creation, and layer mounting in the background.
+2. **Zero-Reflection Event Bus Binding (`[Subscribe]`, `[SubscribeAsync]`)**
+   - No more manual maintenance of tedious `EventBus.Subscribe<T>(Method)` calls.
+   - Just attach `[Subscribe]` or `[SubscribeAsync]` to the event handling methods in your `Manager` (inheriting from `ILayerContext`).
+   - The Source Generator extracts the underlying delegates directly, generates high-density wrapper classes, and injects them into the global bus, **completely eliminating runtime reflection lookups.**
+3. **Global Exception & MetaData Observation (`EventMetaData<T>`)**
+   - For network sync packets or core state events, simply define a class inheriting from `EventMetaData<T>`.
+   - The generator automatically binds it to your `partial struct` event, establishing a **global-level, non-intrusive exception interception point**. Any unhandled exceptions generated during the processing of that event will flow here for unified monitoring.
+
+---
+
+## 📦 Installation & Configuration
+
+Since this package is a compile-time analyzer, it must be **configured as an analyzer reference** to prevent it from being bundled into your project as a runtime library.
+
+1. **Quick Install via NuGet**:
+   ```bash
+   dotnet add package LayerBase.Generator --version 1.3.3
+   ```
+2. **Correct .csproj Reference Configuration**:
+   When using this generator in your project, ensure its `OutputItemType` is set to `Analyzer` and that it does not output a runtime assembly:
+   ```xml
+   <ItemGroup>
+       <PackageReference Include="LayerBase.Generator" Version="1.3.3" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+   </ItemGroup>
+   ```
+   *(If you are using a local source dependency, the configuration is similar)*:
+   ```xml
+   <ItemGroup>
+       <ProjectReference Include="LayerBase.Generator\LayerBase.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+   </ItemGroup>
+   ```
+
+---
+
+## ⚙️ FAQ
+
+### Why does it say "Event type must be partial"?
+When using `EventMetaData<T>` to bind a global exception observer to an event, the generator needs to inject static code into the struct to complete the reflection-free low-level registration. Therefore, your event must be declared like this:
+```csharp
+public partial struct PlayerDeadEvent { ... }
+```
+
+### Why is my [Subscribe] erroring or not taking effect?
+1. Ensure your class inherits the `ILayerContext` interface (typically your various `Managers`).
+2. Ensure your class is marked as `partial`, as the generator needs to write the implementation logic for the `Initialize` interface in a partial part of that class.
+3. Ensure your handling method's parameter uses the `in` modifier (e.g., `in DamageEvent e`) to enjoy zero-allocation passing of structs.
+
+---
+
+## 🔗 About LayerBase
+`LayerBase.Generator` is the final piece of the LayerBase extreme performance ecosystem. Combine it with `LBTask` for zero-allocation async and the low-level SOA branchless engine to build your industrial-grade architecture.
+
+Project Homepage: [LayerBase GitHub Repository](https://github.com/avaw23112/LayerBase)
