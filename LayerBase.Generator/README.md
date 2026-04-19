@@ -29,13 +29,13 @@
 
 1. **NuGet 快速安装**：
    ```bash
-   dotnet add package LayerBase.Generator --version 1.3.1
+   dotnet add package LayerBase.Generator --version 1.3.2
    ```
 2. **正确配置 .csproj 引用**：
    当您在项目中使用该生成器时，确保它的 `OutputItemType` 设置为 `Analyzer`，且不输出运行时程序集：
    ```xml
    <ItemGroup>
-       <PackageReference Include="LayerBase.Generator" Version="1.3.1" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+       <PackageReference Include="LayerBase.Generator" Version="1.3.2" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
    </ItemGroup>
    ```
    *(如果您使用的是本地源码依赖，配置方法类似)*：

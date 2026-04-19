@@ -102,7 +102,7 @@ EventBucket<T>
 1. **NuGet 快速安装 (推荐)**：
    您可以通过 NuGet 包管理器直接安装 LayerBase：
    ```bash
-   dotnet add package LayerBase --version 1.3.0
+   dotnet add package LayerBase --version 1.3.2
    ```
 2. **源码引入**：将仓库中的 `LayerBase` 和 `LayerBase.Task` 项目目录直接添加到您的解决方案中并建立引用。
 3. **配置源生成器 (Source Generator)**：
