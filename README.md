@@ -7,7 +7,7 @@
 **LayerBase** 是一款专为 Unity、Godot 及纯 C# 服务端打造的高性能事件架构与通讯总线框架。
 
 它打破了传统面向对象（OOP）事件总线的性能瓶颈，在底层采用了**面向数据设计（Data-Oriented Design, DOD）**与**SOA（Structure of
-Arrays）**内存布局。在保证业务代码极简、解耦的同时，为中大型项目提供规范的事件流转控制，实测单核 TPS 达到 **1.5 亿次/秒**
+Arrays）**内存布局。在保证业务代码极简、解耦的同时，为中大型项目提供规范的事件流转控制，实测单核 TPS 达到 **2 亿次/秒**
 的物理级吞吐量。
 
 ---
@@ -45,31 +45,30 @@ LayerBase 的设计哲学是：**用强约束的框架收编混乱的注册，�
 
 ## ⚡ 标准基准测试 (BenchmarkDotNet)
 
-### 1. 原始测试报表 (Original Benchmark Report)
+### 1. 原始测试报告 (Raw Data)
 
 测试环境：`BenchmarkDotNet v0.15.8`, `Windows 11`, `.NET 8.0 (X64 RyuJIT)`, `Intel Core i7-12650H`.
 
-| Type                        | Method                          |            Mean |          Error |         StdDev | Allocated |
-|-----------------------------|---------------------------------|----------------:|---------------:|---------------:|----------:|
-| **Classic_1ms_Bench**       | **'经典 1ms 挑战 (3层全订阅) - 1万次'**   |    **61.32 us** |   **1.223 us** |   **2.415 us** |     **-** |
-| **Extreme_Empty_64_Bench**  | **'极限空负载 (64层/0订阅) - 100万次'**   | **1,516.91 us** |  **30.175 us** |  **64.955 us** |     **-** |
-| **MultiLayer_Full_Bench**   | **'多层高压 (10层/全订阅) - 100万次'**    | **9,170.90 us** | **180.520 us** | **306.536 us** |     **-** |
-| **MultiLayer_Low_Bench**    | **'多层低压 (10层/仅尾层) - 100万次'**    | **4,598.08 us** |  **91.886 us** | **197.794 us** |     **-** |
-| **MultiLayer_Random_Bench** | **'多层随机负载 (10层/5层订阅) - 100万次'** | **6,222.94 us** | **123.069 us** | **272.714 us** |     **-** |
-| **SingleLayer_High_Bench**  | **'单层高压 (1层/10订阅) - 100万次'**    | **9,053.39 us** | **174.913 us** | **460.791 us** |     **-** |
-| **SingleLayer_Low_Bench**   | **'单层低压 (1层/1订阅) - 100万次'**     | **4,453.57 us** |  **87.153 us** | **169.985 us** |     **-** |
-| **Typical_Heavy_180_Bench** | **'中重度负载 (180订阅) - 1万次'**       |   **894.46 us** |  **17.772 us** |  **44.260 us** |     **-** |
+| 方法 (Method) | 平均耗时 (Mean) | 误差 (Error) | 标准差 (StdDev) | 内存分配 (Allocated) |
+|:---|---:|---:|---:|:---:|
+| **SingleLayer_Low_Bench (1M ops)** | **4.367 ms** | 0.086 ms | 0.196 ms | **-** |
+| **SingleLayer_High_Bench (1M ops)** | **12.653 ms** | 0.252 ms | 0.553 ms | **-** |
+| **MultiLayer_Low_Bench (1M ops)** | **4.488 ms** | 0.090 ms | 0.204 ms | **-** |
+| **MultiLayer_Full_Bench (1M ops)** | **12.164 ms** | 0.239 ms | 0.393 ms | **193 B** |
+| **Extreme_Empty_64_Bench (1M ops)** | **1.459 ms** | 0.029 ms | 0.075 ms | **-** |
+| **Classic_1ms_Bench (10k ops)** | **70.381 us** | 1.404 us | 2.867 us | **-** |
+| **Typical_Heavy_180_Bench (10k ops)** | **1.142 ms** | 0.023 ms | 0.050 ms | **-** |
 
-### 2. 性能大图景 (Performance Analysis Map)
+### 2. 性能大图景分析 (Performance Analysis Map)
 
-我们将原始耗时换算为每秒吞吐量（TPS），以更直观地展示框架的吞吐红利：
+我们将原始耗时换算为吞吐量（TPS），以更直观地展示 v1.6.0 架构的性能红利：
 
-| 核心维度       | 关键指标       | 实测表现         | 换算 TPS (每秒吞吐)    | 工程价值           |
-|:-----------|:-----------|:-------------|:-----------------|:---------------|
-| **单点爆发力**  | 单次分发极限     | **4.45 ns**  | **🚀 2.24 亿次/秒** | 榨干了托管环境分发的物理极限 |
-| **复杂逻辑吞吐** | 180 订阅负载   | **89.4 ns**  | **🚀 1118 万次/秒** | 支撑极复杂业务下的实时响应  |
-| **层级穿透力**  | 64层深路由     | **1.51 ns**  | **🚀 6.59 亿次/秒** | 证明分层位图过滤近乎零损耗  |
-| **实时性保障**  | 1万次 1ms 挑战 | **61.32 us** | **🚀 1.63 亿次/秒** | 复杂传递对逻辑层完全透明   |
+| 核心维度 | 关键指标 | 实际表现 (ns/op) | 换算 TPS (吞吐量) | 工程价值 |
+| :--- | :--- | :--- | :--- | :--- |
+| **单点分发极限** | Single Dispatch | **4.37 ns** | **🚀 2.29 亿/秒** | 在 managed 环境下达到物理分发极限 |
+| **重负载吞吐** | 180 Subs Load | **114.2 ns** | **🚀 875 万/秒** | 支撑极其庞大的业务逻辑实时响应 |
+| **层级穿透力** | 64-Layer Routing | **1.46 ns** | **🚀 6.85 亿/秒** | 证明位图跳层算法几乎零开销 |
+| **实时性保障** | 10k 1ms Challenge | **7.04 ns** | **🚀 1.42 亿/秒** | 复杂拓扑传播对逻辑层完全透明 |
 
 ---
 
@@ -133,7 +132,7 @@ EventBucket<T>
 1. **NuGet 快速安装 (推荐)**：
    您可以通过 NuGet 包管理器直接安装 LayerBase：
    ```bash
-   dotnet add package LayerBase --version 1.3.3
+   dotnet add package LayerBase --version 1.6.0
    ```
 2. **源码引入**：将仓库中的 `LayerBase` 和 `LayerBase.Task` 项目目录直接添加到您的解决方案中并建立引用。
 3. **配置源生成器 (Source Generator)**：
@@ -224,6 +223,7 @@ Service 负责将相关的 Manager 注册到 DI 容器中。
 
 ```csharp
 using LayerBase.DI;
+using LayerBase.Layers;
 
 // 绑定至 GameLogicLayer 层级
 [OwnerLayer(typeof(GameLogicLayer))]
@@ -403,6 +403,103 @@ public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
 ```
 
 ---
+
+
+## 🛠 进阶特性指南
+
+### 1. 流式过滤与拦截 (Fluent API)
+
+对于需要动态控制订阅条件的场景，LayerBase 提供了优雅的链式
+API。它最大的优势在于：拦截条件会在路由的最早期（包装委托内部）执行，不符合条件的事件会被直接短路，避免了不必要的函数调用。
+
+```csharp
+public partial class PlayerManager : ILayerContext
+{
+    private int _myEntityId = 10;
+
+    public void Initialize()
+    {
+        // Chainable calls: Subscribe -> Filter -> Handle
+        this.OnEvent<DamageEvent>()
+            .Where((in DamageEvent e) => e.TargetId == _myEntityId) 
+            .Handle((in DamageEvent e) => 
+            {
+                // Handle damage...
+                return EventHandledState.Handled;
+            });
+    }
+}
+```
+
+### 2. 后台并行处理 (Parallel Handlers)
+
+当面临高 CPU 消耗且**不依赖/不修改主线程状态**的纯计算逻辑（如寻路数据打包、耗时日志序列化）时，可使用并行订阅。事件将进入无锁队列并由
+ThreadPool 在后台异步消化，保障主线程的帧率稳定。
+
+```csharp
+// 通过特性快速绑定并行方法
+[SubscribeParallel]
+private EventHandledState OnHeavyComputeTask(in ComputeEvent e)
+{
+    // 该方法在多线程环境中被安全调度
+    return EventHandledState.Continue;
+}
+```
+
+### 3. 拓扑结构可视化 (Topology Audit)
+
+开启 Debug 模式后，调用 `GetTopologySummary()` 即可在控制台输出一张清晰的文本结构图，展示整个系统内各个 Layer 挂载了哪些
+Manager，以及它们具体订阅/派发了什么事件。这在大型项目中是排查系统耦合度不可或缺的工具。
+
+### 4. 切片式独立处理器 (Standalone EventHandler)
+
+有时候，您可能有一段非常独立的逻辑，它只处理某一个特定事件，将其塞入一个庞大的 Manager 显得过于臃肿。LayerBase
+支持“切片式”的独立处理器。
+只需实现 `IEventHandler<T>` 或 `IEventHandlerAsync<T>` 接口，并挂载 `[OwnerLayer]` 特性，源生成器就会在编译期自动将其注册到对应的层级中：
+
+```csharp
+// 这是一个独立的、切片式的事件处理器
+[OwnerLayer(typeof(GameLogicLayer))] 
+public class PlayerDamageHandler : IEventHandler<DamageEvent>
+{
+    public EventHandledState Deal(in DamageEvent e)
+    {
+        // 专注处理伤害逻辑...
+        return EventHandledState.Continue;
+    }
+}
+```
+
+### 5. 事件元数据与全局异常观察 (Event MetaData)
+
+对于某些核心事件（如网络同步包或核心状态流转），如果在分发过程中有任何 Handler 抛出了异常，我们通常希望能在全局第一时间捕获，以进行统一的日志打点或崩溃上报。
+
+LayerBase 提供了一套**无侵入式、零反射**的元数据（MetaData）注册方案：
+您只需定义一个继承自 `EventMetaData<T>` 的类。源生成器会在编译期自动将其与您的事件绑定（**注：要求事件 `struct`
+必须声明为 `partial`**）。
+
+```csharp
+// 1. 事件必须声明为 partial struct
+public partial struct CoreSyncEvent 
+{ 
+    public byte[] Data; 
+}
+
+// 2. 定义该事件的元数据配置
+public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
+{
+    // [可选]：定义事件所属的分类树，方便进行拓扑分类或模块检索
+    public override EventCategoryToken Category => EventCatalogue.Path("Network", "Sync").GetToken();
+
+    // 🏆 全局异常拦截点
+    // 任何 Handler 在处理 CoreSyncEvent 抛出异常时，都会自动路由到这里！
+    public override void OnEventExpectation(CoreSyncEvent e, Exception exception)
+    {
+        // 在这里进行统一的容错处理、日志打点或崩溃上报
+        Console.WriteLine($"[严重错误] 同步事件处理失败: {exception.Message}");
+    }
+}
+```
 ---
 
 ## ⚠️ 核心设计边界与时序约束 (Core Design Boundaries)
@@ -463,7 +560,7 @@ Godot, and pure C# servers.
 It shatters the performance bottlenecks of traditional Object-Oriented Programming (OOP) event buses by adopting *
 *Data-Oriented Design (DOD)** and **SOA (Structure of Arrays)** memory layout at its core. While keeping your business
 code minimal and decoupled, it provides standardized event flow control for medium-to-large projects, achieving an
-impressive physical throughput of **over 150 million TPS (Transactions Per Second)** on a single core.
+impressive physical throughput of **over 200 million TPS (Transactions Per Second)** on a single core.
 
 ---
 
@@ -509,32 +606,30 @@ performance shackles with data-oriented reconstruction.**
 
 ## ⚡ Standard Benchmarks (BenchmarkDotNet)
 
-### 1. Original Benchmark Report
+### 1. Raw Benchmark Report
 
-Testing Environment: `BenchmarkDotNet v0.15.8`, `Windows 11`, `.NET 8.0 (X64 RyuJIT)`, `Intel Core i7-12650H`.
+Environment: `BenchmarkDotNet v0.15.8`, `Windows 11`, `.NET 8.0 (X64 RyuJIT)`, `Intel Core i7-12650H`.
 
-| Type                        | Method                                                            |            Mean |          Error |         StdDev | Allocated |
-|-----------------------------|-------------------------------------------------------------------|----------------:|---------------:|---------------:|----------:|
-| **Classic_1ms_Bench**       | **'Classic 1ms Challenge (3 layers fully subscribed) - 10k ops'** |    **61.32 us** |   **1.223 us** |   **2.415 us** |     **-** |
-| **Extreme_Empty_64_Bench**  | **'Extreme Empty Load (64 layers/0 subs) - 1M ops'**              | **1,516.91 us** |  **30.175 us** |  **64.955 us** |     **-** |
-| **MultiLayer_Full_Bench**   | **'Multi-Layer High Pressure (10 layers/fully subbed) - 1M ops'** | **9,170.90 us** | **180.520 us** | **306.536 us** |     **-** |
-| **MultiLayer_Low_Bench**    | **'Multi-Layer Low Pressure (10 layers/tail sub only) - 1M ops'** | **4,598.08 us** |  **91.886 us** | **197.794 us** |     **-** |
-| **MultiLayer_Random_Bench** | **'Multi-Layer Random Load (10 layers/5 random subs) - 1M ops'**  | **6,222.94 us** | **123.069 us** | **272.714 us** |     **-** |
-| **SingleLayer_High_Bench**  | **'Single Layer High Pressure (1 layer/10 subs) - 1M ops'**       | **9,053.39 us** | **174.913 us** | **460.791 us** |     **-** |
-| **SingleLayer_Low_Bench**   | **'Single Layer Low Pressure (1 layer/1 sub) - 1M ops'**          | **4,453.57 us** |  **87.153 us** | **169.985 us** |     **-** |
-| **Typical_Heavy_180_Bench** | **'Medium-Heavy Load (180 subs) - 10k ops'**                      |   **894.46 us** |  **17.772 us** |  **44.260 us** |     **-** |
+| Method | Mean | Error | StdDev | Allocated |
+|:---|---:|---:|---:|:---:|
+| **SingleLayer_Low_Bench (1M ops)** | **4.367 ms** | 0.086 ms | 0.196 ms | **-** |
+| **SingleLayer_High_Bench (1M ops)** | **12.653 ms** | 0.252 ms | 0.553 ms | **-** |
+| **MultiLayer_Low_Bench (1M ops)** | **4.488 ms** | 0.090 ms | 0.204 ms | **-** |
+| **MultiLayer_Full_Bench (1M ops)** | **12.164 ms** | 0.239 ms | 0.393 ms | **193 B** |
+| **Extreme_Empty_64_Bench (1M ops)** | **1.459 ms** | 0.029 ms | 0.075 ms | **-** |
+| **Classic_1ms_Bench (10k ops)** | **70.381 us** | 1.404 us | 2.867 us | **-** |
+| **Typical_Heavy_180_Bench (10k ops)** | **1.142 ms** | 0.023 ms | 0.050 ms | **-** |
 
 ### 2. Performance Analysis Map
 
-We have converted the raw timing into throughput (TPS) to more intuitively demonstrate the performance dividends of the
-framework:
+Throughput (TPS) conversion based on v1.6.0 architecture:
 
-| Core Dimension               | Key Metric             | Actual Performance | Converted TPS (Throughput) | Engineering Value                                                  |
-|:-----------------------------|:-----------------------|:-------------------|:---------------------------|:-------------------------------------------------------------------|
-| **Single Point Burst**       | Single Dispatch Limit  | **4.45 ns**        | **🚀 224 Million/sec**     | Squeezes the physical limit of managed environment dispatching     |
-| **Complex Logic Throughput** | 180 Subscriptions Load | **89.4 ns**        | **🚀 11.18 Million/sec**   | Supports real-time response under extremely complex business logic |
-| **Hierarchical Penetration** | 64-layer Deep Routing  | **1.51 ns**        | **🚀 659 Million/sec**     | Proves layered bitmap filtering has near-zero overhead             |
-| **Real-time Guarantee**      | 10k 1ms Challenge      | **61.32 us**       | **🚀 163 Million/sec**     | Complex propagation is completely transparent to the logic layer   |
+| Core Dimension | Key Metric | Actual Perf (ns/op) | Converted TPS (Throughput) | Engineering Value |
+| :--- | :--- | :--- | :--- | :--- |
+| **Single Point Burst** | Single Dispatch | **4.37 ns** | **🚀 229 Million/sec** | Physical limit of managed dispatching |
+| **Complex Logic** | 180 Subs Load | **114.2 ns** | **🚀 8.75 Million/sec** | High-performance even under extreme load |
+| **Hierarchical Penetration** | 64-Layer Routing | **1.46 ns** | **🚀 685 Million/sec** | Near-zero overhead for bitmap skipping |
+| **Real-time Guarantee** | 10k 1ms Challenge | **7.04 ns** | **🚀 142 Million/sec** | Transparent complex propagation |
 
 ---
 
@@ -588,21 +683,16 @@ containing a subscriber, minimizing inter-layer jump overhead.
 
 ---
 
-## 🛡️ Industrial-Grade Infrastructure Guarantees
+## 🛡️ 工业级基建保障
 
-Beyond pursuing extreme execution efficiency, LayerBase also provides a complete suite of facilities for engineering
-robustness:
+除了追求极致的运行效率，LayerBase 在工程稳健性上也提供了全套设施：
 
-- **Self-Healing Circuit Breaker**: When an event Handler throws an unhandled exception, the system instantly locates
-  and physically trips the breaker for that specific node. Local failures will never block other businesses in the same
-  layer. In the next frame, the engine smoothly purges the invalid node via a "Two-Pass Zero-Allocation Rebuild",
-  achieving system self-healing.
-- **Zero-Allocation Asynchronous Ecosystem (`LBTask`)**: Modern game development relies heavily on async operations. The
-  framework comes with `LBTask`, a struct-based task model specifically tuned for the game loop. It achieves **0 GC Heap
-  Allocation** on synchronously completed paths, freeing your async logic from memory jitter nightmares.
-- **Static Topology Audit**: During `Build()` to construct the layers, the underlying Three-Color Algorithm statically
-  scans the entire event network. If a **synchronous infinite loop** risk is detected, a loop warning is printed
-  directly to the console, refusing black-box execution.
+- **自愈熔断机制**：当事件 Handler 抛出未捕获异常时，系统会精准定位并物理熔断该节点，局部故障绝不阻塞同层其他业务。在下一帧，引擎通过“两段式零分配重建（Two-Pass
+  Zero-Allocation Rebuild）”平滑剔除失效节点，实现系统自愈。
+- **零分配异步生态 (`LBTask`)**：现代游戏开发高度依赖异步操作。框架内置了专为游戏帧循环调优的 `LBTask` 结构体任务。在同步完成路径下可实现
+  **0 GC 堆分配**，让异步逻辑免除内存抖动困扰。
+- **静态拓扑审计**：在调用 `Build()` 构建层级时，底层的着色图算法（Three-Color Algorithm）会静态扫描整个事件网络。若发现*
+  *同步死循环**风险，控制台将直接打印环路警告，拒绝黑盒运行。
 
 ---
 
@@ -611,7 +701,7 @@ robustness:
 1. **Quick Install via NuGet (Recommended)**:
    You can easily install LayerBase through the NuGet Package Manager:
    ```bash
-   dotnet add package LayerBase --version 1.3.3
+   dotnet add package LayerBase --version 1.6.0
    ```
 2. **Source Code Integration**: Add the `LayerBase` and `LayerBase.Task` project directories from the repository
    directly to your solution and reference them.
@@ -796,106 +886,3 @@ public class GameRoot : MonoBehaviour
 ```
 
 ---
-
-## 🛠 Advanced Features Guide
-
-### 1. Fluent Filtering and Interception (Fluent API)
-
-For scenarios requiring dynamic subscription conditions, LayerBase offers an elegant chainable API. Its greatest
-advantage is that interception conditions are evaluated at the earliest possible stage in routing (inside the wrapper
-delegate). Unqualified events are short-circuited immediately, preventing the awakening of massive business logic
-blocks.
-
-```csharp
-public partial class PlayerManager : ILayerContext
-{
-    private int _myEntityId = 10;
-
-    public void Initialize()
-    {
-        // Chainable calls: Subscribe -> Filter -> Handle
-        this.OnEvent<DamageEvent>()
-            .Where((in DamageEvent e) => e.TargetId == _myEntityId) 
-            .Handle((in DamageEvent e) => 
-            {
-                // Handle damage...
-                return EventHandledState.Handled;
-            });
-    }
-}
-```
-
-### 2. Background Parallel Processing (Parallel Handlers)
-
-When dealing with logic that consumes high CPU and **does not rely on or modify the main thread state** (such as
-pathfinding data packaging or heavy log serialization), parallel subscriptions can be utilized. Events will enter a
-lock-free queue and be processed asynchronously by the ThreadPool in the background, ensuring main thread frame rate
-stability.
-
-```csharp
-// Quickly bind parallel methods via attribute
-[SubscribeParallel]
-private EventHandledState OnHeavyComputeTask(in ComputeEvent e)
-{
-    // This method is safely scheduled in a multi-threaded environment
-    return EventHandledState.Continue;
-}
-```
-
-### 3. Topology Audit
-
-By enabling Debug mode, you can call `GetTopologySummary()` to output a clear text structural graph in the console,
-showcasing which Managers are mounted on which Layers across the system, as well as what specific events they subscribe
-to or dispatch. This is an indispensable tool for debugging system coupling in large projects.
-
-### 4. Slice-based Standalone Processors (Standalone EventHandler)
-
-Sometimes you might have highly independent logic dedicated to a single event, making it too bloated to cram into a
-massive Manager. LayerBase supports "slice-based" standalone processors.
-Simply implement the `IEventHandler<T>` or `IEventHandlerAsync<T>` interface and attach the `[OwnerLayer]` attribute.
-The source generator will automatically register it to the corresponding layer at compile time:
-
-```csharp
-// A standalone, slice-based event handler
-[OwnerLayer(typeof(GameLogicLayer))] 
-public class PlayerDamageHandler : IEventHandler<DamageEvent>
-{
-    public EventHandledState Deal(in DamageEvent e)
-    {
-        // Focus solely on damage logic...
-        return EventHandledState.Continue;
-    }
-}
-```
-
-### 5. Event MetaData and Global Exception Observation
-
-For critical events (like network sync packets or core state transitions), if any Handler throws an exception during
-dispatch, we generally want to catch it globally and immediately for unified logging or crash reporting.
-
-LayerBase provides a **non-intrusive, zero-reflection** MetaData registration solution:
-You simply define a class inheriting from `EventMetaData<T>`. The source generator will automatically bind it to your
-event at compile time (**Note: the event `struct` must be declared as `partial`**).
-
-```csharp
-// 1. The event must be declared as a partial struct
-public partial struct CoreSyncEvent 
-{ 
-    public byte[] Data; 
-}
-
-// 2. Define the metadata configuration for the event
-public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
-{
-    // [Optional]: Define a category tree for the event, useful for topological categorization or module retrieval
-    public override EventCategoryToken Category => EventCatalogue.Path("Network", "Sync").GetToken();
-
-    // 🏆 Global Exception Interception Point
-    // Any unhandled exception thrown by a Handler processing CoreSyncEvent will be automatically routed here!
-    public override void OnEventExpectation(CoreSyncEvent e, Exception exception)
-    {
-        // Handle fault tolerance, logging, or crash reporting here
-        Console.WriteLine($"[Critical Error] Sync event processing failed: {exception.Message}");
-    }
-}
-```
