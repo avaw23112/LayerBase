@@ -43,6 +43,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                         if (evtParam != null)
                         {
                             var evtStr = evtParam.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
                             var deps = new List<string>();
                             if (!attrName.Contains("Async") && !attrName.Contains("Delay"))
                                 ScanBody(ctx.SemanticModel, method, evtStr, deps);
@@ -99,7 +100,8 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
             foreach (var h in meta.Handlers)
             {
                 var reg = h.Attr.Contains("Async") ? "SubscribeAsync" :
-                    h.Attr.Contains("Parallel")    ? "SubscribeParallel" : "Subscribe";
+                    h.Attr.Contains("Parallel")    ? "SubscribeParallel" : 
+                    h.Attr.Contains("Notify")      ? "SubscribeNotify" : "Subscribe";
 
                 // 🚀 回归标准模式：直接绑定成员方法委托
                 sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");

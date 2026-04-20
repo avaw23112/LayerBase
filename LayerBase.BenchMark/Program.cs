@@ -20,7 +20,7 @@ internal class Program
 public abstract class EventBenchmarkBase
 {
     protected const int OneMillion = 1_000_000;
-    protected const int TenThousand = 10_000;
+    protected const int TenThousand = 130_000;
 }
 
 public class SingleLayer_Low_Bench : EventBenchmarkBase
@@ -102,6 +102,40 @@ public class MultiLayer_Full_Bench : EventBenchmarkBase
         for (var i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent());
     }
 }
+
+public class MultiLayer_Full_Notify_Bench : EventBenchmarkBase
+{
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        var builder = LayerHub.CreateLayers();
+        for (var i = 0; i < 10; i++)
+        {
+            var l = new BenchLayer();
+            l.RegisterService(new FullNotifyBenchManager());
+            builder.Push(l);
+        }
+
+        builder.Build();
+    }
+
+    [Benchmark(Description = "多层高压 Notify (10层/全订阅) - 100万次")]
+    public void Run()
+    {
+        for (var i = 0; i < OneMillion; i++) LayerHub.Send(new FullNotifyEvent());
+    }
+}
+
+public partial class FullNotifyBenchManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+
+    [SubscribeNotify]
+    public void Handle(in FullNotifyEvent e) { }
+}
+
+public struct FullNotifyEvent { }
 
 public class MultiLayer_Random_Bench : EventBenchmarkBase
 {
@@ -193,6 +227,52 @@ public class Typical_Heavy_180_Bench : EventBenchmarkBase
         for (var i = 0; i < TenThousand; i++) LayerHub.Send(new BenchEvent());
     }
 }
+
+public class NotifyComparisonBench : EventBenchmarkBase
+{
+    private const int HundredMillion = 100_000_000;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        var builder = LayerHub.CreateLayers();
+        var l = new BenchLayer();
+        l.RegisterService(new StandardBenchManager());
+        l.RegisterService(new NotifyBenchManager());
+        builder.Push(l).Build();
+    }
+
+    [Benchmark(Description = "标准同步订阅 (1亿次)")]
+    public void StandardSync()
+    {
+        for (var i = 0; i < HundredMillion; i++) LayerHub.Send(new BenchEvent());
+    }
+
+    [Benchmark(Description = "Notify零分支订阅 (1亿次)")]
+    public void NotifyPipeline()
+    {
+        for (var i = 0; i < HundredMillion; i++) LayerHub.Send(new NotifyEvent());
+    }
+}
+
+public partial class StandardBenchManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+
+    [Subscribe]
+    public EventHandledState Handle(in BenchEvent e) => EventHandledState.Continue;
+}
+
+public partial class NotifyBenchManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+
+    [SubscribeNotify]
+    public void Handle(in NotifyEvent e) { }
+}
+
+public struct NotifyEvent { }
 
 public partial class BenchManager : IService
 {

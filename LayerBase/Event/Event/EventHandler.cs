@@ -8,6 +8,7 @@ namespace LayerBase.Core.EventHandler;
 /// </summary>
 /// <typeparam name="TValue"></typeparam>
 public delegate EventHandledState EventHandleDelegate<TValue>(in TValue value) where TValue : struct;
+public delegate void EventNotifyDelegate<TValue>(in TValue value) where TValue : struct;
 
 /// <summary>
 ///     异步事件.不可截断事件流

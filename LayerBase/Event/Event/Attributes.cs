@@ -6,6 +6,11 @@ public sealed class SubscribeAttribute : Attribute
 }
 
 [AttributeUsage(AttributeTargets.Method)]
+public sealed class SubscribeNotifyAttribute : Attribute
+{
+}
+
+[AttributeUsage(AttributeTargets.Method)]
 public sealed class SubscribeAsyncAttribute : Attribute
 {
 }

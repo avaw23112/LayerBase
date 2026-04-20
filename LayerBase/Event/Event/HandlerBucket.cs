@@ -34,6 +34,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     private readonly Action _onDirty;
     internal List<OrderedHandlerEntry<T>> MasterOrdered = new();
     internal List<ParallelHandlerEntry<T>> MasterParallel = new();
+    internal List<NotifyHandlerEntry<T>> MasterNotify = new();
     internal List<UnorderedHandlerEntry<T>> MasterUnordered = new();
 
     public HandlerBucket(Action onDirty)
@@ -41,7 +42,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         _onDirty = onDirty;
     }
 
-    public bool HasHandlers => MasterOrdered.Count > 0 || MasterUnordered.Count > 0 || MasterParallel.Count > 0;
+    public bool HasHandlers => MasterOrdered.Count > 0 || MasterUnordered.Count > 0 || MasterParallel.Count > 0 || MasterNotify.Count > 0;
 
     public void Reset()
     {
@@ -50,6 +51,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             foreach (var h in MasterOrdered) h.Circuit.Reset();
             foreach (var h in MasterUnordered) h.Circuit.Reset();
             foreach (var h in MasterParallel) h.Reset();
+            foreach (var h in MasterNotify) h.Circuit.Reset();
         }
     }
 
@@ -67,6 +69,15 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         lock (_lock)
         {
             MasterUnordered.Add(UnorderedHandlerEntry<T>.Create(h));
+            _onDirty();
+        }
+    }
+
+    public void AddNotify(EventNotifyDelegate<T> h)
+    {
+        lock (_lock)
+        {
+            MasterNotify.Add(NotifyHandlerEntry<T>.Create(h));
             _onDirty();
         }
     }
@@ -142,6 +153,43 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             MasterOrdered.RemoveAll(x => x.AsyncHandler == h);
             _onDirty();
         }
+    }
+
+    public void RemoveNotify(EventNotifyDelegate<T> h)
+    {
+        lock (_lock)
+        {
+            MasterNotify.RemoveAll(x => x.Handler == h);
+            _onDirty();
+        }
+    }
+}
+
+internal readonly struct NotifyHandlerEntry<T> where T : struct
+{
+    public readonly EventNotifyDelegate<T> Handler;
+    public readonly string FullName;
+    public readonly HandlerCircuit Circuit;
+
+    private NotifyHandlerEntry(EventNotifyDelegate<T> h, string n, HandlerCircuit c)
+    {
+        Handler = h;
+        FullName = n;
+        Circuit = c;
+    }
+
+    public static NotifyHandlerEntry<T> Create(EventNotifyDelegate<T> h)
+    {
+        return new NotifyHandlerEntry<T>(h, GetName(h), new HandlerCircuit());
+    }
+
+    private static string GetName(Delegate d)
+    {
+        var m = d.Method;
+        var t = m.DeclaringType?.FullName ?? d.Target?.GetType()?.FullName ?? "Global";
+        var nm = m.Name;
+        if (nm.StartsWith("<") && nm.Contains(">")) nm = "lambda";
+        return $"{t}.{nm}";
     }
 }
 

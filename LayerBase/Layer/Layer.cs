@@ -142,6 +142,23 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
         }
     }
 
+    public void SubscribeNotify<T>(EventNotifyDelegate<T> handler) where T : struct
+    {
+        ThrowIfDisposed();
+        if (RouteIndex != -1)
+        {
+            LayerHub.EventCenter.SubscribeNotify(RouteIndex, handler);
+            lock (m_subscriptions)
+            {
+                m_subscriptions.Add(UnsubscribeNotifyToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+            }
+        }
+        else
+        {
+            m_pendingOps.Add(l => l.SubscribeNotify(handler));
+        }
+    }
+
     public void SubscribeAsync<T>(EventHandleDelegateAsync<T> handler) where T : struct
     {
         ThrowIfDisposed();
@@ -274,6 +291,31 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
         public static UnsubscribeDelegateAsyncToken<T> Rent(GlobalEventCenter c, int l, EventHandleDelegateAsync<T> h)
         {
             if (!Pool.TryTake(out var t)) t = new UnsubscribeDelegateAsyncToken<T>();
+            t._center = c;
+            t._layerIndex = l;
+            t._handler = h;
+            return t;
+        }
+    }
+
+    private sealed class UnsubscribeNotifyToken<T> : IDisposable where T : struct
+    {
+        private static readonly ConcurrentBag<UnsubscribeNotifyToken<T>> Pool = new();
+        private GlobalEventCenter _center;
+        private EventNotifyDelegate<T> _handler;
+        private int _layerIndex;
+
+        public void Dispose()
+        {
+            _center.UnsubscribeNotify(_layerIndex, _handler);
+            _center = null!;
+            _handler = null!;
+            Pool.Add(this);
+        }
+
+        public static UnsubscribeNotifyToken<T> Rent(GlobalEventCenter c, int l, EventNotifyDelegate<T> h)
+        {
+            if (!Pool.TryTake(out var t)) t = new UnsubscribeNotifyToken<T>();
             t._center = c;
             t._layerIndex = l;
             t._handler = h;
