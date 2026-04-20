@@ -740,28 +740,34 @@ public sealed class GlobalEventCenter
             ref var hBase = ref GetArrayDataRef(_syncHandlers);
             var combinedState = 0;
             var i = start;
+            int offset = 0;
             try
             {
-                // 🚀 4x 循环展开：显著降低循环开销，提升 CPU 吞吐
-                for (; i <= end - 4; i += 4)
+                // 🚀 8x 循环展开：显著降低循环开销，提升 CPU 吞吐
+                for (; i <= end - 8; i += 8)
                 {
-                    var r1 = Unsafe.Add(ref hBase, i)(in value);
-                    var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
-                    var r3 = Unsafe.Add(ref hBase, i + 2)(in value);
-                    var r4 = Unsafe.Add(ref hBase, i + 3)(in value);
-                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4;
+                    offset = 0; var r1 = Unsafe.Add(ref hBase, i)(in value);
+                    offset = 1; var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
+                    offset = 2; var r3 = Unsafe.Add(ref hBase, i + 2)(in value);
+                    offset = 3; var r4 = Unsafe.Add(ref hBase, i + 3)(in value);
+                    offset = 4; var r5 = Unsafe.Add(ref hBase, i + 4)(in value);
+                    offset = 5; var r6 = Unsafe.Add(ref hBase, i + 5)(in value);
+                    offset = 6; var r7 = Unsafe.Add(ref hBase, i + 6)(in value);
+                    offset = 7; var r8 = Unsafe.Add(ref hBase, i + 7)(in value);
+                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4| (int)r5 | (int)r6|(int)r7 | (int)r8;
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
                 }
 
                 for (; i < end; i++)
                 {
+                    offset = 0;
                     combinedState |= (int)Unsafe.Add(ref hBase, i)(in value);
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
                 }
             }
             catch (Exception e)
             {
-                HandleFault(i, true, in value, e);
+                HandleFault(i + offset, true, in value, e);
                 return EventHandledState.Continue;
             }
 
@@ -791,27 +797,33 @@ public sealed class GlobalEventCenter
             ref var hBase = ref GetArrayDataRef(_syncHandlers);
             var combinedState = 0;
             var i = end - 1;
+            int offset = 0;
             try
             {
-                for (; i >= start + 3; i -= 4)
+                for (; i >= start + 7; i -= 8)
                 {
-                    var r1 = Unsafe.Add(ref hBase, i)(in value);
-                    var r2 = Unsafe.Add(ref hBase, i - 1)(in value);
-                    var r3 = Unsafe.Add(ref hBase, i - 2)(in value);
-                    var r4 = Unsafe.Add(ref hBase, i - 3)(in value);
-                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4;
+                    offset = 0;  var r1 = Unsafe.Add(ref hBase, i)(in value);
+                    offset = -1; var r2 = Unsafe.Add(ref hBase, i - 1)(in value);
+                    offset = -2; var r3 = Unsafe.Add(ref hBase, i - 2)(in value);
+                    offset = -3; var r4 = Unsafe.Add(ref hBase, i - 3)(in value);
+                    offset = -4; var r5 = Unsafe.Add(ref hBase, i - 4)(in value);
+                    offset = -5; var r6 = Unsafe.Add(ref hBase, i - 5)(in value);
+                    offset = -6; var r7 = Unsafe.Add(ref hBase, i - 6)(in value);
+                    offset = -7; var r8 = Unsafe.Add(ref hBase, i - 7)(in value);
+                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4 | (int)r5 | (int)r6|(int)r7 | (int)r8;
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
                 }
 
                 for (; i >= start; i--)
                 {
+                    offset = 0;
                     combinedState |= (int)Unsafe.Add(ref hBase, i)(in value);
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
                 }
             }
             catch (Exception e)
             {
-                HandleFault(i, true, in value, e);
+                HandleFault(i + offset, true, in value, e);
                 return EventHandledState.Continue;
             }
 
