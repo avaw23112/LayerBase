@@ -9,6 +9,8 @@ using LayerBase.Event.EventMetaData;
 using System.Numerics;
 #endif
 
+using System.Buffers;
+
 namespace LayerBase.Core.Event;
 
 public enum Propagation
@@ -348,7 +350,8 @@ public sealed class GlobalEventCenter
         private readonly ConcurrentQueue<IUnmanagedList> _dirtyQueues = new();
         private readonly int _layerIndex;
         private readonly Action<IUnmanagedList> _onDirtyCallback;
-        private readonly ConcurrentDictionary<int, IUnmanagedList> _queuesByType = new();
+        private volatile IUnmanagedList?[] _queuesByTypeArr = new IUnmanagedList?[64];
+        private readonly object _lock = new();
         private bool _disposed;
 
         public LayerEventQueue(GlobalEventCenter center, int layerIndex)
@@ -362,18 +365,45 @@ public sealed class GlobalEventCenter
         {
             if (_disposed) return;
             _disposed = true;
-            foreach (var q in _queuesByType.Values) q.Dispose();
-            _queuesByType.Clear();
+            lock (_lock)
+            {
+                var arr = _queuesByTypeArr;
+                for (int i = 0; i < arr.Length; i++)
+                {
+                    arr[i]?.Dispose();
+                }
+            }
         }
 
         public void EnqueueEvent<T>(in Event<T> @event) where T : struct
         {
             if (_disposed) return;
             var typeId = EventTypeId<T>.Id;
-            if (!_queuesByType.TryGetValue(typeId, out var list))
-                list = _queuesByType.GetOrAdd(typeId,
-                    _ => new UnmanagedList<T>(_center, _layerIndex, _onDirtyCallback));
-            ((UnmanagedList<T>)list).Post(@event);
+            var arr = _queuesByTypeArr;
+            IUnmanagedList? list = null;
+            if (typeId < arr.Length)
+            {
+                list = arr[typeId];
+            }
+            if (list == null)
+            {
+                lock (_lock)
+                {
+                    if (typeId >= _queuesByTypeArr.Length)
+                    {
+                        int newSize = Math.Max(typeId + 1, _queuesByTypeArr.Length * 2);
+                        var newArr = new IUnmanagedList?[newSize];
+                        Array.Copy(_queuesByTypeArr, newArr, _queuesByTypeArr.Length);
+                        _queuesByTypeArr = newArr;
+                    }
+                    if (_queuesByTypeArr[typeId] == null)
+                    {
+                        _queuesByTypeArr[typeId] = new UnmanagedList<T>(_center, _layerIndex, _onDirtyCallback);
+                    }
+                    list = _queuesByTypeArr[typeId];
+                }
+            }
+            ((UnmanagedList<T>)list!).Post(@event);
         }
 
         public void Pump()
@@ -481,22 +511,24 @@ public sealed class GlobalEventCenter
 
             if (_syncHandlers.Length < totalSync)
             {
-                _syncHandlers = new EventHandleDelegate<T>[Math.Max(totalSync, _syncHandlers.Length * 2)];
-                _syncCircuits = new HandlerCircuit[_syncHandlers.Length];
-                _syncNames = new string[_syncHandlers.Length];
+                int newSize = Math.Max(totalSync, _syncHandlers.Length * 2);
+                _syncHandlers = ArrayPool<EventHandleDelegate<T>>.Shared.Rent(newSize);
+                _syncCircuits = ArrayPool<HandlerCircuit>.Shared.Rent(newSize);
+                _syncNames = ArrayPool<string>.Shared.Rent(newSize);
             }
 
             if (_asyncHandlers.Length < totalAsync)
             {
-                _asyncHandlers = new EventHandleDelegateAsync<T>[Math.Max(totalAsync, _asyncHandlers.Length * 2)];
-                _asyncCircuits = new HandlerCircuit[_asyncHandlers.Length];
-                _asyncNames = new string[_asyncHandlers.Length];
+                int newSize = Math.Max(totalAsync, _asyncHandlers.Length * 2);
+                _asyncHandlers = ArrayPool<EventHandleDelegateAsync<T>>.Shared.Rent(newSize);
+                _asyncCircuits = ArrayPool<HandlerCircuit>.Shared.Rent(newSize);
+                _asyncNames = ArrayPool<string>.Shared.Rent(newSize);
             }
 
             if (_flatParallel.Length < totalParallel)
-                _flatParallel = new ParallelHandlerEntry<T>[Math.Max(totalParallel, _flatParallel.Length * 2)];
+                _flatParallel = ArrayPool<ParallelHandlerEntry<T>>.Shared.Rent(Math.Max(totalParallel, _flatParallel.Length * 2));
             if (_ranges.Length < _buckets.Length)
-                _ranges = new LayerRange[Math.Max(_buckets.Length, _ranges.Length * 2)];
+                _ranges = ArrayPool<LayerRange>.Shared.Rent(Math.Max(_buckets.Length, _ranges.Length * 2));
 
             int sIdx = 0, aIdx = 0, pIdx = 0;
             for (var i = 0; i < _buckets.Length; i++)
@@ -969,7 +1001,7 @@ public sealed class GlobalEventCenter
 
     private sealed class AsyncFaultContext<T> where T : struct
     {
-        private static readonly ConcurrentBag<AsyncFaultContext<T>> s_pool = new();
+        private static readonly ConcurrentQueue<AsyncFaultContext<T>> s_pool = new();
         private readonly Action _continuation;
         private HandlerCircuit? _circuit;
         private string? _handlerFullName;
@@ -986,7 +1018,7 @@ public sealed class GlobalEventCenter
         public static void Observe(EventBucket<T> owner, int layerIndex, HandlerCircuit circuit, string handlerFullName,
                                    in T           payload, LBTask task)
         {
-            if (!s_pool.TryTake(out var context)) context = new AsyncFaultContext<T>();
+            if (!s_pool.TryDequeue(out var context)) context = new AsyncFaultContext<T>();
             context._owner = owner;
             context._layerIndex = layerIndex;
             context._circuit = circuit;
@@ -1018,7 +1050,7 @@ public sealed class GlobalEventCenter
                 _handlerFullName = null;
                 _payload = default;
                 _task = default;
-                s_pool.Add(this);
+                s_pool.Enqueue(this);
             }
         }
     }
