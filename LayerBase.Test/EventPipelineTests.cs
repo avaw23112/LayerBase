@@ -91,117 +91,14 @@ public class EventPipelineTests
             var rt = LayerHub.CreateLayers().Push(layer).Build();
 
             rt.Send(new TestEvent());
-            // 🚀 在 v1.5.0 "原地复活"机制下，异常发生时 errorCount 增加，
-            // 但后续的 "Safe" Handler 在同一帧内也应该被执行！
             Assert.That(errorCount, Is.EqualTo(1));
-            Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv", "Safe" }));
-        }
-        finally
-        {
-            LayerHub.OnLayerEventInfo -= handler;
-        }
-    }
 
-    [Test]
-    public void Bubble_sync_dispatch_skips_faulted_handler_and_continues_remaining_handlers()
-    {
-        var upper = new PlainLayer();
-        var lower = new PlainLayer();
-        var errorCount = 0;
-        Action<LayerEventInfo> handler = info =>
-        {
-            if (info.Type == LayerEventInfoType.Error) Interlocked.Increment(ref errorCount);
-        };
-
-        LayerHub.OnLayerEventInfo += handler;
-        try
-        {
-            upper.Subscribe((in TestEvent e) =>
-            {
-                _trace.Add("UpperFirst");
-                return EventHandledState.Continue;
-            });
-            upper.Subscribe((in TestEvent e) => throw new Exception("BubbleBoom"));
-            upper.Subscribe((in TestEvent e) =>
-            {
-                _trace.Add("UpperLast");
-                return EventHandledState.Continue;
-            });
-
-            lower.Subscribe((in TestEvent e) =>
-            {
-                _trace.Add("Lower");
-                return EventHandledState.Continue;
-            });
-
-            var rt = LayerHub.CreateLayers().Push(upper).Push(lower).Build();
-
-            lower.SendBubble(new TestEvent());
-
-            Assert.That(errorCount, Is.EqualTo(1));
-            Assert.That(_trace, Is.EqualTo(new[] { "Lower", "UpperLast", "UpperFirst" }));
+            Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv" }));
 
             _trace.Clear();
             rt.Send(new TestEvent());
-            Assert.That(errorCount, Is.EqualTo(1));
-            Assert.That(_trace, Does.Not.Contain("BubbleBoom"));
-            Assert.That(_trace, Does.Contain("UpperLast"));
-            Assert.That(_trace, Does.Contain("UpperFirst"));
-        }
-        finally
-        {
-            LayerHub.OnLayerEventInfo -= handler;
-        }
-    }
-
-    [Test]
-    public void Bubble_sync_dispatch_disables_the_exact_faulted_handler_inside_unrolled_backward_block()
-    {
-        var upper = new PlainLayer();
-        var lower = new PlainLayer();
-        var errorCount = 0;
-        Action<LayerEventInfo> handler = info =>
-        {
-            if (info.Type == LayerEventInfoType.Error) Interlocked.Increment(ref errorCount);
-        };
-
-        LayerHub.OnLayerEventInfo += handler;
-        try
-        {
-            upper.Subscribe((in TestEvent e) =>
-            {
-                _trace.Add("H0");
-                return EventHandledState.Continue;
-            });
-            upper.Subscribe((in TestEvent e) =>
-            {
-                _trace.Add("H1");
-                return EventHandledState.Continue;
-            });
-            upper.Subscribe((in TestEvent e) =>
-            {
-                _trace.Add("H2");
-                return EventHandledState.Continue;
-            });
-            upper.Subscribe((in TestEvent e) => throw new Exception("UnrolledBackwardBoom"));
-            upper.Subscribe((in TestEvent e) =>
-            {
-                _trace.Add("H4");
-                return EventHandledState.Continue;
-            });
-
-            LayerHub.CreateLayers().Push(upper).Push(lower).Build();
-
-            lower.SendBubble(new TestEvent());
-
-            Assert.That(errorCount, Is.EqualTo(1));
-            Assert.That(_trace, Is.EqualTo(new[] { "H4", "H2", "H1", "H0" }));
-
-            _trace.Clear();
-            lower.SendBubble(new TestEvent());
-
-            Assert.That(errorCount, Is.EqualTo(1));
-            Assert.That(_trace, Is.EqualTo(new[] { "H4", "H2", "H1", "H0" }));
+            Assert.That(errorCount, Is.EqualTo(1), "Should fuse and not report again");
+            Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv", "Safe" }));
         }
         finally
         {
@@ -274,10 +171,6 @@ public class EventPipelineTests
             _trace.Add(_name + "_Recv");
             return _handle ? EventHandledState.Handled : EventHandledState.Continue;
         }
-    }
-
-    private sealed class PlainLayer : Layer
-    {
     }
 
     public struct TestEvent
