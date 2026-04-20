@@ -340,7 +340,7 @@ public sealed class GlobalEventCenter
         public static EventBucket<T>? Instance;
     }
 
-    private interface IResetable
+    private interface IResetable : IDisposable
     {
         void Reset();
     }
@@ -371,14 +371,16 @@ public sealed class GlobalEventCenter
         public void Dispose()
         {
             if (_disposed) return;
-            _disposed = true;
             lock (_lock)
             {
+                if (_disposed) return;
+                _disposed = true;
                 var arr = _queuesByTypeArr;
                 for (int i = 0; i < arr.Length; i++)
                 {
                     arr[i]?.Dispose();
                 }
+                _queuesByTypeArr = Array.Empty<IUnmanagedList>();
             }
         }
 
@@ -386,16 +388,21 @@ public sealed class GlobalEventCenter
         {
             if (_disposed) return;
             var typeId = EventTypeId<T>.Id;
+            
+            // 使用局部变量引用，防止在 Double-Check 过程中数组被替换
             var arr = _queuesByTypeArr;
             IUnmanagedList? list = null;
+            
             if (typeId < arr.Length)
             {
                 list = arr[typeId];
             }
+
             if (list == null)
             {
                 lock (_lock)
                 {
+                    if (_disposed) return;
                     if (typeId >= _queuesByTypeArr.Length)
                     {
                         int newSize = Math.Max(typeId + 1, _queuesByTypeArr.Length * 2);
@@ -445,10 +452,65 @@ public sealed class GlobalEventCenter
 
         private EventHandleDelegate<T>[] _syncHandlers = Array.Empty<EventHandleDelegate<T>>();
         private string[] _syncNames = Array.Empty<string>();
+        private bool _disposed;
 
         public EventBucket(GlobalEventCenter center)
         {
             Owner = center;
+        }
+
+        public void Dispose()
+        {
+            lock (_lock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                ReturnArrays();
+            }
+        }
+
+        private void ReturnArrays()
+        {
+            if (_syncHandlers != null && _syncHandlers.Length > 0 && _syncHandlers != Array.Empty<EventHandleDelegate<T>>())
+            {
+                ArrayPool<EventHandleDelegate<T>>.Shared.Return(_syncHandlers, true);
+                _syncHandlers = Array.Empty<EventHandleDelegate<T>>();
+            }
+            if (_syncCircuits != null && _syncCircuits.Length > 0 && _syncCircuits != Array.Empty<HandlerCircuit>())
+            {
+                ArrayPool<HandlerCircuit>.Shared.Return(_syncCircuits, true);
+                _syncCircuits = Array.Empty<HandlerCircuit>();
+            }
+            if (_syncNames != null && _syncNames.Length > 0 && _syncNames != Array.Empty<string>())
+            {
+                ArrayPool<string>.Shared.Return(_syncNames, true);
+                _syncNames = Array.Empty<string>();
+            }
+            if (_asyncHandlers != null && _asyncHandlers.Length > 0 && _asyncHandlers != Array.Empty<EventHandleDelegateAsync<T>>())
+            {
+                ArrayPool<EventHandleDelegateAsync<T>>.Shared.Return(_asyncHandlers, true);
+                _asyncHandlers = Array.Empty<EventHandleDelegateAsync<T>>();
+            }
+            if (_asyncCircuits != null && _asyncCircuits.Length > 0 && _asyncCircuits != Array.Empty<HandlerCircuit>())
+            {
+                ArrayPool<HandlerCircuit>.Shared.Return(_asyncCircuits, true);
+                _asyncCircuits = Array.Empty<HandlerCircuit>();
+            }
+            if (_asyncNames != null && _asyncNames.Length > 0 && _asyncNames != Array.Empty<string>())
+            {
+                ArrayPool<string>.Shared.Return(_asyncNames, true);
+                _asyncNames = Array.Empty<string>();
+            }
+            if (_flatParallel != null && _flatParallel.Length > 0 && _flatParallel != Array.Empty<ParallelHandlerEntry<T>>())
+            {
+                ArrayPool<ParallelHandlerEntry<T>>.Shared.Return(_flatParallel, true);
+                _flatParallel = Array.Empty<ParallelHandlerEntry<T>>();
+            }
+            if (_ranges != null && _ranges.Length > 0 && _ranges != Array.Empty<LayerRange>())
+            {
+                ArrayPool<LayerRange>.Shared.Return(_ranges, true);
+                _ranges = Array.Empty<LayerRange>();
+            }
         }
 
         public void Reset()
@@ -484,6 +546,8 @@ public sealed class GlobalEventCenter
 
         private void Rebuild()
         {
+            if (_disposed) return;
+
             int totalSync = 0, totalAsync = 0, totalParallel = 0;
             ulong newMask = 0, newSyncMask = 0, newAsyncMask = 0, newParallelMask = 0;
             for (var i = 0; i < _buckets.Length; i++)
@@ -516,9 +580,12 @@ public sealed class GlobalEventCenter
                 if (bSync > 0 || bAsync > 0 || bParallel > 0) newMask |= bit;
             }
 
+            // 修复：在租借新数组前归还旧数组，防止内存泄露
             if (_syncHandlers.Length < totalSync)
             {
-                int newSize = Math.Max(totalSync, _syncHandlers.Length * 2);
+                int oldSize = _syncHandlers.Length;
+                ReturnArraysForRebuild(true, false, false);
+                int newSize = Math.Max(totalSync, oldSize * 2);
                 _syncHandlers = ArrayPool<EventHandleDelegate<T>>.Shared.Rent(newSize);
                 _syncCircuits = ArrayPool<HandlerCircuit>.Shared.Rent(newSize);
                 _syncNames = ArrayPool<string>.Shared.Rent(newSize);
@@ -526,16 +593,29 @@ public sealed class GlobalEventCenter
 
             if (_asyncHandlers.Length < totalAsync)
             {
-                int newSize = Math.Max(totalAsync, _asyncHandlers.Length * 2);
+                int oldSize = _asyncHandlers.Length;
+                ReturnArraysForRebuild(false, true, false);
+                int newSize = Math.Max(totalAsync, oldSize * 2);
                 _asyncHandlers = ArrayPool<EventHandleDelegateAsync<T>>.Shared.Rent(newSize);
                 _asyncCircuits = ArrayPool<HandlerCircuit>.Shared.Rent(newSize);
                 _asyncNames = ArrayPool<string>.Shared.Rent(newSize);
             }
 
             if (_flatParallel.Length < totalParallel)
+            {
+                if (_flatParallel != Array.Empty<ParallelHandlerEntry<T>>())
+                    ArrayPool<ParallelHandlerEntry<T>>.Shared.Return(_flatParallel, true);
                 _flatParallel = ArrayPool<ParallelHandlerEntry<T>>.Shared.Rent(Math.Max(totalParallel, _flatParallel.Length * 2));
+            }
+
             if (_ranges.Length < _buckets.Length)
+            {
+                if (_ranges != Array.Empty<LayerRange>())
+                    ArrayPool<LayerRange>.Shared.Return(_ranges, true);
                 _ranges = ArrayPool<LayerRange>.Shared.Rent(Math.Max(_buckets.Length, _ranges.Length * 2));
+            }
+
+            // ... (后续填充逻辑保持不变)
 
             int sIdx = 0, aIdx = 0, pIdx = 0;
             for (var i = 0; i < _buckets.Length; i++)
@@ -966,6 +1046,35 @@ public sealed class GlobalEventCenter
                 var @event = new Event<T>(value) { TargetMask = targetMask, Propagation = (int)propagation };
                 Owner.EnqueueEventInternal(firstLayer, in @event);
                 Owner.WakeLayer(firstLayer);
+            }
+        }
+
+        private void ReturnArraysForRebuild(bool sync, bool async, bool parallel)
+        {
+            if (sync)
+            {
+                if (_syncHandlers != null && _syncHandlers.Length > 0 && _syncHandlers != Array.Empty<EventHandleDelegate<T>>())
+                    ArrayPool<EventHandleDelegate<T>>.Shared.Return(_syncHandlers, true);
+                if (_syncCircuits != null && _syncCircuits.Length > 0 && _syncCircuits != Array.Empty<HandlerCircuit>())
+                    ArrayPool<HandlerCircuit>.Shared.Return(_syncCircuits, true);
+                if (_syncNames != null && _syncNames.Length > 0 && _syncNames != Array.Empty<string>())
+                    ArrayPool<string>.Shared.Return(_syncNames, true);
+                _syncHandlers = Array.Empty<EventHandleDelegate<T>>();
+                _syncCircuits = Array.Empty<HandlerCircuit>();
+                _syncNames = Array.Empty<string>();
+            }
+
+            if (async)
+            {
+                if (_asyncHandlers != null && _asyncHandlers.Length > 0 && _asyncHandlers != Array.Empty<EventHandleDelegateAsync<T>>())
+                    ArrayPool<EventHandleDelegateAsync<T>>.Shared.Return(_asyncHandlers, true);
+                if (_asyncCircuits != null && _asyncCircuits.Length > 0 && _asyncCircuits != Array.Empty<HandlerCircuit>())
+                    ArrayPool<HandlerCircuit>.Shared.Return(_asyncCircuits, true);
+                if (_asyncNames != null && _asyncNames.Length > 0 && _asyncNames != Array.Empty<string>())
+                    ArrayPool<string>.Shared.Return(_asyncNames, true);
+                _asyncHandlers = Array.Empty<EventHandleDelegateAsync<T>>();
+                _asyncCircuits = Array.Empty<HandlerCircuit>();
+                _asyncNames = Array.Empty<string>();
             }
         }
 

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace LayerBase.Core.EventStateTrace;
 
 internal struct Slot<T> where T : struct
@@ -29,68 +31,68 @@ internal struct SlotRef
 }
 
 /// <summary>
-///     freelist
+///     高性能 Slot 分配器 (FreeList)
 /// </summary>
 internal sealed class FreeList<T> where T : struct
 {
-    /// <summary>
-    ///     总内存空间
-    /// </summary>
     private readonly List<Slot<T>[]> _slabs = new();
-
-    /// <summary>
-    ///     每组Slot[]的固定长度
-    /// </summary>
     private readonly int _slabSize;
-
     private readonly object _syncLock = new();
-
-    /// <summary>
-    ///     空闲节点头指针
-    /// </summary>
     private int _freeHead = -1;
 
     public FreeList(int slabSize)
     {
+        if (slabSize <= 0) throw new ArgumentOutOfRangeException(nameof(slabSize));
         _slabSize = slabSize;
     }
 
+    /// <summary>
+    ///     预热内存空间，提前分配指定容量的 Slab。
+    /// </summary>
+    public void Prewarm(int capacity)
+    {
+        if (capacity <= 0) return;
+        lock (_syncLock)
+        {
+            var neededSlabs = (capacity + _slabSize - 1) / _slabSize;
+            var currentSlabs = _slabs.Count;
+            for (var i = currentSlabs; i < neededSlabs; i++)
+            {
+                AllocateSlabInternal();
+            }
+        }
+    }
 
     /// <summary>
-    ///     租用新的slot
+    ///     租用新的 slot
     /// </summary>
-    /// <returns></returns>
     public SlotRef Rent()
     {
         lock (_syncLock)
         {
-            //当目前空间不足时,即_freeHead指向最后一个节点的nextFree时,重新开辟内存
             if (_freeHead == -1) AllocateSlabInternal();
 
-            //取出最新可用空闲节点
             var globalIndex = _freeHead;
             ref var slot = ref GetSlotInternal(globalIndex);
             _freeHead = slot.NextFree;
 
-            //将已经分配的slot移除出空闲链表
             slot.NextFree = -1;
             slot.InUse = true;
             slot.Completed = false;
             slot.Version = NextVersion(slot.Version);
 
-            //返回slot引用
             return new SlotRef(globalIndex, slot.Version);
         }
     }
 
     /// <summary>
-    ///     使用原始方式直接获取Slot
+    ///     尝试借用（验证有效性）
     /// </summary>
-    public bool TryBorrow(int GlobalIndex, int Version, out SlotRef slotRef)
+    public bool TryBorrow(int globalIndex, int version, out SlotRef slotRef)
     {
         lock (_syncLock)
         {
-            if (!TryValidateInternal(GlobalIndex, Version, out var globalIndex))
+            if (!ValidateInternal(globalIndex, version))
             {
                 slotRef = default;
                 return false;
@@ -106,54 +108,44 @@ internal sealed class FreeList<T> where T : struct
     {
         lock (_syncLock)
         {
+            // 在高性能路径上，信任调用者已经通过 TryBorrow 或刚 Rent 到引用
             return ref GetSlotInternal(slotRef.GlobalIndex);
         }
     }
 
     /// <summary>
-    ///     回收Slot
+    ///     回收 Slot
     /// </summary>
     public void Release(in SlotRef slotRef)
     {
         lock (_syncLock)
         {
+            if (!ValidateInternal(slotRef.GlobalIndex, slotRef.Version)) return;
+
             ref var slot = ref GetSlotInternal(slotRef.GlobalIndex);
 
-            if (!slot.InUse || slot.Version != slotRef.Version) return;
-
-            //重置当前Slot
             slot.Value = default;
             slot.InUse = false;
             slot.Completed = false;
             slot.Version = NextVersion(slot.Version);
 
-            //延申freeList,使当前已经被释放的slot成为freeList的头节点.
             slot.NextFree = _freeHead;
             _freeHead = slotRef.GlobalIndex;
         }
     }
 
-    private bool TryValidateInternal(int GlobalIndex, int Version, out int globalIndex)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool ValidateInternal(int globalIndex, int version)
     {
-        var slabIndex = GlobalIndex / _slabSize;
-        if (slabIndex < 0 || slabIndex >= _slabs.Count)
-        {
-            globalIndex = default;
-            return false;
-        }
+        var slabIndex = globalIndex / _slabSize;
+        if (slabIndex < 0 || slabIndex >= _slabs.Count) return false;
 
-        var slotIndex = GlobalIndex % _slabSize;
+        var slotIndex = globalIndex % _slabSize;
         ref var slot = ref _slabs[slabIndex][slotIndex];
-        if (!slot.InUse || slot.Version != Version)
-        {
-            globalIndex = default;
-            return false;
-        }
-
-        globalIndex = GlobalIndex;
-        return true;
+        return slot.InUse && slot.Version == version;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ref Slot<T> GetSlotInternal(int globalIndex)
     {
         var slabIndex = globalIndex / _slabSize;
@@ -166,6 +158,7 @@ internal sealed class FreeList<T> where T : struct
         var baseIndex = _slabs.Count * _slabSize;
         var slab = new Slot<T>[_slabSize];
 
+        // 倒序构建链表，使得 Rent 时能从低索引开始使用（对缓存更友好）
         for (var i = _slabSize - 1; i >= 0; i--)
         {
             slab[i].NextFree = _freeHead;
