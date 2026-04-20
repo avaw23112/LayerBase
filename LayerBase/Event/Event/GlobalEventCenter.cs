@@ -971,29 +971,20 @@ public sealed class GlobalEventCenter
             if (start >= end) return;
             ref var hBase = ref GetArrayDataRef(_notifyHandlers);
             var i = start;
-            int offset = 0;
-            try
+            for (; i <= end - 8; i += 8)
             {
-                for (; i <= end - 8; i += 8)
-                {
-                    offset = 0; Unsafe.Add(ref hBase, i)(in e);
-                    offset = 1; Unsafe.Add(ref hBase, i + 1)(in e);
-                    offset = 2; Unsafe.Add(ref hBase, i + 2)(in e);
-                    offset = 3; Unsafe.Add(ref hBase, i + 3)(in e);
-                    offset = 4; Unsafe.Add(ref hBase, i + 4)(in e);
-                    offset = 5; Unsafe.Add(ref hBase, i + 5)(in e);
-                    offset = 6; Unsafe.Add(ref hBase, i + 6)(in e);
-                    offset = 7; Unsafe.Add(ref hBase, i + 7)(in e);
-                }
-                offset = 0;
-                for (; i < end; i++)
-                {
-                    Unsafe.Add(ref hBase, i)(in e);
-                }
+                Unsafe.Add(ref hBase, i)(in e);
+                Unsafe.Add(ref hBase, i + 1)(in e);
+                Unsafe.Add(ref hBase, i + 2)(in e);
+                Unsafe.Add(ref hBase, i + 3)(in e);
+                Unsafe.Add(ref hBase, i + 4)(in e);
+                Unsafe.Add(ref hBase, i + 5)(in e);
+                Unsafe.Add(ref hBase, i + 6)(in e);
+                Unsafe.Add(ref hBase, i + 7)(in e);
             }
-            catch (Exception ex)
+            for (; i < end; i++)
             {
-                HandleNotifyFault(i+ offset, in e, ex);
+                Unsafe.Add(ref hBase, i)(in e);
             }
         }
 
@@ -1003,29 +994,20 @@ public sealed class GlobalEventCenter
             if (start >= end) return;
             ref var hBase = ref GetArrayDataRef(_notifyHandlers);
             var i = end - 1;
-            int offset = 0;
-            try
+            for (; i >= start + 7; i -= 8)
             {
-                for (; i >= start + 7; i -= 8)
-                {
-                    offset =  0;Unsafe.Add(ref hBase, i)(in e);
-                    offset = -1;Unsafe.Add(ref hBase, i - 1)(in e);
-                    offset = -2;Unsafe.Add(ref hBase, i - 2)(in e);
-                    offset = -3;Unsafe.Add(ref hBase, i - 3)(in e);
-                    offset = -4;Unsafe.Add(ref hBase, i - 4)(in e);
-                    offset = -5;Unsafe.Add(ref hBase, i - 5)(in e);
-                    offset = -6;Unsafe.Add(ref hBase, i - 6)(in e);
-                    offset = -7;Unsafe.Add(ref hBase, i - 7)(in e);
-                }
-                offset = 0;
-                for (; i >= start; i--)
-                {
-                    Unsafe.Add(ref hBase, i)(in e);
-                }
+                Unsafe.Add(ref hBase, i)(in e);
+                Unsafe.Add(ref hBase, i - 1)(in e);
+                Unsafe.Add(ref hBase, i - 2)(in e);
+                Unsafe.Add(ref hBase, i - 3)(in e);
+                Unsafe.Add(ref hBase, i - 4)(in e);
+                Unsafe.Add(ref hBase, i - 5)(in e);
+                Unsafe.Add(ref hBase, i - 6)(in e);
+                Unsafe.Add(ref hBase, i - 7)(in e);
             }
-            catch (Exception ex)
+            for (; i >= start; i--)
             {
-                HandleNotifyFault(i + offset, in e, ex);
+                Unsafe.Add(ref hBase, i)(in e);
             }
         }
 
