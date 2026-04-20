@@ -270,7 +270,30 @@ public class Typical_Heavy_180_Bench : EventBenchmarkBase
         for (var i = 0; i < TenThousand; i++) LayerHub.Send(new BenchEvent());
     }
 }
+public class Typical_Heavy_180_Bench_Notify : EventBenchmarkBase
+{
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        var builder = LayerHub.CreateLayers();
+        for (var i = 0; i < 5; i++)
+        {
+            var l = new BenchLayer();
+            var count = i == 0 ? 100 : 20;
+            for (var j = 0; j < count; j++) l.RegisterService(new NotifyBenchManager());
+            builder.Push(l);
+        }
 
+        builder.Build();
+    }
+
+    [Benchmark(Description = "Notify中重度负载 (180订阅) - 1万次")]
+    public void Run()
+    {
+        for (var i = 0; i < TenThousand; i++) LayerHub.Send(new NotifyEvent());
+    }
+}
 public class NotifyComparisonBench : EventBenchmarkBase
 {
     private const int HundredMillion = 100_000_000;

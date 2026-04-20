@@ -20,7 +20,7 @@ public sealed class OwnerLayerAttribute : Attribute
     public Type LayerType { get; }
 }
 
-public abstract class Layer : Node, ILayerContext, IDisposable, IService
+public abstract class Layer : Node, IDisposable
 {
     private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();
     private readonly List<IDelayPublisherUpdater> m_delayUpdaters = new(); // 优化：消除 Values 迭代分配
