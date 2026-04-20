@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LayerBase.Core.Event;
@@ -13,11 +14,13 @@ internal interface IUnmanagedList : IDisposable
 internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
 {
     private readonly GlobalEventCenter _center;
-
-    private readonly List<Event<Value>> _forwardBuffer = new(256);
     private readonly int _layerIndex;
     private readonly Action<IUnmanagedList> _onDirty;
     private readonly PooledChunkedOverwriteQueue<Event<Value>> _queue;
+    private readonly object _lock = new();
+    
+    private Event<Value>[]? _forwardBuffer;
+    private int _forwardCount;
     private bool _disposed;
     private int _isDirty;
 
@@ -31,10 +34,23 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
-        _queue.Dispose();
-        _forwardBuffer.Clear();
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _queue.Dispose();
+            ReturnBuffer();
+        }
+    }
+
+    private void ReturnBuffer()
+    {
+        if (_forwardBuffer != null)
+        {
+            ArrayPool<Event<Value>>.Shared.Return(_forwardBuffer);
+            _forwardBuffer = null;
+        }
+        _forwardCount = 0;
     }
 
     public void MarkClean()
@@ -45,44 +61,51 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     public void Pump()
     {
         MarkClean();
+        
+        // 快速检查，减少锁竞争
         if (_queue.IsEmpty) return;
 
         var forwarded = false;
         var lastTargetLayer = -1;
         var myMask = 1UL << _layerIndex;
 
-        _queue.ProcessBatch(span =>
+        lock (_lock)
         {
-            var len = span.Length;
-            var i = 0;
+            if (_disposed) return;
 
-            for (; i <= len - 4; i += 4)
+            _queue.ProcessBatch(span =>
             {
-                ref readonly var e0 = ref span[i];
-                ref readonly var e1 = ref span[i + 1];
-                ref readonly var e2 = ref span[i + 2];
-                ref readonly var e3 = ref span[i + 3];
+                var len = span.Length;
+                var i = 0;
 
-                if (((e0.TargetMask | e1.TargetMask | e2.TargetMask | e3.TargetMask) & myMask) != 0)
+                for (; i <= len - 4; i += 4)
                 {
-                    ProcessEvent(in e0, ref forwarded, ref lastTargetLayer);
-                    ProcessEvent(in e1, ref forwarded, ref lastTargetLayer);
-                    ProcessEvent(in e2, ref forwarded, ref lastTargetLayer);
-                    ProcessEvent(in e3, ref forwarded, ref lastTargetLayer);
-                }
-                else
-                {
-                    ForwardOnly(in e0, ref forwarded, ref lastTargetLayer);
-                    ForwardOnly(in e1, ref forwarded, ref lastTargetLayer);
-                    ForwardOnly(in e2, ref forwarded, ref lastTargetLayer);
-                    ForwardOnly(in e3, ref forwarded, ref lastTargetLayer);
-                }
-            }
+                    ref readonly var e0 = ref span[i];
+                    ref readonly var e1 = ref span[i + 1];
+                    ref readonly var e2 = ref span[i + 2];
+                    ref readonly var e3 = ref span[i + 3];
 
-            for (; i < len; i++) ProcessEvent(in span[i], ref forwarded, ref lastTargetLayer);
+                    if (((e0.TargetMask | e1.TargetMask | e2.TargetMask | e3.TargetMask) & myMask) != 0)
+                    {
+                        ProcessEvent(in e0, ref forwarded, ref lastTargetLayer);
+                        ProcessEvent(in e1, ref forwarded, ref lastTargetLayer);
+                        ProcessEvent(in e2, ref forwarded, ref lastTargetLayer);
+                        ProcessEvent(in e3, ref forwarded, ref lastTargetLayer);
+                    }
+                    else
+                    {
+                        ForwardOnly(in e0, ref forwarded, ref lastTargetLayer);
+                        ForwardOnly(in e1, ref forwarded, ref lastTargetLayer);
+                        ForwardOnly(in e2, ref forwarded, ref lastTargetLayer);
+                        ForwardOnly(in e3, ref forwarded, ref lastTargetLayer);
+                    }
+                }
 
-            FlushForwardBuffer(ref forwarded);
-        });
+                for (; i < len; i++) ProcessEvent(in span[i], ref forwarded, ref lastTargetLayer);
+
+                FlushForwardBuffer(ref forwarded);
+            });
+        }
 
         if (forwarded) _center.WakeLayer(lastTargetLayer);
     }
@@ -105,34 +128,53 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
         {
             if (lastTargetLayer != -1 && lastTargetLayer != nextLayer) FlushForwardBuffer(ref forwarded);
             lastTargetLayer = nextLayer;
-            _forwardBuffer.Add(@event);
+            
+            // 使用池化内存作为临时缓冲区
+            _forwardBuffer ??= ArrayPool<Event<Value>>.Shared.Rent(256);
+            if (_forwardCount >= _forwardBuffer.Length)
+            {
+                var newBuffer = ArrayPool<Event<Value>>.Shared.Rent(_forwardBuffer.Length * 2);
+                Array.Copy(_forwardBuffer, newBuffer, _forwardBuffer.Length);
+                ArrayPool<Event<Value>>.Shared.Return(_forwardBuffer);
+                _forwardBuffer = newBuffer;
+            }
+            _forwardBuffer[_forwardCount++] = @event;
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void FlushForwardBuffer(ref bool forwarded)
     {
-        if (_forwardBuffer.Count == 0) return;
+        if (_forwardCount == 0 || _forwardBuffer == null) return;
+        
         var target = _forwardBuffer[0].FindNextTarget(_layerIndex, _center);
+        var span = _forwardBuffer.AsSpan(0, _forwardCount);
 
 #if NETCOREAPP || NET5_0_OR_GREATER
-        _center.EnqueueEventBatchInternal<Value>(target, CollectionsMarshal.AsSpan(_forwardBuffer));
+        _center.EnqueueEventBatchInternal<Value>(target, span);
 #else
-        // Fallback for netstandard2.1
-        foreach (var ev in _forwardBuffer) _center.EnqueueEventInternal(target, in ev);
+        foreach (var ev in span) _center.EnqueueEventInternal(target, in ev);
 #endif
-        _forwardBuffer.Clear();
+        _forwardCount = 0;
         forwarded = true;
     }
 
     public void Post(in Event<Value> val)
     {
-        _queue.EnqueueOverwrite(val);
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _queue.EnqueueOverwrite(val);
+        }
+        
         if (Interlocked.CompareExchange(ref _isDirty, 1, 0) == 0) _onDirty(this);
     }
 
     public bool TryDequeue(out Event<Value> @event)
     {
-        return _queue.TryDequeue(out @event);
+        lock (_lock)
+        {
+            return _queue.TryDequeue(out @event);
+        }
     }
 }
