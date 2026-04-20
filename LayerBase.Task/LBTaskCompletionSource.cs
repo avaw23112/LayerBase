@@ -1,13 +1,19 @@
 namespace LayerBase.Async;
 
 /// <summary>Manual completion for ArchTask.</summary>
-public sealed class LBTaskCompletionSource
+public sealed class LBTaskCompletionSource : IDisposable
 {
     private readonly ArchTaskSource _source;
+    private int _disposed;
 
     public LBTaskCompletionSource()
     {
         _source = ArchTaskSource.Rent();
+    }
+
+    ~LBTaskCompletionSource()
+    {
+        DisposeInternal();
     }
 
     public LBTask Task => new(_source);
@@ -65,16 +71,37 @@ public sealed class LBTaskCompletionSource
             return false;
         }
     }
+
+    public void Dispose()
+    {
+        DisposeInternal();
+        GC.SuppressFinalize(this);
+    }
+
+    private void DisposeInternal()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            // 如果任务从未完成，强制归还 Source 到池中
+            _source.TryRelease();
+        }
+    }
 }
 
 /// <summary>Manual completion for ArchTask{T}.</summary>
-public sealed class LBTaskCompletionSource<T>
+public sealed class LBTaskCompletionSource<T> : IDisposable
 {
     private readonly ArchTaskSource<T> _source;
+    private int _disposed;
 
     public LBTaskCompletionSource()
     {
         _source = ArchTaskSource<T>.Rent();
+    }
+
+    ~LBTaskCompletionSource()
+    {
+        DisposeInternal();
     }
 
     public LBTask<T> Task => new(_source);
@@ -130,6 +157,20 @@ public sealed class LBTaskCompletionSource<T>
         catch
         {
             return false;
+        }
+    }
+
+    public void Dispose()
+    {
+        DisposeInternal();
+        GC.SuppressFinalize(this);
+    }
+
+    private void DisposeInternal()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            _source.TryRelease();
         }
     }
 }

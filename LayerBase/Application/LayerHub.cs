@@ -46,8 +46,8 @@ public static class LayerHub
 {
     private static LayerChain? s_chain;
     private static LayerBaseSynchronizationContext? s_context;
-
     private static int s_layerIndexCounter;
+    private static readonly object s_lock = new();
 
     public static GlobalEventCenter EventCenter { get; internal set; } = new();
 
@@ -56,17 +56,23 @@ public static class LayerHub
 
     internal static int GetNextLayerIndex()
     {
-        return s_layerIndexCounter++;
+        return GetNextLayerIndexInternal();
     }
+
+    // 内部实现
+    private static int GetNextLayerIndexInternal() => Interlocked.Increment(ref s_layerIndexCounter) - 1;
 
     public static LayersBuilder CreateLayers()
     {
-        if (SynchronizationContext.Current == null)
-            s_context = LayerBaseSynchronizationContext.InstallAsCurrent();
-        else if (s_context == null && SynchronizationContext.Current is not LayerBaseSynchronizationContext ctx)
-            s_context = LayerBaseSynchronizationContext.Install();
+        lock (s_lock)
+        {
+            if (SynchronizationContext.Current == null)
+                s_context = LayerBaseSynchronizationContext.InstallAsCurrent();
+            else if (s_context == null && SynchronizationContext.Current is not LayerBaseSynchronizationContext ctx)
+                s_context = LayerBaseSynchronizationContext.Install();
 
-        return new LayersBuilder();
+            return new LayersBuilder();
+        }
     }
 
     public static void Pump(float deltaTime)
@@ -77,21 +83,25 @@ public static class LayerHub
 
     public static void Reset()
     {
-        s_chain = null;
-        s_layerIndexCounter = 0;
-        EventCenter = new GlobalEventCenter();
-        ServiceLayerBinder.Reset();
-        OnLayerEventInfo = null;
-        IsDebugMode = false;
+        lock (s_lock)
+        {
+            s_chain = null;
+            s_layerIndexCounter = 0;
+            EventCenter = new GlobalEventCenter();
+            ServiceLayerBinder.Reset();
+            OnLayerEventInfo = null;
+            IsDebugMode = false;
 
-        s_context?.Dispose();
-        if (SynchronizationContext.Current == s_context) SynchronizationContext.SetSynchronizationContext(null);
-        s_context = null;
+            s_context?.Dispose();
+            if (SynchronizationContext.Current == s_context) SynchronizationContext.SetSynchronizationContext(null);
+            s_context = null;
+        }
     }
 
     internal static void ReportInfo(LayerEventInfo info)
     {
-        OnLayerEventInfo?.Invoke(info);
+        var handler = OnLayerEventInfo;
+        handler?.Invoke(info);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -47,7 +47,7 @@ public sealed class GlobalEventCenter
                     var newSlots = new IEventQueue[count];
                     Array.Copy(_layerSlots, newSlots, _layerSlots.Length);
                     for (var i = _layerSlots.Length; i < count; i++) newSlots[i] = new LayerEventQueue(this, i);
-                    _layerSlots = newSlots;
+                    
                     var newBubble = new ulong[count];
                     var newDrop = new ulong[count];
                     for (var i = 0; i < count; i++)
@@ -56,8 +56,10 @@ public sealed class GlobalEventCenter
                         newDrop[i] = ~((1UL << i) - 1);
                     }
 
+                    // 确保数组内容先初始化，再发布引用（简单的可见性保障）
                     _bubbleMasksArr = newBubble;
                     _dropMasksArr = newDrop;
+                    Volatile.Write(ref _layerSlots, newSlots);
                 }
 
                 if (_layerNames.Length < count)
@@ -1118,6 +1120,8 @@ public sealed class GlobalEventCenter
     private sealed class AsyncFaultContext<T> where T : struct
     {
         private static readonly ConcurrentQueue<AsyncFaultContext<T>> s_pool = new();
+        private static int s_poolCount;
+        private const int MAX_POOL_SIZE = 1024;
         private readonly Action _continuation;
         private HandlerCircuit? _circuit;
         private string? _handlerFullName;
@@ -1134,7 +1138,15 @@ public sealed class GlobalEventCenter
         public static void Observe(EventBucket<T> owner, int layerIndex, HandlerCircuit circuit, string handlerFullName,
                                    in T           payload, LBTask task)
         {
-            if (!s_pool.TryDequeue(out var context)) context = new AsyncFaultContext<T>();
+            if (!s_pool.TryDequeue(out var context))
+            {
+                context = new AsyncFaultContext<T>();
+            }
+            else
+            {
+                Interlocked.Decrement(ref s_poolCount);
+            }
+            
             context._owner = owner;
             context._layerIndex = layerIndex;
             context._circuit = circuit;
@@ -1166,7 +1178,16 @@ public sealed class GlobalEventCenter
                 _handlerFullName = null;
                 _payload = default;
                 _task = default;
-                s_pool.Enqueue(this);
+                
+                // 限制池大小，防止在高频错误下无限堆积对象
+                if (Interlocked.Increment(ref s_poolCount) <= MAX_POOL_SIZE)
+                {
+                    s_pool.Enqueue(this);
+                }
+                else
+                {
+                    Interlocked.Decrement(ref s_poolCount);
+                }
             }
         }
     }

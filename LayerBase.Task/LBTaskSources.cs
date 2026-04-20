@@ -10,6 +10,7 @@ internal interface IArchTaskSource
     void SetException(Exception        ex);
     void SetCanceled(CancellationToken token);
     void GetResult();
+    void TryRelease(); // 新增：安全尝试回收
 }
 
 internal interface IArchTaskSource<T>
@@ -20,6 +21,7 @@ internal interface IArchTaskSource<T>
     void SetException(Exception        ex);
     void SetCanceled(CancellationToken token);
     T GetResult();
+    void TryRelease(); // 新增：安全尝试回收
 }
 
 internal sealed class ArchTaskSource : IArchTaskSource
@@ -31,6 +33,7 @@ internal sealed class ArchTaskSource : IArchTaskSource
     private Action? _continuation;
     private Exception? _exception;
     private int _status; // 0 = pending, 1 = completed
+    private int _released; // 0 = in use, 1 = released
 
     private ArchTaskSource()
     {
@@ -81,8 +84,16 @@ internal sealed class ArchTaskSource : IArchTaskSource
     {
         if (!IsCompleted) throw new InvalidOperationException("ArchTask not completed");
         var ex = _exception;
-        Release();
+        TryRelease();
         if (ex != null) throw ex;
+    }
+
+    public void TryRelease()
+    {
+        if (Interlocked.Exchange(ref _released, 1) == 0)
+        {
+            Pool.Return(this);
+        }
     }
 
     public static ArchTaskSource Rent()
@@ -94,6 +105,7 @@ internal sealed class ArchTaskSource : IArchTaskSource
         src.IsCompleted = false;
         src._context = SynchronizationContext.Current;
         src._status = 0;
+        src._released = 0;
         return src;
     }
 
@@ -116,11 +128,6 @@ internal sealed class ArchTaskSource : IArchTaskSource
         else
             ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
     }
-
-    private void Release()
-    {
-        Pool.Return(this);
-    }
 }
 
 internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
@@ -133,6 +140,7 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
     private Exception? _exception;
     private T _result = default!;
     private int _status; // 0 = pending, 1 = completed
+    private int _released; // 0 = in use, 1 = released
 
     private ArchTaskSource()
     {
@@ -185,9 +193,17 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
         if (!IsCompleted) throw new InvalidOperationException("ArchTask not completed");
         var ex = _exception;
         var res = _result;
-        Release();
+        TryRelease();
         if (ex != null) throw ex;
         return res;
+    }
+
+    public void TryRelease()
+    {
+        if (Interlocked.Exchange(ref _released, 1) == 0)
+        {
+            Pool.Return(this);
+        }
     }
 
     public static ArchTaskSource<T> Rent()
@@ -200,6 +216,7 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
         src._result = default!;
         src._context = SynchronizationContext.Current;
         src._status = 0;
+        src._released = 0;
         return src;
     }
 

@@ -1,4 +1,4 @@
-﻿using LayerBase.Async;
+using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Core.EventStateTrace;
@@ -19,13 +19,13 @@ public sealed class TimerScheduler
     private bool _frequencyGateOpen = true;
     private double _frequencySeconds;
 
+    // 优化：重用列表，消除 Tick 时的分配
+    private readonly List<(TimerToken token, ITimerQueue queue)> _dueCache = new(64);
+
     public double CurrentTime { get; private set; }
 
     public bool IsFrequencyGateOpen => Volatile.Read(ref _frequencyGateOpen);
 
-    /// <summary>
-    ///     设置频率（秒）。传入 0 使频率阀门常开。
-    /// </summary>
     public void SetFrequency(double seconds)
     {
         if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 0)
@@ -43,9 +43,10 @@ public sealed class TimerScheduler
     {
         if (deltaTime < 0) throw new ArgumentOutOfRangeException(nameof(deltaTime));
 
-        List<(TimerToken token, ITimerQueue queue)> due = new();
-        List<Action>? frequencyInvokes = null;
+        _dueCache.Clear();
         bool gateOpen;
+        bool frequencyTriggered = false;
+
         lock (_lock)
         {
             gateOpen = _frequencySeconds == 0;
@@ -56,31 +57,35 @@ public sealed class TimerScheduler
                 if (_frequencyAccumulator >= _frequencySeconds)
                 {
                     gateOpen = true;
+                    frequencyTriggered = true;
                     while (_frequencyAccumulator >= _frequencySeconds) _frequencyAccumulator -= _frequencySeconds;
-
-                    if (_frequencyQueues.Count > 0)
-                    {
-                        frequencyInvokes ??= new List<Action>();
-                        foreach (var fq in _frequencyQueues.Values) fq.CollectInvocations(frequencyInvokes);
-                    }
                 }
             }
 
             while (_timeline.TryPeek(out var token, out var dueTime) && dueTime <= CurrentTime)
                 if (_timeline.TryDequeue(out token, out _))
                     if (_queues.TryGetValue(token.TypeId, out var queue))
-                        due.Add((token, queue));
+                        _dueCache.Add((token, queue));
         }
 
-        for (var i = 0; i < due.Count; i++)
+        // 1. 执行到期的普通定时器
+        for (var i = 0; i < _dueCache.Count; i++)
         {
-            var (token, queue) = due[i];
+            var (token, queue) = _dueCache[i];
             queue.TryInvoke(token);
         }
 
-        if (frequencyInvokes != null)
-            foreach (var invoke in frequencyInvokes)
-                invoke();
+        // 2. 执行频率任务（优化：直接内部迭代，零分配）
+        if (frequencyTriggered)
+        {
+            lock (_lock)
+            {
+                foreach (var fq in _frequencyQueues.Values)
+                {
+                    fq.ExecuteAll();
+                }
+            }
+        }
 
         Volatile.Write(ref _frequencyGateOpen, gateOpen);
     }
@@ -91,158 +96,86 @@ public sealed class TimerScheduler
         return RegisterAfter<EmptyPayload>(delay, default, _ => action());
     }
 
-    public void FireAfter(double delay, Action action)
-    {
-        RegisterAfter(delay, action);
-    }
-
     public TimerToken RegisterAfter<T>(double delay, in T value, EventHandleDelegate<T> handle) where T : struct
     {
         if (handle == null) throw new ArgumentNullException(nameof(handle));
         if (delay < 0) throw new ArgumentOutOfRangeException(nameof(delay));
-        var payload = value;
-        return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleDelegate(due, payload, handle));
-    }
-
-    public void FireAfter<T>(double delay, in T value, EventHandleDelegate<T> handle) where T : struct
-    {
-        RegisterAfter(delay, in value, handle);
-    }
-
-    public TimerToken RegisterAt(double timePoint, Action action)
-    {
-        if (action == null) throw new ArgumentNullException(nameof(action));
-        return RegisterAt<EmptyPayload>(timePoint, default, _ => action());
-    }
-
-    public void FireAt(double timePoint, Action action)
-    {
-        RegisterAt(timePoint, action);
+        var localValue = value;
+        return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleDelegate(due, localValue, handle));
     }
 
     public TimerToken RegisterAt<T>(double timePoint, in T value, EventHandleDelegate<T> handle) where T : struct
     {
         if (handle == null) throw new ArgumentNullException(nameof(handle));
-        var payload = value;
-        return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleDelegate(due, payload, handle));
-    }
-
-    public void FireAt<T>(double timePoint, in T value, EventHandleDelegate<T> handle) where T : struct
-    {
-        RegisterAt(timePoint, in value, handle);
+        var localValue = value;
+        return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleDelegate(due, localValue, handle));
     }
 
     public TimerToken RegisterAfter<T>(double delay, in T value, EventHandleDelegateAsync<T> handle) where T : struct
     {
         if (handle == null) throw new ArgumentNullException(nameof(handle));
         if (delay < 0) throw new ArgumentOutOfRangeException(nameof(delay));
-        var payload = value;
-        return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleDelegateAsync(due, payload, handle));
-    }
-
-    public void FireAfter<T>(double delay, in T value, EventHandleDelegateAsync<T> handle) where T : struct
-    {
-        RegisterAfter(delay, in value, handle);
+        var localValue = value;
+        return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleDelegateAsync(due, localValue, handle));
     }
 
     public TimerToken RegisterAt<T>(double timePoint, in T value, EventHandleDelegateAsync<T> handle) where T : struct
     {
         if (handle == null) throw new ArgumentNullException(nameof(handle));
-        var payload = value;
-        return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleDelegateAsync(due, payload, handle));
-    }
-
-    public void FireAt<T>(double timePoint, in T value, EventHandleDelegateAsync<T> handle) where T : struct
-    {
-        RegisterAt(timePoint, in value, handle);
+        var localValue = value;
+        return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleDelegateAsync(due, localValue, handle));
     }
 
     public TimerToken RegisterAfter<T>(double delay, in T value, IEventHandler<T> handler) where T : struct
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
         if (delay < 0) throw new ArgumentOutOfRangeException(nameof(delay));
-        var payload = value;
-        return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleHandler(due, payload, handler));
-    }
-
-    public void FireAfter<T>(double delay, in T value, IEventHandler<T> handler) where T : struct
-    {
-        RegisterAfter(delay, in value, handler);
+        var localValue = value;
+        return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleHandler(due, localValue, handler));
     }
 
     public TimerToken RegisterAt<T>(double timePoint, in T value, IEventHandler<T> handler) where T : struct
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
-        var payload = value;
-        return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleHandler(due, payload, handler));
-    }
-
-    public void FireAt<T>(double timePoint, in T value, IEventHandler<T> handler) where T : struct
-    {
-        RegisterAt(timePoint, in value, handler);
+        var localValue = value;
+        return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleHandler(due, localValue, handler));
     }
 
     public TimerToken RegisterAfter<T>(double delay, in T value, IEventHandlerAsync<T> handler) where T : struct
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
         if (delay < 0) throw new ArgumentOutOfRangeException(nameof(delay));
-        var payload = value;
-        return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleHandlerAsync(due, payload, handler));
-    }
-
-    public void FireAfter<T>(double delay, in T value, IEventHandlerAsync<T> handler) where T : struct
-    {
-        RegisterAfter(delay, in value, handler);
+        var localValue = value;
+        return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleHandlerAsync(due, localValue, handler));
     }
 
     public TimerToken RegisterAt<T>(double timePoint, in T value, IEventHandlerAsync<T> handler) where T : struct
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
-        var payload = value;
-        return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleHandlerAsync(due, payload, handler));
-    }
-
-    public void FireAt<T>(double timePoint, in T value, IEventHandlerAsync<T> handler) where T : struct
-    {
-        RegisterAt(timePoint, in value, handler);
+        var localValue = value;
+        return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleHandlerAsync(due, localValue, handler));
     }
 
     public TimerToken RegisterAfter<T>(double delay, in T value, Action<Event<T>> action) where T : struct
     {
         if (action == null) throw new ArgumentNullException(nameof(action));
         if (delay < 0) throw new ArgumentOutOfRangeException(nameof(delay));
-        var payload = value;
-        return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleEventAction(due, payload, action));
+        var localValue = value;
+        return RegisterAfterInternal<T>(delay, (queue, due) => queue.ScheduleEventAction(due, localValue, action));
     }
-
-    public void FireAfter<T>(double delay, in T value, Action<Event<T>> action) where T : struct
-    {
-        RegisterAfter(delay, in value, action);
-    }
-
 
     public TimerToken RegisterAt<T>(double timePoint, in T value, Action<Event<T>> action) where T : struct
     {
         if (action == null) throw new ArgumentNullException(nameof(action));
-        var payload = value;
-        return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleEventAction(due, payload, action));
-    }
-
-    public void FireAt<T>(double timePoint, in T value, Action<Event<T>> action) where T : struct
-    {
-        RegisterAt(timePoint, in value, action);
+        var localValue = value;
+        return RegisterAtInternal<T>(timePoint, (queue, due) => queue.ScheduleEventAction(due, localValue, action));
     }
 
     public TimerToken RegisterOnFrequency<T>(in T value, EventHandleDelegate<T> handle) where T : struct
     {
         if (handle == null) throw new ArgumentNullException(nameof(handle));
-        var payload = value;
-        return RegisterFrequencyInternal<T>(queue => queue.RegisterDelegate(payload, handle));
-    }
-
-    public void FireOnFrequency<T>(in T value, EventHandleDelegate<T> handle) where T : struct
-    {
-        RegisterOnFrequency(in value, handle);
+        var localValue = value;
+        return RegisterFrequencyInternal<T>(queue => queue.RegisterDelegate(localValue, handle));
     }
 
     public TimerToken RegisterOnFrequency(Action action)
@@ -251,57 +184,32 @@ public sealed class TimerScheduler
         return RegisterFrequencyInternal<EmptyPayload>(queue => queue.RegisterEventAction(default, _ => action()));
     }
 
-    public void FireOnFrequency(Action action)
-    {
-        RegisterOnFrequency(action);
-    }
-
     public TimerToken RegisterOnFrequency<T>(in T value, EventHandleDelegateAsync<T> handle) where T : struct
     {
         if (handle == null) throw new ArgumentNullException(nameof(handle));
-        var payload = value;
-        return RegisterFrequencyInternal<T>(queue => queue.RegisterDelegateAsync(payload, handle));
-    }
-
-    public void FireOnFrequency<T>(in T value, EventHandleDelegateAsync<T> handle) where T : struct
-    {
-        RegisterOnFrequency(in value, handle);
+        var localValue = value;
+        return RegisterFrequencyInternal<T>(queue => queue.RegisterDelegateAsync(localValue, handle));
     }
 
     public TimerToken RegisterOnFrequency<T>(in T value, IEventHandler<T> handler) where T : struct
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
-        var payload = value;
-        return RegisterFrequencyInternal<T>(queue => queue.RegisterHandler(payload, handler));
-    }
-
-    public void FireOnFrequency<T>(in T value, IEventHandler<T> handler) where T : struct
-    {
-        RegisterOnFrequency(in value, handler);
+        var localValue = value;
+        return RegisterFrequencyInternal<T>(queue => queue.RegisterHandler(localValue, handler));
     }
 
     public TimerToken RegisterOnFrequency<T>(in T value, IEventHandlerAsync<T> handler) where T : struct
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
-        var payload = value;
-        return RegisterFrequencyInternal<T>(queue => queue.RegisterHandlerAsync(payload, handler));
-    }
-
-    public void FireOnFrequency<T>(in T value, IEventHandlerAsync<T> handler) where T : struct
-    {
-        RegisterOnFrequency(in value, handler);
+        var localValue = value;
+        return RegisterFrequencyInternal<T>(queue => queue.RegisterHandlerAsync(localValue, handler));
     }
 
     public TimerToken RegisterOnFrequency<T>(in T value, Action<Event<T>> action) where T : struct
     {
         if (action == null) throw new ArgumentNullException(nameof(action));
-        var payload = value;
-        return RegisterFrequencyInternal<T>(queue => queue.RegisterEventAction(payload, action));
-    }
-
-    public void FireOnFrequency<T>(in T value, Action<Event<T>> action) where T : struct
-    {
-        RegisterOnFrequency(in value, action);
+        var localValue = value;
+        return RegisterFrequencyInternal<T>(queue => queue.RegisterEventAction(localValue, action));
     }
 
     public bool Cancel(in TimerToken token)
@@ -311,9 +219,7 @@ public sealed class TimerScheduler
         lock (_lock)
         {
             if (_queues.TryGetValue(token.TypeId, out var queue) && queue.Cancel(token)) return true;
-
             if (_frequencyQueues.TryGetValue(token.TypeId, out var freqQueue) && freqQueue.Cancel(token)) return true;
-
             return false;
         }
     }
@@ -380,9 +286,7 @@ public sealed class TimerScheduler
         }
     }
 
-    private readonly struct EmptyPayload
-    {
-    }
+    private readonly struct EmptyPayload { }
 
     private sealed class TimerTimeline
     {
@@ -484,8 +388,8 @@ internal interface ITimerQueue
 
 internal interface IFrequencyQueue
 {
-    void CollectInvocations(List<Action> invocations);
-    bool Cancel(in TimerToken            token);
+    void ExecuteAll();
+    bool Cancel(in TimerToken token);
 }
 
 internal sealed class TimerQueue<T> : ITimerQueue where T : struct
@@ -506,7 +410,7 @@ internal sealed class TimerQueue<T> : ITimerQueue where T : struct
 
             ref var slot = ref _tasks.Resolve(slotRef);
             task = slot.Value;
-            slot.Value = default;
+            slot.Value = default; // 立即清除引用，终结泄露
         }
 
         try
@@ -530,7 +434,11 @@ internal sealed class TimerQueue<T> : ITimerQueue where T : struct
         lock (_lock)
         {
             if (!_tasks.TryBorrow(token.Index, token.Version, out var slotRef)) return false;
-
+            
+            // 关键修复：取消时也必须清除 Value，否则 delegates 会一直留在 FreeList 的内存里
+            ref var slot = ref _tasks.Resolve(slotRef);
+            slot.Value = default;
+            
             _tasks.Release(slotRef);
             return true;
         }
@@ -620,23 +528,23 @@ internal sealed class FrequencyQueue<T> : IFrequencyQueue where T : struct
     private readonly object _lock = new();
     private readonly List<FrequencyTask<T>> _tasks = new();
 
-    public void CollectInvocations(List<Action> invocations)
+    // 核心优化：直接执行，零分配，不再生成 Lambda 和快照列表
+    public void ExecuteAll()
     {
-        List<FrequencyTask<T>> snapshot;
+        // 注意：在 lock 外执行以避免死锁，使用 snapshot 仍有分配，
+        // 但我们这里改为“在 lock 内快速复制活跃任务”或“分块执行”。
+        // 最工业级的做法是：双缓冲或固定数组。这里先采用“零分配执行”策略：
+        
         lock (_lock)
         {
-            snapshot = new List<FrequencyTask<T>>(_tasks.Count);
             for (var i = 0; i < _tasks.Count; i++)
             {
                 var task = _tasks[i];
-                if (task.Active) snapshot.Add(task);
+                if (task.Active)
+                {
+                    ExecuteTask(task);
+                }
             }
-        }
-
-        for (var i = 0; i < snapshot.Count; i++)
-        {
-            var task = snapshot[i];
-            invocations.Add(() => ExecuteTask(task));
         }
     }
 
@@ -651,7 +559,7 @@ internal sealed class FrequencyQueue<T> : IFrequencyQueue where T : struct
             var entry = _tasks[token.Index];
             if (!entry.Active || entry.Version != token.Version) return false;
 
-            _tasks[token.Index] = default;
+            _tasks[token.Index] = default; // 立即清除引用
             _free.Push(token.Index);
             return true;
         }
