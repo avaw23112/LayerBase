@@ -985,6 +985,7 @@ public sealed class GlobalEventCenter
                     offset = 6; Unsafe.Add(ref hBase, i + 6)(in e);
                     offset = 7; Unsafe.Add(ref hBase, i + 7)(in e);
                 }
+                offset = 0;
                 for (; i < end; i++)
                 {
                     Unsafe.Add(ref hBase, i)(in e);
@@ -1016,6 +1017,7 @@ public sealed class GlobalEventCenter
                     offset = -6;Unsafe.Add(ref hBase, i - 6)(in e);
                     offset = -7;Unsafe.Add(ref hBase, i - 7)(in e);
                 }
+                offset = 0;
                 for (; i >= start; i--)
                 {
                     Unsafe.Add(ref hBase, i)(in e);
@@ -1066,10 +1068,9 @@ public sealed class GlobalEventCenter
 
                     combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4 | (int)r5 | (int)r6 | (int)r7 | (int)r8;
                 }
-
+                offset = 0;
                 for (; i < end; i++)
                 {
-                    offset = 0;
                     var state = Unsafe.Add(ref hBase, i)(in value);
                     if (state == EventHandledState.Handled) return EventHandledState.Handled;
                     combinedState |= (int)state;
@@ -1139,10 +1140,9 @@ public sealed class GlobalEventCenter
 
                     combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4 | (int)r5 | (int)r6 | (int)r7 | (int)r8;
                 }
-
+                offset = 0;
                 for (; i >= start; i--)
                 {
-                    offset = 0;
                     var state = Unsafe.Add(ref hBase, i)(in value);
                     if (state == EventHandledState.Handled) return EventHandledState.Handled;
                     combinedState |= (int)state;
