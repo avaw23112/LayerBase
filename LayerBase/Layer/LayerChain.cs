@@ -96,6 +96,8 @@ internal sealed class LayerChain
                     LayerHub.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
                 }
 
+                LayerHub.RegisterLayerInstance(layer);
+
                 if (layer.RouteIndex > maxIndex) maxIndex = layer.RouteIndex;
             }
 

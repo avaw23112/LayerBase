@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using LayerBase.Async;
+using LayerBase.Call;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Core.ResponsibilityChain;
@@ -27,6 +29,7 @@ public abstract class Layer : Node, IDisposable
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
     private readonly List<IDisposable> m_subscriptions = new();
+    private readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), object> m_callRoutes = new();
     private GlobalEventCenter _center;
     private bool m_disposed;
 
@@ -77,6 +80,7 @@ public abstract class Layer : Node, IDisposable
 
     public void Build()
     {
+        LayerServiceRegistry.Apply(this);
         var descriptors = m_serviceCollection.ToDescriptors();
         var newProvider = new ServiceProvider(descriptors, this);
         var oldProvider = Interlocked.Exchange(ref m_serviceProvider, newProvider);
@@ -198,6 +202,42 @@ public abstract class Layer : Node, IDisposable
             m_delayUpdaters.Add(dp);
             return dp;
         });
+    }
+
+    protected internal void RegisterCallHandler<TRequest, TResponse>(ILayerCallHandler<TRequest, TResponse> handler)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        ThrowIfDisposed();
+        if (handler == null) throw new ArgumentNullException(nameof(handler));
+
+        ServiceLayerBinder.Attach(handler, this);
+        var key = (typeof(TRequest), typeof(TResponse));
+        if (!m_callRoutes.TryAdd(key, handler))
+        {
+            var existing = m_callRoutes[key];
+            throw new LayerCallRouteConflictException(
+                GetType(),
+                typeof(TRequest),
+                typeof(TResponse),
+                existing.GetType(),
+                handler.GetType());
+        }
+    }
+
+    internal LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
+                                                              CancellationToken cancellationToken = default)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        ThrowIfDisposed();
+        if (cancellationToken.IsCancellationRequested) return LBTask<TResponse>.FromCanceled(cancellationToken);
+
+        if (!m_callRoutes.TryGetValue((typeof(TRequest), typeof(TResponse)), out var handler))
+            return LBTask<TResponse>.FromException(
+                new LayerCallRouteNotFoundException(GetType(), typeof(TRequest), typeof(TResponse)));
+
+        return ((ILayerCallHandler<TRequest, TResponse>)handler).HandleAsync(request, cancellationToken);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
