@@ -196,7 +196,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
         return true;
     }
 
-    internal void ProcessBatch(SpanAction<T> action)
+    internal void ProcessBatch(SpanAction action)
     {
         ThrowIfDisposed();
         while (Count > 0)
@@ -489,7 +489,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
             throw new ObjectDisposedException(nameof(PooledChunkedOverwriteQueue<T>));
     }
 
-    internal delegate void SpanAction<T>(ReadOnlySpan<T> span);
+    internal delegate void SpanAction(ReadOnlySpan<T> span);
 
     private sealed class Segment
     {

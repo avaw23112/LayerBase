@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using LayerBase.Async;
 using LayerBase.Core.EventHandler;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Tools.Job;
@@ -198,18 +200,46 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
 
     public static UnorderedHandlerEntry<T> Create(IEventHandler<T> h)
     {
-        EventHandleDelegate<T> wrapper = (in T val) =>
-        {
-            h.Deal(in val);
-            return EventHandledState.Continue;
-        };
-        return new UnorderedHandlerEntry<T>(wrapper, null, h.GetType().Name, new HandlerCircuit(), h);
+        // 核心优化：使用实例方法引用代替 Lambda 闭包，消除订阅时的内存分配
+        return new UnorderedHandlerEntry<T>(
+            new SyncHandlerWrapper<T>(h).Invoke, 
+            null, 
+            h.GetType().Name, 
+            new HandlerCircuit(), 
+            h);
     }
 
     public static UnorderedHandlerEntry<T> Create(IEventHandlerAsync<T> h)
     {
-        EventHandleDelegateAsync<T> wrapper = val => h.Deal(val);
-        return new UnorderedHandlerEntry<T>(null, wrapper, h.GetType().Name, new HandlerCircuit(), h);
+        return new UnorderedHandlerEntry<T>(
+            null, 
+            new AsyncHandlerWrapper<T>(h).Invoke, 
+            h.GetType().Name, 
+            new HandlerCircuit(), 
+            h);
+    }
+
+    // 内部包装类，利用实例方法直接绑定，消除闭包开销
+    private sealed class SyncHandlerWrapper<TValue> where TValue : struct
+    {
+        private readonly IEventHandler<TValue> _handler;
+        public SyncHandlerWrapper(IEventHandler<TValue> handler) => _handler = handler;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public EventHandledState Invoke(in TValue val)
+        {
+            _handler.Deal(in val);
+            return EventHandledState.Continue;
+        }
+    }
+
+    private sealed class AsyncHandlerWrapper<TValue> where TValue : struct
+    {
+        private readonly IEventHandlerAsync<TValue> _handler;
+        public AsyncHandlerWrapper(IEventHandlerAsync<TValue> handler) => _handler = handler;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public LBTask Invoke(TValue val) => _handler.Deal(val);
     }
 }
 
@@ -248,7 +278,7 @@ internal readonly struct ParallelHandlerEntry<T> where T : struct
 
 internal sealed class ParallelSubscriptionQueue<T> where T : struct
 {
-    private readonly Action _drain;
+    private readonly Action _drainInstance;
     private readonly string _eName, _fName;
     private readonly Action<int, string, string, Exception> _err;
     private readonly ConcurrentQueue<T> _evs = new();
@@ -263,7 +293,7 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
         _err = re;
         _fName = h.GetType().Name;
         _eName = typeof(T).Name;
-        _drain = Drain;
+        _drainInstance = Drain;
     }
 
     public ParallelSubscriptionQueue(EventHandleDelegate<T> h, Action<int, string, string, Exception> re)
@@ -272,7 +302,7 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
         _err = re;
         _fName = "Delegate";
         _eName = typeof(T).Name;
-        _drain = Drain;
+        _drainInstance = Drain;
     }
 
     public object Source => (object?)_sh ?? _sd!;
@@ -296,8 +326,11 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
     private void TrySched()
     {
         if (!Circuit.IsDisabled && Interlocked.CompareExchange(ref _sched, 1, 0) == 0)
-            if (!JobSchedulers.Default.TrySchedule(_drain))
+        {
+            // 使用构造函数中创建好的实例委托，热路径零分配
+            if (!JobSchedulers.Default.TrySchedule(_drainInstance))
                 ThreadPool.QueueUserWorkItem(_ => Drain());
+        }
     }
 
     private void Drain()
