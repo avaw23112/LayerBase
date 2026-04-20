@@ -273,7 +273,7 @@ using LayerBase; // 引用核心命名空间
 public class GameRoot : MonoBehaviour
 {
     // 1. 定义运行时 (Runtime)
-    private LayerRuntime _runtime = new LayerRuntime();
+    private LayerRuntime _runtime = null!;
 
     // 定义层级
     public class InteractionLayer : Layer { }
@@ -282,11 +282,11 @@ public class GameRoot : MonoBehaviour
     void Awake()
     {
         // 2. 初始化期：构建拓扑
-        _runtime.CreateLayers()
-                .Push(new InteractionLayer()) // 索引 0: 上层交互
-                .Push(new CoreLogicLayer())   // 索引 1: 下层逻辑
-                .SetDebug()                   // 开启Debug模式
-                .Build();                     // 自动扫描 [OwnerLayer] 并装配
+        _runtime = LayerHub.CreateLayers()
+                           .Push(new InteractionLayer()) // 索引 0: 上层交互
+                           .Push(new CoreLogicLayer())   // 索引 1: 下层逻辑
+                           .SetDebug()                   // 开启Debug模式
+                           .Build();                     // 自动扫描 [OwnerLayer] 并装配
 
         // 注册事件信息回调
         _runtime.OnLayerEventInfo += info => { /* Log info... */ };
@@ -405,118 +405,23 @@ public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
 ---
 
 
-## 🛠 进阶特性指南
-
-### 1. 流式过滤与拦截 (Fluent API)
-
-对于需要动态控制订阅条件的场景，LayerBase 提供了优雅的链式
-API。它最大的优势在于：拦截条件会在路由的最早期（包装委托内部）执行，不符合条件的事件会被直接短路，避免了不必要的函数调用。
-
-```csharp
-public partial class PlayerManager : ILayerContext
-{
-    private int _myEntityId = 10;
-
-    public void Initialize()
-    {
-        // Chainable calls: Subscribe -> Filter -> Handle
-        this.OnEvent<DamageEvent>()
-            .Where((in DamageEvent e) => e.TargetId == _myEntityId) 
-            .Handle((in DamageEvent e) => 
-            {
-                // Handle damage...
-                return EventHandledState.Handled;
-            });
-    }
-}
-```
-
-### 2. 后台并行处理 (Parallel Handlers)
-
-当面临高 CPU 消耗且**不依赖/不修改主线程状态**的纯计算逻辑（如寻路数据打包、耗时日志序列化）时，可使用并行订阅。事件将进入无锁队列并由
-ThreadPool 在后台异步消化，保障主线程的帧率稳定。
-
-```csharp
-// 通过特性快速绑定并行方法
-[SubscribeParallel]
-private EventHandledState OnHeavyComputeTask(in ComputeEvent e)
-{
-    // 该方法在多线程环境中被安全调度
-    return EventHandledState.Continue;
-}
-```
-
-### 3. 拓扑结构可视化 (Topology Audit)
-
-开启 Debug 模式后，调用 `GetTopologySummary()` 即可在控制台输出一张清晰的文本结构图，展示整个系统内各个 Layer 挂载了哪些
-Manager，以及它们具体订阅/派发了什么事件。这在大型项目中是排查系统耦合度不可或缺的工具。
-
-### 4. 切片式独立处理器 (Standalone EventHandler)
-
-有时候，您可能有一段非常独立的逻辑，它只处理某一个特定事件，将其塞入一个庞大的 Manager 显得过于臃肿。LayerBase
-支持“切片式”的独立处理器。
-只需实现 `IEventHandler<T>` 或 `IEventHandlerAsync<T>` 接口，并挂载 `[OwnerLayer]` 特性，源生成器就会在编译期自动将其注册到对应的层级中：
-
-```csharp
-// 这是一个独立的、切片式的事件处理器
-[OwnerLayer(typeof(GameLogicLayer))] 
-public class PlayerDamageHandler : IEventHandler<DamageEvent>
-{
-    public EventHandledState Deal(in DamageEvent e)
-    {
-        // 专注处理伤害逻辑...
-        return EventHandledState.Continue;
-    }
-}
-```
-
-### 5. 事件元数据与全局异常观察 (Event MetaData)
-
-对于某些核心事件（如网络同步包或核心状态流转），如果在分发过程中有任何 Handler 抛出了异常，我们通常希望能在全局第一时间捕获，以进行统一的日志打点或崩溃上报。
-
-LayerBase 提供了一套**无侵入式、零反射**的元数据（MetaData）注册方案：
-您只需定义一个继承自 `EventMetaData<T>` 的类。源生成器会在编译期自动将其与您的事件绑定（**注：要求事件 `struct`
-必须声明为 `partial`**）。
-
-```csharp
-// 1. 事件必须声明为 partial struct
-public partial struct CoreSyncEvent 
-{ 
-    public byte[] Data; 
-}
-
-// 2. 定义该事件的元数据配置
-public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
-{
-    // [可选]：定义事件所属的分类树，方便进行拓扑分类或模块检索
-    public override EventCategoryToken Category => EventCatalogue.Path("Network", "Sync").GetToken();
-
-    // 🏆 全局异常拦截点
-    // 任何 Handler 在处理 CoreSyncEvent 抛出异常时，都会自动路由到这里！
-    public override void OnEventExpectation(CoreSyncEvent e, Exception exception)
-    {
-        // 在这里进行统一的容错处理、日志打点或崩溃上报
-        Console.WriteLine($"[严重错误] 同步事件处理失败: {exception.Message}");
-    }
-}
-```
----
-
 ## ⚠️ 核心设计边界与时序约束 (Core Design Boundaries)
 
 LayerBase v1.6.0+ 在追求极致性能的同时，实现了工业级的鲁棒性与运行域隔离，开发者**必须**了解以下最新的架构特性：
 
-### 1. 故障隔离：单帧内完全隔离，次帧自愈
-LayerBase 采用了极致优化的高性能分发引擎，在确保分发链路高效的同时，实现了**单帧内的无损故障隔离**。
-*   **行为**：如果某个 Handler 抛出未处理异常，系统会立即执行熔断并将其跳过，分发链将在**当前帧内**原地复活并继续执行后续 Handler。
-*   **自愈**：该故障节点被熔断后，在**下一帧**会被彻底剔除出分发队列，实现架构级的稳健性。
-*   **优势**：真正的业务隔离，单个模块的 Bug 不会导致整帧结算逻辑的丢失。
+### 1. 故障隔离：同步分发单帧内跳过坏点，次帧自愈
+LayerBase 的同步分发链路（`Local` / `Bubble` / `Drop` / `Global`）支持**单帧内故障隔离**。
+*   **行为**：如果某个**同步 Handler** 抛出未处理异常，系统会立即执行熔断并跳过该坏点，在**当前帧**继续执行同一传播方向上的后续同步 Handler。
+*   **自愈**：故障节点被熔断后，会在后续重建中从分发队列中剔除，通常体现为**下一帧**不再参与分发。
+*   **边界**：这项保证描述的是同步分发链路；异步 Handler 仍遵循各自的异步完成与异常上报语义。
 
 ### 2. 多运行域 (Multi-Runtime) 范式
-LayerBase v1.6.0+ 彻底去除了全局静态状态的束缚，支持在同一进程中运行多个隔离的 `LayerRuntime`。
+LayerBase v1.6.0+ 将事件总线、拓扑和依赖注入等**核心状态 runtime 化**，并支持在同一进程中运行多个隔离的 `LayerRuntime`。
 *   **隔离性**：每个 `LayerRuntime` 拥有完全独立的事件总线、拓扑结构和依赖注入容器。
 *   **应用场景**：完美支持多世界同步模拟、独立的单元测试、以及编辑器态/运行态的热重载切换。
-*   **全局驱动**：通过 `LayerHub.Pump()` 可统一驱动进程内所有活跃的运行时。
+*   **推荐用法**：`Build()` 会直接返回 `LayerRuntime`，推荐由外部显式持有它，并按需自主 `runtime.Pump(deltaTime)`。
+*   **全局入口仍保留**：`LayerHub` 仍负责登记 runtime、统一 `Pump()` 以及转发 `OnLayerEventInfo`，因此它是一个被压缩后的全局目录与驱动器，而不是完全消失的全局中心。是否使用这个统一入口，由调用方自己决定。
+*   **生命周期边界**：`LayerHub.Reset()` 只会清空 Hub 对 runtime 的追踪并重置 `ServiceLayerBinder`；如果外部仍持有某个 runtime 的强引用，它依然由调用方自行 `Dispose()` 和驱动。
 
 ### 3. 时序约定：同步永远领先于异步
 无论注册顺序如何，同步 Handler 总是优先于异步 Handler 执行，同步处理具备截断事件的能力。
@@ -538,17 +443,19 @@ LayerBase v1.6.0+ 彻底去除了全局静态状态的束缚，支持在同一�
 
 LayerBase v1.6.0+ achieves industrial-grade robustness and environment isolation while pursuing extreme performance. Developers **must** be aware of these physical boundaries:
 
-### 1. Fault Isolation: Single-Frame Isolation, Next-Frame Self-Healing
-LayerBase features a robust dispatch engine that ensures single-frame execution integrity.
-*   **Behavior**: If a Handler throws an unhandled exception, the system instantly isolates the fault and **continues dispatching subsequent Handlers within the same frame**.
-*   **Healing**: The faulty node is tripped and will be purged in the **next frame**, ensuring long-term system stability.
-*   **Advantage**: True business isolation; module-level bugs will not corrupt critical settlement logic in the same frame.
+### 1. Fault Isolation: Sync Dispatch Resumes In-Frame, Then Self-Heals
+LayerBase guarantees in-frame fault isolation for synchronous dispatch paths (`Local`, `Bubble`, `Drop`, and `Global`).
+*   **Behavior**: If a **synchronous Handler** throws an unhandled exception, the system trips that node immediately, skips the fault, and continues the remaining synchronous Handlers in the same propagation path and frame.
+*   **Healing**: The tripped node is removed during the next rebuild cycle, which is typically observed on the **next frame**.
+*   **Boundary**: This guarantee is scoped to synchronous dispatch; async Handlers still follow their own completion and exception-reporting semantics.
 
 ### 2. Multi-Runtime Paradigm
-LayerBase v1.6.0+ is fully de-staticized, supporting isolated `LayerRuntime` instances in a single process.
+LayerBase v1.6.0+ moves the event bus, topology, and DI container into `LayerRuntime`, allowing multiple isolated runtimes to coexist in one process.
 *   **Isolation**: Every `LayerRuntime` possesses its own event bus, topological structure, and DI container.
 *   **Application**: Perfect for multi-world simulation, isolated unit testing, and dynamic hot-reloading.
-*   **Centralized Driving**: Use `LayerHub.Pump()` to drive all active runtimes seamlessly.
+*   **Recommended Usage**: `Build()` returns the `LayerRuntime` directly. The preferred model is to hold that runtime explicitly and call `runtime.Pump(deltaTime)` yourself when needed.
+*   **A Global Entry Still Exists**: `LayerHub` still acts as the shared runtime registry, centralized `Pump()` entry, and `OnLayerEventInfo` forwarder. The design is much less static than before, but not a zero-global-center architecture. Using this centralized entry is optional.
+*   **Lifecycle Boundary**: `LayerHub.Reset()` only clears Hub tracking and resets `ServiceLayerBinder`; if you still hold a strong reference to a runtime, disposing and driving it remains the caller's responsibility.
 
 ### 3. Timing Contract: Synchronous Always Precedes Asynchronous
 For any given Event type, Synchronous Handlers always execute first, with the authority to truncate events.
@@ -858,7 +765,7 @@ using LayerBase; // Reference core namespace
 public class GameRoot : MonoBehaviour
 {
     // 1. Define the Runtime instance
-    private LayerRuntime _runtime = new LayerRuntime();
+    private LayerRuntime _runtime = null!;
 
     // Define Layers
     public class InteractionLayer : Layer { }
@@ -867,11 +774,11 @@ public class GameRoot : MonoBehaviour
     void Awake()
     {
         // 2. Initialization phase: Construct topology
-        _runtime.CreateLayers()
-                .Push(new InteractionLayer()) // Index 0: Upper Interaction Layer
-                .Push(new CoreLogicLayer())   // Index 1: Lower Logic Layer
-                .SetDebug()                   // Enable Debug mode
-                .Build();                     // Automatically scan [OwnerLayer] and assemble
+        _runtime = LayerHub.CreateLayers()
+                           .Push(new InteractionLayer()) // Index 0: Upper Interaction Layer
+                           .Push(new CoreLogicLayer())   // Index 1: Lower Logic Layer
+                           .SetDebug()                   // Enable Debug mode
+                           .Build();                     // Automatically scan [OwnerLayer] and assemble
 
         // Register the info channel to capture framework events/errors
         _runtime.OnLayerEventInfo += info => { /* Handle logging... */ };

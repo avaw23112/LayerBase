@@ -57,6 +57,11 @@ public sealed class LayerRuntime : IDisposable
 
     internal int GetNextLayerIndex() => _layerIndexCounter++;
 
+    /// <summary>
+    ///     驱动当前 runtime。
+    ///     推荐在多运行域场景下由调用方直接持有 runtime 并自主 Pump()；
+    ///     LayerHub.Pump() 仅是保留的可选统一驱动入口。
+    /// </summary>
     public void Pump(float deltaTime)
     {
         if (_disposed) return;
@@ -137,6 +142,10 @@ public sealed class LayerRuntime : IDisposable
             return this;
         }
 
+        /// <summary>
+        ///     构建并返回当前 LayerRuntime。
+        ///     调用方可以直接持有返回值并自主驱动 Pump()；LayerHub 只提供可选的统一管理与驱动入口。
+        /// </summary>
         public LayerRuntime Build()
         {
             if (_runtime._chain == null) throw new InvalidOperationException("No layers.");
@@ -159,7 +168,8 @@ public sealed class LayerRuntime : IDisposable
 }
 
 /// <summary>
-///     LayerBase 全局中心。负责管理所有 LayerRuntime 实例及其全局驱动。
+///     LayerBase 全局中心。负责可选的 runtime 目录管理、统一驱动与事件转发。
+///     它不是唯一入口：调用方也可以直接持有 Build() 返回的 LayerRuntime 并自主 Pump()。
 /// </summary>
 public static class LayerHub
 {
@@ -171,7 +181,8 @@ public static class LayerHub
     public static LayerRuntime.LayersBuilder CreateLayers() => new();
 
     /// <summary>
-    ///     驱动进程内所有活跃的 LayerRuntime。
+    ///     可选地统一驱动进程内所有仍被 Hub 追踪的 LayerRuntime。
+    ///     如果调用方已经自行持有 runtime 并手动 Pump()，则不必使用此入口。
     /// </summary>
     public static void Pump(float deltaTime)
     {
@@ -194,6 +205,10 @@ public static class LayerHub
 
     public static void InitializeJobScheduler(int workerCount) => JobSchedulers.ConfigureDefault(workerCount);
 
+    /// <summary>
+    ///     清空 Hub 对当前 runtime 的追踪，并重置 ServiceLayerBinder。
+    ///     该方法不会主动释放仍被外部强引用持有的 LayerRuntime，调用方仍需自行管理其生命周期。
+    /// </summary>
     public static void Reset()
     {
         lock (s_lock)

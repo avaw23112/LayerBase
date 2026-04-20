@@ -811,16 +811,27 @@ public sealed class GlobalEventCenter
             ref var hBase = ref GetArrayDataRef(_syncHandlers);
             var combinedState = 0;
             var i = end - 1;
+
+            RESUME:
             try
             {
-                for (; i >= start + 3; i -= 4)
+                for (; i >= start + 3; )
                 {
-                    var r1 = Unsafe.Add(ref hBase, i)(in value);
-                    var r2 = Unsafe.Add(ref hBase, i - 1)(in value);
-                    var r3 = Unsafe.Add(ref hBase, i - 2)(in value);
-                    var r4 = Unsafe.Add(ref hBase, i - 3)(in value);
-                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4;
+                    combinedState |= (int)Unsafe.Add(ref hBase, i)(in value);
                     if ((combinedState & 1) != 0) return EventHandledState.Handled;
+                    i--;
+
+                    combinedState |= (int)Unsafe.Add(ref hBase, i)(in value);
+                    if ((combinedState & 1) != 0) return EventHandledState.Handled;
+                    i--;
+
+                    combinedState |= (int)Unsafe.Add(ref hBase, i)(in value);
+                    if ((combinedState & 1) != 0) return EventHandledState.Handled;
+                    i--;
+
+                    combinedState |= (int)Unsafe.Add(ref hBase, i)(in value);
+                    if ((combinedState & 1) != 0) return EventHandledState.Handled;
+                    i--;
                 }
 
                 for (; i >= start; i--)
@@ -832,7 +843,8 @@ public sealed class GlobalEventCenter
             catch (Exception e)
             {
                 HandleFault(i, true, in value, e);
-                return EventHandledState.Continue;
+                i--;
+                if (i >= start) goto RESUME;
             }
 
             return (combinedState & 2) != 0 ? EventHandledState.HandledAndContinue : EventHandledState.Continue;

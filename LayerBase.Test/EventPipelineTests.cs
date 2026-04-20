@@ -103,6 +103,113 @@ public class EventPipelineTests
     }
 
     [Test]
+    public void Bubble_sync_dispatch_skips_faulted_handler_and_continues_remaining_handlers()
+    {
+        var upper = new PlainLayer();
+        var lower = new PlainLayer();
+        var errorCount = 0;
+        Action<LayerEventInfo> handler = info =>
+        {
+            if (info.Type == LayerEventInfoType.Error) Interlocked.Increment(ref errorCount);
+        };
+
+        LayerHub.OnLayerEventInfo += handler;
+        try
+        {
+            upper.Subscribe((in TestEvent e) =>
+            {
+                _trace.Add("UpperFirst");
+                return EventHandledState.Continue;
+            });
+            upper.Subscribe((in TestEvent e) => throw new Exception("BubbleBoom"));
+            upper.Subscribe((in TestEvent e) =>
+            {
+                _trace.Add("UpperLast");
+                return EventHandledState.Continue;
+            });
+
+            lower.Subscribe((in TestEvent e) =>
+            {
+                _trace.Add("Lower");
+                return EventHandledState.Continue;
+            });
+
+            var rt = LayerHub.CreateLayers().Push(upper).Push(lower).Build();
+
+            lower.SendBubble(new TestEvent());
+
+            Assert.That(errorCount, Is.EqualTo(1));
+            Assert.That(_trace, Is.EqualTo(new[] { "Lower", "UpperLast", "UpperFirst" }));
+
+            _trace.Clear();
+            rt.Send(new TestEvent());
+            Assert.That(errorCount, Is.EqualTo(1));
+            Assert.That(_trace, Does.Not.Contain("BubbleBoom"));
+            Assert.That(_trace, Does.Contain("UpperLast"));
+            Assert.That(_trace, Does.Contain("UpperFirst"));
+        }
+        finally
+        {
+            LayerHub.OnLayerEventInfo -= handler;
+        }
+    }
+
+    [Test]
+    public void Bubble_sync_dispatch_disables_the_exact_faulted_handler_inside_unrolled_backward_block()
+    {
+        var upper = new PlainLayer();
+        var lower = new PlainLayer();
+        var errorCount = 0;
+        Action<LayerEventInfo> handler = info =>
+        {
+            if (info.Type == LayerEventInfoType.Error) Interlocked.Increment(ref errorCount);
+        };
+
+        LayerHub.OnLayerEventInfo += handler;
+        try
+        {
+            upper.Subscribe((in TestEvent e) =>
+            {
+                _trace.Add("H0");
+                return EventHandledState.Continue;
+            });
+            upper.Subscribe((in TestEvent e) =>
+            {
+                _trace.Add("H1");
+                return EventHandledState.Continue;
+            });
+            upper.Subscribe((in TestEvent e) =>
+            {
+                _trace.Add("H2");
+                return EventHandledState.Continue;
+            });
+            upper.Subscribe((in TestEvent e) => throw new Exception("UnrolledBackwardBoom"));
+            upper.Subscribe((in TestEvent e) =>
+            {
+                _trace.Add("H4");
+                return EventHandledState.Continue;
+            });
+
+            LayerHub.CreateLayers().Push(upper).Push(lower).Build();
+
+            lower.SendBubble(new TestEvent());
+
+            Assert.That(errorCount, Is.EqualTo(1));
+            Assert.That(_trace, Is.EqualTo(new[] { "H4", "H2", "H1", "H0" }));
+
+            _trace.Clear();
+            lower.SendBubble(new TestEvent());
+
+            Assert.That(errorCount, Is.EqualTo(1));
+            Assert.That(_trace, Is.EqualTo(new[] { "H4", "H2", "H1", "H0" }));
+        }
+        finally
+        {
+            LayerHub.OnLayerEventInfo -= handler;
+        }
+    }
+
+    [Test]
     public void Faulted_parallel_handler_is_disabled_and_reported_once()
     {
         LayerHub.InitializeJobScheduler(1);
@@ -132,6 +239,22 @@ public class EventPipelineTests
         }
     }
 
+    [Test]
+    public void Reset_detaches_runtime_from_hub_pump_but_keeps_caller_owned_runtime_usable()
+    {
+        var layer = new TraceLayer("L1", _trace);
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
+
+        layer.PostLocal(new TestEvent { Value = 7 });
+
+        LayerHub.Reset();
+        LayerHub.Pump(0.016f);
+        Assert.That(_trace, Is.Empty);
+
+        runtime.Pump(0.016f);
+        Assert.That(_trace, Is.EqualTo(new[] { "L1_Recv" }));
+    }
+
     private class TraceLayer : Layer
     {
         private readonly bool _handle;
@@ -151,6 +274,10 @@ public class EventPipelineTests
             _trace.Add(_name + "_Recv");
             return _handle ? EventHandledState.Handled : EventHandledState.Continue;
         }
+    }
+
+    private sealed class PlainLayer : Layer
+    {
     }
 
     public struct TestEvent
