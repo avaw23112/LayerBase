@@ -72,6 +72,7 @@ internal static class ServiceLayerBinder
         if (service == null || layer == null) return;
         s_layerMap.Remove(service);
         s_layerMap.Add(service, layer);
+        //s_layerMap.AddOrUpdate(service,layer);
         if (service is IInternalLayerContext internalCtx) internalCtx.LayerIndex = layer.RouteIndex;
     }
 

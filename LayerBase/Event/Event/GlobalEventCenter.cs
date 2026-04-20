@@ -174,7 +174,14 @@ public sealed class GlobalEventCenter
 
     internal void WakeLayer(int layerIndex)
     {
-        if (layerIndex >= 0 && layerIndex < 64) AtomicSetBit(ref _eventPendingMask, layerIndex);
+        if (layerIndex >= 0 && layerIndex < 64)
+        {
+#if NET5_0_OR_GREATER
+            Interlocked.Or(ref _eventPendingMask, 1L << layerIndex);
+#else
+            AtomicSetBit(ref _eventPendingMask, layerIndex);
+#endif
+        }
     }
 
     internal void PumpLayer(int layerIndex)
