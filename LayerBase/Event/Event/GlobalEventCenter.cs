@@ -982,6 +982,11 @@ public sealed class GlobalEventCenter
                 Unsafe.Add(ref hBase, i + 6)(in e);
                 Unsafe.Add(ref hBase, i + 7)(in e);
             }
+            for (; i <= end - 2; i += 2)
+            {
+                Unsafe.Add(ref hBase, i)(in e);
+                Unsafe.Add(ref hBase, i + 1)(in e);
+            }
             for (; i < end; i++)
             {
                 Unsafe.Add(ref hBase, i)(in e);
@@ -1004,6 +1009,11 @@ public sealed class GlobalEventCenter
                 Unsafe.Add(ref hBase, i - 5)(in e);
                 Unsafe.Add(ref hBase, i - 6)(in e);
                 Unsafe.Add(ref hBase, i - 7)(in e);
+            }   
+            for (; i >= start + 1; i -= 2)
+            {
+                Unsafe.Add(ref hBase, i)(in e);
+                Unsafe.Add(ref hBase, i - 1)(in e);
             }
             for (; i >= start; i--)
             {
@@ -1021,7 +1031,6 @@ public sealed class GlobalEventCenter
             int offset = 0;
             try
             {
-                // 🚀 8x 循环展开配合 PGO (TieredPGO)：使用显式 if 命中常见的分支预测 (Continue)，达到极致吞吐与精准熔断定位
                 for (; i <= end - 8; i += 8)
                 {
                     offset = 0; var r1 = Unsafe.Add(ref hBase, i)(in value);
@@ -1049,6 +1058,14 @@ public sealed class GlobalEventCenter
                     if (r8 == EventHandledState.Handled) return EventHandledState.Handled;
 
                     combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4 | (int)r5 | (int)r6 | (int)r7 | (int)r8;
+                }
+                for (; i <= end - 2; i += 2)
+                {
+                    offset = 0; var r1 = Unsafe.Add(ref hBase, i)(in value);
+                    if (r1 == EventHandledState.Handled) return EventHandledState.Handled;
+                    offset = 1; var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
+                    if (r2 == EventHandledState.Handled) return EventHandledState.Handled;
+                    combinedState |= (int)r1 | (int)r2 ;
                 }
                 offset = 0;
                 for (; i < end; i++)
@@ -1121,6 +1138,14 @@ public sealed class GlobalEventCenter
                     if (r8 == EventHandledState.Handled) return EventHandledState.Handled;
 
                     combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4 | (int)r5 | (int)r6 | (int)r7 | (int)r8;
+                }
+                for (; i >= start + 1; i -= 2)
+                {
+                    offset = 0; var r1 = Unsafe.Add(ref hBase, i)(in value);
+                    if (r1 == EventHandledState.Handled) return EventHandledState.Handled;
+                    offset = -1; var r2 = Unsafe.Add(ref hBase, i - 1)(in value);
+                    if (r2 == EventHandledState.Handled) return EventHandledState.Handled;
+                    combinedState |= (int)r1 | (int)r2 ;
                 }
                 offset = 0;
                 for (; i >= start; i--)

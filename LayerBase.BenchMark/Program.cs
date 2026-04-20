@@ -41,6 +41,49 @@ public class SingleLayer_Low_Bench : EventBenchmarkBase
     }
 }
 
+public class SingleLayer_Low_Notify_Bench : EventBenchmarkBase
+{
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        var l = new BenchLayer();
+        l.RegisterService(new NotifyBenchManager());
+        LayerHub.CreateLayers().Push(l).Build();
+    }
+
+    [Benchmark(Description = "单层低压 Notify (1层/1订阅) - 100万次")]
+    public void Run()
+    {
+        for (var i = 0; i < OneMillion; i++) LayerHub.Send(new NotifyEvent());
+    }
+}
+
+public class SingleLayer_Low_Comparison_Bench : EventBenchmarkBase
+{
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        var l = new BenchLayer();
+        l.RegisterService(new BenchManager());
+        l.RegisterService(new NotifyBenchManager());
+        LayerHub.CreateLayers().Push(l).Build();
+    }
+
+    [Benchmark(Baseline = true, Description = "单层低压标准同步 (1层/1订阅) - 100万次")]
+    public void StandardSync()
+    {
+        for (var i = 0; i < OneMillion; i++) LayerHub.Send(new BenchEvent());
+    }
+
+    [Benchmark(Description = "单层低压 Notify (1层/1订阅) - 100万次")]
+    public void NotifyRoute()
+    {
+        for (var i = 0; i < OneMillion; i++) LayerHub.Send(new NotifyEvent());
+    }
+}
+
 public class SingleLayer_High_Bench : EventBenchmarkBase
 {
     [GlobalSetup]
