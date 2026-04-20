@@ -459,6 +459,9 @@ public sealed class GlobalEventCenter
         private EventNotifyDelegate<T>[] _notifyHandlers = Array.Empty<EventNotifyDelegate<T>>();
         private HandlerCircuit[] _notifyCircuits = Array.Empty<HandlerCircuit>();
         private string[] _notifyNames = Array.Empty<string>();
+        private EventHandleDelegate<T>? _singleSyncHandler;
+        private EventNotifyDelegate<T>? _singleNotifyHandler;
+        private bool _isSingleSync, _isSingleNotify;
         private int _isDirty, _syncCountTotal, _asyncCountTotal, _parallelCountTotal, _notifyCountTotal;
         private LayerRange[] _ranges = Array.Empty<LayerRange>();
 
@@ -1028,48 +1031,33 @@ public sealed class GlobalEventCenter
             ref var hBase = ref GetArrayDataRef(_syncHandlers);
             var combinedState = 0;
             var i = start;
-            int offset = 0;
+            var currentIndex = start;
             try
             {
-                for (; i <= end - 8; i += 8)
+                for (; i <= end - 4; i += 4)
                 {
-                    offset = 0; var r1 = Unsafe.Add(ref hBase, i)(in value);
+                    currentIndex = i;
+                    var r1 = Unsafe.Add(ref hBase, i)(in value);
                     if (r1 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = 1; var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
-                    if (r2 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = 2; var r3 = Unsafe.Add(ref hBase, i + 2)(in value);
-                    if (r3 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = 3; var r4 = Unsafe.Add(ref hBase, i + 3)(in value);
-                    if (r4 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = 4; var r5 = Unsafe.Add(ref hBase, i + 4)(in value);
-                    if (r5 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = 5; var r6 = Unsafe.Add(ref hBase, i + 5)(in value);
-                    if (r6 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = 6; var r7 = Unsafe.Add(ref hBase, i + 6)(in value);
-                    if (r7 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = 7; var r8 = Unsafe.Add(ref hBase, i + 7)(in value);
-                    if (r8 == EventHandledState.Handled) return EventHandledState.Handled;
 
-                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4 | (int)r5 | (int)r6 | (int)r7 | (int)r8;
-                }
-                for (; i <= end - 2; i += 2)
-                {
-                    offset = 0; var r1 = Unsafe.Add(ref hBase, i)(in value);
-                    if (r1 == EventHandledState.Handled) return EventHandledState.Handled;
-                    offset = 1; var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
+                    currentIndex = i + 1;
+                    var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
                     if (r2 == EventHandledState.Handled) return EventHandledState.Handled;
-                    combinedState |= (int)r1 | (int)r2 ;
+
+                    currentIndex = i + 2;
+                    var r3 = Unsafe.Add(ref hBase, i + 2)(in value);
+                    if (r3 == EventHandledState.Handled) return EventHandledState.Handled;
+
+                    currentIndex = i + 3;
+                    var r4 = Unsafe.Add(ref hBase, i + 3)(in value);
+                    if (r4 == EventHandledState.Handled) return EventHandledState.Handled;
+
+                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4;
                 }
-                offset = 0;
+
                 for (; i < end; i++)
                 {
+                    currentIndex = i;
                     var state = Unsafe.Add(ref hBase, i)(in value);
                     if (state == EventHandledState.Handled) return EventHandledState.Handled;
                     combinedState |= (int)state;
@@ -1077,13 +1065,13 @@ public sealed class GlobalEventCenter
             }
             catch (Exception e)
             {
-                HandleFault(i + offset, true, in value, e);
+                HandleFault(currentIndex, true, in value, e);
                 return EventHandledState.Continue;
             }
 
             return (combinedState & 2) != 0 ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
         }
-
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DispatchAsync(int start, int end, in T value)
         {
@@ -1107,49 +1095,33 @@ public sealed class GlobalEventCenter
             ref var hBase = ref GetArrayDataRef(_syncHandlers);
             var combinedState = 0;
             var i = end - 1;
-            int offset = 0;
+            var currentIndex = i;
             try
             {
-                // 🚀 8x 循环展开配合 PGO (TieredPGO)：使用显式 if 命中常见的分支预测 (Continue)
-                for (; i >= start + 7; i -= 8)
+                for (; i >= start + 3; i -= 4)
                 {
-                    offset = 0;  var r1 = Unsafe.Add(ref hBase, i)(in value);
+                    currentIndex = i;
+                    var r1 = Unsafe.Add(ref hBase, i)(in value);
                     if (r1 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = -1; var r2 = Unsafe.Add(ref hBase, i - 1)(in value);
-                    if (r2 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = -2; var r3 = Unsafe.Add(ref hBase, i - 2)(in value);
-                    if (r3 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = -3; var r4 = Unsafe.Add(ref hBase, i - 3)(in value);
-                    if (r4 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = -4; var r5 = Unsafe.Add(ref hBase, i - 4)(in value);
-                    if (r5 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = -5; var r6 = Unsafe.Add(ref hBase, i - 5)(in value);
-                    if (r6 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = -6; var r7 = Unsafe.Add(ref hBase, i - 6)(in value);
-                    if (r7 == EventHandledState.Handled) return EventHandledState.Handled;
-                    
-                    offset = -7; var r8 = Unsafe.Add(ref hBase, i - 7)(in value);
-                    if (r8 == EventHandledState.Handled) return EventHandledState.Handled;
 
-                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4 | (int)r5 | (int)r6 | (int)r7 | (int)r8;
-                }
-                for (; i >= start + 1; i -= 2)
-                {
-                    offset = 0; var r1 = Unsafe.Add(ref hBase, i)(in value);
-                    if (r1 == EventHandledState.Handled) return EventHandledState.Handled;
-                    offset = -1; var r2 = Unsafe.Add(ref hBase, i - 1)(in value);
+                    currentIndex = i - 1;
+                    var r2 = Unsafe.Add(ref hBase, i - 1)(in value);
                     if (r2 == EventHandledState.Handled) return EventHandledState.Handled;
-                    combinedState |= (int)r1 | (int)r2 ;
+
+                    currentIndex = i - 2;
+                    var r3 = Unsafe.Add(ref hBase, i - 2)(in value);
+                    if (r3 == EventHandledState.Handled) return EventHandledState.Handled;
+
+                    currentIndex = i - 3;
+                    var r4 = Unsafe.Add(ref hBase, i - 3)(in value);
+                    if (r4 == EventHandledState.Handled) return EventHandledState.Handled;
+
+                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4;
                 }
-                offset = 0;
+
                 for (; i >= start; i--)
                 {
+                    currentIndex = i;
                     var state = Unsafe.Add(ref hBase, i)(in value);
                     if (state == EventHandledState.Handled) return EventHandledState.Handled;
                     combinedState |= (int)state;
@@ -1157,7 +1129,7 @@ public sealed class GlobalEventCenter
             }
             catch (Exception e)
             {
-                HandleFault(i + offset, true, in value, e);
+                HandleFault(currentIndex, true, in value, e);
                 return EventHandledState.Continue;
             }
 
