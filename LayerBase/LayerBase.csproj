@@ -7,6 +7,7 @@
         <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
         <LangVersion>12</LangVersion>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <TieredPGO>true</TieredPGO>
         <Title>LayerBase</Title>
         <Authors>扭矩不足</Authors>
         <Description>高性能一体化游戏架构框架。集成模块化层级、轻量级 DI、异步任务(LBTask)与超极速事件总线。专为 Godot/Unity 优化。</Description>
