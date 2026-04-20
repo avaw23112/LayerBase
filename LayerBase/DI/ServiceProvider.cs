@@ -6,7 +6,14 @@ namespace LayerBase.DI;
 
 public sealed class ServiceProvider : IServiceProvider, IDisposable
 {
-    private static readonly ServiceProvider _root = new();
+    private static ServiceProvider _root = new();
+
+    public static void ResetRoot()
+    {
+        var oldRoot = Interlocked.Exchange(ref _root, new ServiceProvider());
+        oldRoot.Dispose();
+    }
+
     private readonly ConcurrentDictionary<Type, Lazy<object>> _instances = new();
     private readonly ConcurrentDictionary<Type, ServiceDescriptor> _map;
     private readonly Layer? _ownerLayer;

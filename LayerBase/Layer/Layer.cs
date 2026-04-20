@@ -23,6 +23,7 @@ public sealed class OwnerLayerAttribute : Attribute
 public abstract class Layer : Node, ILayerContext, IDisposable, IService
 {
     private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();
+    private readonly List<IDelayPublisherUpdater> m_delayUpdaters = new(); // 优化：消除 Values 迭代分配
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
     private readonly List<IDisposable> m_subscriptions = new();
@@ -42,8 +43,9 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
     public int RouteIndex { get; private set; } = -1;
     public List<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = new();
 
+    // 优化：不再包含 DiscoveredSubscribers。仅有订阅者的层被称为“被动层”，不应参与逻辑位图轮询。
     public virtual bool HasActiveLogic =>
-        m_serviceUpdates.Count > 0 || m_delayPublishers.Count > 0 || DiscoveredSubscribers.Count > 0;
+        m_serviceUpdates.Count > 0 || m_delayUpdaters.Count > 0;
 
     public void Dispose()
     {
@@ -104,11 +106,17 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
         ServiceLayerBinder.Attach(this, this);
     }
 
+    // 拆分后的方法：由 LayerChain 精准调用
+    internal void PumpEvents()
+    {
+        if (RouteIndex != -1)
+            LayerHub.EventCenter.PumpLayer(RouteIndex);
+    }
+
+    // 拆分后的方法：由逻辑位图驱动
     public virtual void Pump(float deltaTime)
     {
-        if (RouteIndex == -1) return;
-        LayerHub.EventCenter.PumpLayer(RouteIndex);
-        foreach (var updater in m_delayPublishers.Values) updater.Update(deltaTime);
+        for (var i = 0; i < m_delayUpdaters.Count; i++) m_delayUpdaters[i].Update(deltaTime);
         for (var i = 0; i < m_serviceUpdates.Count; i++) m_serviceUpdates[i].Update();
     }
 
@@ -167,7 +175,12 @@ public abstract class Layer : Node, ILayerContext, IDisposable, IService
 
     public IDelayPublisher<T> SubscribeDelay<T>() where T : struct
     {
-        return (IDelayPublisher<T>)m_delayPublishers.GetOrAdd(typeof(T), _ => new DelayPublisher<T>(this));
+        return (IDelayPublisher<T>)m_delayPublishers.GetOrAdd(typeof(T), _ =>
+        {
+            var dp = new DelayPublisher<T>(this);
+            m_delayUpdaters.Add(dp);
+            return dp;
+        });
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

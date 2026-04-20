@@ -49,11 +49,14 @@ internal sealed class LayerChain
         // 1. 获取全局事件挂起状态（位图）
         var eventMask = LayerHub.EventCenter.GetEventPendingMask();
 
-        // 2. 合并逻辑活跃状态
-        var activeMask = eventMask | _logicActiveMask;
+        // 2. 逻辑活跃状态
+        var logicMask = _logicActiveMask;
+
+        // 3. 合并所有需要处理的层
+        var activeMask = eventMask | logicMask;
         if (activeMask == 0) return;
 
-        // 3. 高性能位图遍历：利用硬件指令彻底跳过空闲层级
+        // 4. 高性能位图遍历：利用硬件指令彻底跳过空闲层级
         var center = LayerHub.EventCenter;
         while (activeMask != 0)
         {
@@ -61,7 +64,16 @@ internal sealed class LayerChain
             if (index == -1 || index >= _indexedLayers.Length) break;
 
             var layer = _indexedLayers[index];
-            layer?.Pump(deltaTime);
+            if (layer != null)
+            {
+                var bit = 1UL << index;
+                
+                // 优化：只有当事件位图命中时，才执行事件 Pump (精准打击)
+                if ((eventMask & bit) != 0) layer.PumpEvents();
+                
+                // 只有当逻辑活跃位图命中时，才执行逻辑 Pump
+                if ((logicMask & bit) != 0) layer.Pump(deltaTime);
+            }
 
             activeMask &= ~(1UL << index);
         }

@@ -88,6 +88,7 @@ public static class LayerHub
             s_chain = null;
             s_layerIndexCounter = 0;
             EventCenter = new GlobalEventCenter();
+            ServiceProvider.ResetRoot(); // 新增：重置全局单例容器
             ServiceLayerBinder.Reset();
             OnLayerEventInfo = null;
             IsDebugMode = false;
