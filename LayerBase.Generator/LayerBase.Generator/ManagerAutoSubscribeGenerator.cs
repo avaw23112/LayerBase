@@ -13,8 +13,8 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
 {
     private static readonly DiagnosticDescriptor InvalidSubscribeSignature = new(
         "LBGS001",
-        "Invalid subscribe handler signature",
-        "Method '{0}' uses [{1}] but must match signature '{2}'",
+        "Invalid subscribe member signature",
+        "Member '{0}' uses [{1}] but must match '{2}'",
         "Usage",
         DiagnosticSeverity.Warning,
         true,
@@ -49,33 +49,57 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                     var attrName = attr.AttributeClass?.Name ?? "";
                     if (attrName.StartsWith("Subscribe"))
                     {
-                        var evtParam = method.Parameters.FirstOrDefault();
-                        if (evtParam != null)
+                        if (!TryValidateHandlerSignature(method, attrName, out var expectedSignature))
                         {
-                            if (!TryValidateHandlerSignature(method, attrName, out var expectedSignature))
-                            {
-                                diagnostics.Add(new HandlerDiagnostic(
-                                    method.Name,
-                                    attrName,
-                                    expectedSignature,
-                                    method.Locations.FirstOrDefault()));
-                                continue;
-                            }
-
-                            var evtStr = evtParam.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-                            var deps = new List<string>();
-                            if (!attrName.Contains("Async") && !attrName.Contains("Delay"))
-                                ScanBody(ctx.SemanticModel, method, evtStr, deps);
-                            handlers.Add(new HandlerInfo(method.Name, attrName, evtStr, deps));
+                            diagnostics.Add(new HandlerDiagnostic(
+                                method.Name,
+                                attrName,
+                                expectedSignature,
+                                method.Locations.FirstOrDefault()));
+                            continue;
                         }
+
+                        var evtParam = method.Parameters[0];
+                        var evtStr = evtParam.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                        var deps = new List<string>();
+                        if (!attrName.Contains("Async") && !attrName.Contains("Delay"))
+                            ScanBody(ctx.SemanticModel, method, evtStr, deps);
+                        handlers.Add(new HandlerInfo(method.Name, attrName, evtStr, deps));
                     }
                 }
             else if (member is IPropertySymbol prop)
                 if (prop.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("SubscribeDelay") == true))
-                    if (prop.Type is INamedTypeSymbol ts && ts.IsGenericType)
-                        delayProps.Add(
-                            $"{prop.Name}|{ts.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}");
+                {
+                    if (!TryValidateDelayTarget(prop.Type, out var eventType, out var expectedSignature))
+                    {
+                        diagnostics.Add(new HandlerDiagnostic(
+                            prop.Name,
+                            "SubscribeDelayAttribute",
+                            expectedSignature,
+                            prop.Locations.FirstOrDefault()));
+                    }
+                    else
+                    {
+                        delayProps.Add($"{prop.Name}|{eventType}");
+                    }
+                }
+            else if (member is IFieldSymbol field)
+                if (field.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("SubscribeDelay") == true))
+                {
+                    if (!TryValidateDelayTarget(field.Type, out var eventType, out var expectedSignature))
+                    {
+                        diagnostics.Add(new HandlerDiagnostic(
+                            field.Name,
+                            "SubscribeDelayAttribute",
+                            expectedSignature,
+                            field.Locations.FirstOrDefault()));
+                    }
+                    else
+                    {
+                        delayProps.Add($"{field.Name}|{eventType}");
+                    }
+                }
 
         if (handlers.Count > 0 || delayProps.Count > 0 || implementsCtx || diagnostics.Count > 0)
             return new ClassMeta(symbol.Name, symbol.ContainingNamespace.ToDisplayString(), symbol.ToDisplayString(),
@@ -226,6 +250,25 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
     private static bool IsReturnType(ITypeSymbol type, string fullyQualifiedName)
     {
         return type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == fullyQualifiedName;
+    }
+
+    private static bool TryValidateDelayTarget(ITypeSymbol type, out string eventType, out string expectedSignature)
+    {
+        expectedSignature = "IDelayPublisher<TEvent>";
+        eventType = string.Empty;
+
+        if (type is not INamedTypeSymbol namedType || !namedType.IsGenericType)
+        {
+            return false;
+        }
+
+        if (namedType.Name != "IDelayPublisher" || namedType.TypeArguments.Length != 1)
+        {
+            return false;
+        }
+
+        eventType = namedType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return true;
     }
 
     private static void ScanBody(SemanticModel model, IMethodSymbol handler, string srcEvt, List<string> deps)

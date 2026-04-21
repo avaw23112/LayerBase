@@ -347,8 +347,8 @@ namespace LayerBase.Layers
         public static readonly DiagnosticDescriptor ServiceMustImplementIService =
             new(
                 "LBG001",
-                "Service must implement IService",
-                "Type '{0}' is marked with OwnerLayer but does not implement LayerBase.DI.IService",
+                "OwnerLayer type must implement a supported contract",
+                "Type '{0}' is marked with OwnerLayer but does not implement any supported OwnerLayer contract (IService, ILayerCallHandler<TRequest, TResponse>, IEventHandler<TEvent>, or IEventHandlerAsync<TEvent>)",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
