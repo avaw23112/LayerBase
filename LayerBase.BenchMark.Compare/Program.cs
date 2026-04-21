@@ -15,6 +15,7 @@ using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.DI;
 using LayerBase.Layers;
+using IServiceCollection = LayerBase.DI.IServiceCollection;
 
 namespace LayerBaseCompareBenchmarks;
 
@@ -77,7 +78,7 @@ public class PublishSingleSubscriberCompareBench : CompareBenchmarkBase
 
         LayerHub.Reset();
         var layer = new CompareLayer();
-        layer.SubscribeNotify<NotifyPayload>(static (in NotifyPayload _) => { });
+        layer.RegisterService(new CompareNotifyManager());
         LayerHub.CreateLayers().Push(layer).Build();
     }
 
@@ -151,7 +152,7 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
         LayerHub.Reset();
         var layer = new CompareLayer();
         for (var i = 0; i < SubscriberCount; i++)
-            layer.SubscribeNotify<NotifyPayload>(static (in NotifyPayload _) => { });
+            layer.RegisterService(new CompareNotifyManager());
         LayerHub.CreateLayers().Push(layer).Build();
     }
 
@@ -294,5 +295,18 @@ public sealed class LayerBaseCompareHandler : ILayerCallHandler<CompareRequest, 
     public LBTask<CompareResponse> HandleAsync(CompareRequest request, CancellationToken cancellationToken = default)
     {
         return LBTask<CompareResponse>.FromResult(new CompareResponse(request.Value + 1));
+    }
+}
+
+public partial class CompareNotifyManager : IService
+{
+    [SubscribeNotify]
+    public void OnNotify(in NotifyPayload payload)
+    {
+    }
+
+    public void ConfigureServices(IServiceCollection services)
+    {        
+        services.AddSingleton(this);
     }
 }

@@ -119,8 +119,8 @@ public class FanoutScalingBench : EventBenchmarkBase
         var layer = new BenchLayer();
         for (var i = 0; i < SubscriberCount; i++)
         {
-            layer.Subscribe(static (in BenchEvent _) => EventHandledState.Continue);
-            layer.SubscribeNotify(static (in NotifyEvent _) => { });
+            layer.RegisterService(new FanoutSyncManager());
+            layer.RegisterService(new FanoutNotifyManager());
         }
 
         LayerHub.CreateLayers().Push(layer).Build();
@@ -150,15 +150,15 @@ public class HandledSemanticsBench : EventBenchmarkBase
         var layer = new BenchLayer();
 
         for (var i = 0; i < 32; i++)
-            layer.Subscribe(static (in ContinueOnlyEvent _) => EventHandledState.Continue);
+            layer.RegisterService(new ContinueOnlyManager());
 
-        layer.Subscribe(static (in FirstHandledEvent _) => EventHandledState.Handled);
+        layer.RegisterService(new FirstHandledManager());
         for (var i = 0; i < 31; i++)
-            layer.Subscribe(static (in FirstHandledEvent _) => EventHandledState.Continue);
+            layer.RegisterService(new FirstHandledContinueManager());
 
         for (var i = 0; i < 31; i++)
-            layer.Subscribe(static (in LastHandledEvent _) => EventHandledState.Continue);
-        layer.Subscribe(static (in LastHandledEvent _) => EventHandledState.Handled);
+            layer.RegisterService(new LastHandledContinueManager());
+        layer.RegisterService(new LastHandledManager());
 
         LayerHub.CreateLayers().Push(layer).Build();
     }
@@ -197,7 +197,7 @@ public class RoutingShapeBench : EventBenchmarkBase
         for (var i = 0; i < 3; i++) builder.Push(new BenchLayer());
 
         _tailLayer = new BenchLayer();
-        _tailLayer.Subscribe(static (in RoutedEvent _) => EventHandledState.Continue);
+        _tailLayer.RegisterService(new RoutedManager());
         builder.Push(_tailLayer).Build();
     }
 
@@ -367,7 +367,7 @@ public class CSharpEventSyncComparisonBench : EventBenchmarkBase
 
         var layer = new BenchLayer();
         for (var i = 0; i < SubscriberCount; i++)
-            layer.Subscribe<BenchEvent>(CSharpEventHandlers.SyncContinue);
+            layer.RegisterService(new BenchManager());
 
         LayerHub.CreateLayers().Push(layer).Build();
     }
@@ -406,7 +406,7 @@ public class CSharpEventNotifyComparisonBench : EventBenchmarkBase
 
         var layer = new BenchLayer();
         for (var i = 0; i < SubscriberCount; i++)
-            layer.SubscribeNotify<NotifyEvent>(CSharpEventHandlers.NotifyNoop);
+            layer.RegisterService(new NotifyBenchManager());
 
         LayerHub.CreateLayers().Push(layer).Build();
     }
@@ -438,17 +438,9 @@ public class PostPumpBench : EventBenchmarkBase
         LayerHub.Reset();
 
         _singleLayer = new PumpDrivenLayer();
-        _singleLayer.Subscribe(static (in PumpEvent _) => EventHandledState.Continue);
+        _singleLayer.RegisterService(new PumpManager());
 
         LayerHub.CreateLayers().Push(_singleLayer).Build();
-    }
-
-    [Benchmark(Baseline = true, Description = "Post仅入队 (1层/1订阅) - 10万次")]
-    [BenchmarkCategory("05.PostPump", "Dispatch.Queue", "PostPump")]
-    public void PostOnly()
-    {
-        for (var i = 0; i < HundredThousand; i++)
-            LayerHub.Post(PumpEvent.Instance);
     }
 
     [Benchmark(Description = "Post后立即Pump排空 (1层/1订阅) - 1万次")]
@@ -495,16 +487,14 @@ public class AsyncDispatchBench : EventBenchmarkBase
 
 public class ParallelDispatchBench : EventBenchmarkBase
 {
-    private readonly ParallelWorkloadConsumer _workloadConsumer = new();
-
     [GlobalSetup]
     public void Setup()
     {
         LayerHub.Reset();
         LayerHub.InitializeJobScheduler(4);
         var layer = new BenchLayer();
-        layer.SubscribeParallel(static (in ParallelBenchEvent _) => EventHandledState.Continue);
-        layer.SubscribeParallel<ParallelWorkloadEvent>(_workloadConsumer.Handle);
+        layer.RegisterService(new ParallelNoopManager());
+        layer.RegisterService(new ParallelWorkloadManager());
         LayerHub.CreateLayers().Push(layer).Build();
     }
 
@@ -1027,5 +1017,83 @@ public static class CSharpEventHandlers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void NotifyNoop(in NotifyEvent value)
     {
+    }
+}
+
+public partial class FanoutSyncManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    [Subscribe] public EventHandledState Handle(in BenchEvent e) => EventHandledState.Continue;
+}
+
+public partial class FanoutNotifyManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    [SubscribeNotify] public void Handle(in NotifyEvent e) { }
+}
+
+public partial class ContinueOnlyManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    [Subscribe] public EventHandledState Handle(in ContinueOnlyEvent e) => EventHandledState.Continue;
+}
+
+public partial class FirstHandledManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    [Subscribe] public EventHandledState Handle(in FirstHandledEvent e) => EventHandledState.Handled;
+}
+
+public partial class FirstHandledContinueManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    [Subscribe] public EventHandledState Handle(in FirstHandledEvent e) => EventHandledState.Continue;
+}
+
+public partial class LastHandledContinueManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    [Subscribe] public EventHandledState Handle(in LastHandledEvent e) => EventHandledState.Continue;
+}
+
+public partial class LastHandledManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    [Subscribe] public EventHandledState Handle(in LastHandledEvent e) => EventHandledState.Handled;
+}
+
+public partial class RoutedManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    [Subscribe] public EventHandledState Handle(in RoutedEvent e) => EventHandledState.Continue;
+}
+
+public partial class PumpManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    [Subscribe] public EventHandledState Handle(in PumpEvent e) => EventHandledState.Continue;
+}
+
+public partial class ParallelNoopManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    [SubscribeParallel] public EventHandledState Handle(in ParallelBenchEvent e) => EventHandledState.Continue;
+}
+
+public partial class ParallelWorkloadManager : IService
+{
+    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+
+    private int _sink;
+
+    [SubscribeParallel]
+    public EventHandledState Handle(in ParallelWorkloadEvent value)
+    {
+        var acc = _sink;
+        for (var i = 0; i < 16; i++)
+            acc = (acc * 33) ^ (i + 17);
+        _sink = acc;
+        BenchmarkSink.IntValue = acc;
+        return EventHandledState.Continue;
     }
 }
