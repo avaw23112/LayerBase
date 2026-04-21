@@ -242,6 +242,177 @@ public class RequestResponseCompareBench : CompareBenchmarkBase
     }
 }
 
+public class ManyNotifyFixedBatch32CompareBench : CompareBenchmarkBase
+{
+    [Params(2, 3)]
+    public int SubscribersPerEvent { get; set; }
+
+    private List<IDisposable> _messagePipeSubscriptions = null!;
+    private ManyNotifyBatch32Publishers _publishers = null!;
+    private System.IServiceProvider _provider = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _messagePipeSubscriptions = new List<IDisposable>(32 * SubscribersPerEvent);
+
+        LayerHub.Reset();
+        var layer = new CompareLayer();
+        ManyNotifyFixedBatchRegistry.RegisterLayerBase32(layer, SubscribersPerEvent);
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddMessagePipe();
+        _provider = services.BuildServiceProvider();
+        _publishers = ManyNotifyFixedBatchRegistry.CreatePublishers32(_provider, SubscribersPerEvent, _messagePipeSubscriptions);
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        foreach (var subscription in _messagePipeSubscriptions)
+            subscription.Dispose();
+
+        ((IDisposable)_provider).Dispose();
+        LayerHub.Reset();
+    }
+
+    [Benchmark(Baseline = true, Description = "固定批次 Direct Notify (32事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "Baseline", "Batch32")]
+    public void DirectBaseline()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchDirect32(SubscribersPerEvent);
+    }
+
+    [Benchmark(Description = "LayerBase SubscribeNotify 特性注册 (32事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "LayerBase", "Batch32")]
+    public void LayerBase()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchLayerBase32();
+    }
+
+    [Benchmark(Description = "MessagePipe (32事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "MessagePipe", "Batch32")]
+    public void MessagePipe()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchMessagePipe32(_publishers);
+    }
+}
+
+public class ManyNotifyFixedBatch128CompareBench : CompareBenchmarkBase
+{
+    [Params(2, 3)]
+    public int SubscribersPerEvent { get; set; }
+
+    private List<IDisposable> _messagePipeSubscriptions = null!;
+    private ManyNotifyBatch128Publishers _publishers = null!;
+    private System.IServiceProvider _provider = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _messagePipeSubscriptions = new List<IDisposable>(128 * SubscribersPerEvent);
+
+        LayerHub.Reset();
+        var layer = new CompareLayer();
+        ManyNotifyFixedBatchRegistry.RegisterLayerBase128(layer, SubscribersPerEvent);
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddMessagePipe();
+        _provider = services.BuildServiceProvider();
+        _publishers = ManyNotifyFixedBatchRegistry.CreatePublishers128(_provider, SubscribersPerEvent, _messagePipeSubscriptions);
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        foreach (var subscription in _messagePipeSubscriptions)
+            subscription.Dispose();
+
+        ((IDisposable)_provider).Dispose();
+        LayerHub.Reset();
+    }
+
+    [Benchmark(Baseline = true, Description = "固定批次 Direct Notify (128事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "Baseline", "Batch128")]
+    public void DirectBaseline()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchDirect128(SubscribersPerEvent);
+    }
+
+    [Benchmark(Description = "LayerBase SubscribeNotify 特性注册 (128事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "LayerBase", "Batch128")]
+    public void LayerBase()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchLayerBase128();
+    }
+
+    [Benchmark(Description = "MessagePipe (128事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "MessagePipe", "Batch128")]
+    public void MessagePipe()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchMessagePipe128(_publishers);
+    }
+}
+
+public class ManyNotifyFixedBatch256CompareBench : CompareBenchmarkBase
+{
+    [Params(2, 3)]
+    public int SubscribersPerEvent { get; set; }
+
+    private List<IDisposable> _messagePipeSubscriptions = null!;
+    private ManyNotifyBatch256Publishers _publishers = null!;
+    private System.IServiceProvider _provider = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _messagePipeSubscriptions = new List<IDisposable>(256 * SubscribersPerEvent);
+
+        LayerHub.Reset();
+        var layer = new CompareLayer();
+        ManyNotifyFixedBatchRegistry.RegisterLayerBase256(layer, SubscribersPerEvent);
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddMessagePipe();
+        _provider = services.BuildServiceProvider();
+        _publishers = ManyNotifyFixedBatchRegistry.CreatePublishers256(_provider, SubscribersPerEvent, _messagePipeSubscriptions);
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        foreach (var subscription in _messagePipeSubscriptions)
+            subscription.Dispose();
+
+        ((IDisposable)_provider).Dispose();
+        LayerHub.Reset();
+    }
+
+    [Benchmark(Baseline = true, Description = "固定批次 Direct Notify (256事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "Baseline", "Batch256")]
+    public void DirectBaseline()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchDirect256(SubscribersPerEvent);
+    }
+
+    [Benchmark(Description = "LayerBase SubscribeNotify 特性注册 (256事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "LayerBase", "Batch256")]
+    public void LayerBase()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchLayerBase256();
+    }
+
+    [Benchmark(Description = "MessagePipe (256事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "MessagePipe", "Batch256")]
+    public void MessagePipe()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchMessagePipe256(_publishers);
+    }
+}
+
 public sealed class CSharpNotifyPublisher
 {
     public event EventNotifyDelegate<NotifyPayload>? Notify;

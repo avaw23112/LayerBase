@@ -375,12 +375,13 @@ public sealed class SwitchSceneCallHandler : ILayerCallHandler<SwitchSceneReques
 [OwnerLayer(typeof(CoreLayer))]
 public sealed class ServiceLookupCallHandler : ILayerCallHandler<ServiceLookupRequest, ServiceLookupResponse>
 {
-    public LBTask<ServiceLookupResponse> HandleAsync(ServiceLookupRequest request,
-                                                     CancellationToken cancellationToken = default)
+    public async LBTask<ServiceLookupResponse> HandleAsync(ServiceLookupRequest request,
+                                                           CancellationToken cancellationToken = default)
     {
+        await LBTask.CompletedTask;
         var sceneService = this.Get<SceneService>();
         sceneService.SwitchTo(request.Value);
-        return LBTask<ServiceLookupResponse>.FromResult(new ServiceLookupResponse(sceneService.LastScene));
+        return new ServiceLookupResponse(sceneService.LastScene);
     }
 }
 
