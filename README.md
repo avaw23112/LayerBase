@@ -4,9 +4,7 @@
 
 # 🚀 LayerBase: 面向数据的高性能 C# 游戏架构总线
 
-**LayerBase** 是一款专为 Unity、Godot 及纯 C# 服务端打造的高性能事件架构与通讯总线框架。
-
-它打破了传统面向对象（OOP）事件总线的性能瓶颈，在底层采用了**面向数据设计（Data-Oriented Design, DOD）**与**SOA（Structure of Arrays）**内存布局。在保证业务代码极简、解耦的同时，为中大型项目提供规范的事件流转控制，实测单核 TPS 达到 **1.5 亿次/秒** 的物理级吞吐量。
+**LayerBase** 是一款专为 Unity、Godot 及纯 C# 服务端打造的高性能事件架构与通讯总线框架。它打破了传统面向对象（OOP）事件总线的性能瓶颈，在底层采用了**面向数据设计（Data-Oriented Design, DOD）**与**SOA（Structure of Arrays**内存布局。在保证业务代码极简、解耦的同时，为中大型项目提供规范的事件流转控制。
 
 ---
 
@@ -27,63 +25,53 @@
 
 ### 3. 破局：秩序与极速的重构
 
-LayerBase 的设计哲学是：**用强约束的框架收编混乱的注册，用底层的面向数据重构打破性能的枷锁。**
+LayerBase 的设计哲学是：**用强约束的框架收编混乱的注册，用底层的面向数据重构打破性能的枷锁。** 
 
-1. **在宏观架构上**：摒弃随地订阅的模式，引入 `Layer -> Service -> Manager` 三层递进的架构。通过依赖注入（DI）和明确的拓扑层级，让事件的流向和处理顺序重新回归绝对的确定性。
+1. **在宏观架构上**：摒弃随地订阅的模式，引入 `Layer -> Service -> Manager` 三层递进的架构。通过依赖注入（DI）和明确的拓扑层级，为团队的协作开发提供完整的心智模型。
 2. **在底层执行上**：汲取 ECS 框架的核心思想，在底层采用纯粹的 SOA 数组布局进行事件路由。使得这一架构不仅规范了代码，更在性能上达到了与顶级 C++/C# ECS 框架同级别的缓存命中率。
 
 ---
 
 ## ⚡ 标准基准测试 (Standard Benchmarks)
 
-### 1. 原始测试报表 (Original Benchmark Report)
+### 跨框架增长对比：事件种类与扇出扩张
 
-测试环境：`BenchmarkDotNet v0.15.8`, `Windows 11`, `.NET 8.0 (X64 RyuJIT)`, `Intel Core i7-12650H`.
+以下数据全部来自 `LayerBase.BenchMark.Compare/bin/Release/net8.0/BenchmarkDotNet.Artifacts/results`。我们分别观察两类增长：
 
-| Type (Benchmark Class)      | Method (Test Scenario)          |            Mean |          Error |         StdDev | Allocated |
-|:----------------------------|:--------------------------------|----------------:|---------------:|---------------:|:---------:|
-| **Classic_1ms_Bench**       | **'经典 1ms 挑战 (3层全订阅) - 1万次'**   |   **799.91 us** |   **10.20 us** |    **8.52 us** |   **0 B** |
-| **Extreme_Empty_64_Bench**  | **'极限空负载 (64层/0订阅) - 100万次'**   |   **447.09 us** |    **2.36 us** |   **12.95 us** |   **0 B** |
-| **MultiLayer_Full_Bench**   | **'多层高压 (10层/全订阅) - 100万次'**    |     **8.26 ms** |    **0.16 ms** |    **0.25 ms** |   **0 B** |
-| **MultiLayer_Low_Bench**    | **'多层低压 (10层/仅尾层) - 100万次'**    |     **3.26 ms** |    **0.06 ms** |    **0.06 ms** |   **0 B** |
-| **MultiLayer_Random_Bench** | **'多层随机负载 (10层/5层订阅) - 100万次'** |     **6.05 ms** |    **0.12 ms** |    **0.19 ms** |   **0 B** |
-| **SingleLayer_High_Bench**  | **'单层高压 (1层/10订阅) - 100万次'**    |     **8.13 ms** |    **0.16 ms** |    **0.25 ms** |   **0 B** |
-| **SingleLayer_Low_Bench**   | **'单层低压 (1层/1订阅) - 100万次'**     |     **3.27 ms** |    **0.06 ms** |    **0.08 ms** |   **0 B** |
-| **Typical_Heavy_180_Bench** | **'中重度负载 (180订阅) - 1万次'**       |   **799.91 us** |   **10.20 us** |    **8.52 us** |   **0 B** |
+1. 固定每事件订阅密度时，事件种类从 `32 -> 128 -> 256` 的批量扩张。
+2. 单事件下订阅数从 `1 -> 4 -> 8 -> 16` 的扇出扩张。
+3. 所有对比场景的 `Allocated` 均为 `0 B`。
+4. 所有LayerBase的处理器都经过 **[SubscribeNotify]** 的特性纯化。
 
-### 2. 性能大图景 (Performance Analysis Map)
+#### 不同事件种类下增长对比（固定批次，多事件）
 
-我们将耗时换算为 **TPS (每秒吞吐量)**，以更直观地展示框架的吞吐红利：
+**每事件 2 个订阅者**
 
-| 核心维度 (Dimension) | 关键指标 (Key Metric) | 每次耗时 (Cost/Op) | 换算 TPS (Throughput) | 工程价值 (Value) |
-|:---|:---|:---|:---|:---|
-| **单点爆发力** | 单次分发极限 | **3.27 ns** | **🚀 3.05 亿次/秒** | 物理级分发响应，几乎消灭通讯开销 |
-| **复杂负载性能** | 180 订阅重载 | **79.9 ns** | **🚀 1250 万次/秒** | 在极重度业务下依然保持毫秒级余量 |
-| **层级穿透力** | 64 层穿透跳跃 | **0.44 ns** | **🚀 22.7 亿次/秒** | 证明分层位图路由近乎零损耗 |
-| **实时性保障** | 1万次 1ms 挑战 | **79.9 ns** | **🚀 1250 万次/秒** | 确保即使大量连续触发也不产生帧率抖动 |
+| 事件种类 | 委托 批量耗时 | MessagePipe 批量耗时 | LayerBase 批量耗时 | LayerBase 单事件均摊 | LayerBase 相对 32 事件增长 | MessagePipe 相对 32 事件增长 | LayerBase 相对 MessagePipe |
+|:---|---:|---:|---:|---:|---:|---:|---:|
+| 32  | 6.185 ns | 194.922 ns | **196.616 ns** | **6.144 ns** | 1.00x | 1.00x | -0.9% |
+| 128 | 27.48 ns | 1,259.72 ns | **1,286.73 ns** | **10.053 ns** | 6.54x | 6.46x | -2.1% |
+| 256 | 57.95 ns | 2,669.05 ns | **2,671.42 ns** | **10.435 ns** | 13.59x | 13.69x | -0.1% |
 
-### 3. 横向对比：Notify 路径深度优化 (Cross-Framework Comparison)
+**每事件 3 个订阅者**
 
-在最新的 Release 中，我们对 `Notify` 分发路径（不关注返回值的快速路径）进行了专项优化。实测表明，在单订阅场景下 LayerBase 已与高性能框架 MessagePipe 持平，并在**扇出数量（Fan-out）增加时展现出极强的扩展性优势**。
+| 事件种类 | 委托 批量耗时 | MessagePipe 批量耗时 | LayerBase 批量耗时 | LayerBase 单事件均摊 | LayerBase 相对 32 事件增长 | MessagePipe 相对 32 事件增长 | LayerBase 相对 MessagePipe |
+|:---|---:|---:|---:|---:|---:|---:|---:|
+| 32  | 10.746 ns | 238.655 ns | **197.714 ns** | **6.179 ns** | 1.00x | 1.00x | +17.2% |
+| 128 | 93.67 ns | 1,426.10 ns | **1,320.44 ns** | **10.316 ns** | 6.68x | 5.98x | +7.4% |
+| 256 | 362.05 ns | 2,943.14 ns | **2,870.13 ns** | **11.211 ns** | 14.52x | 12.33x | +2.5% |
 
-#### Notify 路径横向对比 (vs C# Event & MessagePipe)
+#### 单事件不同订阅者数量下增长对比（100 万次 Notify）
 
-![Notify 单订阅对比](doc/release_single_subscriber_bar.png)
-*图 1：单订阅模式下，LayerBase 与 MessagePipe 处于同一性能梯队*
+| 订阅者数量 | C# event 单次耗时 | MessagePipe 单次耗时 | LayerBase 单次耗时 | C# event 相对 1 订阅增长 | MessagePipe 相对 1 订阅增长 | LayerBase 相对 1 订阅增长 | LayerBase 相对 MessagePipe |
+|:---|---:|---:|---:|---:|---:|---:|---:|
+| 1  | 0.3476 ns | 1.7939 ns | **1.6117 ns** | 1.00x | 1.00x | 1.00x | +10.2% |
+| 4  | 10.8657 ns | 2.9491 ns | **2.8477 ns** | 31.26x | 1.64x | 1.77x | +3.4% |
+| 8  | 19.2476 ns | 4.8975 ns | **3.4861 ns** | 55.37x | 2.73x | 2.16x | +28.8% |
+| 16 | 35.9193 ns | 9.6484 ns | **6.1484 ns** | 103.34x | 5.38x | 3.81x | +36.3% |
 
-![Notify 扇出对比](doc/release_notify_fanout_bar_linear.png)
-*图 2：随订阅者数量增加，LayerBase 的 SOA 布局优势凸显，扩展性远超传统实现*
-
-| 订阅者数量 (Subs) | C# event 耗时 | MessagePipe 耗时 | LayerBase 耗时 | 优势 (vs MessagePipe) |
-|:---|:---|:---|:---|:---|
-| 1 | 0.37 ns | 1.94 ns | **1.80 ns** | **+7.2%** |
-| 16 | 37.98 ns | 9.90 ns | **6.34 ns** | **+36.0%** |
-| 64 | 149.9 ns | 34.95 ns | **17.63 ns** | **+49.5%** |
-
-#### 内部收益：Notify vs Sync
-
-![内部对比](doc/release_internal_sync_vs_notify_bar.png)
-*图 3：在 LayerBase 内部，Notify 路径凭借零分支预测，始终保持比标准 Sync 路径快 30%~50%*
+* 在多事件且少量订阅者的模型中，我们的SOA架构并未发挥出其独有优势，因此只能做到贴近MessagePipe的性能。
+* 但只要一个事件的订阅者数量超过3，那么SOA带来的稳定性与性能的提升就会披露头角。
 
 ---
 
@@ -125,15 +113,21 @@ EventBucket<T>
 * **位运算状态合并**：在核心循环中，将多个 Handler 的返回状态通过按位或（`|`）合并，大幅压缩了分支预测指令（Branch Prediction）。
 * **指针偏移**：在支持的运行时下，底层直接获取数组的原生指针并通过 `Unsafe.Add` 步进，彻底消除了 JIT 在循环内的数组边界检查（BCE）。
 
+### 4. 构建持久性数据
+
+- 在层级构建之初便将一切计算完成，并将结果缓存在内存中。因此在热路径中，我们 **不做计算、不做查找、不做写入、永远只读**。
+
 ---
 
 ## 🛡️ 工业级基建保障
 
 除了追求极致的运行效率，LayerBase 在工程稳健性上也提供了全套设施：
 
-- **自愈熔断机制**：当事件 Handler 抛出未捕获异常时，系统会精准定位并物理熔断该节点，局部故障绝不阻塞同层其他业务。在下一帧，引擎通过“两段式零分配重建（Two-Pass Zero-Allocation Rebuild）”平滑剔除失效节点，实现系统自愈。
-- **零分配异步生态 (`LBTask`)**：现代游戏开发高度依赖异步操作。框架内置了专为游戏帧循环调优的 `LBTask` 结构体任务。在同步完成路径下可实现 **0 GC 堆分配**，让异步逻辑免除内存抖动困扰。
-- **静态拓扑审计**：在调用 `Build()` 构建层级时，底层的着色图算法（Three-Color Algorithm）会静态扫描整个事件网络。若发现**同步死循环**风险，控制台将直接打印环路警告，拒绝黑盒运行。
+1. **自愈熔断机制**：当事件 Handler 抛出未捕获异常时，系统会精准定位并物理熔断该节点，局部故障绝不阻塞同层其他业务。在下一帧，引擎通过“两段式零分配重建（Two-Pass Zero-Allocation Rebuild）”平滑剔除失效节点，实现系统自愈。
+2. **零分配异步生态 (`LBTask`)**：现代游戏开发高度依赖异步操作。框架内置了专为游戏帧循环调优的 `LBTask` 结构体任务。在同步完成路径下可实现 **0 GC 堆分配**，让异步逻辑免除内存抖动困扰。
+3. **静态拓扑审计**：在调用 `Build()` 构建层级时，底层的着色图算法（Three-Color Algorithm）会静态扫描整个事件网络。若发现**同步死循环**风险，控制台将直接打印环路警告，拒绝黑盒运行。
+
+* 注意：在使用 **[SubscribeNotify]** 特性来注册事件时，由于它极度纯化，因此该事件默认开发者自己管理异常，即它不使用异常熔断机制提供容错。
 
 ---
 
@@ -142,7 +136,7 @@ EventBucket<T>
 1. **NuGet 快速安装 (推荐)**：
    您可以通过 NuGet 包管理器直接安装 LayerBase：
    ```bash
-   dotnet add package LayerBase --version 1.3.3
+   dotnet add package LayerBase --version 1.3.6
    ```
 2. **源码引入**：将仓库中的 `LayerBase` 和 `LayerBase.Task` 项目目录直接添加到您的解决方案中并建立引用。
 3. **配置源生成器 (Source Generator)**：
@@ -152,7 +146,7 @@ EventBucket<T>
        <ProjectReference Include="LayerBase.Generator\LayerBase.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
    </ItemGroup>
    ```
-4. **环境要求**：支持 `.NET Standard 2.1`（完美兼容 Unity/Godot），建议在 `.NET 8.0/9.0` 环境下运行以解锁完整的 `Unsafe` 硬件加速。
+4. **环境要求**：支持 `.NET Standard 2.1`（完美兼容 Unity/Godot），但建议在 `.NET 8.0/9.0` 环境下运行。
 
 ---
 
@@ -193,9 +187,11 @@ using LayerBase.DI;
 using LayerBase.Core.Event;
 using LayerBase.Async;
 
+
 // 类需标记为 partial 配合源生成器
 public partial class DamageManager : ILayerContext
 {
+    //  所有Subscribe都保证注册的先后顺序就是它在事件调度中的顺序。
     // 【同步事件处理】：使用 [Subscribe] 特性
     [Subscribe]
     private EventHandledState OnTakeDamage(in DamageEvent e)
@@ -205,7 +201,7 @@ public partial class DamageManager : ILayerContext
         if (e.Amount > 100)
         {
             // 向下坠落：将事件传递给更底层的系统
-            this.SendDrop(new PlayerDeathEvent()); 
+            this.SenDrop(new PlayerDeathEvent()); 
         }
         
         // 返回 Continue: 允许其他同事件的 Manager 继续处理
@@ -221,7 +217,50 @@ public partial class DamageManager : ILayerContext
         await LBTask.Delay(TimeSpan.FromSeconds(3f)); 
     }
 }
+
+public partial class PlayerMoveManager : ILayerContext
+{
+    // 【追求极致性能】：使用 [SubscribeNotify] 特性
+    //  必须由用户自身担保逻辑的正确性，框架不负责捕捉、处理、上报异常
+    [SubscribeNotify]
+    private void OnPlayer(in PlayerMoveEvent e)
+    {
+        ref PositionComponent = ref Player.Entity.Get<PositionComponent>();
+        PositionComponent += e.delta;
+    }
+}
+
+using LayerBase.Option;
+
+public partial class PlayerInputManager : ILayerContext,IUpdate
+{
+    //一个非阻塞的定时事件管道。
+    //最常用的就是把它当做输入缓冲队列，且可在发送端调整缓冲存在的时间
+    [SubscribeDelay] public IDelayPublisher<InputEvent> DelayNotify { get; set; }
+
+    void Update(float deltaTime)
+    {
+        //尝试获取当前挂起的数值（取出管道内的事件）,如果没有则返回False
+        if(DelayNotify.TryTake(out InputEvent inputEvent))
+        {
+            if(inputEvent.Value == InputType.Forward)
+            {
+                this.Send(new PlayerMoveEvent (){e.delat = new Vector2(0,1)});
+            }
+        }
+
+        //尝试取出当前挂起的数值（不取出管道内的事件，只能等缓冲时间到后自动销毁）,如果没有则返回False
+        // if(DelayNotify.TryGet(out InputEvent inputEvent))
+        // {
+                //其他逻辑
+        // }
+    }
+}
+
 ```
+* 注意事件事件类型的执行顺序：在同一层内 由Notify -> sync -> async.
+* 所有事件都只能保证在同类型的事件中顺序和注册一致，不能保证不同事件类型的事件执行顺序和注册顺序一致.
+* 因为考虑业务情况,要形成事件链的话，全都用一种类型事件会更有益于管理.混用不同类型的事件反而会造成混淆。例如要么全用Sync,要么全用Notify。如果中间一定要有一个async事件，那么请你考虑用高级特性中的Call语义，将该async事件做成一个功能切片来使用。
 
 ### Step 3: 组织业务模块 (Service)
 
@@ -254,12 +293,20 @@ this.SendBubble(new DamageEvent()); // 【冒泡】向索引更小的上层抛�
 this.SendDrop(new DamageEvent());   // 【坠落】向索引更大的下层抛出（如UI层发往逻辑层）
 this.SendGlobal(new DamageEvent()); // 【全局】穿透所有层级广播
 
-// 【Post 族：异步投递，将事件压入队列，由下一帧的 Pump 处理】
+// 【Post 族：异步投递，用在一些不紧急，可分帧执行的任务中。相当于把所有层级当做一个可Yield的状态机链，每执行完一层的任务就Yield出去，并把执行权递给更下\上一层状态机，直到事件传播到链尾。
 this.PostBubble(new DamageEvent());
+this.PostDrop(new DamageEvent());
 this.PostGlobal(new DamageEvent()); 
 
-// 【Delay 族：定时投递】
-this.DelayDrop(new PlayerDeathEvent(), 3.5f); // 在指定秒数后向下层级派发
+// 【Delay 族：向事件缓冲管道发布一个定时的事件】
+this.DelayDrop(new PlayerDeathEvent(), 3.5f); // 该事件会在管道中存在3.5秒，直到有新的事件覆盖、到时间自动消亡、或者被取出。
+this.DelayBubble(new PlayerDeathEvent(), 3.5f); 
+this.Delay(new PlayerDeathEvent(), 3.5f); 
+
+// 全局事件传播
+// 注意：全局事件都是是经过特殊优化的，性能比其他种类都要好。如果不是为了特殊的顺序性，考虑全部使用全局事件，如this.SendGlobal或LayerHub.Send()
+LayerHub.Send();
+LayerHub.Post();
 ```
 
 这种设计有助于避免无向广播可能导致的循环触发和不必要的性能消耗。
@@ -314,10 +361,12 @@ public class GameRoot : MonoBehaviour
 
 ### 1. 流式过滤与拦截 (Fluent API)
 
-对于需要动态控制订阅条件的场景，LayerBase 提供了优雅的链式 API。它最大的优势在于：拦截条件会在路由的最早期（包装委托内部）执行，不符合条件的事件会被直接短路，避免了不必要的函数调用。
+对于需要动态控制订阅条件的场景，LayerBase 提供了优雅的链式 API
+- 优点：可以灵活的创建业务逻辑，适合初期快速开发。
+- 缺点：吃不到源生成器的优化，性能较低。
 
 ```csharp
-public partial class PlayerManager : ILayerContext
+public partial class PlayerManager : ILayerContext，IInitialize
 {
     private int _myEntityId = 10;
 
@@ -337,7 +386,7 @@ public partial class PlayerManager : ILayerContext
 
 ### 2. 后台并行处理 (Parallel Handlers)
 
-当面临高 CPU 消耗且**不依赖/不修改主线程状态**的纯计算逻辑（如寻路数据打包、耗时日志序列化）时，可使用并行订阅。事件将进入无锁队列并由 ThreadPool 在后台异步消化，保障主线程的帧率稳定。
+当面临高 CPU 消耗且**不依赖/不修改主线程状态、长时间运作**的纯计算逻辑（如寻路数据打包、耗时日志序列化）时，可使用并行订阅。事件将进入无锁队列并由 ThreadPool 在后台异步消化，保障主线程的帧率稳定。
 
 ```csharp
 // 通过特性快速绑定并行方法
@@ -443,9 +492,7 @@ LayerBase 采用了高效的 SOA 批量分发引擎。为了保证极致的 CPU 
 
 # 🚀 LayerBase: Data-Oriented High-Performance C# Game Architecture Bus
 
-**LayerBase** is a high-performance event architecture and communication bus framework designed specifically for Unity, Godot, and pure C# servers.
-
-It shatters the performance bottlenecks of traditional Object-Oriented Programming (OOP) event buses by adopting **Data-Oriented Design (DOD)** and **SOA (Structure of Arrays)** memory layout at its core. While keeping your business code minimal and decoupled, it provides standardized event flow control for medium-to-large projects, achieving an impressive physical throughput of **over 150 million TPS (Transactions Per Second)** on a single core.
+**LayerBase** is a high-performance event architecture and communication bus framework designed specifically for Unity, Godot, and pure C# servers. It breaks through the performance bottlenecks of traditional Object-Oriented Programming (OOP) event buses by adopting **Data-Oriented Design (DOD)** and **SOA (Structure of Arrays)** memory layout at its core. While keeping business code minimal and decoupled, it provides standardized event-flow control for medium-to-large projects.
 
 ---
 
@@ -468,71 +515,51 @@ To decouple modules, the industry widely adopted `Action` delegates, `UniRx`, or
 
 LayerBase's design philosophy is: **Tame chaotic registrations with a strongly constrained framework, and shatter performance shackles with data-oriented reconstruction.**
 
-1. **On Macro Architecture**: Abandon the free-for-all subscription pattern and introduce a strongly constrained `Layer -> Service -> Manager` three-tier progressive architecture. Through Dependency Injection (DI) and explicit topology layers, the flow and processing order of events return to absolute determinism.
+1. **On Macro Architecture**: Abandon the free-for-all subscription pattern and introduce a `Layer -> Service -> Manager` three-tier progressive architecture. Through Dependency Injection (DI) and explicit topology layers, it provides the team with a complete mental model for collaborative development.
 2. **On Micro Execution**: Draw inspiration from ECS frameworks. Adopt pure SOA array layouts for event routing at the lowest level. This ensures that the architecture not only standardizes the code but also achieves cache hit rates on par with top-tier C++/C# ECS frameworks.
 
 ---
 
 ## ⚡ Standard Benchmarks
 
-### 1. Original Benchmark Report
+### Cross-Framework Growth Comparison: Event Variety and Fan-out Expansion
 
-Testing Environment: `BenchmarkDotNet v0.15.8`, `Windows 11`, `.NET 8.0 (X64 RyuJIT)`, `Intel Core i7-12650H`.
+The following figures are taken directly from `LayerBase.BenchMark.Compare/bin/Release/net8.0/BenchmarkDotNet.Artifacts/results`. They cover two growth dimensions:
 
-| Type (Benchmark Class)      | Method (Test Scenario)                                            |            Mean |          Error |         StdDev | Allocated |
-|:----------------------------|:------------------------------------------------------------------|----------------:|---------------:|---------------:|:---------:|
-| **Classic_1ms_Bench**       | **'Classic 1ms Challenge (3 layers fully subbed) - 10k ops'**     |   **799.91 us** |   **10.20 us** |    **8.52 us** |   **0 B** |
-| **Extreme_Empty_64_Bench**  | **'Extreme Empty Load (64 layers/0 subs) - 1M ops'**              |   **447.09 us** |    **2.36 us** |   **12.95 us** |   **0 B** |
-| **MultiLayer_Full_Bench**   | **'Multi-Layer High Pressure (10 layers fully subbed) - 1M ops'** |     **8.26 ms** |    **0.16 ms** |    **0.25 ms** |   **0 B** |
-| **MultiLayer_Low_Bench**    | **'Multi-Layer Low Pressure (10 layers tail sub only) - 1M ops'** |     **3.26 ms** |    **0.06 ms** |    **0.06 ms** |   **0 B** |
-| **MultiLayer_Random_Bench** | **'Multi-Layer Random Load (10 layers 5 random subs) - 1M ops'**  |     **6.05 ms** |    **0.12 ms** |    **0.19 ms** |   **0 B** |
-| **SingleLayer_High_Bench**  | **'Single Layer High Pressure (1 layer 10 subs) - 1M ops'**       |     **8.13 ms** |    **0.16 ms** |    **0.25 ms** |   **0 B** |
-| **SingleLayer_Low_Bench**   | **'Single Layer Low Pressure (1 layer 1 sub) - 1M ops'**          |     **3.27 ms** |    **0.06 ms** |    **0.08 ms** |   **0 B** |
-| **Typical_Heavy_180_Bench** | **'Medium-Heavy Load (180 subs) - 10k ops'**                      |   **799.91 us** |   **10.20 us** |    **8.52 us** |   **0 B** |
+1. Batch expansion as the number of event kinds grows from `32 -> 128 -> 256` while keeping the subscriber density per event fixed.
+2. Fan-out expansion for a single event as subscriber count grows from `1 -> 4 -> 8 -> 16`.
+3. All comparison cases report `Allocated = 0 B`.
+4. Every LayerBase handler in these comparisons is purified through the **[SubscribeNotify]** attribute path.
 
-### 2. Performance Analysis Map
+#### Growth by Event Kind Count (fixed batch, many event types)
 
-We have converted raw timings into **TPS (Transactions Per Second)** to intuitively demonstrate the performance dividends of the framework:
+**2 subscribers per event**
 
-| Dimension | Key Metric | Cost Per Op | Throughput (TPS) | Engineering Value |
-|:---|:---|:---|:---|:---|
-| **Burst Power** | Single Dispatch Limit | **3.27 ns** | **🚀 3.05 亿次/秒** | Physical-level response; virtually eliminates communication overhead |
-### 2. Performance Analysis Map
+| Event Kinds | Delegate Batch Cost | MessagePipe Batch Cost | LayerBase Batch Cost | LayerBase Avg/Event | LayerBase Scale vs 32 | MessagePipe Scale vs 32 | LayerBase vs MessagePipe |
+|:---|---:|---:|---:|---:|---:|---:|---:|
+| 32  | 6.185 ns | 194.922 ns | **196.616 ns** | **6.144 ns** | 1.00x | 1.00x | -0.9% |
+| 128 | 27.48 ns | 1,259.72 ns | **1,286.73 ns** | **10.053 ns** | 6.54x | 6.46x | -2.1% |
+| 256 | 57.95 ns | 2,669.05 ns | **2,671.42 ns** | **10.435 ns** | 13.59x | 13.69x | -0.1% |
 
-We have converted raw timings into **TPS (Transactions Per Second)** to intuitively demonstrate the performance dividends of the framework:
+**3 subscribers per event**
 
-| Dimension | Key Metric | Cost Per Op | Throughput (TPS) | Engineering Value |
-|:---|:---|:---|:---|:---|
-| **Burst Power** | Single Dispatch Limit | **3.27 ns** | **🚀 305 Million/sec** | Physical-level response; virtually eliminates communication overhead |
-| **Heavy Load** | 180 Subscriptions | **79.9 ns** | **🚀 12.5 Million/sec** | Maintains millisecond-level margin even under extreme business logic |
-| **Deep Routing** | 64-Layer Penetration | **0.44 ns** | **🚀 2.23 Billion/sec** | Proves layered bitmap routing has near-zero overhead |
-| **Stability** | 10k 1ms Challenge | **79.9 ns** | **🚀 12.5 Million/sec** | Ensures massive continuous triggers do not cause frame rate stutter |
+| Event Kinds | Delegate Batch Cost | MessagePipe Batch Cost | LayerBase Batch Cost | LayerBase Avg/Event | LayerBase Scale vs 32 | MessagePipe Scale vs 32 | LayerBase vs MessagePipe |
+|:---|---:|---:|---:|---:|---:|---:|---:|
+| 32  | 10.746 ns | 238.655 ns | **197.714 ns** | **6.179 ns** | 1.00x | 1.00x | +17.2% |
+| 128 | 93.67 ns | 1,426.10 ns | **1,320.44 ns** | **10.316 ns** | 6.68x | 5.98x | +7.4% |
+| 256 | 362.05 ns | 2,943.14 ns | **2,870.13 ns** | **11.211 ns** | 14.52x | 12.33x | +2.5% |
 
-### 3. Cross-Framework Comparison: Notify Path Deep Optimization
+#### Growth by Subscriber Count for a Single Event (1,000,000 Notify calls)
 
-In the latest release, we've implemented specialized optimizations for the `Notify` dispatch path (the "fast path" that
-ignores return values). Benchmarks show that LayerBase is now competitive with high-performance frameworks like
-MessagePipe in single-subscriber scenarios and **demonstrates massive scalability advantages as fan-out increases**.
+| Subscribers | C# event Cost/Notify | MessagePipe Cost/Notify | LayerBase Cost/Notify | C# event Scale vs 1 | MessagePipe Scale vs 1 | LayerBase Scale vs 1 | LayerBase vs MessagePipe |
+|:---|---:|---:|---:|---:|---:|---:|---:|
+| 1  | 0.3476 ns | 1.7939 ns | **1.6117 ns** | 1.00x | 1.00x | 1.00x | +10.2% |
+| 4  | 10.8657 ns | 2.9491 ns | **2.8477 ns** | 31.26x | 1.64x | 1.77x | +3.4% |
+| 8  | 19.2476 ns | 4.8975 ns | **3.4861 ns** | 55.37x | 2.73x | 2.16x | +28.8% |
+| 16 | 35.9193 ns | 9.6484 ns | **6.1484 ns** | 103.34x | 5.38x | 3.81x | +36.3% |
 
-#### Notify Path Comparison (vs C# Event & MessagePipe)
-
-![Notify Single-Sub](doc/release_single_subscriber_bar.png)
-*Figure 1: In single-subscriber mode, LayerBase is in the same performance class as MessagePipe.*
-
-![Notify Fan-out](doc/release_notify_fanout_bar_linear.png)
-*Figure 2: As the number of subscribers grows, LayerBase's SOA layout advantage becomes clear, far outscaling traditional
-implementations.*
-
-| Subscriber Count (Subs) | C# event (ns) | MessagePipe (ns) | LayerBase (ns) | Gain (vs MessagePipe) |
-|:-----------------|:--------------|:-----------------|:---------------|:----------------------|
-| 1                | 0.37 ns       | 1.94 ns          | **1.80 ns**    | **+7.2%**             |
-| 16               | 37.98 ns      | 9.90 ns          | **6.34 ns**    | **+36.0%**            |
-| 64               | 149.9 ns      | 34.95 ns         | **17.63 ns**   | **+49.5%**            |
-
-#### Internal Gain: Notify vs Sync
-
-![Internal Comparison](doc/release_internal_sync_vs_notify_bar.png)
-*Figure 3: Within LayerBase, the Notify path consistently remains 30%~50% faster than the standard Sync path thanks to zero-branch prediction.*
+* In the model with many event kinds and only a small number of subscribers per event, our SOA architecture does not yet show its unique advantage, so it can only stay close to MessagePipe in performance.
+* But once a single event has more than 3 subscribers, the stability and performance uplift brought by SOA starts to become clear.
 
 ---
 
@@ -574,15 +601,21 @@ When dispatching across layers (e.g., global broadcast), LayerBase does not iter
 * **Bitwise State Aggregation**: In the core loop, the return states of multiple Handlers are merged using bitwise OR ( `|`), drastically compressing branch prediction instructions.
 * **Pointer Offsets**: In supported runtimes, the underlying engine directly acquires the native pointer of the array and steps through it via `Unsafe.Add`, completely eliminating JIT array bounds check (BCE) instructions inside the loop.
 
+### 4. Build-Time Persistent Data
+
+- Everything is computed during layer construction and cached in memory from the very beginning. Therefore, on the hot path, we **do not compute, do not look up, do not write, and only ever read**.
+
 ---
 
 ## 🛡️ Industrial-Grade Infrastructure Guarantees
 
 Beyond pursuing extreme execution efficiency, LayerBase also provides a complete suite of facilities for engineering robustness:
 
-- **Self-Healing Circuit Breaker**: When an event Handler throws an unhandled exception, the system instantly locates and physically trips the breaker for that specific node. Local failures will never block other businesses in the same layer. In the next frame, the engine smoothly purges the invalid node via a "Two-Pass Zero-Allocation Rebuild", achieving system self-healing.
-- **Zero-Allocation Asynchronous Ecosystem (`LBTask`)**: Modern game development relies heavily on async operations. The framework comes with `LBTask`, a struct-based task model specifically tuned for the game loop. It achieves **0 GC Heap Allocation** on synchronously completed paths, freeing your async logic from memory jitter nightmares.
-- **Static Topology Audit**: During `Build()` to construct the layers, the underlying Three-Color Algorithm statically scans the entire event network. If a **synchronous infinite loop** risk is detected, a loop warning is printed directly to the console, refusing black-box execution.
+1. **Self-Healing Circuit Breaker**: When an event Handler throws an unhandled exception, the system instantly locates and physically trips the breaker for that specific node. Local failures will never block other businesses in the same layer. In the next frame, the engine smoothly purges the invalid node via a "Two-Pass Zero-Allocation Rebuild", achieving system self-healing.
+2. **Zero-Allocation Asynchronous Ecosystem (`LBTask`)**: Modern game development relies heavily on async operations. The framework comes with `LBTask`, a struct-based task model specifically tuned for the game loop. It achieves **0 GC Heap Allocation** on synchronously completed paths, freeing your async logic from memory jitter nightmares.
+3. **Static Topology Audit**: During `Build()` to construct the layers, the underlying Three-Color Algorithm statically scans the entire event network. If a **synchronous infinite loop** risk is detected, a loop warning is printed directly to the console, refusing black-box execution.
+
+* Note: when registering handlers with the **[SubscribeNotify]** attribute, the path is extremely purified. That means exception handling is left to the developer by default, and this path does not use the circuit-breaker fault-tolerance mechanism.
 
 ---
 
@@ -591,7 +624,7 @@ Beyond pursuing extreme execution efficiency, LayerBase also provides a complete
 1. **Quick Install via NuGet (Recommended)**:
    You can easily install LayerBase through the NuGet Package Manager:
    ```bash
-   dotnet add package LayerBase --version 1.3.3
+   dotnet add package LayerBase --version 1.3.6
    ```
 2. **Source Code Integration**: Add the `LayerBase` and `LayerBase.Task` project directories from the repository directly to your solution and reference them.
 3. **Configure Source Generator**:
@@ -601,7 +634,7 @@ Beyond pursuing extreme execution efficiency, LayerBase also provides a complete
        <ProjectReference Include="LayerBase.Generator\LayerBase.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
    </ItemGroup>
    ```
-4. **Environment Requirements**: Supports `.NET Standard 2.1` (perfectly compatible with Unity/Godot). It's recommended to run in a `.NET 8.0/9.0` environment to unlock full hardware acceleration via `Unsafe`.
+4. **Environment Requirements**: Supports `.NET Standard 2.1` (perfectly compatible with Unity/Godot), but running on `.NET 8.0/9.0` is recommended.
 
 ---
 
@@ -645,6 +678,7 @@ using LayerBase.Async;
 // The class must be marked as partial to work with the source generator
 public partial class DamageManager : ILayerContext
 {
+    // All Subscribe registrations preserve registration order as dispatch order.
     // [Synchronous Event Handling]: using the [Subscribe] attribute
     [Subscribe]
     private EventHandledState OnTakeDamage(in DamageEvent e)
@@ -654,7 +688,7 @@ public partial class DamageManager : ILayerContext
         if (e.Amount > 100)
         {
             // Drop down: Pass the event to lower-level systems
-            this.SendDrop(new PlayerDeathEvent()); 
+            this.SenDrop(new PlayerDeathEvent()); 
         }
         
         // Return Continue: allow other Managers in the same or subsequent layers to process this event
@@ -670,7 +704,51 @@ public partial class DamageManager : ILayerContext
         await LBTask.Delay(TimeSpan.FromSeconds(3f)); 
     }
 }
+
+public partial class PlayerMoveManager : ILayerContext
+{
+    // [Pursuing extreme performance]: use the [SubscribeNotify] attribute
+    // The user must guarantee correctness on their own; the framework does not capture, handle, or report exceptions here
+    [SubscribeNotify]
+    private void OnPlayer(in PlayerMoveEvent e)
+    {
+        ref PositionComponent = ref Player.Entity.Get<PositionComponent>();
+        PositionComponent += e.delta;
+    }
+}
+
+using LayerBase.Option;
+
+public partial class PlayerInputManager : ILayerContext,IUpdate
+{
+    // A non-blocking delayed event pipeline.
+    // The most common use is as an input buffer queue, while letting the sender control how long the buffer exists.
+    [SubscribeDelay] public IDelayPublisher<InputEvent> DelayNotify { get; set; }
+
+    void Update(float deltaTime)
+    {
+        // Try to take the currently pending value out of the pipeline; returns false if none exists
+        if(DelayNotify.TryTake(out InputEvent inputEvent))
+        {
+            if(inputEvent.Value == InputType.Forward)
+            {
+                this.Send(new PlayerMoveEvent (){e.delat = new Vector2(0,1)});
+            }
+        }
+
+        // Try to peek the currently pending value without removing it from the pipeline;
+        // it can then only disappear after timeout or after being overwritten. Returns false if none exists.
+        // if(DelayNotify.TryGet(out InputEvent inputEvent))
+        // {
+                // other logic
+        // }
+    }
+}
 ```
+
+* Note the execution order between event kinds inside the same layer: `Notify -> sync -> async`.
+* All events only guarantee that order is consistent with registration order within the same event type. They do not guarantee execution order across different event types.
+* From a business-management perspective, if you want to form an event chain, using a single event kind throughout is easier to manage. Mixing different event kinds tends to create confusion. For example, either use all Sync or all Notify. If you absolutely need one async step in the middle, consider using the advanced `Call` semantics and turn that async step into a functional slice.
 
 ### Step 3: Organize Business Modules (Service)
 
@@ -704,12 +782,23 @@ this.SendBubble(new DamageEvent()); // [Bubble] Throw upward to a smaller index 
 this.SendDrop(new DamageEvent());   // [Drop] Throw downward to a larger index (e.g., UI sending to Logic)
 this.SendGlobal(new DamageEvent()); // [Global] Penetrate and broadcast across all layers
 
-// 📨 [Post Family: Asynchronous delivery, enqueues the event to be processed by the next Pump]
+// 📨 [Post Family: Asynchronous delivery for work that is not urgent and can be spread across frames.
+// You can think of all layers as a yieldable state-machine chain: after one layer finishes, execution yields out
+// and passes control to the next lower or upper layer until the event reaches the end of the chain.
 this.PostBubble(new DamageEvent());
+this.PostDrop(new DamageEvent());
 this.PostGlobal(new DamageEvent()); 
 
-// ⏳ [Delay Family: Timed delivery]
-this.DelayDrop(new PlayerDeathEvent(), 3.5f); // Dispatch downward after specified seconds
+// ⏳ [Delay Family: Publish a timed event into the event buffer pipeline]
+this.DelayDrop(new PlayerDeathEvent(), 3.5f); // The event stays in the pipeline for 3.5 seconds until overwritten, expired, or taken out.
+this.DelayBubble(new PlayerDeathEvent(), 3.5f); 
+this.Delay(new PlayerDeathEvent(), 3.5f); 
+
+// Global event dispatch
+// Note: global events are specially optimized and perform better than other kinds.
+// If you do not require special ordering constraints, consider using global events everywhere, such as this.SendGlobal or LayerHub.Send().
+LayerHub.Send();
+LayerHub.Post();
 ```
 
 This design helps prevent the circular triggers and unnecessary performance overhead caused by undirected global broadcasting.
@@ -764,10 +853,12 @@ public class GameRoot : MonoBehaviour
 
 ### 1. Fluent Filtering and Interception (Fluent API)
 
-For scenarios requiring dynamic subscription conditions, LayerBase offers an elegant chainable API. Its greatest advantage is that interception conditions are evaluated at the earliest possible stage in routing (inside the wrapper delegate). Unqualified events are short-circuited immediately, preventing the awakening of massive business logic blocks.
+For scenarios requiring dynamic subscription conditions, LayerBase offers an elegant fluent API.
+- Advantage: it lets you build business logic flexibly and is suitable for fast early-stage development.
+- Disadvantage: it does not benefit from source-generator optimization, so performance is lower.
 
 ```csharp
-public partial class PlayerManager : ILayerContext
+public partial class PlayerManager : ILayerContext，IInitialize
 {
     private int _myEntityId = 10;
 
@@ -787,7 +878,7 @@ public partial class PlayerManager : ILayerContext
 
 ### 2. Background Parallel Processing (Parallel Handlers)
 
-When dealing with logic that consumes high CPU and **does not rely on or modify the main thread state** (such as pathfinding data packaging or heavy log serialization), parallel subscriptions can be utilized. Events will enter a lock-free queue and be processed asynchronously by the ThreadPool in the background, ensuring main thread frame rate stability.
+When dealing with pure computation that consumes high CPU, **does not depend on or modify main-thread state, and runs for a long time** (such as pathfinding data packaging or heavy log serialization), parallel subscriptions can be used. Events enter a lock-free queue and are consumed asynchronously by the ThreadPool in the background, protecting main-thread frame stability.
 
 ```csharp
 // Quickly bind parallel methods via attribute
@@ -803,25 +894,7 @@ private EventHandledState OnHeavyComputeTask(in ComputeEvent e)
 
 By enabling Debug mode, you can call `GetTopologySummary()` to output a clear text structural graph in the console, showcasing which Managers are mounted on which Layers across the system, as well as what specific events they subscribe to or dispatch. This is an indispensable tool for debugging system coupling in large projects.
 
-### 4. Slice-based Standalone Processors (Standalone EventHandler)
-
-Sometimes you might have highly independent logic dedicated to a single event, making it too bloated to cram into a massive Manager. LayerBase supports "slice-based" standalone processors.
-Simply implement the `IEventHandler<T>` or `IEventHandlerAsync<T>` interface and attach the `[OwnerLayer]` attribute. The source generator will automatically register it to the corresponding layer at compile time:
-
-```csharp
-// A standalone, slice-based event handler
-[OwnerLayer(typeof(GameLogicLayer))] 
-public class PlayerDamageHandler : IEventHandler<DamageEvent>
-{
-    public EventHandledState Deal(in DamageEvent e)
-    {
-        // Focus solely on damage logic...
-        return EventHandledState.Continue;
-    }
-}
-```
-
-### 5. Event MetaData and Global Exception Observation
+### 4. Event MetaData and Global Exception Observation
 
 For critical events (like network sync packets or core state transitions), if any Handler throws an exception during dispatch, we generally want to catch it globally and immediately for unified logging or crash reporting.
 
@@ -849,21 +922,40 @@ public class CoreSyncEventMetaData : EventMetaData<CoreSyncEvent>
         Console.WriteLine($"[Critical Error] Sync event processing failed: {exception.Message}");
     }
 }
+```
 
-### 6. Layer-Addressable Calls (Layer Call Subsystem)
+### 5. Layer-Addressable Calls (Layer Call Subsystem)
 
 In certain scenarios, you need **point-to-point** Request/Response calls instead of broadcast-based event dispatching. LayerBase provides the `Call` subsystem:
 
-*   **Positioning**: Single-target functional slice invocation, designed for explicit inter-layer service interaction.
-*   **Features**: Layer-addressed, single-target hit, supports `await` for asynchronous waiting, and provides explicit return values.
-*   **Constraints**: Does not participate in event propagation (Bubble/Drop/Global); a Request type is strictly bound to a single Layer and Response type at compile time.
+*   **Positioning**: A single-target functional slice call used for explicit cross-layer service interactions.
+*   **Features**: Layer-addressed routing, single-target resolution, `await`-friendly async execution, and an explicit response value.
+*   **Constraints**: It does not participate in Bubble/Drop propagation. Each Request type is bound at compile time to exactly one Layer and one Response type.
 
 ```csharp
-// Example Call: Sending a score query request to the GameLogicLayer
-var response = await LayerHub.For<GameLogicLayer>()
-    .CallAsync<GetPlayerScoreRequest, GetPlayerScoreResponse>(new GetPlayerScoreRequest(playerId));
+// This is an independent slice-style call handler
+[OwnerLayer(typeof(CoreLayer))]
+public sealed class ServiceLookupCallHandler : ILayerCallHandler<ServiceLookupRequest, ServiceLookupResponse>
+{
+    public async LBTask<ServiceLookupResponse> HandleAsync(ServiceLookupRequest request,
+                                                           CancellationToken cancellationToken = default)
+    {
+        // Resolve the functional module from the target layer's DI container
+        var sceneService = this.Get<SceneService>();
+        // Perform the async scene switch
+        await sceneService.SwitchTo(request.Value);
+        // Return the response directly
+        return new ServiceLookupResponse(sceneService.LastScene);
+    }
+}
 
-Console.WriteLine($"Player Score: {response.Score}");
+// External call style 1
+ServiceLookupResponse response1 =
+    await LayerHub.For<CoreLayer>().CallAsync<ServiceLookupRequest, ServiceLookupResponse>(new ServiceLookupRequest());
+
+// External call style 2
+ServiceLookupResponse response2 =
+    await LayerHub.CallAsync<CoreLayer, ServiceLookupRequest, ServiceLookupResponse>(new ServiceLookupRequest());
 ```
 
 ---
@@ -888,3 +980,5 @@ For any given Event type, regardless of registration order:
 To achieve O(1) cross-layer bitmap routing, LayerBase internally uses a `ulong` bitmap to track layer states.
 *   **Physical Limit**: A single instance supports a maximum of **64 Layers**.
 *   **Overflow Handling**: Attempting to `Push` a 65th layer will throw an `InvalidOperationException`.
+
+

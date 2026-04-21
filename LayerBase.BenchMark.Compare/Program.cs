@@ -125,7 +125,7 @@ public class PublishSingleSubscriberCompareBench : CompareBenchmarkBase
 
 public class PublishFanoutCompareBench : CompareBenchmarkBase
 {
-    [Params(8, 16)]
+    [Params(1,4,8, 16)]
     public int SubscriberCount { get; set; }
 
     private readonly CSharpNotifyPublisher _publisher = new();
@@ -164,13 +164,13 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
         LayerHub.Reset();
     }
 
-    //[Benchmark(Baseline = true, Description = "C# event Notify扇出 (N订阅) - 100万次")]
-    //[BenchmarkCategory("Compare.Notify", "CSharpEvent")]
-    //public void CSharpEvent()
-    //{
-    //    for (var i = 0; i < OneMillion; i++)
-    //        _publisher.Publish(in NotifyPayload.Instance);
-    //}
+    [Benchmark(Baseline = true, Description = "C# event Notify扇出 (N订阅) - 100万次")]
+    [BenchmarkCategory("Compare.Notify", "CSharpEvent")]
+    public void CSharpEvent()
+    {
+        for (var i = 0; i < OneMillion; i++)
+            _publisher.Publish(in NotifyPayload.Instance);
+    }
 
     [Benchmark(Description = "MessagePipe Notify扇出 (N订阅) - 100万次")]
     [BenchmarkCategory("Compare.Notify", "MessagePipe")]
@@ -277,12 +277,12 @@ public class ManyNotifyFixedBatch32CompareBench : CompareBenchmarkBase
         LayerHub.Reset();
     }
 
-    //[Benchmark(Baseline = true, Description = "固定批次 Direct Notify (32事件/每事件2~3订阅)")]
-    //[BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "Baseline", "Batch32")]
-    //public void DirectBaseline()
-    //{
-    //    ManyNotifyFixedBatchRegistry.DispatchDirect32(SubscribersPerEvent);
-    //}
+    [Benchmark(Baseline = true, Description = "固定批次 Direct Notify (32事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "Baseline", "Batch32")]
+    public void DirectBaseline()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchDirect32(SubscribersPerEvent);
+    }
 
     [Benchmark(Description = "LayerBase SubscribeNotify 特性注册 (32事件/每事件2~3订阅)")]
     [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "LayerBase", "Batch32")]
@@ -334,12 +334,12 @@ public class ManyNotifyFixedBatch128CompareBench : CompareBenchmarkBase
         LayerHub.Reset();
     }
 
-    //[Benchmark(Baseline = true, Description = "固定批次 Direct Notify (128事件/每事件2~3订阅)")]
-    //[BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "Baseline", "Batch128")]
-    //public void DirectBaseline()
-    //{
-    //    ManyNotifyFixedBatchRegistry.DispatchDirect128(SubscribersPerEvent);
-    //}
+    [Benchmark(Baseline = true, Description = "固定批次 Direct Notify (128事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "Baseline", "Batch128")]
+    public void DirectBaseline()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchDirect128(SubscribersPerEvent);
+    }
 
     [Benchmark(Description = "LayerBase SubscribeNotify 特性注册 (128事件/每事件2~3订阅)")]
     [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "LayerBase", "Batch128")]
@@ -391,12 +391,12 @@ public class ManyNotifyFixedBatch256CompareBench : CompareBenchmarkBase
         LayerHub.Reset();
     }
 
-    //[Benchmark(Baseline = true, Description = "固定批次 Direct Notify (256事件/每事件2~3订阅)")]
-    //[BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "Baseline", "Batch256")]
-    //public void DirectBaseline()
-    //{
-    //    ManyNotifyFixedBatchRegistry.DispatchDirect256(SubscribersPerEvent);
-    //}
+    [Benchmark(Baseline = true, Description = "固定批次 Direct Notify (256事件/每事件2~3订阅)")]
+    [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "Baseline", "Batch256")]
+    public void DirectBaseline()
+    {
+        ManyNotifyFixedBatchRegistry.DispatchDirect256(SubscribersPerEvent);
+    }
 
     [Benchmark(Description = "LayerBase SubscribeNotify 特性注册 (256事件/每事件2~3订阅)")]
     [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "LayerBase", "Batch256")]

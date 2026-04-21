@@ -2,6 +2,7 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Exporters;
+using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Order;
 using BenchmarkDotNet.Reports;
 using BenchmarkDotNet.Running;
@@ -31,6 +32,7 @@ public sealed class LayerBaseBenchmarkConfig : ManualConfig
     private static IConfig Create()
     {
         var config = ManualConfig.Create(DefaultConfig.Instance);
+        config.AddJob(Job.ShortRun);
         config.AddLogicalGroupRules(BenchmarkLogicalGroupRule.ByCategory);
         config.AddColumn(CategoriesColumn.Default, StatisticColumn.Min, StatisticColumn.Max, RankColumn.Arabic);
         config.AddExporter(MarkdownExporter.GitHub);
@@ -51,9 +53,9 @@ public sealed class LayerBaseBenchmarkConfig : ManualConfig
 // 90.Scenario.Legacy     -> 原有业务场景压测，保留用于版本回归
 public abstract class EventBenchmarkBase
 {
-    protected const int OneMillion = 1_000_000;
-    protected const int TenThousand = 10_000;
-    protected const int HundredThousand = 100_000;
+    protected const int OneMillion = 200_000;
+    protected const int TenThousand = 2_000;
+    protected const int HundredThousand = 20_000;
 }
 
 public static class BenchmarkSink
@@ -109,7 +111,7 @@ public class DirectVsFrameworkDispatchBench : EventBenchmarkBase
 
 public class FanoutScalingBench : EventBenchmarkBase
 {
-    [Params(1, 4, 16, 64)]
+    [Params(1, 4, 16)]
     public int SubscriberCount { get; set; }
 
     [GlobalSetup]

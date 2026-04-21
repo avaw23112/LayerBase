@@ -5,7 +5,6 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <LangVersion>12</LangVersion>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <TieredPGO>true</TieredPGO>
         <Title>LayerBase</Title>
         <Authors>扭矩不足</Authors>
