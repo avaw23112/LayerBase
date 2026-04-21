@@ -30,11 +30,38 @@ public class NotifyTests
         Assert.That(manager.CallCount, Is.EqualTo(1));
     }
 
+    [Test]
+    public void Notify_Small_Fanout_Preserves_Registration_Order()
+    {
+        var layer = new TestLayer();
+        var trace = new List<string>();
+
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
+        {
+            e.Trace!.Add("First");
+        });
+        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
+        {
+            e.Trace!.Add("Second");
+        });
+        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
+        {
+            e.Trace!.Add("Third");
+        });
+
+        LayerHub.Send(new TestEvent { Value = 7, Trace = trace });
+
+        Assert.That(trace, Is.EqualTo(new[] { "First", "Second", "Third" }));
+    }
+
     public class TestLayer : Layer { }
 
     public struct TestEvent
     {
         public int Value;
+        public List<string>? Trace;
     }
 }
 

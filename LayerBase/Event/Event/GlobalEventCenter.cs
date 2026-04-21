@@ -472,6 +472,7 @@ public sealed class GlobalEventCenter
         private LayerRange[] _ranges = Array.Empty<LayerRange>();
 
         private ulong _subscriberMask, _syncMask, _asyncMask, _parallelMask, _notifyMask;
+        private bool _isSmallNotifyFanoutOnly;
         private HandlerCircuit[] _syncCircuits = Array.Empty<HandlerCircuit>();
 
         private EventHandleDelegate<T>[] _syncHandlers = Array.Empty<EventHandleDelegate<T>>();
@@ -505,6 +506,7 @@ public sealed class GlobalEventCenter
             _singleRouteMask = 0;
             _isSingleSync = false;
             _isSingleNotify = false;
+            _isSmallNotifyFanoutOnly = false;
             if (_syncHandlers != null && _syncHandlers.Length > 0 && _syncHandlers != Array.Empty<EventHandleDelegate<T>>())
             {
                 ArrayPool<EventHandleDelegate<T>>.Shared.Return(_syncHandlers, true);
@@ -798,6 +800,11 @@ public sealed class GlobalEventCenter
                 _singleRouteMask = _singleRouteLayerIndex >= 0 ? 1UL << _singleRouteLayerIndex : 0;
             }
 
+            _isSmallNotifyFanoutOnly = _notifyCountTotal is >= 2 and <= 4 &&
+                                       _asyncCountTotal == 0 &&
+                                       _parallelCountTotal == 0 &&
+                                       _syncCountTotal == 0;
+
             _subscriberMask = newMask;
             _syncMask = newSyncMask;
             _asyncMask = newAsyncMask;
@@ -895,42 +902,42 @@ public sealed class GlobalEventCenter
         public EventHandledState Dispatch(in T value, int sourceIndex, Propagation propagation)
         {
             EnsureClean();
-            var mask = Volatile.Read(ref _subscriberMask);
-            if (mask == 0) return EventHandledState.Continue;
+            //考虑到日常使用场景里，极少出现空事件还留在项目的情况，因此把小扇区优化放在第一位，其次才是判空
+            //加之其实做点if判断效率也不低到哪里去，无非是空事件密集时多十几个指令周期
             if (propagation == Propagation.Global)
             {
-                // 🚀 单订阅 Notify 极速路径：完全跳过所有分发骨架
-                if (_isSingleNotify)
+                if (_isSingleNotify) return DispatchSingleNotify(in value);
+                if (_isSingleSync) return DispatchSingleSync(in value);
+                if (_isSmallNotifyFanoutOnly)
                 {
-                    return DispatchSingleNotify(in value);
+                    DispatchSmallNotifyFanout(in value);
+                    return EventHandledState.Continue;
                 }
-
-                // 🚀 单订阅 Sync 极速路径
-                if (_isSingleSync)
-                {
-                    return DispatchSingleSync(in value);
-                }
-
+                
                 if (_parallelMask != 0)
                     for (var j = 0; j < _parallelCountTotal; j++)
                         _flatParallel[j].Enqueue(-1, in value);
-
+                
                 if (_notifyMask != 0)
                 {
                     DispatchNotify(0, _notifyCountTotal, in value);
                 }
-
+                
                 var res = EventHandledState.Continue;
                 if (_syncMask != 0)
                 {
                     res = DispatchSync(0, _syncCountTotal, in value);
                     if (res == EventHandledState.Handled) return res;
                 }
-
+                
                 if (_asyncMask != 0) DispatchAsync(0, _asyncCountTotal, in value);
                 return res;
             }
-
+            
+            //当前层根本没有订阅的handler
+            var mask = Volatile.Read(ref _subscriberMask);
+            if (mask == 0) return EventHandledState.Continue;
+            
             var targetMask = mask;
             var bubble = Owner._bubbleMasksArr;
             var drop = Owner._dropMasksArr;
@@ -1059,7 +1066,7 @@ public sealed class GlobalEventCenter
         {
             try
             {
-                return _singleSyncHandler!(in value);
+                return _singleSyncHandler(in value);
             }
             catch (Exception ex)
             {
@@ -1071,8 +1078,28 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private EventHandledState DispatchSingleNotify(in T value)
         {
-            _singleNotifyHandler!(in value);
+            _singleNotifyHandler(in value);
             return EventHandledState.Continue;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void DispatchSmallNotifyFanout(in T value)
+        {
+            //直接将小扇区写进指令，避免后续for循环产生寄存器和额外指令消耗。
+            //2 ~ 4个订阅者是普遍情况，由于避免了单订阅者的路径
+            ref var hBase = ref GetArrayDataRef(_notifyHandlers);
+            Unsafe.Add(ref hBase, 0)(in value);
+            Unsafe.Add(ref hBase, 1)(in value);
+
+            if (_notifyCountTotal >= 3)
+            {
+                Unsafe.Add(ref hBase, 2)(in value);
+            }
+
+            if (_notifyCountTotal == 4)
+            {
+                Unsafe.Add(ref hBase, 3)(in value);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1403,6 +1430,7 @@ public sealed class GlobalEventCenter
             {
                 _singleNotifyHandler = null;
                 _isSingleNotify = false;
+                _isSmallNotifyFanoutOnly = false;
                 if (_notifyHandlers != null && _notifyHandlers.Length > 0 &&
                     _notifyHandlers != Array.Empty<EventNotifyDelegate<T>>())
                     ArrayPool<EventNotifyDelegate<T>>.Shared.Return(_notifyHandlers, true);
