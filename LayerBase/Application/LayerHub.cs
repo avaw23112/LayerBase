@@ -48,6 +48,7 @@ public static class LayerHub
     private static LayerChain? s_chain;
     private static LayerBaseSynchronizationContext? s_context;
     private static int s_layerIndexCounter;
+    private static int s_layerTypeBindingsVersion;
     private static readonly Dictionary<Type, LayerTypeBinding> s_layerTypeBindings = new();
     private static readonly object s_lock = new();
 
@@ -90,6 +91,7 @@ public static class LayerHub
             s_chain = null;
             s_layerIndexCounter = 0;
             s_layerTypeBindings.Clear();
+            InvalidateLayerTargetCaches();
             EventCenter = new GlobalEventCenter();
             ServiceProvider.ResetRoot(); // 新增：重置全局单例容器
             ServiceLayerBinder.Reset();
@@ -148,20 +150,51 @@ public static class LayerHub
                 s_layerTypeBindings[layerType] = existing.WithAdditional(layer);
             else
                 s_layerTypeBindings[layerType] = LayerTypeBinding.Create(layer);
+            InvalidateLayerTargetCaches();
         }
     }
 
     internal static TLayer ResolveLayerTarget<TLayer>() where TLayer : Layers.Layer
     {
+        if (TryResolveLayerTarget<TLayer>(out var layer, out var error)) return layer!;
+        throw error!;
+    }
+
+    internal static bool TryResolveLayerTarget<TLayer>(out TLayer? layer, out Exception? error)
+        where TLayer : Layers.Layer
+    {
+        var version = Volatile.Read(ref s_layerTypeBindingsVersion);
+        if (TryGetCachedTarget(version, out layer, out error)) return error == null;
+
         lock (s_lock)
         {
+            version = s_layerTypeBindingsVersion;
+            if (TryGetCachedTarget(version, out layer, out error)) return error == null;
+
+            LayerTargetState state;
             if (!s_layerTypeBindings.TryGetValue(typeof(TLayer), out var binding))
-                throw new LayerCallTargetNotFoundException(typeof(TLayer));
+            {
+                layer = null;
+                error = new LayerCallTargetNotFoundException(typeof(TLayer));
+                state = LayerTargetState.Missing;
+            }
+            else if (binding.IsAmbiguous)
+            {
+                layer = null;
+                error = new LayerCallTargetAmbiguousException(typeof(TLayer));
+                state = LayerTargetState.Ambiguous;
+            }
+            else
+            {
+                layer = (TLayer)binding.Layer!;
+                error = null;
+                state = LayerTargetState.Found;
+            }
 
-            if (binding.IsAmbiguous)
-                throw new LayerCallTargetAmbiguousException(typeof(TLayer));
-
-            return (TLayer)binding.Layer!;
+            LayerTargetCache<TLayer>.Layer = layer;
+            LayerTargetCache<TLayer>.State = state;
+            Volatile.Write(ref LayerTargetCache<TLayer>.Version, version);
+            return error == null;
         }
     }
 
@@ -224,15 +257,49 @@ public static class LayerHub
             where TRequest : struct
             where TResponse : struct
         {
-            try
-            {
-                return ResolveLayerTarget<TLayer>().CallAsync<TRequest, TResponse>(request, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                return LBTask<TResponse>.FromException(ex);
-            }
+            if (TryResolveLayerTarget<TLayer>(out var layer, out var error))
+                return layer!.CallAsync<TRequest, TResponse>(request, cancellationToken);
+
+            return LBTask<TResponse>.FromException(error!);
         }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryGetCachedTarget<TLayer>(int version, out TLayer? layer, out Exception? error)
+        where TLayer : Layers.Layer
+    {
+        if (Volatile.Read(ref LayerTargetCache<TLayer>.Version) != version)
+        {
+            layer = null;
+            error = null;
+            return false;
+        }
+
+        switch (LayerTargetCache<TLayer>.State)
+        {
+            case LayerTargetState.Found:
+                layer = LayerTargetCache<TLayer>.Layer;
+                error = null;
+                return true;
+            case LayerTargetState.Missing:
+                layer = null;
+                error = new LayerCallTargetNotFoundException(typeof(TLayer));
+                return true;
+            case LayerTargetState.Ambiguous:
+                layer = null;
+                error = new LayerCallTargetAmbiguousException(typeof(TLayer));
+                return true;
+            default:
+                layer = null;
+                error = null;
+                return false;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void InvalidateLayerTargetCaches()
+    {
+        Interlocked.Increment(ref s_layerTypeBindingsVersion);
     }
 
     private readonly struct LayerTypeBinding
@@ -256,5 +323,20 @@ public static class LayerHub
         {
             return new LayerTypeBinding(Layer ?? layer, Count + 1);
         }
+    }
+
+    private enum LayerTargetState : byte
+    {
+        Unknown = 0,
+        Found = 1,
+        Missing = 2,
+        Ambiguous = 3
+    }
+
+    private static class LayerTargetCache<TLayer> where TLayer : Layers.Layer
+    {
+        public static int Version = -1;
+        public static TLayer? Layer;
+        public static LayerTargetState State;
     }
 }

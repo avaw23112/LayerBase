@@ -460,7 +460,13 @@ public sealed class GlobalEventCenter
         private HandlerCircuit[] _notifyCircuits = Array.Empty<HandlerCircuit>();
         private string[] _notifyNames = Array.Empty<string>();
         private EventHandleDelegate<T>? _singleSyncHandler;
+        private HandlerCircuit? _singleSyncCircuit;
+        private string? _singleSyncName;
         private EventNotifyDelegate<T>? _singleNotifyHandler;
+        private HandlerCircuit? _singleNotifyCircuit;
+        private string? _singleNotifyName;
+        private int _singleRouteLayerIndex = -1;
+        private ulong _singleRouteMask;
         private bool _isSingleSync, _isSingleNotify;
         private int _isDirty, _syncCountTotal, _asyncCountTotal, _parallelCountTotal, _notifyCountTotal;
         private LayerRange[] _ranges = Array.Empty<LayerRange>();
@@ -489,6 +495,16 @@ public sealed class GlobalEventCenter
 
         private void ReturnArrays()
         {
+            _singleSyncHandler = null;
+            _singleSyncCircuit = null;
+            _singleSyncName = null;
+            _singleNotifyHandler = null;
+            _singleNotifyCircuit = null;
+            _singleNotifyName = null;
+            _singleRouteLayerIndex = -1;
+            _singleRouteMask = 0;
+            _isSingleSync = false;
+            _isSingleNotify = false;
             if (_syncHandlers != null && _syncHandlers.Length > 0 && _syncHandlers != Array.Empty<EventHandleDelegate<T>>())
             {
                 ArrayPool<EventHandleDelegate<T>>.Shared.Return(_syncHandlers, true);
@@ -543,6 +559,7 @@ public sealed class GlobalEventCenter
             if (_ranges != null && _ranges.Length > 0 && _ranges != Array.Empty<LayerRange>())
             {
                 ArrayPool<LayerRange>.Shared.Return(_ranges, true);
+                _ranges = ArrayPool<LayerRange>.Shared.Rent(0); // rent a dummy or just use empty
                 _ranges = Array.Empty<LayerRange>();
             }
         }
@@ -750,6 +767,37 @@ public sealed class GlobalEventCenter
             _asyncCountTotal = aIdx;
             _parallelCountTotal = pIdx;
             _notifyCountTotal = nIdx;
+
+            // 🚀 单订阅特化识别：如果全局仅有一个同步/Notify订阅，则提取到字段，分发时彻底跳过多订阅遍历
+            _singleSyncHandler = null;
+            _singleSyncCircuit = null;
+            _singleSyncName = null;
+            _singleNotifyHandler = null;
+            _singleNotifyCircuit = null;
+            _singleNotifyName = null;
+            _singleRouteLayerIndex = -1;
+            _singleRouteMask = 0;
+
+            _isSingleSync = _syncCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0;
+            if (_isSingleSync)
+            {
+                _singleSyncHandler = _syncHandlers[0];
+                _singleSyncCircuit = _syncCircuits[0];
+                _singleSyncName = _syncNames[0];
+                _singleRouteLayerIndex = FindSingleRouteLayerIndex(isNotify: false);
+                _singleRouteMask = _singleRouteLayerIndex >= 0 ? 1UL << _singleRouteLayerIndex : 0;
+            }
+
+            _isSingleNotify = _notifyCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 && _syncCountTotal == 0;
+            if (_isSingleNotify)
+            {
+                _singleNotifyHandler = _notifyHandlers[0];
+                _singleNotifyCircuit = _notifyCircuits[0];
+                _singleNotifyName = _notifyNames[0];
+                _singleRouteLayerIndex = FindSingleRouteLayerIndex(isNotify: true);
+                _singleRouteMask = _singleRouteLayerIndex >= 0 ? 1UL << _singleRouteLayerIndex : 0;
+            }
+
             _subscriberMask = newMask;
             _syncMask = newSyncMask;
             _asyncMask = newAsyncMask;
@@ -851,6 +899,18 @@ public sealed class GlobalEventCenter
             if (mask == 0) return EventHandledState.Continue;
             if (propagation == Propagation.Global)
             {
+                // 🚀 单订阅 Notify 极速路径：完全跳过所有分发骨架
+                if (_isSingleNotify)
+                {
+                    return DispatchSingleNotify(in value);
+                }
+
+                // 🚀 单订阅 Sync 极速路径
+                if (_isSingleSync)
+                {
+                    return DispatchSingleSync(in value);
+                }
+
                 if (_parallelMask != 0)
                     for (var j = 0; j < _parallelCountTotal; j++)
                         _flatParallel[j].Enqueue(-1, in value);
@@ -877,6 +937,11 @@ public sealed class GlobalEventCenter
             if (propagation == Propagation.Bubble && sourceIndex < bubble.Length) targetMask &= bubble[sourceIndex];
             else if (propagation == Propagation.Drop && sourceIndex < drop.Length) targetMask &= drop[sourceIndex];
             if (targetMask == 0) return EventHandledState.Continue;
+            if ((_singleRouteMask & targetMask) != 0)
+            {
+                if (_isSingleNotify) return DispatchSingleNotify(in value);
+                if (_isSingleSync) return DispatchSingleSync(in value);
+            }
             ref var rangesRef = ref GetArrayDataRef(_ranges);
             ref var flatParallelRef = ref GetArrayDataRef(_flatParallel);
             if (propagation == Propagation.Bubble)
@@ -932,7 +997,41 @@ public sealed class GlobalEventCenter
         {
             EnsureClean();
             if (layerIndex >= _ranges.Length) return EventHandledState.Continue;
+            if (layerIndex == _singleRouteLayerIndex)
+            {
+                if (_isSingleNotify) return DispatchSingleNotify(in value);
+                if (_isSingleSync) return DispatchSingleSync(in value);
+            }
+
+            // 🚀 Local 模式下的单订阅识别
             var r = _ranges[layerIndex];
+            if (r.NotifyCount == 1 && r.SyncCount == 0 && r.AsyncCount == 0 && r.ParallelCount == 0)
+            {
+                try
+                {
+                    Unsafe.Add(ref GetArrayDataRef(_notifyHandlers), r.NotifyStart)(in value);
+                    return EventHandledState.Continue;
+                }
+                catch (Exception ex)
+                {
+                    HandleNotifyFault(r.NotifyStart, in value, ex);
+                    return EventHandledState.Continue;
+                }
+            }
+
+            if (r.SyncCount == 1 && r.NotifyCount == 0 && r.AsyncCount == 0 && r.ParallelCount == 0)
+            {
+                try
+                {
+                    return Unsafe.Add(ref GetArrayDataRef(_syncHandlers), r.SyncStart)(in value);
+                }
+                catch (Exception ex)
+                {
+                    HandleFault(r.SyncStart, true, in value, ex);
+                    return EventHandledState.Continue;
+                }
+            }
+
             if (r.ParallelCount > 0)
                 for (var j = 0; j < r.ParallelCount; j++)
                     Unsafe.Add(ref GetArrayDataRef(_flatParallel), r.ParallelStart + j).Enqueue(layerIndex, in value);
@@ -952,20 +1051,36 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal EventHandledState DispatchLocal(int layerIndex, in Event<T> @event)
         {
-            EnsureClean();
-            if (layerIndex >= _ranges.Length) return EventHandledState.Continue;
-            var r = _ranges[layerIndex];
-            if (r.ParallelCount > 0)
-                for (var j = 0; j < r.ParallelCount; j++)
-                    Unsafe.Add(ref GetArrayDataRef(_flatParallel), r.ParallelStart + j).Enqueue(layerIndex, in @event.Value);
+            return DispatchLocal(layerIndex, in @event.Value);
+        }
 
-            if (r.NotifyCount > 0) DispatchNotify(r.NotifyStart, r.NotifyStart + r.NotifyCount, in @event.Value);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private EventHandledState DispatchSingleSync(in T value)
+        {
+            try
+            {
+                return _singleSyncHandler!(in value);
+            }
+            catch (Exception ex)
+            {
+                HandleSingleSyncFault(in value, ex);
+                return EventHandledState.Continue;
+            }
+        }
 
-            var s = EventHandledState.Continue;
-            if (r.SyncCount > 0) s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in @event.Value);
-            if (s == EventHandledState.Handled) return s;
-            if (r.AsyncCount > 0) DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in @event.Value);
-            return s;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private EventHandledState DispatchSingleNotify(in T value)
+        {
+            try
+            {
+                _singleNotifyHandler!(in value);
+                return EventHandledState.Continue;
+            }
+            catch (Exception ex)
+            {
+                HandleSingleNotifyFault(in value, ex);
+                return EventHandledState.Continue;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1071,7 +1186,7 @@ public sealed class GlobalEventCenter
 
             return (combinedState & 2) != 0 ? EventHandledState.HandledAndContinue : EventHandledState.Continue;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DispatchAsync(int start, int end, in T value)
         {
@@ -1181,6 +1296,17 @@ public sealed class GlobalEventCenter
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void HandleSingleSyncFault(in T value, Exception e)
+        {
+            EventMetaDataHandler.OnEventExpectation(value, e);
+            if (_singleSyncCircuit != null && _singleSyncCircuit.TryDisable())
+            {
+                LayerHub.ReportLayerEventError(-1, _singleSyncName ?? "Unknown", typeof(T).Name, e);
+                MarkDirty();
+            }
+        }
+
         private void HandleNotifyFault(int index, in T value, Exception e)
         {
             HandlerCircuit? circuit = null;
@@ -1197,6 +1323,36 @@ public sealed class GlobalEventCenter
                 LayerHub.ReportLayerEventError(-1, name ?? "Unknown", typeof(T).Name, e);
                 MarkDirty();
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void HandleSingleNotifyFault(in T value, Exception e)
+        {
+            EventMetaDataHandler.OnEventExpectation(value, e);
+            if (_singleNotifyCircuit != null && _singleNotifyCircuit.TryDisable())
+            {
+                LayerHub.ReportLayerEventError(-1, _singleNotifyName ?? "Unknown", typeof(T).Name, e);
+                MarkDirty();
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private int FindSingleRouteLayerIndex(bool isNotify)
+        {
+            for (var i = 0; i < _buckets.Length; i++)
+            {
+                ref var range = ref _ranges[i];
+                if (isNotify)
+                {
+                    if (range.NotifyCount == 1) return i;
+                }
+                else if (range.SyncCount == 1)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         public void Post(in T value, int sourceIndex, Propagation propagation)
@@ -1225,6 +1381,8 @@ public sealed class GlobalEventCenter
         {
             if (sync)
             {
+                _singleSyncHandler = null;
+                _isSingleSync = false;
                 if (_syncHandlers != null && _syncHandlers.Length > 0 && _syncHandlers != Array.Empty<EventHandleDelegate<T>>())
                     ArrayPool<EventHandleDelegate<T>>.Shared.Return(_syncHandlers, true);
                 if (_syncCircuits != null && _syncCircuits.Length > 0 && _syncCircuits != Array.Empty<HandlerCircuit>())
@@ -1251,6 +1409,8 @@ public sealed class GlobalEventCenter
 
             if (notify)
             {
+                _singleNotifyHandler = null;
+                _isSingleNotify = false;
                 if (_notifyHandlers != null && _notifyHandlers.Length > 0 &&
                     _notifyHandlers != Array.Empty<EventNotifyDelegate<T>>())
                     ArrayPool<EventNotifyDelegate<T>>.Shared.Return(_notifyHandlers, true);
@@ -1299,8 +1459,7 @@ public sealed class GlobalEventCenter
 
             return b;
         }
-    }
-
+        }
     private sealed class AsyncFaultContext<T> where T : struct
     {
         private static readonly ConcurrentQueue<AsyncFaultContext<T>> s_pool = new();

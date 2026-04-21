@@ -25,11 +25,13 @@ public sealed class OwnerLayerAttribute : Attribute
 public abstract class Layer : Node, IDisposable
 {
     private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();
+    private readonly object m_callRouteLock = new();
     private readonly List<IDelayPublisherUpdater> m_delayUpdaters = new(); // 优化：消除 Values 迭代分配
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
     private readonly List<IDisposable> m_subscriptions = new();
-    private readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), object> m_callRoutes = new();
+    private object?[] m_callRouteInvokers = Array.Empty<object?>();
+    private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();
     private GlobalEventCenter _center;
     private bool m_disposed;
 
@@ -212,16 +214,39 @@ public abstract class Layer : Node, IDisposable
         if (handler == null) throw new ArgumentNullException(nameof(handler));
 
         ServiceLayerBinder.Attach(handler, this);
-        var key = (typeof(TRequest), typeof(TResponse));
-        if (!m_callRoutes.TryAdd(key, handler))
+        var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
+        var invoker = (LayerCallInvoker<TRequest, TResponse>)handler.HandleAsync;
+
+        lock (m_callRouteLock)
         {
-            var existing = m_callRoutes[key];
-            throw new LayerCallRouteConflictException(
-                GetType(),
-                typeof(TRequest),
-                typeof(TResponse),
-                existing.GetType(),
-                handler.GetType());
+            var invokers = m_callRouteInvokers;
+            var handlerTypes = m_callRouteHandlerTypes;
+
+            if (routeId >= invokers.Length)
+            {
+                var newSize = Math.Max(routeId + 1, invokers.Length == 0 ? 4 : invokers.Length * 2);
+                var newInvokers = new object?[newSize];
+                var newHandlerTypes = new Type?[newSize];
+                Array.Copy(invokers, newInvokers, invokers.Length);
+                Array.Copy(handlerTypes, newHandlerTypes, handlerTypes.Length);
+                invokers = newInvokers;
+                handlerTypes = newHandlerTypes;
+            }
+
+            if (invokers[routeId] != null)
+            {
+                throw new LayerCallRouteConflictException(
+                    GetType(),
+                    typeof(TRequest),
+                    typeof(TResponse),
+                    handlerTypes[routeId] ?? invokers[routeId]!.GetType(),
+                    handler.GetType());
+            }
+
+            invokers[routeId] = invoker;
+            handlerTypes[routeId] = handler.GetType();
+            Volatile.Write(ref m_callRouteInvokers, invokers);
+            Volatile.Write(ref m_callRouteHandlerTypes, handlerTypes);
         }
     }
 
@@ -233,11 +258,13 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (cancellationToken.IsCancellationRequested) return LBTask<TResponse>.FromCanceled(cancellationToken);
 
-        if (!m_callRoutes.TryGetValue((typeof(TRequest), typeof(TResponse)), out var handler))
+        var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
+        var invokers = Volatile.Read(ref m_callRouteInvokers);
+        if ((uint)routeId >= (uint)invokers.Length || invokers[routeId] == null)
             return LBTask<TResponse>.FromException(
                 new LayerCallRouteNotFoundException(GetType(), typeof(TRequest), typeof(TResponse)));
 
-        return ((ILayerCallHandler<TRequest, TResponse>)handler).HandleAsync(request, cancellationToken);
+        return ((LayerCallInvoker<TRequest, TResponse>)invokers[routeId]!)(request, cancellationToken);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
