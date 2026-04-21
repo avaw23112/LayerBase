@@ -56,6 +56,32 @@ public class NotifyTests
         Assert.That(trace, Is.EqualTo(new[] { "First", "Second", "Third" }));
     }
 
+    [Test]
+    public void Notify_Small_Fanout_SendLocal_Preserves_Registration_Order()
+    {
+        var layer = new TestLayer();
+        var trace = new List<string>();
+
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
+        {
+            e.Trace!.Add("First");
+        });
+        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
+        {
+            e.Trace!.Add("Second");
+        });
+        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
+        {
+            e.Trace!.Add("Third");
+        });
+
+        layer.SendLocal(new TestEvent { Value = 9, Trace = trace });
+
+        Assert.That(trace, Is.EqualTo(new[] { "First", "Second", "Third" }));
+    }
+
     public class TestLayer : Layer { }
 
     public struct TestEvent

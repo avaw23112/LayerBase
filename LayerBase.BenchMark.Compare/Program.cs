@@ -125,7 +125,7 @@ public class PublishSingleSubscriberCompareBench : CompareBenchmarkBase
 
 public class PublishFanoutCompareBench : CompareBenchmarkBase
 {
-    [Params(1, 4, 16)]
+    [Params(8, 16)]
     public int SubscriberCount { get; set; }
 
     private readonly CSharpNotifyPublisher _publisher = new();

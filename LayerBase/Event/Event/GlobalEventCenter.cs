@@ -800,7 +800,7 @@ public sealed class GlobalEventCenter
                 _singleRouteMask = _singleRouteLayerIndex >= 0 ? 1UL << _singleRouteLayerIndex : 0;
             }
 
-            _isSmallNotifyFanoutOnly = _notifyCountTotal is >= 2 and <= 4 &&
+            _isSmallNotifyFanoutOnly = _notifyCountTotal is >= 2 and <= 8 &&
                                        _asyncCountTotal == 0 &&
                                        _parallelCountTotal == 0 &&
                                        _syncCountTotal == 0;
@@ -1039,6 +1039,12 @@ public sealed class GlobalEventCenter
                 }
             }
 
+            if (r.NotifyCount is >= 2 and <= 8 && r.SyncCount == 0 && r.AsyncCount == 0 && r.ParallelCount == 0)
+            {
+                DispatchSmallNotifyFanout(r.NotifyStart, r.NotifyCount, in value);
+                return EventHandledState.Continue;
+            }
+
             if (r.ParallelCount > 0)
                 for (var j = 0; j < r.ParallelCount; j++)
                     Unsafe.Add(ref GetArrayDataRef(_flatParallel), r.ParallelStart + j).Enqueue(layerIndex, in value);
@@ -1085,21 +1091,24 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DispatchSmallNotifyFanout(in T value)
         {
+            DispatchSmallNotifyFanout(0, _notifyCountTotal, in value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void DispatchSmallNotifyFanout(int start, int count, in T value)
+        {
             //直接将小扇区写进指令，避免后续for循环产生寄存器和额外指令消耗。
-            //2 ~ 4个订阅者是普遍情况，由于避免了单订阅者的路径
+            //由于避免了单订阅者的路径,2 个订阅者是普遍情况
             ref var hBase = ref GetArrayDataRef(_notifyHandlers);
-            Unsafe.Add(ref hBase, 0)(in value);
-            Unsafe.Add(ref hBase, 1)(in value);
+            Unsafe.Add(ref hBase, start)(in value);
+            Unsafe.Add(ref hBase, start + 1)(in value);
 
-            if (_notifyCountTotal >= 3)
-            {
-                Unsafe.Add(ref hBase, 2)(in value);
-            }
-
-            if (_notifyCountTotal == 4)
-            {
-                Unsafe.Add(ref hBase, 3)(in value);
-            }
+            if (count >= 3) Unsafe.Add(ref hBase, start + 2)(in value); 
+            if (count >= 4) Unsafe.Add(ref hBase, start + 3)(in value);
+            if (count >= 5) Unsafe.Add(ref hBase, start + 4)(in value);
+            if (count >= 6) Unsafe.Add(ref hBase, start + 5)(in value);
+            if (count >= 7) Unsafe.Add(ref hBase, start + 6)(in value); 
+            if (count >= 8) Unsafe.Add(ref hBase, start + 7)(in value);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
