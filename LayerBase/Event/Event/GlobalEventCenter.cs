@@ -1011,7 +1011,7 @@ public sealed class GlobalEventCenter
             }
 
             // 🚀 Local 模式下的单订阅识别
-            var r = _ranges[layerIndex];
+            ref var r =ref _ranges[layerIndex];
             if (r.NotifyCount == 1 && r.SyncCount == 0 && r.AsyncCount == 0 && r.ParallelCount == 0)
             {
                 try
