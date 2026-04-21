@@ -117,13 +117,6 @@ public class CallTests
     }
 
     [Test]
-    public void Duplicate_call_handler_registration_fails_during_build()
-    {
-        Assert.That(() => LayerHub.CreateLayers().Push(new DuplicateLayer()).Build(),
-            Throws.TypeOf<LayerCallRouteConflictException>());
-    }
-
-    [Test]
     public async Task CancellationToken_is_passed_to_handler()
     {
         var coreLayer = new CoreLayer();
@@ -471,12 +464,3 @@ public sealed class DuplicateCallHandlerA : ILayerCallHandler<DuplicateRequest, 
     }
 }
 
-[OwnerLayer(typeof(DuplicateLayer))]
-public sealed class DuplicateCallHandlerB : ILayerCallHandler<DuplicateRequest, DuplicateResponse>
-{
-    public LBTask<DuplicateResponse> HandleAsync(DuplicateRequest request,
-                                                 CancellationToken cancellationToken = default)
-    {
-        return LBTask<DuplicateResponse>.FromResult(new DuplicateResponse("B"));
-    }
-}

@@ -215,37 +215,141 @@ public class RoutingShapeBench : EventBenchmarkBase
         for (var i = 0; i < OneMillion; i++) LayerHub.Send(RoutedEvent.Instance);
     }
 }
-
 public class CallSubsystemBench : EventBenchmarkBase
 {
-    private readonly CallRequest _request = new(123);
+    // _baseline:
+    // 1. 直接调用的基线对象。
+    // 2. 它不经过 LayerHub，不做层定位和路由命中。
+    // 3. 作用是提供一个“只保留最小业务处理”的对照组。
     private readonly CallDirectBaseline _baseline = new();
+
+    // _seed:
+    // 1. 用来生成每次循环都不同的请求值。
+    // 2. 如果请求永远固定，比如一直是 new CallRequest(123)，
+    //    JIT（即时编译器，运行时把 C# 编译成机器码的组件）
+    //    更容易把一些逻辑提前算掉，导致 baseline 看起来不真实地快。
+    private int _seed;
 
     [GlobalSetup]
     public void Setup()
     {
         LayerHub.Reset();
         LayerHub.CreateLayers().Push(new CallBenchLayer()).Build();
+
+        // 初始化一个非零种子。
+        // 这里只是随便给一个固定初始值，不要求“随机质量”，
+        // 只要求后续能稳定地产生“每次都不一样”的请求。
+        _seed = unchecked((int)0x12345678);
     }
 
     [Benchmark(Baseline = true, Description = "直接方法调用 (Call基线) - 10万次")]
     [BenchmarkCategory("03.Call", "Call", "Compare.Baseline")]
     public void DirectMethod()
     {
+        // state:
+        // 1. 把字段复制到局部变量里。
+        // 2. 这样循环里读写更直接，也更接近真实热路径。
+        var state = _seed;
+
         for (var i = 0; i < HundredThousand; i++)
-            BenchmarkSink.IntValue = _baseline.HandleAsync(_request).GetAwaiter().GetResult().Value;
+        {
+            // NextState(state):
+            // 1. 生成下一个状态值。
+            // 2. 这是一个很便宜的伪随机推进函数。
+            // 3. “伪随机”指它不是密码学安全随机，只是为了让输入不断变化。
+            state = NextState(state);
+
+            // request:
+            // 1. 每次循环都构造不同的请求。
+            // 2. 这样可以减少“输入恒定 -> 输出恒定 -> 整段被过度优化”的概率。
+            var request = new CallRequest(state);
+
+            // response:
+            // 1. 通过 direct baseline 执行一次最小业务调用。
+            // 2. 返回值仍然走 LBTask + GetAwaiter().GetResult()，
+            //    这样和 LayerCall 在返回形态上尽量一致。
+            var response = DirectInvoke(_baseline, request);
+
+            // Volatile.Write:
+            // 1. 把结果真正写到一个外部可见的位置。
+            // 2. Volatile 的意思是“这个写入不能被轻易忽略或重排”。
+            // 3. 这样能降低 JIT 把整段计算当成无意义代码删掉的概率。
+            Volatile.Write(ref BenchmarkSink.IntValue, response.Value);
+        }
+
+        // 把最终状态写回字段，保证整个循环确实有副作用。
+        _seed = state;
     }
 
     [Benchmark(Description = "LayerHub.CallAsync (单层单处理器) - 10万次")]
     [BenchmarkCategory("03.Call", "Call", "Compare.Baseline")]
     public void LayerCall()
     {
+        var state = _seed;
+
         for (var i = 0; i < HundredThousand; i++)
-            BenchmarkSink.IntValue =
-                LayerHub.CallAsync<CallBenchLayer, CallRequest, CallResponse>(_request).GetAwaiter().GetResult().Value;
+        {
+            state = NextState(state);
+            var request = new CallRequest(state);
+
+            // 这里和 DirectMethod 的唯一区别：
+            // 1. DirectMethod 直接调 baseline。
+            // 2. LayerCall 通过 LayerHub 做层定位、路由命中、处理器调度。
+            var response = LayerInvoke(request);
+
+            Volatile.Write(ref BenchmarkSink.IntValue, response.Value);
+        }
+
+        _seed = state;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static CallResponse DirectInvoke(CallDirectBaseline baseline, CallRequest request)
+    {
+        // baseline:
+        // 1. 基线对象实例。
+        // 2. 由它提供“最小业务处理”的直连调用。
+        //
+        // request:
+        // 1. 本次调用的请求对象。
+        //
+        // NoInlining:
+        // 1. 表示“不要内联”。
+        // 2. “内联”就是把函数体直接展开到调用处。
+        // 3. 禁止内联能减少 benchmark 被优化得过于理想化的概率。
+        return baseline.HandleAsync(request).GetAwaiter().GetResult();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static CallResponse LayerInvoke(CallRequest request)
+    {
+        // request:
+        // 1. 本次要发送给 LayerHub 的请求对象。
+        //
+        // 逻辑说明：
+        // 1. 这里固定命中 CallBenchLayer。
+        // 2. 由 LayerHub 完成层定位、请求类型匹配、处理器调度。
+        return LayerHub.CallAsync<CallBenchLayer, CallRequest, CallResponse>(request)
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int NextState(int state)
+    {
+        // state:
+        // 1. 上一次的状态值。
+        //
+        // 返回值:
+        // 1. 新的状态值。
+        //
+        // 逻辑说明：
+        // 1. 这是一个线性同余生成器（LCG）的推进公式。
+        // 2. 线性同余生成器是一种非常简单、非常快的伪随机数生成方法。
+        // 3. 这里不追求“随机质量”，只追求“每次输入都不同且成本很低”。
+        return unchecked(state * 1664525 + 1013904223);
     }
 }
-
 public class CSharpEventSyncComparisonBench : EventBenchmarkBase
 {
     [Params(1, 4, 16, 64)]

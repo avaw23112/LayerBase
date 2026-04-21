@@ -30,6 +30,8 @@ public interface ILayerCallHandler<TRequest, TResponse>
 - `CallHandler` 的所属层继续通过 `[OwnerLayer(typeof(SomeLayer))]` 声明，并由源生成器自动注册。
 - 不修改 `ILayerContext` 相关契约。
 - 保持 diff 小、实现可逆、测试可验证。
+- 一个 `Request` 只能绑定到**一个 layer、一个 response**；一旦出现多 layer、多 response 或多重绑定，必须直接报编译错误阻止通过。
+- `Call` 的定位是“单目标功能切片调用”，不是完整功能编排机制；当 Analyze / 设计讨论涉及跨 layer 聚合、广播、流程编排或多目标协同时，必须显式提醒开发者不要把 `Call` 误当成完整功能实现边界。
 
 ## Non-goals
 
@@ -46,5 +48,6 @@ public interface ILayerCallHandler<TRequest, TResponse>
 - handler 不能直接拿到其他层 scoped 服务。
 - `[OwnerLayer]` 自动注册有效。
 - 同层重复 `(TRequest, TResponse)` 注册在构建阶段明确失败。
+- 同一 `Request` 面向多个 layer 或多个 response 会在**编译期**直接失败。
 - `CancellationToken` 能传递到 handler。
 - handler 异常会传播到调用方。

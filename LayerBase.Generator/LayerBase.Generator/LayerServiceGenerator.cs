@@ -67,6 +67,7 @@ namespace LayerBase.Layers
             if (iServiceSymbol == null || layerSymbol == null) return;
 
             var validRegistrations = new List<ServiceRegistration>();
+            var callHandlerRegistrations = new List<CallHandlerRegistration>();
             foreach (var registration in collected)
             {
                 var serviceSymbol = registration.ServiceType;
@@ -81,7 +82,22 @@ namespace LayerBase.Layers
 
                 if (!implementsService)
                 {
-                    if (implementsEventHandler || implementsCallHandler) continue;
+                    if (implementsCallHandler)
+                    {
+                        foreach (var impl in GetCallHandlerInterfaces(serviceSymbol, callHandlerSymbol))
+                        {
+                            callHandlerRegistrations.Add(new CallHandlerRegistration(
+                                serviceSymbol,
+                                targetLayer,
+                                impl.RequestType,
+                                impl.ResponseType,
+                                registration.Location ?? serviceSymbol.Locations.FirstOrDefault()));
+                        }
+
+                        continue;
+                    }
+
+                    if (implementsEventHandler) continue;
 
                     spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceMustImplementIService,
                         registration.Location ?? serviceSymbol.Locations.FirstOrDefault(),
@@ -122,6 +138,35 @@ namespace LayerBase.Layers
                 }
 
                 validRegistrations.Add(registration);
+            }
+
+            var conflictingRequests = callHandlerRegistrations
+                .GroupBy(static binding => binding.RequestType, SymbolEqualityComparer.Default)
+                .Select(static group => new
+                {
+                    RequestType = group.Key,
+                    Count = group.Count(),
+                    Bindings = group.Select(static binding => new CallBindingSignature(binding.LayerType, binding.ResponseType))
+                        .Distinct(CallBindingSignatureComparer.Instance)
+                        .OrderBy(static binding => binding.LayerType.ToDisplayString())
+                        .ThenBy(static binding => binding.ResponseType.ToDisplayString())
+                        .ToList()
+                })
+                .Where(static entry => entry.Count > 1)
+                .ToDictionary(static entry => entry.RequestType, static entry => entry.Bindings, SymbolEqualityComparer.Default);
+
+            foreach (var registration in callHandlerRegistrations)
+            {
+                if (!conflictingRequests.TryGetValue(registration.RequestType, out var bindings)) continue;
+
+                var bindingList = string.Join(", ", bindings.Select(static binding =>
+                    $"{binding.LayerType.ToDisplayString()} -> {binding.ResponseType.ToDisplayString()}"));
+
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.RequestMustHaveSingleBinding,
+                    registration.Location ?? registration.ServiceType.Locations.FirstOrDefault(),
+                    registration.RequestType.ToDisplayString(),
+                    bindingList));
             }
 
             var groupedByLayer = validRegistrations
@@ -184,6 +229,20 @@ namespace LayerBase.Layers
                 _ => false
             };
         });
+    }
+
+    private static IEnumerable<CallHandlerImplementation> GetCallHandlerInterfaces(INamedTypeSymbol handlerType,
+                                                                                   INamedTypeSymbol? callHandlerSymbol)
+    {
+        if (callHandlerSymbol == null) yield break;
+
+        foreach (var iface in handlerType.AllInterfaces.OfType<INamedTypeSymbol>())
+        {
+            if (!SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, callHandlerSymbol)) continue;
+            if (iface.TypeArguments.Length != 2) continue;
+
+            yield return new CallHandlerImplementation(iface.TypeArguments[0], iface.TypeArguments[1]);
+        }
     }
 
     private static bool InheritsFromLayer(INamedTypeSymbol target, INamedTypeSymbol layerSymbol)
@@ -329,6 +388,15 @@ namespace LayerBase.Layers
                 Category,
                 DiagnosticSeverity.Error,
                 true);
+
+        public static readonly DiagnosticDescriptor RequestMustHaveSingleBinding =
+            new(
+                "LBG006",
+                "Call request must map to exactly one target and one response",
+                "Call request '{0}' has multiple call bindings: {1}. Call is only for single-target functional slices, so each request must map to exactly one layer and one response.",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
     }
 #pragma warning restore RS2008
 
@@ -346,5 +414,46 @@ namespace LayerBase.Layers
         public INamedTypeSymbol LayerType { get; }
 
         public Location? Location { get; }
+    }
+
+    private sealed class CallHandlerRegistration
+    {
+        public CallHandlerRegistration(INamedTypeSymbol serviceType, INamedTypeSymbol layerType, ITypeSymbol requestType,
+                                       ITypeSymbol responseType, Location? location)
+        {
+            ServiceType = serviceType;
+            LayerType = layerType;
+            RequestType = requestType;
+            ResponseType = responseType;
+            Location = location;
+        }
+
+        public INamedTypeSymbol ServiceType { get; }
+        public INamedTypeSymbol LayerType { get; }
+        public ITypeSymbol RequestType { get; }
+        public ITypeSymbol ResponseType { get; }
+        public Location? Location { get; }
+    }
+
+    private readonly record struct CallHandlerImplementation(ITypeSymbol RequestType, ITypeSymbol ResponseType);
+
+    private readonly record struct CallBindingSignature(INamedTypeSymbol LayerType, ITypeSymbol ResponseType);
+
+    private sealed class CallBindingSignatureComparer : IEqualityComparer<CallBindingSignature>
+    {
+        public static readonly CallBindingSignatureComparer Instance = new();
+
+        public bool Equals(CallBindingSignature x, CallBindingSignature y)
+        {
+            return SymbolEqualityComparer.Default.Equals(x.LayerType, y.LayerType)
+                   && SymbolEqualityComparer.Default.Equals(x.ResponseType, y.ResponseType);
+        }
+
+        public int GetHashCode(CallBindingSignature obj)
+        {
+            var hash = SymbolEqualityComparer.Default.GetHashCode(obj.LayerType);
+            hash = (hash * 397) ^ SymbolEqualityComparer.Default.GetHashCode(obj.ResponseType);
+            return hash;
+        }
     }
 }

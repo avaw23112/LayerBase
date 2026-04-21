@@ -1071,16 +1071,8 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private EventHandledState DispatchSingleNotify(in T value)
         {
-            try
-            {
-                _singleNotifyHandler!(in value);
-                return EventHandledState.Continue;
-            }
-            catch (Exception ex)
-            {
-                HandleSingleNotifyFault(in value, ex);
-                return EventHandledState.Continue;
-            }
+            _singleNotifyHandler!(in value);
+            return EventHandledState.Continue;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
