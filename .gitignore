@@ -1094,3 +1094,11 @@ BenchmarkDotNet.Artifacts/
 packages/
 LayerBase.Template/
 testrun/
+
+# Temporary and build artifacts
+.tmp_reflect_msgpipe.cs
+build_direct_event.binlog
+errors.txt
+tmp_build_test.log,verbosity
+*.DotSettings.user
+codex/tmp/
