@@ -121,7 +121,12 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
         var lazy = _instances.GetOrAdd(desc.ServiceType, _ =>
         {
             return new Lazy<object>(
-                () => CreateInstance(desc, callstack),
+                () => 
+                {
+                    // 使用独立的 callstack 防止跨线程访问非线程安全的 HashSet 及污染检测语义
+                    var localCallstack = new HashSet<Type>();
+                    return CreateInstance(desc, localCallstack);
+                },
                 LazyThreadSafetyMode.ExecutionAndPublication);
         });
 

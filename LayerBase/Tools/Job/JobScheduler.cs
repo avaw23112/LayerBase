@@ -78,9 +78,10 @@ public sealed class JobScheduler : IDisposable
             {
                 job();
             }
-            catch
+            catch (Exception ex)
             {
-                // keep worker alive
+                // keep worker alive, but report error
+                LayerHub.ReportLayerEventError(-1, "JobScheduler.WorkerLoop", "Job Execution", ex);
             }
     }
 }

@@ -1,7 +1,9 @@
+using System.Buffers;
 using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Core.EventStateTrace;
+using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Tools.Timer;
 
@@ -21,6 +23,7 @@ public sealed class TimerScheduler
 
     // 优化：重用列表，消除 Tick 时的分配
     private readonly List<(TimerToken token, ITimerQueue queue)> _dueCache = new(64);
+    private readonly List<IFrequencyQueue> _frequencyDueCache = new(16);
 
     public double CurrentTime { get; private set; }
 
@@ -44,6 +47,7 @@ public sealed class TimerScheduler
         if (deltaTime < 0) throw new ArgumentOutOfRangeException(nameof(deltaTime));
 
         _dueCache.Clear();
+        _frequencyDueCache.Clear();
         bool gateOpen;
         bool frequencyTriggered = false;
 
@@ -66,6 +70,14 @@ public sealed class TimerScheduler
                 if (_timeline.TryDequeue(out token, out _))
                     if (_queues.TryGetValue(token.TypeId, out var queue))
                         _dueCache.Add((token, queue));
+
+            if (frequencyTriggered)
+            {
+                foreach (var fq in _frequencyQueues.Values)
+                {
+                    _frequencyDueCache.Add(fq);
+                }
+            }
         }
 
         // 1. 执行到期的普通定时器
@@ -78,12 +90,9 @@ public sealed class TimerScheduler
         // 2. 执行频率任务（优化：直接内部迭代，零分配）
         if (frequencyTriggered)
         {
-            lock (_lock)
+            for (var i = 0; i < _frequencyDueCache.Count; i++)
             {
-                foreach (var fq in _frequencyQueues.Values)
-                {
-                    fq.ExecuteAll();
-                }
+                _frequencyDueCache[i].ExecuteAll();
             }
         }
 
@@ -418,6 +427,11 @@ internal sealed class TimerQueue<T> : ITimerQueue where T : struct
             if (task.Kind != TimerTaskKind.None) ExecuteTask(ref task);
             return true;
         }
+        catch (Exception ex)
+        {
+            LayerHub.ReportLayerEventError(-1, "TimerQueue.TryInvoke", typeof(T).Name, ex);
+            return true;
+        }
         finally
         {
             lock (_lock)
@@ -501,24 +515,47 @@ internal sealed class TimerQueue<T> : ITimerQueue where T : struct
 
     private static void ExecuteTask(ref TimerTask<T> task)
     {
-        switch (task.Kind)
+        try
         {
-            case TimerTaskKind.EventHandlerDelegate:
-                task.HandlerDelegate!.Invoke(in task.Payload);
-                break;
-            case TimerTaskKind.EventHandlerDelegateAsync:
-                task.HandlerDelegateAsync!.Invoke(task.Payload).Forget();
-                break;
-            case TimerTaskKind.EventHandler:
-                task.Handler!.Deal(in task.Payload);
-                break;
-            case TimerTaskKind.EventHandlerAsync:
-                task.HandlerAsync!.Deal(task.Payload).Forget();
-                break;
-            case TimerTaskKind.EventAction:
-                task.EventAction!.Invoke(new Event<T>(task.Payload));
-                break;
+            switch (task.Kind)
+            {
+                case TimerTaskKind.EventHandlerDelegate:
+                    task.HandlerDelegate!.Invoke(in task.Payload);
+                    break;
+                case TimerTaskKind.EventHandlerDelegateAsync:
+                {
+                    var payload = task.Payload;
+                    var kind = task.Kind;
+                    task.HandlerDelegateAsync!.Invoke(payload)
+                        .Forget(ex => ReportTaskException(kind, in payload, ex));
+                    break;
+                }
+                case TimerTaskKind.EventHandler:
+                    task.Handler!.Deal(in task.Payload);
+                    break;
+                case TimerTaskKind.EventHandlerAsync:
+                {
+                    var payload = task.Payload;
+                    var kind = task.Kind;
+                    task.HandlerAsync!.Deal(payload)
+                        .Forget(ex => ReportTaskException(kind, in payload, ex));
+                    break;
+                }
+                case TimerTaskKind.EventAction:
+                    task.EventAction!.Invoke(new Event<T>(task.Payload));
+                    break;
+            }
         }
+        catch (Exception ex)
+        {
+            ReportTaskException(task.Kind, in task.Payload, ex);
+        }
+    }
+
+    private static void ReportTaskException(TimerTaskKind kind, in T payload, Exception ex)
+    {
+        EventMetaDataHandler.OnEventExpectation(payload, ex);
+        LayerHub.ReportLayerEventError(-1, $"TimerScheduler.{kind}", typeof(T).Name, ex);
     }
 }
 
@@ -531,19 +568,36 @@ internal sealed class FrequencyQueue<T> : IFrequencyQueue where T : struct
     // 核心优化：直接执行，零分配，不再生成 Lambda 和快照列表
     public void ExecuteAll()
     {
-        // 注意：在 lock 外执行以避免死锁，使用 snapshot 仍有分配，
-        // 但我们这里改为“在 lock 内快速复制活跃任务”或“分块执行”。
-        // 最工业级的做法是：双缓冲或固定数组。这里先采用“零分配执行”策略：
-        
+        FrequencyTask<T>[]? snapshot = null;
+        var count = 0;
+
         lock (_lock)
         {
+            if (_tasks.Count == 0) return;
+            snapshot = ArrayPool<FrequencyTask<T>>.Shared.Rent(_tasks.Count);
             for (var i = 0; i < _tasks.Count; i++)
             {
                 var task = _tasks[i];
                 if (task.Active)
                 {
-                    ExecuteTask(task);
+                    snapshot[count++] = task;
                 }
+            }
+        }
+
+        try
+        {
+            for (var i = 0; i < count; i++)
+            {
+                ExecuteTask(snapshot[i]);
+            }
+        }
+        finally
+        {
+            if (snapshot != null)
+            {
+                Array.Clear(snapshot, 0, count);
+                ArrayPool<FrequencyTask<T>>.Shared.Return(snapshot);
             }
         }
     }
@@ -633,24 +687,47 @@ internal sealed class FrequencyQueue<T> : IFrequencyQueue where T : struct
 
     private static void ExecuteTask(FrequencyTask<T> task)
     {
-        switch (task.Kind)
+        try
         {
-            case TimerTaskKind.EventHandlerDelegate:
-                task.HandlerDelegate!.Invoke(in task.Payload);
-                break;
-            case TimerTaskKind.EventHandlerDelegateAsync:
-                task.HandlerDelegateAsync!.Invoke(task.Payload).Forget();
-                break;
-            case TimerTaskKind.EventHandler:
-                task.Handler!.Deal(in task.Payload);
-                break;
-            case TimerTaskKind.EventHandlerAsync:
-                task.HandlerAsync!.Deal(task.Payload).Forget();
-                break;
-            case TimerTaskKind.EventAction:
-                task.EventAction!.Invoke(new Event<T>(task.Payload));
-                break;
+            switch (task.Kind)
+            {
+                case TimerTaskKind.EventHandlerDelegate:
+                    task.HandlerDelegate!.Invoke(in task.Payload);
+                    break;
+                case TimerTaskKind.EventHandlerDelegateAsync:
+                {
+                    var payload = task.Payload;
+                    var kind = task.Kind;
+                    task.HandlerDelegateAsync!.Invoke(payload)
+                        .Forget(ex => ReportTaskException(kind, in payload, ex));
+                    break;
+                }
+                case TimerTaskKind.EventHandler:
+                    task.Handler!.Deal(in task.Payload);
+                    break;
+                case TimerTaskKind.EventHandlerAsync:
+                {
+                    var payload = task.Payload;
+                    var kind = task.Kind;
+                    task.HandlerAsync!.Deal(payload)
+                        .Forget(ex => ReportTaskException(kind, in payload, ex));
+                    break;
+                }
+                case TimerTaskKind.EventAction:
+                    task.EventAction!.Invoke(new Event<T>(task.Payload));
+                    break;
+            }
         }
+        catch (Exception ex)
+        {
+            ReportTaskException(task.Kind, in task.Payload, ex);
+        }
+    }
+
+    private static void ReportTaskException(TimerTaskKind kind, in T payload, Exception ex)
+    {
+        EventMetaDataHandler.OnEventExpectation(payload, ex);
+        LayerHub.ReportLayerEventError(-1, $"TimerScheduler.Frequency.{kind}", typeof(T).Name, ex);
     }
 }
 

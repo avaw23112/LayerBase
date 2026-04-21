@@ -35,7 +35,7 @@ public abstract class Layer : Node, IDisposable
     private GlobalEventCenter _center;
     private bool m_disposed;
 
-    private List<Action<Layer>> m_pendingOps = new();
+    private ConcurrentQueue<Action<Layer>> m_pendingOps = new();
     private ServiceProvider? m_serviceProvider;
 
     protected Layer()
@@ -82,13 +82,21 @@ public abstract class Layer : Node, IDisposable
 
     public void Build()
     {
+        lock (m_subscriptions)
+        {
+            foreach (var sub in m_subscriptions) sub.Dispose();
+            m_subscriptions.Clear();
+        }
+        m_delayPublishers.Clear();
+        m_delayUpdaters.Clear();
+
         LayerServiceRegistry.Apply(this);
         var descriptors = m_serviceCollection.ToDescriptors();
         var newProvider = new ServiceProvider(descriptors, this);
         var oldProvider = Interlocked.Exchange(ref m_serviceProvider, newProvider);
         oldProvider?.Dispose();
         DiscoveredSubscribers = newProvider.InitializeAutoSubscriptions(this, descriptors);
-        var ops = Interlocked.Exchange(ref m_pendingOps, new List<Action<Layer>>());
+        var ops = Interlocked.Exchange(ref m_pendingOps, new ConcurrentQueue<Action<Layer>>());
         if (ops != null)
             foreach (var op in ops)
                 op(this);
@@ -144,7 +152,7 @@ public abstract class Layer : Node, IDisposable
         }
         else
         {
-            m_pendingOps.Add(l => l.Subscribe(handler));
+            m_pendingOps.Enqueue(l => l.Subscribe(handler));
         }
     }
 
@@ -161,7 +169,7 @@ public abstract class Layer : Node, IDisposable
         }
         else
         {
-            m_pendingOps.Add(l => l.SubscribeNotify(handler));
+            m_pendingOps.Enqueue(l => l.SubscribeNotify(handler));
         }
     }
 
@@ -178,7 +186,7 @@ public abstract class Layer : Node, IDisposable
         }
         else
         {
-            m_pendingOps.Add(l => l.SubscribeAsync(handler));
+            m_pendingOps.Enqueue(l => l.SubscribeAsync(handler));
         }
     }
 
@@ -193,7 +201,7 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1)
             LayerHub.EventCenter.SubscribeParallel(RouteIndex, handler, reportError ?? LayerHub.ReportLayerEventError);
-        else m_pendingOps.Add(l => l.SubscribeParallel(handler, reportError));
+        else m_pendingOps.Enqueue(l => l.SubscribeParallel(handler, reportError));
     }
 
     public IDelayPublisher<T> SubscribeDelay<T>() where T : struct

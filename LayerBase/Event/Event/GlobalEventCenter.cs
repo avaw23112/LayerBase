@@ -23,6 +23,7 @@ public enum Propagation
 public sealed class GlobalEventCenter
 {
     private readonly ConcurrentDictionary<int, object> _eventBuckets = new();
+    private readonly ConcurrentDictionary<int, Action> _bucketCacheResetters = new();
     private readonly object _lock = new();
     internal ulong[] _bubbleMasksArr = Array.Empty<ulong>();
     internal ulong[] _dropMasksArr = Array.Empty<ulong>();
@@ -302,8 +303,10 @@ public sealed class GlobalEventCenter
         {
             foreach (var bucket in _eventBuckets.Values)
                 if (bucket is IResetable b)
-                    b.Reset();
+                    b.Dispose();
             _eventBuckets.Clear();
+            foreach (var resetter in _bucketCacheResetters.Values) resetter();
+            _bucketCacheResetters.Clear();
             var oldSlots = _layerSlots;
             _layerSlots = Array.Empty<IEventQueue>();
             foreach (var slot in oldSlots) slot?.Dispose();
@@ -322,6 +325,7 @@ public sealed class GlobalEventCenter
         var cached = BucketCache<T>.Instance;
         if (cached != null && cached.Owner == this) return cached;
         var typeId = EventTypeId<T>.Id;
+        _bucketCacheResetters.TryAdd(typeId, static () => BucketCache<T>.Instance = null);
         var bucket = (EventBucket<T>)_eventBuckets.GetOrAdd(typeId, _ => new EventBucket<T>(this));
         BucketCache<T>.Instance = bucket;
         return bucket;
@@ -448,7 +452,7 @@ public sealed class GlobalEventCenter
     private sealed class EventBucket<T> : IResetable where T : struct
     {
         private readonly object _lock = new();
-        public readonly GlobalEventCenter Owner;
+        public GlobalEventCenter? Owner;
         private HandlerCircuit[] _asyncCircuits = Array.Empty<HandlerCircuit>();
 
         private EventHandleDelegateAsync<T>[] _asyncHandlers = Array.Empty<EventHandleDelegateAsync<T>>();

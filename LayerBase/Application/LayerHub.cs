@@ -92,7 +92,7 @@ public static class LayerHub
             s_layerIndexCounter = 0;
             s_layerTypeBindings.Clear();
             InvalidateLayerTargetCaches();
-            EventCenter = new GlobalEventCenter();
+            EventCenter.Reset();
             ServiceProvider.ResetRoot(); // 新增：重置全局单例容器
             ServiceLayerBinder.Reset();
             OnLayerEventInfo = null;
@@ -107,7 +107,17 @@ public static class LayerHub
     internal static void ReportInfo(LayerEventInfo info)
     {
         var handler = OnLayerEventInfo;
-        handler?.Invoke(info);
+        if (handler != null)
+        {
+            try
+            {
+                handler.Invoke(info);
+            }
+            catch
+            {
+                // Ignore observer exceptions to avoid crashing the framework
+            }
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

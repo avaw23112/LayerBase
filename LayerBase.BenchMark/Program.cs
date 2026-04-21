@@ -350,84 +350,6 @@ public class CallSubsystemBench : EventBenchmarkBase
         return unchecked(state * 1664525 + 1013904223);
     }
 }
-public class CSharpEventSyncComparisonBench : EventBenchmarkBase
-{
-    [Params(1, 4, 16, 64)]
-    public int SubscriberCount { get; set; }
-
-    private CSharpEventPublisher _publisher = null!;
-
-    [GlobalSetup]
-    public void Setup()
-    {
-        LayerHub.Reset();
-        _publisher = new CSharpEventPublisher();
-        for (var i = 0; i < SubscriberCount; i++)
-            _publisher.Sync += CSharpEventHandlers.SyncContinue;
-
-        var layer = new BenchLayer();
-        for (var i = 0; i < SubscriberCount; i++)
-            layer.RegisterService(new BenchManager());
-
-        LayerHub.CreateLayers().Push(layer).Build();
-    }
-
-    [Benchmark(Baseline = true, Description = "C# event 同步扇出 (N订阅) - 100万次")]
-    [BenchmarkCategory("04.Compare.CSharpEvent", "Dispatch.Sync", "Compare.CSharpEvent")]
-    public void CSharpEvent()
-    {
-        for (var i = 0; i < OneMillion; i++)
-            BenchmarkSink.IntValue = (int)_publisher.PublishSync(in BenchEvent.Instance);
-    }
-
-    [Benchmark(Description = "LayerBase 同步扇出 (1层/N订阅) - 100万次")]
-    [BenchmarkCategory("04.Compare.CSharpEvent", "Dispatch.Sync", "Compare.CSharpEvent")]
-    public void LayerBase()
-    {
-        for (var i = 0; i < OneMillion; i++)
-            BenchmarkSink.IntValue = (int)LayerHub.Send(BenchEvent.Instance);
-    }
-}
-
-public class CSharpEventNotifyComparisonBench : EventBenchmarkBase
-{
-    [Params(1, 4, 16, 64)]
-    public int SubscriberCount { get; set; }
-
-    private CSharpEventPublisher _publisher = null!;
-
-    [GlobalSetup]
-    public void Setup()
-    {
-        LayerHub.Reset();
-        _publisher = new CSharpEventPublisher();
-        for (var i = 0; i < SubscriberCount; i++)
-            _publisher.Notify += CSharpEventHandlers.NotifyNoop;
-
-        var layer = new BenchLayer();
-        for (var i = 0; i < SubscriberCount; i++)
-            layer.RegisterService(new NotifyBenchManager());
-
-        LayerHub.CreateLayers().Push(layer).Build();
-    }
-
-    [Benchmark(Baseline = true, Description = "C# event Notify扇出 (N订阅) - 100万次")]
-    [BenchmarkCategory("04.Compare.CSharpEvent", "Dispatch.Notify", "Compare.CSharpEvent")]
-    public void CSharpEvent()
-    {
-        for (var i = 0; i < OneMillion; i++)
-            _publisher.PublishNotify(in NotifyEvent.Instance);
-    }
-
-    [Benchmark(Description = "LayerBase Notify扇出 (1层/N订阅) - 100万次")]
-    [BenchmarkCategory("04.Compare.CSharpEvent", "Dispatch.Notify", "Compare.CSharpEvent")]
-    public void LayerBase()
-    {
-        for (var i = 0; i < OneMillion; i++)
-            LayerHub.Send(NotifyEvent.Instance);
-    }
-}
-
 public class PostPumpBench : EventBenchmarkBase
 {
     private PumpDrivenLayer _singleLayer = null!;
@@ -802,44 +724,6 @@ public class Typical_Heavy_180_Bench_Notify : EventBenchmarkBase
         for (var i = 0; i < TenThousand; i++) LayerHub.Send(NotifyEvent.Instance);
     }
 }
-public class NotifyComparisonBench : EventBenchmarkBase
-{
-    private const int HundredMillion = 100_000_000;
-
-    [GlobalSetup]
-    public void Setup()
-    {
-        LayerHub.Reset();
-        var builder = LayerHub.CreateLayers();
-        var l = new BenchLayer();
-        l.RegisterService(new StandardBenchManager());
-        l.RegisterService(new NotifyBenchManager());
-        builder.Push(l).Build();
-    }
-
-    [Benchmark(Description = "标准同步订阅 (1亿次)")]
-    [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Sync", "Scenario.Legacy")]
-    public void StandardSync()
-    {
-        for (var i = 0; i < HundredMillion; i++) LayerHub.Send(BenchEvent.Instance);
-    }
-
-    [Benchmark(Description = "Notify零分支订阅 (1亿次)")]
-    [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Notify", "Scenario.Legacy")]
-    public void NotifyPipeline()
-    {
-        for (var i = 0; i < HundredMillion; i++) LayerHub.Send(NotifyEvent.Instance);
-    }
-}
-
-public partial class StandardBenchManager : IService
-{
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-
-    [Subscribe]
-    public EventHandledState Handle(in BenchEvent e) => EventHandledState.Continue;
-}
-
 public partial class NotifyBenchManager : IService
 {
     public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
@@ -972,53 +856,6 @@ public sealed class CallBenchHandler : ILayerCallHandler<CallRequest, CallRespon
     }
 }
 
-public sealed class ParallelWorkloadConsumer
-{
-    private int _sink;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EventHandledState Handle(in ParallelWorkloadEvent value)
-    {
-        var acc = _sink;
-        for (var i = 0; i < 16; i++)
-            acc = (acc * 33) ^ (i + 17);
-        _sink = acc;
-        BenchmarkSink.IntValue = acc;
-        return EventHandledState.Continue;
-    }
-}
-
-public sealed class CSharpEventPublisher
-{
-    public event EventHandleDelegate<BenchEvent>? Sync;
-    public event EventNotifyDelegate<NotifyEvent>? Notify;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EventHandledState PublishSync(in BenchEvent value)
-    {
-        return Sync?.Invoke(in value) ?? EventHandledState.Continue;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PublishNotify(in NotifyEvent value)
-    {
-        Notify?.Invoke(in value);
-    }
-}
-
-public static class CSharpEventHandlers
-{
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static EventHandledState SyncContinue(in BenchEvent value)
-    {
-        return EventHandledState.Continue;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void NotifyNoop(in NotifyEvent value)
-    {
-    }
-}
 
 public partial class FanoutSyncManager : IService
 {

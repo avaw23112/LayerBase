@@ -1,3 +1,4 @@
+using LayerBase;
 using LayerBase.Tools.Timer;
 
 namespace EventsTest;
@@ -54,6 +55,56 @@ public class TimerSchedulerTests
 
         scheduler.Tick(1.0);
         Assert.That(scheduler.IsFrequencyGateOpen, Is.True);
+    }
+
+    [Test]
+    public void Tick_continues_after_synchronous_timer_exception_and_reports_error()
+    {
+        LayerHub.Reset();
+        var scheduler = new TimerScheduler();
+        var log = new List<string>();
+        var errors = new List<LayerEventInfo>();
+        Action<LayerEventInfo> handler = info =>
+        {
+            if (info.Type == LayerEventInfoType.Error) errors.Add(info);
+        };
+
+        LayerHub.OnLayerEventInfo += handler;
+        try
+        {
+            scheduler.RegisterAfter(0, new TimerPayload { Id = 1 }, _ => throw new InvalidOperationException("boom"));
+            scheduler.RegisterAfter(0, new TimerPayload { Id = 2 }, e => log.Add($"after:{e.Value.Id}"));
+
+            Assert.DoesNotThrow(() => scheduler.Tick(0));
+            Assert.That(log, Is.EqualTo(new[] { "after:2" }));
+            Assert.That(errors.Any(e => e.Source.Contains("TimerScheduler")), Is.True);
+        }
+        finally
+        {
+            LayerHub.OnLayerEventInfo -= handler;
+        }
+    }
+
+    [Test]
+    public void Frequency_callback_can_reenter_scheduler_without_deadlock()
+    {
+        var scheduler = new TimerScheduler();
+        var log = new List<string>();
+
+        scheduler.SetFrequency(0.1);
+        scheduler.RegisterOnFrequency(new TimerPayload { Id = 1 }, _ =>
+        {
+            log.Add("freq");
+            scheduler.RegisterAfter(0, new TimerPayload { Id = 2 }, e => log.Add($"after:{e.Value.Id}"));
+        });
+
+        var tickTask = Task.Run(() => scheduler.Tick(0.1));
+        Assert.That(tickTask.Wait(TimeSpan.FromSeconds(1)), Is.True, "Frequency Tick should not deadlock on reentrant registration.");
+
+        scheduler.Tick(0);
+
+        Assert.That(log, Does.Contain("freq"));
+        Assert.That(log, Does.Contain("after:2"));
     }
 
     public struct TimerPayload
