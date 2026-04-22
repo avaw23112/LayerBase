@@ -11,13 +11,15 @@ public enum ServiceLifetime
 public sealed class ServiceDescriptor
 {
     public ServiceDescriptor(Type                            serviceType, Type?   implType, ServiceLifetime lifetime,
-                             Func<IServiceProvider, object>? factory,     object? instance)
+                             Func<IServiceProvider, object>? factory,     object? instance,
+                             int                             registrationScopeId = 0)
     {
         ServiceType = serviceType ?? throw new ArgumentNullException(nameof(serviceType));
         ImplType = implType;
         Lifetime = lifetime;
         Factory = factory;
         Instance = instance;
+        RegistrationScopeId = registrationScopeId;
     }
 
     public Type ServiceType { get; }
@@ -25,6 +27,7 @@ public sealed class ServiceDescriptor
     public ServiceLifetime Lifetime { get; }
     public Func<IServiceProvider, object>? Factory { get; }
     public object? Instance { get; }
+    public int RegistrationScopeId { get; }
 
     public static ServiceDescriptor Singleton<TService, TImpl>() where TImpl : TService
     {
@@ -59,5 +62,12 @@ public sealed class ServiceDescriptor
     public static ServiceDescriptor LayerScoped<TService>(Func<IServiceProvider, TService> factory)
     {
         return new ServiceDescriptor(typeof(TService), null, ServiceLifetime.Scoped, sp => factory(sp)!, null);
+    }
+
+    internal ServiceDescriptor WithRegistrationScope(int registrationScopeId)
+    {
+        if (RegistrationScopeId == registrationScopeId) return this;
+
+        return new ServiceDescriptor(ServiceType, ImplType, Lifetime, Factory, Instance, registrationScopeId);
     }
 }

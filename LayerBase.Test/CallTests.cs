@@ -156,6 +156,64 @@ public class CallTests
 
         Assert.That(response.SceneName, Is.EqualTo("TitleScene"));
     }
+
+    [Test]
+    public async Task Layer_method_marked_with_Call_is_auto_registered()
+    {
+        var layer = new LayerMethodLayer();
+        layer.RegisterService(new CoreLayerServicesModule());
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        var response = await LayerHub.For<LayerMethodLayer>()
+            .CallAsync<LayerMethodRequest, LayerMethodResponse>(new LayerMethodRequest("LayerScene"));
+
+        Assert.That(response.SceneName, Is.EqualTo("LayerScene"));
+        Assert.That(layer.GetService<SceneService>().LastScene, Is.EqualTo("LayerScene"));
+    }
+
+    [Test]
+    public async Task Service_method_marked_with_Call_is_auto_registered()
+    {
+        var layer = new ServiceMethodLayer();
+        layer.RegisterService(new ServiceMethodCallModule());
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        var response = await LayerHub.For<ServiceMethodLayer>()
+            .CallAsync<ServiceMethodRequest, ServiceMethodResponse>(new ServiceMethodRequest("ServiceScene"));
+
+        Assert.That(response.SceneName, Is.EqualTo("ServiceScene"));
+        Assert.That(layer.GetService<SceneService>().LastScene, Is.EqualTo("ServiceScene"));
+    }
+
+    [Test]
+    public void Invalid_layer_Call_method_signature_fails_during_build()
+    {
+        Assert.That(
+            () => LayerHub.CreateLayers().Push(new InvalidLayerMethodLayer()).Build(),
+            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("[Call] method"));
+    }
+
+    [Test]
+    public void Invalid_service_Call_method_signature_fails_during_build()
+    {
+        var layer = new InvalidServiceMethodLayer();
+        layer.RegisterService(new InvalidServiceMethodCallModule());
+
+        Assert.That(
+            () => LayerHub.CreateLayers().Push(layer).Build(),
+            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("[Call] method"));
+    }
+
+    [Test]
+    public void Module_cannot_declare_Call_methods()
+    {
+        var layer = new ModuleCallInvalidLayer();
+        layer.RegisterService(new ModuleCallInvalidService());
+
+        Assert.That(
+            () => LayerHub.CreateLayers().Push(layer).Build(),
+            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("should not declare [Call]"));
+    }
 }
 
 public struct SwitchSceneRequest
@@ -312,6 +370,46 @@ public struct DuplicateResponse
     public string Value { get; set; }
 }
 
+public readonly struct LayerMethodRequest
+{
+    public LayerMethodRequest(string sceneName)
+    {
+        SceneName = sceneName;
+    }
+
+    public string SceneName { get; }
+}
+
+public readonly struct LayerMethodResponse
+{
+    public LayerMethodResponse(string sceneName)
+    {
+        SceneName = sceneName;
+    }
+
+    public string SceneName { get; }
+}
+
+public readonly struct ServiceMethodRequest
+{
+    public ServiceMethodRequest(string sceneName)
+    {
+        SceneName = sceneName;
+    }
+
+    public string SceneName { get; }
+}
+
+public readonly struct ServiceMethodResponse
+{
+    public ServiceMethodResponse(string sceneName)
+    {
+        SceneName = sceneName;
+    }
+
+    public string SceneName { get; }
+}
+
 public sealed class SceneService
 {
     public string LastScene { get; private set; } = string.Empty;
@@ -343,6 +441,51 @@ public sealed class AudioLayerServicesModule : IService
     }
 }
 
+public sealed class ServiceMethodCallModule : IService
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddScoped<SceneService, SceneService>();
+    }
+
+    [Call]
+    public LBTask<ServiceMethodResponse> HandleServiceMethodAsync(ServiceMethodRequest request)
+    {
+        this.GetService<SceneService>().SwitchTo(request.SceneName);
+        return LBTask<ServiceMethodResponse>.FromResult(new ServiceMethodResponse(request.SceneName));
+    }
+}
+
+public sealed class InvalidServiceMethodCallModule : IService
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    [Call]
+    public LBTask<ServiceMethodResponse> InvalidHandle(ServiceMethodRequest request, int unexpectedParameter)
+    {
+        return LBTask<ServiceMethodResponse>.FromResult(new ServiceMethodResponse(request.SceneName));
+    }
+}
+
+public sealed class ModuleCallInvalidService : IService
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddScoped<ModuleCallInvalidManager, ModuleCallInvalidManager>();
+    }
+}
+
+public sealed class ModuleCallInvalidManager : ILayerContext
+{
+    [Call]
+    public LBTask<ServiceMethodResponse> InvalidModuleCall(ServiceMethodRequest request)
+    {
+        return LBTask<ServiceMethodResponse>.FromResult(new ServiceMethodResponse(request.SceneName));
+    }
+}
+
 public partial class CoreLayer : Layer
 {
 }
@@ -356,6 +499,37 @@ public partial class AudioLayer : Layer
 }
 
 public partial class DuplicateLayer : Layer
+{
+}
+
+public partial class LayerMethodLayer : Layer
+{
+    [Call]
+    public LBTask<LayerMethodResponse> HandleLayerMethodAsync(LayerMethodRequest request)
+    {
+        GetService<SceneService>().SwitchTo(request.SceneName);
+        return LBTask<LayerMethodResponse>.FromResult(new LayerMethodResponse(request.SceneName));
+    }
+}
+
+public partial class ServiceMethodLayer : Layer
+{
+}
+
+public partial class InvalidLayerMethodLayer : Layer
+{
+    [Call]
+    public LayerMethodResponse InvalidHandle(LayerMethodRequest request)
+    {
+        return new LayerMethodResponse(request.SceneName);
+    }
+}
+
+public partial class InvalidServiceMethodLayer : Layer
+{
+}
+
+public partial class ModuleCallInvalidLayer : Layer
 {
 }
 

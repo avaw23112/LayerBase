@@ -6,6 +6,18 @@ namespace LayerBase.DI;
 
 public sealed class ServiceProvider : IServiceProvider, IDisposable
 {
+    internal readonly struct ResolvedService
+    {
+        public ResolvedService(ServiceDescriptor descriptor, object instance)
+        {
+            Descriptor = descriptor;
+            Instance = instance;
+        }
+
+        public ServiceDescriptor Descriptor { get; }
+        public object Instance { get; }
+    }
+
     private static ServiceProvider _root = new();
 
     public static void ResetRoot()
@@ -81,6 +93,18 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
         }
 
         return discovered;
+    }
+
+    internal List<ResolvedService> ResolveOrderedServices(IEnumerable<ServiceDescriptor> orderedDescriptors)
+    {
+        var resolved = new List<ResolvedService>();
+        foreach (var desc in orderedDescriptors)
+        {
+            var instance = GetService(desc.ServiceType);
+            if (instance != null) resolved.Add(new ResolvedService(desc, instance));
+        }
+
+        return resolved;
     }
 
     private object? GetServiceInternal(Type serviceType, HashSet<Type> callstack)

@@ -24,17 +24,27 @@ internal sealed class LayerChain
     {
         AssignEventBus();
 
-        // 汇总逻辑活跃状态并构建各层的 DI 容器
-        _logicActiveMask = 0;
-        var allSubscribers = new List<IAutoSubscribe>();
+        var builtLayers = new List<Layer>();
         foreach (var node in responsibilityChain)
             if (node is Layer layer)
             {
-                layer.Build();
-                allSubscribers.AddRange(layer.DiscoveredSubscribers);
-
-                if (layer.HasActiveLogic) _logicActiveMask |= 1UL << layer.RouteIndex;
+                layer.PrepareBuild();
+                builtLayers.Add(layer);
             }
+
+        SharedFieldBinder.Bind(
+            builtLayers.SelectMany(static layer => layer.GetSharedFieldParticipants(includeGlobalScope: true)));
+
+        // 汇总逻辑活跃状态并构建各层的 DI 容器
+        _logicActiveMask = 0;
+        var allSubscribers = new List<IAutoSubscribe>();
+        foreach (var layer in builtLayers)
+        {
+            layer.FinalizeBuild();
+            allSubscribers.AddRange(layer.DiscoveredSubscribers);
+
+            if (layer.HasActiveLogic) _logicActiveMask |= 1UL << layer.RouteIndex;
+        }
 
         // 核心步骤：启动期全量环路审计
         EventGraphValidator.Validate(allSubscribers);

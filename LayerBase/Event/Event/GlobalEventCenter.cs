@@ -914,7 +914,7 @@ public sealed class GlobalEventCenter
                 if (_isSingleSync) return DispatchSingleSync(in value);
                 if (_isSmallNotifyFanoutOnly)
                 {
-                    DispatchSmallNotifyFanout(in value);
+                    DispatchSmallNotifyFanout(0, _notifyCountTotal, in value);
                     return EventHandledState.Continue;
                 }
                 
@@ -1018,16 +1018,7 @@ public sealed class GlobalEventCenter
             ref var r =ref _ranges[layerIndex];
             if (r.NotifyCount == 1 && r.SyncCount == 0 && r.AsyncCount == 0 && r.ParallelCount == 0)
             {
-                try
-                {
-                    Unsafe.Add(ref GetArrayDataRef(_notifyHandlers), r.NotifyStart)(in value);
-                    return EventHandledState.Continue;
-                }
-                catch (Exception ex)
-                {
-                    HandleNotifyFault(r.NotifyStart, in value, ex);
-                    return EventHandledState.Continue;
-                }
+                Unsafe.Add(ref GetArrayDataRef(_notifyHandlers), r.NotifyStart)(in value);
             }
 
             if (r.SyncCount == 1 && r.NotifyCount == 0 && r.AsyncCount == 0 && r.ParallelCount == 0)
@@ -1092,12 +1083,6 @@ public sealed class GlobalEventCenter
             return EventHandledState.Continue;
         }
         
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void DispatchSmallNotifyFanout(in T value)
-        {
-            DispatchSmallNotifyFanout(0, _notifyCountTotal, in value);
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DispatchSmallNotifyFanout(int start, int count, in T value)
         {

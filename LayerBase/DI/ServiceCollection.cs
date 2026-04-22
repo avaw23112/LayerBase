@@ -6,10 +6,11 @@ namespace LayerBase.DI;
 public class ServiceCollection : IServiceCollection
 {
     private readonly List<ServiceDescriptor> _descriptors = new();
+    private int _currentRegistrationScopeId;
 
     public IServiceCollection Add(ServiceDescriptor descriptor)
     {
-        _descriptors.Add(descriptor);
+        _descriptors.Add(descriptor.WithRegistrationScope(_currentRegistrationScopeId));
         return this;
     }
 
@@ -49,5 +50,33 @@ public class ServiceCollection : IServiceCollection
     public void Reset()
     {
         _descriptors.Clear();
+        _currentRegistrationScopeId = 0;
+    }
+
+    internal IDisposable PushRegistrationScope(int registrationScopeId)
+    {
+        var previous = _currentRegistrationScopeId;
+        _currentRegistrationScopeId = registrationScopeId;
+        return new RegistrationScope(this, previous);
+    }
+
+    private sealed class RegistrationScope : IDisposable
+    {
+        private readonly ServiceCollection _owner;
+        private readonly int _previousScopeId;
+        private bool _disposed;
+
+        public RegistrationScope(ServiceCollection owner, int previousScopeId)
+        {
+            _owner = owner;
+            _previousScopeId = previousScopeId;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _owner._currentRegistrationScopeId = _previousScopeId;
+        }
     }
 }

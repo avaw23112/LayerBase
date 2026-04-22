@@ -24,9 +24,23 @@ public sealed class OwnerLayerAttribute : Attribute
 
 public abstract class Layer : Node, IDisposable
 {
+    internal readonly struct RegisteredService
+    {
+        public RegisteredService(IService service, int scopeId)
+        {
+            Service = service;
+            ScopeId = scopeId;
+        }
+
+        public IService Service { get; }
+        public int ScopeId { get; }
+    }
+
     private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();
     private readonly object m_callRouteLock = new();
     private readonly List<IDelayPublisherUpdater> m_delayUpdaters = new(); // 优化：消除 Values 迭代分配
+    private readonly List<RegisteredService> m_activeServices = new();
+    private readonly List<RegisteredService> m_manualServices = new();
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
     private readonly List<IDisposable> m_subscriptions = new();
@@ -36,6 +50,9 @@ public abstract class Layer : Node, IDisposable
     private bool m_disposed;
 
     private ConcurrentQueue<Action<Layer>> m_pendingOps = new();
+    private bool m_collectingGeneratedServices;
+    private int m_nextServiceScopeId;
+    private List<ServiceProvider.ResolvedService> m_resolvedServices = new();
     private ServiceProvider? m_serviceProvider;
 
     protected Layer()
@@ -72,7 +89,16 @@ public abstract class Layer : Node, IDisposable
 
     public void RegisterService(IService service)
     {
-        service.ConfigureServices(m_serviceCollection);
+        if (service == null) throw new ArgumentNullException(nameof(service));
+
+        var registration = new RegisteredService(service, Interlocked.Increment(ref m_nextServiceScopeId));
+        if (m_collectingGeneratedServices)
+        {
+            AddActiveService(registration);
+            return;
+        }
+
+        m_manualServices.Add(registration);
     }
 
     public T GetService<T>() where T : class
@@ -82,6 +108,13 @@ public abstract class Layer : Node, IDisposable
 
     public void Build()
     {
+        PrepareBuild();
+        SharedFieldBinder.Bind(GetSharedFieldParticipants(includeGlobalScope: true));
+        FinalizeBuild();
+    }
+
+    internal void PrepareBuild()
+    {
         lock (m_subscriptions)
         {
             foreach (var sub in m_subscriptions) sub.Dispose();
@@ -89,28 +122,122 @@ public abstract class Layer : Node, IDisposable
         }
         m_delayPublishers.Clear();
         m_delayUpdaters.Clear();
+        m_serviceUpdates.Clear();
+        m_activeServices.Clear();
+        m_resolvedServices.Clear();
+        m_serviceCollection.Reset();
+        m_callRouteInvokers = Array.Empty<object?>();
+        m_callRouteHandlerTypes = Array.Empty<Type?>();
 
+        foreach (var registration in m_manualServices)
+            AddActiveService(registration);
+
+        m_collectingGeneratedServices = true;
         LayerServiceRegistry.Apply(this);
+        m_collectingGeneratedServices = false;
+
         var descriptors = m_serviceCollection.ToDescriptors();
         var newProvider = new ServiceProvider(descriptors, this);
         var oldProvider = Interlocked.Exchange(ref m_serviceProvider, newProvider);
         oldProvider?.Dispose();
-        DiscoveredSubscribers = newProvider.InitializeAutoSubscriptions(this, descriptors);
+        m_resolvedServices = newProvider.ResolveOrderedServices(descriptors);
+    }
+
+    internal void FinalizeBuild()
+    {
+        ValidateNoModuleCallMethods();
+        BindAutoCallHandlers();
+
+        var subscribers = new List<IAutoSubscribe>();
+        if (this is IAutoSubscribe layerAutoSubscribe)
+        {
+            layerAutoSubscribe.AutoBind(this);
+            subscribers.Add(layerAutoSubscribe);
+        }
+
+        foreach (var resolved in m_resolvedServices)
+        {
+            if (resolved.Instance is not IAutoSubscribe auto) continue;
+            auto.AutoBind(this);
+            subscribers.Add(auto);
+        }
+
+        DiscoveredSubscribers = subscribers;
+
         var ops = Interlocked.Exchange(ref m_pendingOps, new ConcurrentQueue<Action<Layer>>());
         if (ops != null)
             foreach (var op in ops)
                 op(this);
-        foreach (var desc in descriptors)
+
+        foreach (var resolved in m_resolvedServices)
         {
-            var instance = newProvider.GetService(desc.ServiceType);
-            if (instance is IInitializable init) init.Initialize();
+            if (resolved.Instance is IInitializable init) init.Initialize();
+            if (resolved.Instance is IUpdate up) m_serviceUpdates.Add(up);
+        }
+    }
+
+    internal IEnumerable<SharedFieldBinder.Participant> GetSharedFieldParticipants(bool includeGlobalScope)
+    {
+        if (includeGlobalScope)
+            yield return new SharedFieldBinder.Participant(this, this, 0);
+
+        foreach (var service in m_activeServices)
+            yield return new SharedFieldBinder.Participant(service.Service, this, service.ScopeId);
+
+        foreach (var resolved in m_resolvedServices)
+            yield return new SharedFieldBinder.Participant(resolved.Instance, this, resolved.Descriptor.RegistrationScopeId);
+    }
+
+    private void AddActiveService(RegisteredService registration)
+    {
+        m_activeServices.Add(registration);
+        ServiceLayerBinder.Attach(registration.Service, this);
+
+        using var _ = m_serviceCollection.PushRegistrationScope(registration.ScopeId);
+        registration.Service.ConfigureServices(m_serviceCollection);
+    }
+
+    private void BindAutoCallHandlers()
+    {
+        var boundInstances = new HashSet<object>(ObjectReferenceComparer.Instance);
+
+        BindAutoCallHandler(this, boundInstances);
+
+        foreach (var registration in m_activeServices)
+            BindAutoCallHandler(registration.Service, boundInstances);
+    }
+
+    private void BindAutoCallHandler(object candidate, HashSet<object> boundInstances)
+    {
+        if (!boundInstances.Add(candidate)) return;
+        CallMethodBinder.Bind(candidate, this);
+    }
+
+    private void ValidateNoModuleCallMethods()
+    {
+        foreach (var resolved in m_resolvedServices)
+        {
+            if (resolved.Instance is not ILayerContext) continue;
+            if (!CallMethodBinder.HasCallMethods(resolved.Instance.GetType())) continue;
+
+            throw new InvalidOperationException(
+                $"[Call] methods are only supported on Layer and IService owners. " +
+                $"Module '{resolved.Instance.GetType().FullName}' should not declare [Call].");
+        }
+    }
+
+    private sealed class ObjectReferenceComparer : IEqualityComparer<object>
+    {
+        public static readonly ObjectReferenceComparer Instance = new();
+
+        public new bool Equals(object? x, object? y)
+        {
+            return ReferenceEquals(x, y);
         }
 
-        m_serviceUpdates.Clear();
-        foreach (var desc in descriptors)
+        public int GetHashCode(object obj)
         {
-            var instance = newProvider.GetService(desc.ServiceType);
-            if (instance is IUpdate up) m_serviceUpdates.Add(up);
+            return RuntimeHelpers.GetHashCode(obj);
         }
     }
 
@@ -398,3 +525,5 @@ public abstract class Layer : Node, IDisposable
         }
     }
 }
+
+
