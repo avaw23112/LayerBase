@@ -339,7 +339,60 @@ public static class LayerHub
             }
         }
         if (!hasFields) sb.AppendLine("| (None) | | | | |");
-        
+        sb.AppendLine();
+
+        // 5. Health Audit
+        sb.AppendLine("## 5. Health Audit");
+        var issues = new List<string>();
+
+        var allLayers = s_chain.GetNodes().OfType<Layers.Layer>().ToList();
+        var allSubscribed = allLayers.SelectMany(l => l.SubscribedEvents).ToHashSet();
+        var allProduced = allLayers.SelectMany(l => l.ProducedEvents).ToHashSet();
+        var allCallHandlers = allLayers.SelectMany(l => l.CallHandlers.Select(ch => ch.Req)).ToHashSet();
+        var allCallInvoked = allLayers.SelectMany(l => l.InvokedCalls).Concat(CallUsageTracker.GetUsedRequestTypes()).ToHashSet();
+        var allPublicKeys = allLayers.SelectMany(l => l.SharedFields.Where(f => f.IsProvider).Select(f => $"{f.Scope}_{f.Key}")).ToHashSet();
+        var allFromKeys = allLayers.SelectMany(l => l.SharedFields.Where(f => !f.IsProvider).Select(f => $"{f.Scope}_{f.Key}")).ToHashSet();
+
+        // Check Zombie Events
+        foreach (var evt in allSubscribed)
+        {
+            if (!allProduced.Contains(evt))
+                issues.Add($"- **Zombie Event**: `{evt.Name}` is subscribed but never produced (Send/Post).");
+        }
+
+        // Check Unsent Events (Produced but no one listening)
+        foreach (var evt in allProduced)
+        {
+            if (!allSubscribed.Contains(evt))
+                issues.Add($"- **Unused Producer**: Event `{evt.Name}` is produced but has no subscribers.");
+        }
+
+        // Check Uncalled Call Routes
+        foreach (var req in allCallHandlers)
+        {
+            if (!allCallInvoked.Contains(req))
+                issues.Add($"- **Dead Call Route**: Request `{req.Name}` has a handler but is never invoked via `CallAsync`.");
+        }
+
+        // Check Orphaned Publics
+        foreach (var key in allPublicKeys)
+        {
+            if (!allFromKeys.Contains(key))
+            {
+                var keyName = key.Substring(key.IndexOf('_') + 1);
+                issues.Add($"- **Orphaned Public**: Shared key `{keyName}` is published but never consumed via `[From]`. (Scope: {key.Split('_')[0]})");
+            }
+        }
+
+        if (issues.Count == 0)
+        {
+            sb.AppendLine("✅ No health issues detected. All bindings are active and used.");
+        }
+        else
+        {
+            foreach (var issue in issues) sb.AppendLine(issue);
+        }
+
         return sb.ToString();
     }
 

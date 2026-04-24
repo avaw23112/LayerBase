@@ -16,15 +16,22 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
         "Invalid subscribe member signature",
         "Member '{0}' uses [{1}] but must match '{2}'",
         "Usage",
-        DiagnosticSeverity.Warning,
+        DiagnosticSeverity.Error,
         true,
         "Subscribe-family attributes require delegate-compatible method signatures.");
+
+    private static readonly DiagnosticDescriptor ClassMustBePartial = new(
+        "LBGS002",
+        "Class must be partial",
+        "Class '{0}' uses [Subscribe] attributes and must be declared as partial to allow source generation.",
+        "Usage",
+        DiagnosticSeverity.Error,
+        true);
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var classProvider = context.SyntaxProvider.CreateSyntaxProvider(
-                                       static (node, _) => node is ClassDeclarationSyntax cds &&
-                                                           cds.Modifiers.Any(SyntaxKind.PartialKeyword),
+                                       static (node, _) => node is ClassDeclarationSyntax,
                                        static (ctx, _) => GetClassMeta(ctx))
                                    .Where(static m => m != null)!;
 
@@ -37,13 +44,14 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
         var symbol = ctx.SemanticModel.GetDeclaredSymbol(cds);
         if (symbol == null) return null;
 
-        var implementsCtx = symbol.AllInterfaces.Any(i => i.Name.Contains("ILayerContext"));
         var handlers = new List<HandlerInfo>();
         var diagnostics = new List<HandlerDiagnostic>();
         var delayProps = new List<string>();
 
         foreach (var member in symbol.GetMembers())
+        {
             if (member is IMethodSymbol method)
+            {
                 foreach (var attr in method.GetAttributes())
                 {
                     var attrName = attr.AttributeClass?.Name ?? "";
@@ -68,7 +76,9 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                         handlers.Add(new HandlerInfo(method.Name, attrName, evtStr, deps));
                     }
                 }
+            }
             else if (member is IPropertySymbol prop)
+            {
                 if (prop.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("SubscribeDelay") == true))
                 {
                     if (!TryValidateDelayTarget(prop.Type, out var eventType, out var expectedSignature))
@@ -84,7 +94,9 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                         delayProps.Add($"{prop.Name}|{eventType}");
                     }
                 }
+            }
             else if (member is IFieldSymbol field)
+            {
                 if (field.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("SubscribeDelay") == true))
                 {
                     if (!TryValidateDelayTarget(field.Type, out var eventType, out var expectedSignature))
@@ -100,24 +112,51 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                         delayProps.Add($"{field.Name}|{eventType}");
                     }
                 }
+            }
+        }
 
-        if (handlers.Count > 0 || delayProps.Count > 0 || implementsCtx || diagnostics.Count > 0)
-            return new ClassMeta(symbol.Name, symbol.ContainingNamespace.ToDisplayString(), symbol.ToDisplayString(),
-                implementsCtx, handlers, delayProps, diagnostics);
-        return null;
+        if (handlers.Count == 0 && delayProps.Count == 0 && diagnostics.Count == 0)
+            return null;
+
+        if (!cds.Modifiers.Any(SyntaxKind.PartialKeyword))
+        {
+            diagnostics.Add(new HandlerDiagnostic(
+                symbol.Name,
+                "PartialCheck",
+                "partial class",
+                cds.Identifier.GetLocation()));
+        }
+
+        var implementsCtx = symbol.AllInterfaces.Any(i => i.Name.Contains("ILayerContext"));
+
+        return new ClassMeta(symbol.Name, symbol.ContainingNamespace.ToDisplayString(), symbol.ToDisplayString(),
+            implementsCtx, handlers, delayProps, diagnostics);
     }
 
     private static void GenerateCode(SourceProductionContext spc, ClassMeta meta)
     {
         foreach (var diagnostic in meta.Diagnostics)
         {
-            spc.ReportDiagnostic(Diagnostic.Create(
-                InvalidSubscribeSignature,
-                diagnostic.Location,
-                diagnostic.MethodName,
-                diagnostic.AttributeName,
-                diagnostic.ExpectedSignature));
+            if (diagnostic.AttributeName == "PartialCheck")
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    ClassMustBePartial,
+                    diagnostic.Location,
+                    diagnostic.MethodName));
+            }
+            else
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    InvalidSubscribeSignature,
+                    diagnostic.Location,
+                    diagnostic.MethodName,
+                    diagnostic.AttributeName,
+                    diagnostic.ExpectedSignature));
+            }
         }
+
+        // Only generate code if it's partial and has things to bind
+        if (meta.Diagnostics.Any(d => d.AttributeName == "PartialCheck")) return;
 
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated />");
@@ -160,6 +199,19 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                 // 🚀 回归标准模式：直接绑定成员方法委托
                 sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
                 sb.AppendLine($"            layer.SubscribedEvents.Add(typeof({h.Evt}));");
+                
+                foreach (var d in h.Deps)
+                {
+                    // d is formatted as "yield return new global::LayerBase.DI.EventDependency(typeof(Src), typeof(Target));"
+                    // We extract the target type
+                    var start = d.LastIndexOf("typeof(") + 7;
+                    var end = d.LastIndexOf(")");
+                    if (start > 7 && end > start)
+                    {
+                        var targetEvt = d.Substring(start, end - start);
+                        sb.AppendLine($"            layer.ProducedEvents.Add(typeof({targetEvt}));");
+                    }
+                }
             }
 
             foreach (var p in meta.DelayProps)
