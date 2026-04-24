@@ -105,7 +105,7 @@ public class ServiceRegistrationTests
             return EventHandledState.Continue;
         });
 
-        for (var i = 0; i < 100; i++) layer.SendGlobal(new ServiceTestEvent());
+        for (var i = 0; i < 100; i++) layer.Send(new ServiceTestEvent());
 
         // Wait a bit for parallel processing
         Thread.Sleep(500);

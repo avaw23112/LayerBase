@@ -37,7 +37,7 @@ public class DelayPublisherTests
 
         public void RequestGlobalDelay(float ttl, int value)
         {
-            this.DelayGlobal(new DelayTestEvent { Value = value }, ttl);
+            this.Delay(new DelayTestEvent { Value = value }, ttl);
         }
     }
 

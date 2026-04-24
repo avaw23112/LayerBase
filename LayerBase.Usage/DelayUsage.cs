@@ -21,7 +21,7 @@ public class NotifyManager : IService
     public void RequestNotification(string message, float delay)
     {
         // 🚀 在 Service 中调用扩展方法，安全且符合架构
-        this.DelayGlobal(new NotificationEvent { Msg = message }, delay);
+        this.Delay(new NotificationEvent { Msg = message }, delay);
     }
 }
 

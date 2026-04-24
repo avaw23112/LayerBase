@@ -97,10 +97,10 @@ public static class ServiceExtensions
         return service.GetLayer().SendLocal(value);
     }
 
-    public static EventHandledState SendGlobal<TValue>(this IService service, in TValue value)
+    public static EventHandledState Send<TValue>(this IService service, in TValue value)
         where TValue : struct
     {
-        return service.GetLayer().SendGlobal(value);
+        return service.GetLayer().Send(value);
     }
 
     public static void PostLocal<TValue>(this IService service, in TValue value) where TValue : struct
@@ -108,9 +108,9 @@ public static class ServiceExtensions
         service.GetLayer().PostLocal(value);
     }
 
-    public static void PostGlobal<TValue>(this IService service, in TValue value) where TValue : struct
+    public static void Post<TValue>(this IService service, in TValue value) where TValue : struct
     {
-        service.GetLayer().PostGlobal(value);
+        service.GetLayer().Post(value);
     }
 
     public static void DelayLocal<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
@@ -120,7 +120,7 @@ public static class ServiceExtensions
             contractId);
     }
 
-    public static void DelayGlobal<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
+    public static void Delay<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
         where TValue : struct
     {
         ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl,
@@ -173,10 +173,10 @@ public static class LayerContextExtensions
         return service.GetLayer().SendLocal(value);
     }
 
-    public static EventHandledState SendGlobal<TValue>(this ILayerContext service, in TValue value)
+    public static EventHandledState Send<TValue>(this ILayerContext service, in TValue value)
         where TValue : struct
     {
-        return service.GetLayer().SendGlobal(value);
+        return service.GetLayer().Send(value);
     }
 
     public static void PostLocal<TValue>(this ILayerContext service, in TValue value) where TValue : struct
@@ -184,9 +184,9 @@ public static class LayerContextExtensions
         service.GetLayer().PostLocal(value);
     }
 
-    public static void PostGlobal<TValue>(this ILayerContext service, in TValue value) where TValue : struct
+    public static void Post<TValue>(this ILayerContext service, in TValue value) where TValue : struct
     {
-        service.GetLayer().PostGlobal(value);
+        service.GetLayer().Post(value);
     }
 
     public static void DelayLocal<TValue>(this ILayerContext service, in TValue value, float ttl, int contractId = 0)
@@ -196,7 +196,7 @@ public static class LayerContextExtensions
             contractId);
     }
 
-    public static void DelayGlobal<TValue>(this ILayerContext service, in TValue value, float ttl, int contractId = 0)
+    public static void Delay<TValue>(this ILayerContext service, in TValue value, float ttl, int contractId = 0)
         where TValue : struct
     {
         ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl,

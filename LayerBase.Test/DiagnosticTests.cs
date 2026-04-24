@@ -29,7 +29,7 @@ public partial class ProducerManager : ILayerContext
     [Subscribe]
     public EventHandledState OnStart(in SomeEvent e)
     {
-        this.SendGlobal(new UnsubscribedEvent());
+        this.Send(new UnsubscribedEvent());
         return EventHandledState.Continue;
     }
 }

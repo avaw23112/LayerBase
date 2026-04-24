@@ -379,7 +379,7 @@ public abstract class Layer : Node, IDisposable
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EventHandledState SendGlobal<T>(in T value) where T : struct
+    public EventHandledState Send<T>(in T value) where T : struct
     {
         return LayerHub.EventCenter.Send(value);
     }
@@ -391,7 +391,7 @@ public abstract class Layer : Node, IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostGlobal<T>(in T value) where T : struct
+    public void Post<T>(in T value) where T : struct
     {
         LayerHub.EventCenter.Post(value);
     }
