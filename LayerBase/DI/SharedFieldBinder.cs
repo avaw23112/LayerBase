@@ -87,10 +87,15 @@ internal static class SharedFieldBinder
                         participant.Instance,
                         item.Field,
                         value);
+
+                    participant.Layer.SharedFields.Add((item.PublicAttribute.Scope, item.PublicAttribute.Key, item.Field.FieldType, true));
                 }
 
                 if (item.FromAttribute != null)
+                {
                     pendingConsumers.Add((participant, item.Field, item.FromAttribute));
+                    participant.Layer.SharedFields.Add((item.FromAttribute.Scope, item.FromAttribute.Key, item.Field.FieldType, false));
+                }
             }
         }
 

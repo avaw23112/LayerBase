@@ -15,6 +15,14 @@ internal sealed class LayerChain
         responsibilityChain = chain;
     }
 
+    internal IEnumerable<Layer> GetNodes()
+    {
+        for (var i = 0; i < _indexedLayers.Length; i++)
+        {
+            if (_indexedLayers[i] != null) yield return _indexedLayers[i]!;
+        }
+    }
+
     internal void AddNode(Node node)
     {
         responsibilityChain.AddLast(node);

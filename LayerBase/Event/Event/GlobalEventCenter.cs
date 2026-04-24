@@ -1092,12 +1092,12 @@ public sealed class GlobalEventCenter
             Unsafe.Add(ref hBase, start)(in value);
             Unsafe.Add(ref hBase, start + 1)(in value);
 
-            if (count >= 3) Unsafe.Add(ref hBase, start + 2)(in value); 
-            if (count >= 4) Unsafe.Add(ref hBase, start + 3)(in value);
-            if (count >= 5) Unsafe.Add(ref hBase, start + 4)(in value);
-            if (count >= 6) Unsafe.Add(ref hBase, start + 5)(in value);
-            if (count >= 7) Unsafe.Add(ref hBase, start + 6)(in value); 
-            if (count >= 8) Unsafe.Add(ref hBase, start + 7)(in value);
+            if (count >= 3) Unsafe.Add(ref hBase, start + 2)(in value);else return;
+            if (count >= 4) Unsafe.Add(ref hBase, start + 3)(in value);else return;
+            if (count >= 5) Unsafe.Add(ref hBase, start + 4)(in value);else return;
+            if (count >= 6) Unsafe.Add(ref hBase, start + 5)(in value);else return;
+            if (count >= 7) Unsafe.Add(ref hBase, start + 6)(in value);else return;
+            if (count >= 8) Unsafe.Add(ref hBase, start + 7)(in value);else return;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

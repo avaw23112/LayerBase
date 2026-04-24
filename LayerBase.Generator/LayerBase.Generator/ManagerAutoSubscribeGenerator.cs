@@ -159,12 +159,14 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
 
                 // 🚀 回归标准模式：直接绑定成员方法委托
                 sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
+                sb.AppendLine($"            layer.SubscribedEvents.Add(typeof({h.Evt}));");
             }
 
             foreach (var p in meta.DelayProps)
             {
                 var parts = p.Split('|');
                 sb.AppendLine($"            this.{parts[0]} = layer.SubscribeDelay<{parts[1]}>();");
+                sb.AppendLine($"            layer.SubscribedEvents.Add(typeof({parts[1]}));");
             }
 
             sb.AppendLine("        }");

@@ -44,6 +44,12 @@ public abstract class Layer : Node, IDisposable
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
     private readonly List<IDisposable> m_subscriptions = new();
+    
+    // Metadata for Topology Report
+    public readonly List<Type> SubscribedEvents = new();
+    public readonly List<(Type Req, Type Resp, Type Handler)> CallHandlers = new();
+    public readonly List<(PublicType Scope, string Key, Type FieldType, bool IsProvider)> SharedFields = new();
+
     private object?[] m_callRouteInvokers = Array.Empty<object?>();
     private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();
     private GlobalEventCenter _center;
@@ -367,6 +373,7 @@ public abstract class Layer : Node, IDisposable
 
             invokers[routeId] = invoker;
             handlerTypes[routeId] = handler.GetType();
+            CallHandlers.Add((typeof(TRequest), typeof(TResponse), handler.GetType()));
             Volatile.Write(ref m_callRouteInvokers, invokers);
             Volatile.Write(ref m_callRouteHandlerTypes, handlerTypes);
         }

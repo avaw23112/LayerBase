@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
@@ -249,7 +250,11 @@ public static class LayerHub
         {
             if (s_chain == null) throw new InvalidOperationException("No layers added.");
             s_chain.Build(1024, true);
-            if (_debugMode) ReportTopology();
+            if (_debugMode)
+            {
+                ReportTopology();
+                ReportInfo(new LayerEventInfo(-1, "System", "TopologySnapshot", GetTopologyMarkdown(), LayerEventInfoType.Info));
+            }
         }
 
         private void ReportTopology()
@@ -258,6 +263,84 @@ public static class LayerHub
             var summary = s_chain.GetTopologySummary();
             ReportInfo(new LayerEventInfo(-1, "System", "Topology", summary, LayerEventInfoType.Info));
         }
+    }
+
+    public static string GetTopologyMarkdown()
+    {
+        if (s_chain == null) return "No layers built.";
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("# LayerBase Topology Snapshot");
+        sb.AppendLine();
+
+        // 1. Layer Overview
+        sb.AppendLine("## 1. Layers");
+        sb.AppendLine("| Index | Layer Type | Active Logic |");
+        sb.AppendLine("| :--- | :--- | :--- |");
+        foreach (var layer in s_chain.GetNodes().OfType<Layers.Layer>())
+        {
+            sb.AppendLine($"| {layer.RouteIndex} | {layer.GetType().Name} | {layer.HasActiveLogic} |");
+        }
+        sb.AppendLine();
+
+        // 2. Event Subscriptions
+        sb.AppendLine("## 2. Event Subscriptions");
+        sb.AppendLine("| Event Type | Subscribed Layers |");
+        sb.AppendLine("| :--- | :--- |");
+        
+        var eventMap = new Dictionary<Type, List<string>>();
+        foreach (var layer in s_chain.GetNodes().OfType<Layers.Layer>())
+        {
+            // Note: Currently we only capture events explicitly tracked in SubscribedEvents
+            // In a real scenario, we might want to query EventCenter if possible
+            foreach (var evt in layer.SubscribedEvents)
+            {
+                if (!eventMap.TryGetValue(evt, out var layers))
+                    eventMap[evt] = layers = new List<string>();
+                layers.Add(layer.GetType().Name);
+            }
+        }
+
+        if (eventMap.Count == 0) sb.AppendLine("| (None) | |");
+        foreach (var kvp in eventMap.OrderBy(x => x.Key.Name))
+        {
+            sb.AppendLine($"| {kvp.Key.Name} | {string.Join(", ", kvp.Value)} |");
+        }
+        sb.AppendLine();
+
+        // 3. Call Routes
+        sb.AppendLine("## 3. Call Routes");
+        sb.AppendLine("| Request | Response | Target Layer | Handler |");
+        sb.AppendLine("| :--- | :--- | :--- | :--- |");
+        var hasCalls = false;
+        foreach (var layer in s_chain.GetNodes().OfType<Layers.Layer>())
+        {
+            foreach (var call in layer.CallHandlers)
+            {
+                sb.AppendLine($"| {call.Req.Name} | {call.Resp.Name} | {layer.GetType().Name} | {call.Handler.Name} |");
+                hasCalls = true;
+            }
+        }
+        if (!hasCalls) sb.AppendLine("| (None) | | | |");
+        sb.AppendLine();
+
+        // 4. Shared Fields (Public/From)
+        sb.AppendLine("## 4. Shared Fields");
+        sb.AppendLine("| Scope | Key | Type | Role | Layer |");
+        sb.AppendLine("| :--- | :--- | :--- | :--- | :--- |");
+        var hasFields = false;
+        foreach (var layer in s_chain.GetNodes().OfType<Layers.Layer>())
+        {
+            foreach (var field in layer.SharedFields)
+            {
+                var role = field.IsProvider ? "**Public**" : "From";
+                sb.AppendLine($"| {field.Scope} | `{field.Key}` | {field.FieldType.Name} | {role} | {layer.GetType().Name} |");
+                hasFields = true;
+            }
+        }
+        if (!hasFields) sb.AppendLine("| (None) | | | | |");
+        
+        return sb.ToString();
     }
 
     public readonly struct LayerCallTarget<TLayer> where TLayer : Layers.Layer
