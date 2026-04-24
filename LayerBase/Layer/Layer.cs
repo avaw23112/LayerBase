@@ -50,7 +50,7 @@ public abstract class Layer : Node, IDisposable
     public readonly List<Type> ProducedEvents = new(); // 新增：产生的事件
     public readonly List<(Type Req, Type Resp, Type Handler)> CallHandlers = new();
     public readonly List<Type> InvokedCalls = new(); // 新增：发出的 Call
-    public readonly List<(PublicType Scope, string Key, Type FieldType, bool IsProvider)> SharedFields = new();
+    public readonly List<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> SharedFields = new();
 
     private object?[] m_callRouteInvokers = Array.Empty<object?>();
     private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();

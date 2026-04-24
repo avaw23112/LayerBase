@@ -30,7 +30,7 @@ public sealed partial class SharedStateReaderService : IService
 
 public sealed class InventoryStorageModule : ILayerContext
 {
-    [Public(PublicType.Service, "items")]
+    [Public(typeof(SharedInventoryService), "items")]
     private List<string> _items = new();
 
     public void Add(string item)
@@ -41,7 +41,7 @@ public sealed class InventoryStorageModule : ILayerContext
 
 public sealed class InventoryQueryModule : ILayerContext
 {
-    [From(PublicType.Service, "items")]
+    [From(typeof(SharedInventoryService), "items")]
     private IReadOnlyList<string> _items = default!;
 
     public int Count()
@@ -52,7 +52,7 @@ public sealed class InventoryQueryModule : ILayerContext
 
 public sealed class InventoryStateModule : ILayerContext
 {
-    [Public(PublicType.Layer, "equip-state")]
+    [Public(typeof(SharedFieldLayer), "equip-state")]
     private Dictionary<string, bool> _equipped = new();
 
     public void SetEquipped(string itemName, bool equipped)
@@ -63,7 +63,7 @@ public sealed class InventoryStateModule : ILayerContext
 
 public sealed class InventoryHudModule : ILayerContext
 {
-    [From(PublicType.Layer, "equip-state")]
+    [From(typeof(SharedFieldLayer), "equip-state")]
     private IReadOnlyDictionary<string, bool> _equipped = default!;
 
     public bool IsEquipped(string itemName)

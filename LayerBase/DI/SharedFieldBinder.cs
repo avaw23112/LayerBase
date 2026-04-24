@@ -1,5 +1,8 @@
+using System;
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using LayerBase.Layers;
 
@@ -25,21 +28,21 @@ internal static class SharedFieldBinder
 
     private readonly struct PublishedField
     {
-        public PublishedField(PublicType scope, Layer layer, int serviceScopeId, string key, object owner, FieldInfo field, object value)
+        public PublishedField(Type ownerType, Layer layer, int serviceScopeId, string localKey, object owner, FieldInfo field, object value)
         {
-            Scope = scope;
+            OwnerType = ownerType;
             Layer = layer;
             ServiceScopeId = serviceScopeId;
-            Key = key;
+            LocalKey = localKey;
             Owner = owner;
             Field = field;
             Value = value;
         }
 
-        public PublicType Scope { get; }
+        public Type OwnerType { get; }
         public Layer Layer { get; }
         public int ServiceScopeId { get; }
-        public string Key { get; }
+        public string LocalKey { get; }
         public object Owner { get; }
         public FieldInfo Field { get; }
         public object Value { get; }
@@ -52,7 +55,7 @@ internal static class SharedFieldBinder
         var participantList = participants.ToList();
         if (participantList.Count == 0) return;
 
-        var published = new Dictionary<(PublicType Scope, int LayerId, int ServiceScopeId, string Key), PublishedField>();
+        var published = new Dictionary<(Type OwnerType, string LocalKey), PublishedField>();
         var pendingConsumers = new List<(Participant Participant, FieldInfo Field, FromAttribute Attribute)>();
 
         foreach (var participant in participantList)
@@ -69,46 +72,44 @@ internal static class SharedFieldBinder
                 if (item.PublicAttribute != null)
                 {
                     var value = ResolvePublishedValue(participant.Instance, item.Field, item.PublicAttribute);
-                    var key = CreateScopeKey(item.PublicAttribute.Scope, participant.Layer, participant.ServiceScopeId,
-                        item.PublicAttribute.Key);
+                    var key = (item.PublicAttribute.OwnerType, item.PublicAttribute.LocalKey);
 
                     if (published.TryGetValue(key, out var existing))
                     {
                         throw new InvalidOperationException(
-                            $"Shared field publisher conflict for scope '{item.PublicAttribute.Scope}' and key '{item.PublicAttribute.Key}'. " +
+                            $"Shared field publisher conflict for ownerType '{item.PublicAttribute.OwnerType.FullName}' and localKey '{item.PublicAttribute.LocalKey}'. " +
                             $"Owners: {existing.Owner.GetType().FullName}.{existing.Field.Name} and {participant.Instance.GetType().FullName}.{item.Field.Name}.");
                     }
 
                     published[key] = new PublishedField(
-                        item.PublicAttribute.Scope,
+                        item.PublicAttribute.OwnerType,
                         participant.Layer,
                         participant.ServiceScopeId,
-                        item.PublicAttribute.Key,
+                        item.PublicAttribute.LocalKey,
                         participant.Instance,
                         item.Field,
                         value);
 
-                    participant.Layer.SharedFields.Add((item.PublicAttribute.Scope, item.PublicAttribute.Key, item.Field.FieldType, true));
+                    participant.Layer.SharedFields.Add((item.PublicAttribute.OwnerType, item.PublicAttribute.LocalKey, item.Field.FieldType, true));
                 }
 
                 if (item.FromAttribute != null)
                 {
                     pendingConsumers.Add((participant, item.Field, item.FromAttribute));
-                    participant.Layer.SharedFields.Add((item.FromAttribute.Scope, item.FromAttribute.Key, item.Field.FieldType, false));
+                    participant.Layer.SharedFields.Add((item.FromAttribute.OwnerType, item.FromAttribute.LocalKey, item.Field.FieldType, false));
                 }
             }
         }
 
         foreach (var consumer in pendingConsumers)
         {
-            var key = CreateScopeKey(consumer.Attribute.Scope, consumer.Participant.Layer, consumer.Participant.ServiceScopeId,
-                consumer.Attribute.Key);
+            var key = (consumer.Attribute.OwnerType, consumer.Attribute.LocalKey);
 
             if (!published.TryGetValue(key, out var publisher))
             {
                 throw new InvalidOperationException(
                     $"Shared field consumer '{consumer.Participant.Instance.GetType().FullName}.{consumer.Field.Name}' could not find " +
-                    $"a publisher for scope '{consumer.Attribute.Scope}' and key '{consumer.Attribute.Key}'.");
+                    $"a publisher for ownerType '{consumer.Attribute.OwnerType.FullName}' and localKey '{consumer.Attribute.LocalKey}'.");
             }
 
             if (!TryAdaptValue(publisher.Value, consumer.Field.FieldType, out var adaptedValue))
@@ -116,7 +117,7 @@ internal static class SharedFieldBinder
                 throw new InvalidOperationException(
                     $"Shared field consumer '{consumer.Participant.Instance.GetType().FullName}.{consumer.Field.Name}' " +
                     $"of type '{consumer.Field.FieldType.FullName}' cannot consume publisher '{publisher.Owner.GetType().FullName}.{publisher.Field.Name}' " +
-                    $"of type '{publisher.Field.FieldType.FullName}'.");
+                    $"of type '{publisher.Field.FieldType.FullName}'. Only read-only projections are allowed.");
             }
 
             consumer.Field.SetValue(consumer.Participant.Instance, adaptedValue);
@@ -140,7 +141,7 @@ internal static class SharedFieldBinder
         if (ctor == null || !ctor.IsPublic)
         {
             throw new InvalidOperationException(
-                $"Shared field publisher '{owner.GetType().FullName}.{field.Name}' for scope '{attribute.Scope}' and key '{attribute.Key}' " +
+                $"Shared field publisher '{owner.GetType().FullName}.{field.Name}' for ownerType '{attribute.OwnerType.FullName}' and localKey '{attribute.LocalKey}' " +
                 "must be initialized inline or expose a public parameterless constructor.");
         }
 
@@ -151,7 +152,7 @@ internal static class SharedFieldBinder
 
     private static bool TryAdaptValue(object publishedValue, Type targetType, out object? adaptedValue)
     {
-        if (IsWritableContainerExposure(targetType, publishedValue.GetType()))
+        if (IsWritableContainerExposure(targetType))
         {
             adaptedValue = null;
             return false;
@@ -167,7 +168,7 @@ internal static class SharedFieldBinder
         return false;
     }
 
-    private static bool IsWritableContainerExposure(Type targetType, Type publishedType)
+    private static bool IsWritableContainerExposure(Type targetType)
     {
         if (targetType.IsGenericType)
         {
@@ -176,48 +177,25 @@ internal static class SharedFieldBinder
                 targetDef == typeof(IList<>) ||
                 targetDef == typeof(IDictionary<,>) ||
                 targetDef == typeof(ISet<>) ||
-                targetDef == typeof(IProducerConsumerCollection<>))
+                targetDef == typeof(List<>) ||
+                targetDef == typeof(Dictionary<,>) ||
+                targetDef == typeof(Queue<>) ||
+                targetDef == typeof(Stack<>) ||
+                targetDef == typeof(HashSet<>) ||
+                targetDef == typeof(LinkedList<>) ||
+                targetDef == typeof(ConcurrentDictionary<,>) ||
+                targetDef == typeof(ConcurrentQueue<>) ||
+                targetDef == typeof(ConcurrentStack<>) ||
+                targetDef == typeof(ConcurrentBag<>))
             {
                 return true;
             }
         }
 
-        if (targetType != publishedType) return false;
+        if (targetType == typeof(ICollection) || targetType == typeof(IList) || targetType == typeof(IDictionary))
+            return true;
 
-        if (!targetType.IsGenericType) return typeof(ICollection).IsAssignableFrom(targetType);
-
-        var publishedDef = targetType.GetGenericTypeDefinition();
-        return publishedDef == typeof(List<>) ||
-               publishedDef == typeof(Dictionary<,>) ||
-               publishedDef == typeof(Queue<>) ||
-               publishedDef == typeof(Stack<>) ||
-               publishedDef == typeof(HashSet<>) ||
-               publishedDef == typeof(LinkedList<>) ||
-               publishedDef == typeof(ConcurrentDictionary<,>) ||
-               publishedDef == typeof(ConcurrentQueue<>) ||
-               publishedDef == typeof(ConcurrentStack<>) ||
-               publishedDef == typeof(ConcurrentBag<>);
-    }
-
-    private static (PublicType Scope, int LayerId, int ServiceScopeId, string Key) CreateScopeKey(
-        PublicType scope,
-        Layer layer,
-        int serviceScopeId,
-        string key)
-    {
-        if (scope == PublicType.Service && serviceScopeId <= 0)
-        {
-            throw new InvalidOperationException(
-                $"Shared field key '{key}' uses Service scope outside of a service registration boundary.");
-        }
-
-        return scope switch
-        {
-            PublicType.Global => (scope, -1, -1, key),
-            PublicType.Layer => (scope, layer.RouteIndex, -1, key),
-            PublicType.Service => (scope, layer.RouteIndex, serviceScopeId, key),
-            _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, null)
-        };
+        return false;
     }
 
     private static FieldBindingMetadata[] GetMetadata(Type type)

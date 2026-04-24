@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -33,42 +32,42 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         context.RegisterSourceOutput(allFields, static (spc, pair) => Analyze(spc, pair.Left, pair.Right));
     }
 
-    private static FieldInfo GetFieldInfo(GeneratorAttributeSyntaxContext ctx, bool isPublic)
+    private static FieldInfo? GetFieldInfo(GeneratorAttributeSyntaxContext ctx, bool isPublic)
     {
         var fieldSymbol = (IFieldSymbol)ctx.TargetSymbol;
         var attr = ctx.Attributes[0];
-        
-        var scope = (int)attr.ConstructorArguments[0].Value!;
-        var key = (string)attr.ConstructorArguments[1].Value!;
-        
+
+        if (attr.ConstructorArguments.Length < 2) return null;
+
+        var ownerType = attr.ConstructorArguments[0].Value as ITypeSymbol;
+        var localKey = attr.ConstructorArguments[1].Value as string;
+
+        if (ownerType == null || string.IsNullOrEmpty(localKey)) return null;
+
         return new FieldInfo(
             fieldSymbol.ContainingType,
             fieldSymbol.Name,
             fieldSymbol.Type,
-            scope,
-            key,
+            ownerType,
+            localKey,
             isPublic,
             fieldSymbol.Locations.FirstOrDefault());
     }
 
-    private static void Analyze(SourceProductionContext spc, ImmutableArray<FieldInfo> publics, ImmutableArray<FieldInfo> froms)
+    private static void Analyze(SourceProductionContext spc, ImmutableArray<FieldInfo?> publics, ImmutableArray<FieldInfo?> froms)
     {
+        var validPublics = publics.Where(p => p != null).Select(p => p!).ToImmutableArray();
+        var validFroms = froms.Where(p => p != null).Select(p => p!).ToImmutableArray();
+
         // 1. Check for Public conflicts
         var publicMap = new Dictionary<string, FieldInfo>();
-        foreach (var p in publics)
+        foreach (var p in validPublics)
         {
-            var uniqueKey = $"{p.Scope}_{p.Key}";
-            if (p.Scope == 1) // Layer scope
-            {
-                // In real world, we need to know WHICH layer. 
-                // For simplicity in analyzer, we check within same containing type or context.
-                // But usually Key should be unique per Layer Type.
-                // uniqueKey += "_" + GetOwnerLayer(p.Owner); 
-            }
+            var uniqueKey = $"{p.OwnerType.ToDisplayString()}_{p.LocalKey}";
 
             if (publicMap.TryGetValue(uniqueKey, out var existing))
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.PublicConflict, p.Location, p.Key, p.Owner.Name, existing.Owner.Name));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.PublicConflict, p.Location, p.LocalKey, existing.ContainingType.Name, p.ContainingType.Name));
             }
             else
             {
@@ -77,26 +76,53 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         }
 
         // 2. Check for From matches and type compatibility
-        foreach (var f in froms)
+        foreach (var f in validFroms)
         {
-            var uniqueKey = $"{f.Scope}_{f.Key}";
+            var uniqueKey = $"{f.OwnerType.ToDisplayString()}_{f.LocalKey}";
             if (publicMap.TryGetValue(uniqueKey, out var p))
             {
                 if (!IsTypeCompatible(p.Type, f.Type))
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, f.Location, f.Key, f.Type.Name, p.Type.Name));
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, f.Location, f.LocalKey, f.Type.Name, p.Type.Name));
                 }
             }
             else
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OrphanFrom, f.Location, f.Key));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OrphanFrom, f.Location, f.LocalKey));
             }
         }
     }
 
     private static bool IsTypeCompatible(ITypeSymbol source, ITypeSymbol target)
     {
-        // Basic check: same type or assignable
+        // Enforce ReadOnly projection for all From usages.
+        // Block common writable collections:
+        if (target is INamedTypeSymbol namedTarget && namedTarget.IsGenericType)
+        {
+            var name = namedTarget.ConstructUnboundGenericType().ToDisplayString();
+            if (name.Contains("ICollection<") ||
+                name.Contains("IList<") ||
+                name.Contains("IDictionary<") ||
+                name.Contains("ISet<") ||
+                name.Contains("System.Collections.Generic.List<") ||
+                name.Contains("System.Collections.Generic.Dictionary<") ||
+                name.Contains("System.Collections.Generic.Queue<") ||
+                name.Contains("System.Collections.Generic.Stack<") ||
+                name.Contains("System.Collections.Generic.HashSet<") ||
+                name.Contains("System.Collections.Generic.LinkedList<"))
+            {
+                return false;
+            }
+        }
+
+        if (target.ToDisplayString() == "System.Collections.ICollection" || 
+            target.ToDisplayString() == "System.Collections.IList" || 
+            target.ToDisplayString() == "System.Collections.IDictionary")
+        {
+            return false;
+        }
+
+        // Check compatibility
         return SymbolEqualityComparer.Default.Equals(source, target) || 
                target.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, source)) ||
                InheritsFrom(source, target);
@@ -112,22 +138,22 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
 
     private sealed class FieldInfo
     {
-        public FieldInfo(INamedTypeSymbol owner, string name, ITypeSymbol type, int scope, string key, bool isPublic, Location? location)
+        public FieldInfo(INamedTypeSymbol containingType, string name, ITypeSymbol type, ITypeSymbol ownerType, string localKey, bool isPublic, Location? location)
         {
-            Owner = owner;
+            ContainingType = containingType;
             Name = name;
             Type = type;
-            Scope = scope;
-            Key = key;
+            OwnerType = ownerType;
+            LocalKey = localKey;
             IsPublic = isPublic;
             Location = location;
         }
 
-        public INamedTypeSymbol Owner { get; }
+        public INamedTypeSymbol ContainingType { get; }
         public string Name { get; }
         public ITypeSymbol Type { get; }
-        public int Scope { get; }
-        public string Key { get; }
+        public ITypeSymbol OwnerType { get; }
+        public string LocalKey { get; }
         public bool IsPublic { get; }
         public Location? Location { get; }
     }
@@ -137,7 +163,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public static readonly DiagnosticDescriptor PublicConflict = new(
             "LBG401",
             "Shared field Public conflict",
-            "Key '{0}' is published by multiple owners: {1} and {2}. Shared keys must be unique within their scope.",
+            "LocalKey '{0}' is published by multiple owners: {1} and {2}. Shared keys must be unique within their OwnerType.",
             "Usage",
             DiagnosticSeverity.Error,
             true);
@@ -145,7 +171,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public static readonly DiagnosticDescriptor TypeMismatch = new(
             "LBG402",
             "Shared field type mismatch",
-            "Key '{0}' is consumed as '{1}' but published as '{2}'. Types must be compatible.",
+            "LocalKey '{0}' is consumed as '{1}' but published as '{2}'. Types must be compatible, and [From] only allows read-only projections.",
             "Usage",
             DiagnosticSeverity.Error,
             true);
@@ -153,7 +179,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public static readonly DiagnosticDescriptor OrphanFrom = new(
             "LBG403",
             "Orphan Shared field From",
-            "Key '{0}' is consumed via [From] but no [Public] provider was found in this compilation.",
+            "LocalKey '{0}' is consumed via [From] but no [Public] provider was found in this compilation.",
             "Usage",
             DiagnosticSeverity.Warning,
             true);

@@ -1,40 +1,37 @@
+using System;
+
 namespace LayerBase.DI;
 
-public enum PublicType
-{
-    Global,
-    Layer,
-    Service
-}
+public struct GlobalScope { }
 
 [AttributeUsage(AttributeTargets.Field)]
 public sealed class PublicAttribute : Attribute
 {
-    public PublicAttribute(PublicType scope, string key)
+    public PublicAttribute(Type ownerType, string localKey)
     {
-        if (string.IsNullOrWhiteSpace(key))
-            throw new ArgumentException("Shared field key cannot be null or whitespace.", nameof(key));
+        if (string.IsNullOrWhiteSpace(localKey))
+            throw new ArgumentException("Shared field localKey cannot be null or whitespace.", nameof(localKey));
 
-        Scope = scope;
-        Key = key;
+        OwnerType = ownerType ?? throw new ArgumentNullException(nameof(ownerType));
+        LocalKey = localKey;
     }
 
-    public PublicType Scope { get; }
-    public string Key { get; }
+    public Type OwnerType { get; }
+    public string LocalKey { get; }
 }
 
 [AttributeUsage(AttributeTargets.Field)]
 public sealed class FromAttribute : Attribute
 {
-    public FromAttribute(PublicType scope, string key)
+    public FromAttribute(Type ownerType, string localKey)
     {
-        if (string.IsNullOrWhiteSpace(key))
-            throw new ArgumentException("Shared field key cannot be null or whitespace.", nameof(key));
+        if (string.IsNullOrWhiteSpace(localKey))
+            throw new ArgumentException("Shared field localKey cannot be null or whitespace.", nameof(localKey));
 
-        Scope = scope;
-        Key = key;
+        OwnerType = ownerType ?? throw new ArgumentNullException(nameof(ownerType));
+        LocalKey = localKey;
     }
 
-    public PublicType Scope { get; }
-    public string Key { get; }
+    public Type OwnerType { get; }
+    public string LocalKey { get; }
 }

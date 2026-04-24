@@ -326,7 +326,7 @@ public static class LayerHub
 
         // 4. Shared Fields (Public/From)
         sb.AppendLine("## 4. Shared Fields");
-        sb.AppendLine("| Scope | Key | Type | Role | Layer |");
+        sb.AppendLine("| OwnerType | LocalKey | Type | Role | Layer |");
         sb.AppendLine("| :--- | :--- | :--- | :--- | :--- |");
         var hasFields = false;
         foreach (var layer in s_chain.GetNodes().OfType<Layers.Layer>())
@@ -334,7 +334,7 @@ public static class LayerHub
             foreach (var field in layer.SharedFields)
             {
                 var role = field.IsProvider ? "**Public**" : "From";
-                sb.AppendLine($"| {field.Scope} | `{field.Key}` | {field.FieldType.Name} | {role} | {layer.GetType().Name} |");
+                sb.AppendLine($"| {field.OwnerType.Name} | `{field.Key}` | {field.FieldType.Name} | {role} | {layer.GetType().Name} |");
                 hasFields = true;
             }
         }
@@ -350,8 +350,8 @@ public static class LayerHub
         var allProduced = allLayers.SelectMany(l => l.ProducedEvents).ToHashSet();
         var allCallHandlers = allLayers.SelectMany(l => l.CallHandlers.Select(ch => ch.Req)).ToHashSet();
         var allCallInvoked = allLayers.SelectMany(l => l.InvokedCalls).Concat(CallUsageTracker.GetUsedRequestTypes()).ToHashSet();
-        var allPublicKeys = allLayers.SelectMany(l => l.SharedFields.Where(f => f.IsProvider).Select(f => $"{f.Scope}_{f.Key}")).ToHashSet();
-        var allFromKeys = allLayers.SelectMany(l => l.SharedFields.Where(f => !f.IsProvider).Select(f => $"{f.Scope}_{f.Key}")).ToHashSet();
+        var allPublicKeys = allLayers.SelectMany(l => l.SharedFields.Where(f => f.IsProvider).Select(f => $"{f.OwnerType.FullName}_{f.Key}")).ToHashSet();
+        var allFromKeys = allLayers.SelectMany(l => l.SharedFields.Where(f => !f.IsProvider).Select(f => $"{f.OwnerType.FullName}_{f.Key}")).ToHashSet();
 
         // Check Zombie Events
         foreach (var evt in allSubscribed)

@@ -187,7 +187,7 @@ public sealed class WritableConsumerService : IService
 
 public sealed class PlayerStorageModule : ILayerContext
 {
-    [Public(PublicType.Service, "players")]
+    [Public(typeof(ServiceScopeSharingService), "players")]
     private List<int> _players = new();
 
     public void Add(int playerId)
@@ -198,7 +198,7 @@ public sealed class PlayerStorageModule : ILayerContext
 
 public sealed class PlayerQueryModule : ILayerContext
 {
-    [From(PublicType.Service, "players")]
+    [From(typeof(ServiceScopeSharingService), "players")]
     private IReadOnlyList<int> _players = default!;
 
     public int Count()
@@ -220,7 +220,7 @@ public sealed class PlayerQueryModule : ILayerContext
 
 public sealed class PlayerStateModule : ILayerContext
 {
-    [Public(PublicType.Layer, "player_states")]
+    [Public(typeof(SharedFieldLayer), "player_states")]
     private Dictionary<int, bool> _states = new();
 
     public void SetOnline(int playerId, bool isOnline)
@@ -231,7 +231,7 @@ public sealed class PlayerStateModule : ILayerContext
 
 public sealed class PlayerHudModule : ILayerContext
 {
-    [From(PublicType.Layer, "player_states")]
+    [From(typeof(SharedFieldLayer), "player_states")]
     private IReadOnlyDictionary<int, bool> _states = default!;
 
     public bool IsOnline(int playerId)
@@ -242,7 +242,7 @@ public sealed class PlayerHudModule : ILayerContext
 
 public sealed class SharedReferencePublisherModule : ILayerContext
 {
-    [Public(PublicType.Global, "shared-ref")]
+    [Public(typeof(GlobalScope), "shared-ref")]
     private SharedReferenceBox _box = new();
 
     public void SetValue(string value)
@@ -253,7 +253,7 @@ public sealed class SharedReferencePublisherModule : ILayerContext
 
 public sealed class SharedReferenceConsumerModule : ILayerContext
 {
-    [From(PublicType.Global, "shared-ref")]
+    [From(typeof(GlobalScope), "shared-ref")]
     private SharedReferenceBox _box = default!;
 
     public string ReadValue()
@@ -264,25 +264,25 @@ public sealed class SharedReferenceConsumerModule : ILayerContext
 
 public sealed class DuplicateLayerPublisherModuleA : ILayerContext
 {
-    [Public(PublicType.Layer, "duplicate-layer-key")]
+    [Public(typeof(SharedFieldLayer), "duplicate-layer-key")]
     private Dictionary<int, int> _state = new();
 }
 
 public sealed class DuplicateLayerPublisherModuleB : ILayerContext
 {
-    [Public(PublicType.Layer, "duplicate-layer-key")]
+    [Public(typeof(SharedFieldLayer), "duplicate-layer-key")]
     private Dictionary<int, int> _state = new();
 }
 
 public sealed class MissingPublisherConsumerModule : ILayerContext
 {
-    [From(PublicType.Layer, "missing-layer-key")]
+    [From(typeof(SharedFieldLayer), "missing-layer-key")]
     private IReadOnlyDictionary<int, int> _state = default!;
 }
 
 public sealed class WritableListConsumerModule : ILayerContext
 {
-    [From(PublicType.Service, "players")]
+    [From(typeof(ServiceScopeSharingService), "players")]
     private List<int> _players = default!;
 }
 
