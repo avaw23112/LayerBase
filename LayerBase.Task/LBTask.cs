@@ -156,10 +156,7 @@ public readonly struct LBTask
             lock (s_lock)
             {
                 HeapPush(work);
-                if (ReferenceEquals(s_heap[0], work)) 
-                {
-                    ArmTimer(due);
-                }
+                if (ReferenceEquals(s_heap[0], work)) ArmTimer(due);
             }
         }
 
@@ -189,10 +186,7 @@ public readonly struct LBTask
                     dueWork = HeapPop();
                 }
 
-                if (dueWork != null)
-                {
-                    ThreadPool.QueueUserWorkItem(DelayWorkItem.OnTimer, dueWork);
-                }
+                if (dueWork != null) ThreadPool.QueueUserWorkItem(DelayWorkItem.OnTimer, dueWork);
             }
         }
 

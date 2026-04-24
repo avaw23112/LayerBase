@@ -32,8 +32,8 @@ internal sealed class ArchTaskSource : IArchTaskSource
 
     private Action? _continuation;
     private Exception? _exception;
-    private int _status; // 0 = pending, 1 = completed
     private int _released; // 0 = in use, 1 = released
+    private int _status;   // 0 = pending, 1 = completed
 
     private ArchTaskSource()
     {
@@ -90,10 +90,7 @@ internal sealed class ArchTaskSource : IArchTaskSource
 
     public void TryRelease()
     {
-        if (Interlocked.Exchange(ref _released, 1) == 0)
-        {
-            Pool.Return(this);
-        }
+        if (Interlocked.Exchange(ref _released, 1) == 0) Pool.Return(this);
     }
 
     public static ArchTaskSource Rent()
@@ -138,9 +135,9 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
 
     private Action? _continuation;
     private Exception? _exception;
+    private int _released; // 0 = in use, 1 = released
     private T _result = default!;
     private int _status; // 0 = pending, 1 = completed
-    private int _released; // 0 = in use, 1 = released
 
     private ArchTaskSource()
     {
@@ -200,10 +197,7 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
 
     public void TryRelease()
     {
-        if (Interlocked.Exchange(ref _released, 1) == 0)
-        {
-            Pool.Return(this);
-        }
+        if (Interlocked.Exchange(ref _released, 1) == 0) Pool.Return(this);
     }
 
     public static ArchTaskSource<T> Rent()

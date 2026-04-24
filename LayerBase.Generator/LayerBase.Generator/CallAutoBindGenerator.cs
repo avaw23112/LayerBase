@@ -22,17 +22,18 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var callMethods = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                CallAttributeMetadataName,
-                static (node, _) => node is MethodDeclarationSyntax,
-                static (ctx, _) => new CallMethodCandidate((IMethodSymbol)ctx.TargetSymbol))
-            .Collect();
+                                 .ForAttributeWithMetadataName(
+                                     CallAttributeMetadataName,
+                                     static (node, _) => node is MethodDeclarationSyntax,
+                                     static (ctx,  _) => new CallMethodCandidate((IMethodSymbol)ctx.TargetSymbol))
+                                 .Collect();
 
         var source = context.CompilationProvider.Combine(callMethods);
         context.RegisterSourceOutput(source, static (spc, value) => Execute(spc, value.Left, value.Right));
     }
 
-    private static void Execute(SourceProductionContext spc, Compilation compilation, ImmutableArray<CallMethodCandidate> candidates)
+    private static void Execute(SourceProductionContext             spc, Compilation compilation,
+                                ImmutableArray<CallMethodCandidate> candidates)
     {
         if (candidates.IsDefaultOrEmpty) return;
 
@@ -53,13 +54,15 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
 
             if (!IsPartial(ownerType))
             {
-                diagnostics.Add(Diagnostic.Create(Diagnostics.OwnerMustBePartial, location, ownerType.ToDisplayString()));
+                diagnostics.Add(
+                    Diagnostic.Create(Diagnostics.OwnerMustBePartial, location, ownerType.ToDisplayString()));
                 continue;
             }
 
             if (ownerType.IsAbstract)
             {
-                diagnostics.Add(Diagnostic.Create(Diagnostics.OwnerCannotBeAbstract, location, ownerType.ToDisplayString()));
+                diagnostics.Add(Diagnostic.Create(Diagnostics.OwnerCannotBeAbstract, location,
+                    ownerType.ToDisplayString()));
                 continue;
             }
 
@@ -102,13 +105,14 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
     }
 
     private static bool TryCreateBinding(
-        IMethodSymbol method,
-        INamedTypeSymbol ownerType,
-        CallOwnerKind ownerKind,
+        IMethodSymbol          method,
+        INamedTypeSymbol       ownerType,
+        CallOwnerKind          ownerKind,
         out CallMethodBinding? binding,
-        out string? expectedSignature)
+        out string?            expectedSignature)
     {
-        expectedSignature = "LBTask<TResponse> Handle(TRequest request) or LBTask<TResponse> Handle(TRequest request, CancellationToken cancellationToken)";
+        expectedSignature =
+            "LBTask<TResponse> Handle(TRequest request) or LBTask<TResponse> Handle(TRequest request, CancellationToken cancellationToken)";
         binding = null;
 
         if (method.IsStatic || method.IsGenericMethod || method.ReturnsVoid)
@@ -127,9 +131,7 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
             if (cancellationParameter.RefKind != RefKind.None ||
                 cancellationParameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) !=
                 "global::System.Threading.CancellationToken")
-            {
                 return false;
-            }
         }
 
         if (requestParameter.Type is not ITypeSymbol requestType || !requestType.IsValueType)
@@ -137,10 +139,9 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
 
         if (method.ReturnType is not INamedTypeSymbol returnType ||
             !returnType.IsGenericType ||
-            returnType.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::LayerBase.Async.LBTask<T>")
-        {
+            returnType.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) !=
+            "global::LayerBase.Async.LBTask<T>")
             return false;
-        }
 
         var responseType = returnType.TypeArguments[0];
         if (!responseType.IsValueType)
@@ -150,7 +151,8 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
             ownerType,
             ownerKind,
             method.Name,
-            SanitizeIdentifier(method.Name + "_" + method.Locations.FirstOrDefault()?.GetLineSpan().StartLinePosition.Line),
+            SanitizeIdentifier(method.Name + "_" +
+                               method.Locations.FirstOrDefault()?.GetLineSpan().StartLinePosition.Line),
             requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             responseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             method.Parameters.Length == 2);
@@ -158,9 +160,9 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
     }
 
     private static CallOwnerKind GetOwnerKind(
-        INamedTypeSymbol ownerType,
-        INamedTypeSymbol layerSymbol,
-        INamedTypeSymbol serviceSymbol,
+        INamedTypeSymbol  ownerType,
+        INamedTypeSymbol  layerSymbol,
+        INamedTypeSymbol  serviceSymbol,
         INamedTypeSymbol? layerContextSymbol)
     {
         if (InheritsFrom(ownerType, layerSymbol))
@@ -185,10 +187,8 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
     private static bool InheritsFrom(INamedTypeSymbol ownerType, INamedTypeSymbol baseType)
     {
         for (var current = ownerType; current != null; current = current.BaseType)
-        {
             if (SymbolEqualityComparer.Default.Equals(current, baseType))
                 return true;
-        }
 
         return false;
     }
@@ -196,13 +196,9 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
     private static bool IsPartial(INamedTypeSymbol type)
     {
         foreach (var syntaxRef in type.DeclaringSyntaxReferences)
-        {
             if (syntaxRef.GetSyntax() is TypeDeclarationSyntax typeDeclaration &&
                 typeDeclaration.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
-            {
                 return true;
-            }
-        }
 
         return false;
     }
@@ -228,22 +224,21 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
         }
 
         builder.Append("partial class ").Append(ownerIdentifier)
-            .AppendLine(" : global::LayerBase.Call.IAutoCallBinder");
+               .AppendLine(" : global::LayerBase.Call.IAutoCallBinder");
         builder.AppendLine("{");
-        builder.AppendLine("    void global::LayerBase.Call.IAutoCallBinder.AutoBindCalls(global::LayerBase.Layers.Layer layer)");
+        builder.AppendLine(
+            "    void global::LayerBase.Call.IAutoCallBinder.AutoBindCalls(global::LayerBase.Layers.Layer layer)");
         builder.AppendLine("    {");
 
         foreach (var binding in bindings)
-        {
             builder.Append("        global::LayerBase.Call.LayerCallRegistrationBridge.Register<")
-                .Append(binding.RequestDisplay)
-                .Append(", ")
-                .Append(binding.ResponseDisplay)
-                .Append(">(layer, new __GeneratedCallHandler_")
-                .Append(binding.GeneratedIdentifier)
-                .Append("(this));")
-                .AppendLine();
-        }
+                   .Append(binding.RequestDisplay)
+                   .Append(", ")
+                   .Append(binding.ResponseDisplay)
+                   .Append(">(layer, new __GeneratedCallHandler_")
+                   .Append(binding.GeneratedIdentifier)
+                   .Append("(this));")
+                   .AppendLine();
 
         builder.AppendLine("    }");
         builder.AppendLine();
@@ -251,24 +246,24 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
         foreach (var binding in bindings)
         {
             builder.Append("    private sealed class __GeneratedCallHandler_")
-                .Append(binding.GeneratedIdentifier)
-                .Append(" : global::LayerBase.Call.ILayerCallHandler<")
-                .Append(binding.RequestDisplay)
-                .Append(", ")
-                .Append(binding.ResponseDisplay)
-                .AppendLine(">");
+                   .Append(binding.GeneratedIdentifier)
+                   .Append(" : global::LayerBase.Call.ILayerCallHandler<")
+                   .Append(binding.RequestDisplay)
+                   .Append(", ")
+                   .Append(binding.ResponseDisplay)
+                   .AppendLine(">");
             builder.AppendLine("    {");
             builder.Append("        private readonly ").Append(ownerDisplay).AppendLine(" _owner;");
             builder.AppendLine();
             builder.Append("        public __GeneratedCallHandler_").Append(binding.GeneratedIdentifier).Append("(")
-                .Append(ownerDisplay).AppendLine(" owner)");
+                   .Append(ownerDisplay).AppendLine(" owner)");
             builder.AppendLine("        {");
             builder.AppendLine("            _owner = owner;");
             builder.AppendLine("        }");
             builder.AppendLine();
             builder.Append("        public global::LayerBase.Async.LBTask<").Append(binding.ResponseDisplay)
-                .Append("> HandleAsync(").Append(binding.RequestDisplay)
-                .AppendLine(" request, global::System.Threading.CancellationToken cancellationToken = default)");
+                   .Append("> HandleAsync(").Append(binding.RequestDisplay)
+                   .AppendLine(" request, global::System.Threading.CancellationToken cancellationToken = default)");
             builder.AppendLine("        {");
             builder.Append("            return _owner.").Append(binding.MethodName).Append("(request");
             if (binding.TakesCancellationToken)
@@ -358,12 +353,12 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
     {
         public CallMethodBinding(
             INamedTypeSymbol ownerType,
-            CallOwnerKind ownerKind,
-            string methodName,
-            string generatedIdentifier,
-            string requestDisplay,
-            string responseDisplay,
-            bool takesCancellationToken)
+            CallOwnerKind    ownerKind,
+            string           methodName,
+            string           generatedIdentifier,
+            string           requestDisplay,
+            string           responseDisplay,
+            bool             takesCancellationToken)
         {
             OwnerType = ownerType;
             OwnerKind = ownerKind;

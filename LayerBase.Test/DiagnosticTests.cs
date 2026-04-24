@@ -75,7 +75,7 @@ public class DiagnosticTests
 
         LayerHub.CreateLayers()
                 .Push(layer)
-                .SetDebug(true)
+                .SetDebug()
                 .Build();
 
         var topologyLog = _logs.Find(l => l.Source == "System" && l.EventName == "Topology");
@@ -93,7 +93,7 @@ public class DiagnosticTests
 
         LayerHub.CreateLayers()
                 .Push(layer)
-                .SetDebug(true)
+                .SetDebug()
                 .Build(); // 期待在此处触发 TopologyAudit
 
         var warningLog = _logs.Find(l => l.Source == "TopologyAudit" && l.Type == LayerEventInfoType.Warning);

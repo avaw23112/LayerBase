@@ -2,7 +2,6 @@ using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Layers;
-using NUnit.Framework;
 
 namespace EventsTest;
 
@@ -21,7 +20,7 @@ public class NotifyTests
         var layer = new TestLayer();
         var manager = new TestNotifyManager();
         layer.RegisterService(manager);
-        
+
         LayerHub.CreateLayers().Push(layer).Build();
 
         LayerHub.Send(new TestEvent { Value = 42 });
@@ -38,18 +37,9 @@ public class NotifyTests
 
         LayerHub.CreateLayers().Push(layer).Build();
 
-        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
-        {
-            e.Trace!.Add("First");
-        });
-        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
-        {
-            e.Trace!.Add("Second");
-        });
-        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
-        {
-            e.Trace!.Add("Third");
-        });
+        layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("First"); });
+        layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("Second"); });
+        layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("Third"); });
 
         LayerHub.Send(new TestEvent { Value = 7, Trace = trace });
 
@@ -64,25 +54,18 @@ public class NotifyTests
 
         LayerHub.CreateLayers().Push(layer).Build();
 
-        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
-        {
-            e.Trace!.Add("First");
-        });
-        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
-        {
-            e.Trace!.Add("Second");
-        });
-        layer.SubscribeNotify<TestEvent>(static (in TestEvent e) =>
-        {
-            e.Trace!.Add("Third");
-        });
+        layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("First"); });
+        layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("Second"); });
+        layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("Third"); });
 
         layer.SendLocal(new TestEvent { Value = 9, Trace = trace });
 
         Assert.That(trace, Is.EqualTo(new[] { "First", "Second", "Third" }));
     }
 
-    public class TestLayer : Layer { }
+    public class TestLayer : Layer
+    {
+    }
 
     public struct TestEvent
     {
@@ -93,8 +76,8 @@ public class NotifyTests
 
 public partial class TestNotifyManager : IService
 {
-    public int ReceivedValue;
     public int CallCount;
+    public int ReceivedValue;
 
     public void ConfigureServices(IServiceCollection services)
     {

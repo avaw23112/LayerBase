@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
@@ -6,7 +7,6 @@ using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Order;
 using BenchmarkDotNet.Reports;
 using BenchmarkDotNet.Running;
-using System.Runtime.CompilerServices;
 using LayerBase;
 using LayerBase.Async;
 using LayerBase.Call;
@@ -31,7 +31,7 @@ public sealed class LayerBaseBenchmarkConfig : ManualConfig
 
     private static IConfig Create()
     {
-        var config = ManualConfig.Create(DefaultConfig.Instance);
+        var config = Create(DefaultConfig.Instance);
         config.AddJob(Job.ShortRun);
         config.AddLogicalGroupRules(BenchmarkLogicalGroupRule.ByCategory);
         config.AddColumn(CategoriesColumn.Default, StatisticColumn.Min, StatisticColumn.Max, RankColumn.Arabic);
@@ -65,8 +65,10 @@ public static class BenchmarkSink
 
 public class DirectVsFrameworkDispatchBench : EventBenchmarkBase
 {
-    private readonly EventHandleDelegate<BenchEvent> _directSync = static (in BenchEvent _) => EventHandledState.Continue;
     private readonly EventNotifyDelegate<NotifyEvent> _directNotify = static (in NotifyEvent _) => { };
+
+    private readonly EventHandleDelegate<BenchEvent> _directSync = static (in BenchEvent _) =>
+        EventHandledState.Continue;
 
     [GlobalSetup]
     public void Setup()
@@ -111,8 +113,7 @@ public class DirectVsFrameworkDispatchBench : EventBenchmarkBase
 
 public class FanoutScalingBench : EventBenchmarkBase
 {
-    [Params(1, 4, 16)]
-    public int SubscriberCount { get; set; }
+    [Params(1, 4, 16)] public int SubscriberCount { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -217,6 +218,7 @@ public class RoutingShapeBench : EventBenchmarkBase
         for (var i = 0; i < OneMillion; i++) LayerHub.Send(RoutedEvent.Instance);
     }
 }
+
 public class CallSubsystemBench : EventBenchmarkBase
 {
     // _baseline:
@@ -241,7 +243,7 @@ public class CallSubsystemBench : EventBenchmarkBase
         // 初始化一个非零种子。
         // 这里只是随便给一个固定初始值，不要求“随机质量”，
         // 只要求后续能稳定地产生“每次都不一样”的请求。
-        _seed = unchecked((int)0x12345678);
+        _seed = unchecked(0x12345678);
     }
 
     [Benchmark(Baseline = true, Description = "直接方法调用 (Call基线) - 10万次")]
@@ -332,8 +334,8 @@ public class CallSubsystemBench : EventBenchmarkBase
         // 1. 这里固定命中 CallBenchLayer。
         // 2. 由 LayerHub 完成层定位、请求类型匹配、处理器调度。
         return LayerHub.CallAsync<CallBenchLayer, CallRequest, CallResponse>(request)
-            .GetAwaiter()
-            .GetResult();
+                       .GetAwaiter()
+                       .GetResult();
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -352,6 +354,7 @@ public class CallSubsystemBench : EventBenchmarkBase
         return unchecked(state * 1664525 + 1013904223);
     }
 }
+
 public class PostPumpBench : EventBenchmarkBase
 {
     private PumpDrivenLayer _singleLayer = null!;
@@ -596,10 +599,15 @@ public class MultiLayer_Full_Notify_Bench : EventBenchmarkBase
 
 public partial class FullNotifyBenchManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
 
     [SubscribeNotify]
-    public void Handle(in FullNotifyEvent e) { }
+    public void Handle(in FullNotifyEvent e)
+    {
+    }
 }
 
 public struct FullNotifyEvent
@@ -701,6 +709,7 @@ public class Typical_Heavy_180_Bench : EventBenchmarkBase
         for (var i = 0; i < TenThousand; i++) LayerHub.Send(BenchEvent.Instance);
     }
 }
+
 public class Typical_Heavy_180_Bench_Notify : EventBenchmarkBase
 {
     [GlobalSetup]
@@ -726,17 +735,26 @@ public class Typical_Heavy_180_Bench_Notify : EventBenchmarkBase
         for (var i = 0; i < TenThousand; i++) LayerHub.Send(NotifyEvent.Instance);
     }
 }
+
 public partial class NotifyBenchManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
 
     [SubscribeNotify]
-    public void Handle(in NotifyEvent e) { }
+    public void Handle(in NotifyEvent e)
+    {
+    }
 }
 
 public partial class AsyncBenchManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
 
     [SubscribeAsync]
     public LBTask Handle(AsyncBenchEvent e)
@@ -858,72 +876,153 @@ public sealed class CallBenchHandler : ILayerCallHandler<CallRequest, CallRespon
     }
 }
 
-
 public partial class FanoutSyncManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-    [Subscribe] public EventHandledState Handle(in BenchEvent e) => EventHandledState.Continue;
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
+
+    [Subscribe]
+    public EventHandledState Handle(in BenchEvent e)
+    {
+        return EventHandledState.Continue;
+    }
 }
 
 public partial class FanoutNotifyManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-    [SubscribeNotify] public void Handle(in NotifyEvent e) { }
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
+
+    [SubscribeNotify]
+    public void Handle(in NotifyEvent e)
+    {
+    }
 }
 
 public partial class ContinueOnlyManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-    [Subscribe] public EventHandledState Handle(in ContinueOnlyEvent e) => EventHandledState.Continue;
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
+
+    [Subscribe]
+    public EventHandledState Handle(in ContinueOnlyEvent e)
+    {
+        return EventHandledState.Continue;
+    }
 }
 
 public partial class FirstHandledManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-    [Subscribe] public EventHandledState Handle(in FirstHandledEvent e) => EventHandledState.Handled;
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
+
+    [Subscribe]
+    public EventHandledState Handle(in FirstHandledEvent e)
+    {
+        return EventHandledState.Handled;
+    }
 }
 
 public partial class FirstHandledContinueManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-    [Subscribe] public EventHandledState Handle(in FirstHandledEvent e) => EventHandledState.Continue;
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
+
+    [Subscribe]
+    public EventHandledState Handle(in FirstHandledEvent e)
+    {
+        return EventHandledState.Continue;
+    }
 }
 
 public partial class LastHandledContinueManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-    [Subscribe] public EventHandledState Handle(in LastHandledEvent e) => EventHandledState.Continue;
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
+
+    [Subscribe]
+    public EventHandledState Handle(in LastHandledEvent e)
+    {
+        return EventHandledState.Continue;
+    }
 }
 
 public partial class LastHandledManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-    [Subscribe] public EventHandledState Handle(in LastHandledEvent e) => EventHandledState.Handled;
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
+
+    [Subscribe]
+    public EventHandledState Handle(in LastHandledEvent e)
+    {
+        return EventHandledState.Handled;
+    }
 }
 
 public partial class RoutedManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-    [Subscribe] public EventHandledState Handle(in RoutedEvent e) => EventHandledState.Continue;
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
+
+    [Subscribe]
+    public EventHandledState Handle(in RoutedEvent e)
+    {
+        return EventHandledState.Continue;
+    }
 }
 
 public partial class PumpManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-    [Subscribe] public EventHandledState Handle(in PumpEvent e) => EventHandledState.Continue;
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
+
+    [Subscribe]
+    public EventHandledState Handle(in PumpEvent e)
+    {
+        return EventHandledState.Continue;
+    }
 }
 
 public partial class ParallelNoopManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-    [SubscribeParallel] public EventHandledState Handle(in ParallelBenchEvent e) => EventHandledState.Continue;
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
+
+    [SubscribeParallel]
+    public EventHandledState Handle(in ParallelBenchEvent e)
+    {
+        return EventHandledState.Continue;
+    }
 }
 
 public partial class ParallelWorkloadManager : IService
 {
-    public void ConfigureServices(IServiceCollection s) => s.AddSingleton(this);
-
     private int _sink;
+
+    public void ConfigureServices(IServiceCollection s)
+    {
+        s.AddSingleton(this);
+    }
 
     [SubscribeParallel]
     public EventHandledState Handle(in ParallelWorkloadEvent value)

@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using LayerBase.Core.Event;
 
 namespace LayerBase.Core.UnmanagedList;
@@ -15,13 +14,13 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
 {
     private readonly GlobalEventCenter _center;
     private readonly int _layerIndex;
+    private readonly object _lock = new();
     private readonly Action<IUnmanagedList> _onDirty;
     private readonly PooledChunkedOverwriteQueue<Event<Value>> _queue;
-    private readonly object _lock = new();
-    
+    private bool _disposed;
+
     private Event<Value>[]? _forwardBuffer;
     private int _forwardCount;
-    private bool _disposed;
     private int _isDirty;
 
     public UnmanagedList(GlobalEventCenter center, int layerIndex, Action<IUnmanagedList> onDirty)
@@ -43,16 +42,6 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
         }
     }
 
-    private void ReturnBuffer()
-    {
-        if (_forwardBuffer != null)
-        {
-            ArrayPool<Event<Value>>.Shared.Return(_forwardBuffer);
-            _forwardBuffer = null;
-        }
-        _forwardCount = 0;
-    }
-
     public void MarkClean()
     {
         Interlocked.Exchange(ref _isDirty, 0);
@@ -61,7 +50,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     public void Pump()
     {
         MarkClean();
-        
+
         // 快速检查，减少锁竞争
         if (_queue.IsEmpty) return;
 
@@ -110,6 +99,17 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
         if (forwarded) _center.WakeLayer(lastTargetLayer);
     }
 
+    private void ReturnBuffer()
+    {
+        if (_forwardBuffer != null)
+        {
+            ArrayPool<Event<Value>>.Shared.Return(_forwardBuffer);
+            _forwardBuffer = null;
+        }
+
+        _forwardCount = 0;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void ProcessEvent(in Event<Value> @event, ref bool forwarded, ref int lastTargetLayer)
     {
@@ -128,7 +128,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
         {
             if (lastTargetLayer != -1 && lastTargetLayer != nextLayer) FlushForwardBuffer(ref forwarded);
             lastTargetLayer = nextLayer;
-            
+
             // 使用池化内存作为临时缓冲区
             _forwardBuffer ??= ArrayPool<Event<Value>>.Shared.Rent(256);
             if (_forwardCount >= _forwardBuffer.Length)
@@ -138,6 +138,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
                 ArrayPool<Event<Value>>.Shared.Return(_forwardBuffer);
                 _forwardBuffer = newBuffer;
             }
+
             _forwardBuffer[_forwardCount++] = @event;
         }
     }
@@ -146,7 +147,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     private void FlushForwardBuffer(ref bool forwarded)
     {
         if (_forwardCount == 0 || _forwardBuffer == null) return;
-        
+
         var target = _forwardBuffer[0].FindNextTarget(_layerIndex, _center);
         var span = _forwardBuffer.AsSpan(0, _forwardCount);
 
@@ -166,7 +167,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
             if (_disposed) return;
             _queue.EnqueueOverwrite(val);
         }
-        
+
         if (Interlocked.CompareExchange(ref _isDirty, 1, 0) == 0) _onDirty(this);
     }
 

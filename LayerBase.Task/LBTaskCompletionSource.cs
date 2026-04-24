@@ -11,12 +11,18 @@ public sealed class LBTaskCompletionSource : IDisposable
         _source = ArchTaskSource.Rent();
     }
 
+    public LBTask Task => new(_source);
+
+    public void Dispose()
+    {
+        DisposeInternal();
+        GC.SuppressFinalize(this);
+    }
+
     ~LBTaskCompletionSource()
     {
         DisposeInternal();
     }
-
-    public LBTask Task => new(_source);
 
     public void SetResult()
     {
@@ -72,19 +78,11 @@ public sealed class LBTaskCompletionSource : IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        DisposeInternal();
-        GC.SuppressFinalize(this);
-    }
-
     private void DisposeInternal()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
-        {
             // 如果任务从未完成，强制归还 Source 到池中
             _source.TryRelease();
-        }
     }
 }
 
@@ -99,12 +97,18 @@ public sealed class LBTaskCompletionSource<T> : IDisposable
         _source = ArchTaskSource<T>.Rent();
     }
 
+    public LBTask<T> Task => new(_source);
+
+    public void Dispose()
+    {
+        DisposeInternal();
+        GC.SuppressFinalize(this);
+    }
+
     ~LBTaskCompletionSource()
     {
         DisposeInternal();
     }
-
-    public LBTask<T> Task => new(_source);
 
     public void SetResult(T value)
     {
@@ -160,17 +164,8 @@ public sealed class LBTaskCompletionSource<T> : IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        DisposeInternal();
-        GC.SuppressFinalize(this);
-    }
-
     private void DisposeInternal()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0)
-        {
-            _source.TryRelease();
-        }
+        if (Interlocked.Exchange(ref _disposed, 1) == 0) _source.TryRelease();
     }
 }

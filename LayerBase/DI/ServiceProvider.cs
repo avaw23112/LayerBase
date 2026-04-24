@@ -6,25 +6,7 @@ namespace LayerBase.DI;
 
 public sealed class ServiceProvider : IServiceProvider, IDisposable
 {
-    internal readonly struct ResolvedService
-    {
-        public ResolvedService(ServiceDescriptor descriptor, object instance)
-        {
-            Descriptor = descriptor;
-            Instance = instance;
-        }
-
-        public ServiceDescriptor Descriptor { get; }
-        public object Instance { get; }
-    }
-
     private static ServiceProvider _root = new();
-
-    public static void ResetRoot()
-    {
-        var oldRoot = Interlocked.Exchange(ref _root, new ServiceProvider());
-        oldRoot.Dispose();
-    }
 
     private readonly ConcurrentDictionary<Type, Lazy<object>> _instances = new();
     private readonly ConcurrentDictionary<Type, ServiceDescriptor> _map;
@@ -76,6 +58,12 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
         if (service == null)
             throw new InvalidOperationException($"Service not registered: {typeof(T)}");
         return (T)service;
+    }
+
+    public static void ResetRoot()
+    {
+        var oldRoot = Interlocked.Exchange(ref _root, new ServiceProvider());
+        oldRoot.Dispose();
     }
 
     internal List<IAutoSubscribe> InitializeAutoSubscriptions(Layer                          owner,
@@ -145,7 +133,7 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
         var lazy = _instances.GetOrAdd(desc.ServiceType, _ =>
         {
             return new Lazy<object>(
-                () => 
+                () =>
                 {
                     // 使用独立的 callstack 防止跨线程访问非线程安全的 HashSet 及污染检测语义
                     var localCallstack = new HashSet<Type>();
@@ -224,5 +212,17 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
             var dep = GetService(p.PropertyType);
             if (dep != null) p.SetValue(instance, dep, null);
         }
+    }
+
+    internal readonly struct ResolvedService
+    {
+        public ResolvedService(ServiceDescriptor descriptor, object instance)
+        {
+            Descriptor = descriptor;
+            Instance = instance;
+        }
+
+        public ServiceDescriptor Descriptor { get; }
+        public object Instance { get; }
     }
 }

@@ -32,9 +32,9 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
 {
     private readonly object _lock = new();
     private readonly Action _onDirty;
+    internal List<NotifyHandlerEntry<T>> MasterNotify = new();
     internal List<OrderedHandlerEntry<T>> MasterOrdered = new();
     internal List<ParallelHandlerEntry<T>> MasterParallel = new();
-    internal List<NotifyHandlerEntry<T>> MasterNotify = new();
     internal List<UnorderedHandlerEntry<T>> MasterUnordered = new();
 
     public HandlerBucket(Action onDirty)
@@ -42,7 +42,8 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         _onDirty = onDirty;
     }
 
-    public bool HasHandlers => MasterOrdered.Count > 0 || MasterUnordered.Count > 0 || MasterParallel.Count > 0 || MasterNotify.Count > 0;
+    public bool HasHandlers => MasterOrdered.Count > 0 || MasterUnordered.Count > 0 || MasterParallel.Count > 0 ||
+                               MasterNotify.Count > 0;
 
     public void Reset()
     {
@@ -250,20 +251,20 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
     {
         // 核心优化：使用实例方法引用代替 Lambda 闭包，消除订阅时的内存分配
         return new UnorderedHandlerEntry<T>(
-            new SyncHandlerWrapper<T>(h).Invoke, 
-            null, 
-            h.GetType().Name, 
-            new HandlerCircuit(), 
+            new SyncHandlerWrapper<T>(h).Invoke,
+            null,
+            h.GetType().Name,
+            new HandlerCircuit(),
             h);
     }
 
     public static UnorderedHandlerEntry<T> Create(IEventHandlerAsync<T> h)
     {
         return new UnorderedHandlerEntry<T>(
-            null, 
-            new AsyncHandlerWrapper<T>(h).Invoke, 
-            h.GetType().Name, 
-            new HandlerCircuit(), 
+            null,
+            new AsyncHandlerWrapper<T>(h).Invoke,
+            h.GetType().Name,
+            new HandlerCircuit(),
             h);
     }
 
@@ -271,7 +272,11 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
     private sealed class SyncHandlerWrapper<TValue> where TValue : struct
     {
         private readonly IEventHandler<TValue> _handler;
-        public SyncHandlerWrapper(IEventHandler<TValue> handler) => _handler = handler;
+
+        public SyncHandlerWrapper(IEventHandler<TValue> handler)
+        {
+            _handler = handler;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public EventHandledState Invoke(in TValue val)
@@ -284,10 +289,17 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
     private sealed class AsyncHandlerWrapper<TValue> where TValue : struct
     {
         private readonly IEventHandlerAsync<TValue> _handler;
-        public AsyncHandlerWrapper(IEventHandlerAsync<TValue> handler) => _handler = handler;
+
+        public AsyncHandlerWrapper(IEventHandlerAsync<TValue> handler)
+        {
+            _handler = handler;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LBTask Invoke(TValue val) => _handler.Deal(val);
+        public LBTask Invoke(TValue val)
+        {
+            return _handler.Deal(val);
+        }
     }
 }
 
@@ -374,11 +386,9 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
     private void TrySched()
     {
         if (!Circuit.IsDisabled && Interlocked.CompareExchange(ref _sched, 1, 0) == 0)
-        {
             // 使用构造函数中创建好的实例委托，热路径零分配
             if (!JobSchedulers.Default.TrySchedule(_drainInstance))
                 ThreadPool.QueueUserWorkItem(_ => Drain());
-        }
     }
 
     private void Drain()

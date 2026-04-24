@@ -99,15 +99,15 @@ public class SharedFieldBindingTests
     }
 }
 
-public partial class SharedFieldLayer : Layer
+public class SharedFieldLayer : Layer
 {
 }
 
-public partial class GlobalPublisherLayer : Layer
+public class GlobalPublisherLayer : Layer
 {
 }
 
-public partial class GlobalConsumerLayer : Layer
+public class GlobalConsumerLayer : Layer
 {
 }
 
@@ -188,7 +188,7 @@ public sealed class WritableConsumerService : IService
 public sealed class PlayerStorageModule : ILayerContext
 {
     [Public(typeof(ServiceScopeSharingService), "players")]
-    private List<int> _players = new();
+    private readonly List<int> _players = new();
 
     public void Add(int playerId)
     {
@@ -199,7 +199,7 @@ public sealed class PlayerStorageModule : ILayerContext
 public sealed class PlayerQueryModule : ILayerContext
 {
     [From(typeof(ServiceScopeSharingService), "players")]
-    private IReadOnlyList<int> _players = default!;
+    private readonly IReadOnlyList<int> _players = default!;
 
     public int Count()
     {
@@ -209,10 +209,8 @@ public sealed class PlayerQueryModule : ILayerContext
     public bool Contains(int playerId)
     {
         for (var i = 0; i < _players.Count; i++)
-        {
             if (_players[i] == playerId)
                 return true;
-        }
 
         return false;
     }
@@ -221,7 +219,7 @@ public sealed class PlayerQueryModule : ILayerContext
 public sealed class PlayerStateModule : ILayerContext
 {
     [Public(typeof(SharedFieldLayer), "player_states")]
-    private Dictionary<int, bool> _states = new();
+    private readonly Dictionary<int, bool> _states = new();
 
     public void SetOnline(int playerId, bool isOnline)
     {
@@ -232,7 +230,7 @@ public sealed class PlayerStateModule : ILayerContext
 public sealed class PlayerHudModule : ILayerContext
 {
     [From(typeof(SharedFieldLayer), "player_states")]
-    private IReadOnlyDictionary<int, bool> _states = default!;
+    private readonly IReadOnlyDictionary<int, bool> _states = default!;
 
     public bool IsOnline(int playerId)
     {
@@ -243,7 +241,7 @@ public sealed class PlayerHudModule : ILayerContext
 public sealed class SharedReferencePublisherModule : ILayerContext
 {
     [Public(typeof(GlobalScope), "shared-ref")]
-    private SharedReferenceBox _box = new();
+    private readonly SharedReferenceBox _box = new();
 
     public void SetValue(string value)
     {
@@ -254,7 +252,7 @@ public sealed class SharedReferencePublisherModule : ILayerContext
 public sealed class SharedReferenceConsumerModule : ILayerContext
 {
     [From(typeof(GlobalScope), "shared-ref")]
-    private SharedReferenceBox _box = default!;
+    private readonly SharedReferenceBox _box = default!;
 
     public string ReadValue()
     {

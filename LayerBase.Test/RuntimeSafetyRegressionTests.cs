@@ -19,11 +19,13 @@ public class RuntimeSafetyRegressionTests
         LayerHub.Send(new ResetProbeEvent());
 
         var cacheField = GetBucketCacheField(typeof(ResetProbeEvent));
-        Assert.That(cacheField.GetValue(null), Is.Not.Null, "Expected the generic bucket cache to be populated after first send.");
+        Assert.That(cacheField.GetValue(null), Is.Not.Null,
+            "Expected the generic bucket cache to be populated after first send.");
 
         LayerHub.Reset();
 
-        Assert.That(cacheField.GetValue(null), Is.Null, "Reset should clear static generic bucket caches so old buckets can be collected.");
+        Assert.That(cacheField.GetValue(null), Is.Null,
+            "Reset should clear static generic bucket caches so old buckets can be collected.");
     }
 
     private static FieldInfo GetBucketCacheField(Type eventType)

@@ -1,8 +1,5 @@
-using System;
 using System.Collections;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using LayerBase.Layers;
 
@@ -11,42 +8,6 @@ namespace LayerBase.DI;
 internal static class SharedFieldBinder
 {
     private static readonly ConcurrentDictionary<Type, FieldBindingMetadata[]> MetadataCache = new();
-
-    internal readonly struct Participant
-    {
-        public Participant(object instance, Layer layer, int serviceScopeId)
-        {
-            Instance = instance;
-            Layer = layer;
-            ServiceScopeId = serviceScopeId;
-        }
-
-        public object Instance { get; }
-        public Layer Layer { get; }
-        public int ServiceScopeId { get; }
-    }
-
-    private readonly struct PublishedField
-    {
-        public PublishedField(Type ownerType, Layer layer, int serviceScopeId, string localKey, object owner, FieldInfo field, object value)
-        {
-            OwnerType = ownerType;
-            Layer = layer;
-            ServiceScopeId = serviceScopeId;
-            LocalKey = localKey;
-            Owner = owner;
-            Field = field;
-            Value = value;
-        }
-
-        public Type OwnerType { get; }
-        public Layer Layer { get; }
-        public int ServiceScopeId { get; }
-        public string LocalKey { get; }
-        public object Owner { get; }
-        public FieldInfo Field { get; }
-        public object Value { get; }
-    }
 
     public static void Bind(IEnumerable<Participant> participants)
     {
@@ -64,10 +25,8 @@ internal static class SharedFieldBinder
             foreach (var item in metadata)
             {
                 if (item.PublicAttribute != null && item.FromAttribute != null)
-                {
                     throw new InvalidOperationException(
                         $"Shared field '{participant.Instance.GetType().FullName}.{item.Field.Name}' cannot declare both [Public] and [From].");
-                }
 
                 if (item.PublicAttribute != null)
                 {
@@ -75,11 +34,9 @@ internal static class SharedFieldBinder
                     var key = (item.PublicAttribute.OwnerType, item.PublicAttribute.LocalKey);
 
                     if (published.TryGetValue(key, out var existing))
-                    {
                         throw new InvalidOperationException(
                             $"Shared field publisher conflict for ownerType '{item.PublicAttribute.OwnerType.FullName}' and localKey '{item.PublicAttribute.LocalKey}'. " +
                             $"Owners: {existing.Owner.GetType().FullName}.{existing.Field.Name} and {participant.Instance.GetType().FullName}.{item.Field.Name}.");
-                    }
 
                     published[key] = new PublishedField(
                         item.PublicAttribute.OwnerType,
@@ -90,13 +47,15 @@ internal static class SharedFieldBinder
                         item.Field,
                         value);
 
-                    participant.Layer.SharedFields.Add((item.PublicAttribute.OwnerType, item.PublicAttribute.LocalKey, item.Field.FieldType, true));
+                    participant.Layer.SharedFields.Add((item.PublicAttribute.OwnerType, item.PublicAttribute.LocalKey,
+                        item.Field.FieldType, true));
                 }
 
                 if (item.FromAttribute != null)
                 {
                     pendingConsumers.Add((participant, item.Field, item.FromAttribute));
-                    participant.Layer.SharedFields.Add((item.FromAttribute.OwnerType, item.FromAttribute.LocalKey, item.Field.FieldType, false));
+                    participant.Layer.SharedFields.Add((item.FromAttribute.OwnerType, item.FromAttribute.LocalKey,
+                        item.Field.FieldType, false));
                 }
             }
         }
@@ -106,19 +65,15 @@ internal static class SharedFieldBinder
             var key = (consumer.Attribute.OwnerType, consumer.Attribute.LocalKey);
 
             if (!published.TryGetValue(key, out var publisher))
-            {
                 throw new InvalidOperationException(
                     $"Shared field consumer '{consumer.Participant.Instance.GetType().FullName}.{consumer.Field.Name}' could not find " +
                     $"a publisher for ownerType '{consumer.Attribute.OwnerType.FullName}' and localKey '{consumer.Attribute.LocalKey}'.");
-            }
 
             if (!TryAdaptValue(publisher.Value, consumer.Field.FieldType, out var adaptedValue))
-            {
                 throw new InvalidOperationException(
                     $"Shared field consumer '{consumer.Participant.Instance.GetType().FullName}.{consumer.Field.Name}' " +
                     $"of type '{consumer.Field.FieldType.FullName}' cannot consume publisher '{publisher.Owner.GetType().FullName}.{publisher.Field.Name}' " +
                     $"of type '{publisher.Field.FieldType.FullName}'. Only read-only projections are allowed.");
-            }
 
             consumer.Field.SetValue(consumer.Participant.Instance, adaptedValue);
         }
@@ -139,11 +94,9 @@ internal static class SharedFieldBinder
 
         var ctor = fieldType.GetConstructor(Type.EmptyTypes);
         if (ctor == null || !ctor.IsPublic)
-        {
             throw new InvalidOperationException(
                 $"Shared field publisher '{owner.GetType().FullName}.{field.Name}' for ownerType '{attribute.OwnerType.FullName}' and localKey '{attribute.LocalKey}' " +
                 "must be initialized inline or expose a public parameterless constructor.");
-        }
 
         value = ctor.Invoke(null)!;
         field.SetValue(owner, value);
@@ -187,9 +140,7 @@ internal static class SharedFieldBinder
                 targetDef == typeof(ConcurrentQueue<>) ||
                 targetDef == typeof(ConcurrentStack<>) ||
                 targetDef == typeof(ConcurrentBag<>))
-            {
                 return true;
-            }
         }
 
         if (targetType == typeof(ICollection) || targetType == typeof(IList) || targetType == typeof(IDictionary))
@@ -209,6 +160,43 @@ internal static class SharedFieldBinder
                     field.GetCustomAttribute<FromAttribute>()))
                 .Where(static item => item.PublicAttribute != null || item.FromAttribute != null)
                 .ToArray());
+    }
+
+    internal readonly struct Participant
+    {
+        public Participant(object instance, Layer layer, int serviceScopeId)
+        {
+            Instance = instance;
+            Layer = layer;
+            ServiceScopeId = serviceScopeId;
+        }
+
+        public object Instance { get; }
+        public Layer Layer { get; }
+        public int ServiceScopeId { get; }
+    }
+
+    private readonly struct PublishedField
+    {
+        public PublishedField(Type      ownerType, Layer  layer, int serviceScopeId, string localKey, object owner,
+                              FieldInfo field,     object value)
+        {
+            OwnerType = ownerType;
+            Layer = layer;
+            ServiceScopeId = serviceScopeId;
+            LocalKey = localKey;
+            Owner = owner;
+            Field = field;
+            Value = value;
+        }
+
+        public Type OwnerType { get; }
+        public Layer Layer { get; }
+        public int ServiceScopeId { get; }
+        public string LocalKey { get; }
+        public object Owner { get; }
+        public FieldInfo Field { get; }
+        public object Value { get; }
     }
 
     private readonly struct FieldBindingMetadata

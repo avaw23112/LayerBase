@@ -12,21 +12,31 @@ namespace LayerBase.Generator;
 public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
 {
     public const string DiagnosticId = "EVT001";
+    public const string DeprecatedId = "EVT002";
 
     private static readonly DiagnosticDescriptor Rule = new(
         DiagnosticId,
         "Event Flow Insight",
-        "事件 '{0}' 被订阅者: {1}", // 修改描述使其更清晰
+        "事件 '{0}' 被订阅者: {1}",
         "Design",
         DiagnosticSeverity.Info,
         true,
         "显示此事件分发时的所有潜在订阅者。");
 
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
+    private static readonly DiagnosticDescriptor DeprecatedRule = new(
+        DeprecatedId,
+        "Deprecated Propagation Semantics",
+        "事件语义 '{0}' 已被删除。原 Bubble 场景请改用 Layer [Call] 或显式 Send，原 Drop 场景请改用显式 Send/Post 或 Delay。",
+        "Usage",
+        DiagnosticSeverity.Error,
+        true,
+        "硬删除 SendDrop 和 Bubble 语义以精简热路径。");
+
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
+        ImmutableArray.Create(Rule, DeprecatedRule);
 
     public override void Initialize(AnalysisContext context)
     {
-        // 关键：不要跳过生成的代码，因为有些订阅者是生成的
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze |
                                                GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
@@ -38,12 +48,17 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
     {
         var invocation = (InvocationExpressionSyntax)context.Node;
 
-        // 尝试获取方法名
         var methodName = "";
         if (invocation.Expression is MemberAccessExpressionSyntax maes)
             methodName = maes.Name.Identifier.Text;
         else if (invocation.Expression is IdentifierNameSyntax ins)
             methodName = ins.Identifier.Text;
+
+        if (IsDeprecatedMethod(methodName))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(DeprecatedRule, invocation.GetLocation(), methodName));
+            return;
+        }
 
         if (!IsDispatchMethod(methodName)) return;
 
@@ -86,8 +101,14 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
     private bool IsDispatchMethod(string name)
     {
         return name == "Send" || name == "Post" || name.Contains("SendGlobal") ||
-               name.Contains("SendLocal") || name.Contains("SendBubble") ||
-               name.Contains("SendDrop");
+               name.Contains("SendLocal");
+    }
+
+    private bool IsDeprecatedMethod(string name)
+    {
+        return name.Contains("SendBubble") || name.Contains("SendDrop") ||
+               name.Contains("PostBubble") || name.Contains("PostDrop") ||
+               name.Contains("DelayBubble") || name.Contains("DelayDrop");
     }
 
     private List<SubscriberInfo> FindSubscribers(Compilation compilation, ITypeSymbol eventType)

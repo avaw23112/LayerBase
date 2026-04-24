@@ -12,6 +12,9 @@ namespace LayerBase.Tools.Timer;
 /// </summary>
 public sealed class TimerScheduler
 {
+    // 优化：重用列表，消除 Tick 时的分配
+    private readonly List<(TimerToken token, ITimerQueue queue)> _dueCache = new(64);
+    private readonly List<IFrequencyQueue> _frequencyDueCache = new(16);
     private readonly Dictionary<int, IFrequencyQueue> _frequencyQueues = new();
     private readonly object _lock = new();
     private readonly Dictionary<int, ITimerQueue> _queues = new();
@@ -20,10 +23,6 @@ public sealed class TimerScheduler
     private double _frequencyAccumulator;
     private bool _frequencyGateOpen = true;
     private double _frequencySeconds;
-
-    // 优化：重用列表，消除 Tick 时的分配
-    private readonly List<(TimerToken token, ITimerQueue queue)> _dueCache = new(64);
-    private readonly List<IFrequencyQueue> _frequencyDueCache = new(16);
 
     public double CurrentTime { get; private set; }
 
@@ -49,7 +48,7 @@ public sealed class TimerScheduler
         _dueCache.Clear();
         _frequencyDueCache.Clear();
         bool gateOpen;
-        bool frequencyTriggered = false;
+        var frequencyTriggered = false;
 
         lock (_lock)
         {
@@ -72,12 +71,8 @@ public sealed class TimerScheduler
                         _dueCache.Add((token, queue));
 
             if (frequencyTriggered)
-            {
                 foreach (var fq in _frequencyQueues.Values)
-                {
                     _frequencyDueCache.Add(fq);
-                }
-            }
         }
 
         // 1. 执行到期的普通定时器
@@ -89,12 +84,8 @@ public sealed class TimerScheduler
 
         // 2. 执行频率任务（优化：直接内部迭代，零分配）
         if (frequencyTriggered)
-        {
             for (var i = 0; i < _frequencyDueCache.Count; i++)
-            {
                 _frequencyDueCache[i].ExecuteAll();
-            }
-        }
 
         Volatile.Write(ref _frequencyGateOpen, gateOpen);
     }
@@ -295,7 +286,9 @@ public sealed class TimerScheduler
         }
     }
 
-    private readonly struct EmptyPayload { }
+    private readonly struct EmptyPayload
+    {
+    }
 
     private sealed class TimerTimeline
     {
@@ -448,11 +441,11 @@ internal sealed class TimerQueue<T> : ITimerQueue where T : struct
         lock (_lock)
         {
             if (!_tasks.TryBorrow(token.Index, token.Version, out var slotRef)) return false;
-            
+
             // 关键修复：取消时也必须清除 Value，否则 delegates 会一直留在 FreeList 的内存里
             ref var slot = ref _tasks.Resolve(slotRef);
             slot.Value = default;
-            
+
             _tasks.Release(slotRef);
             return true;
         }
@@ -578,19 +571,13 @@ internal sealed class FrequencyQueue<T> : IFrequencyQueue where T : struct
             for (var i = 0; i < _tasks.Count; i++)
             {
                 var task = _tasks[i];
-                if (task.Active)
-                {
-                    snapshot[count++] = task;
-                }
+                if (task.Active) snapshot[count++] = task;
             }
         }
 
         try
         {
-            for (var i = 0; i < count; i++)
-            {
-                ExecuteTask(snapshot[i]);
-            }
+            for (var i = 0; i < count; i++) ExecuteTask(snapshot[i]);
         }
         finally
         {

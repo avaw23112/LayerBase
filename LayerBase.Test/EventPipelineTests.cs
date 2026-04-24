@@ -29,17 +29,6 @@ public class EventPipelineTests
     }
 
     [Test]
-    public void Bubble_stops_at_lower_priority_layer_when_handled_by_higher_priority()
-    {
-        var l1 = new TraceLayer("L1", _trace, true);
-        var l2 = new TraceLayer("L2", _trace);
-        LayerHub.CreateLayers().Push(l1).Push(l2).Build();
-
-        l2.SendBubble(new TestEvent { Value = 1 });
-        Assert.That(_trace, Is.EqualTo(new[] { "L2_Recv", "L1_Recv" }));
-    }
-
-    [Test]
     public void Ordered_handlers_keep_registration_order_when_sync_and_async_are_mixed()
     {
         var layer = new TraceLayer("L1", _trace);

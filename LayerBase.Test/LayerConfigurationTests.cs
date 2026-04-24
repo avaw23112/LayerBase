@@ -30,20 +30,6 @@ public class LayerConfigurationTests
         Assert.That(bottom.ReceivedIds, Is.EqualTo(new[] { eventId }));
     }
 
-    [Test]
-    public void Direct_route_skips_layers_without_handlers()
-    {
-        const int eventId = 20;
-        var first = new EmptyLayer();
-        var middle = new EmptyLayer();
-        var bottom = new RecordingLayer<PlainEvent>(EventHandledState.Continue, e => e.Id);
-
-        LayerHub.CreateLayers().Push(first).Push(middle).Push(bottom).Build();
-
-        first.SendDrop(new PlainEvent(eventId));
-
-        Assert.That(bottom.ReceivedIds, Is.EqualTo(new[] { eventId }));
-    }
 
     private sealed class RecordingLayer<TEvent> : Layer where TEvent : struct
     {

@@ -1,11 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
 
 namespace LayerBase.Generator;
 
@@ -20,12 +17,12 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         var publicFields = context.SyntaxProvider.ForAttributeWithMetadataName(
             PublicAttributeName,
             static (node, _) => node is FieldDeclarationSyntax,
-            static (ctx, _) => GetFieldInfo(ctx, true));
+            static (ctx,  _) => GetFieldInfo(ctx, true));
 
         var fromFields = context.SyntaxProvider.ForAttributeWithMetadataName(
             FromAttributeName,
             static (node, _) => node is FieldDeclarationSyntax,
-            static (ctx, _) => GetFieldInfo(ctx, false));
+            static (ctx,  _) => GetFieldInfo(ctx, false));
 
         var allFields = publicFields.Collect().Combine(fromFields.Collect());
 
@@ -54,7 +51,8 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             fieldSymbol.Locations.FirstOrDefault());
     }
 
-    private static void Analyze(SourceProductionContext spc, ImmutableArray<FieldInfo?> publics, ImmutableArray<FieldInfo?> froms)
+    private static void Analyze(SourceProductionContext    spc, ImmutableArray<FieldInfo?> publics,
+                                ImmutableArray<FieldInfo?> froms)
     {
         var validPublics = publics.Where(p => p != null).Select(p => p!).ToImmutableArray();
         var validFroms = froms.Where(p => p != null).Select(p => p!).ToImmutableArray();
@@ -66,13 +64,10 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             var uniqueKey = $"{p.OwnerType.ToDisplayString()}_{p.LocalKey}";
 
             if (publicMap.TryGetValue(uniqueKey, out var existing))
-            {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.PublicConflict, p.Location, p.LocalKey, existing.ContainingType.Name, p.ContainingType.Name));
-            }
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.PublicConflict, p.Location, p.LocalKey,
+                    existing.ContainingType.Name, p.ContainingType.Name));
             else
-            {
                 publicMap[uniqueKey] = p;
-            }
         }
 
         // 2. Check for From matches and type compatibility
@@ -82,9 +77,8 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             if (publicMap.TryGetValue(uniqueKey, out var p))
             {
                 if (!IsTypeCompatible(p.Type, f.Type))
-                {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, f.Location, f.LocalKey, f.Type.Name, p.Type.Name));
-                }
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, f.Location, f.LocalKey,
+                        f.Type.Name, p.Type.Name));
             }
             else
             {
@@ -110,20 +104,16 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
                 name.Contains("System.Collections.Generic.Stack<") ||
                 name.Contains("System.Collections.Generic.HashSet<") ||
                 name.Contains("System.Collections.Generic.LinkedList<"))
-            {
                 return false;
-            }
         }
 
-        if (target.ToDisplayString() == "System.Collections.ICollection" || 
-            target.ToDisplayString() == "System.Collections.IList" || 
+        if (target.ToDisplayString() == "System.Collections.ICollection" ||
+            target.ToDisplayString() == "System.Collections.IList" ||
             target.ToDisplayString() == "System.Collections.IDictionary")
-        {
             return false;
-        }
 
         // Check compatibility
-        return SymbolEqualityComparer.Default.Equals(source, target) || 
+        return SymbolEqualityComparer.Default.Equals(source, target) ||
                target.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, source)) ||
                InheritsFrom(source, target);
     }
@@ -138,7 +128,8 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
 
     private sealed class FieldInfo
     {
-        public FieldInfo(INamedTypeSymbol containingType, string name, ITypeSymbol type, ITypeSymbol ownerType, string localKey, bool isPublic, Location? location)
+        public FieldInfo(INamedTypeSymbol containingType, string name,     ITypeSymbol type, ITypeSymbol ownerType,
+                         string           localKey,       bool   isPublic, Location?   location)
         {
             ContainingType = containingType;
             Name = name;

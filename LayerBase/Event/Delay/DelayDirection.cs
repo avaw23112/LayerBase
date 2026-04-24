@@ -11,11 +11,5 @@ public enum DelayDirection
     Local,
 
     /// <summary> 全局广播 </summary>
-    BroadCast,
-
-    /// <summary> 向上冒泡 </summary>
-    Bubble,
-
-    /// <summary> 向下下沉 </summary>
-    Drop
+    BroadCast
 }

@@ -1,5 +1,3 @@
-using LayerBase.Layers;
-
 namespace LayerBase.Call;
 
 public sealed class LayerCallTargetNotFoundException : InvalidOperationException
@@ -29,7 +27,8 @@ public sealed class LayerCallRouteNotFoundException : InvalidOperationException
 
 public sealed class LayerCallRouteConflictException : InvalidOperationException
 {
-    public LayerCallRouteConflictException(Type layerType, Type requestType, Type responseType, Type existingHandlerType,
+    public LayerCallRouteConflictException(Type layerType, Type requestType, Type responseType,
+                                           Type existingHandlerType,
                                            Type newHandlerType)
         : base(
             $"Layer '{layerType?.Name}' has duplicate Call handlers for request '{requestType?.Name}' and response '{responseType?.Name}': '{existingHandlerType?.Name}' and '{newHandlerType?.Name}'.")

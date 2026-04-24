@@ -45,24 +45,14 @@ public class ServiceRegistrationTests
         Assert.That(ReferenceEquals(s1, s2), Is.False);
     }
 
-    private class InstanceServiceModule : IService
-    {
-        private readonly object _instance;
-        public InstanceServiceModule(object instance) => _instance = instance;
-        public void ConfigureServices(IServiceCollection services)
-        {
-            if (_instance is IDemoService ds) services.AddSingleton<IDemoService>(ds);
-        }
-    }
-
     [Test]
     public void Singleton_service_from_root_is_shared_across_layers()
     {
         var rootInstance = new DemoService();
-        
+
         var layer1 = new DemoLayer();
         layer1.RegisterService(new InstanceServiceModule(rootInstance));
-        
+
         var layer2 = new DemoLayer();
         layer2.RegisterService(new InstanceServiceModule(rootInstance));
 
@@ -123,25 +113,6 @@ public class ServiceRegistrationTests
     }
 
     [Test]
-    public void IService_can_access_layer_and_dispatch_events()
-    {
-        var layer = new DemoLayer();
-        layer.RegisterService(new ServiceEventModule());
-        LayerHub.CreateLayers().Push(layer).Build();
-
-        var emitter = layer.GetService<ServiceEventEmitter>();
-        var receivedId = 0;
-        layer.Subscribe((in ServiceRaisedEvent e) =>
-        {
-            receivedId = e.Id;
-            return EventHandledState.Continue;
-        });
-
-        emitter.Emit(42);
-        Assert.That(receivedId, Is.EqualTo(42));
-    }
-
-    [Test]
     public void IService_that_implements_IUpdate_is_pumped()
     {
         var layer = new DemoLayer();
@@ -157,6 +128,21 @@ public class ServiceRegistrationTests
 
         LayerHub.Pump(0.02f);
         Assert.That(service.TickCount, Is.EqualTo(2));
+    }
+
+    private class InstanceServiceModule : IService
+    {
+        private readonly object _instance;
+
+        public InstanceServiceModule(object instance)
+        {
+            _instance = instance;
+        }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            if (_instance is IDemoService ds) services.AddSingleton<IDemoService>(ds);
+        }
     }
 
     private interface IDemoService
@@ -191,25 +177,6 @@ public class ServiceRegistrationTests
     {
     }
 
-    public class ServiceEventModule : IService
-    {
-        public void ConfigureServices(IServiceCollection services)
-        {
-            services.AddScoped<ServiceEventEmitter, ServiceEventEmitter>();
-        }
-    }
-
-    public class ServiceEventEmitter : IService
-    {
-        public void ConfigureServices(IServiceCollection services)
-        {
-        }
-
-        public void Emit(int id)
-        {
-            this.SendBubble(new ServiceRaisedEvent(id));
-        }
-    }
 
     internal struct ServiceRaisedEvent(int Id)
     {

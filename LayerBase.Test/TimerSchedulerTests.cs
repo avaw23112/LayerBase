@@ -99,7 +99,8 @@ public class TimerSchedulerTests
         });
 
         var tickTask = Task.Run(() => scheduler.Tick(0.1));
-        Assert.That(tickTask.Wait(TimeSpan.FromSeconds(1)), Is.True, "Frequency Tick should not deadlock on reentrant registration.");
+        Assert.That(tickTask.Wait(TimeSpan.FromSeconds(1)), Is.True,
+            "Frequency Tick should not deadlock on reentrant registration.");
 
         scheduler.Tick(0);
 

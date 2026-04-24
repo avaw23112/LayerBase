@@ -3,7 +3,7 @@ using LayerBase.Async;
 namespace LayerBase.Call;
 
 internal delegate LBTask<TResponse> LayerCallInvoker<TRequest, TResponse>(
-    TRequest request,
+    TRequest          request,
     CancellationToken cancellationToken)
     where TRequest : struct
     where TResponse : struct;

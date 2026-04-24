@@ -32,7 +32,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
     {
         var classProvider = context.SyntaxProvider.CreateSyntaxProvider(
                                        static (node, _) => node is ClassDeclarationSyntax,
-                                       static (ctx, _) => GetClassMeta(ctx))
+                                       static (ctx,  _) => GetClassMeta(ctx))
                                    .Where(static m => m != null)!;
 
         context.RegisterSourceOutput(classProvider, static (spc, meta) => GenerateCode(spc, meta!));
@@ -49,7 +49,6 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
         var delayProps = new List<string>();
 
         foreach (var member in symbol.GetMembers())
-        {
             if (member is IMethodSymbol method)
             {
                 foreach (var attr in method.GetAttributes())
@@ -82,17 +81,13 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                 if (prop.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("SubscribeDelay") == true))
                 {
                     if (!TryValidateDelayTarget(prop.Type, out var eventType, out var expectedSignature))
-                    {
                         diagnostics.Add(new HandlerDiagnostic(
                             prop.Name,
                             "SubscribeDelayAttribute",
                             expectedSignature,
                             prop.Locations.FirstOrDefault()));
-                    }
                     else
-                    {
                         delayProps.Add($"{prop.Name}|{eventType}");
-                    }
                 }
             }
             else if (member is IFieldSymbol field)
@@ -100,32 +95,25 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                 if (field.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("SubscribeDelay") == true))
                 {
                     if (!TryValidateDelayTarget(field.Type, out var eventType, out var expectedSignature))
-                    {
                         diagnostics.Add(new HandlerDiagnostic(
                             field.Name,
                             "SubscribeDelayAttribute",
                             expectedSignature,
                             field.Locations.FirstOrDefault()));
-                    }
                     else
-                    {
                         delayProps.Add($"{field.Name}|{eventType}");
-                    }
                 }
             }
-        }
 
         if (handlers.Count == 0 && delayProps.Count == 0 && diagnostics.Count == 0)
             return null;
 
         if (!cds.Modifiers.Any(SyntaxKind.PartialKeyword))
-        {
             diagnostics.Add(new HandlerDiagnostic(
                 symbol.Name,
                 "PartialCheck",
                 "partial class",
                 cds.Identifier.GetLocation()));
-        }
 
         var implementsCtx = symbol.AllInterfaces.Any(i => i.Name.Contains("ILayerContext"));
 
@@ -136,24 +124,18 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
     private static void GenerateCode(SourceProductionContext spc, ClassMeta meta)
     {
         foreach (var diagnostic in meta.Diagnostics)
-        {
             if (diagnostic.AttributeName == "PartialCheck")
-            {
                 spc.ReportDiagnostic(Diagnostic.Create(
                     ClassMustBePartial,
                     diagnostic.Location,
                     diagnostic.MethodName));
-            }
             else
-            {
                 spc.ReportDiagnostic(Diagnostic.Create(
                     InvalidSubscribeSignature,
                     diagnostic.Location,
                     diagnostic.MethodName,
                     diagnostic.AttributeName,
                     diagnostic.ExpectedSignature));
-            }
-        }
 
         if (meta.Diagnostics.Any(d => d.AttributeName == "PartialCheck")) return;
 
@@ -192,16 +174,14 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
             foreach (var h in meta.Handlers)
             {
                 var reg = h.Attr.Contains("Async") ? "SubscribeAsync" :
-                    h.Attr.Contains("Parallel")    ? "SubscribeParallel" : 
+                    h.Attr.Contains("Parallel")    ? "SubscribeParallel" :
                     h.Attr.Contains("Notify")      ? "SubscribeNotify" : "Subscribe";
 
                 sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
                 sb.AppendLine($"            layer.SubscribedEvents.Add(typeof({h.Evt}));");
-                
+
                 foreach (var produced in h.ProducedEvts)
-                {
                     sb.AppendLine($"            layer.ProducedEvents.Add(typeof({produced}));");
-                }
             }
 
             foreach (var p in meta.DelayProps)
@@ -219,7 +199,8 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
             sb.AppendLine("        {");
             foreach (var h in meta.Handlers)
             foreach (var produced in h.ProducedEvts)
-                sb.AppendLine($"            yield return new global::LayerBase.DI.EventDependency(typeof({h.Evt}), typeof({produced}));");
+                sb.AppendLine(
+                    $"            yield return new global::LayerBase.DI.EventDependency(typeof({h.Evt}), typeof({produced}));");
             sb.AppendLine("            yield break;");
             sb.AppendLine("        }");
 
@@ -310,7 +291,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
 
     private class ClassMeta
     {
-        public ClassMeta(string       name, string ns, string display, bool ctx, List<HandlerInfo> handlers,
+        public ClassMeta(string       name,       string ns, string display, bool ctx, List<HandlerInfo> handlers,
                          List<string> delayProps, List<HandlerDiagnostic> diagnostics)
         {
             ClassName = name;

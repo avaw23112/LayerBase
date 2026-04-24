@@ -18,9 +18,8 @@ internal sealed class LayerChain
     internal IEnumerable<Layer> GetNodes()
     {
         for (var i = 0; i < _indexedLayers.Length; i++)
-        {
-            if (_indexedLayers[i] != null) yield return _indexedLayers[i]!;
-        }
+            if (_indexedLayers[i] != null)
+                yield return _indexedLayers[i]!;
     }
 
     internal void AddNode(Node node)
@@ -41,7 +40,7 @@ internal sealed class LayerChain
             }
 
         SharedFieldBinder.Bind(
-            builtLayers.SelectMany(static layer => layer.GetSharedFieldParticipants(includeGlobalScope: true)));
+            builtLayers.SelectMany(static layer => layer.GetSharedFieldParticipants(true)));
 
         // 汇总逻辑活跃状态并构建各层的 DI 容器
         _logicActiveMask = 0;
@@ -85,10 +84,10 @@ internal sealed class LayerChain
             if (layer != null)
             {
                 var bit = 1UL << index;
-                
+
                 // 优化：只有当事件位图命中时，才执行事件 Pump (精准打击)
                 if ((eventMask & bit) != 0) layer.PumpEvents();
-                
+
                 // 只有当逻辑活跃位图命中时，才执行逻辑 Pump
                 if ((logicMask & bit) != 0) layer.Pump(deltaTime);
             }

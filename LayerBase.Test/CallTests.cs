@@ -25,7 +25,8 @@ public class CallTests
         LayerHub.CreateLayers().Push(coreLayer).Build();
 
         var response = await LayerHub.For<CoreLayer>()
-            .CallAsync<SwitchSceneRequest, SwitchSceneResponse>(new SwitchSceneRequest("BattleScene"));
+                                     .CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
+                                         new SwitchSceneRequest("BattleScene"));
 
         Assert.That(response.SceneName, Is.EqualTo("BattleScene"));
         Assert.That(response.Success, Is.True);
@@ -39,7 +40,7 @@ public class CallTests
 
         Assert.That(async () =>
                 await LayerHub.For<CoreLayer>()
-                    .CallAsync<SwitchSceneRequest, SwitchSceneResponse>(new SwitchSceneRequest("Missing")),
+                              .CallAsync<SwitchSceneRequest, SwitchSceneResponse>(new SwitchSceneRequest("Missing")),
             Throws.TypeOf<LayerCallTargetNotFoundException>());
     }
 
@@ -52,7 +53,7 @@ public class CallTests
 
         Assert.That(async () =>
                 await LayerHub.For<CoreLayer>()
-                    .CallAsync<UnknownRequest, UnknownResponse>(new UnknownRequest("NoRoute")),
+                              .CallAsync<UnknownRequest, UnknownResponse>(new UnknownRequest("NoRoute")),
             Throws.TypeOf<LayerCallRouteNotFoundException>());
     }
 
@@ -64,7 +65,8 @@ public class CallTests
         LayerHub.CreateLayers().Push(coreLayer).Build();
 
         var response = await LayerHub.For<CoreLayer>()
-            .CallAsync<ServiceLookupRequest, ServiceLookupResponse>(new ServiceLookupRequest("LookupValue"));
+                                     .CallAsync<ServiceLookupRequest, ServiceLookupResponse>(
+                                         new ServiceLookupRequest("LookupValue"));
 
         Assert.That(response.StoredValue, Is.EqualTo("LookupValue"));
         Assert.That(coreLayer.GetService<SceneService>().LastScene, Is.EqualTo("LookupValue"));
@@ -81,7 +83,8 @@ public class CallTests
         LayerHub.CreateLayers().Push(coreLayer).Push(audioLayer).Build();
 
         var response = await LayerHub.For<CoreLayer>()
-            .CallAsync<CrossLayerAccessRequest, CrossLayerAccessResponse>(new CrossLayerAccessRequest());
+                                     .CallAsync<CrossLayerAccessRequest, CrossLayerAccessResponse>(
+                                         new CrossLayerAccessRequest());
 
         Assert.That(response.Value, Is.EqualTo("MainMixer"));
     }
@@ -98,8 +101,8 @@ public class CallTests
 
         Assert.That(async () =>
                 await LayerHub.For<CoreLayer>()
-                    .CallAsync<DirectCrossLayerAccessRequest, DirectCrossLayerAccessResponse>(
-                        new DirectCrossLayerAccessRequest()),
+                              .CallAsync<DirectCrossLayerAccessRequest, DirectCrossLayerAccessResponse>(
+                                  new DirectCrossLayerAccessRequest()),
             Throws.TypeOf<InvalidOperationException>());
     }
 
@@ -112,7 +115,7 @@ public class CallTests
 
         Assert.That(async () =>
                 await LayerHub.For<CoreLayer>()
-                    .CallAsync<NoOwnerLayerRequest, NoOwnerLayerResponse>(new NoOwnerLayerRequest()),
+                              .CallAsync<NoOwnerLayerRequest, NoOwnerLayerResponse>(new NoOwnerLayerRequest()),
             Throws.TypeOf<LayerCallRouteNotFoundException>());
     }
 
@@ -125,7 +128,8 @@ public class CallTests
 
         using var cts = new CancellationTokenSource();
         var response = await LayerHub.For<CoreLayer>()
-            .CallAsync<CancellationEchoRequest, CancellationEchoResponse>(new CancellationEchoRequest(), cts.Token);
+                                     .CallAsync<CancellationEchoRequest, CancellationEchoResponse>(
+                                         new CancellationEchoRequest(), cts.Token);
 
         Assert.That(response.CanBeCanceled, Is.True);
         Assert.That(CancellationEchoCallHandler.LastToken, Is.EqualTo(cts.Token));
@@ -140,7 +144,7 @@ public class CallTests
 
         Assert.That(async () =>
                 await LayerHub.For<CoreLayer>()
-                    .CallAsync<ThrowingRequest, ThrowingResponse>(new ThrowingRequest()),
+                              .CallAsync<ThrowingRequest, ThrowingResponse>(new ThrowingRequest()),
             Throws.TypeOf<InvalidOperationException>().With.Message.Contains("Call exploded"));
     }
 
@@ -165,7 +169,8 @@ public class CallTests
         LayerHub.CreateLayers().Push(layer).Build();
 
         var response = await LayerHub.For<LayerMethodLayer>()
-            .CallAsync<LayerMethodRequest, LayerMethodResponse>(new LayerMethodRequest("LayerScene"));
+                                     .CallAsync<LayerMethodRequest, LayerMethodResponse>(
+                                         new LayerMethodRequest("LayerScene"));
 
         Assert.That(response.SceneName, Is.EqualTo("LayerScene"));
         Assert.That(layer.GetService<SceneService>().LastScene, Is.EqualTo("LayerScene"));
@@ -179,12 +184,12 @@ public class CallTests
         LayerHub.CreateLayers().Push(layer).Build();
 
         var response = await LayerHub.For<ServiceMethodLayer>()
-            .CallAsync<ServiceMethodRequest, ServiceMethodResponse>(new ServiceMethodRequest("ServiceScene"));
+                                     .CallAsync<ServiceMethodRequest, ServiceMethodResponse>(
+                                         new ServiceMethodRequest("ServiceScene"));
 
         Assert.That(response.SceneName, Is.EqualTo("ServiceScene"));
         Assert.That(layer.GetService<SceneService>().LastScene, Is.EqualTo("ServiceScene"));
     }
-
 }
 
 public struct SwitchSceneRequest
@@ -431,7 +436,7 @@ public partial class CoreLayer : Layer
 {
 }
 
-public partial class UiLayer : Layer
+public class UiLayer : Layer
 {
 }
 
@@ -453,7 +458,7 @@ public partial class LayerMethodLayer : Layer
     }
 }
 
-public partial class ServiceMethodLayer : Layer
+public class ServiceMethodLayer : Layer
 {
 }
 
@@ -461,7 +466,7 @@ public partial class ServiceMethodLayer : Layer
 public sealed class SwitchSceneCallHandler : ILayerCallHandler<SwitchSceneRequest, SwitchSceneResponse>
 {
     public LBTask<SwitchSceneResponse> HandleAsync(SwitchSceneRequest request,
-                                                   CancellationToken cancellationToken = default)
+                                                   CancellationToken  cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var sceneService = this.Get<SceneService>();
@@ -474,7 +479,7 @@ public sealed class SwitchSceneCallHandler : ILayerCallHandler<SwitchSceneReques
 public sealed class ServiceLookupCallHandler : ILayerCallHandler<ServiceLookupRequest, ServiceLookupResponse>
 {
     public async LBTask<ServiceLookupResponse> HandleAsync(ServiceLookupRequest request,
-                                                           CancellationToken cancellationToken = default)
+                                                           CancellationToken    cancellationToken = default)
     {
         await LBTask.CompletedTask;
         var sceneService = this.Get<SceneService>();
@@ -487,7 +492,7 @@ public sealed class ServiceLookupCallHandler : ILayerCallHandler<ServiceLookupRe
 public sealed class CrossLayerAccessCallHandler : ILayerCallHandler<CrossLayerAccessRequest, CrossLayerAccessResponse>
 {
     public async LBTask<CrossLayerAccessResponse> HandleAsync(CrossLayerAccessRequest request,
-                                                              CancellationToken cancellationToken = default)
+                                                              CancellationToken       cancellationToken = default)
     {
         var audioResponse = await LayerHub.CallAsync<AudioLayer, AudioMixerQueryRequest, AudioMixerQueryResponse>(
             new AudioMixerQueryRequest(),
@@ -502,7 +507,7 @@ public sealed class DirectCrossLayerAccessCallHandler
     : ILayerCallHandler<DirectCrossLayerAccessRequest, DirectCrossLayerAccessResponse>
 {
     public LBTask<DirectCrossLayerAccessResponse> HandleAsync(DirectCrossLayerAccessRequest request,
-                                                              CancellationToken cancellationToken = default)
+                                                              CancellationToken             cancellationToken = default)
     {
         var audioService = this.Get<AudioScopedService>();
         return LBTask<DirectCrossLayerAccessResponse>.FromResult(
@@ -514,7 +519,7 @@ public sealed class DirectCrossLayerAccessCallHandler
 public sealed class AudioMixerQueryCallHandler : ILayerCallHandler<AudioMixerQueryRequest, AudioMixerQueryResponse>
 {
     public LBTask<AudioMixerQueryResponse> HandleAsync(AudioMixerQueryRequest request,
-                                                       CancellationToken cancellationToken = default)
+                                                       CancellationToken      cancellationToken = default)
     {
         var audioService = this.Get<AudioScopedService>();
         return LBTask<AudioMixerQueryResponse>.FromResult(new AudioMixerQueryResponse(audioService.MixerName));
@@ -524,7 +529,7 @@ public sealed class AudioMixerQueryCallHandler : ILayerCallHandler<AudioMixerQue
 public sealed class NoOwnerLayerCallHandler : ILayerCallHandler<NoOwnerLayerRequest, NoOwnerLayerResponse>
 {
     public LBTask<NoOwnerLayerResponse> HandleAsync(NoOwnerLayerRequest request,
-                                                    CancellationToken cancellationToken = default)
+                                                    CancellationToken   cancellationToken = default)
     {
         return LBTask<NoOwnerLayerResponse>.FromResult(new NoOwnerLayerResponse("ShouldNotRegister"));
     }
@@ -536,17 +541,18 @@ public sealed class CancellationEchoCallHandler : ILayerCallHandler<Cancellation
     public static CancellationToken LastToken;
 
     public LBTask<CancellationEchoResponse> HandleAsync(CancellationEchoRequest request,
-                                                        CancellationToken cancellationToken = default)
+                                                        CancellationToken       cancellationToken = default)
     {
         LastToken = cancellationToken;
-        return LBTask<CancellationEchoResponse>.FromResult(new CancellationEchoResponse(cancellationToken.CanBeCanceled));
+        return LBTask<CancellationEchoResponse>.FromResult(
+            new CancellationEchoResponse(cancellationToken.CanBeCanceled));
     }
 }
 
 [OwnerLayer(typeof(CoreLayer))]
 public sealed class ThrowingCallHandler : ILayerCallHandler<ThrowingRequest, ThrowingResponse>
 {
-    public LBTask<ThrowingResponse> HandleAsync(ThrowingRequest request,
+    public LBTask<ThrowingResponse> HandleAsync(ThrowingRequest   request,
                                                 CancellationToken cancellationToken = default)
     {
         throw new InvalidOperationException("Call exploded.");
@@ -556,10 +562,9 @@ public sealed class ThrowingCallHandler : ILayerCallHandler<ThrowingRequest, Thr
 [OwnerLayer(typeof(DuplicateLayer))]
 public sealed class DuplicateCallHandlerA : ILayerCallHandler<DuplicateRequest, DuplicateResponse>
 {
-    public LBTask<DuplicateResponse> HandleAsync(DuplicateRequest request,
+    public LBTask<DuplicateResponse> HandleAsync(DuplicateRequest  request,
                                                  CancellationToken cancellationToken = default)
     {
         return LBTask<DuplicateResponse>.FromResult(new DuplicateResponse("A"));
     }
 }
-

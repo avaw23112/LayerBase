@@ -15,9 +15,6 @@ internal static class Program
         ParallelUsage.Run();
         Console.WriteLine();
 
-        PropagationUsage.Run();
-        Console.WriteLine();
-
         DelayUsage.Run();
         Console.WriteLine();
 

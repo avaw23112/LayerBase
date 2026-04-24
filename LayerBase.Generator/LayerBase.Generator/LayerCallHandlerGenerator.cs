@@ -77,7 +77,8 @@ public sealed class LayerCallHandlerGenerator : IIncrementalGenerator
                 if (implementations.Count == 0) continue;
 
                 foreach (var impl in implementations)
-                    validBindings.Add(new CallHandlerBinding(handlerType, targetLayer, impl.RequestType, impl.ResponseType,
+                    validBindings.Add(new CallHandlerBinding(handlerType, targetLayer, impl.RequestType,
+                        impl.ResponseType,
                         location));
             }
 
@@ -112,7 +113,7 @@ public sealed class LayerCallHandlerGenerator : IIncrementalGenerator
     }
 
     private static IEnumerable<CallHandlerImplementation> GetCallHandlerInterfaces(INamedTypeSymbol handlerType,
-                                                                                   INamedTypeSymbol callHandlerSymbol)
+        INamedTypeSymbol                                                                            callHandlerSymbol)
     {
         foreach (var iface in handlerType.AllInterfaces.OfType<INamedTypeSymbol>())
         {
@@ -280,8 +281,8 @@ public sealed class LayerCallHandlerGenerator : IIncrementalGenerator
 
     private sealed class CallHandlerBinding
     {
-        public CallHandlerBinding(INamedTypeSymbol handlerType, INamedTypeSymbol layerType, ITypeSymbol requestType,
-                                  ITypeSymbol responseType, Location? location)
+        public CallHandlerBinding(INamedTypeSymbol handlerType,  INamedTypeSymbol layerType, ITypeSymbol requestType,
+                                  ITypeSymbol      responseType, Location?        location)
         {
             HandlerType = handlerType;
             LayerType = layerType;

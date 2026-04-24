@@ -3,7 +3,7 @@ using LayerBase.Layers;
 
 namespace LayerBase.Usage;
 
-public sealed partial class SharedInventoryService : IService
+public sealed class SharedInventoryService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -12,7 +12,7 @@ public sealed partial class SharedInventoryService : IService
     }
 }
 
-public sealed partial class SharedStatePublisherService : IService
+public sealed class SharedStatePublisherService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -20,7 +20,7 @@ public sealed partial class SharedStatePublisherService : IService
     }
 }
 
-public sealed partial class SharedStateReaderService : IService
+public sealed class SharedStateReaderService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -31,7 +31,7 @@ public sealed partial class SharedStateReaderService : IService
 public sealed class InventoryStorageModule : ILayerContext
 {
     [Public(typeof(SharedInventoryService), "items")]
-    private List<string> _items = new();
+    private readonly List<string> _items = new();
 
     public void Add(string item)
     {
@@ -42,7 +42,7 @@ public sealed class InventoryStorageModule : ILayerContext
 public sealed class InventoryQueryModule : ILayerContext
 {
     [From(typeof(SharedInventoryService), "items")]
-    private IReadOnlyList<string> _items = default!;
+    private readonly IReadOnlyList<string> _items = default!;
 
     public int Count()
     {
@@ -53,7 +53,7 @@ public sealed class InventoryQueryModule : ILayerContext
 public sealed class InventoryStateModule : ILayerContext
 {
     [Public(typeof(SharedFieldLayer), "equip-state")]
-    private Dictionary<string, bool> _equipped = new();
+    private readonly Dictionary<string, bool> _equipped = new();
 
     public void SetEquipped(string itemName, bool equipped)
     {
@@ -64,7 +64,7 @@ public sealed class InventoryStateModule : ILayerContext
 public sealed class InventoryHudModule : ILayerContext
 {
     [From(typeof(SharedFieldLayer), "equip-state")]
-    private IReadOnlyDictionary<string, bool> _equipped = default!;
+    private readonly IReadOnlyDictionary<string, bool> _equipped = default!;
 
     public bool IsEquipped(string itemName)
     {
@@ -72,7 +72,7 @@ public sealed class InventoryHudModule : ILayerContext
     }
 }
 
-public partial class SharedFieldLayer : Layer
+public class SharedFieldLayer : Layer
 {
 }
 

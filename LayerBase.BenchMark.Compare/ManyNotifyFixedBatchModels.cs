@@ -1,11 +1,10 @@
-using System.Threading;
-using MessagePipe;
 using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
-using LayerBase.Layers;
+using MessagePipe;
 using Microsoft.Extensions.DependencyInjection;
 using IServiceCollection = LayerBase.DI.IServiceCollection;
+using IServiceProvider = System.IServiceProvider;
 
 namespace LayerBaseCompareBenchmarks;
 
@@ -16,1792 +15,2816 @@ public interface IManyNotifyEventPayload
 
 public readonly struct ManyNotifyEvent_000 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_000(int value) => Value = value;
+    public ManyNotifyEvent_000(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_000 Instance = new(1);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_001 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_001(int value) => Value = value;
+    public ManyNotifyEvent_001(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_001 Instance = new(2);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_002 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_002(int value) => Value = value;
+    public ManyNotifyEvent_002(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_002 Instance = new(3);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_003 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_003(int value) => Value = value;
+    public ManyNotifyEvent_003(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_003 Instance = new(4);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_004 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_004(int value) => Value = value;
+    public ManyNotifyEvent_004(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_004 Instance = new(5);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_005 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_005(int value) => Value = value;
+    public ManyNotifyEvent_005(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_005 Instance = new(6);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_006 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_006(int value) => Value = value;
+    public ManyNotifyEvent_006(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_006 Instance = new(7);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_007 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_007(int value) => Value = value;
+    public ManyNotifyEvent_007(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_007 Instance = new(8);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_008 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_008(int value) => Value = value;
+    public ManyNotifyEvent_008(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_008 Instance = new(9);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_009 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_009(int value) => Value = value;
+    public ManyNotifyEvent_009(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_009 Instance = new(10);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_010 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_010(int value) => Value = value;
+    public ManyNotifyEvent_010(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_010 Instance = new(11);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_011 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_011(int value) => Value = value;
+    public ManyNotifyEvent_011(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_011 Instance = new(12);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_012 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_012(int value) => Value = value;
+    public ManyNotifyEvent_012(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_012 Instance = new(13);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_013 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_013(int value) => Value = value;
+    public ManyNotifyEvent_013(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_013 Instance = new(14);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_014 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_014(int value) => Value = value;
+    public ManyNotifyEvent_014(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_014 Instance = new(15);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_015 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_015(int value) => Value = value;
+    public ManyNotifyEvent_015(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_015 Instance = new(16);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_016 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_016(int value) => Value = value;
+    public ManyNotifyEvent_016(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_016 Instance = new(17);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_017 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_017(int value) => Value = value;
+    public ManyNotifyEvent_017(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_017 Instance = new(18);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_018 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_018(int value) => Value = value;
+    public ManyNotifyEvent_018(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_018 Instance = new(19);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_019 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_019(int value) => Value = value;
+    public ManyNotifyEvent_019(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_019 Instance = new(20);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_020 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_020(int value) => Value = value;
+    public ManyNotifyEvent_020(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_020 Instance = new(21);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_021 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_021(int value) => Value = value;
+    public ManyNotifyEvent_021(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_021 Instance = new(22);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_022 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_022(int value) => Value = value;
+    public ManyNotifyEvent_022(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_022 Instance = new(23);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_023 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_023(int value) => Value = value;
+    public ManyNotifyEvent_023(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_023 Instance = new(24);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_024 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_024(int value) => Value = value;
+    public ManyNotifyEvent_024(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_024 Instance = new(25);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_025 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_025(int value) => Value = value;
+    public ManyNotifyEvent_025(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_025 Instance = new(26);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_026 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_026(int value) => Value = value;
+    public ManyNotifyEvent_026(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_026 Instance = new(27);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_027 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_027(int value) => Value = value;
+    public ManyNotifyEvent_027(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_027 Instance = new(28);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_028 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_028(int value) => Value = value;
+    public ManyNotifyEvent_028(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_028 Instance = new(29);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_029 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_029(int value) => Value = value;
+    public ManyNotifyEvent_029(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_029 Instance = new(30);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_030 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_030(int value) => Value = value;
+    public ManyNotifyEvent_030(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_030 Instance = new(31);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_031 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_031(int value) => Value = value;
+    public ManyNotifyEvent_031(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_031 Instance = new(32);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_032 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_032(int value) => Value = value;
+    public ManyNotifyEvent_032(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_032 Instance = new(33);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_033 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_033(int value) => Value = value;
+    public ManyNotifyEvent_033(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_033 Instance = new(34);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_034 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_034(int value) => Value = value;
+    public ManyNotifyEvent_034(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_034 Instance = new(35);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_035 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_035(int value) => Value = value;
+    public ManyNotifyEvent_035(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_035 Instance = new(36);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_036 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_036(int value) => Value = value;
+    public ManyNotifyEvent_036(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_036 Instance = new(37);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_037 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_037(int value) => Value = value;
+    public ManyNotifyEvent_037(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_037 Instance = new(38);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_038 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_038(int value) => Value = value;
+    public ManyNotifyEvent_038(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_038 Instance = new(39);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_039 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_039(int value) => Value = value;
+    public ManyNotifyEvent_039(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_039 Instance = new(40);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_040 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_040(int value) => Value = value;
+    public ManyNotifyEvent_040(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_040 Instance = new(41);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_041 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_041(int value) => Value = value;
+    public ManyNotifyEvent_041(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_041 Instance = new(42);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_042 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_042(int value) => Value = value;
+    public ManyNotifyEvent_042(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_042 Instance = new(43);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_043 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_043(int value) => Value = value;
+    public ManyNotifyEvent_043(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_043 Instance = new(44);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_044 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_044(int value) => Value = value;
+    public ManyNotifyEvent_044(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_044 Instance = new(45);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_045 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_045(int value) => Value = value;
+    public ManyNotifyEvent_045(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_045 Instance = new(46);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_046 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_046(int value) => Value = value;
+    public ManyNotifyEvent_046(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_046 Instance = new(47);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_047 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_047(int value) => Value = value;
+    public ManyNotifyEvent_047(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_047 Instance = new(48);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_048 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_048(int value) => Value = value;
+    public ManyNotifyEvent_048(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_048 Instance = new(49);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_049 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_049(int value) => Value = value;
+    public ManyNotifyEvent_049(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_049 Instance = new(50);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_050 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_050(int value) => Value = value;
+    public ManyNotifyEvent_050(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_050 Instance = new(51);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_051 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_051(int value) => Value = value;
+    public ManyNotifyEvent_051(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_051 Instance = new(52);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_052 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_052(int value) => Value = value;
+    public ManyNotifyEvent_052(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_052 Instance = new(53);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_053 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_053(int value) => Value = value;
+    public ManyNotifyEvent_053(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_053 Instance = new(54);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_054 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_054(int value) => Value = value;
+    public ManyNotifyEvent_054(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_054 Instance = new(55);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_055 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_055(int value) => Value = value;
+    public ManyNotifyEvent_055(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_055 Instance = new(56);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_056 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_056(int value) => Value = value;
+    public ManyNotifyEvent_056(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_056 Instance = new(57);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_057 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_057(int value) => Value = value;
+    public ManyNotifyEvent_057(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_057 Instance = new(58);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_058 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_058(int value) => Value = value;
+    public ManyNotifyEvent_058(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_058 Instance = new(59);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_059 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_059(int value) => Value = value;
+    public ManyNotifyEvent_059(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_059 Instance = new(60);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_060 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_060(int value) => Value = value;
+    public ManyNotifyEvent_060(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_060 Instance = new(61);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_061 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_061(int value) => Value = value;
+    public ManyNotifyEvent_061(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_061 Instance = new(62);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_062 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_062(int value) => Value = value;
+    public ManyNotifyEvent_062(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_062 Instance = new(63);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_063 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_063(int value) => Value = value;
+    public ManyNotifyEvent_063(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_063 Instance = new(64);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_064 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_064(int value) => Value = value;
+    public ManyNotifyEvent_064(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_064 Instance = new(65);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_065 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_065(int value) => Value = value;
+    public ManyNotifyEvent_065(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_065 Instance = new(66);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_066 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_066(int value) => Value = value;
+    public ManyNotifyEvent_066(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_066 Instance = new(67);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_067 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_067(int value) => Value = value;
+    public ManyNotifyEvent_067(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_067 Instance = new(68);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_068 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_068(int value) => Value = value;
+    public ManyNotifyEvent_068(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_068 Instance = new(69);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_069 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_069(int value) => Value = value;
+    public ManyNotifyEvent_069(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_069 Instance = new(70);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_070 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_070(int value) => Value = value;
+    public ManyNotifyEvent_070(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_070 Instance = new(71);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_071 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_071(int value) => Value = value;
+    public ManyNotifyEvent_071(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_071 Instance = new(72);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_072 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_072(int value) => Value = value;
+    public ManyNotifyEvent_072(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_072 Instance = new(73);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_073 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_073(int value) => Value = value;
+    public ManyNotifyEvent_073(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_073 Instance = new(74);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_074 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_074(int value) => Value = value;
+    public ManyNotifyEvent_074(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_074 Instance = new(75);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_075 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_075(int value) => Value = value;
+    public ManyNotifyEvent_075(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_075 Instance = new(76);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_076 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_076(int value) => Value = value;
+    public ManyNotifyEvent_076(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_076 Instance = new(77);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_077 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_077(int value) => Value = value;
+    public ManyNotifyEvent_077(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_077 Instance = new(78);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_078 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_078(int value) => Value = value;
+    public ManyNotifyEvent_078(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_078 Instance = new(79);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_079 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_079(int value) => Value = value;
+    public ManyNotifyEvent_079(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_079 Instance = new(80);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_080 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_080(int value) => Value = value;
+    public ManyNotifyEvent_080(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_080 Instance = new(81);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_081 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_081(int value) => Value = value;
+    public ManyNotifyEvent_081(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_081 Instance = new(82);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_082 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_082(int value) => Value = value;
+    public ManyNotifyEvent_082(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_082 Instance = new(83);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_083 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_083(int value) => Value = value;
+    public ManyNotifyEvent_083(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_083 Instance = new(84);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_084 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_084(int value) => Value = value;
+    public ManyNotifyEvent_084(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_084 Instance = new(85);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_085 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_085(int value) => Value = value;
+    public ManyNotifyEvent_085(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_085 Instance = new(86);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_086 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_086(int value) => Value = value;
+    public ManyNotifyEvent_086(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_086 Instance = new(87);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_087 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_087(int value) => Value = value;
+    public ManyNotifyEvent_087(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_087 Instance = new(88);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_088 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_088(int value) => Value = value;
+    public ManyNotifyEvent_088(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_088 Instance = new(89);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_089 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_089(int value) => Value = value;
+    public ManyNotifyEvent_089(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_089 Instance = new(90);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_090 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_090(int value) => Value = value;
+    public ManyNotifyEvent_090(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_090 Instance = new(91);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_091 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_091(int value) => Value = value;
+    public ManyNotifyEvent_091(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_091 Instance = new(92);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_092 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_092(int value) => Value = value;
+    public ManyNotifyEvent_092(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_092 Instance = new(93);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_093 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_093(int value) => Value = value;
+    public ManyNotifyEvent_093(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_093 Instance = new(94);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_094 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_094(int value) => Value = value;
+    public ManyNotifyEvent_094(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_094 Instance = new(95);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_095 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_095(int value) => Value = value;
+    public ManyNotifyEvent_095(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_095 Instance = new(96);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_096 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_096(int value) => Value = value;
+    public ManyNotifyEvent_096(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_096 Instance = new(97);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_097 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_097(int value) => Value = value;
+    public ManyNotifyEvent_097(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_097 Instance = new(98);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_098 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_098(int value) => Value = value;
+    public ManyNotifyEvent_098(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_098 Instance = new(99);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_099 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_099(int value) => Value = value;
+    public ManyNotifyEvent_099(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_099 Instance = new(100);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_100 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_100(int value) => Value = value;
+    public ManyNotifyEvent_100(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_100 Instance = new(101);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_101 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_101(int value) => Value = value;
+    public ManyNotifyEvent_101(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_101 Instance = new(102);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_102 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_102(int value) => Value = value;
+    public ManyNotifyEvent_102(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_102 Instance = new(103);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_103 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_103(int value) => Value = value;
+    public ManyNotifyEvent_103(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_103 Instance = new(104);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_104 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_104(int value) => Value = value;
+    public ManyNotifyEvent_104(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_104 Instance = new(105);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_105 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_105(int value) => Value = value;
+    public ManyNotifyEvent_105(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_105 Instance = new(106);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_106 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_106(int value) => Value = value;
+    public ManyNotifyEvent_106(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_106 Instance = new(107);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_107 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_107(int value) => Value = value;
+    public ManyNotifyEvent_107(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_107 Instance = new(108);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_108 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_108(int value) => Value = value;
+    public ManyNotifyEvent_108(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_108 Instance = new(109);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_109 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_109(int value) => Value = value;
+    public ManyNotifyEvent_109(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_109 Instance = new(110);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_110 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_110(int value) => Value = value;
+    public ManyNotifyEvent_110(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_110 Instance = new(111);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_111 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_111(int value) => Value = value;
+    public ManyNotifyEvent_111(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_111 Instance = new(112);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_112 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_112(int value) => Value = value;
+    public ManyNotifyEvent_112(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_112 Instance = new(113);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_113 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_113(int value) => Value = value;
+    public ManyNotifyEvent_113(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_113 Instance = new(114);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_114 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_114(int value) => Value = value;
+    public ManyNotifyEvent_114(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_114 Instance = new(115);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_115 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_115(int value) => Value = value;
+    public ManyNotifyEvent_115(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_115 Instance = new(116);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_116 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_116(int value) => Value = value;
+    public ManyNotifyEvent_116(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_116 Instance = new(117);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_117 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_117(int value) => Value = value;
+    public ManyNotifyEvent_117(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_117 Instance = new(118);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_118 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_118(int value) => Value = value;
+    public ManyNotifyEvent_118(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_118 Instance = new(119);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_119 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_119(int value) => Value = value;
+    public ManyNotifyEvent_119(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_119 Instance = new(120);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_120 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_120(int value) => Value = value;
+    public ManyNotifyEvent_120(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_120 Instance = new(121);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_121 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_121(int value) => Value = value;
+    public ManyNotifyEvent_121(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_121 Instance = new(122);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_122 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_122(int value) => Value = value;
+    public ManyNotifyEvent_122(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_122 Instance = new(123);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_123 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_123(int value) => Value = value;
+    public ManyNotifyEvent_123(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_123 Instance = new(124);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_124 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_124(int value) => Value = value;
+    public ManyNotifyEvent_124(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_124 Instance = new(125);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_125 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_125(int value) => Value = value;
+    public ManyNotifyEvent_125(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_125 Instance = new(126);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_126 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_126(int value) => Value = value;
+    public ManyNotifyEvent_126(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_126 Instance = new(127);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_127 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_127(int value) => Value = value;
+    public ManyNotifyEvent_127(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_127 Instance = new(128);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_128 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_128(int value) => Value = value;
+    public ManyNotifyEvent_128(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_128 Instance = new(129);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_129 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_129(int value) => Value = value;
+    public ManyNotifyEvent_129(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_129 Instance = new(130);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_130 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_130(int value) => Value = value;
+    public ManyNotifyEvent_130(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_130 Instance = new(131);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_131 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_131(int value) => Value = value;
+    public ManyNotifyEvent_131(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_131 Instance = new(132);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_132 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_132(int value) => Value = value;
+    public ManyNotifyEvent_132(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_132 Instance = new(133);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_133 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_133(int value) => Value = value;
+    public ManyNotifyEvent_133(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_133 Instance = new(134);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_134 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_134(int value) => Value = value;
+    public ManyNotifyEvent_134(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_134 Instance = new(135);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_135 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_135(int value) => Value = value;
+    public ManyNotifyEvent_135(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_135 Instance = new(136);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_136 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_136(int value) => Value = value;
+    public ManyNotifyEvent_136(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_136 Instance = new(137);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_137 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_137(int value) => Value = value;
+    public ManyNotifyEvent_137(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_137 Instance = new(138);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_138 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_138(int value) => Value = value;
+    public ManyNotifyEvent_138(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_138 Instance = new(139);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_139 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_139(int value) => Value = value;
+    public ManyNotifyEvent_139(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_139 Instance = new(140);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_140 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_140(int value) => Value = value;
+    public ManyNotifyEvent_140(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_140 Instance = new(141);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_141 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_141(int value) => Value = value;
+    public ManyNotifyEvent_141(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_141 Instance = new(142);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_142 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_142(int value) => Value = value;
+    public ManyNotifyEvent_142(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_142 Instance = new(143);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_143 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_143(int value) => Value = value;
+    public ManyNotifyEvent_143(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_143 Instance = new(144);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_144 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_144(int value) => Value = value;
+    public ManyNotifyEvent_144(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_144 Instance = new(145);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_145 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_145(int value) => Value = value;
+    public ManyNotifyEvent_145(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_145 Instance = new(146);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_146 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_146(int value) => Value = value;
+    public ManyNotifyEvent_146(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_146 Instance = new(147);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_147 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_147(int value) => Value = value;
+    public ManyNotifyEvent_147(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_147 Instance = new(148);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_148 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_148(int value) => Value = value;
+    public ManyNotifyEvent_148(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_148 Instance = new(149);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_149 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_149(int value) => Value = value;
+    public ManyNotifyEvent_149(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_149 Instance = new(150);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_150 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_150(int value) => Value = value;
+    public ManyNotifyEvent_150(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_150 Instance = new(151);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_151 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_151(int value) => Value = value;
+    public ManyNotifyEvent_151(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_151 Instance = new(152);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_152 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_152(int value) => Value = value;
+    public ManyNotifyEvent_152(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_152 Instance = new(153);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_153 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_153(int value) => Value = value;
+    public ManyNotifyEvent_153(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_153 Instance = new(154);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_154 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_154(int value) => Value = value;
+    public ManyNotifyEvent_154(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_154 Instance = new(155);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_155 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_155(int value) => Value = value;
+    public ManyNotifyEvent_155(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_155 Instance = new(156);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_156 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_156(int value) => Value = value;
+    public ManyNotifyEvent_156(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_156 Instance = new(157);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_157 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_157(int value) => Value = value;
+    public ManyNotifyEvent_157(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_157 Instance = new(158);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_158 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_158(int value) => Value = value;
+    public ManyNotifyEvent_158(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_158 Instance = new(159);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_159 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_159(int value) => Value = value;
+    public ManyNotifyEvent_159(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_159 Instance = new(160);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_160 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_160(int value) => Value = value;
+    public ManyNotifyEvent_160(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_160 Instance = new(161);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_161 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_161(int value) => Value = value;
+    public ManyNotifyEvent_161(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_161 Instance = new(162);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_162 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_162(int value) => Value = value;
+    public ManyNotifyEvent_162(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_162 Instance = new(163);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_163 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_163(int value) => Value = value;
+    public ManyNotifyEvent_163(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_163 Instance = new(164);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_164 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_164(int value) => Value = value;
+    public ManyNotifyEvent_164(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_164 Instance = new(165);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_165 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_165(int value) => Value = value;
+    public ManyNotifyEvent_165(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_165 Instance = new(166);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_166 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_166(int value) => Value = value;
+    public ManyNotifyEvent_166(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_166 Instance = new(167);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_167 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_167(int value) => Value = value;
+    public ManyNotifyEvent_167(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_167 Instance = new(168);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_168 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_168(int value) => Value = value;
+    public ManyNotifyEvent_168(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_168 Instance = new(169);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_169 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_169(int value) => Value = value;
+    public ManyNotifyEvent_169(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_169 Instance = new(170);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_170 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_170(int value) => Value = value;
+    public ManyNotifyEvent_170(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_170 Instance = new(171);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_171 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_171(int value) => Value = value;
+    public ManyNotifyEvent_171(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_171 Instance = new(172);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_172 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_172(int value) => Value = value;
+    public ManyNotifyEvent_172(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_172 Instance = new(173);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_173 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_173(int value) => Value = value;
+    public ManyNotifyEvent_173(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_173 Instance = new(174);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_174 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_174(int value) => Value = value;
+    public ManyNotifyEvent_174(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_174 Instance = new(175);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_175 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_175(int value) => Value = value;
+    public ManyNotifyEvent_175(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_175 Instance = new(176);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_176 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_176(int value) => Value = value;
+    public ManyNotifyEvent_176(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_176 Instance = new(177);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_177 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_177(int value) => Value = value;
+    public ManyNotifyEvent_177(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_177 Instance = new(178);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_178 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_178(int value) => Value = value;
+    public ManyNotifyEvent_178(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_178 Instance = new(179);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_179 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_179(int value) => Value = value;
+    public ManyNotifyEvent_179(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_179 Instance = new(180);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_180 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_180(int value) => Value = value;
+    public ManyNotifyEvent_180(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_180 Instance = new(181);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_181 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_181(int value) => Value = value;
+    public ManyNotifyEvent_181(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_181 Instance = new(182);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_182 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_182(int value) => Value = value;
+    public ManyNotifyEvent_182(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_182 Instance = new(183);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_183 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_183(int value) => Value = value;
+    public ManyNotifyEvent_183(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_183 Instance = new(184);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_184 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_184(int value) => Value = value;
+    public ManyNotifyEvent_184(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_184 Instance = new(185);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_185 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_185(int value) => Value = value;
+    public ManyNotifyEvent_185(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_185 Instance = new(186);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_186 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_186(int value) => Value = value;
+    public ManyNotifyEvent_186(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_186 Instance = new(187);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_187 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_187(int value) => Value = value;
+    public ManyNotifyEvent_187(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_187 Instance = new(188);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_188 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_188(int value) => Value = value;
+    public ManyNotifyEvent_188(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_188 Instance = new(189);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_189 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_189(int value) => Value = value;
+    public ManyNotifyEvent_189(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_189 Instance = new(190);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_190 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_190(int value) => Value = value;
+    public ManyNotifyEvent_190(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_190 Instance = new(191);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_191 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_191(int value) => Value = value;
+    public ManyNotifyEvent_191(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_191 Instance = new(192);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_192 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_192(int value) => Value = value;
+    public ManyNotifyEvent_192(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_192 Instance = new(193);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_193 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_193(int value) => Value = value;
+    public ManyNotifyEvent_193(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_193 Instance = new(194);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_194 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_194(int value) => Value = value;
+    public ManyNotifyEvent_194(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_194 Instance = new(195);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_195 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_195(int value) => Value = value;
+    public ManyNotifyEvent_195(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_195 Instance = new(196);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_196 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_196(int value) => Value = value;
+    public ManyNotifyEvent_196(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_196 Instance = new(197);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_197 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_197(int value) => Value = value;
+    public ManyNotifyEvent_197(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_197 Instance = new(198);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_198 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_198(int value) => Value = value;
+    public ManyNotifyEvent_198(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_198 Instance = new(199);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_199 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_199(int value) => Value = value;
+    public ManyNotifyEvent_199(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_199 Instance = new(200);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_200 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_200(int value) => Value = value;
+    public ManyNotifyEvent_200(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_200 Instance = new(201);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_201 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_201(int value) => Value = value;
+    public ManyNotifyEvent_201(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_201 Instance = new(202);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_202 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_202(int value) => Value = value;
+    public ManyNotifyEvent_202(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_202 Instance = new(203);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_203 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_203(int value) => Value = value;
+    public ManyNotifyEvent_203(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_203 Instance = new(204);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_204 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_204(int value) => Value = value;
+    public ManyNotifyEvent_204(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_204 Instance = new(205);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_205 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_205(int value) => Value = value;
+    public ManyNotifyEvent_205(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_205 Instance = new(206);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_206 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_206(int value) => Value = value;
+    public ManyNotifyEvent_206(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_206 Instance = new(207);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_207 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_207(int value) => Value = value;
+    public ManyNotifyEvent_207(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_207 Instance = new(208);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_208 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_208(int value) => Value = value;
+    public ManyNotifyEvent_208(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_208 Instance = new(209);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_209 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_209(int value) => Value = value;
+    public ManyNotifyEvent_209(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_209 Instance = new(210);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_210 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_210(int value) => Value = value;
+    public ManyNotifyEvent_210(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_210 Instance = new(211);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_211 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_211(int value) => Value = value;
+    public ManyNotifyEvent_211(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_211 Instance = new(212);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_212 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_212(int value) => Value = value;
+    public ManyNotifyEvent_212(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_212 Instance = new(213);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_213 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_213(int value) => Value = value;
+    public ManyNotifyEvent_213(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_213 Instance = new(214);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_214 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_214(int value) => Value = value;
+    public ManyNotifyEvent_214(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_214 Instance = new(215);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_215 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_215(int value) => Value = value;
+    public ManyNotifyEvent_215(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_215 Instance = new(216);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_216 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_216(int value) => Value = value;
+    public ManyNotifyEvent_216(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_216 Instance = new(217);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_217 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_217(int value) => Value = value;
+    public ManyNotifyEvent_217(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_217 Instance = new(218);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_218 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_218(int value) => Value = value;
+    public ManyNotifyEvent_218(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_218 Instance = new(219);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_219 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_219(int value) => Value = value;
+    public ManyNotifyEvent_219(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_219 Instance = new(220);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_220 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_220(int value) => Value = value;
+    public ManyNotifyEvent_220(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_220 Instance = new(221);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_221 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_221(int value) => Value = value;
+    public ManyNotifyEvent_221(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_221 Instance = new(222);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_222 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_222(int value) => Value = value;
+    public ManyNotifyEvent_222(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_222 Instance = new(223);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_223 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_223(int value) => Value = value;
+    public ManyNotifyEvent_223(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_223 Instance = new(224);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_224 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_224(int value) => Value = value;
+    public ManyNotifyEvent_224(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_224 Instance = new(225);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_225 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_225(int value) => Value = value;
+    public ManyNotifyEvent_225(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_225 Instance = new(226);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_226 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_226(int value) => Value = value;
+    public ManyNotifyEvent_226(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_226 Instance = new(227);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_227 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_227(int value) => Value = value;
+    public ManyNotifyEvent_227(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_227 Instance = new(228);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_228 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_228(int value) => Value = value;
+    public ManyNotifyEvent_228(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_228 Instance = new(229);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_229 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_229(int value) => Value = value;
+    public ManyNotifyEvent_229(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_229 Instance = new(230);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_230 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_230(int value) => Value = value;
+    public ManyNotifyEvent_230(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_230 Instance = new(231);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_231 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_231(int value) => Value = value;
+    public ManyNotifyEvent_231(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_231 Instance = new(232);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_232 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_232(int value) => Value = value;
+    public ManyNotifyEvent_232(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_232 Instance = new(233);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_233 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_233(int value) => Value = value;
+    public ManyNotifyEvent_233(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_233 Instance = new(234);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_234 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_234(int value) => Value = value;
+    public ManyNotifyEvent_234(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_234 Instance = new(235);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_235 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_235(int value) => Value = value;
+    public ManyNotifyEvent_235(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_235 Instance = new(236);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_236 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_236(int value) => Value = value;
+    public ManyNotifyEvent_236(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_236 Instance = new(237);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_237 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_237(int value) => Value = value;
+    public ManyNotifyEvent_237(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_237 Instance = new(238);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_238 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_238(int value) => Value = value;
+    public ManyNotifyEvent_238(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_238 Instance = new(239);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_239 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_239(int value) => Value = value;
+    public ManyNotifyEvent_239(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_239 Instance = new(240);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_240 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_240(int value) => Value = value;
+    public ManyNotifyEvent_240(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_240 Instance = new(241);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_241 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_241(int value) => Value = value;
+    public ManyNotifyEvent_241(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_241 Instance = new(242);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_242 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_242(int value) => Value = value;
+    public ManyNotifyEvent_242(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_242 Instance = new(243);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_243 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_243(int value) => Value = value;
+    public ManyNotifyEvent_243(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_243 Instance = new(244);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_244 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_244(int value) => Value = value;
+    public ManyNotifyEvent_244(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_244 Instance = new(245);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_245 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_245(int value) => Value = value;
+    public ManyNotifyEvent_245(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_245 Instance = new(246);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_246 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_246(int value) => Value = value;
+    public ManyNotifyEvent_246(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_246 Instance = new(247);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_247 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_247(int value) => Value = value;
+    public ManyNotifyEvent_247(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_247 Instance = new(248);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_248 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_248(int value) => Value = value;
+    public ManyNotifyEvent_248(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_248 Instance = new(249);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_249 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_249(int value) => Value = value;
+    public ManyNotifyEvent_249(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_249 Instance = new(250);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_250 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_250(int value) => Value = value;
+    public ManyNotifyEvent_250(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_250 Instance = new(251);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_251 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_251(int value) => Value = value;
+    public ManyNotifyEvent_251(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_251 Instance = new(252);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_252 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_252(int value) => Value = value;
+    public ManyNotifyEvent_252(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_252 Instance = new(253);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_253 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_253(int value) => Value = value;
+    public ManyNotifyEvent_253(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_253 Instance = new(254);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_254 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_254(int value) => Value = value;
+    public ManyNotifyEvent_254(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_254 Instance = new(255);
     public int Value { get; }
 }
 
 public readonly struct ManyNotifyEvent_255 : IManyNotifyEventPayload
 {
-    public ManyNotifyEvent_255(int value) => Value = value;
+    public ManyNotifyEvent_255(int value)
+    {
+        Value = value;
+    }
+
     public static readonly ManyNotifyEvent_255 Instance = new(256);
     public int Value { get; }
 }
@@ -2236,18 +3259,20 @@ internal sealed class ManyNotifyBatch256Publishers
 
 internal static class ManyNotifyFixedBatchRegistry
 {
-    private static void RegisterServiceCopies<TManager>(CompareLayer layer, int subscribersPerEvent) where TManager : IService, new()
+    private static void RegisterServiceCopies<TManager>(CompareLayer layer, int subscribersPerEvent)
+        where TManager : IService, new()
     {
         for (var i = 0; i < subscribersPerEvent; i++)
             layer.RegisterService(new TManager());
     }
 
-    private static void SubscribeCopies<TEvent>(System.IServiceProvider provider, int subscribersPerEvent, List<IDisposable> subscriptions)
+    private static void SubscribeCopies<TEvent>(IServiceProvider  provider, int subscribersPerEvent,
+                                                List<IDisposable> subscriptions)
         where TEvent : struct, IManyNotifyEventPayload
     {
         var subscriber = provider.GetRequiredService<ISubscriber<TEvent>>();
         for (var i = 0; i < subscribersPerEvent; i++)
-            subscriptions.Add(subscriber.Subscribe(HandleMessagePipe<TEvent>));
+            subscriptions.Add(subscriber.Subscribe(HandleMessagePipe));
     }
 
     private static void HandleMessagePipe<TEvent>(TEvent value) where TEvent : struct, IManyNotifyEventPayload
@@ -2296,7 +3321,8 @@ internal static class ManyNotifyFixedBatchRegistry
         RegisterServiceCopies<ManyNotifyManager_031>(layer, subscribersPerEvent);
     }
 
-    public static ManyNotifyBatch32Publishers CreatePublishers32(System.IServiceProvider provider, int subscribersPerEvent, List<IDisposable> subscriptions)
+    public static ManyNotifyBatch32Publishers CreatePublishers32(IServiceProvider  provider, int subscribersPerEvent,
+                                                                 List<IDisposable> subscriptions)
     {
         var publishers = new ManyNotifyBatch32Publishers();
         SubscribeCopies<ManyNotifyEvent_000>(provider, subscribersPerEvent, subscriptions);
@@ -2370,70 +3396,70 @@ internal static class ManyNotifyFixedBatchRegistry
     {
         if (subscribersPerEvent == 2)
         {
-        DirectConsume(in ManyNotifyEvent_000.Instance);
-        DirectConsume(in ManyNotifyEvent_000.Instance);
-        DirectConsume(in ManyNotifyEvent_001.Instance);
-        DirectConsume(in ManyNotifyEvent_001.Instance);
-        DirectConsume(in ManyNotifyEvent_002.Instance);
-        DirectConsume(in ManyNotifyEvent_002.Instance);
-        DirectConsume(in ManyNotifyEvent_003.Instance);
-        DirectConsume(in ManyNotifyEvent_003.Instance);
-        DirectConsume(in ManyNotifyEvent_004.Instance);
-        DirectConsume(in ManyNotifyEvent_004.Instance);
-        DirectConsume(in ManyNotifyEvent_005.Instance);
-        DirectConsume(in ManyNotifyEvent_005.Instance);
-        DirectConsume(in ManyNotifyEvent_006.Instance);
-        DirectConsume(in ManyNotifyEvent_006.Instance);
-        DirectConsume(in ManyNotifyEvent_007.Instance);
-        DirectConsume(in ManyNotifyEvent_007.Instance);
-        DirectConsume(in ManyNotifyEvent_008.Instance);
-        DirectConsume(in ManyNotifyEvent_008.Instance);
-        DirectConsume(in ManyNotifyEvent_009.Instance);
-        DirectConsume(in ManyNotifyEvent_009.Instance);
-        DirectConsume(in ManyNotifyEvent_010.Instance);
-        DirectConsume(in ManyNotifyEvent_010.Instance);
-        DirectConsume(in ManyNotifyEvent_011.Instance);
-        DirectConsume(in ManyNotifyEvent_011.Instance);
-        DirectConsume(in ManyNotifyEvent_012.Instance);
-        DirectConsume(in ManyNotifyEvent_012.Instance);
-        DirectConsume(in ManyNotifyEvent_013.Instance);
-        DirectConsume(in ManyNotifyEvent_013.Instance);
-        DirectConsume(in ManyNotifyEvent_014.Instance);
-        DirectConsume(in ManyNotifyEvent_014.Instance);
-        DirectConsume(in ManyNotifyEvent_015.Instance);
-        DirectConsume(in ManyNotifyEvent_015.Instance);
-        DirectConsume(in ManyNotifyEvent_016.Instance);
-        DirectConsume(in ManyNotifyEvent_016.Instance);
-        DirectConsume(in ManyNotifyEvent_017.Instance);
-        DirectConsume(in ManyNotifyEvent_017.Instance);
-        DirectConsume(in ManyNotifyEvent_018.Instance);
-        DirectConsume(in ManyNotifyEvent_018.Instance);
-        DirectConsume(in ManyNotifyEvent_019.Instance);
-        DirectConsume(in ManyNotifyEvent_019.Instance);
-        DirectConsume(in ManyNotifyEvent_020.Instance);
-        DirectConsume(in ManyNotifyEvent_020.Instance);
-        DirectConsume(in ManyNotifyEvent_021.Instance);
-        DirectConsume(in ManyNotifyEvent_021.Instance);
-        DirectConsume(in ManyNotifyEvent_022.Instance);
-        DirectConsume(in ManyNotifyEvent_022.Instance);
-        DirectConsume(in ManyNotifyEvent_023.Instance);
-        DirectConsume(in ManyNotifyEvent_023.Instance);
-        DirectConsume(in ManyNotifyEvent_024.Instance);
-        DirectConsume(in ManyNotifyEvent_024.Instance);
-        DirectConsume(in ManyNotifyEvent_025.Instance);
-        DirectConsume(in ManyNotifyEvent_025.Instance);
-        DirectConsume(in ManyNotifyEvent_026.Instance);
-        DirectConsume(in ManyNotifyEvent_026.Instance);
-        DirectConsume(in ManyNotifyEvent_027.Instance);
-        DirectConsume(in ManyNotifyEvent_027.Instance);
-        DirectConsume(in ManyNotifyEvent_028.Instance);
-        DirectConsume(in ManyNotifyEvent_028.Instance);
-        DirectConsume(in ManyNotifyEvent_029.Instance);
-        DirectConsume(in ManyNotifyEvent_029.Instance);
-        DirectConsume(in ManyNotifyEvent_030.Instance);
-        DirectConsume(in ManyNotifyEvent_030.Instance);
-        DirectConsume(in ManyNotifyEvent_031.Instance);
-        DirectConsume(in ManyNotifyEvent_031.Instance);
+            DirectConsume(in ManyNotifyEvent_000.Instance);
+            DirectConsume(in ManyNotifyEvent_000.Instance);
+            DirectConsume(in ManyNotifyEvent_001.Instance);
+            DirectConsume(in ManyNotifyEvent_001.Instance);
+            DirectConsume(in ManyNotifyEvent_002.Instance);
+            DirectConsume(in ManyNotifyEvent_002.Instance);
+            DirectConsume(in ManyNotifyEvent_003.Instance);
+            DirectConsume(in ManyNotifyEvent_003.Instance);
+            DirectConsume(in ManyNotifyEvent_004.Instance);
+            DirectConsume(in ManyNotifyEvent_004.Instance);
+            DirectConsume(in ManyNotifyEvent_005.Instance);
+            DirectConsume(in ManyNotifyEvent_005.Instance);
+            DirectConsume(in ManyNotifyEvent_006.Instance);
+            DirectConsume(in ManyNotifyEvent_006.Instance);
+            DirectConsume(in ManyNotifyEvent_007.Instance);
+            DirectConsume(in ManyNotifyEvent_007.Instance);
+            DirectConsume(in ManyNotifyEvent_008.Instance);
+            DirectConsume(in ManyNotifyEvent_008.Instance);
+            DirectConsume(in ManyNotifyEvent_009.Instance);
+            DirectConsume(in ManyNotifyEvent_009.Instance);
+            DirectConsume(in ManyNotifyEvent_010.Instance);
+            DirectConsume(in ManyNotifyEvent_010.Instance);
+            DirectConsume(in ManyNotifyEvent_011.Instance);
+            DirectConsume(in ManyNotifyEvent_011.Instance);
+            DirectConsume(in ManyNotifyEvent_012.Instance);
+            DirectConsume(in ManyNotifyEvent_012.Instance);
+            DirectConsume(in ManyNotifyEvent_013.Instance);
+            DirectConsume(in ManyNotifyEvent_013.Instance);
+            DirectConsume(in ManyNotifyEvent_014.Instance);
+            DirectConsume(in ManyNotifyEvent_014.Instance);
+            DirectConsume(in ManyNotifyEvent_015.Instance);
+            DirectConsume(in ManyNotifyEvent_015.Instance);
+            DirectConsume(in ManyNotifyEvent_016.Instance);
+            DirectConsume(in ManyNotifyEvent_016.Instance);
+            DirectConsume(in ManyNotifyEvent_017.Instance);
+            DirectConsume(in ManyNotifyEvent_017.Instance);
+            DirectConsume(in ManyNotifyEvent_018.Instance);
+            DirectConsume(in ManyNotifyEvent_018.Instance);
+            DirectConsume(in ManyNotifyEvent_019.Instance);
+            DirectConsume(in ManyNotifyEvent_019.Instance);
+            DirectConsume(in ManyNotifyEvent_020.Instance);
+            DirectConsume(in ManyNotifyEvent_020.Instance);
+            DirectConsume(in ManyNotifyEvent_021.Instance);
+            DirectConsume(in ManyNotifyEvent_021.Instance);
+            DirectConsume(in ManyNotifyEvent_022.Instance);
+            DirectConsume(in ManyNotifyEvent_022.Instance);
+            DirectConsume(in ManyNotifyEvent_023.Instance);
+            DirectConsume(in ManyNotifyEvent_023.Instance);
+            DirectConsume(in ManyNotifyEvent_024.Instance);
+            DirectConsume(in ManyNotifyEvent_024.Instance);
+            DirectConsume(in ManyNotifyEvent_025.Instance);
+            DirectConsume(in ManyNotifyEvent_025.Instance);
+            DirectConsume(in ManyNotifyEvent_026.Instance);
+            DirectConsume(in ManyNotifyEvent_026.Instance);
+            DirectConsume(in ManyNotifyEvent_027.Instance);
+            DirectConsume(in ManyNotifyEvent_027.Instance);
+            DirectConsume(in ManyNotifyEvent_028.Instance);
+            DirectConsume(in ManyNotifyEvent_028.Instance);
+            DirectConsume(in ManyNotifyEvent_029.Instance);
+            DirectConsume(in ManyNotifyEvent_029.Instance);
+            DirectConsume(in ManyNotifyEvent_030.Instance);
+            DirectConsume(in ManyNotifyEvent_030.Instance);
+            DirectConsume(in ManyNotifyEvent_031.Instance);
+            DirectConsume(in ManyNotifyEvent_031.Instance);
             return;
         }
 
@@ -2739,7 +3765,8 @@ internal static class ManyNotifyFixedBatchRegistry
         RegisterServiceCopies<ManyNotifyManager_127>(layer, subscribersPerEvent);
     }
 
-    public static ManyNotifyBatch128Publishers CreatePublishers128(System.IServiceProvider provider, int subscribersPerEvent, List<IDisposable> subscriptions)
+    public static ManyNotifyBatch128Publishers CreatePublishers128(IServiceProvider  provider, int subscribersPerEvent,
+                                                                   List<IDisposable> subscriptions)
     {
         var publishers = new ManyNotifyBatch128Publishers();
         SubscribeCopies<ManyNotifyEvent_000>(provider, subscribersPerEvent, subscriptions);
@@ -3005,262 +4032,262 @@ internal static class ManyNotifyFixedBatchRegistry
     {
         if (subscribersPerEvent == 2)
         {
-        DirectConsume(in ManyNotifyEvent_000.Instance);
-        DirectConsume(in ManyNotifyEvent_000.Instance);
-        DirectConsume(in ManyNotifyEvent_001.Instance);
-        DirectConsume(in ManyNotifyEvent_001.Instance);
-        DirectConsume(in ManyNotifyEvent_002.Instance);
-        DirectConsume(in ManyNotifyEvent_002.Instance);
-        DirectConsume(in ManyNotifyEvent_003.Instance);
-        DirectConsume(in ManyNotifyEvent_003.Instance);
-        DirectConsume(in ManyNotifyEvent_004.Instance);
-        DirectConsume(in ManyNotifyEvent_004.Instance);
-        DirectConsume(in ManyNotifyEvent_005.Instance);
-        DirectConsume(in ManyNotifyEvent_005.Instance);
-        DirectConsume(in ManyNotifyEvent_006.Instance);
-        DirectConsume(in ManyNotifyEvent_006.Instance);
-        DirectConsume(in ManyNotifyEvent_007.Instance);
-        DirectConsume(in ManyNotifyEvent_007.Instance);
-        DirectConsume(in ManyNotifyEvent_008.Instance);
-        DirectConsume(in ManyNotifyEvent_008.Instance);
-        DirectConsume(in ManyNotifyEvent_009.Instance);
-        DirectConsume(in ManyNotifyEvent_009.Instance);
-        DirectConsume(in ManyNotifyEvent_010.Instance);
-        DirectConsume(in ManyNotifyEvent_010.Instance);
-        DirectConsume(in ManyNotifyEvent_011.Instance);
-        DirectConsume(in ManyNotifyEvent_011.Instance);
-        DirectConsume(in ManyNotifyEvent_012.Instance);
-        DirectConsume(in ManyNotifyEvent_012.Instance);
-        DirectConsume(in ManyNotifyEvent_013.Instance);
-        DirectConsume(in ManyNotifyEvent_013.Instance);
-        DirectConsume(in ManyNotifyEvent_014.Instance);
-        DirectConsume(in ManyNotifyEvent_014.Instance);
-        DirectConsume(in ManyNotifyEvent_015.Instance);
-        DirectConsume(in ManyNotifyEvent_015.Instance);
-        DirectConsume(in ManyNotifyEvent_016.Instance);
-        DirectConsume(in ManyNotifyEvent_016.Instance);
-        DirectConsume(in ManyNotifyEvent_017.Instance);
-        DirectConsume(in ManyNotifyEvent_017.Instance);
-        DirectConsume(in ManyNotifyEvent_018.Instance);
-        DirectConsume(in ManyNotifyEvent_018.Instance);
-        DirectConsume(in ManyNotifyEvent_019.Instance);
-        DirectConsume(in ManyNotifyEvent_019.Instance);
-        DirectConsume(in ManyNotifyEvent_020.Instance);
-        DirectConsume(in ManyNotifyEvent_020.Instance);
-        DirectConsume(in ManyNotifyEvent_021.Instance);
-        DirectConsume(in ManyNotifyEvent_021.Instance);
-        DirectConsume(in ManyNotifyEvent_022.Instance);
-        DirectConsume(in ManyNotifyEvent_022.Instance);
-        DirectConsume(in ManyNotifyEvent_023.Instance);
-        DirectConsume(in ManyNotifyEvent_023.Instance);
-        DirectConsume(in ManyNotifyEvent_024.Instance);
-        DirectConsume(in ManyNotifyEvent_024.Instance);
-        DirectConsume(in ManyNotifyEvent_025.Instance);
-        DirectConsume(in ManyNotifyEvent_025.Instance);
-        DirectConsume(in ManyNotifyEvent_026.Instance);
-        DirectConsume(in ManyNotifyEvent_026.Instance);
-        DirectConsume(in ManyNotifyEvent_027.Instance);
-        DirectConsume(in ManyNotifyEvent_027.Instance);
-        DirectConsume(in ManyNotifyEvent_028.Instance);
-        DirectConsume(in ManyNotifyEvent_028.Instance);
-        DirectConsume(in ManyNotifyEvent_029.Instance);
-        DirectConsume(in ManyNotifyEvent_029.Instance);
-        DirectConsume(in ManyNotifyEvent_030.Instance);
-        DirectConsume(in ManyNotifyEvent_030.Instance);
-        DirectConsume(in ManyNotifyEvent_031.Instance);
-        DirectConsume(in ManyNotifyEvent_031.Instance);
-        DirectConsume(in ManyNotifyEvent_032.Instance);
-        DirectConsume(in ManyNotifyEvent_032.Instance);
-        DirectConsume(in ManyNotifyEvent_033.Instance);
-        DirectConsume(in ManyNotifyEvent_033.Instance);
-        DirectConsume(in ManyNotifyEvent_034.Instance);
-        DirectConsume(in ManyNotifyEvent_034.Instance);
-        DirectConsume(in ManyNotifyEvent_035.Instance);
-        DirectConsume(in ManyNotifyEvent_035.Instance);
-        DirectConsume(in ManyNotifyEvent_036.Instance);
-        DirectConsume(in ManyNotifyEvent_036.Instance);
-        DirectConsume(in ManyNotifyEvent_037.Instance);
-        DirectConsume(in ManyNotifyEvent_037.Instance);
-        DirectConsume(in ManyNotifyEvent_038.Instance);
-        DirectConsume(in ManyNotifyEvent_038.Instance);
-        DirectConsume(in ManyNotifyEvent_039.Instance);
-        DirectConsume(in ManyNotifyEvent_039.Instance);
-        DirectConsume(in ManyNotifyEvent_040.Instance);
-        DirectConsume(in ManyNotifyEvent_040.Instance);
-        DirectConsume(in ManyNotifyEvent_041.Instance);
-        DirectConsume(in ManyNotifyEvent_041.Instance);
-        DirectConsume(in ManyNotifyEvent_042.Instance);
-        DirectConsume(in ManyNotifyEvent_042.Instance);
-        DirectConsume(in ManyNotifyEvent_043.Instance);
-        DirectConsume(in ManyNotifyEvent_043.Instance);
-        DirectConsume(in ManyNotifyEvent_044.Instance);
-        DirectConsume(in ManyNotifyEvent_044.Instance);
-        DirectConsume(in ManyNotifyEvent_045.Instance);
-        DirectConsume(in ManyNotifyEvent_045.Instance);
-        DirectConsume(in ManyNotifyEvent_046.Instance);
-        DirectConsume(in ManyNotifyEvent_046.Instance);
-        DirectConsume(in ManyNotifyEvent_047.Instance);
-        DirectConsume(in ManyNotifyEvent_047.Instance);
-        DirectConsume(in ManyNotifyEvent_048.Instance);
-        DirectConsume(in ManyNotifyEvent_048.Instance);
-        DirectConsume(in ManyNotifyEvent_049.Instance);
-        DirectConsume(in ManyNotifyEvent_049.Instance);
-        DirectConsume(in ManyNotifyEvent_050.Instance);
-        DirectConsume(in ManyNotifyEvent_050.Instance);
-        DirectConsume(in ManyNotifyEvent_051.Instance);
-        DirectConsume(in ManyNotifyEvent_051.Instance);
-        DirectConsume(in ManyNotifyEvent_052.Instance);
-        DirectConsume(in ManyNotifyEvent_052.Instance);
-        DirectConsume(in ManyNotifyEvent_053.Instance);
-        DirectConsume(in ManyNotifyEvent_053.Instance);
-        DirectConsume(in ManyNotifyEvent_054.Instance);
-        DirectConsume(in ManyNotifyEvent_054.Instance);
-        DirectConsume(in ManyNotifyEvent_055.Instance);
-        DirectConsume(in ManyNotifyEvent_055.Instance);
-        DirectConsume(in ManyNotifyEvent_056.Instance);
-        DirectConsume(in ManyNotifyEvent_056.Instance);
-        DirectConsume(in ManyNotifyEvent_057.Instance);
-        DirectConsume(in ManyNotifyEvent_057.Instance);
-        DirectConsume(in ManyNotifyEvent_058.Instance);
-        DirectConsume(in ManyNotifyEvent_058.Instance);
-        DirectConsume(in ManyNotifyEvent_059.Instance);
-        DirectConsume(in ManyNotifyEvent_059.Instance);
-        DirectConsume(in ManyNotifyEvent_060.Instance);
-        DirectConsume(in ManyNotifyEvent_060.Instance);
-        DirectConsume(in ManyNotifyEvent_061.Instance);
-        DirectConsume(in ManyNotifyEvent_061.Instance);
-        DirectConsume(in ManyNotifyEvent_062.Instance);
-        DirectConsume(in ManyNotifyEvent_062.Instance);
-        DirectConsume(in ManyNotifyEvent_063.Instance);
-        DirectConsume(in ManyNotifyEvent_063.Instance);
-        DirectConsume(in ManyNotifyEvent_064.Instance);
-        DirectConsume(in ManyNotifyEvent_064.Instance);
-        DirectConsume(in ManyNotifyEvent_065.Instance);
-        DirectConsume(in ManyNotifyEvent_065.Instance);
-        DirectConsume(in ManyNotifyEvent_066.Instance);
-        DirectConsume(in ManyNotifyEvent_066.Instance);
-        DirectConsume(in ManyNotifyEvent_067.Instance);
-        DirectConsume(in ManyNotifyEvent_067.Instance);
-        DirectConsume(in ManyNotifyEvent_068.Instance);
-        DirectConsume(in ManyNotifyEvent_068.Instance);
-        DirectConsume(in ManyNotifyEvent_069.Instance);
-        DirectConsume(in ManyNotifyEvent_069.Instance);
-        DirectConsume(in ManyNotifyEvent_070.Instance);
-        DirectConsume(in ManyNotifyEvent_070.Instance);
-        DirectConsume(in ManyNotifyEvent_071.Instance);
-        DirectConsume(in ManyNotifyEvent_071.Instance);
-        DirectConsume(in ManyNotifyEvent_072.Instance);
-        DirectConsume(in ManyNotifyEvent_072.Instance);
-        DirectConsume(in ManyNotifyEvent_073.Instance);
-        DirectConsume(in ManyNotifyEvent_073.Instance);
-        DirectConsume(in ManyNotifyEvent_074.Instance);
-        DirectConsume(in ManyNotifyEvent_074.Instance);
-        DirectConsume(in ManyNotifyEvent_075.Instance);
-        DirectConsume(in ManyNotifyEvent_075.Instance);
-        DirectConsume(in ManyNotifyEvent_076.Instance);
-        DirectConsume(in ManyNotifyEvent_076.Instance);
-        DirectConsume(in ManyNotifyEvent_077.Instance);
-        DirectConsume(in ManyNotifyEvent_077.Instance);
-        DirectConsume(in ManyNotifyEvent_078.Instance);
-        DirectConsume(in ManyNotifyEvent_078.Instance);
-        DirectConsume(in ManyNotifyEvent_079.Instance);
-        DirectConsume(in ManyNotifyEvent_079.Instance);
-        DirectConsume(in ManyNotifyEvent_080.Instance);
-        DirectConsume(in ManyNotifyEvent_080.Instance);
-        DirectConsume(in ManyNotifyEvent_081.Instance);
-        DirectConsume(in ManyNotifyEvent_081.Instance);
-        DirectConsume(in ManyNotifyEvent_082.Instance);
-        DirectConsume(in ManyNotifyEvent_082.Instance);
-        DirectConsume(in ManyNotifyEvent_083.Instance);
-        DirectConsume(in ManyNotifyEvent_083.Instance);
-        DirectConsume(in ManyNotifyEvent_084.Instance);
-        DirectConsume(in ManyNotifyEvent_084.Instance);
-        DirectConsume(in ManyNotifyEvent_085.Instance);
-        DirectConsume(in ManyNotifyEvent_085.Instance);
-        DirectConsume(in ManyNotifyEvent_086.Instance);
-        DirectConsume(in ManyNotifyEvent_086.Instance);
-        DirectConsume(in ManyNotifyEvent_087.Instance);
-        DirectConsume(in ManyNotifyEvent_087.Instance);
-        DirectConsume(in ManyNotifyEvent_088.Instance);
-        DirectConsume(in ManyNotifyEvent_088.Instance);
-        DirectConsume(in ManyNotifyEvent_089.Instance);
-        DirectConsume(in ManyNotifyEvent_089.Instance);
-        DirectConsume(in ManyNotifyEvent_090.Instance);
-        DirectConsume(in ManyNotifyEvent_090.Instance);
-        DirectConsume(in ManyNotifyEvent_091.Instance);
-        DirectConsume(in ManyNotifyEvent_091.Instance);
-        DirectConsume(in ManyNotifyEvent_092.Instance);
-        DirectConsume(in ManyNotifyEvent_092.Instance);
-        DirectConsume(in ManyNotifyEvent_093.Instance);
-        DirectConsume(in ManyNotifyEvent_093.Instance);
-        DirectConsume(in ManyNotifyEvent_094.Instance);
-        DirectConsume(in ManyNotifyEvent_094.Instance);
-        DirectConsume(in ManyNotifyEvent_095.Instance);
-        DirectConsume(in ManyNotifyEvent_095.Instance);
-        DirectConsume(in ManyNotifyEvent_096.Instance);
-        DirectConsume(in ManyNotifyEvent_096.Instance);
-        DirectConsume(in ManyNotifyEvent_097.Instance);
-        DirectConsume(in ManyNotifyEvent_097.Instance);
-        DirectConsume(in ManyNotifyEvent_098.Instance);
-        DirectConsume(in ManyNotifyEvent_098.Instance);
-        DirectConsume(in ManyNotifyEvent_099.Instance);
-        DirectConsume(in ManyNotifyEvent_099.Instance);
-        DirectConsume(in ManyNotifyEvent_100.Instance);
-        DirectConsume(in ManyNotifyEvent_100.Instance);
-        DirectConsume(in ManyNotifyEvent_101.Instance);
-        DirectConsume(in ManyNotifyEvent_101.Instance);
-        DirectConsume(in ManyNotifyEvent_102.Instance);
-        DirectConsume(in ManyNotifyEvent_102.Instance);
-        DirectConsume(in ManyNotifyEvent_103.Instance);
-        DirectConsume(in ManyNotifyEvent_103.Instance);
-        DirectConsume(in ManyNotifyEvent_104.Instance);
-        DirectConsume(in ManyNotifyEvent_104.Instance);
-        DirectConsume(in ManyNotifyEvent_105.Instance);
-        DirectConsume(in ManyNotifyEvent_105.Instance);
-        DirectConsume(in ManyNotifyEvent_106.Instance);
-        DirectConsume(in ManyNotifyEvent_106.Instance);
-        DirectConsume(in ManyNotifyEvent_107.Instance);
-        DirectConsume(in ManyNotifyEvent_107.Instance);
-        DirectConsume(in ManyNotifyEvent_108.Instance);
-        DirectConsume(in ManyNotifyEvent_108.Instance);
-        DirectConsume(in ManyNotifyEvent_109.Instance);
-        DirectConsume(in ManyNotifyEvent_109.Instance);
-        DirectConsume(in ManyNotifyEvent_110.Instance);
-        DirectConsume(in ManyNotifyEvent_110.Instance);
-        DirectConsume(in ManyNotifyEvent_111.Instance);
-        DirectConsume(in ManyNotifyEvent_111.Instance);
-        DirectConsume(in ManyNotifyEvent_112.Instance);
-        DirectConsume(in ManyNotifyEvent_112.Instance);
-        DirectConsume(in ManyNotifyEvent_113.Instance);
-        DirectConsume(in ManyNotifyEvent_113.Instance);
-        DirectConsume(in ManyNotifyEvent_114.Instance);
-        DirectConsume(in ManyNotifyEvent_114.Instance);
-        DirectConsume(in ManyNotifyEvent_115.Instance);
-        DirectConsume(in ManyNotifyEvent_115.Instance);
-        DirectConsume(in ManyNotifyEvent_116.Instance);
-        DirectConsume(in ManyNotifyEvent_116.Instance);
-        DirectConsume(in ManyNotifyEvent_117.Instance);
-        DirectConsume(in ManyNotifyEvent_117.Instance);
-        DirectConsume(in ManyNotifyEvent_118.Instance);
-        DirectConsume(in ManyNotifyEvent_118.Instance);
-        DirectConsume(in ManyNotifyEvent_119.Instance);
-        DirectConsume(in ManyNotifyEvent_119.Instance);
-        DirectConsume(in ManyNotifyEvent_120.Instance);
-        DirectConsume(in ManyNotifyEvent_120.Instance);
-        DirectConsume(in ManyNotifyEvent_121.Instance);
-        DirectConsume(in ManyNotifyEvent_121.Instance);
-        DirectConsume(in ManyNotifyEvent_122.Instance);
-        DirectConsume(in ManyNotifyEvent_122.Instance);
-        DirectConsume(in ManyNotifyEvent_123.Instance);
-        DirectConsume(in ManyNotifyEvent_123.Instance);
-        DirectConsume(in ManyNotifyEvent_124.Instance);
-        DirectConsume(in ManyNotifyEvent_124.Instance);
-        DirectConsume(in ManyNotifyEvent_125.Instance);
-        DirectConsume(in ManyNotifyEvent_125.Instance);
-        DirectConsume(in ManyNotifyEvent_126.Instance);
-        DirectConsume(in ManyNotifyEvent_126.Instance);
-        DirectConsume(in ManyNotifyEvent_127.Instance);
-        DirectConsume(in ManyNotifyEvent_127.Instance);
+            DirectConsume(in ManyNotifyEvent_000.Instance);
+            DirectConsume(in ManyNotifyEvent_000.Instance);
+            DirectConsume(in ManyNotifyEvent_001.Instance);
+            DirectConsume(in ManyNotifyEvent_001.Instance);
+            DirectConsume(in ManyNotifyEvent_002.Instance);
+            DirectConsume(in ManyNotifyEvent_002.Instance);
+            DirectConsume(in ManyNotifyEvent_003.Instance);
+            DirectConsume(in ManyNotifyEvent_003.Instance);
+            DirectConsume(in ManyNotifyEvent_004.Instance);
+            DirectConsume(in ManyNotifyEvent_004.Instance);
+            DirectConsume(in ManyNotifyEvent_005.Instance);
+            DirectConsume(in ManyNotifyEvent_005.Instance);
+            DirectConsume(in ManyNotifyEvent_006.Instance);
+            DirectConsume(in ManyNotifyEvent_006.Instance);
+            DirectConsume(in ManyNotifyEvent_007.Instance);
+            DirectConsume(in ManyNotifyEvent_007.Instance);
+            DirectConsume(in ManyNotifyEvent_008.Instance);
+            DirectConsume(in ManyNotifyEvent_008.Instance);
+            DirectConsume(in ManyNotifyEvent_009.Instance);
+            DirectConsume(in ManyNotifyEvent_009.Instance);
+            DirectConsume(in ManyNotifyEvent_010.Instance);
+            DirectConsume(in ManyNotifyEvent_010.Instance);
+            DirectConsume(in ManyNotifyEvent_011.Instance);
+            DirectConsume(in ManyNotifyEvent_011.Instance);
+            DirectConsume(in ManyNotifyEvent_012.Instance);
+            DirectConsume(in ManyNotifyEvent_012.Instance);
+            DirectConsume(in ManyNotifyEvent_013.Instance);
+            DirectConsume(in ManyNotifyEvent_013.Instance);
+            DirectConsume(in ManyNotifyEvent_014.Instance);
+            DirectConsume(in ManyNotifyEvent_014.Instance);
+            DirectConsume(in ManyNotifyEvent_015.Instance);
+            DirectConsume(in ManyNotifyEvent_015.Instance);
+            DirectConsume(in ManyNotifyEvent_016.Instance);
+            DirectConsume(in ManyNotifyEvent_016.Instance);
+            DirectConsume(in ManyNotifyEvent_017.Instance);
+            DirectConsume(in ManyNotifyEvent_017.Instance);
+            DirectConsume(in ManyNotifyEvent_018.Instance);
+            DirectConsume(in ManyNotifyEvent_018.Instance);
+            DirectConsume(in ManyNotifyEvent_019.Instance);
+            DirectConsume(in ManyNotifyEvent_019.Instance);
+            DirectConsume(in ManyNotifyEvent_020.Instance);
+            DirectConsume(in ManyNotifyEvent_020.Instance);
+            DirectConsume(in ManyNotifyEvent_021.Instance);
+            DirectConsume(in ManyNotifyEvent_021.Instance);
+            DirectConsume(in ManyNotifyEvent_022.Instance);
+            DirectConsume(in ManyNotifyEvent_022.Instance);
+            DirectConsume(in ManyNotifyEvent_023.Instance);
+            DirectConsume(in ManyNotifyEvent_023.Instance);
+            DirectConsume(in ManyNotifyEvent_024.Instance);
+            DirectConsume(in ManyNotifyEvent_024.Instance);
+            DirectConsume(in ManyNotifyEvent_025.Instance);
+            DirectConsume(in ManyNotifyEvent_025.Instance);
+            DirectConsume(in ManyNotifyEvent_026.Instance);
+            DirectConsume(in ManyNotifyEvent_026.Instance);
+            DirectConsume(in ManyNotifyEvent_027.Instance);
+            DirectConsume(in ManyNotifyEvent_027.Instance);
+            DirectConsume(in ManyNotifyEvent_028.Instance);
+            DirectConsume(in ManyNotifyEvent_028.Instance);
+            DirectConsume(in ManyNotifyEvent_029.Instance);
+            DirectConsume(in ManyNotifyEvent_029.Instance);
+            DirectConsume(in ManyNotifyEvent_030.Instance);
+            DirectConsume(in ManyNotifyEvent_030.Instance);
+            DirectConsume(in ManyNotifyEvent_031.Instance);
+            DirectConsume(in ManyNotifyEvent_031.Instance);
+            DirectConsume(in ManyNotifyEvent_032.Instance);
+            DirectConsume(in ManyNotifyEvent_032.Instance);
+            DirectConsume(in ManyNotifyEvent_033.Instance);
+            DirectConsume(in ManyNotifyEvent_033.Instance);
+            DirectConsume(in ManyNotifyEvent_034.Instance);
+            DirectConsume(in ManyNotifyEvent_034.Instance);
+            DirectConsume(in ManyNotifyEvent_035.Instance);
+            DirectConsume(in ManyNotifyEvent_035.Instance);
+            DirectConsume(in ManyNotifyEvent_036.Instance);
+            DirectConsume(in ManyNotifyEvent_036.Instance);
+            DirectConsume(in ManyNotifyEvent_037.Instance);
+            DirectConsume(in ManyNotifyEvent_037.Instance);
+            DirectConsume(in ManyNotifyEvent_038.Instance);
+            DirectConsume(in ManyNotifyEvent_038.Instance);
+            DirectConsume(in ManyNotifyEvent_039.Instance);
+            DirectConsume(in ManyNotifyEvent_039.Instance);
+            DirectConsume(in ManyNotifyEvent_040.Instance);
+            DirectConsume(in ManyNotifyEvent_040.Instance);
+            DirectConsume(in ManyNotifyEvent_041.Instance);
+            DirectConsume(in ManyNotifyEvent_041.Instance);
+            DirectConsume(in ManyNotifyEvent_042.Instance);
+            DirectConsume(in ManyNotifyEvent_042.Instance);
+            DirectConsume(in ManyNotifyEvent_043.Instance);
+            DirectConsume(in ManyNotifyEvent_043.Instance);
+            DirectConsume(in ManyNotifyEvent_044.Instance);
+            DirectConsume(in ManyNotifyEvent_044.Instance);
+            DirectConsume(in ManyNotifyEvent_045.Instance);
+            DirectConsume(in ManyNotifyEvent_045.Instance);
+            DirectConsume(in ManyNotifyEvent_046.Instance);
+            DirectConsume(in ManyNotifyEvent_046.Instance);
+            DirectConsume(in ManyNotifyEvent_047.Instance);
+            DirectConsume(in ManyNotifyEvent_047.Instance);
+            DirectConsume(in ManyNotifyEvent_048.Instance);
+            DirectConsume(in ManyNotifyEvent_048.Instance);
+            DirectConsume(in ManyNotifyEvent_049.Instance);
+            DirectConsume(in ManyNotifyEvent_049.Instance);
+            DirectConsume(in ManyNotifyEvent_050.Instance);
+            DirectConsume(in ManyNotifyEvent_050.Instance);
+            DirectConsume(in ManyNotifyEvent_051.Instance);
+            DirectConsume(in ManyNotifyEvent_051.Instance);
+            DirectConsume(in ManyNotifyEvent_052.Instance);
+            DirectConsume(in ManyNotifyEvent_052.Instance);
+            DirectConsume(in ManyNotifyEvent_053.Instance);
+            DirectConsume(in ManyNotifyEvent_053.Instance);
+            DirectConsume(in ManyNotifyEvent_054.Instance);
+            DirectConsume(in ManyNotifyEvent_054.Instance);
+            DirectConsume(in ManyNotifyEvent_055.Instance);
+            DirectConsume(in ManyNotifyEvent_055.Instance);
+            DirectConsume(in ManyNotifyEvent_056.Instance);
+            DirectConsume(in ManyNotifyEvent_056.Instance);
+            DirectConsume(in ManyNotifyEvent_057.Instance);
+            DirectConsume(in ManyNotifyEvent_057.Instance);
+            DirectConsume(in ManyNotifyEvent_058.Instance);
+            DirectConsume(in ManyNotifyEvent_058.Instance);
+            DirectConsume(in ManyNotifyEvent_059.Instance);
+            DirectConsume(in ManyNotifyEvent_059.Instance);
+            DirectConsume(in ManyNotifyEvent_060.Instance);
+            DirectConsume(in ManyNotifyEvent_060.Instance);
+            DirectConsume(in ManyNotifyEvent_061.Instance);
+            DirectConsume(in ManyNotifyEvent_061.Instance);
+            DirectConsume(in ManyNotifyEvent_062.Instance);
+            DirectConsume(in ManyNotifyEvent_062.Instance);
+            DirectConsume(in ManyNotifyEvent_063.Instance);
+            DirectConsume(in ManyNotifyEvent_063.Instance);
+            DirectConsume(in ManyNotifyEvent_064.Instance);
+            DirectConsume(in ManyNotifyEvent_064.Instance);
+            DirectConsume(in ManyNotifyEvent_065.Instance);
+            DirectConsume(in ManyNotifyEvent_065.Instance);
+            DirectConsume(in ManyNotifyEvent_066.Instance);
+            DirectConsume(in ManyNotifyEvent_066.Instance);
+            DirectConsume(in ManyNotifyEvent_067.Instance);
+            DirectConsume(in ManyNotifyEvent_067.Instance);
+            DirectConsume(in ManyNotifyEvent_068.Instance);
+            DirectConsume(in ManyNotifyEvent_068.Instance);
+            DirectConsume(in ManyNotifyEvent_069.Instance);
+            DirectConsume(in ManyNotifyEvent_069.Instance);
+            DirectConsume(in ManyNotifyEvent_070.Instance);
+            DirectConsume(in ManyNotifyEvent_070.Instance);
+            DirectConsume(in ManyNotifyEvent_071.Instance);
+            DirectConsume(in ManyNotifyEvent_071.Instance);
+            DirectConsume(in ManyNotifyEvent_072.Instance);
+            DirectConsume(in ManyNotifyEvent_072.Instance);
+            DirectConsume(in ManyNotifyEvent_073.Instance);
+            DirectConsume(in ManyNotifyEvent_073.Instance);
+            DirectConsume(in ManyNotifyEvent_074.Instance);
+            DirectConsume(in ManyNotifyEvent_074.Instance);
+            DirectConsume(in ManyNotifyEvent_075.Instance);
+            DirectConsume(in ManyNotifyEvent_075.Instance);
+            DirectConsume(in ManyNotifyEvent_076.Instance);
+            DirectConsume(in ManyNotifyEvent_076.Instance);
+            DirectConsume(in ManyNotifyEvent_077.Instance);
+            DirectConsume(in ManyNotifyEvent_077.Instance);
+            DirectConsume(in ManyNotifyEvent_078.Instance);
+            DirectConsume(in ManyNotifyEvent_078.Instance);
+            DirectConsume(in ManyNotifyEvent_079.Instance);
+            DirectConsume(in ManyNotifyEvent_079.Instance);
+            DirectConsume(in ManyNotifyEvent_080.Instance);
+            DirectConsume(in ManyNotifyEvent_080.Instance);
+            DirectConsume(in ManyNotifyEvent_081.Instance);
+            DirectConsume(in ManyNotifyEvent_081.Instance);
+            DirectConsume(in ManyNotifyEvent_082.Instance);
+            DirectConsume(in ManyNotifyEvent_082.Instance);
+            DirectConsume(in ManyNotifyEvent_083.Instance);
+            DirectConsume(in ManyNotifyEvent_083.Instance);
+            DirectConsume(in ManyNotifyEvent_084.Instance);
+            DirectConsume(in ManyNotifyEvent_084.Instance);
+            DirectConsume(in ManyNotifyEvent_085.Instance);
+            DirectConsume(in ManyNotifyEvent_085.Instance);
+            DirectConsume(in ManyNotifyEvent_086.Instance);
+            DirectConsume(in ManyNotifyEvent_086.Instance);
+            DirectConsume(in ManyNotifyEvent_087.Instance);
+            DirectConsume(in ManyNotifyEvent_087.Instance);
+            DirectConsume(in ManyNotifyEvent_088.Instance);
+            DirectConsume(in ManyNotifyEvent_088.Instance);
+            DirectConsume(in ManyNotifyEvent_089.Instance);
+            DirectConsume(in ManyNotifyEvent_089.Instance);
+            DirectConsume(in ManyNotifyEvent_090.Instance);
+            DirectConsume(in ManyNotifyEvent_090.Instance);
+            DirectConsume(in ManyNotifyEvent_091.Instance);
+            DirectConsume(in ManyNotifyEvent_091.Instance);
+            DirectConsume(in ManyNotifyEvent_092.Instance);
+            DirectConsume(in ManyNotifyEvent_092.Instance);
+            DirectConsume(in ManyNotifyEvent_093.Instance);
+            DirectConsume(in ManyNotifyEvent_093.Instance);
+            DirectConsume(in ManyNotifyEvent_094.Instance);
+            DirectConsume(in ManyNotifyEvent_094.Instance);
+            DirectConsume(in ManyNotifyEvent_095.Instance);
+            DirectConsume(in ManyNotifyEvent_095.Instance);
+            DirectConsume(in ManyNotifyEvent_096.Instance);
+            DirectConsume(in ManyNotifyEvent_096.Instance);
+            DirectConsume(in ManyNotifyEvent_097.Instance);
+            DirectConsume(in ManyNotifyEvent_097.Instance);
+            DirectConsume(in ManyNotifyEvent_098.Instance);
+            DirectConsume(in ManyNotifyEvent_098.Instance);
+            DirectConsume(in ManyNotifyEvent_099.Instance);
+            DirectConsume(in ManyNotifyEvent_099.Instance);
+            DirectConsume(in ManyNotifyEvent_100.Instance);
+            DirectConsume(in ManyNotifyEvent_100.Instance);
+            DirectConsume(in ManyNotifyEvent_101.Instance);
+            DirectConsume(in ManyNotifyEvent_101.Instance);
+            DirectConsume(in ManyNotifyEvent_102.Instance);
+            DirectConsume(in ManyNotifyEvent_102.Instance);
+            DirectConsume(in ManyNotifyEvent_103.Instance);
+            DirectConsume(in ManyNotifyEvent_103.Instance);
+            DirectConsume(in ManyNotifyEvent_104.Instance);
+            DirectConsume(in ManyNotifyEvent_104.Instance);
+            DirectConsume(in ManyNotifyEvent_105.Instance);
+            DirectConsume(in ManyNotifyEvent_105.Instance);
+            DirectConsume(in ManyNotifyEvent_106.Instance);
+            DirectConsume(in ManyNotifyEvent_106.Instance);
+            DirectConsume(in ManyNotifyEvent_107.Instance);
+            DirectConsume(in ManyNotifyEvent_107.Instance);
+            DirectConsume(in ManyNotifyEvent_108.Instance);
+            DirectConsume(in ManyNotifyEvent_108.Instance);
+            DirectConsume(in ManyNotifyEvent_109.Instance);
+            DirectConsume(in ManyNotifyEvent_109.Instance);
+            DirectConsume(in ManyNotifyEvent_110.Instance);
+            DirectConsume(in ManyNotifyEvent_110.Instance);
+            DirectConsume(in ManyNotifyEvent_111.Instance);
+            DirectConsume(in ManyNotifyEvent_111.Instance);
+            DirectConsume(in ManyNotifyEvent_112.Instance);
+            DirectConsume(in ManyNotifyEvent_112.Instance);
+            DirectConsume(in ManyNotifyEvent_113.Instance);
+            DirectConsume(in ManyNotifyEvent_113.Instance);
+            DirectConsume(in ManyNotifyEvent_114.Instance);
+            DirectConsume(in ManyNotifyEvent_114.Instance);
+            DirectConsume(in ManyNotifyEvent_115.Instance);
+            DirectConsume(in ManyNotifyEvent_115.Instance);
+            DirectConsume(in ManyNotifyEvent_116.Instance);
+            DirectConsume(in ManyNotifyEvent_116.Instance);
+            DirectConsume(in ManyNotifyEvent_117.Instance);
+            DirectConsume(in ManyNotifyEvent_117.Instance);
+            DirectConsume(in ManyNotifyEvent_118.Instance);
+            DirectConsume(in ManyNotifyEvent_118.Instance);
+            DirectConsume(in ManyNotifyEvent_119.Instance);
+            DirectConsume(in ManyNotifyEvent_119.Instance);
+            DirectConsume(in ManyNotifyEvent_120.Instance);
+            DirectConsume(in ManyNotifyEvent_120.Instance);
+            DirectConsume(in ManyNotifyEvent_121.Instance);
+            DirectConsume(in ManyNotifyEvent_121.Instance);
+            DirectConsume(in ManyNotifyEvent_122.Instance);
+            DirectConsume(in ManyNotifyEvent_122.Instance);
+            DirectConsume(in ManyNotifyEvent_123.Instance);
+            DirectConsume(in ManyNotifyEvent_123.Instance);
+            DirectConsume(in ManyNotifyEvent_124.Instance);
+            DirectConsume(in ManyNotifyEvent_124.Instance);
+            DirectConsume(in ManyNotifyEvent_125.Instance);
+            DirectConsume(in ManyNotifyEvent_125.Instance);
+            DirectConsume(in ManyNotifyEvent_126.Instance);
+            DirectConsume(in ManyNotifyEvent_126.Instance);
+            DirectConsume(in ManyNotifyEvent_127.Instance);
+            DirectConsume(in ManyNotifyEvent_127.Instance);
             return;
         }
 
@@ -4174,7 +5201,8 @@ internal static class ManyNotifyFixedBatchRegistry
         RegisterServiceCopies<ManyNotifyManager_255>(layer, subscribersPerEvent);
     }
 
-    public static ManyNotifyBatch256Publishers CreatePublishers256(System.IServiceProvider provider, int subscribersPerEvent, List<IDisposable> subscriptions)
+    public static ManyNotifyBatch256Publishers CreatePublishers256(IServiceProvider  provider, int subscribersPerEvent,
+                                                                   List<IDisposable> subscriptions)
     {
         var publishers = new ManyNotifyBatch256Publishers();
         SubscribeCopies<ManyNotifyEvent_000>(provider, subscribersPerEvent, subscriptions);
@@ -4696,518 +5724,518 @@ internal static class ManyNotifyFixedBatchRegistry
     {
         if (subscribersPerEvent == 2)
         {
-        DirectConsume(in ManyNotifyEvent_000.Instance);
-        DirectConsume(in ManyNotifyEvent_000.Instance);
-        DirectConsume(in ManyNotifyEvent_001.Instance);
-        DirectConsume(in ManyNotifyEvent_001.Instance);
-        DirectConsume(in ManyNotifyEvent_002.Instance);
-        DirectConsume(in ManyNotifyEvent_002.Instance);
-        DirectConsume(in ManyNotifyEvent_003.Instance);
-        DirectConsume(in ManyNotifyEvent_003.Instance);
-        DirectConsume(in ManyNotifyEvent_004.Instance);
-        DirectConsume(in ManyNotifyEvent_004.Instance);
-        DirectConsume(in ManyNotifyEvent_005.Instance);
-        DirectConsume(in ManyNotifyEvent_005.Instance);
-        DirectConsume(in ManyNotifyEvent_006.Instance);
-        DirectConsume(in ManyNotifyEvent_006.Instance);
-        DirectConsume(in ManyNotifyEvent_007.Instance);
-        DirectConsume(in ManyNotifyEvent_007.Instance);
-        DirectConsume(in ManyNotifyEvent_008.Instance);
-        DirectConsume(in ManyNotifyEvent_008.Instance);
-        DirectConsume(in ManyNotifyEvent_009.Instance);
-        DirectConsume(in ManyNotifyEvent_009.Instance);
-        DirectConsume(in ManyNotifyEvent_010.Instance);
-        DirectConsume(in ManyNotifyEvent_010.Instance);
-        DirectConsume(in ManyNotifyEvent_011.Instance);
-        DirectConsume(in ManyNotifyEvent_011.Instance);
-        DirectConsume(in ManyNotifyEvent_012.Instance);
-        DirectConsume(in ManyNotifyEvent_012.Instance);
-        DirectConsume(in ManyNotifyEvent_013.Instance);
-        DirectConsume(in ManyNotifyEvent_013.Instance);
-        DirectConsume(in ManyNotifyEvent_014.Instance);
-        DirectConsume(in ManyNotifyEvent_014.Instance);
-        DirectConsume(in ManyNotifyEvent_015.Instance);
-        DirectConsume(in ManyNotifyEvent_015.Instance);
-        DirectConsume(in ManyNotifyEvent_016.Instance);
-        DirectConsume(in ManyNotifyEvent_016.Instance);
-        DirectConsume(in ManyNotifyEvent_017.Instance);
-        DirectConsume(in ManyNotifyEvent_017.Instance);
-        DirectConsume(in ManyNotifyEvent_018.Instance);
-        DirectConsume(in ManyNotifyEvent_018.Instance);
-        DirectConsume(in ManyNotifyEvent_019.Instance);
-        DirectConsume(in ManyNotifyEvent_019.Instance);
-        DirectConsume(in ManyNotifyEvent_020.Instance);
-        DirectConsume(in ManyNotifyEvent_020.Instance);
-        DirectConsume(in ManyNotifyEvent_021.Instance);
-        DirectConsume(in ManyNotifyEvent_021.Instance);
-        DirectConsume(in ManyNotifyEvent_022.Instance);
-        DirectConsume(in ManyNotifyEvent_022.Instance);
-        DirectConsume(in ManyNotifyEvent_023.Instance);
-        DirectConsume(in ManyNotifyEvent_023.Instance);
-        DirectConsume(in ManyNotifyEvent_024.Instance);
-        DirectConsume(in ManyNotifyEvent_024.Instance);
-        DirectConsume(in ManyNotifyEvent_025.Instance);
-        DirectConsume(in ManyNotifyEvent_025.Instance);
-        DirectConsume(in ManyNotifyEvent_026.Instance);
-        DirectConsume(in ManyNotifyEvent_026.Instance);
-        DirectConsume(in ManyNotifyEvent_027.Instance);
-        DirectConsume(in ManyNotifyEvent_027.Instance);
-        DirectConsume(in ManyNotifyEvent_028.Instance);
-        DirectConsume(in ManyNotifyEvent_028.Instance);
-        DirectConsume(in ManyNotifyEvent_029.Instance);
-        DirectConsume(in ManyNotifyEvent_029.Instance);
-        DirectConsume(in ManyNotifyEvent_030.Instance);
-        DirectConsume(in ManyNotifyEvent_030.Instance);
-        DirectConsume(in ManyNotifyEvent_031.Instance);
-        DirectConsume(in ManyNotifyEvent_031.Instance);
-        DirectConsume(in ManyNotifyEvent_032.Instance);
-        DirectConsume(in ManyNotifyEvent_032.Instance);
-        DirectConsume(in ManyNotifyEvent_033.Instance);
-        DirectConsume(in ManyNotifyEvent_033.Instance);
-        DirectConsume(in ManyNotifyEvent_034.Instance);
-        DirectConsume(in ManyNotifyEvent_034.Instance);
-        DirectConsume(in ManyNotifyEvent_035.Instance);
-        DirectConsume(in ManyNotifyEvent_035.Instance);
-        DirectConsume(in ManyNotifyEvent_036.Instance);
-        DirectConsume(in ManyNotifyEvent_036.Instance);
-        DirectConsume(in ManyNotifyEvent_037.Instance);
-        DirectConsume(in ManyNotifyEvent_037.Instance);
-        DirectConsume(in ManyNotifyEvent_038.Instance);
-        DirectConsume(in ManyNotifyEvent_038.Instance);
-        DirectConsume(in ManyNotifyEvent_039.Instance);
-        DirectConsume(in ManyNotifyEvent_039.Instance);
-        DirectConsume(in ManyNotifyEvent_040.Instance);
-        DirectConsume(in ManyNotifyEvent_040.Instance);
-        DirectConsume(in ManyNotifyEvent_041.Instance);
-        DirectConsume(in ManyNotifyEvent_041.Instance);
-        DirectConsume(in ManyNotifyEvent_042.Instance);
-        DirectConsume(in ManyNotifyEvent_042.Instance);
-        DirectConsume(in ManyNotifyEvent_043.Instance);
-        DirectConsume(in ManyNotifyEvent_043.Instance);
-        DirectConsume(in ManyNotifyEvent_044.Instance);
-        DirectConsume(in ManyNotifyEvent_044.Instance);
-        DirectConsume(in ManyNotifyEvent_045.Instance);
-        DirectConsume(in ManyNotifyEvent_045.Instance);
-        DirectConsume(in ManyNotifyEvent_046.Instance);
-        DirectConsume(in ManyNotifyEvent_046.Instance);
-        DirectConsume(in ManyNotifyEvent_047.Instance);
-        DirectConsume(in ManyNotifyEvent_047.Instance);
-        DirectConsume(in ManyNotifyEvent_048.Instance);
-        DirectConsume(in ManyNotifyEvent_048.Instance);
-        DirectConsume(in ManyNotifyEvent_049.Instance);
-        DirectConsume(in ManyNotifyEvent_049.Instance);
-        DirectConsume(in ManyNotifyEvent_050.Instance);
-        DirectConsume(in ManyNotifyEvent_050.Instance);
-        DirectConsume(in ManyNotifyEvent_051.Instance);
-        DirectConsume(in ManyNotifyEvent_051.Instance);
-        DirectConsume(in ManyNotifyEvent_052.Instance);
-        DirectConsume(in ManyNotifyEvent_052.Instance);
-        DirectConsume(in ManyNotifyEvent_053.Instance);
-        DirectConsume(in ManyNotifyEvent_053.Instance);
-        DirectConsume(in ManyNotifyEvent_054.Instance);
-        DirectConsume(in ManyNotifyEvent_054.Instance);
-        DirectConsume(in ManyNotifyEvent_055.Instance);
-        DirectConsume(in ManyNotifyEvent_055.Instance);
-        DirectConsume(in ManyNotifyEvent_056.Instance);
-        DirectConsume(in ManyNotifyEvent_056.Instance);
-        DirectConsume(in ManyNotifyEvent_057.Instance);
-        DirectConsume(in ManyNotifyEvent_057.Instance);
-        DirectConsume(in ManyNotifyEvent_058.Instance);
-        DirectConsume(in ManyNotifyEvent_058.Instance);
-        DirectConsume(in ManyNotifyEvent_059.Instance);
-        DirectConsume(in ManyNotifyEvent_059.Instance);
-        DirectConsume(in ManyNotifyEvent_060.Instance);
-        DirectConsume(in ManyNotifyEvent_060.Instance);
-        DirectConsume(in ManyNotifyEvent_061.Instance);
-        DirectConsume(in ManyNotifyEvent_061.Instance);
-        DirectConsume(in ManyNotifyEvent_062.Instance);
-        DirectConsume(in ManyNotifyEvent_062.Instance);
-        DirectConsume(in ManyNotifyEvent_063.Instance);
-        DirectConsume(in ManyNotifyEvent_063.Instance);
-        DirectConsume(in ManyNotifyEvent_064.Instance);
-        DirectConsume(in ManyNotifyEvent_064.Instance);
-        DirectConsume(in ManyNotifyEvent_065.Instance);
-        DirectConsume(in ManyNotifyEvent_065.Instance);
-        DirectConsume(in ManyNotifyEvent_066.Instance);
-        DirectConsume(in ManyNotifyEvent_066.Instance);
-        DirectConsume(in ManyNotifyEvent_067.Instance);
-        DirectConsume(in ManyNotifyEvent_067.Instance);
-        DirectConsume(in ManyNotifyEvent_068.Instance);
-        DirectConsume(in ManyNotifyEvent_068.Instance);
-        DirectConsume(in ManyNotifyEvent_069.Instance);
-        DirectConsume(in ManyNotifyEvent_069.Instance);
-        DirectConsume(in ManyNotifyEvent_070.Instance);
-        DirectConsume(in ManyNotifyEvent_070.Instance);
-        DirectConsume(in ManyNotifyEvent_071.Instance);
-        DirectConsume(in ManyNotifyEvent_071.Instance);
-        DirectConsume(in ManyNotifyEvent_072.Instance);
-        DirectConsume(in ManyNotifyEvent_072.Instance);
-        DirectConsume(in ManyNotifyEvent_073.Instance);
-        DirectConsume(in ManyNotifyEvent_073.Instance);
-        DirectConsume(in ManyNotifyEvent_074.Instance);
-        DirectConsume(in ManyNotifyEvent_074.Instance);
-        DirectConsume(in ManyNotifyEvent_075.Instance);
-        DirectConsume(in ManyNotifyEvent_075.Instance);
-        DirectConsume(in ManyNotifyEvent_076.Instance);
-        DirectConsume(in ManyNotifyEvent_076.Instance);
-        DirectConsume(in ManyNotifyEvent_077.Instance);
-        DirectConsume(in ManyNotifyEvent_077.Instance);
-        DirectConsume(in ManyNotifyEvent_078.Instance);
-        DirectConsume(in ManyNotifyEvent_078.Instance);
-        DirectConsume(in ManyNotifyEvent_079.Instance);
-        DirectConsume(in ManyNotifyEvent_079.Instance);
-        DirectConsume(in ManyNotifyEvent_080.Instance);
-        DirectConsume(in ManyNotifyEvent_080.Instance);
-        DirectConsume(in ManyNotifyEvent_081.Instance);
-        DirectConsume(in ManyNotifyEvent_081.Instance);
-        DirectConsume(in ManyNotifyEvent_082.Instance);
-        DirectConsume(in ManyNotifyEvent_082.Instance);
-        DirectConsume(in ManyNotifyEvent_083.Instance);
-        DirectConsume(in ManyNotifyEvent_083.Instance);
-        DirectConsume(in ManyNotifyEvent_084.Instance);
-        DirectConsume(in ManyNotifyEvent_084.Instance);
-        DirectConsume(in ManyNotifyEvent_085.Instance);
-        DirectConsume(in ManyNotifyEvent_085.Instance);
-        DirectConsume(in ManyNotifyEvent_086.Instance);
-        DirectConsume(in ManyNotifyEvent_086.Instance);
-        DirectConsume(in ManyNotifyEvent_087.Instance);
-        DirectConsume(in ManyNotifyEvent_087.Instance);
-        DirectConsume(in ManyNotifyEvent_088.Instance);
-        DirectConsume(in ManyNotifyEvent_088.Instance);
-        DirectConsume(in ManyNotifyEvent_089.Instance);
-        DirectConsume(in ManyNotifyEvent_089.Instance);
-        DirectConsume(in ManyNotifyEvent_090.Instance);
-        DirectConsume(in ManyNotifyEvent_090.Instance);
-        DirectConsume(in ManyNotifyEvent_091.Instance);
-        DirectConsume(in ManyNotifyEvent_091.Instance);
-        DirectConsume(in ManyNotifyEvent_092.Instance);
-        DirectConsume(in ManyNotifyEvent_092.Instance);
-        DirectConsume(in ManyNotifyEvent_093.Instance);
-        DirectConsume(in ManyNotifyEvent_093.Instance);
-        DirectConsume(in ManyNotifyEvent_094.Instance);
-        DirectConsume(in ManyNotifyEvent_094.Instance);
-        DirectConsume(in ManyNotifyEvent_095.Instance);
-        DirectConsume(in ManyNotifyEvent_095.Instance);
-        DirectConsume(in ManyNotifyEvent_096.Instance);
-        DirectConsume(in ManyNotifyEvent_096.Instance);
-        DirectConsume(in ManyNotifyEvent_097.Instance);
-        DirectConsume(in ManyNotifyEvent_097.Instance);
-        DirectConsume(in ManyNotifyEvent_098.Instance);
-        DirectConsume(in ManyNotifyEvent_098.Instance);
-        DirectConsume(in ManyNotifyEvent_099.Instance);
-        DirectConsume(in ManyNotifyEvent_099.Instance);
-        DirectConsume(in ManyNotifyEvent_100.Instance);
-        DirectConsume(in ManyNotifyEvent_100.Instance);
-        DirectConsume(in ManyNotifyEvent_101.Instance);
-        DirectConsume(in ManyNotifyEvent_101.Instance);
-        DirectConsume(in ManyNotifyEvent_102.Instance);
-        DirectConsume(in ManyNotifyEvent_102.Instance);
-        DirectConsume(in ManyNotifyEvent_103.Instance);
-        DirectConsume(in ManyNotifyEvent_103.Instance);
-        DirectConsume(in ManyNotifyEvent_104.Instance);
-        DirectConsume(in ManyNotifyEvent_104.Instance);
-        DirectConsume(in ManyNotifyEvent_105.Instance);
-        DirectConsume(in ManyNotifyEvent_105.Instance);
-        DirectConsume(in ManyNotifyEvent_106.Instance);
-        DirectConsume(in ManyNotifyEvent_106.Instance);
-        DirectConsume(in ManyNotifyEvent_107.Instance);
-        DirectConsume(in ManyNotifyEvent_107.Instance);
-        DirectConsume(in ManyNotifyEvent_108.Instance);
-        DirectConsume(in ManyNotifyEvent_108.Instance);
-        DirectConsume(in ManyNotifyEvent_109.Instance);
-        DirectConsume(in ManyNotifyEvent_109.Instance);
-        DirectConsume(in ManyNotifyEvent_110.Instance);
-        DirectConsume(in ManyNotifyEvent_110.Instance);
-        DirectConsume(in ManyNotifyEvent_111.Instance);
-        DirectConsume(in ManyNotifyEvent_111.Instance);
-        DirectConsume(in ManyNotifyEvent_112.Instance);
-        DirectConsume(in ManyNotifyEvent_112.Instance);
-        DirectConsume(in ManyNotifyEvent_113.Instance);
-        DirectConsume(in ManyNotifyEvent_113.Instance);
-        DirectConsume(in ManyNotifyEvent_114.Instance);
-        DirectConsume(in ManyNotifyEvent_114.Instance);
-        DirectConsume(in ManyNotifyEvent_115.Instance);
-        DirectConsume(in ManyNotifyEvent_115.Instance);
-        DirectConsume(in ManyNotifyEvent_116.Instance);
-        DirectConsume(in ManyNotifyEvent_116.Instance);
-        DirectConsume(in ManyNotifyEvent_117.Instance);
-        DirectConsume(in ManyNotifyEvent_117.Instance);
-        DirectConsume(in ManyNotifyEvent_118.Instance);
-        DirectConsume(in ManyNotifyEvent_118.Instance);
-        DirectConsume(in ManyNotifyEvent_119.Instance);
-        DirectConsume(in ManyNotifyEvent_119.Instance);
-        DirectConsume(in ManyNotifyEvent_120.Instance);
-        DirectConsume(in ManyNotifyEvent_120.Instance);
-        DirectConsume(in ManyNotifyEvent_121.Instance);
-        DirectConsume(in ManyNotifyEvent_121.Instance);
-        DirectConsume(in ManyNotifyEvent_122.Instance);
-        DirectConsume(in ManyNotifyEvent_122.Instance);
-        DirectConsume(in ManyNotifyEvent_123.Instance);
-        DirectConsume(in ManyNotifyEvent_123.Instance);
-        DirectConsume(in ManyNotifyEvent_124.Instance);
-        DirectConsume(in ManyNotifyEvent_124.Instance);
-        DirectConsume(in ManyNotifyEvent_125.Instance);
-        DirectConsume(in ManyNotifyEvent_125.Instance);
-        DirectConsume(in ManyNotifyEvent_126.Instance);
-        DirectConsume(in ManyNotifyEvent_126.Instance);
-        DirectConsume(in ManyNotifyEvent_127.Instance);
-        DirectConsume(in ManyNotifyEvent_127.Instance);
-        DirectConsume(in ManyNotifyEvent_128.Instance);
-        DirectConsume(in ManyNotifyEvent_128.Instance);
-        DirectConsume(in ManyNotifyEvent_129.Instance);
-        DirectConsume(in ManyNotifyEvent_129.Instance);
-        DirectConsume(in ManyNotifyEvent_130.Instance);
-        DirectConsume(in ManyNotifyEvent_130.Instance);
-        DirectConsume(in ManyNotifyEvent_131.Instance);
-        DirectConsume(in ManyNotifyEvent_131.Instance);
-        DirectConsume(in ManyNotifyEvent_132.Instance);
-        DirectConsume(in ManyNotifyEvent_132.Instance);
-        DirectConsume(in ManyNotifyEvent_133.Instance);
-        DirectConsume(in ManyNotifyEvent_133.Instance);
-        DirectConsume(in ManyNotifyEvent_134.Instance);
-        DirectConsume(in ManyNotifyEvent_134.Instance);
-        DirectConsume(in ManyNotifyEvent_135.Instance);
-        DirectConsume(in ManyNotifyEvent_135.Instance);
-        DirectConsume(in ManyNotifyEvent_136.Instance);
-        DirectConsume(in ManyNotifyEvent_136.Instance);
-        DirectConsume(in ManyNotifyEvent_137.Instance);
-        DirectConsume(in ManyNotifyEvent_137.Instance);
-        DirectConsume(in ManyNotifyEvent_138.Instance);
-        DirectConsume(in ManyNotifyEvent_138.Instance);
-        DirectConsume(in ManyNotifyEvent_139.Instance);
-        DirectConsume(in ManyNotifyEvent_139.Instance);
-        DirectConsume(in ManyNotifyEvent_140.Instance);
-        DirectConsume(in ManyNotifyEvent_140.Instance);
-        DirectConsume(in ManyNotifyEvent_141.Instance);
-        DirectConsume(in ManyNotifyEvent_141.Instance);
-        DirectConsume(in ManyNotifyEvent_142.Instance);
-        DirectConsume(in ManyNotifyEvent_142.Instance);
-        DirectConsume(in ManyNotifyEvent_143.Instance);
-        DirectConsume(in ManyNotifyEvent_143.Instance);
-        DirectConsume(in ManyNotifyEvent_144.Instance);
-        DirectConsume(in ManyNotifyEvent_144.Instance);
-        DirectConsume(in ManyNotifyEvent_145.Instance);
-        DirectConsume(in ManyNotifyEvent_145.Instance);
-        DirectConsume(in ManyNotifyEvent_146.Instance);
-        DirectConsume(in ManyNotifyEvent_146.Instance);
-        DirectConsume(in ManyNotifyEvent_147.Instance);
-        DirectConsume(in ManyNotifyEvent_147.Instance);
-        DirectConsume(in ManyNotifyEvent_148.Instance);
-        DirectConsume(in ManyNotifyEvent_148.Instance);
-        DirectConsume(in ManyNotifyEvent_149.Instance);
-        DirectConsume(in ManyNotifyEvent_149.Instance);
-        DirectConsume(in ManyNotifyEvent_150.Instance);
-        DirectConsume(in ManyNotifyEvent_150.Instance);
-        DirectConsume(in ManyNotifyEvent_151.Instance);
-        DirectConsume(in ManyNotifyEvent_151.Instance);
-        DirectConsume(in ManyNotifyEvent_152.Instance);
-        DirectConsume(in ManyNotifyEvent_152.Instance);
-        DirectConsume(in ManyNotifyEvent_153.Instance);
-        DirectConsume(in ManyNotifyEvent_153.Instance);
-        DirectConsume(in ManyNotifyEvent_154.Instance);
-        DirectConsume(in ManyNotifyEvent_154.Instance);
-        DirectConsume(in ManyNotifyEvent_155.Instance);
-        DirectConsume(in ManyNotifyEvent_155.Instance);
-        DirectConsume(in ManyNotifyEvent_156.Instance);
-        DirectConsume(in ManyNotifyEvent_156.Instance);
-        DirectConsume(in ManyNotifyEvent_157.Instance);
-        DirectConsume(in ManyNotifyEvent_157.Instance);
-        DirectConsume(in ManyNotifyEvent_158.Instance);
-        DirectConsume(in ManyNotifyEvent_158.Instance);
-        DirectConsume(in ManyNotifyEvent_159.Instance);
-        DirectConsume(in ManyNotifyEvent_159.Instance);
-        DirectConsume(in ManyNotifyEvent_160.Instance);
-        DirectConsume(in ManyNotifyEvent_160.Instance);
-        DirectConsume(in ManyNotifyEvent_161.Instance);
-        DirectConsume(in ManyNotifyEvent_161.Instance);
-        DirectConsume(in ManyNotifyEvent_162.Instance);
-        DirectConsume(in ManyNotifyEvent_162.Instance);
-        DirectConsume(in ManyNotifyEvent_163.Instance);
-        DirectConsume(in ManyNotifyEvent_163.Instance);
-        DirectConsume(in ManyNotifyEvent_164.Instance);
-        DirectConsume(in ManyNotifyEvent_164.Instance);
-        DirectConsume(in ManyNotifyEvent_165.Instance);
-        DirectConsume(in ManyNotifyEvent_165.Instance);
-        DirectConsume(in ManyNotifyEvent_166.Instance);
-        DirectConsume(in ManyNotifyEvent_166.Instance);
-        DirectConsume(in ManyNotifyEvent_167.Instance);
-        DirectConsume(in ManyNotifyEvent_167.Instance);
-        DirectConsume(in ManyNotifyEvent_168.Instance);
-        DirectConsume(in ManyNotifyEvent_168.Instance);
-        DirectConsume(in ManyNotifyEvent_169.Instance);
-        DirectConsume(in ManyNotifyEvent_169.Instance);
-        DirectConsume(in ManyNotifyEvent_170.Instance);
-        DirectConsume(in ManyNotifyEvent_170.Instance);
-        DirectConsume(in ManyNotifyEvent_171.Instance);
-        DirectConsume(in ManyNotifyEvent_171.Instance);
-        DirectConsume(in ManyNotifyEvent_172.Instance);
-        DirectConsume(in ManyNotifyEvent_172.Instance);
-        DirectConsume(in ManyNotifyEvent_173.Instance);
-        DirectConsume(in ManyNotifyEvent_173.Instance);
-        DirectConsume(in ManyNotifyEvent_174.Instance);
-        DirectConsume(in ManyNotifyEvent_174.Instance);
-        DirectConsume(in ManyNotifyEvent_175.Instance);
-        DirectConsume(in ManyNotifyEvent_175.Instance);
-        DirectConsume(in ManyNotifyEvent_176.Instance);
-        DirectConsume(in ManyNotifyEvent_176.Instance);
-        DirectConsume(in ManyNotifyEvent_177.Instance);
-        DirectConsume(in ManyNotifyEvent_177.Instance);
-        DirectConsume(in ManyNotifyEvent_178.Instance);
-        DirectConsume(in ManyNotifyEvent_178.Instance);
-        DirectConsume(in ManyNotifyEvent_179.Instance);
-        DirectConsume(in ManyNotifyEvent_179.Instance);
-        DirectConsume(in ManyNotifyEvent_180.Instance);
-        DirectConsume(in ManyNotifyEvent_180.Instance);
-        DirectConsume(in ManyNotifyEvent_181.Instance);
-        DirectConsume(in ManyNotifyEvent_181.Instance);
-        DirectConsume(in ManyNotifyEvent_182.Instance);
-        DirectConsume(in ManyNotifyEvent_182.Instance);
-        DirectConsume(in ManyNotifyEvent_183.Instance);
-        DirectConsume(in ManyNotifyEvent_183.Instance);
-        DirectConsume(in ManyNotifyEvent_184.Instance);
-        DirectConsume(in ManyNotifyEvent_184.Instance);
-        DirectConsume(in ManyNotifyEvent_185.Instance);
-        DirectConsume(in ManyNotifyEvent_185.Instance);
-        DirectConsume(in ManyNotifyEvent_186.Instance);
-        DirectConsume(in ManyNotifyEvent_186.Instance);
-        DirectConsume(in ManyNotifyEvent_187.Instance);
-        DirectConsume(in ManyNotifyEvent_187.Instance);
-        DirectConsume(in ManyNotifyEvent_188.Instance);
-        DirectConsume(in ManyNotifyEvent_188.Instance);
-        DirectConsume(in ManyNotifyEvent_189.Instance);
-        DirectConsume(in ManyNotifyEvent_189.Instance);
-        DirectConsume(in ManyNotifyEvent_190.Instance);
-        DirectConsume(in ManyNotifyEvent_190.Instance);
-        DirectConsume(in ManyNotifyEvent_191.Instance);
-        DirectConsume(in ManyNotifyEvent_191.Instance);
-        DirectConsume(in ManyNotifyEvent_192.Instance);
-        DirectConsume(in ManyNotifyEvent_192.Instance);
-        DirectConsume(in ManyNotifyEvent_193.Instance);
-        DirectConsume(in ManyNotifyEvent_193.Instance);
-        DirectConsume(in ManyNotifyEvent_194.Instance);
-        DirectConsume(in ManyNotifyEvent_194.Instance);
-        DirectConsume(in ManyNotifyEvent_195.Instance);
-        DirectConsume(in ManyNotifyEvent_195.Instance);
-        DirectConsume(in ManyNotifyEvent_196.Instance);
-        DirectConsume(in ManyNotifyEvent_196.Instance);
-        DirectConsume(in ManyNotifyEvent_197.Instance);
-        DirectConsume(in ManyNotifyEvent_197.Instance);
-        DirectConsume(in ManyNotifyEvent_198.Instance);
-        DirectConsume(in ManyNotifyEvent_198.Instance);
-        DirectConsume(in ManyNotifyEvent_199.Instance);
-        DirectConsume(in ManyNotifyEvent_199.Instance);
-        DirectConsume(in ManyNotifyEvent_200.Instance);
-        DirectConsume(in ManyNotifyEvent_200.Instance);
-        DirectConsume(in ManyNotifyEvent_201.Instance);
-        DirectConsume(in ManyNotifyEvent_201.Instance);
-        DirectConsume(in ManyNotifyEvent_202.Instance);
-        DirectConsume(in ManyNotifyEvent_202.Instance);
-        DirectConsume(in ManyNotifyEvent_203.Instance);
-        DirectConsume(in ManyNotifyEvent_203.Instance);
-        DirectConsume(in ManyNotifyEvent_204.Instance);
-        DirectConsume(in ManyNotifyEvent_204.Instance);
-        DirectConsume(in ManyNotifyEvent_205.Instance);
-        DirectConsume(in ManyNotifyEvent_205.Instance);
-        DirectConsume(in ManyNotifyEvent_206.Instance);
-        DirectConsume(in ManyNotifyEvent_206.Instance);
-        DirectConsume(in ManyNotifyEvent_207.Instance);
-        DirectConsume(in ManyNotifyEvent_207.Instance);
-        DirectConsume(in ManyNotifyEvent_208.Instance);
-        DirectConsume(in ManyNotifyEvent_208.Instance);
-        DirectConsume(in ManyNotifyEvent_209.Instance);
-        DirectConsume(in ManyNotifyEvent_209.Instance);
-        DirectConsume(in ManyNotifyEvent_210.Instance);
-        DirectConsume(in ManyNotifyEvent_210.Instance);
-        DirectConsume(in ManyNotifyEvent_211.Instance);
-        DirectConsume(in ManyNotifyEvent_211.Instance);
-        DirectConsume(in ManyNotifyEvent_212.Instance);
-        DirectConsume(in ManyNotifyEvent_212.Instance);
-        DirectConsume(in ManyNotifyEvent_213.Instance);
-        DirectConsume(in ManyNotifyEvent_213.Instance);
-        DirectConsume(in ManyNotifyEvent_214.Instance);
-        DirectConsume(in ManyNotifyEvent_214.Instance);
-        DirectConsume(in ManyNotifyEvent_215.Instance);
-        DirectConsume(in ManyNotifyEvent_215.Instance);
-        DirectConsume(in ManyNotifyEvent_216.Instance);
-        DirectConsume(in ManyNotifyEvent_216.Instance);
-        DirectConsume(in ManyNotifyEvent_217.Instance);
-        DirectConsume(in ManyNotifyEvent_217.Instance);
-        DirectConsume(in ManyNotifyEvent_218.Instance);
-        DirectConsume(in ManyNotifyEvent_218.Instance);
-        DirectConsume(in ManyNotifyEvent_219.Instance);
-        DirectConsume(in ManyNotifyEvent_219.Instance);
-        DirectConsume(in ManyNotifyEvent_220.Instance);
-        DirectConsume(in ManyNotifyEvent_220.Instance);
-        DirectConsume(in ManyNotifyEvent_221.Instance);
-        DirectConsume(in ManyNotifyEvent_221.Instance);
-        DirectConsume(in ManyNotifyEvent_222.Instance);
-        DirectConsume(in ManyNotifyEvent_222.Instance);
-        DirectConsume(in ManyNotifyEvent_223.Instance);
-        DirectConsume(in ManyNotifyEvent_223.Instance);
-        DirectConsume(in ManyNotifyEvent_224.Instance);
-        DirectConsume(in ManyNotifyEvent_224.Instance);
-        DirectConsume(in ManyNotifyEvent_225.Instance);
-        DirectConsume(in ManyNotifyEvent_225.Instance);
-        DirectConsume(in ManyNotifyEvent_226.Instance);
-        DirectConsume(in ManyNotifyEvent_226.Instance);
-        DirectConsume(in ManyNotifyEvent_227.Instance);
-        DirectConsume(in ManyNotifyEvent_227.Instance);
-        DirectConsume(in ManyNotifyEvent_228.Instance);
-        DirectConsume(in ManyNotifyEvent_228.Instance);
-        DirectConsume(in ManyNotifyEvent_229.Instance);
-        DirectConsume(in ManyNotifyEvent_229.Instance);
-        DirectConsume(in ManyNotifyEvent_230.Instance);
-        DirectConsume(in ManyNotifyEvent_230.Instance);
-        DirectConsume(in ManyNotifyEvent_231.Instance);
-        DirectConsume(in ManyNotifyEvent_231.Instance);
-        DirectConsume(in ManyNotifyEvent_232.Instance);
-        DirectConsume(in ManyNotifyEvent_232.Instance);
-        DirectConsume(in ManyNotifyEvent_233.Instance);
-        DirectConsume(in ManyNotifyEvent_233.Instance);
-        DirectConsume(in ManyNotifyEvent_234.Instance);
-        DirectConsume(in ManyNotifyEvent_234.Instance);
-        DirectConsume(in ManyNotifyEvent_235.Instance);
-        DirectConsume(in ManyNotifyEvent_235.Instance);
-        DirectConsume(in ManyNotifyEvent_236.Instance);
-        DirectConsume(in ManyNotifyEvent_236.Instance);
-        DirectConsume(in ManyNotifyEvent_237.Instance);
-        DirectConsume(in ManyNotifyEvent_237.Instance);
-        DirectConsume(in ManyNotifyEvent_238.Instance);
-        DirectConsume(in ManyNotifyEvent_238.Instance);
-        DirectConsume(in ManyNotifyEvent_239.Instance);
-        DirectConsume(in ManyNotifyEvent_239.Instance);
-        DirectConsume(in ManyNotifyEvent_240.Instance);
-        DirectConsume(in ManyNotifyEvent_240.Instance);
-        DirectConsume(in ManyNotifyEvent_241.Instance);
-        DirectConsume(in ManyNotifyEvent_241.Instance);
-        DirectConsume(in ManyNotifyEvent_242.Instance);
-        DirectConsume(in ManyNotifyEvent_242.Instance);
-        DirectConsume(in ManyNotifyEvent_243.Instance);
-        DirectConsume(in ManyNotifyEvent_243.Instance);
-        DirectConsume(in ManyNotifyEvent_244.Instance);
-        DirectConsume(in ManyNotifyEvent_244.Instance);
-        DirectConsume(in ManyNotifyEvent_245.Instance);
-        DirectConsume(in ManyNotifyEvent_245.Instance);
-        DirectConsume(in ManyNotifyEvent_246.Instance);
-        DirectConsume(in ManyNotifyEvent_246.Instance);
-        DirectConsume(in ManyNotifyEvent_247.Instance);
-        DirectConsume(in ManyNotifyEvent_247.Instance);
-        DirectConsume(in ManyNotifyEvent_248.Instance);
-        DirectConsume(in ManyNotifyEvent_248.Instance);
-        DirectConsume(in ManyNotifyEvent_249.Instance);
-        DirectConsume(in ManyNotifyEvent_249.Instance);
-        DirectConsume(in ManyNotifyEvent_250.Instance);
-        DirectConsume(in ManyNotifyEvent_250.Instance);
-        DirectConsume(in ManyNotifyEvent_251.Instance);
-        DirectConsume(in ManyNotifyEvent_251.Instance);
-        DirectConsume(in ManyNotifyEvent_252.Instance);
-        DirectConsume(in ManyNotifyEvent_252.Instance);
-        DirectConsume(in ManyNotifyEvent_253.Instance);
-        DirectConsume(in ManyNotifyEvent_253.Instance);
-        DirectConsume(in ManyNotifyEvent_254.Instance);
-        DirectConsume(in ManyNotifyEvent_254.Instance);
-        DirectConsume(in ManyNotifyEvent_255.Instance);
-        DirectConsume(in ManyNotifyEvent_255.Instance);
+            DirectConsume(in ManyNotifyEvent_000.Instance);
+            DirectConsume(in ManyNotifyEvent_000.Instance);
+            DirectConsume(in ManyNotifyEvent_001.Instance);
+            DirectConsume(in ManyNotifyEvent_001.Instance);
+            DirectConsume(in ManyNotifyEvent_002.Instance);
+            DirectConsume(in ManyNotifyEvent_002.Instance);
+            DirectConsume(in ManyNotifyEvent_003.Instance);
+            DirectConsume(in ManyNotifyEvent_003.Instance);
+            DirectConsume(in ManyNotifyEvent_004.Instance);
+            DirectConsume(in ManyNotifyEvent_004.Instance);
+            DirectConsume(in ManyNotifyEvent_005.Instance);
+            DirectConsume(in ManyNotifyEvent_005.Instance);
+            DirectConsume(in ManyNotifyEvent_006.Instance);
+            DirectConsume(in ManyNotifyEvent_006.Instance);
+            DirectConsume(in ManyNotifyEvent_007.Instance);
+            DirectConsume(in ManyNotifyEvent_007.Instance);
+            DirectConsume(in ManyNotifyEvent_008.Instance);
+            DirectConsume(in ManyNotifyEvent_008.Instance);
+            DirectConsume(in ManyNotifyEvent_009.Instance);
+            DirectConsume(in ManyNotifyEvent_009.Instance);
+            DirectConsume(in ManyNotifyEvent_010.Instance);
+            DirectConsume(in ManyNotifyEvent_010.Instance);
+            DirectConsume(in ManyNotifyEvent_011.Instance);
+            DirectConsume(in ManyNotifyEvent_011.Instance);
+            DirectConsume(in ManyNotifyEvent_012.Instance);
+            DirectConsume(in ManyNotifyEvent_012.Instance);
+            DirectConsume(in ManyNotifyEvent_013.Instance);
+            DirectConsume(in ManyNotifyEvent_013.Instance);
+            DirectConsume(in ManyNotifyEvent_014.Instance);
+            DirectConsume(in ManyNotifyEvent_014.Instance);
+            DirectConsume(in ManyNotifyEvent_015.Instance);
+            DirectConsume(in ManyNotifyEvent_015.Instance);
+            DirectConsume(in ManyNotifyEvent_016.Instance);
+            DirectConsume(in ManyNotifyEvent_016.Instance);
+            DirectConsume(in ManyNotifyEvent_017.Instance);
+            DirectConsume(in ManyNotifyEvent_017.Instance);
+            DirectConsume(in ManyNotifyEvent_018.Instance);
+            DirectConsume(in ManyNotifyEvent_018.Instance);
+            DirectConsume(in ManyNotifyEvent_019.Instance);
+            DirectConsume(in ManyNotifyEvent_019.Instance);
+            DirectConsume(in ManyNotifyEvent_020.Instance);
+            DirectConsume(in ManyNotifyEvent_020.Instance);
+            DirectConsume(in ManyNotifyEvent_021.Instance);
+            DirectConsume(in ManyNotifyEvent_021.Instance);
+            DirectConsume(in ManyNotifyEvent_022.Instance);
+            DirectConsume(in ManyNotifyEvent_022.Instance);
+            DirectConsume(in ManyNotifyEvent_023.Instance);
+            DirectConsume(in ManyNotifyEvent_023.Instance);
+            DirectConsume(in ManyNotifyEvent_024.Instance);
+            DirectConsume(in ManyNotifyEvent_024.Instance);
+            DirectConsume(in ManyNotifyEvent_025.Instance);
+            DirectConsume(in ManyNotifyEvent_025.Instance);
+            DirectConsume(in ManyNotifyEvent_026.Instance);
+            DirectConsume(in ManyNotifyEvent_026.Instance);
+            DirectConsume(in ManyNotifyEvent_027.Instance);
+            DirectConsume(in ManyNotifyEvent_027.Instance);
+            DirectConsume(in ManyNotifyEvent_028.Instance);
+            DirectConsume(in ManyNotifyEvent_028.Instance);
+            DirectConsume(in ManyNotifyEvent_029.Instance);
+            DirectConsume(in ManyNotifyEvent_029.Instance);
+            DirectConsume(in ManyNotifyEvent_030.Instance);
+            DirectConsume(in ManyNotifyEvent_030.Instance);
+            DirectConsume(in ManyNotifyEvent_031.Instance);
+            DirectConsume(in ManyNotifyEvent_031.Instance);
+            DirectConsume(in ManyNotifyEvent_032.Instance);
+            DirectConsume(in ManyNotifyEvent_032.Instance);
+            DirectConsume(in ManyNotifyEvent_033.Instance);
+            DirectConsume(in ManyNotifyEvent_033.Instance);
+            DirectConsume(in ManyNotifyEvent_034.Instance);
+            DirectConsume(in ManyNotifyEvent_034.Instance);
+            DirectConsume(in ManyNotifyEvent_035.Instance);
+            DirectConsume(in ManyNotifyEvent_035.Instance);
+            DirectConsume(in ManyNotifyEvent_036.Instance);
+            DirectConsume(in ManyNotifyEvent_036.Instance);
+            DirectConsume(in ManyNotifyEvent_037.Instance);
+            DirectConsume(in ManyNotifyEvent_037.Instance);
+            DirectConsume(in ManyNotifyEvent_038.Instance);
+            DirectConsume(in ManyNotifyEvent_038.Instance);
+            DirectConsume(in ManyNotifyEvent_039.Instance);
+            DirectConsume(in ManyNotifyEvent_039.Instance);
+            DirectConsume(in ManyNotifyEvent_040.Instance);
+            DirectConsume(in ManyNotifyEvent_040.Instance);
+            DirectConsume(in ManyNotifyEvent_041.Instance);
+            DirectConsume(in ManyNotifyEvent_041.Instance);
+            DirectConsume(in ManyNotifyEvent_042.Instance);
+            DirectConsume(in ManyNotifyEvent_042.Instance);
+            DirectConsume(in ManyNotifyEvent_043.Instance);
+            DirectConsume(in ManyNotifyEvent_043.Instance);
+            DirectConsume(in ManyNotifyEvent_044.Instance);
+            DirectConsume(in ManyNotifyEvent_044.Instance);
+            DirectConsume(in ManyNotifyEvent_045.Instance);
+            DirectConsume(in ManyNotifyEvent_045.Instance);
+            DirectConsume(in ManyNotifyEvent_046.Instance);
+            DirectConsume(in ManyNotifyEvent_046.Instance);
+            DirectConsume(in ManyNotifyEvent_047.Instance);
+            DirectConsume(in ManyNotifyEvent_047.Instance);
+            DirectConsume(in ManyNotifyEvent_048.Instance);
+            DirectConsume(in ManyNotifyEvent_048.Instance);
+            DirectConsume(in ManyNotifyEvent_049.Instance);
+            DirectConsume(in ManyNotifyEvent_049.Instance);
+            DirectConsume(in ManyNotifyEvent_050.Instance);
+            DirectConsume(in ManyNotifyEvent_050.Instance);
+            DirectConsume(in ManyNotifyEvent_051.Instance);
+            DirectConsume(in ManyNotifyEvent_051.Instance);
+            DirectConsume(in ManyNotifyEvent_052.Instance);
+            DirectConsume(in ManyNotifyEvent_052.Instance);
+            DirectConsume(in ManyNotifyEvent_053.Instance);
+            DirectConsume(in ManyNotifyEvent_053.Instance);
+            DirectConsume(in ManyNotifyEvent_054.Instance);
+            DirectConsume(in ManyNotifyEvent_054.Instance);
+            DirectConsume(in ManyNotifyEvent_055.Instance);
+            DirectConsume(in ManyNotifyEvent_055.Instance);
+            DirectConsume(in ManyNotifyEvent_056.Instance);
+            DirectConsume(in ManyNotifyEvent_056.Instance);
+            DirectConsume(in ManyNotifyEvent_057.Instance);
+            DirectConsume(in ManyNotifyEvent_057.Instance);
+            DirectConsume(in ManyNotifyEvent_058.Instance);
+            DirectConsume(in ManyNotifyEvent_058.Instance);
+            DirectConsume(in ManyNotifyEvent_059.Instance);
+            DirectConsume(in ManyNotifyEvent_059.Instance);
+            DirectConsume(in ManyNotifyEvent_060.Instance);
+            DirectConsume(in ManyNotifyEvent_060.Instance);
+            DirectConsume(in ManyNotifyEvent_061.Instance);
+            DirectConsume(in ManyNotifyEvent_061.Instance);
+            DirectConsume(in ManyNotifyEvent_062.Instance);
+            DirectConsume(in ManyNotifyEvent_062.Instance);
+            DirectConsume(in ManyNotifyEvent_063.Instance);
+            DirectConsume(in ManyNotifyEvent_063.Instance);
+            DirectConsume(in ManyNotifyEvent_064.Instance);
+            DirectConsume(in ManyNotifyEvent_064.Instance);
+            DirectConsume(in ManyNotifyEvent_065.Instance);
+            DirectConsume(in ManyNotifyEvent_065.Instance);
+            DirectConsume(in ManyNotifyEvent_066.Instance);
+            DirectConsume(in ManyNotifyEvent_066.Instance);
+            DirectConsume(in ManyNotifyEvent_067.Instance);
+            DirectConsume(in ManyNotifyEvent_067.Instance);
+            DirectConsume(in ManyNotifyEvent_068.Instance);
+            DirectConsume(in ManyNotifyEvent_068.Instance);
+            DirectConsume(in ManyNotifyEvent_069.Instance);
+            DirectConsume(in ManyNotifyEvent_069.Instance);
+            DirectConsume(in ManyNotifyEvent_070.Instance);
+            DirectConsume(in ManyNotifyEvent_070.Instance);
+            DirectConsume(in ManyNotifyEvent_071.Instance);
+            DirectConsume(in ManyNotifyEvent_071.Instance);
+            DirectConsume(in ManyNotifyEvent_072.Instance);
+            DirectConsume(in ManyNotifyEvent_072.Instance);
+            DirectConsume(in ManyNotifyEvent_073.Instance);
+            DirectConsume(in ManyNotifyEvent_073.Instance);
+            DirectConsume(in ManyNotifyEvent_074.Instance);
+            DirectConsume(in ManyNotifyEvent_074.Instance);
+            DirectConsume(in ManyNotifyEvent_075.Instance);
+            DirectConsume(in ManyNotifyEvent_075.Instance);
+            DirectConsume(in ManyNotifyEvent_076.Instance);
+            DirectConsume(in ManyNotifyEvent_076.Instance);
+            DirectConsume(in ManyNotifyEvent_077.Instance);
+            DirectConsume(in ManyNotifyEvent_077.Instance);
+            DirectConsume(in ManyNotifyEvent_078.Instance);
+            DirectConsume(in ManyNotifyEvent_078.Instance);
+            DirectConsume(in ManyNotifyEvent_079.Instance);
+            DirectConsume(in ManyNotifyEvent_079.Instance);
+            DirectConsume(in ManyNotifyEvent_080.Instance);
+            DirectConsume(in ManyNotifyEvent_080.Instance);
+            DirectConsume(in ManyNotifyEvent_081.Instance);
+            DirectConsume(in ManyNotifyEvent_081.Instance);
+            DirectConsume(in ManyNotifyEvent_082.Instance);
+            DirectConsume(in ManyNotifyEvent_082.Instance);
+            DirectConsume(in ManyNotifyEvent_083.Instance);
+            DirectConsume(in ManyNotifyEvent_083.Instance);
+            DirectConsume(in ManyNotifyEvent_084.Instance);
+            DirectConsume(in ManyNotifyEvent_084.Instance);
+            DirectConsume(in ManyNotifyEvent_085.Instance);
+            DirectConsume(in ManyNotifyEvent_085.Instance);
+            DirectConsume(in ManyNotifyEvent_086.Instance);
+            DirectConsume(in ManyNotifyEvent_086.Instance);
+            DirectConsume(in ManyNotifyEvent_087.Instance);
+            DirectConsume(in ManyNotifyEvent_087.Instance);
+            DirectConsume(in ManyNotifyEvent_088.Instance);
+            DirectConsume(in ManyNotifyEvent_088.Instance);
+            DirectConsume(in ManyNotifyEvent_089.Instance);
+            DirectConsume(in ManyNotifyEvent_089.Instance);
+            DirectConsume(in ManyNotifyEvent_090.Instance);
+            DirectConsume(in ManyNotifyEvent_090.Instance);
+            DirectConsume(in ManyNotifyEvent_091.Instance);
+            DirectConsume(in ManyNotifyEvent_091.Instance);
+            DirectConsume(in ManyNotifyEvent_092.Instance);
+            DirectConsume(in ManyNotifyEvent_092.Instance);
+            DirectConsume(in ManyNotifyEvent_093.Instance);
+            DirectConsume(in ManyNotifyEvent_093.Instance);
+            DirectConsume(in ManyNotifyEvent_094.Instance);
+            DirectConsume(in ManyNotifyEvent_094.Instance);
+            DirectConsume(in ManyNotifyEvent_095.Instance);
+            DirectConsume(in ManyNotifyEvent_095.Instance);
+            DirectConsume(in ManyNotifyEvent_096.Instance);
+            DirectConsume(in ManyNotifyEvent_096.Instance);
+            DirectConsume(in ManyNotifyEvent_097.Instance);
+            DirectConsume(in ManyNotifyEvent_097.Instance);
+            DirectConsume(in ManyNotifyEvent_098.Instance);
+            DirectConsume(in ManyNotifyEvent_098.Instance);
+            DirectConsume(in ManyNotifyEvent_099.Instance);
+            DirectConsume(in ManyNotifyEvent_099.Instance);
+            DirectConsume(in ManyNotifyEvent_100.Instance);
+            DirectConsume(in ManyNotifyEvent_100.Instance);
+            DirectConsume(in ManyNotifyEvent_101.Instance);
+            DirectConsume(in ManyNotifyEvent_101.Instance);
+            DirectConsume(in ManyNotifyEvent_102.Instance);
+            DirectConsume(in ManyNotifyEvent_102.Instance);
+            DirectConsume(in ManyNotifyEvent_103.Instance);
+            DirectConsume(in ManyNotifyEvent_103.Instance);
+            DirectConsume(in ManyNotifyEvent_104.Instance);
+            DirectConsume(in ManyNotifyEvent_104.Instance);
+            DirectConsume(in ManyNotifyEvent_105.Instance);
+            DirectConsume(in ManyNotifyEvent_105.Instance);
+            DirectConsume(in ManyNotifyEvent_106.Instance);
+            DirectConsume(in ManyNotifyEvent_106.Instance);
+            DirectConsume(in ManyNotifyEvent_107.Instance);
+            DirectConsume(in ManyNotifyEvent_107.Instance);
+            DirectConsume(in ManyNotifyEvent_108.Instance);
+            DirectConsume(in ManyNotifyEvent_108.Instance);
+            DirectConsume(in ManyNotifyEvent_109.Instance);
+            DirectConsume(in ManyNotifyEvent_109.Instance);
+            DirectConsume(in ManyNotifyEvent_110.Instance);
+            DirectConsume(in ManyNotifyEvent_110.Instance);
+            DirectConsume(in ManyNotifyEvent_111.Instance);
+            DirectConsume(in ManyNotifyEvent_111.Instance);
+            DirectConsume(in ManyNotifyEvent_112.Instance);
+            DirectConsume(in ManyNotifyEvent_112.Instance);
+            DirectConsume(in ManyNotifyEvent_113.Instance);
+            DirectConsume(in ManyNotifyEvent_113.Instance);
+            DirectConsume(in ManyNotifyEvent_114.Instance);
+            DirectConsume(in ManyNotifyEvent_114.Instance);
+            DirectConsume(in ManyNotifyEvent_115.Instance);
+            DirectConsume(in ManyNotifyEvent_115.Instance);
+            DirectConsume(in ManyNotifyEvent_116.Instance);
+            DirectConsume(in ManyNotifyEvent_116.Instance);
+            DirectConsume(in ManyNotifyEvent_117.Instance);
+            DirectConsume(in ManyNotifyEvent_117.Instance);
+            DirectConsume(in ManyNotifyEvent_118.Instance);
+            DirectConsume(in ManyNotifyEvent_118.Instance);
+            DirectConsume(in ManyNotifyEvent_119.Instance);
+            DirectConsume(in ManyNotifyEvent_119.Instance);
+            DirectConsume(in ManyNotifyEvent_120.Instance);
+            DirectConsume(in ManyNotifyEvent_120.Instance);
+            DirectConsume(in ManyNotifyEvent_121.Instance);
+            DirectConsume(in ManyNotifyEvent_121.Instance);
+            DirectConsume(in ManyNotifyEvent_122.Instance);
+            DirectConsume(in ManyNotifyEvent_122.Instance);
+            DirectConsume(in ManyNotifyEvent_123.Instance);
+            DirectConsume(in ManyNotifyEvent_123.Instance);
+            DirectConsume(in ManyNotifyEvent_124.Instance);
+            DirectConsume(in ManyNotifyEvent_124.Instance);
+            DirectConsume(in ManyNotifyEvent_125.Instance);
+            DirectConsume(in ManyNotifyEvent_125.Instance);
+            DirectConsume(in ManyNotifyEvent_126.Instance);
+            DirectConsume(in ManyNotifyEvent_126.Instance);
+            DirectConsume(in ManyNotifyEvent_127.Instance);
+            DirectConsume(in ManyNotifyEvent_127.Instance);
+            DirectConsume(in ManyNotifyEvent_128.Instance);
+            DirectConsume(in ManyNotifyEvent_128.Instance);
+            DirectConsume(in ManyNotifyEvent_129.Instance);
+            DirectConsume(in ManyNotifyEvent_129.Instance);
+            DirectConsume(in ManyNotifyEvent_130.Instance);
+            DirectConsume(in ManyNotifyEvent_130.Instance);
+            DirectConsume(in ManyNotifyEvent_131.Instance);
+            DirectConsume(in ManyNotifyEvent_131.Instance);
+            DirectConsume(in ManyNotifyEvent_132.Instance);
+            DirectConsume(in ManyNotifyEvent_132.Instance);
+            DirectConsume(in ManyNotifyEvent_133.Instance);
+            DirectConsume(in ManyNotifyEvent_133.Instance);
+            DirectConsume(in ManyNotifyEvent_134.Instance);
+            DirectConsume(in ManyNotifyEvent_134.Instance);
+            DirectConsume(in ManyNotifyEvent_135.Instance);
+            DirectConsume(in ManyNotifyEvent_135.Instance);
+            DirectConsume(in ManyNotifyEvent_136.Instance);
+            DirectConsume(in ManyNotifyEvent_136.Instance);
+            DirectConsume(in ManyNotifyEvent_137.Instance);
+            DirectConsume(in ManyNotifyEvent_137.Instance);
+            DirectConsume(in ManyNotifyEvent_138.Instance);
+            DirectConsume(in ManyNotifyEvent_138.Instance);
+            DirectConsume(in ManyNotifyEvent_139.Instance);
+            DirectConsume(in ManyNotifyEvent_139.Instance);
+            DirectConsume(in ManyNotifyEvent_140.Instance);
+            DirectConsume(in ManyNotifyEvent_140.Instance);
+            DirectConsume(in ManyNotifyEvent_141.Instance);
+            DirectConsume(in ManyNotifyEvent_141.Instance);
+            DirectConsume(in ManyNotifyEvent_142.Instance);
+            DirectConsume(in ManyNotifyEvent_142.Instance);
+            DirectConsume(in ManyNotifyEvent_143.Instance);
+            DirectConsume(in ManyNotifyEvent_143.Instance);
+            DirectConsume(in ManyNotifyEvent_144.Instance);
+            DirectConsume(in ManyNotifyEvent_144.Instance);
+            DirectConsume(in ManyNotifyEvent_145.Instance);
+            DirectConsume(in ManyNotifyEvent_145.Instance);
+            DirectConsume(in ManyNotifyEvent_146.Instance);
+            DirectConsume(in ManyNotifyEvent_146.Instance);
+            DirectConsume(in ManyNotifyEvent_147.Instance);
+            DirectConsume(in ManyNotifyEvent_147.Instance);
+            DirectConsume(in ManyNotifyEvent_148.Instance);
+            DirectConsume(in ManyNotifyEvent_148.Instance);
+            DirectConsume(in ManyNotifyEvent_149.Instance);
+            DirectConsume(in ManyNotifyEvent_149.Instance);
+            DirectConsume(in ManyNotifyEvent_150.Instance);
+            DirectConsume(in ManyNotifyEvent_150.Instance);
+            DirectConsume(in ManyNotifyEvent_151.Instance);
+            DirectConsume(in ManyNotifyEvent_151.Instance);
+            DirectConsume(in ManyNotifyEvent_152.Instance);
+            DirectConsume(in ManyNotifyEvent_152.Instance);
+            DirectConsume(in ManyNotifyEvent_153.Instance);
+            DirectConsume(in ManyNotifyEvent_153.Instance);
+            DirectConsume(in ManyNotifyEvent_154.Instance);
+            DirectConsume(in ManyNotifyEvent_154.Instance);
+            DirectConsume(in ManyNotifyEvent_155.Instance);
+            DirectConsume(in ManyNotifyEvent_155.Instance);
+            DirectConsume(in ManyNotifyEvent_156.Instance);
+            DirectConsume(in ManyNotifyEvent_156.Instance);
+            DirectConsume(in ManyNotifyEvent_157.Instance);
+            DirectConsume(in ManyNotifyEvent_157.Instance);
+            DirectConsume(in ManyNotifyEvent_158.Instance);
+            DirectConsume(in ManyNotifyEvent_158.Instance);
+            DirectConsume(in ManyNotifyEvent_159.Instance);
+            DirectConsume(in ManyNotifyEvent_159.Instance);
+            DirectConsume(in ManyNotifyEvent_160.Instance);
+            DirectConsume(in ManyNotifyEvent_160.Instance);
+            DirectConsume(in ManyNotifyEvent_161.Instance);
+            DirectConsume(in ManyNotifyEvent_161.Instance);
+            DirectConsume(in ManyNotifyEvent_162.Instance);
+            DirectConsume(in ManyNotifyEvent_162.Instance);
+            DirectConsume(in ManyNotifyEvent_163.Instance);
+            DirectConsume(in ManyNotifyEvent_163.Instance);
+            DirectConsume(in ManyNotifyEvent_164.Instance);
+            DirectConsume(in ManyNotifyEvent_164.Instance);
+            DirectConsume(in ManyNotifyEvent_165.Instance);
+            DirectConsume(in ManyNotifyEvent_165.Instance);
+            DirectConsume(in ManyNotifyEvent_166.Instance);
+            DirectConsume(in ManyNotifyEvent_166.Instance);
+            DirectConsume(in ManyNotifyEvent_167.Instance);
+            DirectConsume(in ManyNotifyEvent_167.Instance);
+            DirectConsume(in ManyNotifyEvent_168.Instance);
+            DirectConsume(in ManyNotifyEvent_168.Instance);
+            DirectConsume(in ManyNotifyEvent_169.Instance);
+            DirectConsume(in ManyNotifyEvent_169.Instance);
+            DirectConsume(in ManyNotifyEvent_170.Instance);
+            DirectConsume(in ManyNotifyEvent_170.Instance);
+            DirectConsume(in ManyNotifyEvent_171.Instance);
+            DirectConsume(in ManyNotifyEvent_171.Instance);
+            DirectConsume(in ManyNotifyEvent_172.Instance);
+            DirectConsume(in ManyNotifyEvent_172.Instance);
+            DirectConsume(in ManyNotifyEvent_173.Instance);
+            DirectConsume(in ManyNotifyEvent_173.Instance);
+            DirectConsume(in ManyNotifyEvent_174.Instance);
+            DirectConsume(in ManyNotifyEvent_174.Instance);
+            DirectConsume(in ManyNotifyEvent_175.Instance);
+            DirectConsume(in ManyNotifyEvent_175.Instance);
+            DirectConsume(in ManyNotifyEvent_176.Instance);
+            DirectConsume(in ManyNotifyEvent_176.Instance);
+            DirectConsume(in ManyNotifyEvent_177.Instance);
+            DirectConsume(in ManyNotifyEvent_177.Instance);
+            DirectConsume(in ManyNotifyEvent_178.Instance);
+            DirectConsume(in ManyNotifyEvent_178.Instance);
+            DirectConsume(in ManyNotifyEvent_179.Instance);
+            DirectConsume(in ManyNotifyEvent_179.Instance);
+            DirectConsume(in ManyNotifyEvent_180.Instance);
+            DirectConsume(in ManyNotifyEvent_180.Instance);
+            DirectConsume(in ManyNotifyEvent_181.Instance);
+            DirectConsume(in ManyNotifyEvent_181.Instance);
+            DirectConsume(in ManyNotifyEvent_182.Instance);
+            DirectConsume(in ManyNotifyEvent_182.Instance);
+            DirectConsume(in ManyNotifyEvent_183.Instance);
+            DirectConsume(in ManyNotifyEvent_183.Instance);
+            DirectConsume(in ManyNotifyEvent_184.Instance);
+            DirectConsume(in ManyNotifyEvent_184.Instance);
+            DirectConsume(in ManyNotifyEvent_185.Instance);
+            DirectConsume(in ManyNotifyEvent_185.Instance);
+            DirectConsume(in ManyNotifyEvent_186.Instance);
+            DirectConsume(in ManyNotifyEvent_186.Instance);
+            DirectConsume(in ManyNotifyEvent_187.Instance);
+            DirectConsume(in ManyNotifyEvent_187.Instance);
+            DirectConsume(in ManyNotifyEvent_188.Instance);
+            DirectConsume(in ManyNotifyEvent_188.Instance);
+            DirectConsume(in ManyNotifyEvent_189.Instance);
+            DirectConsume(in ManyNotifyEvent_189.Instance);
+            DirectConsume(in ManyNotifyEvent_190.Instance);
+            DirectConsume(in ManyNotifyEvent_190.Instance);
+            DirectConsume(in ManyNotifyEvent_191.Instance);
+            DirectConsume(in ManyNotifyEvent_191.Instance);
+            DirectConsume(in ManyNotifyEvent_192.Instance);
+            DirectConsume(in ManyNotifyEvent_192.Instance);
+            DirectConsume(in ManyNotifyEvent_193.Instance);
+            DirectConsume(in ManyNotifyEvent_193.Instance);
+            DirectConsume(in ManyNotifyEvent_194.Instance);
+            DirectConsume(in ManyNotifyEvent_194.Instance);
+            DirectConsume(in ManyNotifyEvent_195.Instance);
+            DirectConsume(in ManyNotifyEvent_195.Instance);
+            DirectConsume(in ManyNotifyEvent_196.Instance);
+            DirectConsume(in ManyNotifyEvent_196.Instance);
+            DirectConsume(in ManyNotifyEvent_197.Instance);
+            DirectConsume(in ManyNotifyEvent_197.Instance);
+            DirectConsume(in ManyNotifyEvent_198.Instance);
+            DirectConsume(in ManyNotifyEvent_198.Instance);
+            DirectConsume(in ManyNotifyEvent_199.Instance);
+            DirectConsume(in ManyNotifyEvent_199.Instance);
+            DirectConsume(in ManyNotifyEvent_200.Instance);
+            DirectConsume(in ManyNotifyEvent_200.Instance);
+            DirectConsume(in ManyNotifyEvent_201.Instance);
+            DirectConsume(in ManyNotifyEvent_201.Instance);
+            DirectConsume(in ManyNotifyEvent_202.Instance);
+            DirectConsume(in ManyNotifyEvent_202.Instance);
+            DirectConsume(in ManyNotifyEvent_203.Instance);
+            DirectConsume(in ManyNotifyEvent_203.Instance);
+            DirectConsume(in ManyNotifyEvent_204.Instance);
+            DirectConsume(in ManyNotifyEvent_204.Instance);
+            DirectConsume(in ManyNotifyEvent_205.Instance);
+            DirectConsume(in ManyNotifyEvent_205.Instance);
+            DirectConsume(in ManyNotifyEvent_206.Instance);
+            DirectConsume(in ManyNotifyEvent_206.Instance);
+            DirectConsume(in ManyNotifyEvent_207.Instance);
+            DirectConsume(in ManyNotifyEvent_207.Instance);
+            DirectConsume(in ManyNotifyEvent_208.Instance);
+            DirectConsume(in ManyNotifyEvent_208.Instance);
+            DirectConsume(in ManyNotifyEvent_209.Instance);
+            DirectConsume(in ManyNotifyEvent_209.Instance);
+            DirectConsume(in ManyNotifyEvent_210.Instance);
+            DirectConsume(in ManyNotifyEvent_210.Instance);
+            DirectConsume(in ManyNotifyEvent_211.Instance);
+            DirectConsume(in ManyNotifyEvent_211.Instance);
+            DirectConsume(in ManyNotifyEvent_212.Instance);
+            DirectConsume(in ManyNotifyEvent_212.Instance);
+            DirectConsume(in ManyNotifyEvent_213.Instance);
+            DirectConsume(in ManyNotifyEvent_213.Instance);
+            DirectConsume(in ManyNotifyEvent_214.Instance);
+            DirectConsume(in ManyNotifyEvent_214.Instance);
+            DirectConsume(in ManyNotifyEvent_215.Instance);
+            DirectConsume(in ManyNotifyEvent_215.Instance);
+            DirectConsume(in ManyNotifyEvent_216.Instance);
+            DirectConsume(in ManyNotifyEvent_216.Instance);
+            DirectConsume(in ManyNotifyEvent_217.Instance);
+            DirectConsume(in ManyNotifyEvent_217.Instance);
+            DirectConsume(in ManyNotifyEvent_218.Instance);
+            DirectConsume(in ManyNotifyEvent_218.Instance);
+            DirectConsume(in ManyNotifyEvent_219.Instance);
+            DirectConsume(in ManyNotifyEvent_219.Instance);
+            DirectConsume(in ManyNotifyEvent_220.Instance);
+            DirectConsume(in ManyNotifyEvent_220.Instance);
+            DirectConsume(in ManyNotifyEvent_221.Instance);
+            DirectConsume(in ManyNotifyEvent_221.Instance);
+            DirectConsume(in ManyNotifyEvent_222.Instance);
+            DirectConsume(in ManyNotifyEvent_222.Instance);
+            DirectConsume(in ManyNotifyEvent_223.Instance);
+            DirectConsume(in ManyNotifyEvent_223.Instance);
+            DirectConsume(in ManyNotifyEvent_224.Instance);
+            DirectConsume(in ManyNotifyEvent_224.Instance);
+            DirectConsume(in ManyNotifyEvent_225.Instance);
+            DirectConsume(in ManyNotifyEvent_225.Instance);
+            DirectConsume(in ManyNotifyEvent_226.Instance);
+            DirectConsume(in ManyNotifyEvent_226.Instance);
+            DirectConsume(in ManyNotifyEvent_227.Instance);
+            DirectConsume(in ManyNotifyEvent_227.Instance);
+            DirectConsume(in ManyNotifyEvent_228.Instance);
+            DirectConsume(in ManyNotifyEvent_228.Instance);
+            DirectConsume(in ManyNotifyEvent_229.Instance);
+            DirectConsume(in ManyNotifyEvent_229.Instance);
+            DirectConsume(in ManyNotifyEvent_230.Instance);
+            DirectConsume(in ManyNotifyEvent_230.Instance);
+            DirectConsume(in ManyNotifyEvent_231.Instance);
+            DirectConsume(in ManyNotifyEvent_231.Instance);
+            DirectConsume(in ManyNotifyEvent_232.Instance);
+            DirectConsume(in ManyNotifyEvent_232.Instance);
+            DirectConsume(in ManyNotifyEvent_233.Instance);
+            DirectConsume(in ManyNotifyEvent_233.Instance);
+            DirectConsume(in ManyNotifyEvent_234.Instance);
+            DirectConsume(in ManyNotifyEvent_234.Instance);
+            DirectConsume(in ManyNotifyEvent_235.Instance);
+            DirectConsume(in ManyNotifyEvent_235.Instance);
+            DirectConsume(in ManyNotifyEvent_236.Instance);
+            DirectConsume(in ManyNotifyEvent_236.Instance);
+            DirectConsume(in ManyNotifyEvent_237.Instance);
+            DirectConsume(in ManyNotifyEvent_237.Instance);
+            DirectConsume(in ManyNotifyEvent_238.Instance);
+            DirectConsume(in ManyNotifyEvent_238.Instance);
+            DirectConsume(in ManyNotifyEvent_239.Instance);
+            DirectConsume(in ManyNotifyEvent_239.Instance);
+            DirectConsume(in ManyNotifyEvent_240.Instance);
+            DirectConsume(in ManyNotifyEvent_240.Instance);
+            DirectConsume(in ManyNotifyEvent_241.Instance);
+            DirectConsume(in ManyNotifyEvent_241.Instance);
+            DirectConsume(in ManyNotifyEvent_242.Instance);
+            DirectConsume(in ManyNotifyEvent_242.Instance);
+            DirectConsume(in ManyNotifyEvent_243.Instance);
+            DirectConsume(in ManyNotifyEvent_243.Instance);
+            DirectConsume(in ManyNotifyEvent_244.Instance);
+            DirectConsume(in ManyNotifyEvent_244.Instance);
+            DirectConsume(in ManyNotifyEvent_245.Instance);
+            DirectConsume(in ManyNotifyEvent_245.Instance);
+            DirectConsume(in ManyNotifyEvent_246.Instance);
+            DirectConsume(in ManyNotifyEvent_246.Instance);
+            DirectConsume(in ManyNotifyEvent_247.Instance);
+            DirectConsume(in ManyNotifyEvent_247.Instance);
+            DirectConsume(in ManyNotifyEvent_248.Instance);
+            DirectConsume(in ManyNotifyEvent_248.Instance);
+            DirectConsume(in ManyNotifyEvent_249.Instance);
+            DirectConsume(in ManyNotifyEvent_249.Instance);
+            DirectConsume(in ManyNotifyEvent_250.Instance);
+            DirectConsume(in ManyNotifyEvent_250.Instance);
+            DirectConsume(in ManyNotifyEvent_251.Instance);
+            DirectConsume(in ManyNotifyEvent_251.Instance);
+            DirectConsume(in ManyNotifyEvent_252.Instance);
+            DirectConsume(in ManyNotifyEvent_252.Instance);
+            DirectConsume(in ManyNotifyEvent_253.Instance);
+            DirectConsume(in ManyNotifyEvent_253.Instance);
+            DirectConsume(in ManyNotifyEvent_254.Instance);
+            DirectConsume(in ManyNotifyEvent_254.Instance);
+            DirectConsume(in ManyNotifyEvent_255.Instance);
+            DirectConsume(in ManyNotifyEvent_255.Instance);
             return;
         }
 
@@ -6500,7 +7528,6 @@ internal static class ManyNotifyFixedBatchRegistry
         publishers.P254.Publish(ManyNotifyEvent_254.Instance);
         publishers.P255.Publish(ManyNotifyEvent_255.Instance);
     }
-
 }
 
 public partial class ManyNotifyManager_000 : IService
@@ -10086,4 +11113,3 @@ public partial class ManyNotifyManager_255 : IService
         Volatile.Write(ref CompareSink.IntValue, payload.Value);
     }
 }
-

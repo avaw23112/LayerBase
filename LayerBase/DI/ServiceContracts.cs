@@ -6,7 +6,6 @@ using LayerBase.Layers;
 
 namespace LayerBase.DI;
 
-// (Previous interfaces remain unchanged...)
 public interface ILayerContext
 {
 }
@@ -31,7 +30,6 @@ public interface IServiceCollection
     IServiceCollection AddScoped<TService>(Func<IServiceProvider, TService> factory);
     IReadOnlyList<ServiceDescriptor> ToDescriptors();
 }
-
 
 public interface IServiceProvider
 {
@@ -105,17 +103,6 @@ public static class ServiceExtensions
         return service.GetLayer().SendGlobal(value);
     }
 
-    public static EventHandledState SendBubble<TValue>(this IService service, in TValue value)
-        where TValue : struct
-    {
-        return service.GetLayer().SendBubble(value);
-    }
-
-    public static EventHandledState SendDrop<TValue>(this IService service, in TValue value) where TValue : struct
-    {
-        return service.GetLayer().SendDrop(value);
-    }
-
     public static void PostLocal<TValue>(this IService service, in TValue value) where TValue : struct
     {
         service.GetLayer().PostLocal(value);
@@ -126,17 +113,6 @@ public static class ServiceExtensions
         service.GetLayer().PostGlobal(value);
     }
 
-    public static void PostBubble<TValue>(this IService service, in TValue value) where TValue : struct
-    {
-        service.GetLayer().PostBubble(value);
-    }
-
-    public static void PostDrop<TValue>(this IService service, in TValue value) where TValue : struct
-    {
-        service.GetLayer().PostDrop(value);
-    }
-
-    // 核心修复：通过内部转换调用 Publish
     public static void DelayLocal<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
         where TValue : struct
     {
@@ -149,20 +125,6 @@ public static class ServiceExtensions
     {
         ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl,
             DelayDirection.BroadCast, contractId);
-    }
-
-    public static void DelayBubble<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
-        where TValue : struct
-    {
-        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl, DelayDirection.Bubble,
-            contractId);
-    }
-
-    public static void DelayDrop<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
-        where TValue : struct
-    {
-        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl, DelayDirection.Drop,
-            contractId);
     }
 
     public static void Subscribe<TValue>(this IService service, EventHandleDelegate<TValue> handler)
@@ -217,17 +179,6 @@ public static class LayerContextExtensions
         return service.GetLayer().SendGlobal(value);
     }
 
-    public static EventHandledState SendBubble<TValue>(this ILayerContext service, in TValue value)
-        where TValue : struct
-    {
-        return service.GetLayer().SendBubble(value);
-    }
-
-    public static EventHandledState SendDrop<TValue>(this ILayerContext service, in TValue value) where TValue : struct
-    {
-        return service.GetLayer().SendDrop(value);
-    }
-
     public static void PostLocal<TValue>(this ILayerContext service, in TValue value) where TValue : struct
     {
         service.GetLayer().PostLocal(value);
@@ -238,17 +189,6 @@ public static class LayerContextExtensions
         service.GetLayer().PostGlobal(value);
     }
 
-    public static void PostBubble<TValue>(this ILayerContext service, in TValue value) where TValue : struct
-    {
-        service.GetLayer().PostBubble(value);
-    }
-
-    public static void PostDrop<TValue>(this ILayerContext service, in TValue value) where TValue : struct
-    {
-        service.GetLayer().PostDrop(value);
-    }
-
-    // 核心修复：通过内部转换调用 Publish
     public static void DelayLocal<TValue>(this ILayerContext service, in TValue value, float ttl, int contractId = 0)
         where TValue : struct
     {
@@ -261,20 +201,6 @@ public static class LayerContextExtensions
     {
         ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl,
             DelayDirection.BroadCast, contractId);
-    }
-
-    public static void DelayBubble<TValue>(this ILayerContext service, in TValue value, float ttl, int contractId = 0)
-        where TValue : struct
-    {
-        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl, DelayDirection.Bubble,
-            contractId);
-    }
-
-    public static void DelayDrop<TValue>(this ILayerContext service, in TValue value, float ttl, int contractId = 0)
-        where TValue : struct
-    {
-        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl, DelayDirection.Drop,
-            contractId);
     }
 
     public static void Subscribe<TValue>(this ILayerContext service, EventHandleDelegate<TValue> handler)

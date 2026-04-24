@@ -75,8 +75,10 @@ namespace LayerBase.Layers
                 var implementsService = ImplementsInterface(serviceSymbol, iServiceSymbol);
                 var implementsEventHandler = ImplementsInterface(serviceSymbol, eventHandlerSymbol) ||
                                              ImplementsInterface(serviceSymbol, eventHandlerAsyncSymbol) ||
-                                             ImplementsInterfaceByMetadataName(serviceSymbol, EventHandlerMetadataName) ||
-                                             ImplementsInterfaceByMetadataName(serviceSymbol, EventHandlerAsyncMetadataName);
+                                             ImplementsInterfaceByMetadataName(serviceSymbol,
+                                                 EventHandlerMetadataName) ||
+                                             ImplementsInterfaceByMetadataName(serviceSymbol,
+                                                 EventHandlerAsyncMetadataName);
                 var implementsCallHandler = ImplementsInterface(serviceSymbol, callHandlerSymbol) ||
                                             ImplementsInterfaceByMetadataName(serviceSymbol, CallHandlerMetadataName);
 
@@ -85,14 +87,12 @@ namespace LayerBase.Layers
                     if (implementsCallHandler)
                     {
                         foreach (var impl in GetCallHandlerInterfaces(serviceSymbol, callHandlerSymbol))
-                        {
                             callHandlerRegistrations.Add(new CallHandlerRegistration(
                                 serviceSymbol,
                                 targetLayer,
                                 impl.RequestType,
                                 impl.ResponseType,
                                 registration.Location ?? serviceSymbol.Locations.FirstOrDefault()));
-                        }
 
                         continue;
                     }
@@ -141,19 +141,24 @@ namespace LayerBase.Layers
             }
 
             var conflictingRequests = callHandlerRegistrations
-                .GroupBy(static binding => binding.RequestType, SymbolEqualityComparer.Default)
-                .Select(static group => new
-                {
-                    RequestType = group.Key,
-                    Count = group.Count(),
-                    Bindings = group.Select(static binding => new CallBindingSignature(binding.LayerType, binding.ResponseType))
-                        .Distinct(CallBindingSignatureComparer.Instance)
-                        .OrderBy(static binding => binding.LayerType.ToDisplayString())
-                        .ThenBy(static binding => binding.ResponseType.ToDisplayString())
-                        .ToList()
-                })
-                .Where(static entry => entry.Count > 1)
-                .ToDictionary(static entry => entry.RequestType, static entry => entry.Bindings, SymbolEqualityComparer.Default);
+                                      .GroupBy(static binding => binding.RequestType, SymbolEqualityComparer.Default)
+                                      .Select(static group => new
+                                      {
+                                          RequestType = group.Key,
+                                          Count = group.Count(),
+                                          Bindings = group.Select(static binding =>
+                                                              new CallBindingSignature(binding.LayerType,
+                                                                  binding.ResponseType))
+                                                          .Distinct(CallBindingSignatureComparer.Instance)
+                                                          .OrderBy(static binding =>
+                                                              binding.LayerType.ToDisplayString())
+                                                          .ThenBy(static binding =>
+                                                              binding.ResponseType.ToDisplayString())
+                                                          .ToList()
+                                      })
+                                      .Where(static entry => entry.Count > 1)
+                                      .ToDictionary(static entry => entry.RequestType, static entry => entry.Bindings,
+                                          SymbolEqualityComparer.Default);
 
             foreach (var registration in callHandlerRegistrations)
             {
@@ -219,20 +224,20 @@ namespace LayerBase.Layers
             var candidate = i.OriginalDefinition is INamedTypeSymbol named ? named : i;
             var display = candidate.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             return display switch
-            {
-                "global::LayerBase.Call.ILayerCallHandler<TRequest, TResponse>" when
-                    metadataName == CallHandlerMetadataName => true,
-                "global::LayerBase.Core.EventHandler.IEventHandler<TValue>" when
-                    metadataName == EventHandlerMetadataName => true,
-                "global::LayerBase.Core.EventHandler.IEventHandlerAsync<TValue>" when
-                    metadataName == EventHandlerAsyncMetadataName => true,
-                _ => false
-            };
+                   {
+                       "global::LayerBase.Call.ILayerCallHandler<TRequest, TResponse>" when
+                           metadataName == CallHandlerMetadataName => true,
+                       "global::LayerBase.Core.EventHandler.IEventHandler<TValue>" when
+                           metadataName == EventHandlerMetadataName => true,
+                       "global::LayerBase.Core.EventHandler.IEventHandlerAsync<TValue>" when
+                           metadataName == EventHandlerAsyncMetadataName => true,
+                       _ => false
+                   };
         });
     }
 
     private static IEnumerable<CallHandlerImplementation> GetCallHandlerInterfaces(INamedTypeSymbol handlerType,
-                                                                                   INamedTypeSymbol? callHandlerSymbol)
+        INamedTypeSymbol?                                                                           callHandlerSymbol)
     {
         if (callHandlerSymbol == null) yield break;
 
@@ -418,8 +423,9 @@ namespace LayerBase.Layers
 
     private sealed class CallHandlerRegistration
     {
-        public CallHandlerRegistration(INamedTypeSymbol serviceType, INamedTypeSymbol layerType, ITypeSymbol requestType,
-                                       ITypeSymbol responseType, Location? location)
+        public CallHandlerRegistration(INamedTypeSymbol serviceType, INamedTypeSymbol layerType,
+                                       ITypeSymbol      requestType,
+                                       ITypeSymbol      responseType, Location? location)
         {
             ServiceType = serviceType;
             LayerType = layerType;

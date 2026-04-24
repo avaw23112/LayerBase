@@ -56,10 +56,7 @@ internal sealed class FreeList<T> where T : struct
         {
             var neededSlabs = (capacity + _slabSize - 1) / _slabSize;
             var currentSlabs = _slabs.Count;
-            for (var i = currentSlabs; i < neededSlabs; i++)
-            {
-                AllocateSlabInternal();
-            }
+            for (var i = currentSlabs; i < neededSlabs; i++) AllocateSlabInternal();
         }
     }
 

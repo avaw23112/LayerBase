@@ -24,7 +24,7 @@ public static class LayerCallHandlerExtensions
     }
 
     public static LBTask<TResponse> Call<TLayer, TRequest, TResponse>(this ILayerCallHandler handler, TRequest request,
-                                                                       CancellationToken cancellationToken = default)
+                                                                      CancellationToken cancellationToken = default)
         where TLayer : Layer
         where TRequest : struct
         where TResponse : struct
@@ -37,7 +37,7 @@ public static class LayerCallHandlerExtensions
 public static class LayerCallRegistrationBridge
 {
     public static void Register<TRequest, TResponse>(
-        Layer layer,
+        Layer                                  layer,
         ILayerCallHandler<TRequest, TResponse> handler)
         where TRequest : struct
         where TResponse : struct

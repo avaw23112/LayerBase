@@ -24,42 +24,31 @@ public sealed class OwnerLayerAttribute : Attribute
 
 public abstract class Layer : Node, IDisposable
 {
-    internal readonly struct RegisteredService
-    {
-        public RegisteredService(IService service, int scopeId)
-        {
-            Service = service;
-            ScopeId = scopeId;
-        }
-
-        public IService Service { get; }
-        public int ScopeId { get; }
-    }
+    public readonly List<(Type Req, Type Resp, Type Handler)> CallHandlers = new();
+    public readonly List<Type> InvokedCalls = new(); // 新增：发出的 Call
+    private readonly List<RegisteredService> m_activeServices = new();
+    private readonly object m_callRouteLock = new();
 
     private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();
-    private readonly object m_callRouteLock = new();
     private readonly List<IDelayPublisherUpdater> m_delayUpdaters = new(); // 优化：消除 Values 迭代分配
-    private readonly List<RegisteredService> m_activeServices = new();
     private readonly List<RegisteredService> m_manualServices = new();
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
     private readonly List<IDisposable> m_subscriptions = new();
-    
-    // Metadata for Topology Report
-    public readonly List<Type> SubscribedEvents = new();
     public readonly List<Type> ProducedEvents = new(); // 新增：产生的事件
-    public readonly List<(Type Req, Type Resp, Type Handler)> CallHandlers = new();
-    public readonly List<Type> InvokedCalls = new(); // 新增：发出的 Call
     public readonly List<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> SharedFields = new();
 
-    private object?[] m_callRouteInvokers = Array.Empty<object?>();
-    private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();
+    // Metadata for Topology Report
+    public readonly List<Type> SubscribedEvents = new();
     private GlobalEventCenter _center;
+    private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();
+
+    private object?[] m_callRouteInvokers = Array.Empty<object?>();
+    private bool m_collectingGeneratedServices;
     private bool m_disposed;
+    private int m_nextServiceScopeId;
 
     private ConcurrentQueue<Action<Layer>> m_pendingOps = new();
-    private bool m_collectingGeneratedServices;
-    private int m_nextServiceScopeId;
     private List<ServiceProvider.ResolvedService> m_resolvedServices = new();
     private ServiceProvider? m_serviceProvider;
 
@@ -117,7 +106,7 @@ public abstract class Layer : Node, IDisposable
     public void Build()
     {
         PrepareBuild();
-        SharedFieldBinder.Bind(GetSharedFieldParticipants(includeGlobalScope: true));
+        SharedFieldBinder.Bind(GetSharedFieldParticipants(true));
         FinalizeBuild();
     }
 
@@ -128,6 +117,7 @@ public abstract class Layer : Node, IDisposable
             foreach (var sub in m_subscriptions) sub.Dispose();
             m_subscriptions.Clear();
         }
+
         m_delayPublishers.Clear();
         m_delayUpdaters.Clear();
         m_serviceUpdates.Clear();
@@ -192,7 +182,8 @@ public abstract class Layer : Node, IDisposable
             yield return new SharedFieldBinder.Participant(service.Service, this, service.ScopeId);
 
         foreach (var resolved in m_resolvedServices)
-            yield return new SharedFieldBinder.Participant(resolved.Instance, this, resolved.Descriptor.RegistrationScopeId);
+            yield return new SharedFieldBinder.Participant(resolved.Instance, this,
+                resolved.Descriptor.RegistrationScopeId);
     }
 
     private void AddActiveService(RegisteredService registration)
@@ -219,21 +210,6 @@ public abstract class Layer : Node, IDisposable
         if (!boundInstances.Add(candidate)) return;
         if (candidate is IAutoCallBinder autoCallBinder)
             autoCallBinder.AutoBindCalls(this);
-    }
-
-    private sealed class ObjectReferenceComparer : IEqualityComparer<object>
-    {
-        public static readonly ObjectReferenceComparer Instance = new();
-
-        public new bool Equals(object? x, object? y)
-        {
-            return ReferenceEquals(x, y);
-        }
-
-        public int GetHashCode(object obj)
-        {
-            return RuntimeHelpers.GetHashCode(obj);
-        }
     }
 
     internal void SetRouteIndex(int routeIndex)
@@ -364,14 +340,12 @@ public abstract class Layer : Node, IDisposable
             }
 
             if (invokers[routeId] != null)
-            {
                 throw new LayerCallRouteConflictException(
                     GetType(),
                     typeof(TRequest),
                     typeof(TResponse),
                     handlerTypes[routeId] ?? invokers[routeId]!.GetType(),
                     handler.GetType());
-            }
 
             invokers[routeId] = invoker;
             handlerTypes[routeId] = handler.GetType();
@@ -381,7 +355,7 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
-    internal LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
+    internal LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest          request,
                                                               CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
@@ -403,23 +377,11 @@ public abstract class Layer : Node, IDisposable
     {
         return LayerHub.EventCenter.SendLocal(RouteIndex, value);
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EventHandledState SendBubble<T>(in T value) where T : struct
-    {
-        return LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Bubble);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EventHandledState SendDrop<T>(in T value) where T : struct
-    {
-        return LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Drop);
-    }
-
+    
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventHandledState SendGlobal<T>(in T value) where T : struct
     {
-        return LayerHub.EventCenter.Send(value, RouteIndex, Propagation.Global);
+        return LayerHub.EventCenter.Send(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -429,21 +391,36 @@ public abstract class Layer : Node, IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostBubble<T>(in T value) where T : struct
-    {
-        LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Bubble);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostDrop<T>(in T value) where T : struct
-    {
-        LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Drop);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostGlobal<T>(in T value) where T : struct
     {
         LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Global);
+    }
+
+    internal readonly struct RegisteredService
+    {
+        public RegisteredService(IService service, int scopeId)
+        {
+            Service = service;
+            ScopeId = scopeId;
+        }
+
+        public IService Service { get; }
+        public int ScopeId { get; }
+    }
+
+    private sealed class ObjectReferenceComparer : IEqualityComparer<object>
+    {
+        public static readonly ObjectReferenceComparer Instance = new();
+
+        public new bool Equals(object? x, object? y)
+        {
+            return ReferenceEquals(x, y);
+        }
+
+        public int GetHashCode(object obj)
+        {
+            return RuntimeHelpers.GetHashCode(obj);
+        }
     }
 
     private sealed class UnsubscribeDelegateToken<T> : IDisposable where T : struct
@@ -521,5 +498,3 @@ public abstract class Layer : Node, IDisposable
         }
     }
 }
-
-

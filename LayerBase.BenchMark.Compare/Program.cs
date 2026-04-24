@@ -1,13 +1,11 @@
-﻿using BenchmarkDotNet.Attributes;
+﻿using System.Runtime.CompilerServices;
+using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Exporters;
 using BenchmarkDotNet.Order;
 using BenchmarkDotNet.Reports;
 using BenchmarkDotNet.Running;
-using MessagePipe;
-using Microsoft.Extensions.DependencyInjection;
-using System.Runtime.CompilerServices;
 using LayerBase;
 using LayerBase.Async;
 using LayerBase.Call;
@@ -15,7 +13,11 @@ using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.DI;
 using LayerBase.Layers;
+using MessagePipe;
+using Microsoft.Extensions.DependencyInjection;
 using IServiceCollection = LayerBase.DI.IServiceCollection;
+using IServiceProvider = System.IServiceProvider;
+using ServiceCollection = Microsoft.Extensions.DependencyInjection.ServiceCollection;
 
 namespace LayerBaseCompareBenchmarks;
 
@@ -33,7 +35,7 @@ public sealed class CompareBenchmarkConfig : ManualConfig
 
     private static IConfig Create()
     {
-        var config = ManualConfig.Create(DefaultConfig.Instance);
+        var config = Create(DefaultConfig.Instance);
         config.AddLogicalGroupRules(BenchmarkLogicalGroupRule.ByCategory);
         config.AddColumn(CategoriesColumn.Default, StatisticColumn.Min, StatisticColumn.Max, RankColumn.Arabic);
         config.AddExporter(MarkdownExporter.GitHub);
@@ -59,17 +61,17 @@ public class PublishSingleSubscriberCompareBench : CompareBenchmarkBase
 {
     private readonly EventNotifyDelegate<NotifyPayload> _direct = static (in NotifyPayload _) => { };
     private readonly CSharpNotifyPublisher _publisher = new();
-    private System.IServiceProvider _provider = null!;
     private IPublisher<NotifyPayload> _messagePipePublisher = null!;
     private ISubscriber<NotifyPayload> _messagePipeSubscriber = null!;
     private IDisposable _messagePipeSubscription = null!;
+    private IServiceProvider _provider = null!;
 
     [GlobalSetup]
     public void Setup()
     {
         _publisher.Notify += static (in NotifyPayload _) => { };
 
-        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        var services = new ServiceCollection();
         services.AddMessagePipe();
         _provider = services.BuildServiceProvider();
         _messagePipePublisher = _provider.GetRequiredService<IPublisher<NotifyPayload>>();
@@ -125,14 +127,13 @@ public class PublishSingleSubscriberCompareBench : CompareBenchmarkBase
 
 public class PublishFanoutCompareBench : CompareBenchmarkBase
 {
-    [Params(1,4,8)]
-    public int SubscriberCount { get; set; }
-
     private readonly CSharpNotifyPublisher _publisher = new();
-    private System.IServiceProvider _provider = null!;
     private IPublisher<NotifyPayload> _messagePipePublisher = null!;
     private ISubscriber<NotifyPayload> _messagePipeSubscriber = null!;
     private IDisposable[] _messagePipeSubscriptions = Array.Empty<IDisposable>();
+    private IServiceProvider _provider = null!;
+
+    [Params(1, 4, 8)] public int SubscriberCount { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -140,7 +141,7 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
         for (var i = 0; i < SubscriberCount; i++)
             _publisher.Notify += static (in NotifyPayload _) => { };
 
-        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        var services = new ServiceCollection();
         services.AddMessagePipe();
         _provider = services.BuildServiceProvider();
         _messagePipePublisher = _provider.GetRequiredService<IPublisher<NotifyPayload>>();
@@ -191,15 +192,15 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
 
 public class RequestResponseCompareBench : CompareBenchmarkBase
 {
-    private readonly CompareRequest _request = new(123);
     private readonly CompareDirectBaseline _baseline = new();
-    private System.IServiceProvider _provider = null!;
+    private readonly CompareRequest _request = new(123);
     private IRequestHandler<CompareRequest, CompareResponse> _messagePipeHandler = null!;
+    private IServiceProvider _provider = null!;
 
     [GlobalSetup]
     public void Setup()
     {
-        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        var services = new ServiceCollection();
         var options = services.AddMessagePipe();
         options.AddRequestHandler<MessagePipeCompareHandler>();
         _provider = services.BuildServiceProvider();
@@ -238,18 +239,17 @@ public class RequestResponseCompareBench : CompareBenchmarkBase
     {
         for (var i = 0; i < HundredThousand; i++)
             CompareSink.IntValue = LayerHub.CallAsync<CompareCallLayer, CompareRequest, CompareResponse>(_request)
-                .GetAwaiter().GetResult().Value;
+                                           .GetAwaiter().GetResult().Value;
     }
 }
 
 public class ManyNotifyFixedBatch32CompareBench : CompareBenchmarkBase
 {
-    [Params(2, 3)]
-    public int SubscribersPerEvent { get; set; }
-
     private List<IDisposable> _messagePipeSubscriptions = null!;
+    private IServiceProvider _provider = null!;
     private ManyNotifyBatch32Publishers _publishers = null!;
-    private System.IServiceProvider _provider = null!;
+
+    [Params(2, 3)] public int SubscribersPerEvent { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -261,10 +261,11 @@ public class ManyNotifyFixedBatch32CompareBench : CompareBenchmarkBase
         ManyNotifyFixedBatchRegistry.RegisterLayerBase32(layer, SubscribersPerEvent);
         LayerHub.CreateLayers().Push(layer).Build();
 
-        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        var services = new ServiceCollection();
         services.AddMessagePipe();
         _provider = services.BuildServiceProvider();
-        _publishers = ManyNotifyFixedBatchRegistry.CreatePublishers32(_provider, SubscribersPerEvent, _messagePipeSubscriptions);
+        _publishers =
+            ManyNotifyFixedBatchRegistry.CreatePublishers32(_provider, SubscribersPerEvent, _messagePipeSubscriptions);
     }
 
     [GlobalCleanup]
@@ -301,12 +302,11 @@ public class ManyNotifyFixedBatch32CompareBench : CompareBenchmarkBase
 
 public class ManyNotifyFixedBatch128CompareBench : CompareBenchmarkBase
 {
-    [Params(2, 3)]
-    public int SubscribersPerEvent { get; set; }
-
     private List<IDisposable> _messagePipeSubscriptions = null!;
+    private IServiceProvider _provider = null!;
     private ManyNotifyBatch128Publishers _publishers = null!;
-    private System.IServiceProvider _provider = null!;
+
+    [Params(2, 3)] public int SubscribersPerEvent { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -318,10 +318,11 @@ public class ManyNotifyFixedBatch128CompareBench : CompareBenchmarkBase
         ManyNotifyFixedBatchRegistry.RegisterLayerBase128(layer, SubscribersPerEvent);
         LayerHub.CreateLayers().Push(layer).Build();
 
-        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        var services = new ServiceCollection();
         services.AddMessagePipe();
         _provider = services.BuildServiceProvider();
-        _publishers = ManyNotifyFixedBatchRegistry.CreatePublishers128(_provider, SubscribersPerEvent, _messagePipeSubscriptions);
+        _publishers =
+            ManyNotifyFixedBatchRegistry.CreatePublishers128(_provider, SubscribersPerEvent, _messagePipeSubscriptions);
     }
 
     [GlobalCleanup]
@@ -358,12 +359,11 @@ public class ManyNotifyFixedBatch128CompareBench : CompareBenchmarkBase
 
 public class ManyNotifyFixedBatch256CompareBench : CompareBenchmarkBase
 {
-    [Params(2, 3)]
-    public int SubscribersPerEvent { get; set; }
-
     private List<IDisposable> _messagePipeSubscriptions = null!;
+    private IServiceProvider _provider = null!;
     private ManyNotifyBatch256Publishers _publishers = null!;
-    private System.IServiceProvider _provider = null!;
+
+    [Params(2, 3)] public int SubscribersPerEvent { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -375,10 +375,11 @@ public class ManyNotifyFixedBatch256CompareBench : CompareBenchmarkBase
         ManyNotifyFixedBatchRegistry.RegisterLayerBase256(layer, SubscribersPerEvent);
         LayerHub.CreateLayers().Push(layer).Build();
 
-        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        var services = new ServiceCollection();
         services.AddMessagePipe();
         _provider = services.BuildServiceProvider();
-        _publishers = ManyNotifyFixedBatchRegistry.CreatePublishers256(_provider, SubscribersPerEvent, _messagePipeSubscriptions);
+        _publishers =
+            ManyNotifyFixedBatchRegistry.CreatePublishers256(_provider, SubscribersPerEvent, _messagePipeSubscriptions);
     }
 
     [GlobalCleanup]
@@ -431,13 +432,21 @@ public struct NotifyPayload
 
 public struct CompareRequest
 {
-    public CompareRequest(int value) => Value = value;
+    public CompareRequest(int value)
+    {
+        Value = value;
+    }
+
     public int Value { get; set; }
 }
 
 public struct CompareResponse
 {
-    public CompareResponse(int value) => Value = value;
+    public CompareResponse(int value)
+    {
+        Value = value;
+    }
+
     public int Value { get; set; }
 }
 
@@ -457,8 +466,13 @@ public sealed class MessagePipeCompareHandler : IRequestHandler<CompareRequest, 
     }
 }
 
-public partial class CompareLayer : Layer { }
-public partial class CompareCallLayer : Layer { }
+public class CompareLayer : Layer
+{
+}
+
+public partial class CompareCallLayer : Layer
+{
+}
 
 [OwnerLayer(typeof(CompareCallLayer))]
 public sealed class LayerBaseCompareHandler : ILayerCallHandler<CompareRequest, CompareResponse>
@@ -471,13 +485,13 @@ public sealed class LayerBaseCompareHandler : ILayerCallHandler<CompareRequest, 
 
 public partial class CompareNotifyManager : IService
 {
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton(this);
+    }
+
     [SubscribeNotify]
     public void OnNotify(in NotifyPayload payload)
     {
-    }
-
-    public void ConfigureServices(IServiceCollection services)
-    {        
-        services.AddSingleton(this);
     }
 }

@@ -12,12 +12,16 @@ using Microsoft.CodeAnalysis.Formatting;
 
 namespace LayerBase.Generator;
 
-[ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(SubscribeSignatureFixer)), Shared]
+[ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(SubscribeSignatureFixer))]
+[Shared]
 public class SubscribeSignatureFixer : CodeFixProvider
 {
     public sealed override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("LBGS001");
 
-    public sealed override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
+    public sealed override FixAllProvider GetFixAllProvider()
+    {
+        return WellKnownFixAllProviders.BatchFixer;
+    }
 
     public sealed override async Task RegisterCodeFixesAsync(CodeFixContext context)
     {
@@ -27,21 +31,23 @@ public class SubscribeSignatureFixer : CodeFixProvider
         var diagnostic = context.Diagnostics.First();
         var diagnosticSpan = diagnostic.Location.SourceSpan;
 
-        var methodDeclaration = root.FindToken(diagnosticSpan.Start).Parent?.AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+        var methodDeclaration = root.FindToken(diagnosticSpan.Start).Parent?.AncestorsAndSelf()
+                                    .OfType<MethodDeclarationSyntax>().FirstOrDefault();
         if (methodDeclaration == null) return;
 
         context.RegisterCodeFix(
             CodeAction.Create(
-                title: "Fix [Subscribe] signature",
-                createChangedDocument: c => FixSignatureAsync(context.Document, methodDeclaration, c),
-                equivalenceKey: nameof(SubscribeSignatureFixer)),
+                "Fix [Subscribe] signature",
+                c => FixSignatureAsync(context.Document, methodDeclaration, c),
+                nameof(SubscribeSignatureFixer)),
             diagnostic);
     }
 
-    private async Task<Document> FixSignatureAsync(Document document, MethodDeclarationSyntax method, CancellationToken cancellationToken)
+    private async Task<Document> FixSignatureAsync(Document          document, MethodDeclarationSyntax method,
+                                                   CancellationToken cancellationToken)
     {
         var attr = method.AttributeLists.SelectMany(al => al.Attributes)
-            .FirstOrDefault(a => a.Name.ToString().StartsWith("Subscribe"));
+                         .FirstOrDefault(a => a.Name.ToString().StartsWith("Subscribe"));
         if (attr == null) return document;
 
         var attrName = attr.Name.ToString();
@@ -61,9 +67,7 @@ public class SubscribeSignatureFixer : CodeFixProvider
         if (!isAsync)
         {
             if (!param.Modifiers.Any(SyntaxKind.InKeyword))
-            {
                 newParam = param.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.InKeyword)));
-            }
         }
         else
         {
@@ -71,13 +75,13 @@ public class SubscribeSignatureFixer : CodeFixProvider
             newParam = param.WithModifiers(SyntaxFactory.TokenList());
         }
 
-        var newMethod = method.WithParameterList(method.ParameterList.WithParameters(SyntaxFactory.SeparatedList(new[] { newParam })));
+        var newMethod =
+            method.WithParameterList(
+                method.ParameterList.WithParameters(SyntaxFactory.SeparatedList(new[] { newParam })));
 
         // Fix modifiers: Add 'async' if it's an Async subscriber and missing
         if (isAsync && !newMethod.Modifiers.Any(SyntaxKind.AsyncKeyword))
-        {
             newMethod = newMethod.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
-        }
 
         // Fix return type
         if (isAsync)
@@ -87,7 +91,8 @@ public class SubscribeSignatureFixer : CodeFixProvider
         }
         else if (isNotify)
         {
-            newMethod = newMethod.WithReturnType(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)));
+            newMethod = newMethod.WithReturnType(
+                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)));
         }
         else
         {

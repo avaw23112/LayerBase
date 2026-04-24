@@ -1,8 +1,8 @@
-using System;
-
 namespace LayerBase.DI;
 
-public struct GlobalScope { }
+public struct GlobalScope
+{
+}
 
 [AttributeUsage(AttributeTargets.Field)]
 public sealed class PublicAttribute : Attribute
