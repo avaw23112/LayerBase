@@ -136,8 +136,7 @@ EventBucket<T>
 1. **NuGet 快速安装 (推荐)**：
    您可以通过 NuGet 包管理器直接安装 LayerBase：
    ```bash
-   dotnet add package LayerBase --version 1.3.6
-   ```
+   dotnet add package LayerBase --version 1.4.0   ```
 2. **源码引入**：将仓库中的 `LayerBase` 和 `LayerBase.Task` 项目目录直接添加到您的解决方案中并建立引用。
 3. **配置源生成器 (Source Generator)**：
    框架依赖源生成器以实现零反射的特性自动绑定，请确保在主项目中引入了分析器：
@@ -456,12 +455,56 @@ public sealed class ServiceLookupCallHandler : ILayerCallHandler<ServiceLookupRe
     }
 }
 
-//外部调用1
-ServiceLookupResponse response1 = await LayerHub.For<CoreLayer>().CallAsync<ServiceLookupRequest, ServiceLookupResponse>(new ServiceLookupRequest())
-//外部调用2
-ServiceLookupResponse response2 = await LayerHub.CallAsync<CoreLayer, ServiceLookupRequest, ServiceLookupResponse>(new ServiceLookupRequest());
-
+// 外部调用
+ServiceLookupResponse resp = await LayerHub.CallAsync<CoreLayer, ServiceLookupRequest, ServiceLookupResponse>(new ServiceLookupRequest());
 ```
+
+### 6. 声明式共享内存 (Shared Field v2)
+
+解决组件间在不建立显式引用关系的情况下，如何安全、高效地共享内存状态。
+
+*   **显式边界**：不再使用枚举推断范围，而是通过 `(Type ownerType, string localKey)` 显式指定状态的归属。
+*   **自动生命周期**：标记为 `[Public]` 的字段在 `Build()` 阶段会自动实例化（支持引用类型和值类型）。
+*   **强制只读**：`[From]` 端只能接收只读投影（如 `IReadOnlyList<T>`），禁止拿走可写容器（如 `List<T>`），彻底杜绝逻辑后门。
+
+```csharp
+public sealed class InventoryModule : ILayerContext
+{
+    // 在 Service 范围内发布一个状态，Key 为 "items"
+    [Public(typeof(InventoryService), "items")]
+    private List<string> _items = new();
+}
+
+public sealed class HudModule : ILayerContext
+{
+    // 从指定的 Service 中引用该状态，强制使用只读接口
+    [From(typeof(InventoryService), "items")]
+    private IReadOnlyList<string> _items = default!;
+}
+
+// 全局作用域请使用 typeof(GlobalScope)
+[Public(typeof(GlobalScope), "config")]
+private AppConfig _config;
+```
+
+### 7. 注册总览与健康审计 (Topology & Health Audit)
+
+在大型项目中，排查“谁发了消息、谁在听、为什么没响应”是极大的负担。LayerBase v1.4.0 引入了全量的拓扑快照。
+
+*   **一键导出**：调用 `LayerHub.GetTopologyMarkdown()` 即可获得一份详细的 Markdown 表格，涵盖所有 Layer、Event 订阅关系、Call 路由以及共享字段。
+*   **僵尸代码审计**：自动识别并标记：
+    *   **Zombie Event**：有订阅但没人发的事件。
+    *   **Unused Producer**：有人发但没人听的事件。
+    *   **Dead Call**：定义了 Handler 但从未被调用的 Call。
+    *   **Orphaned Public**：发布了状态但全项目没人引用的 Key。
+
+### 8. Roslyn 智能开发体验 (Diagnostics & Code Fixes)
+
+为了降低心智负担，框架自带了深度集成的 Roslyn 插件：
+
+*   **编译期拦截**：非法的方法签名、`[Public]` 键位碰撞、`[From]` 类型不匹配、类缺少 `partial` 关键字，都会在**按下 F5 之前**以 Error 形式提示。
+*   **一键修复 (Code Fix)**：按下 `Alt+Enter`，自动修正订阅方法签名、自动补全 `async` 关键字、自动同步共享字段类型。
+
 
 ---
 
@@ -624,8 +667,7 @@ Beyond pursuing extreme execution efficiency, LayerBase also provides a complete
 1. **Quick Install via NuGet (Recommended)**:
    You can easily install LayerBase through the NuGet Package Manager:
    ```bash
-   dotnet add package LayerBase --version 1.3.6
-   ```
+   dotnet add package LayerBase --version 1.4.0   ```
 2. **Source Code Integration**: Add the `LayerBase` and `LayerBase.Task` project directories from the repository directly to your solution and reference them.
 3. **Configure Source Generator**:
    The framework relies on Source Generators to achieve zero-reflection attribute binding. Ensure the analyzer is referenced in your main project:
@@ -949,14 +991,55 @@ public sealed class ServiceLookupCallHandler : ILayerCallHandler<ServiceLookupRe
     }
 }
 
-// External call style 1
-ServiceLookupResponse response1 =
-    await LayerHub.For<CoreLayer>().CallAsync<ServiceLookupRequest, ServiceLookupResponse>(new ServiceLookupRequest());
-
-// External call style 2
-ServiceLookupResponse response2 =
-    await LayerHub.CallAsync<CoreLayer, ServiceLookupRequest, ServiceLookupResponse>(new ServiceLookupRequest());
+// External call
+ServiceLookupResponse resp = await LayerHub.CallAsync<CoreLayer, ServiceLookupRequest, ServiceLookupResponse>(new ServiceLookupRequest());
 ```
+
+### 6. Declarative Shared Memory (Shared Field v2)
+
+Safely and efficiently share memory state between components without establishing explicit references.
+
+*   **Explicit Boundaries**: Instead of implicit enums, use `(Type ownerType, string localKey)` to explicitly specify state ownership.
+*   **Automatic Lifecycle**: Fields marked `[Public]` are automatically instantiated during `Build()` (supports both reference and value types).
+*   **Strict Read-Only**: `[From]` side can only receive read-only projections (e.g., `IReadOnlyList<T>`), forbidding writable containers (e.g., `List<T>`), closing logic loopholes.
+
+```csharp
+public sealed class InventoryModule : ILayerContext
+{
+    // Publish state within Service scope with Key "items"
+    [Public(typeof(InventoryService), "items")]
+    private List<string> _items = new();
+}
+
+public sealed class HudModule : ILayerContext
+{
+    // Consume state from specific Service, forcing read-only interface
+    [From(typeof(InventoryService), "items")]
+    private IReadOnlyList<string> _items = default!;
+}
+
+// For global scope, use typeof(GlobalScope)
+[Public(typeof(GlobalScope), "config")]
+private AppConfig _config;
+```
+
+### 7. Registration Overview & Health Audit
+
+In large projects, debugging "who sent what, who is listening, and why no response" is a huge burden. LayerBase v1.4.0 introduces full topology snapshots.
+
+*   **Topology Export**: Call `LayerHub.GetTopologyMarkdown()` to get a detailed Markdown report covering all Layers, Event subscriptions, Call routes, and Shared Fields.
+*   **Dead Code Audit**: Automatically detects and flags:
+    *   **Zombie Event**: Subscribed but never produced.
+    *   **Unused Producer**: Produced but no subscribers.
+    *   **Dead Call**: Handler defined but never invoked.
+    *   **Orphaned Public**: Key published but never consumed.
+
+### 8. Roslyn Developer Experience (Diagnostics & Code Fixes)
+
+Deeply integrated Roslyn analyzers provide:
+*   **Compile-time Guardrails**: Catch invalid signatures, key collisions, and missing `partial` modifiers before execution.
+*   **One-Click Fixes**: Use `Alt+Enter` to auto-fix method signatures, inject `async` keywords, or sync shared field types.
+
 
 ---
 
