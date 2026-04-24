@@ -393,7 +393,7 @@ public abstract class Layer : Node, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostGlobal<T>(in T value) where T : struct
     {
-        LayerHub.EventCenter.Post(value, RouteIndex, Propagation.Global);
+        LayerHub.EventCenter.Post(value);
     }
 
     internal readonly struct RegisteredService

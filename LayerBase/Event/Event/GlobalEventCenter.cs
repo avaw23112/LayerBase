@@ -142,17 +142,17 @@ public sealed class GlobalEventCenter
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void Post<T>(in T value, int sourceIndex, Propagation propagation) where T : struct
+    internal void Post<T>(in T value) where T : struct
     {
         if (Volatile.Read(ref _isResetting) == 1) return;
         var cached = BucketCache<T>.Instance;
         if (cached != null && cached.Owner == this)
         {
-            cached.Post(in value, sourceIndex, propagation);
+            cached.Post(in value);
             return;
         }
 
-        GetBucket<T>().Post(in value, sourceIndex, propagation);
+        GetBucket<T>().Post(in value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -904,11 +904,11 @@ public sealed class GlobalEventCenter
                 DispatchSmallNotifyFanout(0, _notifyCountTotal, in value);
                 return EventHandledState.Continue;
             }
-
+            
             if (_parallelMask != 0)
                 for (var j = 0; j < _parallelCountTotal; j++)
                     _flatParallel[j].Enqueue(-1, in value);
-
+            
             if (_notifyMask != 0) DispatchNotify(0, _notifyCountTotal, in value);
 
             var res = EventHandledState.Continue;
@@ -979,7 +979,7 @@ public sealed class GlobalEventCenter
         {
             try
             {
-                return _singleSyncHandler!(in value);
+                return _singleSyncHandler(in value);
             }
             catch (Exception ex)
             {
@@ -991,7 +991,7 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private EventHandledState DispatchSingleNotify(in T value)
         {
-            _singleNotifyHandler!(in value);
+            _singleNotifyHandler(in value);
             return EventHandledState.Continue;
         }
 
@@ -1003,19 +1003,12 @@ public sealed class GlobalEventCenter
             ref var hBase = ref GetArrayDataRef(_notifyHandlers);
             Unsafe.Add(ref hBase, start)(in value);
             Unsafe.Add(ref hBase, start + 1)(in value);
-
-            if (count >= 3) Unsafe.Add(ref hBase, start + 2)(in value);
-            else return;
-            if (count >= 4) Unsafe.Add(ref hBase, start + 3)(in value);
-            else return;
-            if (count >= 5) Unsafe.Add(ref hBase, start + 4)(in value);
-            else return;
-            if (count >= 6) Unsafe.Add(ref hBase, start + 5)(in value);
-            else return;
-            if (count >= 7) Unsafe.Add(ref hBase, start + 6)(in value);
-            else return;
-            if (count >= 8) Unsafe.Add(ref hBase, start + 7)(in value);
-            else return;
+            if (count == 2) return;Unsafe.Add(ref hBase, start + 2)(in value);
+            if(count == 3) return;Unsafe.Add(ref hBase, start + 3)(in value);
+            if(count == 4) return;Unsafe.Add(ref hBase, start + 4)(in value);
+            if (count == 5) return;Unsafe.Add(ref hBase, start + 5)(in value);
+            if (count == 6) return;Unsafe.Add(ref hBase, start + 6)(in value);
+            if (count == 7) return;Unsafe.Add(ref hBase, start + 7)(in value);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1149,35 +1142,6 @@ public sealed class GlobalEventCenter
             }
         }
 
-        private void HandleNotifyFault(int index, in T value, Exception e)
-        {
-            HandlerCircuit? circuit = null;
-            string? name = null;
-            if (index >= 0 && index < _notifyCountTotal)
-            {
-                circuit = _notifyCircuits[index];
-                name = _notifyNames[index];
-            }
-
-            EventMetaDataHandler.OnEventExpectation(value, e);
-            if (circuit != null && circuit.TryDisable())
-            {
-                LayerHub.ReportLayerEventError(-1, name ?? "Unknown", typeof(T).Name, e);
-                MarkDirty();
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void HandleSingleNotifyFault(in T value, Exception e)
-        {
-            EventMetaDataHandler.OnEventExpectation(value, e);
-            if (_singleNotifyCircuit != null && _singleNotifyCircuit.TryDisable())
-            {
-                LayerHub.ReportLayerEventError(-1, _singleNotifyName ?? "Unknown", typeof(T).Name, e);
-                MarkDirty();
-            }
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int FindSingleRouteLayerIndex(bool isNotify)
         {
@@ -1197,7 +1161,7 @@ public sealed class GlobalEventCenter
             return -1;
         }
 
-        public void Post(in T value, int sourceIndex, Propagation propagation)
+        public void Post(in T value)
         {
             if (Volatile.Read(ref Owner!._isResetting) == 1) return;
             EnsureClean();
@@ -1205,7 +1169,7 @@ public sealed class GlobalEventCenter
             if (mask == 0) return;
 
             var firstLayer = Owner.FindFirstBit(mask);
-            var @event = new Event<T>(value) { TargetMask = mask, Propagation = (int)propagation };
+            var @event = new Event<T>(value) { TargetMask = mask };
             Owner.EnqueueEventInternal(firstLayer, in @event);
             Owner.WakeLayer(firstLayer);
         }
@@ -1269,7 +1233,7 @@ public sealed class GlobalEventCenter
             if (layerIndex >= 0 && layerIndex < 64 && (_subscriberMask & (1UL << layerIndex)) != 0)
             {
                 var @event = new Event<T>(value)
-                    { TargetMask = 1UL << layerIndex, Propagation = (int)Propagation.Global };
+                    { TargetMask = 1UL << layerIndex};
                 Owner.EnqueueEventInternal(layerIndex, in @event);
                 Owner.WakeLayer(layerIndex);
             }

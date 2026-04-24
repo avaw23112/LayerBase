@@ -26,16 +26,10 @@ public struct Event<T> where T : struct
     public T Value;
     public ulong TargetMask;
 
-    /// <summary>
-    ///     事件传播模式。
-    /// </summary>
-    public int Propagation;
-
     public Event(T value)
     {
         Value = value;
         TargetMask = 0;
-        Propagation = 0; // 默认 Global
     }
 
     internal int FindNextTarget(int currentLayer, GlobalEventCenter center)
