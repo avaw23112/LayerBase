@@ -214,7 +214,7 @@ public partial class DamageManager : ILayerContext
         if (e.Amount > 100)
         {
             // 向全局广播事件
-            this.SendGlobal(new PlayerDeathEvent()); 
+            this.Send(new PlayerDeathEvent()); 
         }
         
         // 返回 Continue: 允许其他同事件的 Manager 继续处理
@@ -258,7 +258,7 @@ public partial class PlayerInputManager : ILayerContext,IUpdate
         {
             if(inputEvent.Value == InputType.Forward)
             {
-                this.SendGlobal(new PlayerMoveEvent (){e.delat = new Vector2(0,1)});
+                this.Send(new PlayerMoveEvent (){e.delat = new Vector2(0,1)});
             }
         }
     }
@@ -296,19 +296,19 @@ LayerBase 提供了精确控制传播范围的 API。在 `Layer`、`Service` 或
 ```csharp
 // 【Send 族：同步执行，当前执行流会等待分发完成】
 this.SendLocal(new DamageEvent());  // 【同层】仅在当前层级广播
-this.SendGlobal(new DamageEvent()); // 【全局】穿透所有层级广播
+this.Send(new DamageEvent()); // 【全局】穿透所有层级广播
 
 // 【Post 族：异步投递，用在一些不紧急，可分帧执行的任务中。
 this.PostLocal(new DamageEvent());
-this.PostGlobal(new DamageEvent()); 
+this.Post(new DamageEvent()); 
 
 // 【Delay 族：向事件缓冲管道发布一个定时的事件】
 this.DelayGlobal(new PlayerDeathEvent(), 3.5f); // 该事件会在管道中存在3.5秒，直到有新的事件覆盖、到时间自动消亡、或者被取出。
 this.DelayLocal(new PlayerDeathEvent(), 3.5f); 
 
 // 注意：全局事件都是是经过特殊优化的，性能比其他种类都要好。
-LayerHub.SendGlobal(new MyEvent());
-LayerHub.PostGlobal(new MyEvent());
+LayerHub.Send(new MyEvent());
+LayerHub.Post(new MyEvent());
 ```
 
 这种设计有助于精简事件流，减少不必要的跨层搜索。
@@ -803,7 +803,7 @@ public partial class DamageManager : ILayerContext
         if (e.Amount > 100)
         {
             // Broadcast event globally
-            this.SendGlobal(new PlayerDeathEvent()); 
+            this.Send(new PlayerDeathEvent()); 
         }
         
         // Return Continue: allow other Managers in the same or subsequent layers to process this event
@@ -847,7 +847,7 @@ public partial class PlayerInputManager : ILayerContext,IUpdate
         {
             if(inputEvent.Value == InputType.Forward)
             {
-                this.SendGlobal(new PlayerMoveEvent (){e.delat = new Vector2(0,1)});
+                this.Send(new PlayerMoveEvent (){e.delat = new Vector2(0,1)});
             }
         }
     }
@@ -887,19 +887,19 @@ call extension methods directly to dispatch events:
 ```csharp
 // ⚔️ [Send Family: Synchronous execution, the current thread blocks until dispatch finishes]
 this.SendLocal(new DamageEvent());  // [Local] Broadcast only within the current layer
-this.SendGlobal(new DamageEvent()); // [Global] Penetrate and broadcast across all layers
+this.Send(new DamageEvent()); // [Global] Penetrate and broadcast across all layers
 
 // 📨 [Post Family: Asynchronous delivery for work that is not urgent and can be spread across frames.
 this.PostLocal(new DamageEvent());
-this.PostGlobal(new DamageEvent()); 
+this.Post(new DamageEvent()); 
 
 // ⏳ [Delay Family: Publish a timed event into the event buffer pipeline]
 this.DelayGlobal(new PlayerDeathEvent(), 3.5f); // The event stays in the pipeline for 3.5 seconds until overwritten, expired, or taken out.
 this.DelayLocal(new PlayerDeathEvent(), 3.5f); 
 
 // Note: global events are specially optimized and perform better than other kinds.
-LayerHub.SendGlobal(new MyEvent());
-LayerHub.PostGlobal(new MyEvent());
+LayerHub.Send(new MyEvent());
+LayerHub.Post(new MyEvent());
 ```
 
 This design helps streamline event flows and reduces unnecessary cross-layer searching.
