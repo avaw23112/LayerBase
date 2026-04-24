@@ -4,3 +4,8 @@ namespace LayerBase.Call;
 public sealed class CallAttribute : Attribute
 {
 }
+
+public interface IAutoCallBinder
+{
+    void AutoBindCalls(LayerBase.Layers.Layer layer);
+}

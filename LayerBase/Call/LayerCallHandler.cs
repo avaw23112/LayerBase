@@ -33,3 +33,18 @@ public static class LayerCallHandlerExtensions
         return LayerHub.CallAsync<TLayer, TRequest, TResponse>(request, cancellationToken);
     }
 }
+
+public static class LayerCallRegistrationBridge
+{
+    public static void Register<TRequest, TResponse>(
+        Layer layer,
+        ILayerCallHandler<TRequest, TResponse> handler)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        if (layer == null) throw new ArgumentNullException(nameof(layer));
+        if (handler == null) throw new ArgumentNullException(nameof(handler));
+
+        layer.RegisterCallHandler(handler);
+    }
+}

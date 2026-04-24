@@ -145,7 +145,6 @@ public abstract class Layer : Node, IDisposable
 
     internal void FinalizeBuild()
     {
-        ValidateNoModuleCallMethods();
         BindAutoCallHandlers();
 
         var subscribers = new List<IAutoSubscribe>();
@@ -210,20 +209,8 @@ public abstract class Layer : Node, IDisposable
     private void BindAutoCallHandler(object candidate, HashSet<object> boundInstances)
     {
         if (!boundInstances.Add(candidate)) return;
-        CallMethodBinder.Bind(candidate, this);
-    }
-
-    private void ValidateNoModuleCallMethods()
-    {
-        foreach (var resolved in m_resolvedServices)
-        {
-            if (resolved.Instance is not ILayerContext) continue;
-            if (!CallMethodBinder.HasCallMethods(resolved.Instance.GetType())) continue;
-
-            throw new InvalidOperationException(
-                $"[Call] methods are only supported on Layer and IService owners. " +
-                $"Module '{resolved.Instance.GetType().FullName}' should not declare [Call].");
-        }
+        if (candidate is IAutoCallBinder autoCallBinder)
+            autoCallBinder.AutoBindCalls(this);
     }
 
     private sealed class ObjectReferenceComparer : IEqualityComparer<object>

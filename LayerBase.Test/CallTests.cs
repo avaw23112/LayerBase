@@ -185,35 +185,6 @@ public class CallTests
         Assert.That(layer.GetService<SceneService>().LastScene, Is.EqualTo("ServiceScene"));
     }
 
-    [Test]
-    public void Invalid_layer_Call_method_signature_fails_during_build()
-    {
-        Assert.That(
-            () => LayerHub.CreateLayers().Push(new InvalidLayerMethodLayer()).Build(),
-            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("[Call] method"));
-    }
-
-    [Test]
-    public void Invalid_service_Call_method_signature_fails_during_build()
-    {
-        var layer = new InvalidServiceMethodLayer();
-        layer.RegisterService(new InvalidServiceMethodCallModule());
-
-        Assert.That(
-            () => LayerHub.CreateLayers().Push(layer).Build(),
-            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("[Call] method"));
-    }
-
-    [Test]
-    public void Module_cannot_declare_Call_methods()
-    {
-        var layer = new ModuleCallInvalidLayer();
-        layer.RegisterService(new ModuleCallInvalidService());
-
-        Assert.That(
-            () => LayerHub.CreateLayers().Push(layer).Build(),
-            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("should not declare [Call]"));
-    }
 }
 
 public struct SwitchSceneRequest
@@ -441,7 +412,7 @@ public sealed class AudioLayerServicesModule : IService
     }
 }
 
-public sealed class ServiceMethodCallModule : IService
+public sealed partial class ServiceMethodCallModule : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -452,36 +423,6 @@ public sealed class ServiceMethodCallModule : IService
     public LBTask<ServiceMethodResponse> HandleServiceMethodAsync(ServiceMethodRequest request)
     {
         this.GetService<SceneService>().SwitchTo(request.SceneName);
-        return LBTask<ServiceMethodResponse>.FromResult(new ServiceMethodResponse(request.SceneName));
-    }
-}
-
-public sealed class InvalidServiceMethodCallModule : IService
-{
-    public void ConfigureServices(IServiceCollection services)
-    {
-    }
-
-    [Call]
-    public LBTask<ServiceMethodResponse> InvalidHandle(ServiceMethodRequest request, int unexpectedParameter)
-    {
-        return LBTask<ServiceMethodResponse>.FromResult(new ServiceMethodResponse(request.SceneName));
-    }
-}
-
-public sealed class ModuleCallInvalidService : IService
-{
-    public void ConfigureServices(IServiceCollection services)
-    {
-        services.AddScoped<ModuleCallInvalidManager, ModuleCallInvalidManager>();
-    }
-}
-
-public sealed class ModuleCallInvalidManager : ILayerContext
-{
-    [Call]
-    public LBTask<ServiceMethodResponse> InvalidModuleCall(ServiceMethodRequest request)
-    {
         return LBTask<ServiceMethodResponse>.FromResult(new ServiceMethodResponse(request.SceneName));
     }
 }
@@ -513,23 +454,6 @@ public partial class LayerMethodLayer : Layer
 }
 
 public partial class ServiceMethodLayer : Layer
-{
-}
-
-public partial class InvalidLayerMethodLayer : Layer
-{
-    [Call]
-    public LayerMethodResponse InvalidHandle(LayerMethodRequest request)
-    {
-        return new LayerMethodResponse(request.SceneName);
-    }
-}
-
-public partial class InvalidServiceMethodLayer : Layer
-{
-}
-
-public partial class ModuleCallInvalidLayer : Layer
 {
 }
 
