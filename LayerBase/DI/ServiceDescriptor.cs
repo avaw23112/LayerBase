@@ -4,10 +4,10 @@ namespace LayerBase.DI;
 
 public enum ServiceLifetime
 {
-    Singleton, // 全局唯一
-    Scoped,    // 层级唯一
-    Transient, // 每次创建
-    Instance   // 外部预创建实�?(通常表现�?Scoped)
+    Singleton, // Globally unique
+    Scoped,    // Layer unique
+    Transient, // Created every time
+    Instance   // Externally pre-created instance (usually acts as Scoped)
 }
 
 public sealed class ServiceDescriptor

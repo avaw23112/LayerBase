@@ -15,7 +15,7 @@ public class ServiceCollection : IServiceCollection
     }
 
     /// <summary>
-    ///     注册一个全局单例 (Global Singleton)�?
+    ///     Register a global singleton.
     /// </summary>
     public IServiceCollection AddSingleton<TService>(TService instance)
     {
@@ -80,4 +80,6 @@ public class ServiceCollection : IServiceCollection
         }
     }
 }
+
+
 

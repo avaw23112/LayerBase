@@ -97,7 +97,7 @@ public static class LayerHub
             s_layerTypeBindings.Clear();
             InvalidateLayerTargetCaches();
             EventCenter.Reset();
-            ServiceProvider.ResetRoot(); // 新增：重置全局单例容器
+            ServiceProvider.ResetRoot(); // New: Reset global singleton container
             ServiceLayerBinder.Reset();
             LayerServiceRegistry.Reset();
             OnLayerEventInfo = null;
@@ -481,4 +481,6 @@ public static class LayerHub
         public static LayerTargetState State;
     }
 }
+
+
 

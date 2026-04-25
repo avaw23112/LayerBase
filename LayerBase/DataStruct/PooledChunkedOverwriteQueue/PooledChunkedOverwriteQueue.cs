@@ -41,7 +41,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
 
     private Segment? _headSeg;
     private int _maxCapacity;
-    private int _tailIndex; // 指向尾段的“下一写入位置�?
+    private int _tailIndex; // Points to the next write position of the tail segment
     private Segment? _tailSeg;
 
     internal PooledChunkedOverwriteQueue(

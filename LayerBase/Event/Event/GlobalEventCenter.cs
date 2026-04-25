@@ -384,7 +384,7 @@ public sealed class GlobalEventCenter
             if (_disposed) return;
             var typeId = EventTypeId<T>.Id;
 
-            // 使用局部变量引用，防止�?Double-Check 过程中数组被替换
+            // 使用局部变量引用，防止�?Double-Check 过程中数组被替换
             var arr = _queuesByTypeArr;
             IUnmanagedList? list = null;
 
@@ -632,7 +632,7 @@ public sealed class GlobalEventCenter
                 if (bSync > 0 || bAsync > 0 || bParallel > 0 || bNotify > 0) newMask |= bit;
             }
 
-            // 修复：在租借新数组前归还旧数组，防止内存泄�?
+            // 修复：在租借新数组前归还旧数组，防止内存泄�?
             if (_syncHandlers.Length < totalSync)
             {
                 var oldSize = _syncHandlers.Length;
@@ -764,7 +764,7 @@ public sealed class GlobalEventCenter
             _parallelCountTotal = pIdx;
             _notifyCountTotal = nIdx;
 
-            // 🚀 单订阅特化识别：如果全局仅有一个同�?Notify订阅，则提取到字段，分发时彻底跳过多订阅遍历
+            // 🚀 单订阅特化识别：如果全局仅有一个同�?Notify订阅，则提取到字段，分发时彻底跳过多订阅遍历
             _singleSyncHandler = null;
             _singleSyncCircuit = null;
             _singleSyncName = null;
@@ -933,7 +933,7 @@ public sealed class GlobalEventCenter
                 if (_isSingleSync) return DispatchSingleSync(in value);
             }
 
-            // 🚀 Local 模式下的单订阅识�?
+            // 🚀 Local 模式下的单订阅识�?
             ref var r = ref _ranges[layerIndex];
             if (r.NotifyCount == 1 && r.SyncCount == 0 && r.AsyncCount == 0 && r.ParallelCount == 0)
                 Unsafe.Add(ref GetArrayDataRef(_notifyHandlers), r.NotifyStart)(in value);
@@ -998,7 +998,7 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DispatchSmallNotifyFanout(int start, int count, in T value)
         {
-            //直接将小扇区写进指令，避免后续for循环产生寄存器和额外指令消耗�?
+            //直接将小扇区写进指令，避免后续for循环产生寄存器和额外指令消耗
             //由于避免了单订阅者的路径,2 个订阅者是普遍情况
             ref var hBase = ref GetArrayDataRef(_notifyHandlers);
             Unsafe.Add(ref hBase, start)(in value);

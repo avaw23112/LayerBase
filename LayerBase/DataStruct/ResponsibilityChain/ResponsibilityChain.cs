@@ -59,9 +59,9 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
             return node;
         }
 
-        node.Next = Head; // 新节点后�?= 旧头
-        Head.Prev = node; // 旧头前驱 = 新节�?
-        Head = node;      // 更新头指�?
+        node.Next = Head; // New node's next = old head
+        Head.Prev = node; // Old head's prev = new node
+        Head = node;      // Update head pointer
         ValidateAcyclic();
         return node;
     }
@@ -241,7 +241,7 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
             if (!ReferenceEquals(cur.Prev, prev))
                 throw new InvalidOperationException("Invalid chain: Prev/Next symmetry broken.");
 
-            // 防止自环（最常见 bug：cur.Next = cur�?
+            // Prevent self-loop (most common bug: cur.Next = cur)
             if (ReferenceEquals(cur.Next, cur))
                 throw new InvalidOperationException("Invalid chain: self-loop detected (node.Next == node).");
 
@@ -291,4 +291,5 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
         }
     }
 }
+
 
