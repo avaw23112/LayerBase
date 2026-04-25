@@ -11,7 +11,10 @@ using LayerBase.Event.Delay;
 
 namespace LayerBase.Layers;
 
-[AttributeUsage(AttributeTargets.Class)]
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class SourceGeneratedServiceInitAttribute : Attribute { }
+
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
 public sealed class OwnerLayerAttribute : Attribute
 {
     public OwnerLayerAttribute(Type layerType)
@@ -62,7 +65,7 @@ public abstract class Layer : Node, IDisposable
     public int RouteIndex { get; private set; } = -1;
     public List<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = new();
 
-    // 优化：不再包含 DiscoveredSubscribers。仅有订阅者的层被称为“被动层”，不应参与逻辑位图轮询。
+    // 优化：不再包�?DiscoveredSubscribers。仅有订阅者的层被称为“被动层”，不应参与逻辑位图轮询�?
     public virtual bool HasActiveLogic =>
         m_serviceUpdates.Count > 0 || m_delayUpdaters.Count > 0;
 
@@ -84,12 +87,16 @@ public abstract class Layer : Node, IDisposable
     {
     }
 
+    private readonly HashSet<Type> m_registeredServiceTypes = new();
+
     public void RegisterService(IService service)
     {
         if (service == null) throw new ArgumentNullException(nameof(service));
 
-        var registration = new RegisteredService(service, Interlocked.Increment(ref m_nextServiceScopeId));
-        if (m_collectingGeneratedServices)
+        if (!m_registeredServiceTypes.Add(service.GetType()))    
+            return;
+
+        var registration = new RegisteredService(service, Interlocked.Increment(ref m_nextServiceScopeId));        if (m_collectingGeneratedServices)
         {
             AddActiveService(registration);
             return;
@@ -126,9 +133,15 @@ public abstract class Layer : Node, IDisposable
         m_serviceCollection.Reset();
         m_callRouteInvokers = Array.Empty<object?>();
         m_callRouteHandlerTypes = Array.Empty<Type?>();
+        CallHandlers.Clear();
+        m_registeredServiceTypes.Clear(); // Clear before re-adding manual services
 
         foreach (var registration in m_manualServices)
+        {
+            // Track them so generated ones won't duplicate them
+            m_registeredServiceTypes.Add(registration.Service.GetType());
             AddActiveService(registration);
+        }
 
         m_collectingGeneratedServices = true;
         LayerServiceRegistry.Apply(this);
@@ -340,12 +353,16 @@ public abstract class Layer : Node, IDisposable
             }
 
             if (invokers[routeId] != null)
+            {
+                if (handlerTypes[routeId] == handler.GetType()) return; // Already registered
+
                 throw new LayerCallRouteConflictException(
                     GetType(),
                     typeof(TRequest),
                     typeof(TResponse),
                     handlerTypes[routeId] ?? invokers[routeId]!.GetType(),
                     handler.GetType());
+            }
 
             invokers[routeId] = invoker;
             handlerTypes[routeId] = handler.GetType();
@@ -498,3 +515,4 @@ public abstract class Layer : Node, IDisposable
         }
     }
 }
+

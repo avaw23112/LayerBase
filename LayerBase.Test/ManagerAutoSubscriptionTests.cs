@@ -129,7 +129,7 @@ public class ManagerAutoSubscriptionTests
 
         public void ConfigureServices(IServiceCollection services)
         {
-            // 使用工厂模式注册，解决构造函数注入 Trace 的问题
+            // 使用工厂模式注册，解决构造函数注�?Trace 的问�?
             services.AddSingleton<TestManagerA>(new TestManagerA(_trace));
             services.AddSingleton<TestManagerB>(new TestManagerB(_trace));
         }
@@ -150,3 +150,4 @@ public class ManagerAutoSubscriptionTests
         }
     }
 }
+

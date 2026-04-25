@@ -1,11 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using LayerBase.DI;
 
 namespace LayerBase;
 
-/// <summary>
-///     事件环路异常：在启动期检测到同步事件分发存在死循环风险时抛出。
-/// </summary>
 public sealed class EventCycleException : Exception
 {
     public EventCycleException(string message) : base(message)
@@ -15,9 +15,6 @@ public sealed class EventCycleException : Exception
 
 internal static class EventGraphValidator
 {
-    /// <summary>
-    ///     执行全局事件依赖审计，检测环路并识别“无人订阅”的空事件。
-    /// </summary>
     public static void Validate(IEnumerable<IAutoSubscribe> subscribers)
     {
         var sentEvents = new HashSet<Type>();
@@ -26,7 +23,6 @@ internal static class EventGraphValidator
 
         foreach (var sub in subscribers)
         {
-            // 1. 收集发送关系与环路图数据
             foreach (var dep in sub.GetEventDependencies())
             {
                 sentEvents.Add(dep.Target);
@@ -39,11 +35,9 @@ internal static class EventGraphValidator
                 targets.Add(dep.Target);
             }
 
-            // 2. 收集订阅数据
             foreach (var evtType in sub.GetSubscribedEvents()) subscribedEvents.Add(evtType);
         }
 
-        // --- 审计 A: 环路检测 (三色算法) ---
         if (adj.Count > 0)
         {
             var colors = new Dictionary<Type, NodeColor>();
@@ -54,18 +48,17 @@ internal static class EventGraphValidator
                         ThrowCycleError(cyclePath!);
         }
 
-        // --- 审计 B: Dead Letter 检测 (无人订阅预警) ---
         if (LayerHub.IsDebugMode)
             foreach (var sent in sentEvents)
                 if (!subscribedEvents.Contains(sent))
                     LayerHub.ReportWarning(-1, "TopologyAudit", sent.Name,
-                        "该事件被某些组件同步分发，但在当前拓扑中没有任何订阅者。这可能导致逻辑空转。");
+                        "This event is dispatched synchronously but has no subscribers in current topology.");
     }
 
     private static bool CheckCycle(Type u, Dictionary<Type, HashSet<Type>> adj, Dictionary<Type, NodeColor> colors,
                                    List<Type> path, out List<Type>? cyclePath)
     {
-        colors[u] = NodeColor.Gray; // 标记为正在访问
+        colors[u] = NodeColor.Gray; 
         path.Add(u);
         cyclePath = null;
 
@@ -76,10 +69,9 @@ internal static class EventGraphValidator
 
                 if (vColor == NodeColor.Gray)
                 {
-                    // 发现回边！从 v 开始截取环路
                     var startIndex = path.IndexOf(v);
                     cyclePath = path.Skip(startIndex).ToList();
-                    cyclePath.Add(v); // 闭合环路
+                    cyclePath.Add(v); 
                     return true;
                 }
 
@@ -89,16 +81,16 @@ internal static class EventGraphValidator
             }
 
         path.RemoveAt(path.Count - 1);
-        colors[u] = NodeColor.Black; // 标记为完全访问
+        colors[u] = NodeColor.Black; 
         return false;
     }
 
     private static void ThrowCycleError(List<Type> path)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("检测到同步事件分发死循环！");
-        sb.AppendLine("为了保证极致性能，系统禁止在 Handler 内部同步分发可能导致回环的事件。");
-        sb.Append("环路路径: ");
+        sb.AppendLine("Synchronous event cycle detected!");
+        sb.AppendLine("To ensure performance, synchronous dispatch of events that may cause a loop is prohibited.");
+        sb.Append("Cycle path: ");
         for (var i = 0; i < path.Count; i++)
         {
             sb.Append(path[i].Name);
@@ -106,7 +98,7 @@ internal static class EventGraphValidator
         }
 
         sb.AppendLine();
-        sb.AppendLine("解决方案：请将环路中任意一处 [Send] 改为 [Post] (异步分发)，以打破同步调用栈。");
+        sb.AppendLine("Solution: Change any [Send] in the loop to [Post] (asynchronous dispatch) to break the synchronous call stack.");
 
         throw new EventCycleException(sb.ToString());
     }
@@ -118,3 +110,4 @@ internal static class EventGraphValidator
         Black
     }
 }
+

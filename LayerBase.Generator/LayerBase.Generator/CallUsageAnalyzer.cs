@@ -94,3 +94,4 @@ public sealed class CallUsageAnalyzer : IIncrementalGenerator
         spc.AddSource("CallUsageRegistry.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
     }
 }
+

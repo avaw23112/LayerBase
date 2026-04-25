@@ -1,7 +1,7 @@
-ï»¿namespace LayerBase.Core.Event;
+namespace LayerBase.Core.Event;
 
 /// <summary>
-///     è®°å½•ä¸åŒäº‹ä»¶ç±»å‹çš„å”¯ä¸€ IDã€‚
+///     ¼ÇÂ¼²»Í¬ÊÂ¼şÀàĞÍµÄÎ¨Ò» ID¡£
 /// </summary>
 internal static class EventTypeIdProvider
 {
@@ -52,3 +52,4 @@ internal class EventTypeId
         return EventTypeIdProvider.GetType(id);
     }
 }
+

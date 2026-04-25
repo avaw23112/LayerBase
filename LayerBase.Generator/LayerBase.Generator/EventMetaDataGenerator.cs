@@ -283,3 +283,4 @@ public sealed class EventMetaDataGenerator : IIncrementalGenerator
     }
 #pragma warning restore RS2008
 }
+

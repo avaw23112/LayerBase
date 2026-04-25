@@ -1,3 +1,5 @@
+using System;
+
 namespace LayerBase.DI;
 
 public enum ServiceLifetime
@@ -5,7 +7,7 @@ public enum ServiceLifetime
     Singleton, // 全局唯一
     Scoped,    // 层级唯一
     Transient, // 每次创建
-    Instance   // 外部预创建实例 (通常表现同 Scoped)
+    Instance   // 外部预创建实�?(通常表现�?Scoped)
 }
 
 public sealed class ServiceDescriptor
@@ -71,3 +73,4 @@ public sealed class ServiceDescriptor
         return new ServiceDescriptor(ServiceType, ImplType, Lifetime, Factory, Instance, registrationScopeId);
     }
 }
+

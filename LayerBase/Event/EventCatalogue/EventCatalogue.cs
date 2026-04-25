@@ -92,3 +92,4 @@ public static class EventCatalogue
         s_mapCategoryNameWithToken.Add(node.Catalogue, node.GetToken());
     }
 }
+

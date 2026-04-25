@@ -1,7 +1,9 @@
-﻿namespace LayerBase.Tools.Timer;
+using System;
+
+namespace LayerBase.Tools.Timer;
 
 /// <summary>
-///     定时任务的唯一标识，用于追踪与取消。
+///     ��ʱ�����Ψһ��ʶ������׷����ȡ����
 /// </summary>
 public readonly struct TimerToken : IEquatable<TimerToken>
 {
@@ -50,3 +52,4 @@ public readonly struct TimerToken : IEquatable<TimerToken>
         return IsValid ? $"{TypeId}:{Index}:{Version}" : "None";
     }
 }
+

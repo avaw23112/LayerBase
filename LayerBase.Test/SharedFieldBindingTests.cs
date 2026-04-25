@@ -14,9 +14,9 @@ public class SharedFieldBindingTests
     }
 
     [Test]
-    public void Service_scope_Public_and_From_share_the_same_list()
+    public void Service_scope_Provide_and_Use_share_the_same_list()
     {
-        var layer = new SharedFieldLayer();
+        var layer = new Layer_A();
         layer.RegisterService(new ServiceScopeSharingService());
         LayerHub.CreateLayers().Push(layer).Build();
 
@@ -31,9 +31,9 @@ public class SharedFieldBindingTests
     }
 
     [Test]
-    public void Layer_scope_Public_and_From_share_state_across_services()
+    public void Layer_scope_Provide_and_Use_share_state_across_services()
     {
-        var layer = new SharedFieldLayer();
+        var layer = new Layer_A();
         layer.RegisterService(new PlayerStateService());
         layer.RegisterService(new PlayerHudService());
         LayerHub.CreateLayers().Push(layer).Build();
@@ -47,11 +47,11 @@ public class SharedFieldBindingTests
     }
 
     [Test]
-    public void Global_scope_Public_and_From_share_reference_across_layers()
+    public void Global_scope_Provide_and_Use_share_reference_across_layers()
     {
-        var layerA = new GlobalPublisherLayer();
+        var layerA = new Layer_A();
         layerA.RegisterService(new GlobalPublisherService());
-        var layerB = new GlobalConsumerLayer();
+        var layerB = new Layer_B();
         layerB.RegisterService(new GlobalConsumerService());
 
         LayerHub.CreateLayers().Push(layerA).Push(layerB).Build();
@@ -67,47 +67,42 @@ public class SharedFieldBindingTests
     [Test]
     public void Duplicate_publishers_in_the_same_scope_fail_build()
     {
-        var layer = new SharedFieldLayer();
+        var layer = new Layer_A();
         layer.RegisterService(new DuplicatePublisherServiceA());
         layer.RegisterService(new DuplicatePublisherServiceB());
 
         Assert.That(
             () => LayerHub.CreateLayers().Push(layer).Build(),
-            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("publisher conflict"));
+            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("Shared field provider conflict"));
     }
 
     [Test]
     public void Missing_publisher_fails_build()
     {
-        var layer = new SharedFieldLayer();
+        var layer = new Layer_A();
         layer.RegisterService(new MissingPublisherConsumerService());
 
         Assert.That(
             () => LayerHub.CreateLayers().Push(layer).Build(),
-            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("could not find a publisher"));
+            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("could not find a provider"));
     }
 
     [Test]
     public void Writable_container_consumer_is_rejected()
     {
-        var layer = new SharedFieldLayer();
+        var layer = new Layer_A();
         layer.RegisterService(new WritableConsumerService());
 
         Assert.That(
             () => LayerHub.CreateLayers().Push(layer).Build(),
-            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("cannot consume publisher"));
+            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("Only read-only projections are allowed"));
     }
 }
 
+public class Layer_A : Layer { }
+public class Layer_B : Layer { }
+
 public class SharedFieldLayer : Layer
-{
-}
-
-public class GlobalPublisherLayer : Layer
-{
-}
-
-public class GlobalConsumerLayer : Layer
 {
 }
 
@@ -187,7 +182,7 @@ public sealed class WritableConsumerService : IService
 
 public sealed class PlayerStorageModule : ILayerContext
 {
-    [Public(typeof(ServiceScopeSharingService), "players")]
+    [Provide(typeof(ServiceScopeSharingService), "players")]
     private readonly List<int> _players = new();
 
     public void Add(int playerId)
@@ -198,7 +193,7 @@ public sealed class PlayerStorageModule : ILayerContext
 
 public sealed class PlayerQueryModule : ILayerContext
 {
-    [From(typeof(ServiceScopeSharingService), "players")]
+    [Use(typeof(ServiceScopeSharingService), "players")]
     private readonly IReadOnlyList<int> _players = default!;
 
     public int Count()
@@ -218,7 +213,7 @@ public sealed class PlayerQueryModule : ILayerContext
 
 public sealed class PlayerStateModule : ILayerContext
 {
-    [Public(typeof(SharedFieldLayer), "player_states")]
+    [Provide(typeof(Layer_A), "player_states")]
     private readonly Dictionary<int, bool> _states = new();
 
     public void SetOnline(int playerId, bool isOnline)
@@ -229,7 +224,7 @@ public sealed class PlayerStateModule : ILayerContext
 
 public sealed class PlayerHudModule : ILayerContext
 {
-    [From(typeof(SharedFieldLayer), "player_states")]
+    [Use(typeof(Layer_A), "player_states")]
     private readonly IReadOnlyDictionary<int, bool> _states = default!;
 
     public bool IsOnline(int playerId)
@@ -240,7 +235,7 @@ public sealed class PlayerHudModule : ILayerContext
 
 public sealed class SharedReferencePublisherModule : ILayerContext
 {
-    [Public(typeof(GlobalScope), "shared-ref")]
+    [Provide(typeof(GlobalScope), "shared-ref")]
     private readonly SharedReferenceBox _box = new();
 
     public void SetValue(string value)
@@ -251,7 +246,7 @@ public sealed class SharedReferencePublisherModule : ILayerContext
 
 public sealed class SharedReferenceConsumerModule : ILayerContext
 {
-    [From(typeof(GlobalScope), "shared-ref")]
+    [Use(typeof(GlobalScope), "shared-ref")]
     private readonly SharedReferenceBox _box = default!;
 
     public string ReadValue()
@@ -262,25 +257,25 @@ public sealed class SharedReferenceConsumerModule : ILayerContext
 
 public sealed class DuplicateLayerPublisherModuleA : ILayerContext
 {
-    [Public(typeof(SharedFieldLayer), "duplicate-layer-key")]
+    [Provide(typeof(Layer_A), "duplicate-layer-key")]
     private Dictionary<int, int> _state = new();
 }
 
 public sealed class DuplicateLayerPublisherModuleB : ILayerContext
 {
-    [Public(typeof(SharedFieldLayer), "duplicate-layer-key")]
+    [Provide(typeof(Layer_A), "duplicate-layer-key")]
     private Dictionary<int, int> _state = new();
 }
 
 public sealed class MissingPublisherConsumerModule : ILayerContext
 {
-    [From(typeof(SharedFieldLayer), "missing-layer-key")]
+    [Use(typeof(Layer_A), "missing-layer-key")]
     private IReadOnlyDictionary<int, int> _state = default!;
 }
 
 public sealed class WritableListConsumerModule : ILayerContext
 {
-    [From(typeof(ServiceScopeSharingService), "players")]
+    [Use(typeof(ServiceScopeSharingService), "players")]
     private List<int> _players = default!;
 }
 

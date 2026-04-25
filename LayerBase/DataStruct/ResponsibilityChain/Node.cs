@@ -1,14 +1,15 @@
-ï»¿namespace LayerBase.Core.ResponsibilityChain;
+namespace LayerBase.Core.ResponsibilityChain;
 
 /// <summary>
-///     é“¾è¡¨èŠ‚ç‚¹ï¼ˆåŒå‘ï¼‰ï¼šæŒæœ‰å¤„ç†å™¨ï¼Œå¹¶èƒ½çœ‹åˆ°å‰åèŠ‚ç‚¹ã€‚
+///     Á´±í½Úµã£¨Ë«Ïò£©£º³ÖÓĞ´¦ÀíÆ÷£¬²¢ÄÜ¿´µ½Ç°ºó½Úµã¡£
 /// </summary>
 public abstract class Node
 {
     internal Node? Next;
     internal Node? Prev;
-    public Node? Previous => Prev; // ^ Previousï¼šå¯¹å¤–åªè¯»è®¿é—®å‰é©±èŠ‚ç‚¹
-    public Node? NextNode => Next; // ^ NextNodeï¼šå¯¹å¤–åªè¯»è®¿é—®åç»§èŠ‚ç‚¹
+    public Node? Previous => Prev; // ^ Previous£º¶ÔÍâÖ»¶Á·ÃÎÊÇ°Çı½Úµã
+    public Node? NextNode => Next; // ^ NextNode£º¶ÔÍâÖ»¶Á·ÃÎÊºó¼Ì½Úµã
 
     public RcOwnerToken OwnerToken { get; set; } = RcOwnerToken.Zero;
 }
+

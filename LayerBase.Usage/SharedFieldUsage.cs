@@ -30,7 +30,7 @@ public sealed class SharedStateReaderService : IService
 
 public sealed class InventoryStorageModule : ILayerContext
 {
-    [Public(typeof(SharedInventoryService), "items")]
+    [Provide(typeof(SharedInventoryService), "items")]
     private readonly List<string> _items = new();
 
     public void Add(string item)
@@ -41,7 +41,7 @@ public sealed class InventoryStorageModule : ILayerContext
 
 public sealed class InventoryQueryModule : ILayerContext
 {
-    [From(typeof(SharedInventoryService), "items")]
+    [Use(typeof(SharedInventoryService), "items")]
     private readonly IReadOnlyList<string> _items = default!;
 
     public int Count()
@@ -52,7 +52,7 @@ public sealed class InventoryQueryModule : ILayerContext
 
 public sealed class InventoryStateModule : ILayerContext
 {
-    [Public(typeof(SharedFieldLayer), "equip-state")]
+    [Provide(typeof(SharedFieldLayer), "equip-state")]
     private readonly Dictionary<string, bool> _equipped = new();
 
     public void SetEquipped(string itemName, bool equipped)
@@ -63,7 +63,7 @@ public sealed class InventoryStateModule : ILayerContext
 
 public sealed class InventoryHudModule : ILayerContext
 {
-    [From(typeof(SharedFieldLayer), "equip-state")]
+    [Use(typeof(SharedFieldLayer), "equip-state")]
     private readonly IReadOnlyDictionary<string, bool> _equipped = default!;
 
     public bool IsEquipped(string itemName)
@@ -102,3 +102,4 @@ public static class SharedFieldUsage
         Console.WriteLine($"[Layer Scope] Sword equipped: {hud.IsEquipped("Sword")}");
     }
 }
+

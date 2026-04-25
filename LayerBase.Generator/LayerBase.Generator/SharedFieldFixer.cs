@@ -42,7 +42,7 @@ public class SharedFieldFixer : CodeFixProvider
 
         context.RegisterCodeFix(
             CodeAction.Create(
-                "Sync type with [Public] source",
+                "Sync type with [Provide] source",
                 c => FixFieldTypeAsync(context.Document, fieldDeclaration, diagnostic, c),
                 nameof(SharedFieldFixer)),
             diagnostic);
@@ -72,3 +72,4 @@ public class SharedFieldFixer : CodeFixProvider
         return document.WithSyntaxRoot(newRoot);
     }
 }
+

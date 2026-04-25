@@ -18,3 +18,4 @@ public class TestAdditionalFile : AdditionalText
 
     public override string Path { get; }
 }
+

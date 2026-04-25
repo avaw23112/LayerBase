@@ -1,7 +1,9 @@
-﻿namespace LayerBase.Core.ResponsibilityChain;
+using System;
+
+namespace LayerBase.Core.ResponsibilityChain;
 
 /// <summary>
-///     责任链识别ID
+///     ������ʶ��ID
 /// </summary>
 public struct RcOwnerToken : IEquatable<RcOwnerToken>
 {
@@ -54,3 +56,4 @@ public struct RcOwnerToken : IEquatable<RcOwnerToken>
         return Id.GetHashCode();
     }
 }
+

@@ -10,7 +10,7 @@ internal interface IArchTaskSource
     void SetException(Exception        ex);
     void SetCanceled(CancellationToken token);
     void GetResult();
-    void TryRelease(); // 新增：安全尝试回收
+    void TryRelease(); // 新增：安全尝试回�?
 }
 
 internal interface IArchTaskSource<T>
@@ -21,7 +21,7 @@ internal interface IArchTaskSource<T>
     void SetException(Exception        ex);
     void SetCanceled(CancellationToken token);
     T GetResult();
-    void TryRelease(); // 新增：安全尝试回收
+    void TryRelease(); // 新增：安全尝试回�?
 }
 
 internal sealed class ArchTaskSource : IArchTaskSource
@@ -260,3 +260,4 @@ internal sealed class ObjectPool<T> where T : class
         _bag.Add(item);
     }
 }
+

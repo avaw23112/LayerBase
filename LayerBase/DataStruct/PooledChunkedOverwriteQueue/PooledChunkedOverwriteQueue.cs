@@ -1,3 +1,4 @@
+using System;
 using System.Buffers;
 
 namespace LayerBase.Core;
@@ -15,7 +16,7 @@ public enum EventQueueOverflowStrategy
     Throw,
 
     /// <summary>
-    ///     丢弃最老元素
+    ///     丢弃最老元�?
     /// </summary>
     OverWrite,
 
@@ -26,7 +27,7 @@ public enum EventQueueOverflowStrategy
 }
 
 /// <summary>
-///     分段双端队列，支持覆盖写和多种溢出策略。
+///     分段双端队列，支持覆盖写和多种溢出策略�?
 /// </summary>
 public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struct
 {
@@ -40,7 +41,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
 
     private Segment? _headSeg;
     private int _maxCapacity;
-    private int _tailIndex; // 指向尾段的“下一写入位置”
+    private int _tailIndex; // 指向尾段的“下一写入位置�?
     private Segment? _tailSeg;
 
     internal PooledChunkedOverwriteQueue(
@@ -100,7 +101,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
     }
 
     /// <summary>
-    ///     追加到队尾（保持旧 API 名称），使用配置的溢出策略。
+    ///     追加到队尾（保持�?API 名称），使用配置的溢出策略�?
     /// </summary>
     internal void EnqueueOverwrite(in T item)
     {
@@ -108,7 +109,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
     }
 
     /// <summary>
-    ///     追加到队头。
+    ///     追加到队头�?
     /// </summary>
     internal void EnqueueFront(in T item)
     {
@@ -202,7 +203,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
         while (Count > 0)
         {
             var seg = _headSeg!;
-            // 确定当前段内可读取的上限：如果是尾段，读到 tailIndex；否则读到 chunkSize
+            // 确定当前段内可读取的上限：如果是尾段，读�?tailIndex；否则读�?chunkSize
             var upper = seg == _tailSeg ? _tailIndex : _chunkSize;
             var available = upper - _headIndex;
 
@@ -503,3 +504,4 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
         }
     }
 }
+

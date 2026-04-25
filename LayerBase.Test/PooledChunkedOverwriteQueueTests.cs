@@ -26,3 +26,4 @@ public class PooledChunkedOverwriteQueueTests
         return (PooledChunkedOverwriteQueue<int>)ctor!.Invoke(new object[] { 8, EventQueueOverflowStrategy.OverWrite });
     }
 }
+

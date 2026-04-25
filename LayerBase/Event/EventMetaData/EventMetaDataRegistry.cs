@@ -11,3 +11,4 @@ public static class EventMetaDataRegistry
         EventMetaDataHandler.RegisterMetaData<EventType>(metaData);
     }
 }
+

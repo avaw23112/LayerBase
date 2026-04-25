@@ -249,7 +249,7 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
 
     public static UnorderedHandlerEntry<T> Create(IEventHandler<T> h)
     {
-        // 核心优化：使用实例方法引用代替 Lambda 闭包，消除订阅时的内存分配
+        // 核心优化：使用实例方法引用代�?Lambda 闭包，消除订阅时的内存分�?
         return new UnorderedHandlerEntry<T>(
             new SyncHandlerWrapper<T>(h).Invoke,
             null,
@@ -386,7 +386,7 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
     private void TrySched()
     {
         if (!Circuit.IsDisabled && Interlocked.CompareExchange(ref _sched, 1, 0) == 0)
-            // 使用构造函数中创建好的实例委托，热路径零分配
+            // 使用构造函数中创建好的实例委托，热路径零分�?
             if (!JobSchedulers.Default.TrySchedule(_drainInstance))
                 ThreadPool.QueueUserWorkItem(_ => Drain());
     }
@@ -418,3 +418,4 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
         }
     }
 }
+

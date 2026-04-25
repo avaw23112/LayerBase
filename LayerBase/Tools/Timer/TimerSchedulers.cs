@@ -3,14 +3,14 @@ using System.Collections.Concurrent;
 namespace LayerBase.Tools.Timer;
 
 /// <summary>
-///     统一管理与调度所有 TimerScheduler。
+///     统一管理与调度所�?TimerScheduler�?
 /// </summary>
 public static class TimerSchedulers
 {
     private static readonly ConcurrentDictionary<string, TimerScheduler> s_schedulers = new(StringComparer.Ordinal);
 
     /// <summary>
-    ///     获取或创建具名调度器。
+    ///     获取或创建具名调度器�?
     /// </summary>
     public static TimerScheduler GetOrCreate(string name)
     {
@@ -20,7 +20,7 @@ public static class TimerSchedulers
     }
 
     /// <summary>
-    ///     尝试获取具名调度器。
+    ///     尝试获取具名调度器�?
     /// </summary>
     public static bool TryGet(string name, out TimerScheduler? scheduler)
     {
@@ -31,7 +31,7 @@ public static class TimerSchedulers
     }
 
     /// <summary>
-    ///     统一推进所有调度器的时间。
+    ///     统一推进所有调度器的时间�?
     /// </summary>
     public static void TickAll(double deltaTime)
     {
@@ -39,7 +39,7 @@ public static class TimerSchedulers
     }
 
     /// <summary>
-    ///     移除具名调度器。
+    ///     移除具名调度器�?
     /// </summary>
     public static bool Remove(string name)
     {
@@ -47,10 +47,11 @@ public static class TimerSchedulers
     }
 
     /// <summary>
-    ///     清空所有调度器。
+    ///     清空所有调度器�?
     /// </summary>
     public static void Clear()
     {
         s_schedulers.Clear();
     }
 }
+

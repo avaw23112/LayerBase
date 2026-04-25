@@ -23,7 +23,7 @@ public struct DataRequestEvent
     public string Query;
 }
 
-// 3. 在 Layer 中使用服务
+// 3. �?Layer 中使用服�?
 public partial class ServiceLayer : Layer
 {
     [Subscribe]
@@ -49,3 +49,4 @@ public static class ServiceUsage
         LayerHub.Send(new DataRequestEvent { Query = "Get My Data" });
     }
 }
+

@@ -1,3 +1,5 @@
+using System;
+
 namespace LayerBase.DI;
 
 public struct GlobalScope
@@ -5,9 +7,9 @@ public struct GlobalScope
 }
 
 [AttributeUsage(AttributeTargets.Field)]
-public sealed class PublicAttribute : Attribute
+public sealed class ProvideAttribute : Attribute
 {
-    public PublicAttribute(Type ownerType, string localKey)
+    public ProvideAttribute(Type ownerType, string localKey)
     {
         if (string.IsNullOrWhiteSpace(localKey))
             throw new ArgumentException("Shared field localKey cannot be null or whitespace.", nameof(localKey));
@@ -21,9 +23,9 @@ public sealed class PublicAttribute : Attribute
 }
 
 [AttributeUsage(AttributeTargets.Field)]
-public sealed class FromAttribute : Attribute
+public sealed class UseAttribute : Attribute
 {
-    public FromAttribute(Type ownerType, string localKey)
+    public UseAttribute(Type ownerType, string localKey)
     {
         if (string.IsNullOrWhiteSpace(localKey))
             throw new ArgumentException("Shared field localKey cannot be null or whitespace.", nameof(localKey));
@@ -35,3 +37,15 @@ public sealed class FromAttribute : Attribute
     public Type OwnerType { get; }
     public string LocalKey { get; }
 }
+
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
+public sealed class OwnerServiceAttribute : Attribute
+{
+    public OwnerServiceAttribute(Type serviceType)
+    {
+        ServiceType = serviceType ?? throw new ArgumentNullException(nameof(serviceType));
+    }
+
+    public Type ServiceType { get; }
+}
+

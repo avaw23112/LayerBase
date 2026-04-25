@@ -91,3 +91,4 @@ public partial class TestNotifyManager : IService
         CallCount++;
     }
 }
+

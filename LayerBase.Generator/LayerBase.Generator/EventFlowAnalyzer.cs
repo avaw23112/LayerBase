@@ -17,20 +17,20 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor Rule = new(
         DiagnosticId,
         "Event Flow Insight",
-        "事件 '{0}' 被订阅者: {1}",
+        "Event '{0}' is subscribed at: {1}",
         "Design",
         DiagnosticSeverity.Info,
         true,
-        "显示此事件分发时的所有潜在订阅者。");
+        "Shows all potential subscribers when this event is dispatched.");
 
     private static readonly DiagnosticDescriptor DeprecatedRule = new(
         DeprecatedId,
         "Deprecated Propagation Semantics",
-        "事件语义 '{0}' 已被删除。原 Bubble 场景请改用 Layer [Call] 或显式 Send，原 Drop 场景请改用显式 Send/Post 或 Delay。",
+        "Event semantic '{0}' has been removed. Use Layer [Call] or explicit Send for Bubble scenarios, and explicit Send/Post or Delay for Drop scenarios.",
         "Usage",
         DiagnosticSeverity.Error,
         true,
-        "硬删除 SendDrop 和 Bubble 语义以精简热路径。");
+        "Hard delete SendDrop and Bubble semantics to streamline hot path.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(Rule, DeprecatedRule);
@@ -40,14 +40,12 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze |
                                                GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
-
         context.RegisterSyntaxNodeAction(AnalyzeInvocation, SyntaxKind.InvocationExpression);
     }
 
     private void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
     {
         var invocation = (InvocationExpressionSyntax)context.Node;
-
         var methodName = "";
         if (invocation.Expression is MemberAccessExpressionSyntax maes)
             methodName = maes.Name.Identifier.Text;
@@ -66,11 +64,9 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
         var methodSymbol = symbolInfo.Symbol as IMethodSymbol;
         if (methodSymbol == null) return;
 
-        // 获取事件类型 T (泛型参数)
         var eventType = methodSymbol.TypeArguments.FirstOrDefault();
         if (eventType == null)
         {
-            // 处理非泛型调用，尝试从参数推导
             var firstArg = invocation.ArgumentList.Arguments.FirstOrDefault();
             if (firstArg != null)
             {
@@ -78,16 +74,12 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
                 if (argType != null) eventType = argType;
             }
         }
-
         if (eventType == null) return;
 
-        // 🚀 核心：查找订阅者
         var subscribers = FindSubscribers(context.Compilation, eventType);
         if (subscribers.Count == 0) return;
 
         var subscriberNames = string.Join(" | ", subscribers.Select(s => s.DisplayName));
-
-        // 生成诊断，并将目标位置关联
         var diagnostic = Diagnostic.Create(
             Rule,
             invocation.GetLocation(),
@@ -114,34 +106,25 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
     private List<SubscriberInfo> FindSubscribers(Compilation compilation, ITypeSymbol eventType)
     {
         var result = new List<SubscriberInfo>();
-        var targetEventName = eventType.ToDisplayString();
-
-        // 性能优化：不再遍历所有 TypeSymbol，而是先查语法树中有 [Subscribe] 的文件
         foreach (var tree in compilation.SyntaxTrees)
         {
             var root = tree.GetRoot();
             var semanticModel = compilation.GetSemanticModel(tree);
-
-            // 寻找包含特性的方法
             var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
             foreach (var m in methods)
             {
                 if (m.AttributeLists.Count == 0) continue;
-
                 var methodSymbol = semanticModel.GetDeclaredSymbol(m);
                 if (methodSymbol == null) continue;
-
                 if (methodSymbol.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("Subscribe") == true))
                 {
                     var param = methodSymbol.Parameters.FirstOrDefault();
                     if (param != null && SymbolEqualityComparer.Default.Equals(param.Type, eventType))
                         result.Add(new SubscriberInfo(
                             $"{methodSymbol.ContainingType.Name}.{methodSymbol.Name}",
-                            methodSymbol.Locations.FirstOrDefault()));
+                            methodSymbol.Locations.FirstOrDefault()!));
                 }
             }
-
-            // 同时兼容字段订阅 (Struct Handler)
             var fields = root.DescendantNodes().OfType<FieldDeclarationSyntax>();
             foreach (var f in fields)
             {
@@ -150,23 +133,19 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
                 {
                     var fieldSymbol = semanticModel.GetDeclaredSymbol(variable) as IFieldSymbol;
                     if (fieldSymbol == null) continue;
-
                     if (fieldSymbol.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("Subscribe") == true))
                     {
-                        // 检查是否是 IStructHandler<T>
-                        var handlerInterface =
-                            fieldSymbol.Type.AllInterfaces.FirstOrDefault(i =>
+                        var handlerInterface = fieldSymbol.Type.AllInterfaces.FirstOrDefault(i =>
                                 i.Name == "IStructHandler" && i.IsGenericType);
                         if (handlerInterface != null &&
                             SymbolEqualityComparer.Default.Equals(handlerInterface.TypeArguments[0], eventType))
                             result.Add(new SubscriberInfo(
                                 $"[Struct] {fieldSymbol.ContainingType.Name}.{fieldSymbol.Name}",
-                                fieldSymbol.Locations.FirstOrDefault()));
+                                fieldSymbol.Locations.FirstOrDefault()!));
                     }
                 }
             }
         }
-
         return result;
     }
 
@@ -174,7 +153,6 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
     {
         public readonly string DisplayName;
         public readonly Location Location;
-
         public SubscriberInfo(string name, Location loc)
         {
             DisplayName = name;
@@ -182,3 +160,4 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
         }
     }
 }
+

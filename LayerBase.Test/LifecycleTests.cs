@@ -23,10 +23,10 @@ public class LifecycleTests
         var layer = new LifecycleLayer();
         layer.RegisterService(new LifecycleTestService(_trace));
 
-        // 运行构建流
+        // 运行构建�?
         LayerHub.CreateLayers().Push(layer).Build();
 
-        // 验证执行顺序：1. AutoBind -> 2. Initialize
+        // 验证执行顺序�?. AutoBind -> 2. Initialize
         Assert.That(_trace, Is.EqualTo(new[] { "AutoBind_A", "AutoBind_B", "Init_A", "Init_B" }),
             "Should bind all first, then initialize all, maintaining registration order.");
 
@@ -135,3 +135,4 @@ public class LifecycleTests
         }
     }
 }
+

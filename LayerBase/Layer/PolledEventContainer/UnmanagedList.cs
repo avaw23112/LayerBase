@@ -51,7 +51,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     {
         MarkClean();
 
-        // 快速检查，减少锁竞争
+        // 快速检查，减少锁竞�?
         if (_queue.IsEmpty) return;
 
         var forwarded = false;
@@ -129,7 +129,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
             if (lastTargetLayer != -1 && lastTargetLayer != nextLayer) FlushForwardBuffer(ref forwarded);
             lastTargetLayer = nextLayer;
 
-            // 使用池化内存作为临时缓冲区
+            // 使用池化内存作为临时缓冲�?
             _forwardBuffer ??= ArrayPool<Event<Value>>.Shared.Rent(256);
             if (_forwardCount >= _forwardBuffer.Length)
             {
@@ -179,3 +179,4 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
         }
     }
 }
+

@@ -1,7 +1,9 @@
+using System.Threading;
+
 namespace LayerBase.Tools.Job;
 
 /// <summary>
-///     全局 JobScheduler 管理器。
+///     全局 JobScheduler 管理器�?
 /// </summary>
 public static class JobSchedulers
 {
@@ -21,3 +23,4 @@ public static class JobSchedulers
         ConfigureDefault();
     }
 }
+

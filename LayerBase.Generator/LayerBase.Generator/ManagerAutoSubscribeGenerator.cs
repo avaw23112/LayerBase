@@ -344,3 +344,4 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
         public Location? Location { get; }
     }
 }
+

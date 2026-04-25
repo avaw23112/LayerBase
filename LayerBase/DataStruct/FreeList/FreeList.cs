@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace LayerBase.Core.EventStateTrace;
@@ -25,13 +27,13 @@ internal struct SlotRef
     public int GlobalIndex { get; }
 
     /// <summary>
-    ///     由于GlobalIndex会被复用,需要额外参数查重.
+    ///     由于GlobalIndex会被复用,需要额外参数查�?
     /// </summary>
     public ushort Version { get; }
 }
 
 /// <summary>
-///     高性能 Slot 分配器 (FreeList)
+///     高性能 Slot 分配�?(FreeList)
 /// </summary>
 internal sealed class FreeList<T> where T : struct
 {
@@ -47,7 +49,7 @@ internal sealed class FreeList<T> where T : struct
     }
 
     /// <summary>
-    ///     预热内存空间，提前分配指定容量的 Slab。
+    ///     预热内存空间，提前分配指定容量的 Slab�?
     /// </summary>
     public void Prewarm(int capacity)
     {
@@ -105,7 +107,7 @@ internal sealed class FreeList<T> where T : struct
     {
         lock (_syncLock)
         {
-            // 在高性能路径上，信任调用者已经通过 TryBorrow 或刚 Rent 到引用
+            // 在高性能路径上，信任调用者已经通过 TryBorrow 或刚 Rent 到引�?
             return ref GetSlotInternal(slotRef.GlobalIndex);
         }
     }
@@ -155,7 +157,7 @@ internal sealed class FreeList<T> where T : struct
         var baseIndex = _slabs.Count * _slabSize;
         var slab = new Slot<T>[_slabSize];
 
-        // 倒序构建链表，使得 Rent 时能从低索引开始使用（对缓存更友好）
+        // 倒序构建链表，使�?Rent 时能从低索引开始使用（对缓存更友好�?
         for (var i = _slabSize - 1; i >= 0; i--)
         {
             slab[i].NextFree = _freeHead;
@@ -172,3 +174,4 @@ internal sealed class FreeList<T> where T : struct
         return next;
     }
 }
+

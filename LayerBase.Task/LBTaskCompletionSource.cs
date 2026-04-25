@@ -81,7 +81,7 @@ public sealed class LBTaskCompletionSource : IDisposable
     private void DisposeInternal()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            // 如果任务从未完成，强制归还 Source 到池中
+            // 如果任务从未完成，强制归�?Source 到池�?
             _source.TryRelease();
     }
 }
@@ -169,3 +169,4 @@ public sealed class LBTaskCompletionSource<T> : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) == 0) _source.TryRelease();
     }
 }
+

@@ -33,10 +33,10 @@ public static class AsyncUsage
         var resource = new ResourceLayer();
         LayerHub.CreateLayers().Push(resource).Build();
 
-        // 1. 发送异步事件
+        // 1. 发送异步事�?
         LayerHub.Send(new AssetLoadRequest { AssetPath = "Textures/Player.png" });
 
-        // 2. 核心：驱动循环 (Main Loop)
+        // 2. 核心：驱动循�?(Main Loop)
         var timeout = 0;
         while (!resource.IsLoadFinished && timeout < 20)
         {
@@ -46,3 +46,4 @@ public static class AsyncUsage
         }
     }
 }
+

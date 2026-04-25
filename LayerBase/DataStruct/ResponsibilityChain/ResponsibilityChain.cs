@@ -1,9 +1,11 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace LayerBase.Core.ResponsibilityChain;
 
 /// <summary>
-///     外部可控的双向责任链：节点知道前后指针，外部可插入/删除/移动节点。
+///     外部可控的双向责任链：节点知道前后指针，外部可插�?删除/移动节点�?
 /// </summary>
 internal sealed class ResponsibilityChain : IEnumerable<Node>
 {
@@ -39,9 +41,9 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
             return node;
         }
 
-        node.Prev = Tail; // 新节点前驱 = 旧尾
-        Tail.Next = node; // 旧尾后继 = 新节点
-        Tail = node;      // 更新尾指针
+        node.Prev = Tail; // 新节点前�?= 旧尾
+        Tail.Next = node; // 旧尾后继 = 新节�?
+        Tail = node;      // 更新尾指�?
         ValidateAcyclic();
         return node;
     }
@@ -57,9 +59,9 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
             return node;
         }
 
-        node.Next = Head; // 新节点后继 = 旧头
-        Head.Prev = node; // 旧头前驱 = 新节点
-        Head = node;      // 更新头指针
+        node.Next = Head; // 新节点后�?= 旧头
+        Head.Prev = node; // 旧头前驱 = 新节�?
+        Head = node;      // 更新头指�?
         ValidateAcyclic();
         return node;
     }
@@ -132,10 +134,10 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
         if (node == anchor) return;
         if (node.Next == anchor) return;
 
-        // 先摘除 node（但不清 Owner）
+        // 先摘�?node（但不清 Owner�?
         Detach(node);
 
-        // 再插入到 anchor 前
+        // 再插入到 anchor �?
         if (anchor == Head)
         {
             node.Prev = null;
@@ -239,7 +241,7 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
             if (!ReferenceEquals(cur.Prev, prev))
                 throw new InvalidOperationException("Invalid chain: Prev/Next symmetry broken.");
 
-            // 防止自环（最常见 bug：cur.Next = cur）
+            // 防止自环（最常见 bug：cur.Next = cur�?
             if (ReferenceEquals(cur.Next, cur))
                 throw new InvalidOperationException("Invalid chain: self-loop detected (node.Next == node).");
 
@@ -289,3 +291,4 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
         }
     }
 }
+

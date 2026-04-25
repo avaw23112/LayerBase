@@ -94,13 +94,14 @@ public class DiagnosticTests
         LayerHub.CreateLayers()
                 .Push(layer)
                 .SetDebug()
-                .Build(); // 期待在此处触发 TopologyAudit
+                .Build(); // 期待在此处触�?TopologyAudit
 
         var warningLog = _logs.Find(l => l.Source == "TopologyAudit" && l.Type == LayerEventInfoType.Warning);
 
-        // 验证警告内容 (LayerEventInfo 是 struct，所以查 EventName 是否被填入)
+        // 验证警告内容 (LayerEventInfo �?struct，所以查 EventName 是否被填�?
         Assert.That(warningLog.EventName, Is.EqualTo("UnsubscribedEvent"));
 
         TestContext.Out.WriteLine("Captured Build-Time Dead Letter Log: " + warningLog.Message);
     }
 }
+

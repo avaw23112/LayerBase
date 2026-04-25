@@ -3263,7 +3263,20 @@ internal static class ManyNotifyFixedBatchRegistry
         where TManager : IService, new()
     {
         for (var i = 0; i < subscribersPerEvent; i++)
-            layer.RegisterService(new TManager());
+        {
+            var manager = new TManager();
+            if (i == 0)
+            {
+                // 第一个实例通过正常 RegisterService 注册，Build 时会自动触发其 AutoBind
+                layer.RegisterService(manager);
+            }
+            else
+            {
+                // 后续实例手动触发 AutoBind
+                if (manager is IAutoSubscribe auto)
+                    auto.AutoBind(layer);
+            }
+        }
     }
 
     private static void SubscribeCopies<TEvent>(IServiceProvider  provider, int subscribersPerEvent,
@@ -11113,3 +11126,4 @@ public partial class ManyNotifyManager_255 : IService
         Volatile.Write(ref CompareSink.IntValue, payload.Value);
     }
 }
+

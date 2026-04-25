@@ -99,6 +99,7 @@ public static class LayerHub
             EventCenter.Reset();
             ServiceProvider.ResetRoot(); // 新增：重置全局单例容器
             ServiceLayerBinder.Reset();
+            LayerServiceRegistry.Reset();
             OnLayerEventInfo = null;
             IsDebugMode = false;
 
@@ -275,7 +276,7 @@ public static class LayerHub
         if (!hasCalls) sb.AppendLine("| (None) | | | |");
         sb.AppendLine();
 
-        // 4. Shared Fields (Public/From)
+        // 4. Shared Fields (Provide/Use)
         sb.AppendLine("## 4. Shared Fields");
         sb.AppendLine("| OwnerType | LocalKey | Type | Role | Layer |");
         sb.AppendLine("| :--- | :--- | :--- | :--- | :--- |");
@@ -283,7 +284,7 @@ public static class LayerHub
         foreach (var layer in s_chain.GetNodes().OfType<Layer>())
         foreach (var field in layer.SharedFields)
         {
-            var role = field.IsProvider ? "**Public**" : "From";
+            var role = field.IsProvider ? "**Provide**" : "Use";
             sb.AppendLine(
                 $"| {field.OwnerType.Name} | `{field.Key}` | {field.FieldType.Name} | {role} | {layer.GetType().Name} |");
             hasFields = true;
@@ -302,9 +303,9 @@ public static class LayerHub
         var allCallHandlers = allLayers.SelectMany(l => l.CallHandlers.Select(ch => ch.Req)).ToHashSet();
         var allCallInvoked = allLayers.SelectMany(l => l.InvokedCalls).Concat(CallUsageTracker.GetUsedRequestTypes())
                                       .ToHashSet();
-        var allPublicKeys = allLayers.SelectMany(l =>
+        var allProvideKeys = allLayers.SelectMany(l =>
             l.SharedFields.Where(f => f.IsProvider).Select(f => $"{f.OwnerType.FullName}_{f.Key}")).ToHashSet();
-        var allFromKeys = allLayers.SelectMany(l =>
+        var allUseKeys = allLayers.SelectMany(l =>
             l.SharedFields.Where(f => !f.IsProvider).Select(f => $"{f.OwnerType.FullName}_{f.Key}")).ToHashSet();
 
         // Check Zombie Events
@@ -323,17 +324,17 @@ public static class LayerHub
                 issues.Add(
                     $"- **Dead Call Route**: Request `{req.Name}` has a handler but is never invoked via `CallAsync`.");
 
-        // Check Orphaned Publics
-        foreach (var key in allPublicKeys)
-            if (!allFromKeys.Contains(key))
+        // Check Orphaned Provides
+        foreach (var key in allProvideKeys)
+            if (!allUseKeys.Contains(key))
             {
                 var keyName = key.Substring(key.IndexOf('_') + 1);
                 issues.Add(
-                    $"- **Orphaned Public**: Shared key `{keyName}` is published but never consumed via `[From]`. (Scope: {key.Split('_')[0]})");
+                    $"- **Orphaned Provide**: Shared key `{keyName}` is published but never consumed via `[Use]`. (Scope: {key.Split('_')[0]})");
             }
 
         if (issues.Count == 0)
-            sb.AppendLine("✅ No health issues detected. All bindings are active and used.");
+            sb.AppendLine("�?No health issues detected. All bindings are active and used.");
         else
             foreach (var issue in issues)
                 sb.AppendLine(issue);
@@ -480,3 +481,4 @@ public static class LayerHub
         public static LayerTargetState State;
     }
 }
+
