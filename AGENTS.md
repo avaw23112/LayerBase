@@ -1,4 +1,4 @@
-# Repository Guidelines
+﻿# Repository Guidelines
 
 ## Project Structure & Module Organization
 - `LayerBase/`: core library code; key areas include `Application/` (bootstrapping), `DataStruct/` (utilities like `FreeList`), `DI/` (service wiring), `Event/` (event types, dispatcher, metadata), `Layer/` (layer lifecycle), and `Tools/Timer/` (tick-driven timers such as `TimerScheduler`).

@@ -1,4 +1,4 @@
-namespace LayerBase.Usage;
+﻿namespace LayerBase.Usage;
 
 internal static class Program
 {

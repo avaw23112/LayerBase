@@ -1,4 +1,4 @@
-namespace LayerBase.Event.EventMetaData;
+﻿namespace LayerBase.Event.EventMetaData;
 
 /// <summary>
 ///     Public entry point for registering event metadata discovered by the source generator.

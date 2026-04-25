@@ -1,9 +1,9 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 
 namespace LayerBase.Tools.Job;
 
 /// <summary>
-///     固定线程数的轻量任务调度器�?
+///     固定线程数的轻量任务调度器�?
 /// </summary>
 public sealed class JobScheduler : IDisposable
 {

@@ -1,4 +1,4 @@
-using LayerBase;
+﻿using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Layers;
@@ -129,7 +129,7 @@ public class ManagerAutoSubscriptionTests
 
         public void ConfigureServices(IServiceCollection services)
         {
-            // 使用工厂模式注册，解决构造函数注�?Trace 的问�?
+            // 浣跨敤宸ュ巶妯″紡娉ㄥ唽锛岃В鍐虫瀯閫犲嚱鏁版敞鍏?Trace 鐨勯棶棰?
             services.AddSingleton<TestManagerA>(new TestManagerA(_trace));
             services.AddSingleton<TestManagerB>(new TestManagerB(_trace));
         }

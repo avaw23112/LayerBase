@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using LayerBase.Core;
 
 namespace EventsTest;

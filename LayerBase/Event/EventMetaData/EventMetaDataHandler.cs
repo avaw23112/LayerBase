@@ -1,10 +1,10 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using LayerBase.Core.EventCatalogue;
 
 namespace LayerBase.Event.EventMetaData;
 
 /// <summary>
-///     事件元数据调度：注册、查询以及异常回调�?
+///     事件元数据调度：注册、查询以及异常回调�?
 /// </summary>
 internal static class EventMetaDataHandler
 {

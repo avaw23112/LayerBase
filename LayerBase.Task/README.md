@@ -1,4 +1,4 @@
-# 🚀 LayerBase.Task: 工业级游戏异步任务系统
+﻿# 🚀 LayerBase.Task: 工业级游戏异步任务系统
 
 **LayerBase.Task** 是 [LayerBase 架构总线](https://github.com/avaw23112/LayerBase)的核心基建之一，提供了一套专为游戏引擎（如
 Unity、Godot）心跳循环（Pump）深度调优的零分配（Zero-Allocation）异步任务模型：`LBTask`。

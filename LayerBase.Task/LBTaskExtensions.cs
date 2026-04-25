@@ -1,4 +1,4 @@
-namespace LayerBase.Async;
+﻿namespace LayerBase.Async;
 
 public static class LBTaskExtensions
 {

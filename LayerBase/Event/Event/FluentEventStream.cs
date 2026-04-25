@@ -1,4 +1,4 @@
-using LayerBase.Async;
+﻿using LayerBase.Async;
 using LayerBase.Core.EventHandler;
 using LayerBase.Layers;
 
@@ -7,7 +7,7 @@ namespace LayerBase.Core.Event;
 public delegate bool EventFilterDelegate<T>(in T value) where T : struct;
 
 /// <summary>
-///     提供链式 API（Fluent API）的事件订阅流�?
+///     提供链式 API（Fluent API）的事件订阅流�?
 /// </summary>
 public readonly struct LayerEventStream<T> where T : struct
 {
@@ -21,7 +21,7 @@ public readonly struct LayerEventStream<T> where T : struct
     }
 
     /// <summary>
-    ///     添加过滤条件。只有满足条件的事件才会传递给后续�?Handler�?
+    ///     添加过滤条件。只有满足条件的事件才会传递给后续�?Handler�?
     /// </summary>
     public LayerEventStream<T> Where(EventFilterDelegate<T> predicate)
     {
@@ -32,7 +32,7 @@ public readonly struct LayerEventStream<T> where T : struct
     }
 
     /// <summary>
-    ///     绑定同步处理函数�?
+    ///     绑定同步处理函数�?
     /// </summary>
     public void Handle(EventHandleDelegate<T> handler)
     {
@@ -49,7 +49,7 @@ public readonly struct LayerEventStream<T> where T : struct
     }
 
     /// <summary>
-    ///     绑定异步处理函数�?
+    ///     绑定异步处理函数�?
     /// </summary>
     public void HandleAsync(EventHandleDelegateAsync<T> handler)
     {
@@ -66,7 +66,7 @@ public readonly struct LayerEventStream<T> where T : struct
     }
 
     /// <summary>
-    ///     绑定并行处理函数�?
+    ///     绑定并行处理函数�?
     /// </summary>
     public void HandleParallel(EventHandleDelegate<T> handler, Action<int, string, string, Exception> reportError)
     {

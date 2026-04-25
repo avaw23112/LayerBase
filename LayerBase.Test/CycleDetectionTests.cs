@@ -1,4 +1,4 @@
-using LayerBase;
+﻿using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Layers;
@@ -62,7 +62,7 @@ public class CycleDetectionTests
         var layer = new GameLayer();
         layer.RegisterService(new DirectCycleService());
 
-        // 强力诊断：查�?Generator 提取出的依赖
+        // 寮哄姏璇婃柇锛氭煡鐪?Generator 鎻愬彇鍑虹殑渚濊禆
         var mgr = new DirectCycleManager();
         var deps = ((IAutoSubscribe)mgr).GetEventDependencies().ToList();
         TestContext.Progress.WriteLine($"[Diagnostic] DirectCycleManager deps count: {deps.Count}");
@@ -82,7 +82,7 @@ public class CycleDetectionTests
         var layer = new GameLayer();
         layer.RegisterService(new IndirectCycleService());
 
-        // 强力诊断：查看两�?Manager 的依�?
+        // 寮哄姏璇婃柇锛氭煡鐪嬩袱涓?Manager 鐨勪緷璧?
         var mgrA = new IndirectManagerA();
         var depsA = ((IAutoSubscribe)mgrA).GetEventDependencies().ToList();
         TestContext.Progress.WriteLine($"[Diagnostic] IndirectManagerA deps count: {depsA.Count}");

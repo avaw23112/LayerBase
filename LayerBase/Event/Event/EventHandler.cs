@@ -1,10 +1,10 @@
-using LayerBase.Async;
+ï»¿using LayerBase.Async;
 using LayerBase.Core.Event;
 
 namespace LayerBase.Core.EventHandler;
 
 /// <summary>
-///     ×èÈûÊÂ¼ş.¿É½Ø¶ÏÊÂ¼şÁ÷
+///     é˜»å¡äº‹ä»¶.å¯æˆªæ–­äº‹ä»¶æµ
 /// </summary>
 /// <typeparam name="TValue"></typeparam>
 public delegate EventHandledState EventHandleDelegate<TValue>(in TValue value) where TValue : struct;
@@ -12,13 +12,13 @@ public delegate EventHandledState EventHandleDelegate<TValue>(in TValue value) w
 public delegate void EventNotifyDelegate<TValue>(in TValue value) where TValue : struct;
 
 /// <summary>
-///     Òì²½ÊÂ¼ş.²»¿É½Ø¶ÏÊÂ¼şÁ÷
+///     å¼‚æ­¥äº‹ä»¶.ä¸å¯æˆªæ–­äº‹ä»¶æµ
 /// </summary>
 /// <typeparam name="TValue"></typeparam>
 public delegate LBTask EventHandleDelegateAsync<in TValue>(TValue value) where TValue : struct;
 
 /// <summary>
-///     ÊÂ¼ş´¦ÀíÆ÷
+///     äº‹ä»¶å¤„ç†å™¨
 /// </summary>
 public interface IEventHandler
 {

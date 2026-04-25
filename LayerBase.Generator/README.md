@@ -1,4 +1,4 @@
-# 🚀 LayerBase.Generator: 工业级架构源生成器
+﻿# 🚀 LayerBase.Generator: 工业级架构源生成器
 
 **LayerBase.Generator** 是 [LayerBase 高性能架构总线](https://github.com/avaw23112/LayerBase)的专属 **C# 源生成器（Source
 Generator）** 插件。

@@ -1,4 +1,4 @@
-using LayerBase.Core.Event;
+﻿using LayerBase.Core.Event;
 using LayerBase.Layers;
 
 namespace LayerBase.Usage;
@@ -23,7 +23,7 @@ public struct DataRequestEvent
     public string Query;
 }
 
-// 3. �?Layer 中使用服�?
+// 3. �?Layer 中使用服�?
 public partial class ServiceLayer : Layer
 {
     [Subscribe]

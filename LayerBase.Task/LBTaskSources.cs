@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 
 namespace LayerBase.Async;
 
@@ -10,7 +10,7 @@ internal interface IArchTaskSource
     void SetException(Exception        ex);
     void SetCanceled(CancellationToken token);
     void GetResult();
-    void TryRelease(); // 新增：安全尝试回�?
+    void TryRelease(); // 新增：安全尝试回�?
 }
 
 internal interface IArchTaskSource<T>
@@ -21,7 +21,7 @@ internal interface IArchTaskSource<T>
     void SetException(Exception        ex);
     void SetCanceled(CancellationToken token);
     T GetResult();
-    void TryRelease(); // 新增：安全尝试回�?
+    void TryRelease(); // 新增：安全尝试回�?
 }
 
 internal sealed class ArchTaskSource : IArchTaskSource

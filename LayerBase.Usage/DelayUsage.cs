@@ -1,4 +1,4 @@
-using LayerBase.Core.Event;
+﻿using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
@@ -20,14 +20,14 @@ public class NotifyManager : IService
 
     public void RequestNotification(string message, float delay)
     {
-        // 🚀 �?Service 中调用扩展方法，安全且符合架�?
+        // 🚀 �?Service 中调用扩展方法，安全且符合架�?
         this.Delay(new NotificationEvent { Msg = message }, delay);
     }
 }
 
 public partial class NotifyLayer : Layer
 {
-    // [SubscribeDelay] 允许层级持有延迟发布的引�?
+    // [SubscribeDelay] 允许层级持有延迟发布的引�?
     [SubscribeDelay] public IDelayPublisher<NotificationEvent> DelayNotify { get; set; }
 
     public bool HasReceived { get; private set; }
@@ -61,7 +61,7 @@ public static class DelayUsage
         // 3. 通过获取到的 Service 实例发起请求
         layer.GetService<NotifyManager>().RequestNotification("Delayed Message", 0.5f);
 
-        // 4. 驱动主循�?
+        // 4. 驱动主循�?
         var timeout = 0;
         while (!layer.HasReceived && timeout < 20)
         {

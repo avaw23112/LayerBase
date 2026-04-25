@@ -1,4 +1,4 @@
-namespace LayerBase.Core.EventCatalogue;
+ï»¿namespace LayerBase.Core.EventCatalogue;
 
 public class CatalogueNode
 {
@@ -9,7 +9,7 @@ public class CatalogueNode
 
     public CatalogueNode Combine(string subCatalogue)
     {
-        if (string.IsNullOrEmpty(subCatalogue)) throw new Exception("´íÎóÄ¿Â¼");
+        if (string.IsNullOrEmpty(subCatalogue)) throw new Exception("é”™è¯¯ç›®å½•");
 
         _children ??= new Dictionary<string, CatalogueNode>(4);
 

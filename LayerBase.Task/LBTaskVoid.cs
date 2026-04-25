@@ -1,4 +1,4 @@
-namespace LayerBase.Async;
+﻿namespace LayerBase.Async;
 
 /// <summary>
 ///     Fire-and-forget task; exceptions should be observed via OnException.

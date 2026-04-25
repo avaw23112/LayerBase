@@ -1,4 +1,4 @@
-namespace LayerBase.Core.EventCatalogue;
+﻿namespace LayerBase.Core.EventCatalogue;
 
 public static class EventCatalogue
 {

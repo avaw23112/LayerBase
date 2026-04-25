@@ -1,4 +1,4 @@
-namespace LayerBase.Event.Delay;
+﻿namespace LayerBase.Event.Delay;
 
 public interface IDelayPublisherManager
 {

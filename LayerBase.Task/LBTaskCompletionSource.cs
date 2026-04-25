@@ -1,4 +1,4 @@
-namespace LayerBase.Async;
+﻿namespace LayerBase.Async;
 
 /// <summary>Manual completion for ArchTask.</summary>
 public sealed class LBTaskCompletionSource : IDisposable
@@ -81,7 +81,7 @@ public sealed class LBTaskCompletionSource : IDisposable
     private void DisposeInternal()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            // 如果任务从未完成，强制归�?Source 到池�?
+            // 濡傛灉浠诲姟浠庢湭瀹屾垚锛屽己鍒跺綊杩?Source 鍒版睜涓?
             _source.TryRelease();
     }
 }

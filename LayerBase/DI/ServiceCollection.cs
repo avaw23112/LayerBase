@@ -1,4 +1,4 @@
-namespace LayerBase.DI;
+﻿namespace LayerBase.DI;
 
 /// <summary>
 ///     切片服务容器

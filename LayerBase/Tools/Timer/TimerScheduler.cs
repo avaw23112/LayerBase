@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
@@ -8,7 +8,7 @@ using LayerBase.Event.EventMetaData;
 namespace LayerBase.Tools.Timer;
 
 /// <summary>
-///     由外部Tick驱动的简单定时器，使用FreeList复用定时任务内存�?
+///     由外部Tick驱动的简单定时器，使用FreeList复用定时任务内存�?
 /// </summary>
 public sealed class TimerScheduler
 {
@@ -82,7 +82,7 @@ public sealed class TimerScheduler
             queue.TryInvoke(token);
         }
 
-        // 2. 执行频率任务（优化：直接内部迭代，零分配�?
+        // 2. 执行频率任务（优化：直接内部迭代，零分配�?
         if (frequencyTriggered)
             for (var i = 0; i < _frequencyDueCache.Count; i++)
                 _frequencyDueCache[i].ExecuteAll();
@@ -412,7 +412,7 @@ internal sealed class TimerQueue<T> : ITimerQueue where T : struct
 
             ref var slot = ref _tasks.Resolve(slotRef);
             task = slot.Value;
-            slot.Value = default; // 立即清除引用，终结泄�?
+            slot.Value = default; // 立即清除引用，终结泄�?
         }
 
         try
@@ -442,7 +442,7 @@ internal sealed class TimerQueue<T> : ITimerQueue where T : struct
         {
             if (!_tasks.TryBorrow(token.Index, token.Version, out var slotRef)) return false;
 
-            // 关键修复：取消时也必须清�?Value，否�?delegates 会一直留�?FreeList 的内存里
+            // 关键修复：取消时也必须清�?Value，否�?delegates 会一直留�?FreeList 的内存里
             ref var slot = ref _tasks.Resolve(slotRef);
             slot.Value = default;
 
@@ -558,7 +558,7 @@ internal sealed class FrequencyQueue<T> : IFrequencyQueue where T : struct
     private readonly object _lock = new();
     private readonly List<FrequencyTask<T>> _tasks = new();
 
-    // 核心优化：直接执行，零分配，不再生成 Lambda 和快照列�?
+    // 核心优化：直接执行，零分配，不再生成 Lambda 和快照列�?
     public void ExecuteAll()
     {
         FrequencyTask<T>[]? snapshot = null;

@@ -1,4 +1,4 @@
-using LayerBase;
+﻿using LayerBase;
 using LayerBase.Tools.Timer;
 
 namespace EventsTest;

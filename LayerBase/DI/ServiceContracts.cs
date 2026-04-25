@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Event.Delay;
@@ -148,7 +148,7 @@ public static class ServiceExtensions
     }
 
     /// <summary>
-    ///     获取针对特定事件的链�?API 流�?
+    ///     获取针对特定事件的链�?API 流�?
     /// </summary>
     public static LayerEventStream<TValue> OnEvent<TValue>(this IService service) where TValue : struct
     {
@@ -224,7 +224,7 @@ public static class LayerContextExtensions
     }
 
     /// <summary>
-    ///     获取针对特定事件的链�?API 流�?
+    ///     获取针对特定事件的链�?API 流�?
     /// </summary>
     public static LayerEventStream<TValue> OnEvent<TValue>(this ILayerContext service) where TValue : struct
     {

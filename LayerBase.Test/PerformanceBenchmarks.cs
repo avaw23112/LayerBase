@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.Layers;
@@ -21,7 +21,7 @@ public class PerformanceBenchmarks
     {
         const int totalHandlers = 10;
 
-        // 场景 A: 集中�?(1�?x 10个Handler) - 内存极致连续
+        // 场景 A: 集中�?(1�?x 10个Handler) - 内存极致连续
         LayerHub.Reset();
         var lA = new BenchLayer();
         for (var i = 0; i < totalHandlers; i++)
@@ -35,9 +35,9 @@ public class PerformanceBenchmarks
         var sw = Stopwatch.StartNew();
         for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
         sw.Stop();
-        Console.WriteLine($"\n[内存密集�?集中分发] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
+        Console.WriteLine($"\n[内存密集�?集中分发] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
 
-        // 场景 B: 碎片�?(10�?x 1个Handler) - 跨对象跳�?
+        // 场景 B: 碎片�?(10�?x 1个Handler) - 跨对象跳�?
         LayerHub.Reset();
         var builder = LayerHub.CreateLayers();
         for (var i = 0; i < totalHandlers; i++)
@@ -56,7 +56,7 @@ public class PerformanceBenchmarks
         sw.Restart();
         for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
         sw.Stop();
-        Console.WriteLine($"[内存碎片�?跨桶分发] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
+        Console.WriteLine($"[内存碎片�?跨桶分发] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
     }
 
     private class BenchLayer : Layer

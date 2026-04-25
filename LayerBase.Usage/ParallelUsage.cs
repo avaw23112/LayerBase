@@ -1,4 +1,4 @@
-using LayerBase.Core.Event;
+﻿using LayerBase.Core.Event;
 using LayerBase.Layers;
 
 namespace LayerBase.Usage;
@@ -10,12 +10,12 @@ public struct HeavyComputeEvent
 
 public partial class ComputeLayer : Layer
 {
-    // [SubscribeParallel] 会在独立的线程池中执行�?
-    // 这提供了极致的性能，同时也实现了故障隔离�?
+    // [SubscribeParallel] 会在独立的线程池中执行�?
+    // 这提供了极致的性能，同时也实现了故障隔离�?
     [SubscribeParallel]
     private EventHandledState DoWork(in HeavyComputeEvent e)
     {
-        if (e.Data < 0) throw new Exception("Compute Error!"); // 故意制造异�?
+        if (e.Data < 0) throw new Exception("Compute Error!"); // 故意制造异�?
 
         Console.WriteLine($"[Parallel] Processing data: {e.Data} on thread {Thread.CurrentThread.ManagedThreadId}");
         return EventHandledState.Continue;
@@ -28,7 +28,7 @@ public static class ParallelUsage
     {
         Console.WriteLine("--- Parallel Usage ---");
 
-        // 1. 初始化并行调度器（指定工作线程数�?
+        // 1. 初始化并行调度器（指定工作线程数�?
         LayerHub.InitializeJobScheduler(4);
 
         var compute = new ComputeLayer();
