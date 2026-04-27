@@ -330,7 +330,7 @@ public static class LayerHub
             {
                 var keyName = key.Substring(key.IndexOf('_') + 1);
                 issues.Add(
-                    $"- **Orphaned Provide**: Shared key `{keyName}` is published but never consumed via `[Use]`. (Scope: {key.Split('_')[0]})");
+                    $"- **Orphaned Provide**: Shared key `{keyName}` is published but never consumed via `[From]`. (Scope: {key.Split('_')[0]})");
             }
 
         if (issues.Count == 0)

@@ -20,16 +20,16 @@ internal static class SharedFieldBinder
         if (participantList.Count == 0) return;
 
         var published = new Dictionary<(Type OwnerType, string LocalKey), PublishedField>();
-        var pendingConsumers = new List<(Participant Participant, FieldInfo Field, UseAttribute Attribute)>();
+        var pendingConsumers = new List<(Participant Participant, FieldInfo Field, FromAttribute Attribute)>();
 
         foreach (var participant in participantList)
         {
             var metadata = GetMetadata(participant.Instance.GetType());
             foreach (var item in metadata)
             {
-                if (item.ProvideAttribute != null && item.UseAttribute != null)
+                if (item.ProvideAttribute != null && item.FromAttribute != null)
                     throw new InvalidOperationException(
-                        $"Shared field '{participant.Instance.GetType().FullName}.{item.Field.Name}' cannot declare both [Provide] and [Use].");
+                        $"Shared field '{participant.Instance.GetType().FullName}.{item.Field.Name}' cannot declare both [Provide] and [From].");
 
                 if (item.ProvideAttribute != null)
                 {
@@ -54,10 +54,10 @@ internal static class SharedFieldBinder
                         item.Field.FieldType, true));
                 }
 
-                if (item.UseAttribute != null)
+                if (item.FromAttribute != null)
                 {
-                    pendingConsumers.Add((participant, item.Field, item.UseAttribute));
-                    participant.Layer.SharedFields.Add((item.UseAttribute.OwnerType, item.UseAttribute.LocalKey,
+                    pendingConsumers.Add((participant, item.Field, item.FromAttribute));
+                    participant.Layer.SharedFields.Add((item.FromAttribute.OwnerType, item.FromAttribute.LocalKey,
                         item.Field.FieldType, false));
                 }
             }
@@ -160,8 +160,8 @@ internal static class SharedFieldBinder
                 .Select(static field => new FieldBindingMetadata(
                     field,
                     field.GetCustomAttribute<ProvideAttribute>(),
-                    field.GetCustomAttribute<UseAttribute>()))
-                .Where(static item => item.ProvideAttribute != null || item.UseAttribute != null)
+                    field.GetCustomAttribute<FromAttribute>()))
+                .Where(static item => item.ProvideAttribute != null || item.FromAttribute != null)
                 .ToArray());
     }
 
@@ -204,16 +204,16 @@ internal static class SharedFieldBinder
 
     private readonly struct FieldBindingMetadata
     {
-        public FieldBindingMetadata(FieldInfo field, ProvideAttribute? provideAttribute, UseAttribute? useAttribute)
+        public FieldBindingMetadata(FieldInfo field, ProvideAttribute? provideAttribute, FromAttribute? fromAttribute)
         {
             Field = field;
             ProvideAttribute = provideAttribute;
-            UseAttribute = useAttribute;
+            FromAttribute = fromAttribute;
         }
 
         public FieldInfo Field { get; }
         public ProvideAttribute? ProvideAttribute { get; }
-        public UseAttribute? UseAttribute { get; }
+        public FromAttribute? FromAttribute { get; }
     }
 }
 

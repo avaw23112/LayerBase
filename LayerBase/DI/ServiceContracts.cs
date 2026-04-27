@@ -238,7 +238,7 @@ public static class LayerContextExtensions
 }
 
 [AttributeUsage(AttributeTargets.Constructor | AttributeTargets.Field | AttributeTargets.Property)]
-public sealed class InjectAttribute : Attribute
+public sealed class MountAttribute : Attribute
 {
 }
 

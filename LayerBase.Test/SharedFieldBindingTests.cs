@@ -193,7 +193,7 @@ public sealed class PlayerStorageModule : ILayerContext
 
 public sealed class PlayerQueryModule : ILayerContext
 {
-    [Use(typeof(ServiceScopeSharingService), "players")]
+    [From(typeof(ServiceScopeSharingService), "players")]
     private readonly IReadOnlyList<int> _players = default!;
 
     public int Count()
@@ -224,7 +224,7 @@ public sealed class PlayerStateModule : ILayerContext
 
 public sealed class PlayerHudModule : ILayerContext
 {
-    [Use(typeof(Layer_A), "player_states")]
+    [From(typeof(Layer_A), "player_states")]
     private readonly IReadOnlyDictionary<int, bool> _states = default!;
 
     public bool IsOnline(int playerId)
@@ -246,7 +246,7 @@ public sealed class SharedReferencePublisherModule : ILayerContext
 
 public sealed class SharedReferenceConsumerModule : ILayerContext
 {
-    [Use(typeof(GlobalScope), "shared-ref")]
+    [From(typeof(GlobalScope), "shared-ref")]
     private readonly SharedReferenceBox _box = default!;
 
     public string ReadValue()
@@ -269,13 +269,13 @@ public sealed class DuplicateLayerPublisherModuleB : ILayerContext
 
 public sealed class MissingPublisherConsumerModule : ILayerContext
 {
-    [Use(typeof(Layer_A), "missing-layer-key")]
+    [From(typeof(Layer_A), "missing-layer-key")]
     private IReadOnlyDictionary<int, int> _state = default!;
 }
 
 public sealed class WritableListConsumerModule : ILayerContext
 {
-    [Use(typeof(ServiceScopeSharingService), "players")]
+    [From(typeof(ServiceScopeSharingService), "players")]
     private List<int> _players = default!;
 }
 

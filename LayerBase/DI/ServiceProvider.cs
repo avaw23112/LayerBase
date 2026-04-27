@@ -201,14 +201,14 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
 
         foreach (var f in t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
         {
-            if (f.GetCustomAttribute<InjectAttribute>() == null) continue;
+            if (f.GetCustomAttribute<MountAttribute>() == null) continue;
             var dep = GetService(f.FieldType);
             if (dep != null) f.SetValue(instance, dep);
         }
 
         foreach (var p in t.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
         {
-            if (p.GetCustomAttribute<InjectAttribute>() == null || !p.CanWrite) continue;
+            if (p.GetCustomAttribute<MountAttribute>() == null || !p.CanWrite) continue;
             var dep = GetService(p.PropertyType);
             if (dep != null) p.SetValue(instance, dep, null);
         }

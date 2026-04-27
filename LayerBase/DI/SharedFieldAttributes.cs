@@ -23,9 +23,9 @@ public sealed class ProvideAttribute : Attribute
 }
 
 [AttributeUsage(AttributeTargets.Field)]
-public sealed class UseAttribute : Attribute
+public sealed class FromAttribute : Attribute
 {
-    public UseAttribute(Type ownerType, string localKey)
+    public FromAttribute(Type ownerType, string localKey)
     {
         if (string.IsNullOrWhiteSpace(localKey))
             throw new ArgumentException("Shared field localKey cannot be null or whitespace.", nameof(localKey));

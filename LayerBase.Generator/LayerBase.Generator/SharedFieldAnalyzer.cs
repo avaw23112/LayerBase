@@ -2,6 +2,7 @@
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LayerBase.Generator;
@@ -10,7 +11,7 @@ namespace LayerBase.Generator;
 public sealed class SharedFieldAnalyzer : IIncrementalGenerator
 {
     private const string ProvideAttributeName = "LayerBase.DI.ProvideAttribute";
-    private const string UseAttributeName = "LayerBase.DI.UseAttribute";
+    private const string FromAttributeName = "LayerBase.DI.FromAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -20,13 +21,14 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             static (ctx,  _) => GetFieldInfo(ctx, true));
 
         var useFields = context.SyntaxProvider.ForAttributeWithMetadataName(
-            UseAttributeName,
+            FromAttributeName,
             static (node, _) => node is FieldDeclarationSyntax,
             static (ctx,  _) => GetFieldInfo(ctx, false));
 
         var allFields = provideFields.Collect().Combine(useFields.Collect());
+        var compilationAndFields = context.CompilationProvider.Combine(allFields);
 
-        context.RegisterSourceOutput(allFields, static (spc, pair) => Analyze(spc, pair.Left, pair.Right));
+        context.RegisterSourceOutput(compilationAndFields, static (spc, pair) => Analyze(spc, pair.Left, pair.Right.Left, pair.Right.Right));
     }
 
     private static FieldInfo? GetFieldInfo(GeneratorAttributeSyntaxContext ctx, bool isProvide)
@@ -41,6 +43,10 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
 
         if (ownerType == null || string.IsNullOrEmpty(localKey)) return null;
 
+        var syntax = attr.ApplicationSyntaxReference?.GetSyntax() as AttributeSyntax;
+        bool isLiteral = syntax != null && syntax.ArgumentList != null && syntax.ArgumentList.Arguments.Count > 1 &&
+                         syntax.ArgumentList.Arguments[1].Expression.IsKind(SyntaxKind.StringLiteralExpression);
+
         return new FieldInfo(
             fieldSymbol.ContainingType,
             fieldSymbol.Name,
@@ -48,14 +54,40 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             ownerType,
             localKey,
             isProvide,
-            fieldSymbol.Locations.FirstOrDefault());
+            fieldSymbol.Locations.FirstOrDefault() ?? Location.None,
+            isLiteral);
     }
 
-    private static void Analyze(SourceProductionContext    spc, ImmutableArray<FieldInfo?> provides,
+    private static void Analyze(SourceProductionContext    spc, Compilation compilation, ImmutableArray<FieldInfo?> provides,
                                 ImmutableArray<FieldInfo?> uses)
     {
         var validProvides = provides.Where(p => p != null).Select(p => p!).ToImmutableArray();
         var validUses = uses.Where(p => p != null).Select(p => p!).ToImmutableArray();
+        var allValidFields = validProvides.Concat(validUses);
+
+        var layerSymbol = compilation.GetTypeByMetadataName("LayerBase.Layers.Layer");
+        var iServiceSymbol = compilation.GetTypeByMetadataName("LayerBase.DI.IService");
+        var globalScopeSymbol = compilation.GetTypeByMetadataName("LayerBase.DI.GlobalScope");
+
+        foreach (var f in allValidFields)
+        {
+            if (f.IsLocalKeyLiteral)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LiteralKeyWarning, f.Location, f.LocalKey));
+            }
+
+            if (layerSymbol != null && iServiceSymbol != null && globalScopeSymbol != null)
+            {
+                bool isValidOwner = SymbolEqualityComparer.Default.Equals(f.OwnerType, globalScopeSymbol) ||
+                                    InheritsFrom(f.OwnerType, layerSymbol) ||
+                                    f.OwnerType.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, iServiceSymbol) || SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iServiceSymbol));
+                
+                if (!isValidOwner)
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidOwnerType, f.Location, f.OwnerType.ToDisplayString()));
+                }
+            }
+        }
 
         // 1. Check for Provide conflicts
         var provideMap = new Dictionary<string, FieldInfo>();
@@ -129,7 +161,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
     private sealed class FieldInfo
     {
         public FieldInfo(INamedTypeSymbol containingType, string name,      ITypeSymbol type, ITypeSymbol ownerType,
-                         string           localKey,       bool   isProvide, Location?   location)
+                         string           localKey,       bool   isProvide, Location?   location, bool isLocalKeyLiteral)
         {
             ContainingType = containingType;
             Name = name;
@@ -138,6 +170,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             LocalKey = localKey;
             IsProvide = isProvide;
             Location = location;
+            IsLocalKeyLiteral = isLocalKeyLiteral;
         }
 
         public INamedTypeSymbol ContainingType { get; }
@@ -147,6 +180,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public string LocalKey { get; }
         public bool IsProvide { get; }
         public Location? Location { get; }
+        public bool IsLocalKeyLiteral { get; }
     }
 
     private static class Diagnostics
@@ -162,15 +196,31 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public static readonly DiagnosticDescriptor TypeMismatch = new(
             "LBG402",
             "Shared field type mismatch",
-            "LocalKey '{0}' is consumed as '{1}' but published as '{2}'. Types must be compatible, and [Use] only allows read-only projections.",
+            "LocalKey '{0}' is consumed as '{1}' but published as '{2}'. Types must be compatible, and [From] only allows read-only projections.",
             "Usage",
             DiagnosticSeverity.Error,
             true);
 
         public static readonly DiagnosticDescriptor OrphanUse = new(
             "LBG403",
-            "Orphan Shared field Use",
-            "LocalKey '{0}' is consumed via [Use] but no [Provide] provider was found in this compilation.",
+            "Orphan Shared field From",
+            "LocalKey '{0}' is consumed via [From] but no [Provide] provider was found in this compilation.",
+            "Usage",
+            DiagnosticSeverity.Error,
+            true);
+
+        public static readonly DiagnosticDescriptor InvalidOwnerType = new(
+            "LBG404",
+            "Invalid Owner Type",
+            "OwnerType '{0}' is invalid. Only Layer, Service, or GlobalScope are allowed as OwnerType.",
+            "Usage",
+            DiagnosticSeverity.Error,
+            true);
+
+        public static readonly DiagnosticDescriptor LiteralKeyWarning = new(
+            "LBG405",
+            "Literal LocalKey Usage",
+            "LocalKey '{0}' is a string literal. It is recommended to use constants for shared field keys to avoid typos.",
             "Usage",
             DiagnosticSeverity.Warning,
             true);

@@ -41,7 +41,7 @@ public sealed class InventoryStorageModule : ILayerContext
 
 public sealed class InventoryQueryModule : ILayerContext
 {
-    [Use(typeof(SharedInventoryService), "items")]
+    [From(typeof(SharedInventoryService), "items")]
     private readonly IReadOnlyList<string> _items = default!;
 
     public int Count()
@@ -63,7 +63,7 @@ public sealed class InventoryStateModule : ILayerContext
 
 public sealed class InventoryHudModule : ILayerContext
 {
-    [Use(typeof(SharedFieldLayer), "equip-state")]
+    [From(typeof(SharedFieldLayer), "equip-state")]
     private readonly IReadOnlyDictionary<string, bool> _equipped = default!;
 
     public bool IsEquipped(string itemName)
