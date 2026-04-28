@@ -353,11 +353,13 @@ public readonly struct LBTask<T>
         HasResult = true;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Awaiter GetAwaiter()
     {
         return new Awaiter(this);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static LBTask<T> FromResult(T value)
     {
         return new LBTask<T>(value);
@@ -449,6 +451,7 @@ public readonly struct LBTask<T>
 
         public bool IsCompleted => _task.HasResult || _task.Source == null || _task.Source.IsCompleted;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnCompleted(Action continuation)
         {
             if (_task.HasResult || _task.Source == null)
@@ -460,6 +463,7 @@ public readonly struct LBTask<T>
             _task.Source.OnCompleted(continuation);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T GetResult()
         {
             if (_task.HasResult) return _task.Result!;

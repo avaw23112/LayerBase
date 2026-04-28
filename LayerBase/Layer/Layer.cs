@@ -372,21 +372,45 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal LayerCallInvoker<TRequest, TResponse> GetCallInvoker<TRequest, TResponse>()
+        where TRequest : struct
+        where TResponse : struct
+    {
+        var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
+        var invokers = Volatile.Read(ref m_callRouteInvokers);
+        if ((uint)routeId >= (uint)invokers.Length || invokers[routeId] == null)
+            ThrowRouteNotFound<TRequest, TResponse>();
+
+        return (LayerCallInvoker<TRequest, TResponse>)invokers[routeId]!;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest          request,
                                                               CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
     {
-        ThrowIfDisposed();
+        if (m_disposed) ThrowDisposed();
         if (cancellationToken.IsCancellationRequested) return LBTask<TResponse>.FromCanceled(cancellationToken);
 
         var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
         var invokers = Volatile.Read(ref m_callRouteInvokers);
         if ((uint)routeId >= (uint)invokers.Length || invokers[routeId] == null)
-            return LBTask<TResponse>.FromException(
-                new LayerCallRouteNotFoundException(GetType(), typeof(TRequest), typeof(TResponse)));
+            ThrowRouteNotFound<TRequest, TResponse>();
 
         return ((LayerCallInvoker<TRequest, TResponse>)invokers[routeId]!)(request, cancellationToken);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ThrowDisposed() => throw new ObjectDisposedException(GetType().Name);
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ThrowRouteNotFound<TRequest, TResponse>()
+        where TRequest : struct
+        where TResponse : struct
+    {
+        throw new LayerCallRouteNotFoundException(GetType(), typeof(TRequest), typeof(TResponse));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
