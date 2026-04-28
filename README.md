@@ -77,6 +77,16 @@ LayerBase 的设计哲学是：**用强约束的框架收编混乱的注册，�
 | 8     |    20.5293 ns |        5.0653 ns |  **3.4854 ns** |             56.91x |                 2.72x |               2.10x |                   +31.2% |
 | 16    |    35.9193 ns |        9.6484 ns |  **6.1484 ns** |            103.34x |                 5.38x |               3.81x |                   +36.3% |
 
+#### Request/Response 性能对比（10 万次 Call）
+
+| 方案 | 10 万次总耗时 | 单次均摊耗时 | 相对直接调用增长 | 内存分配 |
+|:---|---:|---:|---:|---:|
+| 直接 LBTask 结构体调用 | **29.21 μs** | **0.29 ns** | 1.00x | 0 B |
+| MessagePipe IRequestHandler | **50.48 μs** | **0.50 ns** | 1.73x | 0 B |
+| **LayerBase CallAsync** | **108.15 μs** | **1.08 ns** | 3.70x | 0 B |
+
+* 虽然由于层级路由与 DI 容器的存在，`CallAsync` 的开销略高于极简的 MessagePipe，但 **1.08 ns** 的单次开销依然意味着在常规业务中它几乎是“免费”的。
+
 * 在多事件且少量订阅者的模型中，我们的SOA架构并未发挥出其独有优势，因此只能做到贴近MessagePipe的性能。
 * 但只要一个事件的订阅者数量超过3，那么SOA带来的稳定性与性能的提升就会披露头角。
 
@@ -122,9 +132,15 @@ EventBucket<T>
   Prediction）。
 * **指针偏移**：在支持的运行时下，底层直接获取数组的原生指针并通过 `Unsafe.Add` 步进，彻底消除了 JIT 在循环内的数组边界检查（BCE）。
 
-### 4. 构建持久性数据
+### 5. v1.4.2 极限性能优化 (Ultra Performance Updates)
 
-- 在层级构建之初便将一切计算完成，并将结果缓存在内存中。因此在热路径中，我们 **不做计算、不做查找、不做写入、永远只读**。
+为了在 .NET 8/9 环境下达到比肩原生接口调用的性能，v1.4.2 引入了以下深度优化：
+
+*   **`LBTask<T>` 结构体瘦身**：移除了 `HasResult` 字段，利用 `Source == null` 作为同步完成标记。减小了结构体体积，降低了寄存器传递压力。
+*   **异步路径短路 (Sync-Path Short-circuit)**：优化了 `LBTaskMethodBuilder`，在异步方法同步完成时彻底消除 `ArchTaskSource` 的租赁开销。
+*   **静态泛型调用缓存 (Ultra Fast Path)**：在 `LayerHub.CallAsync` 中引入静态泛型类缓存。**零字典查找、零锁竞争、零版本核对**，调用开销缩减至仅一次静态字段读取。
+*   **去虚化接口调用 (Devirtualization)**：缓存 `ILayerCallHandler` 接口实例而非委托。配合 `sealed` 处理类，JIT 可以直接生成内联或直接跳转的汇编代码。
+*   **全面零拷贝 (`in` 修饰符)**：所有 Call 链路强制使用 `in TRequest`，彻底消除大 struct 在分发过程中的内存复制。
 
 ---
 
@@ -148,7 +164,7 @@ EventBucket<T>
 1. **NuGet 快速安装 (推荐)**：
    您可以通过 NuGet 包管理器直接安装 LayerBase：
    ```bash
-   dotnet add package LayerBase --version 1.4.1
+   dotnet add package LayerBase --version 1.4.2
    ```
 2. **源码引入**：将仓库中的 `LayerBase` 和 `LayerBase.Task` 项目目录直接添加到您的解决方案中并建立引用。
 3. **配置源生成器 (Source Generator)**：
@@ -274,17 +290,24 @@ public partial class PlayerInputManager : ILayerContext,IUpdate
 Service 负责将相关的 Manager 注册到 DI 容器中。
 通过 `[OwnerLayer]` 特性，可以将 Service 静态绑定到指定的 Layer 层级。
 
+此外，您可以使用 `[Mount]` 特性实现**声明式依赖注入**。被 `[Mount]` 标记的字段或属性，源生成器会自动将其类型注册到 DI 容器中，并在实例创建时自动完成注入。
+
 ```csharp
 using LayerBase.DI;
 
 // 绑定至 GameLogicLayer 层级
 [OwnerLayer(typeof(GameLogicLayer))]
-public class CombatService : IService 
+public partial class CombatService : IService 
 {
+    // 使用 [Mount] 声明依赖
+    // 1. 编译期：源生成器会自动在生成的 ConfigureServices 中添加 services.AddScoped<DamageManager, DamageManager>()
+    // 2. 运行期：实例化 CombatService 后，ServiceProvider 会自动注入该字段
+    [Mount] private DamageManager _damageManager;
+
     public void ConfigureServices(IServiceCollection services) 
     { 
-        // 注册 Manager。此处注册的先后顺序即决定了同层级内事件响应的优先级。
-        services.AddScoped<DamageManager, DamageManager>();
+        // 如果使用了 [Mount]，则无需再手动 AddScoped
+        // services.AddScoped<DamageManager, DamageManager>();
     }
 }
 ```
@@ -472,7 +495,7 @@ ServiceLookupResponse resp = await LayerHub.CallAsync<CoreLayer, ServiceLookupRe
 解决组件间在不建立显式引用关系的情况下，如何安全、高效地共享内存状态。
 
 * **显式边界**：不再使用枚举推断范围，而是通过 `(Type ownerType, string localKey)` 显式指定状态的归属。
-* **自动生命周期**：标记为 `[Public]` 的字段在 `Build()` 阶段会自动实例化（支持引用类型 and 值类型）。
+* **自动生命周期**：标记为 `[Provide]` 的字段在 `Build()` 阶段会自动实例化（支持引用类型 and 值类型）。
 * **强制只读**：`[From]` 端只能接收只读投影（如 `IReadOnlyList<T>`），禁止拿走可写容器（如 `List<T>`），彻底杜绝逻辑后门。
 
 ```csharp
@@ -505,13 +528,13 @@ private AppConfig _config;
     * **Zombie Event**：有订阅但没人发的事件。
     * **Unused Producer**：有人发但没人听的事件。
     * **Dead Call**：定义了 Handler 但从未被调用的 Call。
-    * **Orphaned Public**：发布了状态但全项目没人引用的 Key。
+    * **Orphaned Provide**: 发布了状态但全项目没人引用的 Key。
 
 ### 8. Roslyn 智能开发体验 (Diagnostics & Code Fixes)
 
 为了降低心智负担，框架自带了深度集成的 Roslyn 插件：
 
-* **编译期拦截**：非法的方法签名、`[Public]` 键位碰撞、`[From]` 类型不匹配、类缺少 `partial` 关键字，都会在**按下 F5 之前**以
+* **编译期拦截**：非法的方法签名、`[Provide]` 键位碰撞、`[From]` 类型不匹配、类缺少 `partial` 关键字，都会在**按下 F5 之前**以
   Error 形式提示。
 * **一键修复 (Code Fix)**：按下 `Alt+Enter`，自动修正订阅方法签名、自动补全 `async` 关键字、自动同步共享字段类型。
 
@@ -636,7 +659,17 @@ The following figures are taken directly from
 | 1           |            0.3476 ns |               1.7939 ns |         **1.6117 ns** |               1.00x |                  1.00x |                1.00x |                   +10.2% |
 | 4           |           10.8657 ns |               2.9491 ns |         **2.8477 ns** |              31.26x |                  1.64x |                1.77x |                    +3.4% |
 | 8           |           19.2476 ns |               4.8975 ns |         **3.4861 ns** |              55.37x |                  2.73x |                2.16x |                   +28.8% |
-| 16          |           35.9193 ns |               9.6484 ns |         **6.1484 ns** |             103.34x |                  5.38x |                3.81x |                   +36.3% |
+| 16          |           35.9193 ns |               9.6484 ns |         **6.1484 ns** |             103.34x |             5.38x |                3.81x |                   +36.3% |
+
+#### Request/Response Performance Comparison (100,000 Calls)
+
+| Method | Total Cost (100k) | Avg/Call | Scale vs Direct | Memory |
+|:---|---:|---:|---:|---:|
+| Direct LBTask Struct Call | **29.21 μs** | **0.29 ns** | 1.00x | 0 B |
+| MessagePipe IRequestHandler | **50.48 μs** | **0.50 ns** | 1.73x | 0 B |
+| **LayerBase CallAsync** | **108.15 μs** | **1.08 ns** | 3.70x | 0 B |
+
+* Despite the overhead of layer routing and DI resolution, the **1.08 ns** cost per call means `CallAsync` is virtually "free" in most real-world scenarios.
 
 * In the model with many event kinds and only a small number of subscribers per event, our SOA architecture does not yet
   show its unique advantage, so it can only stay close to MessagePipe in performance.
@@ -698,6 +731,16 @@ inter-layer jump overhead.
 - Everything is computed during layer construction and cached in memory from the very beginning. Therefore, on the hot
   path, we **do not compute, do not look up, do not write, and only ever read**.
 
+### 5. v1.4.2 Ultra Performance Updates
+
+To achieve performance comparable to native interface calls in .NET 8/9, v1.4.2 introduces the following deep optimizations:
+
+*   **`LBTask<T>` Struct Slimming**: Removed unnecessary fields and utilized `Source == null` as a synchronous completion flag. This reduces struct size and register pressure during parameter passing.
+*   **Async Path Short-circuit**: Optimized `LBTaskMethodBuilder` to completely eliminate `ArchTaskSource` leasing overhead when an async method completes synchronously.
+*   **Static Generic Call Cache (Ultra Fast Path)**: Introduced a static generic class cache in `LayerHub.CallAsync`. This achieves **zero dictionary lookups, zero lock contention, and zero version checks**, reducing call overhead to a single static field read.
+*   **Devirtualized Interface Calls**: Caches `ILayerCallHandler` interface instances instead of delegates. Combined with `sealed` handler classes, the JIT can generate inlined code or direct jumps.
+*   **Zero-Copy by Default (`in` modifier)**: All Call paths now enforce the use of `in TRequest`, completely eliminating memory copies for large structs during dispatch.
+
 ---
 
 ## 🛡️ Industrial-Grade Infrastructure Guarantees
@@ -727,7 +770,7 @@ robustness:
 1. **Quick Install via NuGet (Recommended)**:
    You can easily install LayerBase through the NuGet Package Manager:
    ```bash
-   dotnet add package LayerBase --version 1.4.1
+   dotnet add package LayerBase --version 1.4.2
    ```
 2. **Source Code Integration**: Add the `LayerBase` and `LayerBase.Task` project directories from the repository
    directly to your solution and reference them.
@@ -863,18 +906,25 @@ public partial class PlayerInputManager : ILayerContext,IUpdate
 Services are responsible for registering related Managers into the DI container.
 By using the `[OwnerLayer]` attribute, a Service can be statically bound to a specific Layer.
 
+Additionally, you can use the `[Mount]` attribute for **declarative dependency injection**. Fields or properties marked with `[Mount]` are automatically registered in the DI container by the source generator, and dependencies are automatically injected upon instance creation.
+
 ```csharp
 using LayerBase.DI;
 using LayerBase.Layers;
 
 // Bound to the GameLogicLayer
 [OwnerLayer(typeof(GameLogicLayer))]
-public class CombatService : IService 
+public partial class CombatService : IService 
 {
+    // Declare dependency via [Mount]
+    // 1. Compile-time: Source generator automatically adds services.AddScoped<DamageManager, DamageManager>()
+    // 2. Runtime: The ServiceProvider automatically injects this field after CombatService is instantiated
+    [Mount] private DamageManager _damageManager;
+
     public void ConfigureServices(IServiceCollection services) 
     { 
-        // Register Managers. The order of registration dictates the priority of event responses within this layer.
-        services.AddScoped<DamageManager, DamageManager>();
+        // No need to manually AddScoped if [Mount] is used
+        // services.AddScoped<DamageManager, DamageManager>();
     }
 }
 ```
@@ -1072,7 +1122,7 @@ Safely and efficiently share memory state between components without establishin
 
 * **Explicit Boundaries**: Instead of implicit enums, use `(Type ownerType, string localKey)` to explicitly specify
   state ownership.
-* **Automatic Lifecycle**: Fields marked `[Public]` are automatically instantiated during `Build()` (supports both
+* **Automatic Lifecycle**: Fields marked `[Provide]` are automatically instantiated during `Build()` (supports both
   reference and value types).
 * **Strict Read-Only**: `[From]` side can only receive read-only projections (e.g., `IReadOnlyList<T>`), forbidding
   writable containers (e.g., `List<T>`), closing logic loopholes.
@@ -1152,3 +1202,4 @@ To achieve O(1) cross-layer bitmap routing, LayerBase internally uses a `ulong` 
 
 * **Physical Limit**: A single instance supports a maximum of **64 Layers**.
 * **Overflow Handling**: Attempting to `Push` a 65th layer will throw an `InvalidOperationException`.
+`.
