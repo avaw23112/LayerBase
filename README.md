@@ -87,9 +87,6 @@ LayerBase 的设计哲学是：**用强约束的框架收编混乱的注册，�
 
 * 虽然由于层级路由与 DI 容器的存在，`CallAsync` 的开销略高于极简的 MessagePipe，但 **1.08 ns** 的单次开销依然意味着在常规业务中它几乎是“免费”的。
 
-* 在多事件且少量订阅者的模型中，我们的SOA架构并未发挥出其独有优势，因此只能做到贴近MessagePipe的性能。
-* 但只要一个事件的订阅者数量超过3，那么SOA带来的稳定性与性能的提升就会披露头角。
-
 ---
 
 ## 📊 直观剖析：我们为什么这么快？
@@ -168,7 +165,7 @@ EventBucket<T>
    ```
 2. **源码引入**：将仓库中的 `LayerBase` 和 `LayerBase.Task` 项目目录直接添加到您的解决方案中并建立引用。
 3. **配置源生成器 (Source Generator)**：
-   框架依赖源生成器以实现零反射的特性自动绑定，请确保在主项目中引入了分析器：
+   框架依赖源生成器以实现在事件分发热路径上的零反射，请确保在主项目中引入了分析器（注：DI 装配与共享字段绑定在 Build 阶段仍使用反射，但通过元数据缓存进行了深度优化）：
    ```xml
    <ItemGroup>
        <ProjectReference Include="LayerBase.Generator\LayerBase.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
@@ -295,6 +292,13 @@ Service 负责将相关的 Manager 注册到 DI 容器中。
 ```csharp
 using LayerBase.DI;
 
+public partial class GameLogicLayer : Layer
+{
+    // 使用 [Mount] 声明Service的挂载顺序,例如OtherService的挂载顺序在CombatService之后，因此无论是update还是事件注册都是CombatService优先。
+    [Mount] private CombatService _combatService;
+    [Mount] private OtherService _combatService;
+}
+
 // 绑定至 GameLogicLayer 层级
 [OwnerLayer(typeof(GameLogicLayer))]
 public partial class CombatService : IService 
@@ -348,12 +352,12 @@ using UnityEngine;
 using LayerBase.Layers;
 using LayerBase.LayerHub;
 
+// 定义层级
+public class InteractionLayer : Layer { }
+public class CoreLogicLayer : Layer { }
+
 public class GameRoot : MonoBehaviour
 {
-    // 定义层级
-    public class InteractionLayer : Layer { }
-    public class CoreLogicLayer : Layer { }
-
     void Awake()
     {
         // 1. 初始化期：构建拓扑
@@ -494,15 +498,15 @@ ServiceLookupResponse resp = await LayerHub.CallAsync<CoreLayer, ServiceLookupRe
 
 解决组件间在不建立显式引用关系的情况下，如何安全、高效地共享内存状态。
 
-* **显式边界**：不再使用枚举推断范围，而是通过 `(Type ownerType, string localKey)` 显式指定状态的归属。
+* **显式边界**：通过 `(Type ownerType, string localKey)` 显式指定状态的归属。
 * **自动生命周期**：标记为 `[Provide]` 的字段在 `Build()` 阶段会自动实例化（支持引用类型 and 值类型）。
-* **强制只读**：`[From]` 端只能接收只读投影（如 `IReadOnlyList<T>`），禁止拿走可写容器（如 `List<T>`），彻底杜绝逻辑后门。
+* **强制只读投影**：`[From]` 端只能接收只读投影（如 `IReadOnlyList<T>`），禁止消费可写容器（如 `List<T>`, `Dictionary<K,V>`, `IList<T>`, `ICollection<T>` 等），彻底杜绝逻辑后门。
 
 ```csharp
 public sealed class InventoryModule : ILayerContext
 {
     // 在 Service 范围内发布一个状态，Key 为 "items"
-    [Public(typeof(InventoryService), "items")]
+    [Provide(typeof(InventoryService), "items")]
     private List<string> _items = new();
 }
 
@@ -514,7 +518,7 @@ public sealed class HudModule : ILayerContext
 }
 
 // 全局作用域请使用 typeof(GlobalScope)
-[Public(typeof(GlobalScope), "config")]
+[Provide(typeof(GlobalScope), "config")]
 private AppConfig _config;
 ```
 
@@ -775,8 +779,7 @@ robustness:
 2. **Source Code Integration**: Add the `LayerBase` and `LayerBase.Task` project directories from the repository
    directly to your solution and reference them.
 3. **Configure Source Generator**:
-   The framework relies on Source Generators to achieve zero-reflection attribute binding. Ensure the analyzer is
-   referenced in your main project:
+   The framework relies on Source Generators to achieve zero-reflection in the event dispatch hot path. Ensure the analyzer is referenced in your main project (Note: DI assembly and shared field binding still utilize reflection during the Build phase, but are heavily optimized via metadata caching):
    ```xml
    <ItemGroup>
        <ProjectReference Include="LayerBase.Generator\LayerBase.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
@@ -912,6 +915,14 @@ Additionally, you can use the `[Mount]` attribute for **declarative dependency i
 using LayerBase.DI;
 using LayerBase.Layers;
 
+public partial class GameLogicLayer : Layer
+{
+    // Use [Mount] to declare the mounting order of Services. 
+    // For example, if OtherService is mounted after CombatService, CombatService will have priority in both Update and Event registration.
+    [Mount] private CombatService _combatService;
+    [Mount] private OtherService _otherService;
+}
+
 // Bound to the GameLogicLayer
 [OwnerLayer(typeof(GameLogicLayer))]
 public partial class CombatService : IService 
@@ -968,12 +979,12 @@ using UnityEngine;
 using LayerBase.Layers;
 using LayerBase.LayerHub;
 
+// Define Layers
+public class InteractionLayer : Layer { }
+public class CoreLogicLayer : Layer { }
+
 public class GameRoot : MonoBehaviour
 {
-    // Define Layers
-    public class InteractionLayer : Layer { }
-    public class CoreLogicLayer : Layer { }
-
     void Awake()
     {
         // 1. Initialization phase: Construct topology
@@ -1120,18 +1131,15 @@ ServiceLookupResponse resp = await LayerHub.CallAsync<CoreLayer, ServiceLookupRe
 
 Safely and efficiently share memory state between components without establishing explicit references.
 
-* **Explicit Boundaries**: Instead of implicit enums, use `(Type ownerType, string localKey)` to explicitly specify
-  state ownership.
-* **Automatic Lifecycle**: Fields marked `[Provide]` are automatically instantiated during `Build()` (supports both
-  reference and value types).
-* **Strict Read-Only**: `[From]` side can only receive read-only projections (e.g., `IReadOnlyList<T>`), forbidding
-  writable containers (e.g., `List<T>`), closing logic loopholes.
+* **Explicit Boundaries**: Use `(Type ownerType, string localKey)` to explicitly specify state ownership.
+* **Automatic Lifecycle**: Fields marked `[Provide]` are automatically instantiated during `Build()` (supports both reference and value types).
+* **Strict Read-Only Projections**: `[From]` side can only receive read-only projections (e.g., `IReadOnlyList<T>`), forbidding writable containers or interfaces (e.g., `List<T>`, `Dictionary<K,V>`, `IList<T>`, `ICollection<T>`), closing logic loopholes.
 
 ```csharp
 public sealed class InventoryModule : ILayerContext
 {
     // Publish state within Service scope with Key "items"
-    [Public(typeof(InventoryService), "items")]
+    [Provide(typeof(InventoryService), "items")]
     private List<string> _items = new();
 }
 
@@ -1143,7 +1151,7 @@ public sealed class HudModule : ILayerContext
 }
 
 // For global scope, use typeof(GlobalScope)
-[Public(typeof(GlobalScope), "config")]
+[Provide(typeof(GlobalScope), "config")]
 private AppConfig _config;
 ```
 
@@ -1158,7 +1166,7 @@ introduces full topology snapshots.
     * **Zombie Event**: Subscribed but never produced.
     * **Unused Producer**: Produced but no subscribers.
     * **Dead Call**: Handler defined but never invoked.
-    * **Orphaned Public**: Key published but never consumed.
+    * **Orphaned Provide**: Key published but never consumed.
 
 ### 8. Roslyn Developer Experience (Diagnostics & Code Fixes)
 
