@@ -111,9 +111,11 @@ EventBus
 ```text
 ✅ LayerBase 零分支分发引擎 (完美的 Cache 亲和性)
 EventBucket<T>
- ├── Delegate[] SyncHandlers  [ ptr | ptr | ptr | ptr ] -> 纯净的连续函数指针，CPU 极速顺序预取
- ├── Delegate[] AsyncHandlers [ ptr | ptr | ptr | ptr ] -> 物理隔离同步与异步，消灭分支判断
- └── Circuit[]  FaultCircuits [ 0 | 0 | 1 | 0 ] -> 仅在抛出异常时才访问，绝不污染热路径
+ ├── Delegate[] NotifyHandlers      -> [SubscribeNotify] 极致性能，无异常捕获
+ ├── Delegate[] SafeNotifyHandlers  -> [Subscribe] 异常隔离，安全通知
+ ├── Delegate[] FlowHandlers        -> [SubscribeFlow] 同步业务流，支持截断
+ ├── Delegate[] AsyncHandlers       -> [SubscribeAsync] 异步逻辑
+ └── Circuit[]  FaultCircuits       -> 仅在抛出异常时才访问，绝不污染热路径
 ```
 
 由于热路径中只剩下紧凑的委托指针，CPU L1/L2 缓存可以实现近乎完美的顺序预取（Prefetching）。
@@ -218,20 +220,23 @@ using LayerBase.Async;
 public partial class DamageManager : ILayerContext
 {
     //  所有Subscribe都保证注册的先后顺序就是它在事件调度中的顺序。
-    // 【同步事件处理】：使用 [Subscribe] 特性
+    // 【安全通知处理】：使用 [Subscribe] 特性 (异常隔离)
     [Subscribe]
-    private EventHandledState OnTakeDamage(in DamageEvent e)
+    private void OnTakeDamage(in DamageEvent e)
     {
-        // 业务逻辑处理
-        
+        // 业务逻辑处理...
         if (e.Amount > 100)
         {
             // 向全局广播事件
             this.Send(new PlayerDeathEvent()); 
         }
-        
-        // 返回 Continue: 允许其他同事件的 Manager 继续处理
-        // 返回 Handled: 截断该事件的后续传播
+    }
+
+    // 【同步业务流处理】：使用 [SubscribeFlow] 特性 (支持截断)
+    [SubscribeFlow]
+    private EventHandledState OnBeforeTakeDamage(in DamageEvent e)
+    {
+        if (e.Amount <= 0) return EventHandledState.Handled; // 截断后续处理
         return EventHandledState.Continue;
     }
 
@@ -279,7 +284,7 @@ public partial class PlayerInputManager : ILayerContext,IUpdate
 
 ```
 
-* 注意事件事件类型的执行顺序：在同一层内 由Notify -> sync -> async.
+* 注意事件事件类型的执行顺序：在同一层内 由 SubscribeNotify -> Subscribe -> SubscribeFlow -> SubscribeAsync.
 * 所有事件都只能保证在同类型的事件中顺序和注册一致，不能保证不同事件类型的事件执行顺序和注册顺序一致.
 
 ### Step 3: 组织业务模块 (Service)
@@ -405,7 +410,7 @@ public partial class PlayerManager : ILayerContext
         // 链式调用：订阅 -> 过滤 -> 处理
         this.OnEvent<DamageEvent>()
             .Where((in DamageEvent e) => e.TargetId == _myEntityId) 
-            .Handle((in DamageEvent e) => 
+            .HandleFlow((in DamageEvent e) => 
             {
                 // 处理受击...
                 return EventHandledState.Handled;
@@ -422,10 +427,9 @@ ThreadPool 在后台异步消化，保障主线程的帧率稳定。
 ```csharp
 // 通过特性快速绑定并行方法
 [SubscribeParallel]
-private EventHandledState OnHeavyComputeTask(in ComputeEvent e)
+private void OnHeavyComputeTask(in ComputeEvent e)
 {
     // 该方法在多线程环境中被安全调度
-    return EventHandledState.Continue;
 }
 ```
 
@@ -560,7 +564,7 @@ LayerBase 采用了高效的 SOA 批量分发引擎。为了保证极致的 CPU 
 
 在一个 Event 类型下，无论注册顺序如何：
 
-* **同步 Handler** 总是会被优先批量执行，并具备截断事件（Handled）的能力。
+* **同步 Handler** 总是会被优先批量执行。其中 `[SubscribeFlow]` 具备截断事件（Handled）的能力，而 `[SubscribeNotify]` 和 `[Subscribe]` 为强制全量分发。
 * **异步 Handler** 只有在所有同步逻辑跑完后，才会统一启动。
 * **结论**：不要依赖同步与异步之间的混合注册顺序。
 
@@ -707,9 +711,11 @@ same event type, transforming them into contiguous native arrays (**SOA Layout**
 ```text
 ✅ LayerBase Branchless Dispatch Engine (Perfect Cache Affinity)
 EventBucket<T>
- ├── Delegate[] SyncHandlers  [ ptr | ptr | ptr | ptr ] -> Pure contiguous function pointers, CPU ultra-fast sequential prefetch
- ├── Delegate[] AsyncHandlers [ ptr | ptr | ptr | ptr ] -> Physically isolated sync & async, eliminating branch checks
- └── Circuit[]  FaultCircuits [ 0 | 0 | 1 | 0 ] -> Accessed ONLY when exceptions are thrown, never polluting the hot path
+ ├── Delegate[] NotifyHandlers      -> [SubscribeNotify] Ultra performance, no exception capture
+ ├── Delegate[] SafeNotifyHandlers  -> [Subscribe] Exception isolation, safe notification
+ ├── Delegate[] FlowHandlers        -> [SubscribeFlow] Synchronous business flow, supports truncation
+ ├── Delegate[] AsyncHandlers       -> [SubscribeAsync] Asynchronous logic
+ └── Circuit[]  FaultCircuits       -> Accessed ONLY when exceptions are thrown, never polluting the hot path
 ```
 
 Since only compact delegate pointers remain in the hot path, the CPU's L1/L2 cache achieves near-perfect sequential
@@ -840,20 +846,23 @@ using LayerBase.Async;
 public partial class DamageManager : ILayerContext
 {
     // All Subscribe registrations preserve registration order as dispatch order.
-    // [Synchronous Event Handling]: using the [Subscribe] attribute
+    // [Safe Notify Handling]: using the [Subscribe] attribute (exception isolation)
     [Subscribe]
-    private EventHandledState OnTakeDamage(in DamageEvent e)
+    private void OnTakeDamage(in DamageEvent e)
     {
         // Business logic handling...
-        
         if (e.Amount > 100)
         {
             // Broadcast event globally
             this.Send(new PlayerDeathEvent()); 
         }
-        
-        // Return Continue: allow other Managers in the same or subsequent layers to process this event
-        // Return Handled: truncate further propagation of this event
+    }
+
+    // [Synchronous Flow Handling]: using the [SubscribeFlow] attribute (supports truncation)
+    [SubscribeFlow]
+    private EventHandledState OnBeforeTakeDamage(in DamageEvent e)
+    {
+        if (e.Amount <= 0) return EventHandledState.Handled; // Truncate further processing
         return EventHandledState.Continue;
     }
 
@@ -893,14 +902,14 @@ public partial class PlayerInputManager : ILayerContext,IUpdate
         {
             if(inputEvent.Value == InputType.Forward)
             {
-                this.Send(new PlayerMoveEvent (){e.delat = new Vector2(0,1)});
+                this.Send(new PlayerMoveEvent { delta = new Vector2(0, 1) });
             }
         }
     }
 }
 ```
 
-* Note the execution order between event kinds inside the same layer: `Notify -> sync -> async`.
+* Note the execution order between event kinds inside the same layer: `SubscribeNotify -> Subscribe -> SubscribeFlow -> SubscribeAsync`.
 * All events only guarantee that order is consistent with registration order within the same event type. They do not
   guarantee execution order across different event types.
 
@@ -1032,7 +1041,7 @@ public partial class PlayerManager : ILayerContext
         // Chainable calls: Subscribe -> Filter -> Handle
         this.OnEvent<DamageEvent>()
             .Where((in DamageEvent e) => e.TargetId == _myEntityId) 
-            .Handle((in DamageEvent e) => 
+            .HandleFlow((in DamageEvent e) => 
             {
                 // Handle damage...
                 return EventHandledState.Handled;
@@ -1051,10 +1060,9 @@ main-thread frame stability.
 ```csharp
 // Quickly bind parallel methods via attribute
 [SubscribeParallel]
-private EventHandledState OnHeavyComputeTask(in ComputeEvent e)
+private void OnHeavyComputeTask(in ComputeEvent e)
 {
     // This method is safely scheduled in a multi-threaded environment
-    return EventHandledState.Continue;
 }
 ```
 
