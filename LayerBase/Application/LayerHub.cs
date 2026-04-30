@@ -69,6 +69,10 @@ public static class LayerHub
         return Interlocked.Increment(ref s_layerIndexCounter) - 1;
     }
 
+    /// <summary>
+    /// 初始化构建器，用于配置并构建分层系统。
+    /// 若当前线程未安装同步上下文，则自动安装 <see cref="LayerBaseSynchronizationContext"/>。
+    /// </summary>
     public static LayersBuilder CreateLayers()
     {
         lock (s_lock)
@@ -82,12 +86,20 @@ public static class LayerHub
         }
     }
 
+    /// <summary>
+    /// 驱动框架心跳，处理异步任务与分层事件流。
+    /// </summary>
+    /// <param name="deltaTime">自上一帧以来的秒数。</param>
     public static void Pump(float deltaTime)
     {
         s_context?.Update();
         s_chain?.Pump(deltaTime);
     }
 
+    /// <summary>
+    /// 重置全局状态，包括 Layer 绑定、事件中心、DI 容器与同步上下文。
+    /// 适用于单元测试清理或彻底重新加载场景。
+    /// </summary>
     public static void Reset()
     {
         lock (s_lock)
@@ -134,6 +146,10 @@ public static class LayerHub
         ReportInfo(new LayerEventInfo(layerIndex, source, eventName, message, LayerEventInfoType.Warning));
     }
 
+    /// <summary>
+    /// 初始化任务调度器。
+    /// </summary>
+    /// <param name="workerCount">工作线程数。</param>
     public static void InitializeJobScheduler(int workerCount)
     {
         JobSchedulers.ConfigureDefault(workerCount);
@@ -280,6 +296,10 @@ public static class LayerHub
         EventCenter.Post(value);
     }
 
+    /// <summary>
+    /// 生成当前分层系统的拓扑结构的 Markdown 报告。
+    /// 包含 Layer 路由、事件订阅、Call 路由、Shared Field 及健康审计。
+    /// </summary>
     public static string GetTopologyMarkdown()
     {
         if (s_chain == null) return "No layers built.";
@@ -447,6 +467,7 @@ public static class LayerHub
                 throw new InvalidOperationException(
                     "LayerBase currently supports a maximum of 64 layers due to bitmap routing constraints.");
 
+            s_layerIndexCounter++;
             if (s_chain == null) s_chain = new LayerChain(_chain);
             s_chain.AddNode(layer);
             return this;

@@ -6,6 +6,9 @@ using LayerBase.Layers;
 
 namespace LayerBase.DI;
 
+/// <summary>
+/// 表示一个分层系统的上下文，用于绑定服务与 Layer。
+/// </summary>
 public interface ILayerContext
 {
 }
@@ -15,11 +18,21 @@ public interface IInternalLayerContext : ILayerContext
     int LayerIndex { get; set; }
 }
 
+/// <summary>
+/// 服务接口，用于配置分层 DI 容器。
+/// </summary>
 public interface IService
 {
+    /// <summary>
+    /// 配置服务集合。
+    /// </summary>
+    /// <param name="services">服务集合。</param>
     void ConfigureServices(IServiceCollection services);
 }
 
+/// <summary>
+/// 服务集合，用于注册和管理 DI 服务。
+/// </summary>
 public interface IServiceCollection
 {
     IServiceCollection Add(ServiceDescriptor           descriptor);
@@ -31,12 +44,25 @@ public interface IServiceCollection
     IReadOnlyList<ServiceDescriptor> ToDescriptors();
 }
 
+/// <summary>
+/// 服务提供器，用于从 Layer 解析服务。
+/// </summary>
 public interface IServiceProvider
 {
+    /// <summary>
+    /// 获取指定类型的服务实例。
+    /// </summary>
     object? GetService(Type serviceType);
+    
+    /// <summary>
+    /// 获取指定类型的服务实例。
+    /// </summary>
     T Get<T>();
 }
 
+/// <summary>
+/// 表示事件之间的依赖关系。
+/// </summary>
 public readonly struct EventDependency
 {
     public readonly Type Source;
@@ -49,6 +75,9 @@ public readonly struct EventDependency
     }
 }
 
+/// <summary>
+/// 支持自动订阅的接口，通过此接口可以自动绑定事件与处理逻辑。
+/// </summary>
 public interface IAutoSubscribe
 {
     void AutoBind(Layer layer);

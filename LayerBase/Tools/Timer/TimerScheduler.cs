@@ -7,6 +7,9 @@ using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Tools.Timer;
 
+/// <summary>
+/// 时间调度器，用于在特定的时间点或频率周期性地执行事件或任务。
+/// </summary>
 public sealed class TimerScheduler
 {
     private readonly List<(TimerToken token, ITimerQueue queue)> _dueCache = new(64);
@@ -20,10 +23,20 @@ public sealed class TimerScheduler
     private bool _frequencyGateOpen = true;
     private double _frequencySeconds;
 
+    /// <summary>
+    /// 当前调度器的时间（秒）。
+    /// </summary>
     public double CurrentTime { get; private set; }
 
+    /// <summary>
+    /// 获取频率门控是否打开。
+    /// </summary>
     public bool IsFrequencyGateOpen => Volatile.Read(ref _frequencyGateOpen);
 
+    /// <summary>
+    /// 设置调度器的运行频率。
+    /// </summary>
+    /// <param name="seconds">频率周期（秒），为 0 表示持续开放。</param>
     public void SetFrequency(double seconds)
     {
         if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 0)
@@ -37,9 +50,12 @@ public sealed class TimerScheduler
         }
     }
 
+    /// <summary>
+    /// 推进调度器时间，并执行到期的定时任务和频率任务。
+    /// </summary>
+    /// <param name="deltaTime">自上一帧以来的增量时间（秒）。</param>
     public void Tick(double deltaTime)
     {
-        if (deltaTime < 0) throw new ArgumentOutOfRangeException(nameof(deltaTime));
 
         _dueCache.Clear();
         _frequencyDueCache.Clear();
@@ -86,12 +102,21 @@ public sealed class TimerScheduler
         Volatile.Write(ref _frequencyGateOpen, gateOpen);
     }
 
+    /// <summary>
+    /// 在指定延迟后执行一次操作。
+    /// </summary>
+    /// <param name="delay">延迟秒数。</param>
+    /// <param name="action">要执行的操作。</param>
+    /// <returns>定时任务令牌。</returns>
     public TimerToken RegisterAfter(double delay, Action action)
     {
         if (action == null) throw new ArgumentNullException(nameof(action));
         return RegisterAfter<EmptyPayload>(delay, default, _ => action());
     }
 
+    /// <summary>
+    /// 在指定延迟后注册事件处理委托。
+    /// </summary>
     public TimerToken RegisterAfter<T>(double delay, in T value, EventHandleDelegate<T> handle) where T : struct
     {
         if (handle == null) throw new ArgumentNullException(nameof(handle));

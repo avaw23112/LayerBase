@@ -27,6 +27,9 @@ public sealed class OwnerLayerAttribute : Attribute
     public Type LayerType { get; }
 }
 
+/// <summary>
+/// 逻辑分层（Layer）的基类。Layer 是事件路由、服务管理和逻辑执行的基本单元。
+/// </summary>
 public abstract class Layer : Node, IDisposable
 {
     public readonly List<(Type Req, Type Resp, Type Handler)> CallHandlers = new();
@@ -66,6 +69,9 @@ public abstract class Layer : Node, IDisposable
         ServiceLayerBinder.Attach(this, this);
     }
 
+    /// <summary>
+    /// 获取 Layer 的路由索引。
+    /// </summary>
     public int RouteIndex { get; private set; } = -1;
     public List<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = new();
 
@@ -73,6 +79,9 @@ public abstract class Layer : Node, IDisposable
     public virtual bool HasActiveLogic =>
         m_serviceUpdates.Count > 0 || m_delayUpdaters.Count > 0;
 
+    /// <summary>
+    /// 释放 Layer 资源。
+    /// </summary>
     public void Dispose()
     {
         if (m_disposed) return;
@@ -87,10 +96,18 @@ public abstract class Layer : Node, IDisposable
         m_serviceProvider = null;
     }
 
+    /// <summary>
+    /// 配置 Layer 专属的服务容器。
+    /// </summary>
+    /// <param name="services">服务集合。</param>
     public virtual void ConfigureServices(IServiceCollection services)
     {
     }
 
+    /// <summary>
+    /// 手动注册一个服务到当前 Layer。
+    /// </summary>
+    /// <param name="service">要注册的服务实例。</param>
     public void RegisterService(IService service)
     {
         if (service == null) throw new ArgumentNullException(nameof(service));
@@ -108,6 +125,11 @@ public abstract class Layer : Node, IDisposable
         m_manualServices.Add(registration);
     }
 
+    /// <summary>
+    /// 从当前 Layer 解析服务实例。
+    /// </summary>
+    /// <typeparam name="T">服务类型。</typeparam>
+    /// <returns>服务实例。</returns>
     public T GetService<T>() where T : class
     {
         return m_serviceProvider?.Get<T>() ?? throw new InvalidOperationException("Layer not built.");

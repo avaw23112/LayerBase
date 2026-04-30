@@ -17,6 +17,9 @@ public enum Propagation
     Global
 }
 
+/// <summary>
+/// 全局事件中心，负责事件的路由、派发及分层事件队列的管理。
+/// </summary>
 public sealed class GlobalEventCenter
 {
     private readonly ConcurrentDictionary<int, Action> _bucketCacheResetters = new();
@@ -27,12 +30,20 @@ public sealed class GlobalEventCenter
     private string[] _layerNames = Array.Empty<string>();
     private IEventQueue[] _layerSlots = Array.Empty<IEventQueue>();
 
+    /// <summary>
+    /// 获取当前挂起的事件掩码。
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ulong GetEventPendingMask()
     {
         return (ulong)Volatile.Read(ref _eventPendingMask);
     }
 
+    /// <summary>
+    /// 确保事件队列槽位已初始化。
+    /// </summary>
+    /// <param name="count">需要的槽位数量。</param>
+    /// <param name="name">Layer 名称。</param>
     internal void EnsureSlots(int count, string name)
     {
         if (_layerSlots.Length < count || (count > 0 && _layerNames.Length < count))
@@ -132,6 +143,10 @@ public sealed class GlobalEventCenter
         GetBucket<T>().Remove(layerIndex, handleDelegate);
     }
 
+    /// <summary>
+    /// 派发同步事件。
+    /// </summary>
+    /// <param name="value">事件数据。</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal EventHandledState Send<T>(in T value) where T : struct
     {
@@ -141,6 +156,9 @@ public sealed class GlobalEventCenter
         return GetBucket<T>().Dispatch(in value);
     }
 
+    /// <summary>
+    /// 在特定 Layer 范围内派发事件。
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal EventHandledState SendLocal<T>(int layerIndex, in T value) where T : struct
     {
@@ -150,6 +168,9 @@ public sealed class GlobalEventCenter
         return GetBucket<T>().DispatchLocal(layerIndex, in value);
     }
 
+    /// <summary>
+    /// 异步投递事件，通常用于跨帧处理。
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Post<T>(in T value) where T : struct
     {
@@ -164,6 +185,9 @@ public sealed class GlobalEventCenter
         GetBucket<T>().Post(in value);
     }
 
+    /// <summary>
+    /// 在特定 Layer 范围内异步投递事件。
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void PostLocal<T>(int layerIndex, in T value) where T : struct
     {
