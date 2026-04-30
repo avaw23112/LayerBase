@@ -108,6 +108,34 @@ public class TimerSchedulerTests
         Assert.That(log, Does.Contain("after:2"));
     }
 
+    [Test]
+    public void Reentrant_tick_is_reported_without_corrupting_due_cache()
+    {
+        LayerHub.Reset();
+        var scheduler = new TimerScheduler();
+        var log = new List<string>();
+        var errors = new List<LayerEventInfo>();
+        Action<LayerEventInfo> handler = info =>
+        {
+            if (info.Type == LayerEventInfoType.Error) errors.Add(info);
+        };
+
+        LayerHub.OnLayerEventInfo += handler;
+        try
+        {
+            scheduler.RegisterAfter(0, new TimerPayload { Id = 1 }, _ => scheduler.Tick(0));
+            scheduler.RegisterAfter(0, new TimerPayload { Id = 2 }, e => log.Add($"after:{e.Value.Id}"));
+
+            Assert.DoesNotThrow(() => scheduler.Tick(0));
+            Assert.That(log, Is.EqualTo(new[] { "after:2" }));
+            Assert.That(errors.Any(e => e.Exception is InvalidOperationException), Is.True);
+        }
+        finally
+        {
+            LayerHub.OnLayerEventInfo -= handler;
+        }
+    }
+
     public struct TimerPayload
     {
         public int Id { get; set; }

@@ -48,4 +48,29 @@ public class LBTaskExtensionTests
 
         Assert.ThrowsAsync<TimeoutException>(async () => await task);
     }
+
+    [Test]
+    public void Delay_observes_cancellation_after_scheduling()
+    {
+        using var cts = new CancellationTokenSource();
+        var task = LBTask.Delay(TimeSpan.FromSeconds(30), cts.Token);
+
+        cts.Cancel();
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () => await task);
+    }
+
+    [Test]
+    public void Disposing_completion_source_does_not_recycle_pending_source_before_task_observes_completion()
+    {
+        var tcs = new LBTaskCompletionSource<int>();
+        var task = tcs.Task;
+
+        tcs.Dispose();
+
+        var next = new LBTaskCompletionSource<int>();
+        next.SetResult(123);
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () => await task);
+    }
 }

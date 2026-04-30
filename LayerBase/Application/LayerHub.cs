@@ -470,6 +470,7 @@ public static class LayerHub
     {
         private readonly ResponsibilityChain _chain = new(new RcOwnerToken());
         private bool _debugMode;
+        private LayerChain? _layerChain;
         private int _pendingLayerCount;
 
         public LayersBuilder Push(Layer layer)
@@ -479,8 +480,18 @@ public static class LayerHub
                     "LayerBase currently supports a maximum of 64 layers due to bitmap routing constraints.");
 
             _pendingLayerCount++;
-            if (s_chain == null) s_chain = new LayerChain(_chain);
-            s_chain.AddNode(layer);
+            if (_layerChain == null)
+                lock (s_lock)
+                {
+                    if (s_chain != null)
+                        throw new InvalidOperationException(
+                            "A LayerBase layer chain already exists. Call LayerHub.Reset() before creating another chain.");
+
+                    _layerChain = new LayerChain(_chain);
+                    s_chain = _layerChain;
+                }
+
+            _layerChain.AddNode(layer);
             return this;
         }
 
@@ -499,8 +510,8 @@ public static class LayerHub
 
         public void Build()
         {
-            if (s_chain == null) throw new InvalidOperationException("No layers added.");
-            s_chain.Build(1024, true);
+            if (_layerChain == null) throw new InvalidOperationException("No layers added.");
+            _layerChain.Build(1024, true);
             if (_debugMode)
             {
                 ReportTopology();
@@ -511,8 +522,8 @@ public static class LayerHub
 
         private void ReportTopology()
         {
-            if (s_chain == null) return;
-            var summary = s_chain.GetTopologySummary();
+            if (_layerChain == null) return;
+            var summary = _layerChain.GetTopologySummary();
             ReportInfo(new LayerEventInfo(-1, "System", "Topology", summary, LayerEventInfoType.Info));
         }
     }

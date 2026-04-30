@@ -22,6 +22,7 @@ public sealed class TimerScheduler
     private double _frequencyAccumulator;
     private bool _frequencyGateOpen = true;
     private double _frequencySeconds;
+    private int _isTicking;
 
     /// <summary>
     /// 当前调度器的时间（秒）。
@@ -56,50 +57,59 @@ public sealed class TimerScheduler
     /// <param name="deltaTime">自上一帧以来的增量时间（秒）。</param>
     public void Tick(double deltaTime)
     {
+        if (Interlocked.Exchange(ref _isTicking, 1) != 0)
+            throw new InvalidOperationException("TimerScheduler.Tick is not reentrant.");
 
-        _dueCache.Clear();
-        _frequencyDueCache.Clear();
-        bool gateOpen;
-        var frequencyTriggered = false;
-
-        lock (_lock)
+        try
         {
-            gateOpen = _frequencySeconds == 0;
-            CurrentTime += deltaTime;
-            if (_frequencySeconds > 0)
+            _dueCache.Clear();
+            _frequencyDueCache.Clear();
+            bool gateOpen;
+            var frequencyTriggered = false;
+
+            lock (_lock)
             {
-                _frequencyAccumulator += deltaTime;
-                if (_frequencyAccumulator >= _frequencySeconds)
+                gateOpen = _frequencySeconds == 0;
+                CurrentTime += deltaTime;
+                if (_frequencySeconds > 0)
                 {
-                    gateOpen = true;
-                    frequencyTriggered = true;
-                    while (_frequencyAccumulator >= _frequencySeconds) _frequencyAccumulator -= _frequencySeconds;
+                    _frequencyAccumulator += deltaTime;
+                    if (_frequencyAccumulator >= _frequencySeconds)
+                    {
+                        gateOpen = true;
+                        frequencyTriggered = true;
+                        while (_frequencyAccumulator >= _frequencySeconds) _frequencyAccumulator -= _frequencySeconds;
+                    }
                 }
+
+                while (_timeline.TryPeek(out var token, out var dueTime) && dueTime <= CurrentTime)
+                    if (_timeline.TryDequeue(out token, out _))
+                        if (_queues.TryGetValue(token.TypeId, out var queue))
+                            _dueCache.Add((token, queue));
+
+                if (frequencyTriggered)
+                    foreach (var fq in _frequencyQueues.Values)
+                        _frequencyDueCache.Add(fq);
             }
 
-            while (_timeline.TryPeek(out var token, out var dueTime) && dueTime <= CurrentTime)
-                if (_timeline.TryDequeue(out token, out _))
-                    if (_queues.TryGetValue(token.TypeId, out var queue))
-                        _dueCache.Add((token, queue));
+
+            for (var i = 0; i < _dueCache.Count; i++)
+            {
+                var (token, queue) = _dueCache[i];
+                queue.TryInvoke(token);
+            }
+
 
             if (frequencyTriggered)
-                foreach (var fq in _frequencyQueues.Values)
-                    _frequencyDueCache.Add(fq);
+                for (var i = 0; i < _frequencyDueCache.Count; i++)
+                    _frequencyDueCache[i].ExecuteAll();
+
+            Volatile.Write(ref _frequencyGateOpen, gateOpen);
         }
-
-
-        for (var i = 0; i < _dueCache.Count; i++)
+        finally
         {
-            var (token, queue) = _dueCache[i];
-            queue.TryInvoke(token);
+            Volatile.Write(ref _isTicking, 0);
         }
-
-
-        if (frequencyTriggered)
-            for (var i = 0; i < _frequencyDueCache.Count; i++)
-                _frequencyDueCache[i].ExecuteAll();
-
-        Volatile.Write(ref _frequencyGateOpen, gateOpen);
     }
 
     /// <summary>

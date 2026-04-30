@@ -55,7 +55,7 @@ public abstract class Layer : Node, IDisposable
 
     private object?[] m_callRouteInvokers = Array.Empty<object?>();
     private bool m_collectingGeneratedServices;
-    private bool m_disposed;
+    private int m_disposed;
     private int m_nextServiceScopeId;
 
     private ConcurrentQueue<Action<Layer>> m_pendingOps = new();
@@ -84,8 +84,7 @@ public abstract class Layer : Node, IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (m_disposed) return;
-        m_disposed = true;
+        if (Interlocked.Exchange(ref m_disposed, 1) != 0) return;
         lock (m_subscriptions)
         {
             foreach (var sub in m_subscriptions) sub.Dispose();
@@ -271,7 +270,7 @@ public abstract class Layer : Node, IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (m_disposed) throw new ObjectDisposedException(nameof(Layer));
+        if (Volatile.Read(ref m_disposed) != 0) throw new ObjectDisposedException(nameof(Layer));
     }
 
     public void SubscribeFlow<T>(EventHandleDelegate<T> handler) where T : struct
@@ -367,12 +366,20 @@ public abstract class Layer : Node, IDisposable
 
     public IDelayPublisher<T> SubscribeDelay<T>() where T : struct
     {
-        return (IDelayPublisher<T>)m_delayPublishers.GetOrAdd(typeof(T), _ =>
+        var type = typeof(T);
+        if (m_delayPublishers.TryGetValue(type, out var existing)) return (IDelayPublisher<T>)existing;
+
+        var publisher = new DelayPublisher<T>(this);
+        var actual = m_delayPublishers.GetOrAdd(type, publisher);
+        if (ReferenceEquals(actual, publisher))
         {
-            var dp = new DelayPublisher<T>(this);
-            m_delayUpdaters.Add(dp);
-            return dp;
-        });
+            lock (m_delayUpdaters)
+            {
+                m_delayUpdaters.Add(publisher);
+            }
+        }
+
+        return (IDelayPublisher<T>)actual;
     }
 
     protected internal void RegisterCallHandler<TRequest, TResponse>(ILayerCallHandler<TRequest, TResponse> handler)
@@ -441,7 +448,7 @@ public abstract class Layer : Node, IDisposable
         where TRequest : struct
         where TResponse : struct
     {
-        if (m_disposed) ThrowDisposed();
+        if (Volatile.Read(ref m_disposed) != 0) ThrowDisposed();
         if (cancellationToken.IsCancellationRequested) return LBTask<TResponse>.FromCanceled(cancellationToken);
 
         var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
@@ -520,15 +527,17 @@ public abstract class Layer : Node, IDisposable
     private sealed class UnsubscribeFlowToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeFlowToken<T>> Pool = new();
-        private GlobalEventCenter _center;
-        private EventHandleDelegate<T> _handler;
+        private GlobalEventCenter? _center;
+        private EventHandleDelegate<T>? _handler;
+        private int _disposed;
         private int _layerIndex;
 
         public void Dispose()
         {
-            _center.UnsubscribeFlow(_layerIndex, _handler);
-            _center = null!;
-            _handler = null!;
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            _center?.UnsubscribeFlow(_layerIndex, _handler!);
+            _center = null;
+            _handler = null;
             Pool.Add(this);
         }
 
@@ -538,6 +547,7 @@ public abstract class Layer : Node, IDisposable
             t._center = c;
             t._layerIndex = l;
             t._handler = h;
+            t._disposed = 0;
             return t;
         }
     }
@@ -545,15 +555,17 @@ public abstract class Layer : Node, IDisposable
     private sealed class UnsubscribeDelegateAsyncToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeDelegateAsyncToken<T>> Pool = new();
-        private GlobalEventCenter _center;
-        private EventHandleDelegateAsync<T> _handler;
+        private GlobalEventCenter? _center;
+        private EventHandleDelegateAsync<T>? _handler;
+        private int _disposed;
         private int _layerIndex;
 
         public void Dispose()
         {
-            _center.UnsubscribeAsync(_layerIndex, _handler);
-            _center = null!;
-            _handler = null!;
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            _center?.UnsubscribeAsync(_layerIndex, _handler!);
+            _center = null;
+            _handler = null;
             Pool.Add(this);
         }
 
@@ -563,6 +575,7 @@ public abstract class Layer : Node, IDisposable
             t._center = c;
             t._layerIndex = l;
             t._handler = h;
+            t._disposed = 0;
             return t;
         }
     }
@@ -570,15 +583,17 @@ public abstract class Layer : Node, IDisposable
     private sealed class UnsubscribeNotifyToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeNotifyToken<T>> Pool = new();
-        private GlobalEventCenter _center;
-        private EventNotifyDelegate<T> _handler;
+        private GlobalEventCenter? _center;
+        private EventNotifyDelegate<T>? _handler;
+        private int _disposed;
         private int _layerIndex;
 
         public void Dispose()
         {
-            _center.UnsubscribeNotify(_layerIndex, _handler);
-            _center = null!;
-            _handler = null!;
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            _center?.UnsubscribeNotify(_layerIndex, _handler!);
+            _center = null;
+            _handler = null;
             Pool.Add(this);
         }
 
@@ -588,6 +603,7 @@ public abstract class Layer : Node, IDisposable
             t._center = c;
             t._layerIndex = l;
             t._handler = h;
+            t._disposed = 0;
             return t;
         }
     }
@@ -595,15 +611,17 @@ public abstract class Layer : Node, IDisposable
     private sealed class UnsubscribeToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeToken<T>> Pool = new();
-        private GlobalEventCenter _center;
-        private EventNotifyDelegate<T> _handler;
+        private GlobalEventCenter? _center;
+        private EventNotifyDelegate<T>? _handler;
+        private int _disposed;
         private int _layerIndex;
 
         public void Dispose()
         {
-            _center.Unsubscribe(_layerIndex, _handler);
-            _center = null!;
-            _handler = null!;
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            _center?.Unsubscribe(_layerIndex, _handler!);
+            _center = null;
+            _handler = null;
             Pool.Add(this);
         }
 
@@ -613,6 +631,7 @@ public abstract class Layer : Node, IDisposable
             t._center = c;
             t._layerIndex = l;
             t._handler = h;
+            t._disposed = 0;
             return t;
         }
     }
@@ -620,15 +639,17 @@ public abstract class Layer : Node, IDisposable
     private sealed class UnsubscribeParallelToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeParallelToken<T>> Pool = new();
-        private GlobalEventCenter _center;
-        private EventNotifyDelegate<T> _handler;
+        private GlobalEventCenter? _center;
+        private EventNotifyDelegate<T>? _handler;
+        private int _disposed;
         private int _layerIndex;
 
         public void Dispose()
         {
-            _center.UnsubscribeParallel(_layerIndex, _handler);
-            _center = null!;
-            _handler = null!;
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            _center?.UnsubscribeParallel(_layerIndex, _handler!);
+            _center = null;
+            _handler = null;
             Pool.Add(this);
         }
 
@@ -638,6 +659,7 @@ public abstract class Layer : Node, IDisposable
             t._center = c;
             t._layerIndex = l;
             t._handler = h;
+            t._disposed = 0;
             return t;
         }
     }

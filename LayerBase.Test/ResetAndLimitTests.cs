@@ -53,6 +53,16 @@ public class ResetAndLimitTests
             "Should throw exception when exceeding 64 layers");
     }
 
+    [Test]
+    public void CreateLayers_requires_reset_before_starting_a_second_chain()
+    {
+        LayerHub.CreateLayers().Push(new TestLayer()).Build();
+
+        var nextBuilder = LayerHub.CreateLayers();
+
+        Assert.Throws<InvalidOperationException>(() => nextBuilder.Push(new TestLayer()));
+    }
+
     private class TestLayer : Layer
     {
     }

@@ -16,12 +16,6 @@ public sealed class LBTaskCompletionSource : IDisposable
     public void Dispose()
     {
         DisposeInternal();
-        GC.SuppressFinalize(this);
-    }
-
-    ~LBTaskCompletionSource()
-    {
-        DisposeInternal();
     }
 
     public void SetResult()
@@ -81,8 +75,8 @@ public sealed class LBTaskCompletionSource : IDisposable
     private void DisposeInternal()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            // 濡傛灉浠诲姟浠庢湭瀹屾垚锛屽己鍒跺綊杩?Source 鍒版睜涓?
-            _source.TryRelease();
+            if (!_source.IsCompleted)
+                _source.SetCanceled(default);
     }
 }
 
@@ -100,12 +94,6 @@ public sealed class LBTaskCompletionSource<T> : IDisposable
     public LBTask<T> Task => new(_source);
 
     public void Dispose()
-    {
-        DisposeInternal();
-        GC.SuppressFinalize(this);
-    }
-
-    ~LBTaskCompletionSource()
     {
         DisposeInternal();
     }
@@ -166,7 +154,9 @@ public sealed class LBTaskCompletionSource<T> : IDisposable
 
     private void DisposeInternal()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0) _source.TryRelease();
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            if (!_source.IsCompleted)
+                _source.SetCanceled(default);
     }
 }
 

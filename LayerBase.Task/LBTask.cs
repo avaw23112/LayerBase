@@ -65,6 +65,7 @@ public readonly struct LBTask
         var src = ArchTaskSource.Rent();
         var work = DelayWorkItem.Rent(src, token);
         DelayScheduler.Schedule(work, delay);
+        work.RegisterCancellation();
         return new LBTask(src);
     }
 
@@ -97,6 +98,8 @@ public readonly struct LBTask
 
         private int _completed;
         private long _dueTimestamp;
+        private int _registrationInitializing;
+        private int _returnPending;
         private ArchTaskSource? _source;
         private CancellationToken _token;
 
@@ -115,8 +118,34 @@ public readonly struct LBTask
             work._token = token;
             work._dueTimestamp = 0;
             work._completed = 0;
+            work._registrationInitializing = 0;
+            work._returnPending = 0;
             work.CancellationRegistration = default;
             return work;
+        }
+
+        public void RegisterCancellation()
+        {
+            if (!_token.CanBeCanceled) return;
+
+            Volatile.Write(ref _registrationInitializing, 1);
+            var registration = _token.Register(static state => ((DelayWorkItem)state!).TryCancel(), this);
+            CancellationRegistration = registration;
+            Volatile.Write(ref _registrationInitializing, 0);
+
+            if (Volatile.Read(ref _completed) != 0)
+            {
+                registration.Dispose();
+                CancellationRegistration = default;
+            }
+
+            if (Interlocked.Exchange(ref _returnPending, 0) == 1) ReturnToPool();
+        }
+
+        private void TryCancel()
+        {
+            DelayScheduler.Cancel(this);
+            TryComplete(true);
         }
 
         private void TryComplete(bool canceled)
@@ -133,12 +162,22 @@ public readonly struct LBTask
             }
             finally
             {
-                _source = null;
-                _token = default;
-                _dueTimestamp = 0;
-                CancellationRegistration = default;
-                Pool.Return(this);
+                if (Volatile.Read(ref _registrationInitializing) == 1)
+                    Volatile.Write(ref _returnPending, 1);
+                else
+                    ReturnToPool();
             }
+        }
+
+        private void ReturnToPool()
+        {
+            _source = null;
+            _token = default;
+            _dueTimestamp = 0;
+            _registrationInitializing = 0;
+            _returnPending = 0;
+            CancellationRegistration = default;
+            Pool.Return(this);
         }
     }
 
@@ -158,6 +197,24 @@ public readonly struct LBTask
                 HeapPush(work);
                 if (ReferenceEquals(s_heap[0], work)) ArmTimer(due);
             }
+        }
+
+        public static bool Cancel(DelayWorkItem work)
+        {
+            lock (s_lock)
+            {
+                for (var i = 0; i < s_heap.Count; i++)
+                {
+                    if (!ReferenceEquals(s_heap[i], work)) continue;
+
+                    HeapRemoveAt(i);
+                    if (s_heap.Count > 0) ArmTimer(s_heap[0].DueTimestamp);
+                    else s_timer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void OnTimer(object? state)
@@ -258,6 +315,55 @@ public readonly struct LBTask
 
             s_heap[index] = last;
             return root;
+        }
+
+        private static void HeapRemoveAt(int removeIndex)
+        {
+            var lastIndex = s_heap.Count - 1;
+            if (removeIndex == lastIndex)
+            {
+                s_heap.RemoveAt(lastIndex);
+                return;
+            }
+
+            var replacement = s_heap[lastIndex];
+            s_heap.RemoveAt(lastIndex);
+            s_heap[removeIndex] = replacement;
+
+            var index = removeIndex;
+            while (index > 0)
+            {
+                var parent = (index - 1) >> 1;
+                if (s_heap[parent].DueTimestamp <= replacement.DueTimestamp) break;
+
+                s_heap[index] = s_heap[parent];
+                index = parent;
+            }
+
+            if (index != removeIndex)
+            {
+                s_heap[index] = replacement;
+                return;
+            }
+
+            while (true)
+            {
+                var left = (index << 1) + 1;
+                if (left >= s_heap.Count) break;
+
+                var right = left + 1;
+                var child = right < s_heap.Count &&
+                            s_heap[right].DueTimestamp < s_heap[left].DueTimestamp
+                    ? right
+                    : left;
+
+                if (s_heap[child].DueTimestamp >= replacement.DueTimestamp) break;
+
+                s_heap[index] = s_heap[child];
+                index = child;
+            }
+
+            s_heap[index] = replacement;
         }
     }
 
