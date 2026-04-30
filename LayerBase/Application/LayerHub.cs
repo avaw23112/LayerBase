@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Collections.Concurrent;
 using System.Text;
 using LayerBase.Async;
 using LayerBase.Call;
@@ -51,6 +52,7 @@ public static class LayerHub
     private static int s_layerIndexCounter;
     private static int s_layerTypeBindingsVersion;
     private static readonly Dictionary<Type, LayerTypeBinding> s_layerTypeBindings = new();
+    private static readonly ConcurrentBag<Action> s_cacheResetters = new();
     private static readonly object s_lock = new();
 
     public static GlobalEventCenter EventCenter { get; internal set; } = new();
@@ -104,10 +106,13 @@ public static class LayerHub
     {
         lock (s_lock)
         {
+            var oldChain = s_chain;
             s_chain = null;
             s_layerIndexCounter = 0;
             s_layerTypeBindings.Clear();
             InvalidateLayerTargetCaches();
+            oldChain?.DisposeLayers();
+            foreach (var resetter in s_cacheResetters) resetter();
             EventCenter.Reset();
             ServiceProvider.ResetRoot();
             ServiceLayerBinder.Reset();
@@ -456,18 +461,24 @@ public static class LayerHub
         Interlocked.Increment(ref s_layerTypeBindingsVersion);
     }
 
+    private static void RegisterCacheResetter(Action resetter)
+    {
+        s_cacheResetters.Add(resetter);
+    }
+
     public sealed class LayersBuilder
     {
         private readonly ResponsibilityChain _chain = new(new RcOwnerToken());
         private bool _debugMode;
+        private int _pendingLayerCount;
 
         public LayersBuilder Push(Layer layer)
         {
-            if (s_layerIndexCounter >= 64)
+            if (Volatile.Read(ref s_layerIndexCounter) + _pendingLayerCount >= 64)
                 throw new InvalidOperationException(
                     "LayerBase currently supports a maximum of 64 layers due to bitmap routing constraints.");
 
-            s_layerIndexCounter++;
+            _pendingLayerCount++;
             if (s_chain == null) s_chain = new LayerChain(_chain);
             s_chain.AddNode(layer);
             return this;
@@ -545,6 +556,18 @@ public static class LayerHub
         public static int Version = -1;
         public static LayerCallInvoker<TRequest, TResponse>? Invoker;
         public static Exception? Error;
+
+        static LayerCallCache()
+        {
+            RegisterCacheResetter(Reset);
+        }
+
+        private static void Reset()
+        {
+            Invoker = null;
+            Error = null;
+            Volatile.Write(ref Version, -1);
+        }
     }
 
     private readonly struct LayerTypeBinding
@@ -583,5 +606,17 @@ public static class LayerHub
         public static int Version = -1;
         public static TLayer? Layer;
         public static LayerTargetState State;
+
+        static LayerTargetCache()
+        {
+            RegisterCacheResetter(Reset);
+        }
+
+        private static void Reset()
+        {
+            Layer = null;
+            State = LayerTargetState.Unknown;
+            Volatile.Write(ref Version, -1);
+        }
     }
 }

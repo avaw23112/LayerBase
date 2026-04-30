@@ -27,6 +27,13 @@ internal sealed class LayerChain
         responsibilityChain.AddLast(node);
     }
 
+    internal void DisposeLayers()
+    {
+        foreach (var node in responsibilityChain)
+            if (node is Layer layer)
+                layer.Dispose();
+    }
+
     internal void Build(int eventStateSlabSize, bool releaseMode)
     {
         AssignEventBus();

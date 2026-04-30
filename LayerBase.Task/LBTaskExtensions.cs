@@ -7,38 +7,30 @@ public static class LBTaskExtensions
         if (cancellationToken.IsCancellationRequested) return LBTask.FromCanceled(cancellationToken);
 
         var tcs = new LBTaskCompletionSource();
-        Timer? timer = null;
-        CancellationTokenRegistration registration = default;
+        var resultTask = tcs.Task;
+        var state = new CompletionState(tcs, cancellationToken);
 
-        timer = new Timer(_ => { tcs.TrySetException(new TimeoutException()); }, null, timeout,
-            Timeout.InfiniteTimeSpan);
+        state.SetTimer(new Timer(static s => ((CompletionState)s!).TrySetException(new TimeoutException()), state,
+            timeout, Timeout.InfiniteTimeSpan));
 
         if (cancellationToken.CanBeCanceled)
-            registration = cancellationToken.Register(() =>
-            {
-                tcs.TrySetCanceled(cancellationToken);
-                timer?.Dispose();
-            });
+            state.SetRegistration(cancellationToken.Register(static s => ((CompletionState)s!).TrySetCanceled(),
+                state));
 
         task.GetAwaiter().OnCompleted(() =>
         {
             try
             {
                 task.GetAwaiter().GetResult();
-                tcs.TrySetResult();
+                state.TrySetResult();
             }
             catch (Exception ex)
             {
-                tcs.TrySetException(ex);
-            }
-            finally
-            {
-                timer.Dispose();
-                registration.Dispose();
+                state.TrySetException(ex);
             }
         });
 
-        return tcs.Task;
+        return resultTask;
     }
 
     public static LBTask<T> WithTimeout<T>(this LBTask<T>    task, TimeSpan timeout,
@@ -47,38 +39,30 @@ public static class LBTaskExtensions
         if (cancellationToken.IsCancellationRequested) return LBTask<T>.FromCanceled(cancellationToken);
 
         var tcs = new LBTaskCompletionSource<T>();
-        Timer? timer = null;
-        CancellationTokenRegistration registration = default;
+        var resultTask = tcs.Task;
+        var state = new CompletionState<T>(tcs, cancellationToken);
 
-        timer = new Timer(_ => { tcs.TrySetException(new TimeoutException()); }, null, timeout,
-            Timeout.InfiniteTimeSpan);
+        state.SetTimer(new Timer(static s => ((CompletionState<T>)s!).TrySetException(new TimeoutException()), state,
+            timeout, Timeout.InfiniteTimeSpan));
 
         if (cancellationToken.CanBeCanceled)
-            registration = cancellationToken.Register(() =>
-            {
-                tcs.TrySetCanceled(cancellationToken);
-                timer?.Dispose();
-            });
+            state.SetRegistration(cancellationToken.Register(static s => ((CompletionState<T>)s!).TrySetCanceled(),
+                state));
 
         task.GetAwaiter().OnCompleted(() =>
         {
             try
             {
                 var res = task.GetAwaiter().GetResult();
-                tcs.TrySetResult(res);
+                state.TrySetResult(res);
             }
             catch (Exception ex)
             {
-                tcs.TrySetException(ex);
-            }
-            finally
-            {
-                timer.Dispose();
-                registration.Dispose();
+                state.TrySetException(ex);
             }
         });
 
-        return tcs.Task;
+        return resultTask;
     }
 
     public static LBTask<(bool isCanceled, T result)> SuppressCancellationThrow<T>(this LBTask<T> task)
@@ -254,27 +238,29 @@ public static class LBTaskExtensions
         if (!token.CanBeCanceled) return task;
 
         var tcs = new LBTaskCompletionSource<T>();
+        var resultTask = tcs.Task;
         if (token.IsCancellationRequested)
         {
             tcs.TrySetCanceled(token);
-            return tcs.Task;
+            return resultTask;
         }
 
-        token.Register(() => tcs.TrySetCanceled(token));
+        var state = new CompletionState<T>(tcs, token);
+        state.SetRegistration(token.Register(static s => ((CompletionState<T>)s!).TrySetCanceled(), state));
         task.GetAwaiter().OnCompleted(() =>
         {
             try
             {
                 var res = task.GetAwaiter().GetResult();
-                tcs.TrySetResult(res);
+                state.TrySetResult(res);
             }
             catch (Exception ex)
             {
-                tcs.TrySetException(ex);
+                state.TrySetException(ex);
             }
         });
 
-        return tcs.Task;
+        return resultTask;
     }
 
     public static LBTask AttachExternalCancellation(this LBTask task, CancellationToken token)
@@ -282,27 +268,29 @@ public static class LBTaskExtensions
         if (!token.CanBeCanceled) return task;
 
         var tcs = new LBTaskCompletionSource();
+        var resultTask = tcs.Task;
         if (token.IsCancellationRequested)
         {
             tcs.TrySetCanceled(token);
-            return tcs.Task;
+            return resultTask;
         }
 
-        token.Register(() => tcs.TrySetCanceled(token));
+        var state = new CompletionState(tcs, token);
+        state.SetRegistration(token.Register(static s => ((CompletionState)s!).TrySetCanceled(), state));
         task.GetAwaiter().OnCompleted(() =>
         {
             try
             {
                 task.GetAwaiter().GetResult();
-                tcs.TrySetResult();
+                state.TrySetResult();
             }
             catch (Exception ex)
             {
-                tcs.TrySetException(ex);
+                state.TrySetException(ex);
             }
         });
 
-        return tcs.Task;
+        return resultTask;
     }
 
     public static LBTask WaitUntil(Func<bool>        predicate, SynchronizationContext? ctx = null,
@@ -375,6 +363,118 @@ public static class LBTaskExtensions
                 _onException = null;
                 Pool.Return(this);
             }
+        }
+    }
+
+    private abstract class RegistrationState
+    {
+        private int _disposeRequested;
+        private CancellationTokenRegistration _registration;
+        private Timer? _timer;
+
+        public void SetRegistration(CancellationTokenRegistration registration)
+        {
+            if (Volatile.Read(ref _disposeRequested) == 0)
+            {
+                _registration = registration;
+                if (Volatile.Read(ref _disposeRequested) == 0) return;
+            }
+
+            registration.Dispose();
+        }
+
+        public void SetTimer(Timer timer)
+        {
+            if (Volatile.Read(ref _disposeRequested) == 0)
+            {
+                _timer = timer;
+                if (Volatile.Read(ref _disposeRequested) == 0) return;
+            }
+
+            timer.Dispose();
+        }
+
+        protected void DisposeResources()
+        {
+            if (Interlocked.Exchange(ref _disposeRequested, 1) != 0) return;
+            _timer?.Dispose();
+            _timer = null;
+            _registration.Dispose();
+        }
+    }
+
+    private abstract class CompletionStateBase<TSource> : RegistrationState where TSource : class
+    {
+        private int _completed;
+        private TSource? _source;
+
+        protected CompletionStateBase(TSource source, CancellationToken token)
+        {
+            _source = source;
+            Token = token;
+        }
+
+        protected CancellationToken Token { get; }
+
+        protected void Complete(Action<TSource> complete)
+        {
+            if (Interlocked.Exchange(ref _completed, 1) != 0) return;
+            try
+            {
+                var source = _source;
+                if (source != null) complete(source);
+            }
+            finally
+            {
+                _source = null;
+                DisposeResources();
+            }
+        }
+    }
+
+    private sealed class CompletionState : CompletionStateBase<LBTaskCompletionSource>
+    {
+        public CompletionState(LBTaskCompletionSource source, CancellationToken token)
+            : base(source, token)
+        {
+        }
+
+        public void TrySetResult()
+        {
+            Complete(static s => s.TrySetResult());
+        }
+
+        public void TrySetException(Exception ex)
+        {
+            Complete(s => s.TrySetException(ex));
+        }
+
+        public void TrySetCanceled()
+        {
+            Complete(s => s.TrySetCanceled(Token));
+        }
+    }
+
+    private sealed class CompletionState<T> : CompletionStateBase<LBTaskCompletionSource<T>>
+    {
+        public CompletionState(LBTaskCompletionSource<T> source, CancellationToken token)
+            : base(source, token)
+        {
+        }
+
+        public void TrySetResult(T value)
+        {
+            Complete(s => s.TrySetResult(value));
+        }
+
+        public void TrySetException(Exception ex)
+        {
+            Complete(s => s.TrySetException(ex));
+        }
+
+        public void TrySetCanceled()
+        {
+            Complete(s => s.TrySetCanceled(Token));
         }
     }
 }

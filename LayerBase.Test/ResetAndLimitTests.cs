@@ -30,12 +30,17 @@ public class ResetAndLimitTests
     public void Layer_Limit_64_Is_Enforced()
     {
         var builder = LayerHub.CreateLayers();
+        var layers = new List<TestLayer>();
         for (int i = 0; i < 64; i++)
         {
-            builder.Push(new TestLayer());
+            var layer = new TestLayer();
+            layers.Add(layer);
+            builder.Push(layer);
         }
         
         Assert.DoesNotThrow(() => builder.Build());
+        Assert.That(layers.Select(layer => layer.RouteIndex), Is.EqualTo(Enumerable.Range(0, 64)),
+            "The 64-layer bitmap route space must be assigned exactly once during Build.");
         
         LayerHub.Reset();
         var builder2 = LayerHub.CreateLayers();

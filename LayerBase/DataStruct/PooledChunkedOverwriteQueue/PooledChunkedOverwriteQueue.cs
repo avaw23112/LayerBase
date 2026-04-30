@@ -118,7 +118,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
         Count--;
 
         if (Count == 0)
-            ResetToEmpty();
+            ResetToEmptyRetaining(seg);
         else if (_headIndex >= _chunkSize) AdvanceHeadSegment();
 
         return true;
@@ -145,7 +145,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
         Count--;
 
         if (Count == 0)
-            ResetToEmpty();
+            ResetToEmptyRetaining(_tailSeg);
         else if (_tailIndex == 0 && _tailSeg!.Prev != null) MoveTailToPreviousSegment();
 
         return true;
@@ -199,7 +199,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
             _headIndex += available;
             Count -= available;
 
-            if (Count == 0) ResetToEmpty();
+            if (Count == 0) ResetToEmptyRetaining(seg);
             else if (_headIndex >= _chunkSize) AdvanceHeadSegment();
         }
     }
@@ -437,7 +437,7 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
 
             if (Count == 0)
             {
-                ResetToEmpty();
+                ResetToEmptyRetaining(seg);
                 return;
             }
 
@@ -449,6 +449,24 @@ public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struc
     {
         _headSeg = null;
         _tailSeg = null;
+        _headIndex = 0;
+        _tailIndex = 0;
+        Count = 0;
+    }
+
+    private void ResetToEmptyRetaining(Segment? segment)
+    {
+        if (segment == null)
+        {
+            ResetToEmpty();
+            return;
+        }
+
+        segment.Next = null;
+        segment.Prev = null;
+        if (_clearOnReturn) Array.Clear(segment.Buffer, 0, segment.Buffer.Length);
+        _headSeg = segment;
+        _tailSeg = segment;
         _headIndex = 0;
         _tailIndex = 0;
         Count = 0;

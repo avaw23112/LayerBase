@@ -33,36 +33,48 @@ internal sealed class ArchTaskSource : IArchTaskSource
     private Action? _continuation;
     private Exception? _exception;
     private int _released; // 0 = in use, 1 = released
-    private int _status;   // 0 = pending, 1 = completed
+    private int _status;   // 0 = pending, -1 = completing, 1 = completed
 
     private ArchTaskSource()
     {
         _context = SynchronizationContext.Current;
     }
 
-    public bool IsCompleted { get; private set; }
+    public bool IsCompleted => Volatile.Read(ref _status) == 1;
 
     public void OnCompleted(Action continuation)
     {
-        if (IsCompleted)
+        if (continuation == null) throw new ArgumentNullException(nameof(continuation));
+
+        while (true)
         {
-            Schedule(continuation);
+            if (IsCompleted)
+            {
+                Schedule(continuation);
+                return;
+            }
+
+            var original = Volatile.Read(ref _continuation);
+            var next = original == null
+                ? continuation
+                : () =>
+                {
+                    try
+                    {
+                        original();
+                    }
+                    finally
+                    {
+                        continuation();
+                    }
+                };
+
+            if (Interlocked.CompareExchange(ref _continuation, next, original) != original) continue;
+
+            if (IsCompleted && Interlocked.CompareExchange(ref _continuation, null, next) == next)
+                Schedule(next);
             return;
         }
-
-        var original = Interlocked.CompareExchange(ref _continuation, continuation, null);
-        if (original != null)
-            _continuation = () =>
-            {
-                try
-                {
-                    original();
-                }
-                finally
-                {
-                    continuation();
-                }
-            };
     }
 
     public void SetResult()
@@ -99,7 +111,6 @@ internal sealed class ArchTaskSource : IArchTaskSource
         src._continuation = null;
         src._exception = null;
         src._canceledToken = default;
-        src.IsCompleted = false;
         src._context = SynchronizationContext.Current;
         src._status = 0;
         src._released = 0;
@@ -108,10 +119,10 @@ internal sealed class ArchTaskSource : IArchTaskSource
 
     private void Complete(Exception? ex, CancellationToken canceledToken)
     {
-        if (Interlocked.CompareExchange(ref _status, 1, 0) != 0) return;
+        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
         _exception = ex;
         _canceledToken = canceledToken;
-        IsCompleted = true;
+        Volatile.Write(ref _status, 1);
 
         var cont = Interlocked.Exchange(ref _continuation, null);
         if (cont != null) Schedule(cont);
@@ -137,36 +148,48 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
     private Exception? _exception;
     private int _released; // 0 = in use, 1 = released
     private T _result = default!;
-    private int _status; // 0 = pending, 1 = completed
+    private int _status; // 0 = pending, -1 = completing, 1 = completed
 
     private ArchTaskSource()
     {
         _context = SynchronizationContext.Current;
     }
 
-    public bool IsCompleted { get; private set; }
+    public bool IsCompleted => Volatile.Read(ref _status) == 1;
 
     public void OnCompleted(Action continuation)
     {
-        if (IsCompleted)
+        if (continuation == null) throw new ArgumentNullException(nameof(continuation));
+
+        while (true)
         {
-            Schedule(continuation);
+            if (IsCompleted)
+            {
+                Schedule(continuation);
+                return;
+            }
+
+            var original = Volatile.Read(ref _continuation);
+            var next = original == null
+                ? continuation
+                : () =>
+                {
+                    try
+                    {
+                        original();
+                    }
+                    finally
+                    {
+                        continuation();
+                    }
+                };
+
+            if (Interlocked.CompareExchange(ref _continuation, next, original) != original) continue;
+
+            if (IsCompleted && Interlocked.CompareExchange(ref _continuation, null, next) == next)
+                Schedule(next);
             return;
         }
-
-        var original = Interlocked.CompareExchange(ref _continuation, continuation, null);
-        if (original != null)
-            _continuation = () =>
-            {
-                try
-                {
-                    original();
-                }
-                finally
-                {
-                    continuation();
-                }
-            };
     }
 
     public void SetResult(T value)
@@ -206,7 +229,6 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
         src._continuation = null;
         src._exception = null;
         src._canceledToken = default;
-        src.IsCompleted = false;
         src._result = default!;
         src._context = SynchronizationContext.Current;
         src._status = 0;
@@ -216,10 +238,10 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
 
     private void Complete(Exception? ex, CancellationToken canceledToken)
     {
-        if (Interlocked.CompareExchange(ref _status, 1, 0) != 0) return;
+        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
         _exception = ex;
         _canceledToken = canceledToken;
-        IsCompleted = true;
+        Volatile.Write(ref _status, 1);
 
         var cont = Interlocked.Exchange(ref _continuation, null);
         if (cont != null) Schedule(cont);
