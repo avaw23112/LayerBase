@@ -33,7 +33,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     private readonly object _lock = new();
     private readonly Action _onDirty;
     internal List<NotifyHandlerEntry<T>> MasterNotify = new();
-    internal List<NotifyHandlerEntry<T>> MasterNotifySafe = new();
+    internal List<NotifyHandlerEntry<T>> MasterSubscribe = new();
     internal List<OrderedHandlerEntry<T>> MasterOrdered = new();
     internal List<ParallelHandlerEntry<T>> MasterParallel = new();
     internal List<UnorderedHandlerEntry<T>> MasterUnordered = new();
@@ -44,7 +44,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     }
 
     public bool HasHandlers => MasterOrdered.Count > 0 || MasterUnordered.Count > 0 || MasterParallel.Count > 0 ||
-                               MasterNotify.Count > 0 || MasterNotifySafe.Count > 0;
+                               MasterNotify.Count > 0 || MasterSubscribe.Count > 0;
 
     public void Reset()
     {
@@ -54,7 +54,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             foreach (var h in MasterUnordered) h.Circuit.Reset();
             foreach (var h in MasterParallel) h.Reset();
             foreach (var h in MasterNotify) h.Circuit.Reset();
-            foreach (var h in MasterNotifySafe) h.Circuit.Reset();
+            foreach (var h in MasterSubscribe) h.Circuit.Reset();
         }
     }
 
@@ -85,11 +85,11 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         }
     }
 
-    public void AddNotifySafe(EventNotifyDelegate<T> h)
+    public void AddSubscribe(EventNotifyDelegate<T> h)
     {
         lock (_lock)
         {
-            MasterNotifySafe.Add(NotifyHandlerEntry<T>.Create(h));
+            MasterSubscribe.Add(NotifyHandlerEntry<T>.Create(h));
             _onDirty();
         }
     }
@@ -123,7 +123,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         }
     }
 
-    public void AddParallel(EventHandleDelegate<T> h, Action<int, string, string, Exception> re)
+    public void AddParallel(EventNotifyDelegate<T> h, Action<int, string, string, Exception> re)
     {
         lock (_lock)
         {
@@ -155,7 +155,24 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         lock (_lock)
         {
             MasterOrdered.RemoveAll(x => x.SyncHandler == h);
-            MasterParallel.RemoveAll(x => x.Source == h);
+            _onDirty();
+        }
+    }
+
+    public void RemoveParallel(EventNotifyDelegate<T> h)
+    {
+        lock (_lock)
+        {
+            MasterParallel.RemoveAll(x => x.StopIfSource(h));
+            _onDirty();
+        }
+    }
+
+    public void RemoveParallel(IEventHandler<T> h)
+    {
+        lock (_lock)
+        {
+            MasterParallel.RemoveAll(x => x.StopIfSource(h));
             _onDirty();
         }
     }
@@ -168,11 +185,11 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             _onDirty();
         }
     }
-    public void RemoveNotifySafe(EventNotifyDelegate<T> h)
+    public void RemoveSubscribe(EventNotifyDelegate<T> h)
     {
         lock (_lock)
         {
-            MasterNotifySafe.RemoveAll(x => x.Handler == h);
+            MasterSubscribe.RemoveAll(x => x.Handler == h);
             _onDirty();
         }
     }
@@ -185,6 +202,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             _onDirty();
         }
     }
+
 }
 
 internal readonly struct NotifyHandlerEntry<T> where T : struct
@@ -341,7 +359,7 @@ internal readonly struct ParallelHandlerEntry<T> where T : struct
         return new ParallelHandlerEntry<T>(new ParallelSubscriptionQueue<T>(h, re));
     }
 
-    public static ParallelHandlerEntry<T> Create(EventHandleDelegate<T> h, Action<int, string, string, Exception> re)
+    public static ParallelHandlerEntry<T> Create(EventNotifyDelegate<T> h, Action<int, string, string, Exception> re)
     {
         return new ParallelHandlerEntry<T>(new ParallelSubscriptionQueue<T>(h, re));
     }
@@ -356,6 +374,25 @@ internal readonly struct ParallelHandlerEntry<T> where T : struct
         _q.Reset();
     }
 
+    public void Stop()
+    {
+        _q.Stop();
+    }
+
+    public bool StopIfSource(EventNotifyDelegate<T> h)
+    {
+        if (!_q.HasSource(h)) return false;
+        Stop();
+        return true;
+    }
+
+    public bool StopIfSource(IEventHandler<T> h)
+    {
+        if (!_q.HasSource(h)) return false;
+        Stop();
+        return true;
+    }
+
     public HandlerCircuit Circuit => _q.Circuit;
 }
 
@@ -365,7 +402,7 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
     private readonly string _eName, _fName;
     private readonly Action<int, string, string, Exception> _err;
     private readonly ConcurrentQueue<T> _evs = new();
-    private readonly EventHandleDelegate<T>? _sd;
+    private readonly EventNotifyDelegate<T>? _sd;
     private readonly IEventHandler<T>? _sh;
     public readonly HandlerCircuit Circuit = new();
     private int _lIdx, _sched;
@@ -379,7 +416,7 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
         _drainInstance = Drain;
     }
 
-    public ParallelSubscriptionQueue(EventHandleDelegate<T> h, Action<int, string, string, Exception> re)
+    public ParallelSubscriptionQueue(EventNotifyDelegate<T> h, Action<int, string, string, Exception> re)
     {
         _sd = h;
         _err = re;
@@ -389,6 +426,16 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
     }
 
     public object Source => (object?)_sh ?? _sd!;
+
+    public bool HasSource(EventNotifyDelegate<T> h)
+    {
+        return _sd == h;
+    }
+
+    public bool HasSource(IEventHandler<T> h)
+    {
+        return ReferenceEquals(_sh, h);
+    }
 
     public void Enqueue(int l, in T v)
     {
@@ -406,10 +453,15 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
         while (_evs.TryDequeue(out _)) ;
     }
 
+    public void Stop()
+    {
+        Circuit.TryDisable();
+        while (_evs.TryDequeue(out _)) ;
+    }
+
     private void TrySched()
     {
         if (!Circuit.IsDisabled && Interlocked.CompareExchange(ref _sched, 1, 0) == 0)
-            // 使用构造函数中创建好的实例委托，热路径零分�?
             if (!JobSchedulers.Default.TrySchedule(_drainInstance))
                 ThreadPool.QueueUserWorkItem(_ => Drain());
     }

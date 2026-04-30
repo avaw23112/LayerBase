@@ -37,7 +37,7 @@ public class SubscribeSignatureFixer : CodeFixProvider
 
         context.RegisterCodeFix(
             CodeAction.Create(
-                "Fix [Subscribe] signature",
+                "Fix subscriber signature",
                 c => FixSignatureAsync(context.Document, methodDeclaration, c),
                 nameof(SubscribeSignatureFixer)),
             diagnostic);
@@ -47,12 +47,15 @@ public class SubscribeSignatureFixer : CodeFixProvider
                                                    CancellationToken cancellationToken)
     {
         var attr = method.AttributeLists.SelectMany(al => al.Attributes)
-                         .FirstOrDefault(a => a.Name.ToString().StartsWith("Subscribe"));
+                         .FirstOrDefault(a => a.Name.ToString().Contains("Subscribe"));
         if (attr == null) return document;
 
         var attrName = attr.Name.ToString();
         var isAsync = attrName.Contains("Async");
-        var isNotify = attrName.Contains("Notify") || attrName.Contains("NotifySafe");
+        
+        // Subscribe (原 Subscribe), SubscribeNotify, SubscribeParallel 返回 void
+        var isVoidReturn = attrName == "Subscribe" || attrName == "SubscribeAttribute" || 
+                           attrName.Contains("Notify") || attrName.Contains("Parallel");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
         if (root == null) return document;
@@ -86,16 +89,16 @@ public class SubscribeSignatureFixer : CodeFixProvider
         // Fix return type
         if (isAsync)
         {
-            var eventType = param.Type?.ToString() ?? "object";
             newMethod = newMethod.WithReturnType(SyntaxFactory.ParseTypeName("LBTask"));
         }
-        else if (isNotify)
+        else if (isVoidReturn)
         {
             newMethod = newMethod.WithReturnType(
                 SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)));
         }
         else
         {
+            // SubscribeFlow 返回 EventHandledState
             newMethod = newMethod.WithReturnType(SyntaxFactory.ParseTypeName("EventHandledState"));
         }
 

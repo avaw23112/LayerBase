@@ -43,7 +43,6 @@ public abstract class Layer : Node, IDisposable
 
     // Metadata for Topology Report
     public readonly List<Type> SubscribedEvents = new();
-    public readonly List<Type> NotifySafeSubscribedEvents = new();
     private GlobalEventCenter _center;
     private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();
 
@@ -251,21 +250,20 @@ public abstract class Layer : Node, IDisposable
         if (m_disposed) throw new ObjectDisposedException(nameof(Layer));
     }
 
-    public void Subscribe<T>(EventHandleDelegate<T> handler) where T : struct
+    public void SubscribeFlow<T>(EventHandleDelegate<T> handler) where T : struct
     {
         ThrowIfDisposed();
         if (RouteIndex != -1)
         {
-            LayerHub.EventCenter.Subscribe(RouteIndex, handler);
-            SubscribedEvents.Add(typeof(T));
+            LayerHub.EventCenter.SubscribeFlow(RouteIndex, handler);
             lock (m_subscriptions)
             {
-                m_subscriptions.Add(UnsubscribeDelegateToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+                m_subscriptions.Add(UnsubscribeFlowToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
             }
         }
         else
         {
-            m_pendingOps.Enqueue(l => l.Subscribe(handler));
+            m_pendingOps.Enqueue(l => l.SubscribeFlow(handler));
         }
     }
 
@@ -275,7 +273,6 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1)
         {
             LayerHub.EventCenter.SubscribeNotify(RouteIndex, handler);
-            SubscribedEvents.Add(typeof(T));
             lock (m_subscriptions)
             {
                 m_subscriptions.Add(UnsubscribeNotifyToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
@@ -287,21 +284,20 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
-    public void SubscribeNotifySafe<T>(EventNotifyDelegate<T> handler) where T : struct
+    public void Subscribe<T>(EventNotifyDelegate<T> handler) where T : struct
     {
         ThrowIfDisposed();
         if (RouteIndex != -1)
         {
-            LayerHub.EventCenter.SubscribeNotifySafe(RouteIndex, handler);
-            SubscribedEvents.Add(typeof(T));
+            LayerHub.EventCenter.Subscribe(RouteIndex, handler);
             lock (m_subscriptions)
             {
-                m_subscriptions.Add(UnsubscribeNotifySafeToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+                m_subscriptions.Add(UnsubscribeToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
             }
         }
         else
         {
-            m_pendingOps.Enqueue(l => l.SubscribeNotifySafe(handler));
+            m_pendingOps.Enqueue(l => l.Subscribe(handler));
         }
     }
 
@@ -311,7 +307,6 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1)
         {
             LayerHub.EventCenter.SubscribeAsync(RouteIndex, handler);
-            SubscribedEvents.Add(typeof(T));
             lock (m_subscriptions)
             {
                 m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
@@ -328,13 +323,22 @@ public abstract class Layer : Node, IDisposable
         return new LayerEventStream<T>(this);
     }
 
-    public void SubscribeParallel<T>(EventHandleDelegate<T>                  handler,
+    public void SubscribeParallel<T>(EventNotifyDelegate<T>                  handler,
                                      Action<int, string, string, Exception>? reportError = null) where T : struct
     {
         ThrowIfDisposed();
         if (RouteIndex != -1)
+        {
             LayerHub.EventCenter.SubscribeParallel(RouteIndex, handler, reportError ?? LayerHub.ReportLayerEventError);
-        else m_pendingOps.Enqueue(l => l.SubscribeParallel(handler, reportError));
+            lock (m_subscriptions)
+            {
+                m_subscriptions.Add(UnsubscribeParallelToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+            }
+        }
+        else
+        {
+            m_pendingOps.Enqueue(l => l.SubscribeParallel(handler, reportError));
+        }
     }
 
     public IDelayPublisher<T> SubscribeDelay<T>() where T : struct
@@ -486,24 +490,24 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
-    private sealed class UnsubscribeDelegateToken<T> : IDisposable where T : struct
+    private sealed class UnsubscribeFlowToken<T> : IDisposable where T : struct
     {
-        private static readonly ConcurrentBag<UnsubscribeDelegateToken<T>> Pool = new();
+        private static readonly ConcurrentBag<UnsubscribeFlowToken<T>> Pool = new();
         private GlobalEventCenter _center;
         private EventHandleDelegate<T> _handler;
         private int _layerIndex;
 
         public void Dispose()
         {
-            _center.Unsubscribe(_layerIndex, _handler);
+            _center.UnsubscribeFlow(_layerIndex, _handler);
             _center = null!;
             _handler = null!;
             Pool.Add(this);
         }
 
-        public static UnsubscribeDelegateToken<T> Rent(GlobalEventCenter c, int l, EventHandleDelegate<T> h)
+        public static UnsubscribeFlowToken<T> Rent(GlobalEventCenter c, int l, EventHandleDelegate<T> h)
         {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeDelegateToken<T>();
+            if (!Pool.TryTake(out var t)) t = new UnsubscribeFlowToken<T>();
             t._center = c;
             t._layerIndex = l;
             t._handler = h;
@@ -561,24 +565,49 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
-    private sealed class UnsubscribeNotifySafeToken<T> : IDisposable where T : struct
+    private sealed class UnsubscribeToken<T> : IDisposable where T : struct
     {
-        private static readonly ConcurrentBag<UnsubscribeNotifySafeToken<T>> Pool = new();
+        private static readonly ConcurrentBag<UnsubscribeToken<T>> Pool = new();
         private GlobalEventCenter _center;
         private EventNotifyDelegate<T> _handler;
         private int _layerIndex;
 
         public void Dispose()
         {
-            _center.UnsubscribeNotifySafe(_layerIndex, _handler);
+            _center.Unsubscribe(_layerIndex, _handler);
             _center = null!;
             _handler = null!;
             Pool.Add(this);
         }
 
-        public static UnsubscribeNotifySafeToken<T> Rent(GlobalEventCenter c, int l, EventNotifyDelegate<T> h)
+        public static UnsubscribeToken<T> Rent(GlobalEventCenter c, int l, EventNotifyDelegate<T> h)
         {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeNotifySafeToken<T>();
+            if (!Pool.TryTake(out var t)) t = new UnsubscribeToken<T>();
+            t._center = c;
+            t._layerIndex = l;
+            t._handler = h;
+            return t;
+        }
+    }
+
+    private sealed class UnsubscribeParallelToken<T> : IDisposable where T : struct
+    {
+        private static readonly ConcurrentBag<UnsubscribeParallelToken<T>> Pool = new();
+        private GlobalEventCenter _center;
+        private EventNotifyDelegate<T> _handler;
+        private int _layerIndex;
+
+        public void Dispose()
+        {
+            _center.UnsubscribeParallel(_layerIndex, _handler);
+            _center = null!;
+            _handler = null!;
+            Pool.Add(this);
+        }
+
+        public static UnsubscribeParallelToken<T> Rent(GlobalEventCenter c, int l, EventNotifyDelegate<T> h)
+        {
+            if (!Pool.TryTake(out var t)) t = new UnsubscribeParallelToken<T>();
             t._center = c;
             t._layerIndex = l;
             t._handler = h;

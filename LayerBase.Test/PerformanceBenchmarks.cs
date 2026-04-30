@@ -25,7 +25,7 @@ public class PerformanceBenchmarks
         LayerHub.Reset();
         var lA = new BenchLayer();
         for (var i = 0; i < totalHandlers; i++)
-            lA.Subscribe((in BenchEvent _) =>
+            lA.SubscribeFlow((in BenchEvent _) =>
             {
                 lA.HandledCount++;
                 return EventHandledState.Continue;
@@ -43,7 +43,7 @@ public class PerformanceBenchmarks
         for (var i = 0; i < totalHandlers; i++)
         {
             var l = new BenchLayer();
-            l.Subscribe((in BenchEvent _) =>
+            l.SubscribeFlow((in BenchEvent _) =>
             {
                 l.HandledCount++;
                 return EventHandledState.Continue;

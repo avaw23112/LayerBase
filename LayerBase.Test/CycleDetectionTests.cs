@@ -17,7 +17,7 @@ public struct Event_B
 // --- Test Managers ---
 public partial class DirectCycleManager : ILayerContext
 {
-    [Subscribe]
+    [SubscribeFlow]
     public EventHandledState OnEvent(in Event_A e)
     {
         this.SendLocal(new Event_A());
@@ -27,7 +27,7 @@ public partial class DirectCycleManager : ILayerContext
 
 public partial class IndirectManagerA : ILayerContext
 {
-    [Subscribe]
+    [SubscribeFlow]
     public EventHandledState OnA(in Event_A e)
     {
         this.SendLocal(new Event_B());
@@ -37,7 +37,7 @@ public partial class IndirectManagerA : ILayerContext
 
 public partial class IndirectManagerB : ILayerContext
 {
-    [Subscribe]
+    [SubscribeFlow]
     public EventHandledState OnB(in Event_B e)
     {
         this.SendLocal(new Event_A());

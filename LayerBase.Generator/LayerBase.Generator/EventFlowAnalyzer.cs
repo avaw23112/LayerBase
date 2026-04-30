@@ -116,14 +116,19 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
                 if (m.AttributeLists.Count == 0) continue;
                 var methodSymbol = semanticModel.GetDeclaredSymbol(m);
                 if (methodSymbol == null) continue;
+                
                 var attributes = methodSymbol.GetAttributes();
-                if (attributes.Any(a => a.AttributeClass?.Name.Contains("Subscribe") == true))
+                var subAttr = attributes.FirstOrDefault(a => a.AttributeClass?.Name.Contains("Subscribe") == true);
+                if (subAttr != null)
                 {
                     var param = methodSymbol.Parameters.FirstOrDefault();
                     if (param != null && SymbolEqualityComparer.Default.Equals(param.Type, eventType))
                     {
-                        var tag = attributes.Any(a => a.AttributeClass?.Name.Contains("NotifySafe") == true) ? "[NotifySafe] " : 
-                                  attributes.Any(a => a.AttributeClass?.Name.Contains("Notify") == true) ? "[Notify] " : "";
+                        var attrName = subAttr.AttributeClass!.Name;
+                        var tag = attrName.Contains("Flow") ? "[Flow] " :
+                                  attrName.Contains("Async") ? "[Async] " :
+                                  attrName.Contains("Parallel") ? "[Parallel] " : "[Safe] ";
+                        
                         result.Add(new SubscriberInfo(
                             $"{tag}{methodSymbol.ContainingType.Name}.{methodSymbol.Name}",
                             methodSymbol.Locations.FirstOrDefault()!));
@@ -138,15 +143,21 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
                 {
                     var fieldSymbol = semanticModel.GetDeclaredSymbol(variable) as IFieldSymbol;
                     if (fieldSymbol == null) continue;
-                    if (fieldSymbol.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("Subscribe") == true))
+                    
+                    var subAttr = fieldSymbol.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name.Contains("Subscribe") == true);
+                    if (subAttr != null)
                     {
                         var handlerInterface = fieldSymbol.Type.AllInterfaces.FirstOrDefault(i =>
                                 i.Name == "IStructHandler" && i.IsGenericType);
                         if (handlerInterface != null &&
                             SymbolEqualityComparer.Default.Equals(handlerInterface.TypeArguments[0], eventType))
+                        {
+                            var attrName = subAttr.AttributeClass!.Name;
+                            var tag = attrName.Contains("Flow") ? "[Flow] " : "[Safe] ";
                             result.Add(new SubscriberInfo(
-                                $"[Struct] {fieldSymbol.ContainingType.Name}.{fieldSymbol.Name}",
+                                $"{tag}[Struct] {fieldSymbol.ContainingType.Name}.{fieldSymbol.Name}",
                                 fieldSymbol.Locations.FirstOrDefault()!));
+                        }
                     }
                 }
             }

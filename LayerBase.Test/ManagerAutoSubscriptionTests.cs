@@ -25,7 +25,7 @@ public partial class TestManagerA : ILayerContext
         _trace = trace;
     }
 
-    [Subscribe]
+    [SubscribeFlow]
     public EventHandledState OnOrder(in OrderEvent e)
     {
         _trace.Add("ManagerA");
@@ -42,7 +42,7 @@ public partial class TestManagerB : ILayerContext
         _trace = trace;
     }
 
-    [Subscribe]
+    [SubscribeFlow]
     public EventHandledState OnOrder(in OrderEvent e)
     {
         _trace.Add("ManagerB");
@@ -59,7 +59,7 @@ public partial class TestManagerC : ILayerContext
         _trace = trace;
     }
 
-    [Subscribe]
+    [SubscribeFlow]
     public EventHandledState OnCap(in CapabilityEvent e)
     {
         _trace.Add("HandledByManager");

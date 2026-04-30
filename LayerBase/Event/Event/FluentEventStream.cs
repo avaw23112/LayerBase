@@ -34,17 +34,17 @@ public readonly struct LayerEventStream<T> where T : struct
     /// <summary>
     ///     绑定同步处理函数�?
     /// </summary>
-    public void Handle(EventHandleDelegate<T> handler)
+    public void HandleFlow(EventHandleDelegate<T> handler)
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
         if (_predicate == null)
         {
-            _layer.Subscribe(handler);
+            _layer.SubscribeFlow(handler);
         }
         else
         {
             var pred = _predicate;
-            _layer.Subscribe((in T e) => pred(in e) ? handler(in e) : EventHandledState.Continue);
+            _layer.SubscribeFlow((in T e) => pred(in e) ? handler(in e) : EventHandledState.Continue);
         }
     }
 
@@ -64,46 +64,44 @@ public readonly struct LayerEventStream<T> where T : struct
             _layer.SubscribeAsync((T e) => pred(in e) ? handler(e) : LBTask.CompletedTask);
         }
     }
-
-    /// <summary>
-    ///     绑定并行处理函数?
-    /// </summary>
-    public void HandleParallel(EventHandleDelegate<T> handler, Action<int, string, string, Exception> reportError)
+/// <summary>
+///     绑定并行处理函数?
+/// </summary>
+public void HandleParallel(EventNotifyDelegate<T> handler, Action<int, string, string, Exception> reportError)
+{
+    if (handler == null) throw new ArgumentNullException(nameof(handler));
+    if (_predicate == null)
     {
-        if (handler == null) throw new ArgumentNullException(nameof(handler));
-        if (_predicate == null)
-        {
-            _layer.SubscribeParallel(handler, reportError);
-        }
-        else
-        {
-            var pred = _predicate;
-            _layer.SubscribeParallel((in T e) =>
-            {
-                if (pred(in e)) handler(in e);
-                return EventHandledState.Continue;
-            }, reportError);
-        }
+        _layer.SubscribeParallel(handler, reportError);
     }
+    else
+    {
+        var pred = _predicate;
+        _layer.SubscribeParallel((in T e) =>
+        {
+            if (pred(in e)) handler(in e);
+        }, reportError);
+    }
+}
 
     /// <summary>
     ///     绑定安全通知處理函數（異常隔離）
     /// </summary>
-    public void HandleNotifySafe(EventNotifyDelegate<T> handler)
+    public void Handle(EventNotifyDelegate<T> handler)
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
         if (_predicate == null)
         {
-            _layer.SubscribeNotifySafe(handler);
+            _layer.Subscribe(handler);
         }
         else
         {
             var pred = _predicate;
-            _layer.SubscribeNotifySafe((in T e) =>
+            _layer.Subscribe((in T e) =>
             {
                 if (pred(in e)) handler(in e);
             });
         }
     }
-    }
+}
 

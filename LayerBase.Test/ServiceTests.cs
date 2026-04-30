@@ -102,7 +102,6 @@ public class ServiceRegistrationTests
         {
             var s = layer.GetService<IDemoService>();
             if (s != null) Interlocked.Increment(ref count);
-            return EventHandledState.Continue;
         });
 
         for (var i = 0; i < 100; i++) layer.Send(new ServiceTestEvent());

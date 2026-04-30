@@ -13,12 +13,11 @@ public partial class ComputeLayer : Layer
     // [SubscribeParallel] 会在独立的线程池中执行�?
     // 这提供了极致的性能，同时也实现了故障隔离�?
     [SubscribeParallel]
-    private EventHandledState DoWork(in HeavyComputeEvent e)
+    private void DoWork(in HeavyComputeEvent e)
     {
         if (e.Data < 0) throw new Exception("Compute Error!"); // 故意制造异�?
 
         Console.WriteLine($"[Parallel] Processing data: {e.Data} on thread {Thread.CurrentThread.ManagedThreadId}");
-        return EventHandledState.Continue;
     }
 }
 

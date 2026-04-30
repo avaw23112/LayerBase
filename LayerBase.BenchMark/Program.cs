@@ -796,9 +796,8 @@ public partial class BenchManager : IService
     }
 
     [Subscribe]
-    public EventHandledState Handle(in BenchEvent e)
+    public void Handle(in BenchEvent e)
     {
-        return EventHandledState.Continue;
     }
 }
 
@@ -884,9 +883,8 @@ public partial class FanoutSyncManager : IService
     }
 
     [Subscribe]
-    public EventHandledState Handle(in BenchEvent e)
+    public void Handle(in BenchEvent e)
     {
-        return EventHandledState.Continue;
     }
 }
 
@@ -911,9 +909,8 @@ public partial class ContinueOnlyManager : IService
     }
 
     [Subscribe]
-    public EventHandledState Handle(in ContinueOnlyEvent e)
+    public void Handle(in ContinueOnlyEvent e)
     {
-        return EventHandledState.Continue;
     }
 }
 
@@ -925,9 +922,8 @@ public partial class FirstHandledManager : IService
     }
 
     [Subscribe]
-    public EventHandledState Handle(in FirstHandledEvent e)
+    public void Handle(in FirstHandledEvent e)
     {
-        return EventHandledState.Handled;
     }
 }
 
@@ -939,9 +935,8 @@ public partial class FirstHandledContinueManager : IService
     }
 
     [Subscribe]
-    public EventHandledState Handle(in FirstHandledEvent e)
+    public void Handle(in FirstHandledEvent e)
     {
-        return EventHandledState.Continue;
     }
 }
 
@@ -953,9 +948,8 @@ public partial class LastHandledContinueManager : IService
     }
 
     [Subscribe]
-    public EventHandledState Handle(in LastHandledEvent e)
+    public void Handle(in LastHandledEvent e)
     {
-        return EventHandledState.Continue;
     }
 }
 
@@ -967,9 +961,8 @@ public partial class LastHandledManager : IService
     }
 
     [Subscribe]
-    public EventHandledState Handle(in LastHandledEvent e)
+    public void Handle(in LastHandledEvent e)
     {
-        return EventHandledState.Handled;
     }
 }
 
@@ -981,9 +974,8 @@ public partial class RoutedManager : IService
     }
 
     [Subscribe]
-    public EventHandledState Handle(in RoutedEvent e)
+    public void Handle(in RoutedEvent e)
     {
-        return EventHandledState.Continue;
     }
 }
 
@@ -995,9 +987,8 @@ public partial class PumpManager : IService
     }
 
     [Subscribe]
-    public EventHandledState Handle(in PumpEvent e)
+    public void Handle(in PumpEvent e)
     {
-        return EventHandledState.Continue;
     }
 }
 
@@ -1009,9 +1000,8 @@ public partial class ParallelNoopManager : IService
     }
 
     [SubscribeParallel]
-    public EventHandledState Handle(in ParallelBenchEvent e)
+    public void Handle(in ParallelBenchEvent e)
     {
-        return EventHandledState.Continue;
     }
 }
 
@@ -1025,14 +1015,13 @@ public partial class ParallelWorkloadManager : IService
     }
 
     [SubscribeParallel]
-    public EventHandledState Handle(in ParallelWorkloadEvent value)
+    public void Handle(in ParallelWorkloadEvent value)
     {
         var acc = _sink;
         for (var i = 0; i < 16; i++)
             acc = (acc * 33) ^ (i + 17);
         _sink = acc;
         BenchmarkSink.IntValue = acc;
-        return EventHandledState.Continue;
     }
 }
 

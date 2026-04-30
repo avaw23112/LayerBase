@@ -15,9 +15,9 @@ Generator）** 插件。
 1. **自动依赖注入与层级挂载 (`[OwnerLayer]`)**
     - 只需给您的 `Service` 或切片式的 `EventHandler` 打上 `[OwnerLayer(typeof(YourLayer))]` 特性，生成器便会生成自动注册逻辑。
     - `LayerHub.CreateLayers().Build()` 能够全自动扫描并在后台完成服务依赖、实例创建与层级挂载。
-2. **事件总线零反射绑定 (`[Subscribe]`, `[SubscribeAsync]`)**
-    - 不再需要手动维护繁琐的 `EventBus.Subscribe<T>(Method)`。
-    - 只需在您的 `Manager` (继承 `ILayerContext`) 的事件处理方法上挂载 `[Subscribe]` 或 `[SubscribeAsync]`。
+2. **事件总线零反射绑定 (`[SubscribeFlow]`, `[SubscribeAsync]`)**
+    - 不再需要手动维护繁琐的 `EventBus.SubscribeFlow<T>(Method)`。
+    - 只需在您的 `Manager` (继承 `ILayerContext`) 的事件处理方法上挂载 `[SubscribeFlow]` 或 `[SubscribeAsync]`。
     - 源生成器会直接提取函数的底层委托，生成高密度的包装类并注入全局总线，**彻底消除运行时反射查找。**
 3. **全局异常与元数据观察 (`EventMetaData<T>`)**
     - 对于网络同步包或核心状态事件，只需定义一个继承自 `EventMetaData<T>` 的类。
@@ -60,7 +60,7 @@ Generator）** 插件。
 public partial struct PlayerDeadEvent { ... }
 ```
 
-### 为什么我的 [Subscribe] 报错或没有生效？
+### 为什么我的 [SubscribeFlow] 报错或没有生效？
 
 1. 请确保您的类继承了 `ILayerContext` 接口（通常是各种 `Manager`）。
 2. 请确保您的类被标记为 `partial`，因为生成器需要在该类的同名分部中写入 `Initialize` 接口的实现逻辑。
@@ -97,9 +97,9 @@ By attaching simple attributes, `LayerBase.Generator` silently generates all the
       the generator will produce the auto-registration logic.
     - `LayerHub.CreateLayers().Build()` can fully automatically scan and complete service dependency resolution,
       instance creation, and layer mounting in the background.
-2. **Zero-Reflection Event Bus Binding (`[Subscribe]`, `[SubscribeAsync]`)**
-    - No more manual maintenance of tedious `EventBus.Subscribe<T>(Method)` calls.
-    - Just attach `[Subscribe]` or `[SubscribeAsync]` to the event handling methods in your `Manager` (inheriting from
+2. **Zero-Reflection Event Bus Binding (`[SubscribeFlow]`, `[SubscribeAsync]`)**
+    - No more manual maintenance of tedious `EventBus.SubscribeFlow<T>(Method)` calls.
+    - Just attach `[SubscribeFlow]` or `[SubscribeAsync]` to the event handling methods in your `Manager` (inheriting from
       `ILayerContext`).
     - The Source Generator extracts the underlying delegates directly, generates high-density wrapper classes, and
       injects them into the global bus, **completely eliminating runtime reflection lookups.**
@@ -149,7 +149,7 @@ this:
 public partial struct PlayerDeadEvent { ... }
 ```
 
-### Why is my [Subscribe] erroring or not taking effect?
+### Why is my [SubscribeFlow] erroring or not taking effect?
 
 1. Ensure your class inherits the `ILayerContext` interface (typically your various `Managers`).
 2. Ensure your class is marked as `partial`, as the generator needs to write the implementation logic for the

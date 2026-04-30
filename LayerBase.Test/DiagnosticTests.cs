@@ -17,7 +17,7 @@ public struct UnsubscribedEvent
 
 public partial class TestDiagManager : ILayerContext
 {
-    [Subscribe]
+    [SubscribeFlow]
     public EventHandledState OnEvent(in SomeEvent e)
     {
         return EventHandledState.Continue;
@@ -26,7 +26,7 @@ public partial class TestDiagManager : ILayerContext
 
 public partial class ProducerManager : ILayerContext
 {
-    [Subscribe]
+    [SubscribeFlow]
     public EventHandledState OnStart(in SomeEvent e)
     {
         this.Send(new UnsubscribedEvent());

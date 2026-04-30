@@ -13,9 +13,9 @@ public struct PlayerSpawnEvent
 // 2. 定义 Layer 并使�?partial 关键字开�?Source Generator 优化
 public partial class GameplayLayer : Layer
 {
-    // 使用 [Subscribe] 特性自动订阅�?
+    // 使用 [SubscribeFlow] 特性自动订阅�?
     // 方法必须�?partial 类的一部分，且建议参数�?in 关键字以减少结构体复制�?
-    [Subscribe]
+    [SubscribeFlow]
     private EventHandledState OnPlayerSpawn(in PlayerSpawnEvent e)
     {
         Console.WriteLine($"[Gameplay] Player {e.Name} spawned at level {e.Level}");

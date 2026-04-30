@@ -27,7 +27,6 @@ public class ParallelPerformanceTests
             Thread.Sleep(5);
             Interlocked.Increment(ref processedCount);
             if (!countdown.IsSet) countdown.Signal();
-            return EventHandledState.Continue;
         });
 
         LayerHub.CreateLayers().Push(layer).Build();
@@ -61,6 +60,47 @@ public class ParallelPerformanceTests
         // Wait for the signal instead of arbitrary sleep
         var reported = errorOccurred.Wait(2000);
         Assert.That(reported, Is.True, "Parallel fault signal was never received.");
+    }
+
+    [Test]
+    public void Disposed_parallel_subscription_drops_queued_events()
+    {
+        LayerHub.InitializeJobScheduler(1);
+
+        var layer = new ParallelLayer();
+        var firstStarted = new ManualResetEventSlim(false);
+        var releaseFirst = new ManualResetEventSlim(false);
+        var firstFinished = new ManualResetEventSlim(false);
+        var handled = 0;
+
+        layer.SubscribeParallel((in WorkEvent e) =>
+        {
+            var current = Interlocked.Increment(ref handled);
+            if (current != 1) return;
+
+            firstStarted.Set();
+            try
+            {
+                Assert.That(releaseFirst.Wait(2000), Is.True, "Timed out waiting to release first handler.");
+            }
+            finally
+            {
+                firstFinished.Set();
+            }
+        });
+
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        LayerHub.Send(new WorkEvent());
+        Assert.That(firstStarted.Wait(1000), Is.True, "First parallel handler did not start.");
+
+        LayerHub.Send(new WorkEvent());
+        layer.Dispose();
+        releaseFirst.Set();
+
+        Assert.That(firstFinished.Wait(1000), Is.True, "First parallel handler did not finish.");
+        Thread.Sleep(100);
+        Assert.That(Volatile.Read(ref handled), Is.EqualTo(1));
     }
 
     private class ParallelLayer : Layer

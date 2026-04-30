@@ -127,10 +127,10 @@ public static class ServiceExtensions
             DelayDirection.BroadCast, contractId);
     }
 
-    public static void Subscribe<TValue>(this IService service, EventHandleDelegate<TValue> handler)
+    public static void SubscribeFlow<TValue>(this IService service, EventHandleDelegate<TValue> handler)
         where TValue : struct
     {
-        service.GetLayer().Subscribe(handler);
+        service.GetLayer().SubscribeFlow(handler);
     }
 
     public static void SubscribeAsync<TValue>(this IService service, EventHandleDelegateAsync<TValue> handler)
@@ -139,13 +139,13 @@ public static class ServiceExtensions
         service.GetLayer().SubscribeAsync(handler);
     }
 
-    public static void SubscribeNotifySafe<TValue>(this IService service, EventNotifyDelegate<TValue> handler)
+    public static void Subscribe<TValue>(this IService service, EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
-        service.GetLayer().SubscribeNotifySafe(handler);
+        service.GetLayer().Subscribe(handler);
     }
 
-    public static void SubscribeParallel<TValue>(this IService service, EventHandleDelegate<TValue> handler,
+    public static void SubscribeParallel<TValue>(this IService service, EventNotifyDelegate<TValue> handler,
                                                  Action<int, string, string, Exception>? reportError = null)
         where TValue : struct
     {
@@ -209,10 +209,10 @@ public static class LayerContextExtensions
             DelayDirection.BroadCast, contractId);
     }
 
-    public static void Subscribe<TValue>(this ILayerContext service, EventHandleDelegate<TValue> handler)
+    public static void SubscribeFlow<TValue>(this ILayerContext service, EventHandleDelegate<TValue> handler)
         where TValue : struct
     {
-        service.GetLayer().Subscribe(handler);
+        service.GetLayer().SubscribeFlow(handler);
     }
 
     public static void SubscribeAsync<TValue>(this ILayerContext service, EventHandleDelegateAsync<TValue> handler)
@@ -221,13 +221,13 @@ public static class LayerContextExtensions
         service.GetLayer().SubscribeAsync(handler);
     }
 
-    public static void SubscribeNotifySafe<TValue>(this ILayerContext service, EventNotifyDelegate<TValue> handler)
+    public static void Subscribe<TValue>(this ILayerContext service, EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
-        service.GetLayer().SubscribeNotifySafe(handler);
+        service.GetLayer().Subscribe(handler);
     }
 
-    public static void SubscribeParallel<TValue>(this ILayerContext service, EventHandleDelegate<TValue> handler,
+    public static void SubscribeParallel<TValue>(this ILayerContext service, EventNotifyDelegate<TValue> handler,
                                                  Action<int, string, string, Exception>? reportError = null)
         where TValue : struct
     {

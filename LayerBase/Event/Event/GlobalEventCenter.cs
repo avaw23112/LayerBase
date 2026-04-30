@@ -61,7 +61,7 @@ public sealed class GlobalEventCenter
         if (count > 0) _layerNames[count - 1] = name;
     }
 
-    internal void Subscribe<T>(int layerIndex, IEventHandler<T> handler) where T : struct
+    internal void SubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
         GetBucket<T>().Add(layerIndex, handler);
     }
@@ -71,13 +71,7 @@ public sealed class GlobalEventCenter
         GetBucket<T>().Add(layerIndex, handler);
     }
 
-    internal void SubscribeParallel<T>(int layerIndex, IEventHandler<T> handler,
-                                       Action<int, string, string, Exception> reportError) where T : struct
-    {
-        GetBucket<T>().AddParallel(layerIndex, handler, reportError);
-    }
-
-    internal void Subscribe<T>(int layerIndex, EventHandleDelegate<T> handleDelegate) where T : struct
+    internal void SubscribeFlow<T>(int layerIndex, EventHandleDelegate<T> handleDelegate) where T : struct
     {
         GetBucket<T>().Add(layerIndex, handleDelegate);
     }
@@ -87,7 +81,7 @@ public sealed class GlobalEventCenter
         GetBucket<T>().Add(layerIndex, handleDelegate);
     }
 
-    internal void SubscribeParallel<T>(int layerIndex, EventHandleDelegate<T> handleDelegate,
+    internal void SubscribeParallel<T>(int layerIndex, EventNotifyDelegate<T> handleDelegate,
                                        Action<int, string, string, Exception> reportError) where T : struct
     {
         GetBucket<T>().AddParallel(layerIndex, handleDelegate, reportError);
@@ -98,11 +92,11 @@ public sealed class GlobalEventCenter
         GetBucket<T>().AddNotify(layerIndex, handler);
     }
 
-    internal void SubscribeNotifySafe<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
+    internal void Subscribe<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
-        GetBucket<T>().AddNotifySafe(layerIndex, handler);
+        GetBucket<T>().AddSubscribe(layerIndex, handler);
     }
-    internal void Unsubscribe<T>(int layerIndex, IEventHandler<T> handler) where T : struct
+    internal void UnsubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
         GetBucket<T>().Remove(layerIndex, handler);
     }
@@ -117,12 +111,17 @@ public sealed class GlobalEventCenter
         GetBucket<T>().RemoveNotify(layerIndex, handler);
     }
 
-    internal void UnsubscribeNotifySafe<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
+    internal void UnsubscribeParallel<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
-        GetBucket<T>().RemoveNotifySafe(layerIndex, handler);
+        GetBucket<T>().RemoveParallel(layerIndex, handler);
     }
 
-    internal void Unsubscribe<T>(int layerIndex, EventHandleDelegate<T> handleDelegate) where T : struct
+    internal void Unsubscribe<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
+    {
+        GetBucket<T>().RemoveSubscribe(layerIndex, handler);
+    }
+
+    internal void UnsubscribeFlow<T>(int layerIndex, EventHandleDelegate<T> handleDelegate) where T : struct
     {
         GetBucket<T>().Remove(layerIndex, handleDelegate);
     }
@@ -436,8 +435,8 @@ public sealed class GlobalEventCenter
             ParallelCount,
             NotifyStart,
             NotifyCount,
-            NotifySafeStart,
-            NotifySafeCount;
+            SubscribeStart,
+            SubscribeCount;
     }
 
     private sealed class EventBucket<T> : IResetable where T : struct
@@ -458,26 +457,26 @@ public sealed class GlobalEventCenter
             _asyncCountTotal,
             _parallelCountTotal,
             _notifyCountTotal,
-            _notifySafeCountTotal;
+            _subscribeCountTotal;
 
-        private bool _isSingleSync, _isSingleNotify, _isSingleNotifySafe;
+        private bool _isSingleSync, _isSingleNotify, _isSingleSubscribe;
         private bool _isSmallNotifyFanoutOnly;
         private HandlerCircuit[] _notifyCircuits = Array.Empty<HandlerCircuit>();
         private EventNotifyDelegate<T>[] _notifyHandlers = Array.Empty<EventNotifyDelegate<T>>();
         private string[] _notifyNames = Array.Empty<string>();
 
-        private HandlerCircuit[] _notifySafeCircuits = Array.Empty<HandlerCircuit>();
-        private EventNotifyDelegate<T>[] _notifySafeHandlers = Array.Empty<EventNotifyDelegate<T>>();
-        private string[] _notifySafeNames = Array.Empty<string>();
+        private HandlerCircuit[] _subscribeCircuits = Array.Empty<HandlerCircuit>();
+        private EventNotifyDelegate<T>[] _subscribeHandlers = Array.Empty<EventNotifyDelegate<T>>();
+        private string[] _subscribeNames = Array.Empty<string>();
 
         private LayerRange[] _ranges = Array.Empty<LayerRange>();
         private HandlerCircuit? _singleNotifyCircuit;
         private EventNotifyDelegate<T>? _singleNotifyHandler;
         private string? _singleNotifyName;
 
-        private HandlerCircuit? _singleNotifySafeCircuit;
-        private EventNotifyDelegate<T>? _singleNotifySafeHandler;
-        private string? _singleNotifySafeName;
+        private HandlerCircuit? _singleSubscribeCircuit;
+        private EventNotifyDelegate<T>? _singleSubscribeHandler;
+        private string? _singleSubscribeName;
 
         private int _singleRouteLayerIndex = -1;
         private ulong _singleRouteMask;
@@ -530,20 +529,20 @@ public sealed class GlobalEventCenter
             _singleNotifyHandler = null;
             _singleNotifyCircuit = null;
             _singleNotifyName = null;
-            _singleNotifySafeHandler = null;
-            _singleNotifySafeCircuit = null;
-            _singleNotifySafeName = null;
+            _singleSubscribeHandler = null;
+            _singleSubscribeCircuit = null;
+            _singleSubscribeName = null;
             _singleRouteLayerIndex = -1;
             _singleRouteMask = 0;
             _isSingleSync = false;
             _isSingleNotify = false;
-            _isSingleNotifySafe = false;
+            _isSingleSubscribe = false;
             _isSmallNotifyFanoutOnly = false;
 
             ReturnArrayHelper(ref _syncHandlers, ref _syncCircuits, ref _syncNames);
             ReturnArrayHelper(ref _asyncHandlers, ref _asyncCircuits, ref _asyncNames);
             ReturnArrayHelper(ref _notifyHandlers, ref _notifyCircuits, ref _notifyNames);
-            ReturnArrayHelper(ref _notifySafeHandlers, ref _notifySafeCircuits, ref _notifySafeNames);
+            ReturnArrayHelper(ref _subscribeHandlers, ref _subscribeCircuits, ref _subscribeNames);
 
             if (_flatParallel != null && _flatParallel.Length > 0 &&
                 _flatParallel != Array.Empty<ParallelHandlerEntry<T>>())
@@ -600,13 +599,13 @@ public sealed class GlobalEventCenter
         {
             if (_disposed) return;
 
-            int totalSync = 0, totalAsync = 0, totalParallel = 0, totalNotify = 0, totalNotifySafe = 0;
+            int totalSync = 0, totalAsync = 0, totalParallel = 0, totalNotify = 0, totalSubscribe = 0;
             ulong newMask = 0,
                 newSyncMask = 0,
                 newAsyncMask = 0,
                 newParallelMask = 0,
                 newNotifyMask = 0,
-                newNotifySafeMask = 0;
+                newSubscribeMask = 0;
             for (var i = 0; i < _buckets.Length; i++)
             {
                 var b = _buckets[i];
@@ -631,26 +630,26 @@ public sealed class GlobalEventCenter
                 foreach (var h in b.MasterNotify)
                     if (!h.Circuit.IsDisabled)
                         bNotify++;
-                var bNotifySafe = 0;
-                foreach (var h in b.MasterNotifySafe)
+                var bSubscribe = 0;
+                foreach (var h in b.MasterSubscribe)
                     if (!h.Circuit.IsDisabled)
-                        bNotifySafe++;
+                        bSubscribe++;
 
                 totalSync += bSync;
                 totalAsync += bAsync;
                 totalParallel += bParallel;
                 totalNotify += bNotify;
-                totalNotifySafe += bNotifySafe;
+                totalSubscribe += bSubscribe;
                 var bit = 1UL << i;
                 if (bSync > 0) newSyncMask |= bit;
                 if (bAsync > 0) newAsyncMask |= bit;
                 if (bParallel > 0) newParallelMask |= bit;
                 if (bNotify > 0) newNotifyMask |= bit;
-                if (bNotifySafe > 0) newNotifySafeMask |= bit;
-                if (bSync > 0 || bAsync > 0 || bParallel > 0 || bNotify > 0 || bNotifySafe > 0) newMask |= bit;
+                if (bSubscribe > 0) newSubscribeMask |= bit;
+                if (bSync > 0 || bAsync > 0 || bParallel > 0 || bNotify > 0 || bSubscribe > 0) newMask |= bit;
             }
 
-            RentArrays(totalSync, totalAsync, totalNotify, totalNotifySafe, totalParallel);
+            RentArrays(totalSync, totalAsync, totalNotify, totalSubscribe, totalParallel);
 
             int sIdx = 0, aIdx = 0, pIdx = 0, nIdx = 0, nsIdx = 0;
             for (var i = 0; i < _buckets.Length; i++)
@@ -666,7 +665,7 @@ public sealed class GlobalEventCenter
                 _ranges[i].AsyncStart = aIdx;
                 _ranges[i].ParallelStart = pIdx;
                 _ranges[i].NotifyStart = nIdx;
-                _ranges[i].NotifySafeStart = nsIdx;
+                _ranges[i].SubscribeStart = nsIdx;
                 if (b.HasHandlers)
                 {
                     foreach (var h in b.MasterOrdered)
@@ -718,12 +717,12 @@ public sealed class GlobalEventCenter
                             nIdx++;
                         }
 
-                    foreach (var h in b.MasterNotifySafe)
+                    foreach (var h in b.MasterSubscribe)
                         if (!h.Circuit.IsDisabled)
                         {
-                            _notifySafeHandlers[nsIdx] = h.Handler;
-                            _notifySafeCircuits[nsIdx] = h.Circuit;
-                            _notifySafeNames[nsIdx] = h.FullName;
+                            _subscribeHandlers[nsIdx] = h.Handler;
+                            _subscribeCircuits[nsIdx] = h.Circuit;
+                            _subscribeNames[nsIdx] = h.FullName;
                             nsIdx++;
                         }
 
@@ -734,7 +733,7 @@ public sealed class GlobalEventCenter
                 _ranges[i].AsyncCount = aIdx - _ranges[i].AsyncStart;
                 _ranges[i].ParallelCount = pIdx - _ranges[i].ParallelStart;
                 _ranges[i].NotifyCount = nIdx - _ranges[i].NotifyStart;
-                _ranges[i].NotifySafeCount = nsIdx - _ranges[i].NotifySafeStart;
+                _ranges[i].SubscribeCount = nsIdx - _ranges[i].SubscribeStart;
             }
 
             ClearArrays(sIdx, aIdx, nIdx, nsIdx, pIdx);
@@ -742,7 +741,7 @@ public sealed class GlobalEventCenter
             _asyncCountTotal = aIdx;
             _parallelCountTotal = pIdx;
             _notifyCountTotal = nIdx;
-            _notifySafeCountTotal = nsIdx;
+            _subscribeCountTotal = nsIdx;
 
             IdentifySpecializations();
 
@@ -751,11 +750,11 @@ public sealed class GlobalEventCenter
             _asyncMask = newAsyncMask;
             _parallelMask = newParallelMask;
             _notifyMask = newNotifyMask;
-            _notifySafeMask = newNotifySafeMask;
+            _notifySafeMask = newSubscribeMask;
             Volatile.Write(ref _isDirty, 0);
         }
 
-        private void RentArrays(int totalSync, int totalAsync, int totalNotify, int totalNotifySafe, int totalParallel)
+        private void RentArrays(int totalSync, int totalAsync, int totalNotify, int totalSubscribe, int totalParallel)
         {
             if (_syncHandlers.Length < totalSync)
             {
@@ -781,12 +780,12 @@ public sealed class GlobalEventCenter
                 _notifyNames = ArrayPool<string>.Shared.Rent(totalNotify);
             }
 
-            if (_notifySafeHandlers.Length < totalNotifySafe)
+            if (_subscribeHandlers.Length < totalSubscribe)
             {
                 ReturnArraysForRebuild(false, false, false, true, false);
-                _notifySafeHandlers = ArrayPool<EventNotifyDelegate<T>>.Shared.Rent(totalNotifySafe);
-                _notifySafeCircuits = ArrayPool<HandlerCircuit>.Shared.Rent(totalNotifySafe);
-                _notifySafeNames = ArrayPool<string>.Shared.Rent(totalNotifySafe);
+                _subscribeHandlers = ArrayPool<EventNotifyDelegate<T>>.Shared.Rent(totalSubscribe);
+                _subscribeCircuits = ArrayPool<HandlerCircuit>.Shared.Rent(totalSubscribe);
+                _subscribeNames = ArrayPool<string>.Shared.Rent(totalSubscribe);
             }
 
             if (_flatParallel.Length < totalParallel)
@@ -814,9 +813,9 @@ public sealed class GlobalEventCenter
             Array.Clear(_notifyHandlers, nIdx, _notifyHandlers.Length - nIdx);
             Array.Clear(_notifyCircuits, nIdx, _notifyCircuits.Length - nIdx);
             Array.Clear(_notifyNames, nIdx, _notifyNames.Length - nIdx);
-            Array.Clear(_notifySafeHandlers, nsIdx, _notifySafeHandlers.Length - nsIdx);
-            Array.Clear(_notifySafeCircuits, nsIdx, _notifySafeCircuits.Length - nsIdx);
-            Array.Clear(_notifySafeNames, nsIdx, _notifySafeNames.Length - nsIdx);
+            Array.Clear(_subscribeHandlers, nsIdx, _subscribeHandlers.Length - nsIdx);
+            Array.Clear(_subscribeCircuits, nsIdx, _subscribeCircuits.Length - nsIdx);
+            Array.Clear(_subscribeNames, nsIdx, _subscribeNames.Length - nsIdx);
             Array.Clear(_flatParallel, pIdx, _flatParallel.Length - pIdx);
         }
 
@@ -824,9 +823,9 @@ public sealed class GlobalEventCenter
         {
             _singleSyncHandler = null;
             _singleNotifyHandler = null;
-            _singleNotifySafeHandler = null;
+            _singleSubscribeHandler = null;
             _isSingleSync = _syncCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
-                            _notifyCountTotal == 0 && _notifySafeCountTotal == 0;
+                            _notifyCountTotal == 0 && _subscribeCountTotal == 0;
             if (_isSingleSync)
             {
                 _singleSyncHandler = _syncHandlers[0];
@@ -835,7 +834,7 @@ public sealed class GlobalEventCenter
             }
 
             _isSingleNotify = _notifyCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
-                              _syncCountTotal == 0 && _notifySafeCountTotal == 0;
+                              _syncCountTotal == 0 && _subscribeCountTotal == 0;
             if (_isSingleNotify)
             {
                 _singleNotifyHandler = _notifyHandlers[0];
@@ -843,16 +842,16 @@ public sealed class GlobalEventCenter
                 _singleNotifyName = _notifyNames[0];
             }
 
-            _isSingleNotifySafe = _notifySafeCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
+            _isSingleSubscribe = _subscribeCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
                                   _syncCountTotal == 0 && _notifyCountTotal == 0;
-            if (_isSingleNotifySafe)
+            if (_isSingleSubscribe)
             {
-                _singleNotifySafeHandler = _notifySafeHandlers[0];
-                _singleNotifySafeCircuit = _notifySafeCircuits[0];
-                _singleNotifySafeName = _notifySafeNames[0];
+                _singleSubscribeHandler = _subscribeHandlers[0];
+                _singleSubscribeCircuit = _subscribeCircuits[0];
+                _singleSubscribeName = _subscribeNames[0];
             }
 
-            _isSmallNotifyFanoutOnly = _notifyCountTotal + _notifySafeCountTotal is >= 2 and <= 8 &&
+            _isSmallNotifyFanoutOnly = _notifyCountTotal + _subscribeCountTotal is >= 2 and <= 8 &&
                                        _asyncCountTotal == 0 && _parallelCountTotal == 0 && _syncCountTotal == 0;
             _singleRouteLayerIndex = FindSingleRouteLayerIndex();
         }
@@ -862,7 +861,7 @@ public sealed class GlobalEventCenter
             for (var i = 0; i < _buckets.Length; i++)
             {
                 ref var r = ref _ranges[i];
-                if (r.SyncCount + r.NotifyCount + r.NotifySafeCount == 1 && r.AsyncCount == 0 &&
+                if (r.SyncCount + r.NotifyCount + r.SubscribeCount == 1 && r.AsyncCount == 0 &&
                     r.ParallelCount == 0) return i;
             }
 
@@ -887,9 +886,9 @@ public sealed class GlobalEventCenter
             MarkDirty();
         }
 
-        public void AddNotifySafe(int layerIndex, EventNotifyDelegate<T> h)
+        public void AddSubscribe(int layerIndex, EventNotifyDelegate<T> h)
         {
-            GetOrCreate(layerIndex).AddNotifySafe(h);
+            GetOrCreate(layerIndex).AddSubscribe(h);
             MarkDirty();
         }
 
@@ -898,7 +897,7 @@ public sealed class GlobalEventCenter
             GetOrCreate(layerIndex).AddParallel(h, re);
         }
 
-        public void AddParallel(int layerIndex, EventHandleDelegate<T> h, Action<int, string, string, Exception> re)
+        public void AddParallel(int layerIndex, EventNotifyDelegate<T> h, Action<int, string, string, Exception> re)
         {
             GetOrCreate(layerIndex).AddParallel(h, re);
         }
@@ -933,6 +932,24 @@ public sealed class GlobalEventCenter
             }
         }
 
+        public void RemoveParallel(int layerIndex, EventNotifyDelegate<T> h)
+        {
+            if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
+            {
+                _buckets[layerIndex]!.RemoveParallel(h);
+                MarkDirty();
+            }
+        }
+
+        public void RemoveParallel(int layerIndex, IEventHandler<T> h)
+        {
+            if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
+            {
+                _buckets[layerIndex]!.RemoveParallel(h);
+                MarkDirty();
+            }
+        }
+
         public void RemoveNotify(int layerIndex, EventNotifyDelegate<T> h)
         {
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
@@ -942,11 +959,11 @@ public sealed class GlobalEventCenter
             }
         }
 
-        public void RemoveNotifySafe(int layerIndex, EventNotifyDelegate<T> h)
+        public void RemoveSubscribe(int layerIndex, EventNotifyDelegate<T> h)
         {
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
             {
-                _buckets[layerIndex]!.RemoveNotifySafe(h);
+                _buckets[layerIndex]!.RemoveSubscribe(h);
                 MarkDirty();
             }
         }
@@ -973,29 +990,29 @@ public sealed class GlobalEventCenter
         public EventHandledState Dispatch(in T value)
         {
             EnsureClean();
-            if (_isSingleNotifySafe) return DispatchSingleNotifySafe(in value);
             if (_isSingleNotify) return DispatchSingleNotify(in value);
+            if (_isSingleSubscribe) return DispatchSingleNotifySafe(in value);
             if (_isSingleSync) return DispatchSingleSync(in value);
+            
             if (_isSmallNotifyFanoutOnly)
             {
                 if (_notifyCountTotal > 0) DispatchSmallNotifyFanout(0, _notifyCountTotal, in value);
-                if (_notifySafeCountTotal > 0) DispatchNotifySafe(0, _notifySafeCountTotal, in value);
                 return EventHandledState.Continue;
             }
 
-            if (_parallelMask != 0)
-                for (var j = 0; j < _parallelCountTotal; j++)
-                    _flatParallel[j].Enqueue(-1, in value);
             if (_notifyMask != 0) DispatchNotify(0, _notifyCountTotal, in value);
-            if (_notifySafeMask != 0) DispatchNotifySafe(0, _notifySafeCountTotal, in value);
+            if (_notifySafeMask != 0) DispatchNotifySafe(0, _subscribeCountTotal, in value);
             var res = EventHandledState.Continue;
             if (_syncMask != 0)
             {
                 res = DispatchSync(0, _syncCountTotal, in value);
                 if (res == EventHandledState.Handled) return res;
             }
-
             if (_asyncMask != 0) DispatchAsync(0, _asyncCountTotal, in value);
+            if (_parallelMask != 0)
+                for (var j = 0; j < _parallelCountTotal; j++)
+                    _flatParallel[j].Enqueue(-1, in value);
+
             return res;
         }
 
@@ -1006,13 +1023,13 @@ public sealed class GlobalEventCenter
             if (layerIndex >= _ranges.Length) return EventHandledState.Continue;
             if (layerIndex == _singleRouteLayerIndex)
             {
-                if (_isSingleNotifySafe) return DispatchSingleNotifySafe(in value);
+                if (_isSingleSubscribe) return DispatchSingleNotifySafe(in value);
                 if (_isSingleNotify) return DispatchSingleNotify(in value);
                 if (_isSingleSync) return DispatchSingleSync(in value);
             }
 
             ref var r = ref _ranges[layerIndex];
-            if (r.NotifySafeCount == 1 && r.NotifyCount == 0 && r.SyncCount == 0 && r.AsyncCount == 0 &&
+            if (r.SubscribeCount == 1 && r.NotifyCount == 0 && r.SyncCount == 0 && r.AsyncCount == 0 &&
                 r.ParallelCount == 0) return DispatchSingleNotifySafe(in value);
             
             if (r.ParallelCount > 0)
@@ -1021,8 +1038,8 @@ public sealed class GlobalEventCenter
             
             if (r.NotifyCount > 0) DispatchNotify(r.NotifyStart, r.NotifyStart + r.NotifyCount, in value);
             
-            if (r.NotifySafeCount > 0)
-                DispatchNotifySafe(r.NotifySafeStart, r.NotifySafeStart + r.NotifySafeCount, in value);
+            if (r.SubscribeCount > 0)
+                DispatchNotifySafe(r.SubscribeStart, r.SubscribeStart + r.SubscribeCount, in value);
             
             var s = EventHandledState.Continue;
             if (r.SyncCount > 0) s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value);
@@ -1065,13 +1082,12 @@ public sealed class GlobalEventCenter
         {
             try
             {
-                _singleNotifySafeHandler(in value);
+                _singleSubscribeHandler(in value);
             }
             catch (Exception ex)
             {
                 HandleFault(0, 2, in value, ex);
             }
-
             return EventHandledState.Continue;
         }
 
@@ -1080,7 +1096,6 @@ public sealed class GlobalEventCenter
         {
             ref var hBase = ref GetArrayDataRef(_notifyHandlers);
             Unsafe.Add(ref hBase, start)(in value);
-            if (count == 1) return;
             Unsafe.Add(ref hBase, start + 1)(in value);
             if (count == 2) return;
             Unsafe.Add(ref hBase, start + 2)(in value);
@@ -1127,7 +1142,7 @@ public sealed class GlobalEventCenter
         private void DispatchNotifySafe(int start, int end, in T value)
         {
             if (start >= end) return;
-            ref var hBase = ref GetArrayDataRef(_notifySafeHandlers);
+            ref var hBase = ref GetArrayDataRef(_subscribeHandlers);
             var i = start;
             var currentIndex = start;
             try
@@ -1238,10 +1253,10 @@ public sealed class GlobalEventCenter
             }
             else if (type == 2)
             {
-                if (index >= 0 && index < _notifySafeCountTotal)
+                if (index >= 0 && index < _subscribeCountTotal)
                 {
-                    circuit = _notifySafeCircuits[index];
-                    name = _notifySafeNames[index];
+                    circuit = _subscribeCircuits[index];
+                    name = _subscribeNames[index];
                 }
             }
 
@@ -1265,12 +1280,12 @@ public sealed class GlobalEventCenter
             Owner.WakeLayer(firstLayer);
         }
 
-        private void ReturnArraysForRebuild(bool sync, bool async, bool notify, bool notifySafe, bool parallel)
+        private void ReturnArraysForRebuild(bool sync, bool async, bool notify, bool subscribe, bool parallel)
         {
             if (sync) ReturnArrayHelper(ref _syncHandlers, ref _syncCircuits, ref _syncNames);
             if (async) ReturnArrayHelper(ref _asyncHandlers, ref _asyncCircuits, ref _asyncNames);
             if (notify) ReturnArrayHelper(ref _notifyHandlers, ref _notifyCircuits, ref _notifyNames);
-            if (notifySafe) ReturnArrayHelper(ref _notifySafeHandlers, ref _notifySafeCircuits, ref _notifySafeNames);
+            if (subscribe) ReturnArrayHelper(ref _subscribeHandlers, ref _subscribeCircuits, ref _subscribeNames);
         }
 
         public void PostLocal(int layerIndex, in T value)

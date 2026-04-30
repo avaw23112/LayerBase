@@ -218,7 +218,7 @@ public sealed class LayerEventHandlerGenerator : IIncrementalGenerator
                 : "global::LayerBase.Core.EventHandler.IEventHandler";
             var subscribeMethod = binding.Kind == EventHandlerKind.Async
                 ? "SubscribeAsync"
-                : "Subscribe";
+                : "SubscribeFlow";
 
             builder.Append("            typedLayer.").Append(subscribeMethod).Append("<").Append(eventDisplay)
                    .Append(">((")

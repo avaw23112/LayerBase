@@ -23,7 +23,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor ClassMustBePartial = new(
         "LBGS002",
         "Class must be partial",
-        "Class '{0}' uses [Subscribe] attributes and must be declared as partial to allow source generation.",
+        "Class '{0}' uses Subscribe attributes and must be declared as partial to allow source generation.",
         "Usage",
         DiagnosticSeverity.Error,
         true);
@@ -90,7 +90,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                     var evtStr = evtParam.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
                     var producedEvts = new List<string>();
-                    if (!attrName.Contains("Async") && !attrName.Contains("Delay"))
+                    if (!attrName.Contains("Async") && !attrName.Contains("Delay") && !attrName.Contains("Parallel"))
                         ScanBody(ctx.SemanticModel, method, producedEvts);
                     handlers.Add(new HandlerInfo(method.Name, attrName, evtStr, producedEvts));
                 }
@@ -199,8 +199,8 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
             {
                 var reg = h.Attr.Contains("Async") ? "SubscribeAsync" :
                     h.Attr.Contains("Parallel")    ? "SubscribeParallel" :
-                    h.Attr.Contains("NotifySafe")  ? "SubscribeNotifySafe" :
-                    h.Attr.Contains("Notify")      ? "SubscribeNotify" : "Subscribe";
+                    h.Attr.Contains("Notify")      ? "SubscribeNotify" : 
+                    h.Attr == "SubscribeFlow" || h.Attr == "SubscribeFlowAttribute" ? "SubscribeFlow" : "Subscribe";
 
                 sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
                 sb.AppendLine($"            layer.SubscribedEvents.Add(typeof({h.Evt}));");
@@ -264,16 +264,22 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
 
         if (method.Parameters[0].RefKind != RefKind.In) return false;
 
-        if (attrName.Contains("Notify")) return method.ReturnsVoid;
+        // Subscribe (安全/默認) 和 SubscribeNotify 返回 void
+        if (attrName == "Subscribe" || attrName == "SubscribeAttribute" || 
+            attrName.Contains("Notify") || attrName.Contains("Parallel")) 
+            return method.ReturnsVoid;
 
+        // SubscribeFlow (業務流攔截) 返回 EventHandledState
         return IsReturnType(method.ReturnType, "global::LayerBase.Core.Event.EventHandledState");
     }
 
     private static string GetExpectedSignature(string attrName)
     {
         if (attrName.Contains("Async")) return "LBTask Handle(TEvent value)";
-        if (attrName.Contains("NotifySafe")) return "void Handle(in TEvent value)";
-        if (attrName.Contains("Notify")) return "void Handle(in TEvent value)";
+        if (attrName == "Subscribe" || attrName == "SubscribeAttribute" || 
+            attrName.Contains("Notify") || attrName.Contains("Parallel")) 
+            return "void Handle(in TEvent value)";
+        
         return "EventHandledState Handle(in TEvent value)";
     }
 

@@ -1,10 +1,10 @@
 ﻿namespace LayerBase.Core.Event;
 
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class SubscribeNotifySafeAttribute : Attribute { }
+public sealed class SubscribeAttribute : Attribute { }
 
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class SubscribeAttribute : Attribute { }
+public sealed class SubscribeFlowAttribute : Attribute { }
 
 /// <summary>
 ///     <para>纯粹消息通道：无异常熔断，无Handle控制，甚至不进入异常报告通道。需要开发者自己管理异常�?/para>

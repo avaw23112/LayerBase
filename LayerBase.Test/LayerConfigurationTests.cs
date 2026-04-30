@@ -40,7 +40,7 @@ public class LayerConfigurationTests
         {
             _result = result;
             _idSelector = idSelector;
-            Subscribe<TEvent>(Handle);
+            SubscribeFlow<TEvent>(Handle);
         }
 
         public List<int> ReceivedIds { get; } = new();

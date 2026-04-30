@@ -26,7 +26,7 @@ public struct DataRequestEvent
 // 3. �?Layer 中使用服�?
 public partial class ServiceLayer : Layer
 {
-    [Subscribe]
+    [SubscribeFlow]
     private EventHandledState OnRequest(in DataRequestEvent req)
     {
         // 4. 获取服务实例

@@ -36,7 +36,7 @@ public class EventPipelineTests
         // Use Test method context to create fresh layer
         LayerHub.CreateLayers().Push(layer).Build();
 
-        layer.Subscribe((in TestEvent e) =>
+        layer.SubscribeFlow((in TestEvent e) =>
         {
             _trace.Add("First");
             return EventHandledState.Continue;
@@ -46,7 +46,7 @@ public class EventPipelineTests
             _trace.Add("Second");
             await LBTask.Yield();
         });
-        layer.Subscribe((in TestEvent e) =>
+        layer.SubscribeFlow((in TestEvent e) =>
         {
             _trace.Add("Third");
             return EventHandledState.Continue;
@@ -75,8 +75,8 @@ public class EventPipelineTests
         try
         {
             // 注册一个会报错�?Handler 和一个安全的 Handler
-            layer.Subscribe((in TestEvent e) => throw new Exception("Boom"));
-            layer.Subscribe((in TestEvent e) =>
+            layer.SubscribeFlow((in TestEvent e) => throw new Exception("Boom"));
+            layer.SubscribeFlow((in TestEvent e) =>
             {
                 _trace.Add("Safe");
                 return EventHandledState.Continue;
@@ -145,7 +145,7 @@ public class EventPipelineTests
             _name = name;
             _trace = trace;
             _handle = handle;
-            Subscribe<TestEvent>(OnRecv);
+            SubscribeFlow<TestEvent>(OnRecv);
         }
 
         private EventHandledState OnRecv(in TestEvent e)

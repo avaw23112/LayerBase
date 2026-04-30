@@ -56,7 +56,7 @@ public class LocalEventTests
         {
             _name = name;
             _trace = trace;
-            Subscribe((in LocalEvent evt) =>
+            SubscribeFlow((in LocalEvent evt) =>
             {
                 _trace.Add(_name);
                 return EventHandledState.Continue;

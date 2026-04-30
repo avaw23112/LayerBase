@@ -32,7 +32,7 @@ public partial class NotifyLayer : Layer
 
     public bool HasReceived { get; private set; }
 
-    [Subscribe]
+    [SubscribeFlow]
     private EventHandledState OnNotify(in NotificationEvent e)
     {
         Console.WriteLine($"[Notify] Received: {e.Msg} at {DateTime.Now:HH:mm:ss.fff}");
