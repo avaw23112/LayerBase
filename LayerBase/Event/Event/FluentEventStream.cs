@@ -66,7 +66,7 @@ public readonly struct LayerEventStream<T> where T : struct
     }
 
     /// <summary>
-    ///     绑定并行处理函数�?
+    ///     绑定并行处理函数?
     /// </summary>
     public void HandleParallel(EventHandleDelegate<T> handler, Action<int, string, string, Exception> reportError)
     {
@@ -85,5 +85,25 @@ public readonly struct LayerEventStream<T> where T : struct
             }, reportError);
         }
     }
-}
+
+    /// <summary>
+    ///     绑定安全通知處理函數（異常隔離）
+    /// </summary>
+    public void HandleNotifySafe(EventNotifyDelegate<T> handler)
+    {
+        if (handler == null) throw new ArgumentNullException(nameof(handler));
+        if (_predicate == null)
+        {
+            _layer.SubscribeNotifySafe(handler);
+        }
+        else
+        {
+            var pred = _predicate;
+            _layer.SubscribeNotifySafe((in T e) =>
+            {
+                if (pred(in e)) handler(in e);
+            });
+        }
+    }
+    }
 

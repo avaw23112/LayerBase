@@ -43,6 +43,7 @@ public abstract class Layer : Node, IDisposable
 
     // Metadata for Topology Report
     public readonly List<Type> SubscribedEvents = new();
+    public readonly List<Type> NotifySafeSubscribedEvents = new();
     private GlobalEventCenter _center;
     private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();
 
@@ -256,6 +257,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1)
         {
             LayerHub.EventCenter.Subscribe(RouteIndex, handler);
+            SubscribedEvents.Add(typeof(T));
             lock (m_subscriptions)
             {
                 m_subscriptions.Add(UnsubscribeDelegateToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
@@ -273,6 +275,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1)
         {
             LayerHub.EventCenter.SubscribeNotify(RouteIndex, handler);
+            SubscribedEvents.Add(typeof(T));
             lock (m_subscriptions)
             {
                 m_subscriptions.Add(UnsubscribeNotifyToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
@@ -290,6 +293,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1)
         {
             LayerHub.EventCenter.SubscribeNotifySafe(RouteIndex, handler);
+            SubscribedEvents.Add(typeof(T));
             lock (m_subscriptions)
             {
                 m_subscriptions.Add(UnsubscribeNotifySafeToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
@@ -307,6 +311,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1)
         {
             LayerHub.EventCenter.SubscribeAsync(RouteIndex, handler);
+            SubscribedEvents.Add(typeof(T));
             lock (m_subscriptions)
             {
                 m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));

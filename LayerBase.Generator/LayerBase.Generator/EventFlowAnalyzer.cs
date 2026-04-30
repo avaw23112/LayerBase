@@ -116,13 +116,18 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
                 if (m.AttributeLists.Count == 0) continue;
                 var methodSymbol = semanticModel.GetDeclaredSymbol(m);
                 if (methodSymbol == null) continue;
-                if (methodSymbol.GetAttributes().Any(a => a.AttributeClass?.Name.Contains("Subscribe") == true))
+                var attributes = methodSymbol.GetAttributes();
+                if (attributes.Any(a => a.AttributeClass?.Name.Contains("Subscribe") == true))
                 {
                     var param = methodSymbol.Parameters.FirstOrDefault();
                     if (param != null && SymbolEqualityComparer.Default.Equals(param.Type, eventType))
+                    {
+                        var tag = attributes.Any(a => a.AttributeClass?.Name.Contains("NotifySafe") == true) ? "[NotifySafe] " : 
+                                  attributes.Any(a => a.AttributeClass?.Name.Contains("Notify") == true) ? "[Notify] " : "";
                         result.Add(new SubscriberInfo(
-                            $"{methodSymbol.ContainingType.Name}.{methodSymbol.Name}",
+                            $"{tag}{methodSymbol.ContainingType.Name}.{methodSymbol.Name}",
                             methodSymbol.Locations.FirstOrDefault()!));
+                    }
                 }
             }
             var fields = root.DescendantNodes().OfType<FieldDeclarationSyntax>();
