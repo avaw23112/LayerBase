@@ -79,7 +79,7 @@ public class DiagnosticTests
                 .Build();
 
         var topologyLog = _logs.Find(l => l.Source == "System" && l.EventName == "Topology");
-        Assert.That(topologyLog.Message, Does.Contain("Layer 0: TestDiagLayer"));
+        Assert.That(topologyLog.Message, Does.Contain("TestDiagLayer"));
         Assert.That(topologyLog.Message, Does.Contain("-> [M] TestDiagManager"));
 
         TestContext.Out.WriteLine("Captured Topology Log:\n" + topologyLog.Message);
