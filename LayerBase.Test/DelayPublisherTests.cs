@@ -39,6 +39,11 @@ public class DelayPublisherTests
         {
             this.Delay(new DelayTestEvent { Value = value }, ttl);
         }
+
+        public void RequestBigDelay(float ttl, int value)
+        {
+            this.DelayLocal(new BigDelayEvent(value), ttl);
+        }
     }
 
     [Test]
@@ -108,9 +113,63 @@ public class DelayPublisherTests
         Assert.That(publisher.ContractId, Is.EqualTo(888));
     }
 
+    [Test]
+    public void Concurrent_publish_and_read_observes_whole_value_snapshots()
+    {
+        var layer = new DelayTestLayer();
+        var manager = new DelayTestService();
+        layer.AddManager(manager);
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        var retrievedManager = layer.GetService<DelayTestService>();
+        var publisher = layer.SubscribeDelay<BigDelayEvent>();
+        Exception? readerError = null;
+        var run = true;
+
+        var reader = Task.Run(() =>
+        {
+            try
+            {
+                while (Volatile.Read(ref run))
+                {
+                    if (!publisher.TryGet(out var value)) continue;
+                    Assert.That(value.B, Is.EqualTo(value.A));
+                    Assert.That(value.C, Is.EqualTo(value.A));
+                    Assert.That(value.D, Is.EqualTo(value.A));
+                }
+            }
+            catch (Exception ex)
+            {
+                readerError = ex;
+            }
+        });
+
+        for (var i = 1; i <= 2048; i++) retrievedManager.RequestBigDelay(10.0f, i);
+
+        Volatile.Write(ref run, false);
+        reader.Wait();
+        Assert.That(readerError, Is.Null);
+    }
+
     public struct DelayTestEvent
     {
         public int Value;
+    }
+
+    public struct BigDelayEvent
+    {
+        public int A;
+        public int B;
+        public int C;
+        public int D;
+
+        public BigDelayEvent(int value)
+        {
+            A = value;
+            B = value;
+            C = value;
+            D = value;
+        }
     }
 }
 

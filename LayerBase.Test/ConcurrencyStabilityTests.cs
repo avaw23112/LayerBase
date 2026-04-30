@@ -62,6 +62,59 @@ public class ConcurrencyStabilityTests
         task.Wait();
     }
 
+    [Test]
+    public void Send_While_Subscribe_Rebuilds_Does_Not_Observe_Mutating_Handler_Lists()
+    {
+        var layer = new TestLayer();
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        var run = true;
+        Exception? senderError = null;
+        Exception? subscriberError = null;
+        var received = 0;
+
+        var sender = Task.Run(() =>
+        {
+            try
+            {
+                while (Volatile.Read(ref run))
+                {
+                    LayerHub.Send(new StressEvent(1));
+                    Thread.Yield();
+                }
+            }
+            catch (Exception ex)
+            {
+                senderError = ex;
+            }
+        });
+
+        var subscriber = Task.Run(() =>
+        {
+            try
+            {
+                for (var i = 0; i < 512; i++)
+                {
+                    layer.SubscribeNotify<StressEvent>((in StressEvent _) => Interlocked.Increment(ref received));
+                    LayerHub.Send(new StressEvent(i));
+                }
+            }
+            catch (Exception ex)
+            {
+                subscriberError = ex;
+            }
+            finally
+            {
+                Volatile.Write(ref run, false);
+            }
+        });
+
+        Assert.DoesNotThrow(() => Task.WaitAll(sender, subscriber));
+        Assert.That(senderError, Is.Null);
+        Assert.That(subscriberError, Is.Null);
+        Assert.That(received, Is.GreaterThan(0));
+    }
+
     private class TestLayer : Layer { }
     private struct StressEvent { 
         public int Id;

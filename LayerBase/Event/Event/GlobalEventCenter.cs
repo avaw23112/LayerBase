@@ -464,10 +464,148 @@ public sealed class GlobalEventCenter
             SubscribeCount;
     }
 
+    private sealed class EventBucketSnapshot<TEvent> where TEvent : struct
+    {
+        public static readonly EventBucketSnapshot<TEvent> Empty = new(
+            Array.Empty<EventHandleDelegate<TEvent>>(),
+            Array.Empty<HandlerCircuit>(),
+            Array.Empty<string>(),
+            Array.Empty<EventHandleDelegateAsync<TEvent>>(),
+            Array.Empty<HandlerCircuit>(),
+            Array.Empty<string>(),
+            Array.Empty<EventNotifyDelegate<TEvent>>(),
+            Array.Empty<HandlerCircuit>(),
+            Array.Empty<string>(),
+            Array.Empty<EventNotifyDelegate<TEvent>>(),
+            Array.Empty<HandlerCircuit>(),
+            Array.Empty<string>(),
+            Array.Empty<ParallelHandlerEntry<TEvent>>(),
+            Array.Empty<LayerRange>(),
+            0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0);
+
+        public readonly EventHandleDelegate<TEvent>[] SyncHandlers;
+        public readonly HandlerCircuit[] SyncCircuits;
+        public readonly string[] SyncNames;
+        public readonly EventHandleDelegateAsync<TEvent>[] AsyncHandlers;
+        public readonly HandlerCircuit[] AsyncCircuits;
+        public readonly string[] AsyncNames;
+        public readonly EventNotifyDelegate<TEvent>[] NotifyHandlers;
+        public readonly HandlerCircuit[] NotifyCircuits;
+        public readonly string[] NotifyNames;
+        public readonly EventNotifyDelegate<TEvent>[] SubscribeHandlers;
+        public readonly HandlerCircuit[] NotifySafeCircuits;
+        public readonly string[] NotifySafeNames;
+        public readonly ParallelHandlerEntry<TEvent>[] FlatParallel;
+        public readonly LayerRange[] Ranges;
+        public readonly int SyncCountTotal;
+        public readonly int AsyncCountTotal;
+        public readonly int ParallelCountTotal;
+        public readonly int NotifyCountTotal;
+        public readonly int NotifySafeCountTotal;
+        public readonly bool IsSingleSync;
+        public readonly bool IsSingleNotify;
+        public readonly bool IsSingleNotifySafe;
+        public readonly bool IsSmallNotifyFanoutOnly;
+        public readonly EventHandleDelegate<TEvent>? SingleSyncHandler;
+        public readonly EventNotifyDelegate<TEvent>? SingleNotifyHandler;
+        public readonly EventNotifyDelegate<TEvent>? SingleSubscribeHandler;
+        public readonly int SingleRouteLayerIndex;
+        public readonly ulong SubscriberMask;
+        public readonly ulong SyncMask;
+        public readonly ulong AsyncMask;
+        public readonly ulong ParallelMask;
+        public readonly ulong NotifyMask;
+        public readonly ulong NotifySafeMask;
+
+        public EventBucketSnapshot(
+            EventHandleDelegate<TEvent>[] syncHandlers,
+            HandlerCircuit[] syncCircuits,
+            string[] syncNames,
+            EventHandleDelegateAsync<TEvent>[] asyncHandlers,
+            HandlerCircuit[] asyncCircuits,
+            string[] asyncNames,
+            EventNotifyDelegate<TEvent>[] notifyHandlers,
+            HandlerCircuit[] notifyCircuits,
+            string[] notifyNames,
+            EventNotifyDelegate<TEvent>[] subscribeHandlers,
+            HandlerCircuit[] notifySafeCircuits,
+            string[] notifySafeNames,
+            ParallelHandlerEntry<TEvent>[] flatParallel,
+            LayerRange[] ranges,
+            int syncCountTotal,
+            int asyncCountTotal,
+            int parallelCountTotal,
+            int notifyCountTotal,
+            int notifySafeCountTotal,
+            ulong subscriberMask,
+            ulong syncMask,
+            ulong asyncMask,
+            ulong parallelMask,
+            ulong notifyMask,
+            ulong notifySafeMask)
+        {
+            SyncHandlers = syncHandlers;
+            SyncCircuits = syncCircuits;
+            SyncNames = syncNames;
+            AsyncHandlers = asyncHandlers;
+            AsyncCircuits = asyncCircuits;
+            AsyncNames = asyncNames;
+            NotifyHandlers = notifyHandlers;
+            NotifyCircuits = notifyCircuits;
+            NotifyNames = notifyNames;
+            SubscribeHandlers = subscribeHandlers;
+            NotifySafeCircuits = notifySafeCircuits;
+            NotifySafeNames = notifySafeNames;
+            FlatParallel = flatParallel;
+            Ranges = ranges;
+            SyncCountTotal = syncCountTotal;
+            AsyncCountTotal = asyncCountTotal;
+            ParallelCountTotal = parallelCountTotal;
+            NotifyCountTotal = notifyCountTotal;
+            NotifySafeCountTotal = notifySafeCountTotal;
+            SubscriberMask = subscriberMask;
+            SyncMask = syncMask;
+            AsyncMask = asyncMask;
+            ParallelMask = parallelMask;
+            NotifyMask = notifyMask;
+            NotifySafeMask = notifySafeMask;
+
+            IsSingleSync = syncCountTotal == 1 && asyncCountTotal == 0 && parallelCountTotal == 0 &&
+                           notifyCountTotal == 0 && notifySafeCountTotal == 0;
+            if (IsSingleSync) SingleSyncHandler = syncHandlers[0];
+
+            IsSingleNotify = notifyCountTotal == 1 && asyncCountTotal == 0 && parallelCountTotal == 0 &&
+                             syncCountTotal == 0 && notifySafeCountTotal == 0;
+            if (IsSingleNotify) SingleNotifyHandler = notifyHandlers[0];
+
+            IsSingleNotifySafe = notifySafeCountTotal == 1 && asyncCountTotal == 0 && parallelCountTotal == 0 &&
+                                 syncCountTotal == 0 && notifyCountTotal == 0;
+            if (IsSingleNotifySafe) SingleSubscribeHandler = subscribeHandlers[0];
+
+            IsSmallNotifyFanoutOnly = notifyCountTotal + notifySafeCountTotal is >= 2 and <= 8 &&
+                                      asyncCountTotal == 0 && parallelCountTotal == 0 && syncCountTotal == 0;
+            SingleRouteLayerIndex = FindSingleRouteLayerIndex(ranges);
+        }
+
+        private static int FindSingleRouteLayerIndex(LayerRange[] ranges)
+        {
+            for (var i = 0; i < ranges.Length; i++)
+            {
+                ref var r = ref ranges[i];
+                if (r.SyncCount + r.NotifyCount + r.SubscribeCount == 1 && r.AsyncCount == 0 &&
+                    r.ParallelCount == 0) return i;
+            }
+
+            return -1;
+        }
+    }
+
     private sealed class EventBucket<T> : IResetable where T : struct
     {
         private readonly object _lock = new();
         public readonly GlobalEventCenter? Owner;
+        private EventBucketSnapshot<T> _snapshot = EventBucketSnapshot<T>.Empty;
         private HandlerCircuit[] _asyncCircuits = Array.Empty<HandlerCircuit>();
 
         private EventHandleDelegateAsync<T>[] _asyncHandlers = Array.Empty<EventHandleDelegateAsync<T>>();
@@ -499,7 +637,6 @@ public sealed class GlobalEventCenter
         private string? _singleNotifyName;
 
         private int _singleRouteLayerIndex = -1;
-        private ulong _singleRouteMask;
 
         private HandlerCircuit? _singleSubscribeCircuit;
         private EventNotifyDelegate<T>? _singleSubscribeHandler;
@@ -548,6 +685,7 @@ public sealed class GlobalEventCenter
 
         private void ReturnArrays()
         {
+            Volatile.Write(ref _snapshot, EventBucketSnapshot<T>.Empty);
             _singleSyncHandler = null;
             _singleSyncCircuit = null;
             _singleSyncName = null;
@@ -558,7 +696,6 @@ public sealed class GlobalEventCenter
             _singleSubscribeCircuit = null;
             _singleSubscribeName = null;
             _singleRouteLayerIndex = -1;
-            _singleRouteMask = 0;
             _isSingleSync = false;
             _isSingleNotify = false;
             _isSingleNotifySafe = false;
@@ -611,13 +748,15 @@ public sealed class GlobalEventCenter
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void EnsureClean()
+        private EventBucketSnapshot<T> EnsureClean()
         {
             if (Volatile.Read(ref _isDirty) == 1)
                 lock (_lock)
                 {
                     if (_isDirty == 1) Rebuild();
                 }
+
+            return _snapshot;
         }
 
         private void Rebuild()
@@ -776,7 +915,63 @@ public sealed class GlobalEventCenter
             _parallelMask = newParallelMask;
             _notifyMask = newNotifyMask;
             _notifySafeMask = newSubscribeMask;
+            PublishDispatchSnapshot(newMask, newSyncMask, newAsyncMask, newParallelMask, newNotifyMask,
+                newSubscribeMask);
             Volatile.Write(ref _isDirty, 0);
+        }
+
+        private void PublishDispatchSnapshot(ulong subscriberMask, ulong syncMask, ulong asyncMask, ulong parallelMask,
+                                             ulong notifyMask,     ulong notifySafeMask)
+        {
+            var syncHandlers = CopyPrefix(_syncHandlers, _syncCountTotal);
+            var syncCircuits = CopyPrefix(_syncCircuits, _syncCountTotal);
+            var syncNames = CopyPrefix(_syncNames, _syncCountTotal);
+            var asyncHandlers = CopyPrefix(_asyncHandlers, _asyncCountTotal);
+            var asyncCircuits = CopyPrefix(_asyncCircuits, _asyncCountTotal);
+            var asyncNames = CopyPrefix(_asyncNames, _asyncCountTotal);
+            var notifyHandlers = CopyPrefix(_notifyHandlers, _notifyCountTotal);
+            var notifyCircuits = CopyPrefix(_notifyCircuits, _notifyCountTotal);
+            var notifyNames = CopyPrefix(_notifyNames, _notifyCountTotal);
+            var subscribeHandlers = CopyPrefix(_subscribeHandlers, _notifySafeCountTotal);
+            var notifySafeCircuits = CopyPrefix(_notifySafeCircuits, _notifySafeCountTotal);
+            var notifySafeNames = CopyPrefix(_notifySafeNames, _notifySafeCountTotal);
+            var flatParallel = CopyPrefix(_flatParallel, _parallelCountTotal);
+            var ranges = CopyPrefix(_ranges, _buckets.Length);
+
+            Volatile.Write(ref _snapshot, new EventBucketSnapshot<T>(
+                syncHandlers,
+                syncCircuits,
+                syncNames,
+                asyncHandlers,
+                asyncCircuits,
+                asyncNames,
+                notifyHandlers,
+                notifyCircuits,
+                notifyNames,
+                subscribeHandlers,
+                notifySafeCircuits,
+                notifySafeNames,
+                flatParallel,
+                ranges,
+                _syncCountTotal,
+                _asyncCountTotal,
+                _parallelCountTotal,
+                _notifyCountTotal,
+                _notifySafeCountTotal,
+                subscriberMask,
+                syncMask,
+                asyncMask,
+                parallelMask,
+                notifyMask,
+                notifySafeMask));
+        }
+
+        private static TElement[] CopyPrefix<TElement>(TElement[] source, int count)
+        {
+            if (count <= 0) return Array.Empty<TElement>();
+            var copy = new TElement[count];
+            Array.Copy(source, copy, count);
+            return copy;
         }
 
         private void RentArrays(int totalSync, int totalAsync, int totalNotify, int totalSubscribe, int totalParallel)
@@ -1014,31 +1209,31 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public EventHandledState Dispatch(in T value)
         {
-            EnsureClean();
+            var snapshot = EnsureClean();
 
-            if (_isSingleNotify) return DispatchSingleNotify(in value);
-            if (_isSmallNotifyFanoutOnly && _notifyCountTotal > 0)
+            if (snapshot.IsSingleNotify) return DispatchSingleNotify(snapshot, in value);
+            if (snapshot.IsSmallNotifyFanoutOnly && snapshot.NotifyCountTotal > 0)
             {
-                DispatchSmallNotifyFanout(0, _notifyCountTotal, in value);
+                DispatchSmallNotifyFanout(snapshot, 0, snapshot.NotifyCountTotal, in value);
                 return EventHandledState.Continue;
             }
 
-            if (_isSingleNotifySafe) return DispatchSingleNotifySafe(in value);
-            if (_isSingleSync) return DispatchSingleSync(in value);
+            if (snapshot.IsSingleNotifySafe) return DispatchSingleNotifySafe(snapshot, in value);
+            if (snapshot.IsSingleSync) return DispatchSingleSync(snapshot, in value);
 
-            if (_notifyMask != 0) DispatchNotify(0, _notifyCountTotal, in value);
-            if (_notifySafeMask != 0) DispatchNotifySafe(0, _notifySafeCountTotal, in value);
+            if (snapshot.NotifyMask != 0) DispatchNotify(snapshot, 0, snapshot.NotifyCountTotal, in value);
+            if (snapshot.NotifySafeMask != 0) DispatchNotifySafe(snapshot, 0, snapshot.NotifySafeCountTotal, in value);
             var res = EventHandledState.Continue;
-            if (_syncMask != 0)
+            if (snapshot.SyncMask != 0)
             {
-                res = DispatchSync(0, _syncCountTotal, in value);
+                res = DispatchSync(snapshot, 0, snapshot.SyncCountTotal, in value);
                 if (res == EventHandledState.Handled) return res;
             }
 
-            if (_asyncMask != 0) DispatchAsync(0, _asyncCountTotal, in value);
-            if (_parallelMask != 0)
-                for (var j = 0; j < _parallelCountTotal; j++)
-                    _flatParallel[j].Enqueue(-1, in value);
+            if (snapshot.AsyncMask != 0) DispatchAsync(snapshot, 0, snapshot.AsyncCountTotal, in value);
+            if (snapshot.ParallelMask != 0)
+                for (var j = 0; j < snapshot.ParallelCountTotal; j++)
+                    snapshot.FlatParallel[j].Enqueue(-1, in value);
 
             return res;
         }
@@ -1046,29 +1241,33 @@ public sealed class GlobalEventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public EventHandledState DispatchLocal(int layerIndex, in T value)
         {
-            EnsureClean();
-            if (layerIndex >= _ranges.Length) return EventHandledState.Continue;
-            if (layerIndex == _singleRouteLayerIndex)
+            var snapshot = EnsureClean();
+            if (layerIndex >= snapshot.Ranges.Length) return EventHandledState.Continue;
+            if (layerIndex == snapshot.SingleRouteLayerIndex)
             {
-                if (_isSingleNotifySafe) return DispatchSingleNotifySafe(in value);
-                if (_isSingleNotify) return DispatchSingleNotify(in value);
-                if (_isSingleSync) return DispatchSingleSync(in value);
+                if (snapshot.IsSingleNotifySafe) return DispatchSingleNotifySafe(snapshot, in value);
+                if (snapshot.IsSingleNotify) return DispatchSingleNotify(snapshot, in value);
+                if (snapshot.IsSingleSync) return DispatchSingleSync(snapshot, in value);
             }
 
-            ref var r = ref _ranges[layerIndex];
+            ref var r = ref snapshot.Ranges[layerIndex];
             if (r.SubscribeCount == 1 && r.NotifyCount == 0 && r.SyncCount == 0 && r.AsyncCount == 0 &&
-                r.ParallelCount == 0) return DispatchSingleNotifySafe(in value);
+                r.ParallelCount == 0)
+            {
+                DispatchNotifySafe(snapshot, r.SubscribeStart, r.SubscribeStart + 1, in value);
+                return EventHandledState.Continue;
+            }
 
             if (r.ParallelCount > 0)
                 for (var j = 0; j < r.ParallelCount; j++)
-                    Unsafe.Add(ref GetArrayDataRef(_flatParallel), r.ParallelStart + j).Enqueue(layerIndex, in value);
-            if (r.NotifyCount > 0) DispatchNotify(r.NotifyStart, r.NotifyStart + r.NotifyCount, in value);
+                    Unsafe.Add(ref GetArrayDataRef(snapshot.FlatParallel), r.ParallelStart + j).Enqueue(layerIndex, in value);
+            if (r.NotifyCount > 0) DispatchNotify(snapshot, r.NotifyStart, r.NotifyStart + r.NotifyCount, in value);
             if (r.SubscribeCount > 0)
-                DispatchNotifySafe(r.SubscribeStart, r.SubscribeStart + r.SubscribeCount, in value);
+                DispatchNotifySafe(snapshot, r.SubscribeStart, r.SubscribeStart + r.SubscribeCount, in value);
             var s = EventHandledState.Continue;
-            if (r.SyncCount > 0) s = DispatchSync(r.SyncStart, r.SyncStart + r.SyncCount, in value);
+            if (r.SyncCount > 0) s = DispatchSync(snapshot, r.SyncStart, r.SyncStart + r.SyncCount, in value);
             if (s == EventHandledState.Handled) return s;
-            if (r.AsyncCount > 0) DispatchAsync(r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
+            if (r.AsyncCount > 0) DispatchAsync(snapshot, r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
             return s;
         }
 
@@ -1079,45 +1278,45 @@ public sealed class GlobalEventCenter
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private EventHandledState DispatchSingleSync(in T value)
+        private EventHandledState DispatchSingleSync(EventBucketSnapshot<T> snapshot, in T value)
         {
             try
             {
-                return _singleSyncHandler(in value);
+                return snapshot.SingleSyncHandler!(in value);
             }
             catch (Exception ex)
             {
-                HandleFault(0, 0, in value, ex);
+                HandleFault(snapshot, 0, 0, in value, ex);
                 return EventHandledState.Continue;
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private EventHandledState DispatchSingleNotify(in T value)
+        private EventHandledState DispatchSingleNotify(EventBucketSnapshot<T> snapshot, in T value)
         {
-            _singleNotifyHandler(in value);
+            snapshot.SingleNotifyHandler!(in value);
             return EventHandledState.Continue;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private EventHandledState DispatchSingleNotifySafe(in T value)
+        private EventHandledState DispatchSingleNotifySafe(EventBucketSnapshot<T> snapshot, in T value)
         {
             try
             {
-                _singleSubscribeHandler(in value);
+                snapshot.SingleSubscribeHandler!(in value);
             }
             catch (Exception ex)
             {
-                HandleFault(0, 2, in value, ex);
+                HandleFault(snapshot, 0, 2, in value, ex);
             }
 
             return EventHandledState.Continue;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void DispatchSmallNotifyFanout(int start, int count, in T value)
+        private void DispatchSmallNotifyFanout(EventBucketSnapshot<T> snapshot, int start, int count, in T value)
         {
-            ref var hBase = ref GetArrayDataRef(_notifyHandlers);
+            ref var hBase = ref GetArrayDataRef(snapshot.NotifyHandlers);
             Unsafe.Add(ref hBase, start)(in value);
             Unsafe.Add(ref hBase, start + 1)(in value);
             if (count == 2) return; Unsafe.Add(ref hBase, start + 2)(in value);
@@ -1129,10 +1328,10 @@ public sealed class GlobalEventCenter
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void DispatchNotify(int start, int end, in T e)
+        private void DispatchNotify(EventBucketSnapshot<T> snapshot, int start, int end, in T e)
         {
             if (start >= end) return;
-            ref var hBase = ref GetArrayDataRef(_notifyHandlers);
+            ref var hBase = ref GetArrayDataRef(snapshot.NotifyHandlers);
             var i = start;
             for (; i <= end - 8; i += 8)
             {
@@ -1156,10 +1355,10 @@ public sealed class GlobalEventCenter
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void DispatchNotifySafe(int start, int end, in T value)
+        private void DispatchNotifySafe(EventBucketSnapshot<T> snapshot, int start, int end, in T value)
         {
             if (start >= end) return;
-            ref var hBase = ref GetArrayDataRef(_subscribeHandlers);
+            ref var hBase = ref GetArrayDataRef(snapshot.SubscribeHandlers);
             var i = start;
             var currentIndex = start;
             try
@@ -1184,15 +1383,15 @@ public sealed class GlobalEventCenter
             }
             catch (Exception e)
             {
-                HandleFault(currentIndex, 2, in value, e);
+                HandleFault(snapshot, currentIndex, 2, in value, e);
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private EventHandledState DispatchSync(int start, int end, in T value)
+        private EventHandledState DispatchSync(EventBucketSnapshot<T> snapshot, int start, int end, in T value)
         {
             if (start >= end) return EventHandledState.Continue;
-            ref var hBase = ref GetArrayDataRef(_syncHandlers);
+            ref var hBase = ref GetArrayDataRef(snapshot.SyncHandlers);
             var combinedState = 0;
             var i = start;
             var currentIndex = start;
@@ -1225,7 +1424,7 @@ public sealed class GlobalEventCenter
             }
             catch (Exception e)
             {
-                HandleFault(currentIndex, 0, in value, e);
+                HandleFault(snapshot, currentIndex, 0, in value, e);
                 return EventHandledState.Continue;
             }
 
@@ -1233,47 +1432,47 @@ public sealed class GlobalEventCenter
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void DispatchAsync(int start, int end, in T value)
+        private void DispatchAsync(EventBucketSnapshot<T> snapshot, int start, int end, in T value)
         {
-            var hs = _asyncHandlers;
+            var hs = snapshot.AsyncHandlers;
             var i = start;
             try
             {
                 for (; i < end; i++)
-                    AsyncFaultContext<T>.Observe(this, -1, _asyncCircuits[i], _asyncNames[i], in value, hs[i](value));
+                    AsyncFaultContext<T>.Observe(this, -1, snapshot.AsyncCircuits[i], snapshot.AsyncNames[i], in value, hs[i](value));
             }
             catch (Exception e)
             {
-                HandleFault(i, 1, in value, e);
+                HandleFault(snapshot, i, 1, in value, e);
             }
         }
 
-        private void HandleFault(int index, int type, in T value, Exception e)
+        private void HandleFault(EventBucketSnapshot<T> snapshot, int index, int type, in T value, Exception e)
         {
             HandlerCircuit? circuit = null;
             string? name = null;
             if (type == 0)
             {
-                if (index >= 0 && index < _syncCountTotal)
+                if (index >= 0 && index < snapshot.SyncCountTotal)
                 {
-                    circuit = _syncCircuits[index];
-                    name = _syncNames[index];
+                    circuit = snapshot.SyncCircuits[index];
+                    name = snapshot.SyncNames[index];
                 }
             }
             else if (type == 1)
             {
-                if (index >= 0 && index < _asyncCountTotal)
+                if (index >= 0 && index < snapshot.AsyncCountTotal)
                 {
-                    circuit = _asyncCircuits[index];
-                    name = _asyncNames[index];
+                    circuit = snapshot.AsyncCircuits[index];
+                    name = snapshot.AsyncNames[index];
                 }
             }
             else if (type == 2)
             {
-                if (index >= 0 && index < _notifySafeCountTotal)
+                if (index >= 0 && index < snapshot.NotifySafeCountTotal)
                 {
-                    circuit = _notifySafeCircuits[index];
-                    name = _notifySafeNames[index];
+                    circuit = snapshot.NotifySafeCircuits[index];
+                    name = snapshot.NotifySafeNames[index];
                 }
             }
 
@@ -1288,8 +1487,8 @@ public sealed class GlobalEventCenter
         public void Post(in T value)
         {
             if (Volatile.Read(ref Owner!._isResetting) == 1) return;
-            EnsureClean();
-            var mask = Volatile.Read(ref _subscriberMask);
+            var snapshot = EnsureClean();
+            var mask = snapshot.SubscriberMask;
             if (mask == 0) return;
             var firstLayer = Owner.FindFirstBit(mask);
             var @event = new Event<T>(value) { TargetMask = mask };
@@ -1308,8 +1507,8 @@ public sealed class GlobalEventCenter
         public void PostLocal(int layerIndex, in T value)
         {
             if (Volatile.Read(ref Owner!._isResetting) == 1) return;
-            EnsureClean();
-            if (layerIndex >= 0 && layerIndex < 64 && (_subscriberMask & (1UL << layerIndex)) != 0)
+            var snapshot = EnsureClean();
+            if (layerIndex >= 0 && layerIndex < 64 && (snapshot.SubscriberMask & (1UL << layerIndex)) != 0)
             {
                 var @event = new Event<T>(value) { TargetMask = 1UL << layerIndex };
                 Owner.EnqueueEventInternal(layerIndex, in @event);

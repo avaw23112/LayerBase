@@ -133,7 +133,7 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
     private IDisposable[] _messagePipeSubscriptions = Array.Empty<IDisposable>();
     private IServiceProvider _provider = null!;
 
-    [Params(1,4,8)] public int SubscriberCount { get; set; }
+    [Params(4)] public int SubscriberCount { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -178,13 +178,13 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
         LayerHub.Reset();
     }
 
-    [Benchmark(Baseline = true, Description = "C# event Notify扇出 (N订阅者) - 100万次")]
-    [BenchmarkCategory("Compare.Notify", "CSharpEvent")]
-    public void CSharpEvent()
-    {
-        for (var i = 0; i < OneMillion; i++)
-            _publisher.Publish(in NotifyPayload.Instance);
-    }
+    //[Benchmark(Baseline = true, Description = "C# event Notify扇出 (N订阅者) - 100万次")]
+    //[BenchmarkCategory("Compare.Notify", "CSharpEvent")]
+    //public void CSharpEvent()
+    //{
+    //    for (var i = 0; i < OneMillion; i++)
+    //        _publisher.Publish(in NotifyPayload.Instance);
+    //}
     [Benchmark(Description = "MessagePipe Notify扇出 (N订阅者) - 100万次")]
     [BenchmarkCategory("Compare.Notify", "MessagePipe")]
     public void MessagePipe()

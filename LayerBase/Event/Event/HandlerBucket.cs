@@ -62,7 +62,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterUnordered.Add(UnorderedHandlerEntry<T>.Create(h));
+            MasterUnordered = CopyWith(MasterUnordered, UnorderedHandlerEntry<T>.Create(h));
             _onDirty();
         }
     }
@@ -71,7 +71,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterUnordered.Add(UnorderedHandlerEntry<T>.Create(h));
+            MasterUnordered = CopyWith(MasterUnordered, UnorderedHandlerEntry<T>.Create(h));
             _onDirty();
         }
     }
@@ -80,7 +80,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterNotify.Add(NotifyHandlerEntry<T>.Create(h));
+            MasterNotify = CopyWith(MasterNotify, NotifyHandlerEntry<T>.Create(h));
             _onDirty();
         }
     }
@@ -89,7 +89,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterSubscribe.Add(NotifyHandlerEntry<T>.Create(h));
+            MasterSubscribe = CopyWith(MasterSubscribe, NotifyHandlerEntry<T>.Create(h));
             _onDirty();
         }
     }
@@ -99,7 +99,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterOrdered.Add(OrderedHandlerEntry<T>.Create(h));
+            MasterOrdered = CopyWith(MasterOrdered, OrderedHandlerEntry<T>.Create(h));
             _onDirty();
         }
     }
@@ -108,7 +108,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterOrdered.Add(OrderedHandlerEntry<T>.Create(h));
+            MasterOrdered = CopyWith(MasterOrdered, OrderedHandlerEntry<T>.Create(h));
             _onDirty();
         }
     }
@@ -118,7 +118,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterParallel.Add(ParallelHandlerEntry<T>.Create(h, re));
+            MasterParallel = CopyWith(MasterParallel, ParallelHandlerEntry<T>.Create(h, re));
             _onDirty();
         }
     }
@@ -127,7 +127,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterParallel.Add(ParallelHandlerEntry<T>.Create(h, re));
+            MasterParallel = CopyWith(MasterParallel, ParallelHandlerEntry<T>.Create(h, re));
             _onDirty();
         }
     }
@@ -136,7 +136,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterUnordered.RemoveAll(x => x.Source == h);
+            MasterUnordered = CopyWithout(MasterUnordered, x => x.Source == h);
             _onDirty();
         }
     }
@@ -145,7 +145,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterUnordered.RemoveAll(x => x.Source == h);
+            MasterUnordered = CopyWithout(MasterUnordered, x => x.Source == h);
             _onDirty();
         }
     }
@@ -154,7 +154,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterOrdered.RemoveAll(x => x.SyncHandler == h);
+            MasterOrdered = CopyWithout(MasterOrdered, x => x.SyncHandler == h);
             _onDirty();
         }
     }
@@ -163,7 +163,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterParallel.RemoveAll(x => x.StopIfSource(h));
+            MasterParallel = CopyWithout(MasterParallel, x => x.StopIfSource(h));
             _onDirty();
         }
     }
@@ -172,7 +172,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterParallel.RemoveAll(x => x.StopIfSource(h));
+            MasterParallel = CopyWithout(MasterParallel, x => x.StopIfSource(h));
             _onDirty();
         }
     }
@@ -181,7 +181,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterOrdered.RemoveAll(x => x.AsyncHandler == h);
+            MasterOrdered = CopyWithout(MasterOrdered, x => x.AsyncHandler == h);
             _onDirty();
         }
     }
@@ -190,7 +190,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterSubscribe.RemoveAll(x => x.Handler == h);
+            MasterSubscribe = CopyWithout(MasterSubscribe, x => x.Handler == h);
             _onDirty();
         }
     }
@@ -199,9 +199,29 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     {
         lock (_lock)
         {
-            MasterNotify.RemoveAll(x => x.Handler == h);
+            MasterNotify = CopyWithout(MasterNotify, x => x.Handler == h);
             _onDirty();
         }
+    }
+
+    private static List<TEntry> CopyWith<TEntry>(List<TEntry> source, TEntry entry)
+    {
+        var next = new List<TEntry>(source.Count + 1);
+        next.AddRange(source);
+        next.Add(entry);
+        return next;
+    }
+
+    private static List<TEntry> CopyWithout<TEntry>(List<TEntry> source, Predicate<TEntry> remove)
+    {
+        var next = new List<TEntry>(source.Count);
+        for (var i = 0; i < source.Count; i++)
+        {
+            var item = source[i];
+            if (!remove(item)) next.Add(item);
+        }
+
+        return next;
     }
 }
 
