@@ -52,7 +52,7 @@ public class SubscribeSignatureFixer : CodeFixProvider
 
         var attrName = attr.Name.ToString();
         var isAsync = attrName.Contains("Async");
-        var isNotify = attrName.Contains("Notify");
+        var isNotify = attrName.Contains("Notify") || attrName.Contains("NotifySafe");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
         if (root == null) return document;

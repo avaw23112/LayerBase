@@ -139,6 +139,12 @@ public static class ServiceExtensions
         service.GetLayer().SubscribeAsync(handler);
     }
 
+    public static void SubscribeNotifySafe<TValue>(this IService service, EventNotifyDelegate<TValue> handler)
+        where TValue : struct
+    {
+        service.GetLayer().SubscribeNotifySafe(handler);
+    }
+
     public static void SubscribeParallel<TValue>(this IService service, EventHandleDelegate<TValue> handler,
                                                  Action<int, string, string, Exception>? reportError = null)
         where TValue : struct
@@ -215,6 +221,12 @@ public static class LayerContextExtensions
         service.GetLayer().SubscribeAsync(handler);
     }
 
+    public static void SubscribeNotifySafe<TValue>(this ILayerContext service, EventNotifyDelegate<TValue> handler)
+        where TValue : struct
+    {
+        service.GetLayer().SubscribeNotifySafe(handler);
+    }
+
     public static void SubscribeParallel<TValue>(this ILayerContext service, EventHandleDelegate<TValue> handler,
                                                  Action<int, string, string, Exception>? reportError = null)
         where TValue : struct
@@ -222,10 +234,7 @@ public static class LayerContextExtensions
         service.GetLayer()
                .SubscribeParallel(handler, reportError ?? LayerHub.ReportLayerEventError);
     }
-
-    /// <summary>
-    ///     获取针对特定事件的链�?API 流�?
-    /// </summary>
+    
     public static LayerEventStream<TValue> OnEvent<TValue>(this ILayerContext service) where TValue : struct
     {
         return service.GetLayer().OnEvent<TValue>();

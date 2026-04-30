@@ -33,6 +33,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     private readonly object _lock = new();
     private readonly Action _onDirty;
     internal List<NotifyHandlerEntry<T>> MasterNotify = new();
+    internal List<NotifyHandlerEntry<T>> MasterNotifySafe = new();
     internal List<OrderedHandlerEntry<T>> MasterOrdered = new();
     internal List<ParallelHandlerEntry<T>> MasterParallel = new();
     internal List<UnorderedHandlerEntry<T>> MasterUnordered = new();
@@ -43,7 +44,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     }
 
     public bool HasHandlers => MasterOrdered.Count > 0 || MasterUnordered.Count > 0 || MasterParallel.Count > 0 ||
-                               MasterNotify.Count > 0;
+                               MasterNotify.Count > 0 || MasterNotifySafe.Count > 0;
 
     public void Reset()
     {
@@ -53,6 +54,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             foreach (var h in MasterUnordered) h.Circuit.Reset();
             foreach (var h in MasterParallel) h.Reset();
             foreach (var h in MasterNotify) h.Circuit.Reset();
+            foreach (var h in MasterNotifySafe) h.Circuit.Reset();
         }
     }
 
@@ -83,6 +85,16 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         }
     }
 
+    public void AddNotifySafe(EventNotifyDelegate<T> h)
+    {
+        lock (_lock)
+        {
+            MasterNotifySafe.Add(NotifyHandlerEntry<T>.Create(h));
+            _onDirty();
+        }
+    }
+
+
     public void Add(EventHandleDelegate<T> h)
     {
         lock (_lock)
@@ -100,6 +112,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             _onDirty();
         }
     }
+
 
     public void AddParallel(IEventHandler<T> h, Action<int, string, string, Exception> re)
     {
@@ -155,6 +168,14 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             _onDirty();
         }
     }
+    public void RemoveNotifySafe(EventNotifyDelegate<T> h)
+    {
+        lock (_lock)
+        {
+            MasterNotifySafe.RemoveAll(x => x.Handler == h);
+            _onDirty();
+        }
+    }
 
     public void RemoveNotify(EventNotifyDelegate<T> h)
     {
@@ -171,17 +192,19 @@ internal readonly struct NotifyHandlerEntry<T> where T : struct
     public readonly EventNotifyDelegate<T> Handler;
     public readonly string FullName;
     public readonly HandlerCircuit Circuit;
+    public readonly object? Source;
 
-    private NotifyHandlerEntry(EventNotifyDelegate<T> h, string n, HandlerCircuit c)
+    private NotifyHandlerEntry(EventNotifyDelegate<T> h, string n, HandlerCircuit c, object? src)
     {
         Handler = h;
         FullName = n;
         Circuit = c;
+        Source = src;
     }
 
     public static NotifyHandlerEntry<T> Create(EventNotifyDelegate<T> h)
     {
-        return new NotifyHandlerEntry<T>(h, GetName(h), new HandlerCircuit());
+        return new NotifyHandlerEntry<T>(h, GetName(h), new HandlerCircuit(), null);
     }
 
     private static string GetName(Delegate d)

@@ -175,6 +175,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
             {
                 var reg = h.Attr.Contains("Async") ? "SubscribeAsync" :
                     h.Attr.Contains("Parallel")    ? "SubscribeParallel" :
+                    h.Attr.Contains("NotifySafe")  ? "SubscribeNotifySafe" :
                     h.Attr.Contains("Notify")      ? "SubscribeNotify" : "Subscribe";
 
                 sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
@@ -247,6 +248,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
     private static string GetExpectedSignature(string attrName)
     {
         if (attrName.Contains("Async")) return "LBTask Handle(TEvent value)";
+        if (attrName.Contains("NotifySafe")) return "void Handle(in TEvent value)";
         if (attrName.Contains("Notify")) return "void Handle(in TEvent value)";
         return "EventHandledState Handle(in TEvent value)";
     }
