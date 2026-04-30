@@ -30,4 +30,3 @@ public class CatalogueNode
         return eventCategoryToken;
     }
 }
-

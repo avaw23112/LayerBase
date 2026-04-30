@@ -143,4 +143,3 @@ internal sealed class LayerChain
         return sb.ToString();
     }
 }
-

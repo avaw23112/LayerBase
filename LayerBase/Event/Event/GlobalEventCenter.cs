@@ -96,6 +96,7 @@ public sealed class GlobalEventCenter
     {
         GetBucket<T>().AddSubscribe(layerIndex, handler);
     }
+
     internal void UnsubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
         GetBucket<T>().Remove(layerIndex, handler);
@@ -466,7 +467,6 @@ public sealed class GlobalEventCenter
         private string[] _notifyNames = Array.Empty<string>();
 
         private HandlerCircuit[] _notifySafeCircuits = Array.Empty<HandlerCircuit>();
-        private EventNotifyDelegate<T>[] _subscribeHandlers = Array.Empty<EventNotifyDelegate<T>>();
         private string[] _notifySafeNames = Array.Empty<string>();
 
         private LayerRange[] _ranges = Array.Empty<LayerRange>();
@@ -474,15 +474,16 @@ public sealed class GlobalEventCenter
         private EventNotifyDelegate<T>? _singleNotifyHandler;
         private string? _singleNotifyName;
 
+        private int _singleRouteLayerIndex = -1;
+        private ulong _singleRouteMask;
+
         private HandlerCircuit? _singleSubscribeCircuit;
         private EventNotifyDelegate<T>? _singleSubscribeHandler;
         private string? _singleSubscribeName;
-
-        private int _singleRouteLayerIndex = -1;
-        private ulong _singleRouteMask;
         private HandlerCircuit? _singleSyncCircuit;
         private EventHandleDelegate<T>? _singleSyncHandler;
         private string? _singleSyncName;
+        private EventNotifyDelegate<T>[] _subscribeHandlers = Array.Empty<EventNotifyDelegate<T>>();
 
         private ulong _subscriberMask, _syncMask, _asyncMask, _parallelMask, _notifyMask, _notifySafeMask;
         private HandlerCircuit[] _syncCircuits = Array.Empty<HandlerCircuit>();
@@ -990,14 +991,14 @@ public sealed class GlobalEventCenter
         public EventHandledState Dispatch(in T value)
         {
             EnsureClean();
-            
+
             if (_isSingleNotify) return DispatchSingleNotify(in value);
             if (_isSmallNotifyFanoutOnly && _notifyCountTotal > 0)
             {
                 DispatchSmallNotifyFanout(0, _notifyCountTotal, in value);
                 return EventHandledState.Continue;
             }
-            
+
             if (_isSingleNotifySafe) return DispatchSingleNotifySafe(in value);
             if (_isSingleSync) return DispatchSingleSync(in value);
 
@@ -1009,6 +1010,7 @@ public sealed class GlobalEventCenter
                 res = DispatchSync(0, _syncCountTotal, in value);
                 if (res == EventHandledState.Handled) return res;
             }
+
             if (_asyncMask != 0) DispatchAsync(0, _asyncCountTotal, in value);
             if (_parallelMask != 0)
                 for (var j = 0; j < _parallelCountTotal; j++)
@@ -1032,7 +1034,7 @@ public sealed class GlobalEventCenter
             ref var r = ref _ranges[layerIndex];
             if (r.SubscribeCount == 1 && r.NotifyCount == 0 && r.SyncCount == 0 && r.AsyncCount == 0 &&
                 r.ParallelCount == 0) return DispatchSingleNotifySafe(in value);
-            
+
             if (r.ParallelCount > 0)
                 for (var j = 0; j < r.ParallelCount; j++)
                     Unsafe.Add(ref GetArrayDataRef(_flatParallel), r.ParallelStart + j).Enqueue(layerIndex, in value);
@@ -1084,6 +1086,7 @@ public sealed class GlobalEventCenter
             {
                 HandleFault(0, 2, in value, ex);
             }
+
             return EventHandledState.Continue;
         }
 
@@ -1139,11 +1142,16 @@ public sealed class GlobalEventCenter
             {
                 for (; i <= end - 4; i += 4)
                 {
-                    currentIndex = i; Unsafe.Add(ref hBase, i)(in value);
-                    currentIndex = i + 1; Unsafe.Add(ref hBase, i + 1)(in value);
-                    currentIndex = i + 2; Unsafe.Add(ref hBase, i + 2)(in value);
-                    currentIndex = i + 3; Unsafe.Add(ref hBase, i + 3)(in value);
+                    currentIndex = i;
+                    Unsafe.Add(ref hBase, i)(in value);
+                    currentIndex = i + 1;
+                    Unsafe.Add(ref hBase, i + 1)(in value);
+                    currentIndex = i + 2;
+                    Unsafe.Add(ref hBase, i + 2)(in value);
+                    currentIndex = i + 3;
+                    Unsafe.Add(ref hBase, i + 3)(in value);
                 }
+
                 for (; i < end; i++)
                 {
                     currentIndex = i;
@@ -1168,12 +1176,16 @@ public sealed class GlobalEventCenter
             {
                 for (; i <= end - 4; i += 4)
                 {
-                    currentIndex = i; var r1 = Unsafe.Add(ref hBase, i)(in value);
+                    currentIndex = i;
+                    var r1 = Unsafe.Add(ref hBase, i)(in value);
                     if (r1 == EventHandledState.Handled) return EventHandledState.Handled;
-                    currentIndex = i + 1; var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
+                    currentIndex = i + 1;
+                    var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
                     if (r2 == EventHandledState.Handled) return EventHandledState.Handled;
-                    currentIndex = i + 2; var r3 = Unsafe.Add(ref hBase, i + 2)(in value);
-                    if (r3 == EventHandledState.Handled) return EventHandledState.Handled; currentIndex = i + 3;
+                    currentIndex = i + 2;
+                    var r3 = Unsafe.Add(ref hBase, i + 2)(in value);
+                    if (r3 == EventHandledState.Handled) return EventHandledState.Handled;
+                    currentIndex = i + 3;
                     var r4 = Unsafe.Add(ref hBase, i + 3)(in value);
                     if (r4 == EventHandledState.Handled) return EventHandledState.Handled;
                     combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4;

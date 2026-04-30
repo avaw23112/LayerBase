@@ -11,4 +11,3 @@ public interface IAutoCallBinder
 {
     void AutoBindCalls(Layer layer);
 }
-

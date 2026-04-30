@@ -1,8 +1,5 @@
 ﻿namespace LayerBase.Core.Event;
 
-/// <summary>
-///     记录不同事件类型的唯一 ID。
-/// </summary>
 internal static class EventTypeIdProvider
 {
     private static int s_nextId;
@@ -52,4 +49,3 @@ internal class EventTypeId
         return EventTypeIdProvider.GetType(id);
     }
 }
-

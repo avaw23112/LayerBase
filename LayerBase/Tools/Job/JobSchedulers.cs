@@ -1,10 +1,5 @@
-﻿using System.Threading;
+﻿namespace LayerBase.Tools.Job;
 
-namespace LayerBase.Tools.Job;
-
-/// <summary>
-///     全局 JobScheduler 管理器�?
-/// </summary>
 public static class JobSchedulers
 {
     private static JobScheduler s_default = new();
@@ -23,4 +18,3 @@ public static class JobSchedulers
         ConfigureDefault();
     }
 }
-

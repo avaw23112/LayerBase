@@ -54,17 +54,17 @@ LayerBase 的设计哲学是：**用强约束的框架收编混乱的注册，�
 
 **每事件 2 个订阅者**
 
-| 事件种类 |  委托 批量耗时 | MessagePipe 批量耗时 |  LayerBase 批量耗时 | LayerBase 单事件均摊 | LayerBase 相对 32 事件增长 | MessagePipe 相对 32 事件增长 | LayerBase 相对 MessagePipe |
-|:-----|---------:|-----------------:|----------------:|----------------:|---------------------:|-----------------------:|-------------------------:|
-| 32   |  6.192 ns |       207.639 ns |  **121.643 ns** |    **3.801 ns** |                1.00x |                  1.00x |                   +41.4% |
+| 事件种类 |   委托 批量耗时 | MessagePipe 批量耗时 |   LayerBase 批量耗时 | LayerBase 单事件均摊 | LayerBase 相对 32 事件增长 | MessagePipe 相对 32 事件增长 | LayerBase 相对 MessagePipe |
+|:-----|----------:|-----------------:|-----------------:|----------------:|---------------------:|-----------------------:|-------------------------:|
+| 32   |  6.192 ns |       207.639 ns |   **121.643 ns** |    **3.801 ns** |                1.00x |                  1.00x |                   +41.4% |
 | 128  | 27.760 ns |     1,283.180 ns | **1,118.160 ns** |    **8.735 ns** |                9.19x |                  6.18x |                   +12.8% |
 | 256  | 57.890 ns |     2,828.560 ns | **2,337.390 ns** |    **9.130 ns** |               19.21x |                 13.62x |                   +17.3% |
 
 **每事件 3 个订阅者**
 
-| 事件种类 |   委托 批量耗时 | MessagePipe 批量耗时 |  LayerBase 批量耗时 | LayerBase 单事件均摊 | LayerBase 相对 32 事件增长 | MessagePipe 相对 32 事件增长 | LayerBase 相对 MessagePipe |
-|:-----|----------:|-----------------:|----------------:|----------------:|---------------------:|-----------------------:|-------------------------:|
-| 32   | 11.033 ns |       246.203 ns |  **148.563 ns** |    **4.642 ns** |                1.00x |                  1.00x |                   +39.6% |
+| 事件种类 |   委托 批量耗时 | MessagePipe 批量耗时 |   LayerBase 批量耗时 | LayerBase 单事件均摊 | LayerBase 相对 32 事件增长 | MessagePipe 相对 32 事件增长 | LayerBase 相对 MessagePipe |
+|:-----|----------:|-----------------:|-----------------:|----------------:|---------------------:|-----------------------:|-------------------------:|
+| 32   | 11.033 ns |       246.203 ns |   **148.563 ns** |    **4.642 ns** |                1.00x |                  1.00x |                   +39.6% |
 | 128  | 94.160 ns |     1,480.110 ns | **1,222.960 ns** |    **9.554 ns** |                8.23x |                  6.01x |                   +17.3% |
 | 256  | 378.22 ns |     3,051.310 ns | **2,586.260 ns** |   **10.102 ns** |               17.40x |                 12.39x |                   +15.2% |
 
@@ -79,11 +79,11 @@ LayerBase 的设计哲学是：**用强约束的框架收编混乱的注册，�
 
 #### Request/Response 性能对比（10 万次 Call）
 
-| 方案 | 10 万次总耗时 | 单次均摊耗时 | 相对直接调用增长 | 内存分配 |
-|:---|---:|---:|---:|---:|
-| 直接 LBTask 结构体调用 | **29.21 μs** | **0.29 ns** | 1.00x | 0 B |
-| MessagePipe IRequestHandler | **50.48 μs** | **0.50 ns** | 1.73x | 0 B |
-| **LayerBase CallAsync** | **108.15 μs** | **1.08 ns** | 3.70x | 0 B |
+| 方案                          |      10 万次总耗时 |      单次均摊耗时 | 相对直接调用增长 | 内存分配 |
+|:----------------------------|--------------:|------------:|---------:|-----:|
+| 直接 LBTask 结构体调用             |  **29.21 μs** | **0.29 ns** |    1.00x |  0 B |
+| MessagePipe IRequestHandler |  **50.48 μs** | **0.50 ns** |    1.73x |  0 B |
+| **LayerBase CallAsync**     | **108.15 μs** | **1.08 ns** |    3.70x |  0 B |
 
 * 虽然由于层级路由与 DI 容器的存在，`CallAsync` 的开销略高于极简的 MessagePipe，但 **1.08 ns** 的单次开销依然意味着在常规业务中它几乎是“免费”的。
 
@@ -135,11 +135,14 @@ EventBucket<T>
 
 为了在 .NET 8/9 环境下达到比肩原生接口调用的性能，v1.4.2 引入了以下深度优化：
 
-*   **`LBTask<T>` 结构体瘦身**：移除了 `HasResult` 字段，利用 `Source == null` 作为同步完成标记。减小了结构体体积，降低了寄存器传递压力。
-*   **异步路径短路 (Sync-Path Short-circuit)**：优化了 `LBTaskMethodBuilder`，在异步方法同步完成时彻底消除 `ArchTaskSource` 的租赁开销。
-*   **静态泛型调用缓存 (Ultra Fast Path)**：在 `LayerHub.CallAsync` 中引入静态泛型类缓存。**零字典查找、零锁竞争、零版本核对**，调用开销缩减至仅一次静态字段读取。
-*   **去虚化接口调用 (Devirtualization)**：缓存 `ILayerCallHandler` 接口实例而非委托。配合 `sealed` 处理类，JIT 可以直接生成内联或直接跳转的汇编代码。
-*   **全面零拷贝 (`in` 修饰符)**：所有 Call 链路强制使用 `in TRequest`，彻底消除大 struct 在分发过程中的内存复制。
+* **`LBTask<T>` 结构体瘦身**：移除了 `HasResult` 字段，利用 `Source == null` 作为同步完成标记。减小了结构体体积，降低了寄存器传递压力。
+* **异步路径短路 (Sync-Path Short-circuit)**：优化了 `LBTaskMethodBuilder`，在异步方法同步完成时彻底消除 `ArchTaskSource`
+  的租赁开销。
+* **静态泛型调用缓存 (Ultra Fast Path)**：在 `LayerHub.CallAsync` 中引入静态泛型类缓存。**零字典查找、零锁竞争、零版本核对**
+  ，调用开销缩减至仅一次静态字段读取。
+* **去虚化接口调用 (Devirtualization)**：缓存 `ILayerCallHandler` 接口实例而非委托。配合 `sealed` 处理类，JIT
+  可以直接生成内联或直接跳转的汇编代码。
+* **全面零拷贝 (`in` 修饰符)**：所有 Call 链路强制使用 `in TRequest`，彻底消除大 struct 在分发过程中的内存复制。
 
 ---
 
@@ -167,7 +170,8 @@ EventBucket<T>
    ```
 2. **源码引入**：将仓库中的 `LayerBase` 和 `LayerBase.Task` 项目目录直接添加到您的解决方案中并建立引用。
 3. **配置源生成器 (Source Generator)**：
-   框架依赖源生成器以实现在事件分发热路径上的零反射，请确保在主项目中引入了分析器（注：DI 装配与共享字段绑定在 Build 阶段仍使用反射，但通过元数据缓存进行了深度优化）：
+   框架依赖源生成器以实现在事件分发热路径上的零反射，请确保在主项目中引入了分析器（注：DI 装配与共享字段绑定在 Build
+   阶段仍使用反射，但通过元数据缓存进行了深度优化）：
    ```xml
    <ItemGroup>
        <ProjectReference Include="LayerBase.Generator\LayerBase.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
@@ -292,7 +296,8 @@ public partial class PlayerInputManager : ILayerContext,IUpdate
 Service 负责将相关的 Manager 注册到 DI 容器中。
 通过 `[OwnerLayer]` 特性，可以将 Service 静态绑定到指定的 Layer 层级。
 
-此外，您可以使用 `[Mount]` 特性实现**声明式依赖注入**。被 `[Mount]` 标记的字段或属性，源生成器会自动将其类型注册到 DI 容器中，并在实例创建时自动完成注入。
+此外，您可以使用 `[Mount]` 特性实现**声明式依赖注入**。被 `[Mount]` 标记的字段或属性，源生成器会自动将其类型注册到 DI
+容器中，并在实例创建时自动完成注入。
 
 ```csharp
 using LayerBase.DI;
@@ -504,7 +509,8 @@ ServiceLookupResponse resp = await LayerHub.CallAsync<CoreLayer, ServiceLookupRe
 
 * **显式边界**：通过 `(Type ownerType, string localKey)` 显式指定状态的归属。
 * **自动生命周期**：标记为 `[Provide]` 的字段在 `Build()` 阶段会自动实例化（支持引用类型 and 值类型）。
-* **强制只读投影**：`[From]` 端只能接收只读投影（如 `IReadOnlyList<T>`），禁止消费可写容器（如 `List<T>`, `Dictionary<K,V>`, `IList<T>`, `ICollection<T>` 等），彻底杜绝逻辑后门。
+* **强制只读投影**：`[From]` 端只能接收只读投影（如 `IReadOnlyList<T>`），禁止消费可写容器（如 `List<T>`, `Dictionary<K,V>`,
+  `IList<T>`, `ICollection<T>` 等），彻底杜绝逻辑后门。
 
 ```csharp
 public sealed class InventoryModule : ILayerContext
@@ -564,7 +570,8 @@ LayerBase 采用了高效的 SOA 批量分发引擎。为了保证极致的 CPU 
 
 在一个 Event 类型下，无论注册顺序如何：
 
-* **同步 Handler** 总是会被优先批量执行。其中 `[SubscribeFlow]` 具备截断事件（Handled）的能力，而 `[SubscribeNotify]` 和 `[Subscribe]` 为强制全量分发。
+* **同步 Handler** 总是会被优先批量执行。其中 `[SubscribeFlow]` 具备截断事件（Handled）的能力，而 `[SubscribeNotify]` 和
+  `[Subscribe]` 为强制全量分发。
 * **异步 Handler** 只有在所有同步逻辑跑完后，才会统一启动。
 * **结论**：不要依赖同步与异步之间的混合注册顺序。
 
@@ -667,17 +674,18 @@ The following figures are taken directly from
 | 1           |            0.3476 ns |               1.7939 ns |         **1.6117 ns** |               1.00x |                  1.00x |                1.00x |                   +10.2% |
 | 4           |           10.8657 ns |               2.9491 ns |         **2.8477 ns** |              31.26x |                  1.64x |                1.77x |                    +3.4% |
 | 8           |           19.2476 ns |               4.8975 ns |         **3.4861 ns** |              55.37x |                  2.73x |                2.16x |                   +28.8% |
-| 16          |           35.9193 ns |               9.6484 ns |         **6.1484 ns** |             103.34x |             5.38x |                3.81x |                   +36.3% |
+| 16          |           35.9193 ns |               9.6484 ns |         **6.1484 ns** |             103.34x |                  5.38x |                3.81x |                   +36.3% |
 
 #### Request/Response Performance Comparison (100,000 Calls)
 
-| Method | Total Cost (100k) | Avg/Call | Scale vs Direct | Memory |
-|:---|---:|---:|---:|---:|
-| Direct LBTask Struct Call | **29.21 μs** | **0.29 ns** | 1.00x | 0 B |
-| MessagePipe IRequestHandler | **50.48 μs** | **0.50 ns** | 1.73x | 0 B |
-| **LayerBase CallAsync** | **108.15 μs** | **1.08 ns** | 3.70x | 0 B |
+| Method                      | Total Cost (100k) |    Avg/Call | Scale vs Direct | Memory |
+|:----------------------------|------------------:|------------:|----------------:|-------:|
+| Direct LBTask Struct Call   |      **29.21 μs** | **0.29 ns** |           1.00x |    0 B |
+| MessagePipe IRequestHandler |      **50.48 μs** | **0.50 ns** |           1.73x |    0 B |
+| **LayerBase CallAsync**     |     **108.15 μs** | **1.08 ns** |           3.70x |    0 B |
 
-* Despite the overhead of layer routing and DI resolution, the **1.08 ns** cost per call means `CallAsync` is virtually "free" in most real-world scenarios.
+* Despite the overhead of layer routing and DI resolution, the **1.08 ns** cost per call means `CallAsync` is
+  virtually "free" in most real-world scenarios.
 
 * In the model with many event kinds and only a small number of subscribers per event, our SOA architecture does not yet
   show its unique advantage, so it can only stay close to MessagePipe in performance.
@@ -743,13 +751,20 @@ inter-layer jump overhead.
 
 ### 5. v1.4.2 Ultra Performance Updates
 
-To achieve performance comparable to native interface calls in .NET 8/9, v1.4.2 introduces the following deep optimizations:
+To achieve performance comparable to native interface calls in .NET 8/9, v1.4.2 introduces the following deep
+optimizations:
 
-*   **`LBTask<T>` Struct Slimming**: Removed unnecessary fields and utilized `Source == null` as a synchronous completion flag. This reduces struct size and register pressure during parameter passing.
-*   **Async Path Short-circuit**: Optimized `LBTaskMethodBuilder` to completely eliminate `ArchTaskSource` leasing overhead when an async method completes synchronously.
-*   **Static Generic Call Cache (Ultra Fast Path)**: Introduced a static generic class cache in `LayerHub.CallAsync`. This achieves **zero dictionary lookups, zero lock contention, and zero version checks**, reducing call overhead to a single static field read.
-*   **Devirtualized Interface Calls**: Caches `ILayerCallHandler` interface instances instead of delegates. Combined with `sealed` handler classes, the JIT can generate inlined code or direct jumps.
-*   **Zero-Copy by Default (`in` modifier)**: All Call paths now enforce the use of `in TRequest`, completely eliminating memory copies for large structs during dispatch.
+* **`LBTask<T>` Struct Slimming**: Removed unnecessary fields and utilized `Source == null` as a synchronous completion
+  flag. This reduces struct size and register pressure during parameter passing.
+* **Async Path Short-circuit**: Optimized `LBTaskMethodBuilder` to completely eliminate `ArchTaskSource` leasing
+  overhead when an async method completes synchronously.
+* **Static Generic Call Cache (Ultra Fast Path)**: Introduced a static generic class cache in `LayerHub.CallAsync`. This
+  achieves **zero dictionary lookups, zero lock contention, and zero version checks**, reducing call overhead to a
+  single static field read.
+* **Devirtualized Interface Calls**: Caches `ILayerCallHandler` interface instances instead of delegates. Combined with
+  `sealed` handler classes, the JIT can generate inlined code or direct jumps.
+* **Zero-Copy by Default (`in` modifier)**: All Call paths now enforce the use of `in TRequest`, completely eliminating
+  memory copies for large structs during dispatch.
 
 ---
 
@@ -785,7 +800,9 @@ robustness:
 2. **Source Code Integration**: Add the `LayerBase` and `LayerBase.Task` project directories from the repository
    directly to your solution and reference them.
 3. **Configure Source Generator**:
-   The framework relies on Source Generators to achieve zero-reflection in the event dispatch hot path. Ensure the analyzer is referenced in your main project (Note: DI assembly and shared field binding still utilize reflection during the Build phase, but are heavily optimized via metadata caching):
+   The framework relies on Source Generators to achieve zero-reflection in the event dispatch hot path. Ensure the
+   analyzer is referenced in your main project (Note: DI assembly and shared field binding still utilize reflection
+   during the Build phase, but are heavily optimized via metadata caching):
    ```xml
    <ItemGroup>
        <ProjectReference Include="LayerBase.Generator\LayerBase.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
@@ -909,7 +926,8 @@ public partial class PlayerInputManager : ILayerContext,IUpdate
 }
 ```
 
-* Note the execution order between event kinds inside the same layer: `SubscribeNotify -> Subscribe -> SubscribeFlow -> SubscribeAsync`.
+* Note the execution order between event kinds inside the same layer:
+  `SubscribeNotify -> Subscribe -> SubscribeFlow -> SubscribeAsync`.
 * All events only guarantee that order is consistent with registration order within the same event type. They do not
   guarantee execution order across different event types.
 
@@ -918,7 +936,9 @@ public partial class PlayerInputManager : ILayerContext,IUpdate
 Services are responsible for registering related Managers into the DI container.
 By using the `[OwnerLayer]` attribute, a Service can be statically bound to a specific Layer.
 
-Additionally, you can use the `[Mount]` attribute for **declarative dependency injection**. Fields or properties marked with `[Mount]` are automatically registered in the DI container by the source generator, and dependencies are automatically injected upon instance creation.
+Additionally, you can use the `[Mount]` attribute for **declarative dependency injection**. Fields or properties marked
+with `[Mount]` are automatically registered in the DI container by the source generator, and dependencies are
+automatically injected upon instance creation.
 
 ```csharp
 using LayerBase.DI;
@@ -1140,8 +1160,11 @@ ServiceLookupResponse resp = await LayerHub.CallAsync<CoreLayer, ServiceLookupRe
 Safely and efficiently share memory state between components without establishing explicit references.
 
 * **Explicit Boundaries**: Use `(Type ownerType, string localKey)` to explicitly specify state ownership.
-* **Automatic Lifecycle**: Fields marked `[Provide]` are automatically instantiated during `Build()` (supports both reference and value types).
-* **Strict Read-Only Projections**: `[From]` side can only receive read-only projections (e.g., `IReadOnlyList<T>`), forbidding writable containers or interfaces (e.g., `List<T>`, `Dictionary<K,V>`, `IList<T>`, `ICollection<T>`), closing logic loopholes.
+* **Automatic Lifecycle**: Fields marked `[Provide]` are automatically instantiated during `Build()` (supports both
+  reference and value types).
+* **Strict Read-Only Projections**: `[From]` side can only receive read-only projections (e.g., `IReadOnlyList<T>`),
+  forbidding writable containers or interfaces (e.g., `List<T>`, `Dictionary<K,V>`, `IList<T>`, `ICollection<T>`),
+  closing logic loopholes.
 
 ```csharp
 public sealed class InventoryModule : ILayerContext
@@ -1218,4 +1241,4 @@ To achieve O(1) cross-layer bitmap routing, LayerBase internally uses a `ulong` 
 
 * **Physical Limit**: A single instance supports a maximum of **64 Layers**.
 * **Overflow Handling**: Attempting to `Push` a 65th layer will throw an `InvalidOperationException`.
-`.
+  `.

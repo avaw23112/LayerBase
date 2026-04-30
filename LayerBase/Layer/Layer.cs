@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using LayerBase.Async;
 using LayerBase.Call;
@@ -12,7 +12,9 @@ using LayerBase.Event.Delay;
 namespace LayerBase.Layers;
 
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class SourceGeneratedServiceInitAttribute : Attribute { }
+public sealed class SourceGeneratedServiceInitAttribute : Attribute
+{
+}
 
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
 public sealed class OwnerLayerAttribute : Attribute
@@ -28,20 +30,22 @@ public sealed class OwnerLayerAttribute : Attribute
 public abstract class Layer : Node, IDisposable
 {
     public readonly List<(Type Req, Type Resp, Type Handler)> CallHandlers = new();
-    public readonly List<Type> InvokedCalls = new(); // 新增：发出的 Call
+    public readonly List<Type> InvokedCalls = new();
     private readonly List<RegisteredService> m_activeServices = new();
     private readonly object m_callRouteLock = new();
 
     private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();
-    private readonly List<IDelayPublisherUpdater> m_delayUpdaters = new(); // 优化：消除 Values 迭代分配
+    private readonly List<IDelayPublisherUpdater> m_delayUpdaters = new();
     private readonly List<RegisteredService> m_manualServices = new();
+
+    private readonly HashSet<Type> m_registeredServiceTypes = new();
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
     private readonly List<IDisposable> m_subscriptions = new();
-    public readonly List<Type> ProducedEvents = new(); // 新增：产生的事件
+    public readonly List<Type> ProducedEvents = new();
     public readonly List<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> SharedFields = new();
 
-    // Metadata for Topology Report
+
     public readonly List<Type> SubscribedEvents = new();
     private GlobalEventCenter _center;
     private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();
@@ -65,7 +69,7 @@ public abstract class Layer : Node, IDisposable
     public int RouteIndex { get; private set; } = -1;
     public List<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = new();
 
-    // 优化：不再包�?DiscoveredSubscribers。仅有订阅者的层被称为“被动层”，不应参与逻辑位图轮询�?
+
     public virtual bool HasActiveLogic =>
         m_serviceUpdates.Count > 0 || m_delayUpdaters.Count > 0;
 
@@ -87,16 +91,15 @@ public abstract class Layer : Node, IDisposable
     {
     }
 
-    private readonly HashSet<Type> m_registeredServiceTypes = new();
-
     public void RegisterService(IService service)
     {
         if (service == null) throw new ArgumentNullException(nameof(service));
 
-        if (!m_registeredServiceTypes.Add(service.GetType()))    
+        if (!m_registeredServiceTypes.Add(service.GetType()))
             return;
 
-        var registration = new RegisteredService(service, Interlocked.Increment(ref m_nextServiceScopeId));        if (m_collectingGeneratedServices)
+        var registration = new RegisteredService(service, Interlocked.Increment(ref m_nextServiceScopeId));
+        if (m_collectingGeneratedServices)
         {
             AddActiveService(registration);
             return;
@@ -134,11 +137,10 @@ public abstract class Layer : Node, IDisposable
         m_callRouteInvokers = Array.Empty<object?>();
         m_callRouteHandlerTypes = Array.Empty<Type?>();
         CallHandlers.Clear();
-        m_registeredServiceTypes.Clear(); // Clear before re-adding manual services
+        m_registeredServiceTypes.Clear();
 
         foreach (var registration in m_manualServices)
         {
-            // Track them so generated ones won't duplicate them
             m_registeredServiceTypes.Add(registration.Service.GetType());
             AddActiveService(registration);
         }
@@ -231,14 +233,14 @@ public abstract class Layer : Node, IDisposable
         ServiceLayerBinder.Attach(this, this);
     }
 
-    // 拆分后的方法：由 LayerChain 精准调用
+
     internal void PumpEvents()
     {
         if (RouteIndex != -1)
             LayerHub.EventCenter.PumpLayer(RouteIndex);
     }
 
-    // 拆分后的方法：由逻辑位图驱动
+
     public virtual void Pump(float deltaTime)
     {
         for (var i = 0; i < m_delayUpdaters.Count; i++) m_delayUpdaters[i].Update(deltaTime);
@@ -380,7 +382,7 @@ public abstract class Layer : Node, IDisposable
 
             if (invokers[routeId] != null)
             {
-                if (handlerTypes[routeId] == handler.GetType()) return; // Already registered
+                if (handlerTypes[routeId] == handler.GetType()) return;
 
                 throw new LayerCallRouteConflictException(
                     GetType(),
@@ -429,7 +431,10 @@ public abstract class Layer : Node, IDisposable
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private void ThrowDisposed() => throw new ObjectDisposedException(GetType().Name);
+    private void ThrowDisposed()
+    {
+        throw new ObjectDisposedException(GetType().Name);
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void ThrowRouteNotFound<TRequest, TResponse>()
@@ -444,7 +449,7 @@ public abstract class Layer : Node, IDisposable
     {
         return LayerHub.EventCenter.SendLocal(RouteIndex, value);
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventHandledState Send<T>(in T value) where T : struct
     {
@@ -615,4 +620,3 @@ public abstract class Layer : Node, IDisposable
         }
     }
 }
-

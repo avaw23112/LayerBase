@@ -1,4 +1,4 @@
-﻿using LayerBase.Async;
+using LayerBase.Async;
 using LayerBase.Core.EventHandler;
 using LayerBase.Layers;
 
@@ -6,9 +6,6 @@ namespace LayerBase.Core.Event;
 
 public delegate bool EventFilterDelegate<T>(in T value) where T : struct;
 
-/// <summary>
-///     提供链式 API（Fluent API）的事件订阅流�?
-/// </summary>
 public readonly struct LayerEventStream<T> where T : struct
 {
     private readonly Layer _layer;
@@ -20,9 +17,7 @@ public readonly struct LayerEventStream<T> where T : struct
         _predicate = predicate;
     }
 
-    /// <summary>
-    ///     添加过滤条件。只有满足条件的事件才会传递给后续�?Handler�?
-    /// </summary>
+
     public LayerEventStream<T> Where(EventFilterDelegate<T> predicate)
     {
         if (predicate == null) throw new ArgumentNullException(nameof(predicate));
@@ -31,9 +26,7 @@ public readonly struct LayerEventStream<T> where T : struct
         return new LayerEventStream<T>(_layer, next);
     }
 
-    /// <summary>
-    ///     绑定同步处理函数�?
-    /// </summary>
+
     public void HandleFlow(EventHandleDelegate<T> handler)
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
@@ -48,9 +41,7 @@ public readonly struct LayerEventStream<T> where T : struct
         }
     }
 
-    /// <summary>
-    ///     绑定异步处理函数�?
-    /// </summary>
+
     public void HandleAsync(EventHandleDelegateAsync<T> handler)
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
@@ -64,29 +55,26 @@ public readonly struct LayerEventStream<T> where T : struct
             _layer.SubscribeAsync((T e) => pred(in e) ? handler(e) : LBTask.CompletedTask);
         }
     }
-/// <summary>
-///     绑定并行处理函数?
-/// </summary>
-public void HandleParallel(EventNotifyDelegate<T> handler, Action<int, string, string, Exception> reportError)
-{
-    if (handler == null) throw new ArgumentNullException(nameof(handler));
-    if (_predicate == null)
-    {
-        _layer.SubscribeParallel(handler, reportError);
-    }
-    else
-    {
-        var pred = _predicate;
-        _layer.SubscribeParallel((in T e) =>
-        {
-            if (pred(in e)) handler(in e);
-        }, reportError);
-    }
-}
 
-    /// <summary>
-    ///     绑定安全通知處理函數（異常隔離）
-    /// </summary>
+
+    public void HandleParallel(EventNotifyDelegate<T> handler, Action<int, string, string, Exception> reportError)
+    {
+        if (handler == null) throw new ArgumentNullException(nameof(handler));
+        if (_predicate == null)
+        {
+            _layer.SubscribeParallel(handler, reportError);
+        }
+        else
+        {
+            var pred = _predicate;
+            _layer.SubscribeParallel((in T e) =>
+            {
+                if (pred(in e)) handler(in e);
+            }, reportError);
+        }
+    }
+
+
     public void Handle(EventNotifyDelegate<T> handler)
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
@@ -104,4 +92,3 @@ public void HandleParallel(EventNotifyDelegate<T> handler, Action<int, string, s
         }
     }
 }
-

@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using System.Text;
 using LayerBase.Async;
 using LayerBase.Call;
@@ -63,7 +63,7 @@ public static class LayerHub
         return GetNextLayerIndexInternal();
     }
 
-    // 内部实现
+
     private static int GetNextLayerIndexInternal()
     {
         return Interlocked.Increment(ref s_layerIndexCounter) - 1;
@@ -97,7 +97,7 @@ public static class LayerHub
             s_layerTypeBindings.Clear();
             InvalidateLayerTargetCaches();
             EventCenter.Reset();
-            ServiceProvider.ResetRoot(); // New: Reset global singleton container
+            ServiceProvider.ResetRoot();
             ServiceLayerBinder.Reset();
             LayerServiceRegistry.Reset();
             OnLayerEventInfo = null;
@@ -119,7 +119,6 @@ public static class LayerHub
             }
             catch
             {
-                // Ignore observer exceptions to avoid crashing the framework
             }
     }
 
@@ -165,8 +164,8 @@ public static class LayerHub
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(TRequest          request, int version,
-                                                                                CancellationToken cancellationToken)
+    private static LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(TRequest request, int version,
+        CancellationToken                                                                cancellationToken)
         where TLayer : Layer
         where TRequest : struct
         where TResponse : struct
@@ -189,6 +188,7 @@ public static class LayerHub
             if (LayerCallCache<TLayer, TRequest, TResponse>.Version == version) return;
 
             if (TryResolveLayerTarget<TLayer>(out var layer, out var error))
+            {
                 try
                 {
                     var invoker = layer!.GetCallInvoker<TRequest, TResponse>();
@@ -200,6 +200,7 @@ public static class LayerHub
                     LayerCallCache<TLayer, TRequest, TResponse>.Invoker = null;
                     LayerCallCache<TLayer, TRequest, TResponse>.Error = ex;
                 }
+            }
             else
             {
                 LayerCallCache<TLayer, TRequest, TResponse>.Invoker = null;
@@ -287,7 +288,7 @@ public static class LayerHub
         sb.AppendLine("# LayerBase Topology Snapshot");
         sb.AppendLine();
 
-        // 1. Layer Overview
+
         sb.AppendLine("## 1. Layers");
         sb.AppendLine("| Index | Layer Type | Active Logic |");
         sb.AppendLine("| :--- | :--- | :--- |");
@@ -295,15 +296,15 @@ public static class LayerHub
             sb.AppendLine($"| {layer.RouteIndex} | {layer.GetType().Name} | {layer.HasActiveLogic} |");
         sb.AppendLine();
 
-        // 2. Event Subscriptions
+
         sb.AppendLine("## 2. Event Subscriptions");
         sb.AppendLine("| Event Type | Subscribed Layers |");
         sb.AppendLine("| :--- | :--- |");
 
         var eventMap = new Dictionary<Type, List<string>>();
         foreach (var layer in s_chain.GetNodes().OfType<Layer>())
-            // Note: Currently we only capture events explicitly tracked in SubscribedEvents
-            // In a real scenario, we might want to query EventCenter if possible
+
+
         foreach (var evt in layer.SubscribedEvents)
         {
             if (!eventMap.TryGetValue(evt, out var layers))
@@ -316,7 +317,7 @@ public static class LayerHub
             sb.AppendLine($"| {kvp.Key.Name} | {string.Join(", ", kvp.Value)} |");
         sb.AppendLine();
 
-        // 3. Call Routes
+
         sb.AppendLine("## 3. Call Routes");
         sb.AppendLine("| Request | Response | Target Layer | Handler |");
         sb.AppendLine("| :--- | :--- | :--- | :--- |");
@@ -331,7 +332,7 @@ public static class LayerHub
         if (!hasCalls) sb.AppendLine("| (None) | | | |");
         sb.AppendLine();
 
-        // 4. Shared Fields (Provide/Use)
+
         sb.AppendLine("## 4. Shared Fields");
         sb.AppendLine("| OwnerType | LocalKey | Type | Role | Layer |");
         sb.AppendLine("| :--- | :--- | :--- | :--- | :--- |");
@@ -348,7 +349,7 @@ public static class LayerHub
         if (!hasFields) sb.AppendLine("| (None) | | | | |");
         sb.AppendLine();
 
-        // 5. Health Audit
+
         sb.AppendLine("## 5. Health Audit");
         var issues = new List<string>();
 
@@ -363,23 +364,23 @@ public static class LayerHub
         var allUseKeys = allLayers.SelectMany(l =>
             l.SharedFields.Where(f => !f.IsProvider).Select(f => $"{f.OwnerType.FullName}_{f.Key}")).ToHashSet();
 
-        // Check Zombie Events
+
         foreach (var evt in allSubscribed)
             if (!allProduced.Contains(evt))
                 issues.Add($"- **Zombie Event**: `{evt.Name}` is subscribed but never produced (Send/Post).");
 
-        // Check Unsent Events (Produced but no one listening)
+
         foreach (var evt in allProduced)
             if (!allSubscribed.Contains(evt))
                 issues.Add($"- **Unused Producer**: Event `{evt.Name}` is produced but has no subscribers.");
 
-        // Check Uncalled Call Routes
+
         foreach (var req in allCallHandlers)
             if (!allCallInvoked.Contains(req))
                 issues.Add(
                     $"- **Dead Call Route**: Request `{req.Name}` has a handler but is never invoked via `CallAsync`.");
 
-        // Check Orphaned Provides
+
         foreach (var key in allProvideKeys)
             if (!allUseKeys.Contains(key))
             {
@@ -507,7 +508,7 @@ public static class LayerHub
             if (_error != null)
                 return LBTask<TResponse>.FromException(_error);
 
-            // Fallback for default struct
+
             if (TryResolveLayerTarget<TLayer>(out var layer, out var error))
                 return layer!.CallAsync<TRequest, TResponse>(request, cancellationToken);
 
@@ -563,6 +564,3 @@ public static class LayerHub
         public static LayerTargetState State;
     }
 }
-
-
-

@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace LayerBase.DI;
+﻿namespace LayerBase.DI;
 
 public struct GlobalScope
 {
@@ -48,4 +46,3 @@ public sealed class OwnerServiceAttribute : Attribute
 
     public Type ServiceType { get; }
 }
-

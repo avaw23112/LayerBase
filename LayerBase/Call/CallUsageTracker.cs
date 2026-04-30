@@ -16,4 +16,3 @@ public static class CallUsageTracker
         return s_usedRequestTypes.Distinct();
     }
 }
-

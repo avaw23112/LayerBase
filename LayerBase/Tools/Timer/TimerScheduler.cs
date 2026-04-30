@@ -7,12 +7,8 @@ using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Tools.Timer;
 
-/// <summary>
-///     由外部Tick驱动的简单定时器，使用FreeList复用定时任务内存�?
-/// </summary>
 public sealed class TimerScheduler
 {
-    // 优化：重用列表，消除 Tick 时的分配
     private readonly List<(TimerToken token, ITimerQueue queue)> _dueCache = new(64);
     private readonly List<IFrequencyQueue> _frequencyDueCache = new(16);
     private readonly Dictionary<int, IFrequencyQueue> _frequencyQueues = new();
@@ -75,14 +71,14 @@ public sealed class TimerScheduler
                     _frequencyDueCache.Add(fq);
         }
 
-        // 1. 执行到期的普通定时器
+
         for (var i = 0; i < _dueCache.Count; i++)
         {
             var (token, queue) = _dueCache[i];
             queue.TryInvoke(token);
         }
 
-        // 2. 执行频率任务（优化：直接内部迭代，零分配�?
+
         if (frequencyTriggered)
             for (var i = 0; i < _frequencyDueCache.Count; i++)
                 _frequencyDueCache[i].ExecuteAll();
@@ -412,7 +408,7 @@ internal sealed class TimerQueue<T> : ITimerQueue where T : struct
 
             ref var slot = ref _tasks.Resolve(slotRef);
             task = slot.Value;
-            slot.Value = default; // 立即清除引用，终结泄�?
+            slot.Value = default;
         }
 
         try
@@ -442,7 +438,7 @@ internal sealed class TimerQueue<T> : ITimerQueue where T : struct
         {
             if (!_tasks.TryBorrow(token.Index, token.Version, out var slotRef)) return false;
 
-            // 关键修复：取消时也必须清�?Value，否�?delegates 会一直留�?FreeList 的内存里
+
             ref var slot = ref _tasks.Resolve(slotRef);
             slot.Value = default;
 
@@ -558,7 +554,7 @@ internal sealed class FrequencyQueue<T> : IFrequencyQueue where T : struct
     private readonly object _lock = new();
     private readonly List<FrequencyTask<T>> _tasks = new();
 
-    // 核心优化：直接执行，零分配，不再生成 Lambda 和快照列�?
+
     public void ExecuteAll()
     {
         FrequencyTask<T>[]? snapshot = null;
@@ -600,7 +596,7 @@ internal sealed class FrequencyQueue<T> : IFrequencyQueue where T : struct
             var entry = _tasks[token.Index];
             if (!entry.Active || entry.Version != token.Version) return false;
 
-            _tasks[token.Index] = default; // 立即清除引用
+            _tasks[token.Index] = default;
             _free.Push(token.Index);
             return true;
         }
@@ -867,4 +863,3 @@ internal struct TimerTask<T> where T : struct
         };
     }
 }
-

@@ -1,12 +1,7 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections;
 
 namespace LayerBase.Core.ResponsibilityChain;
 
-/// <summary>
-///     外部可控的双向责任链：节点知道前后指针，外部可插�?删除/移动节点�?
-/// </summary>
 internal sealed class ResponsibilityChain : IEnumerable<Node>
 {
     private readonly RcOwnerToken m_OwnerToken;
@@ -41,9 +36,9 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
             return node;
         }
 
-        node.Prev = Tail; // 新节点前�?= 旧尾
-        Tail.Next = node; // 旧尾后继 = 新节�?
-        Tail = node;      // 更新尾指�?
+        node.Prev = Tail;
+        Tail.Next = node;
+        Tail = node;
         ValidateAcyclic();
         return node;
     }
@@ -59,9 +54,9 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
             return node;
         }
 
-        node.Next = Head; // New node's next = old head
-        Head.Prev = node; // Old head's prev = new node
-        Head = node;      // Update head pointer
+        node.Next = Head;
+        Head.Prev = node;
+        Head = node;
         ValidateAcyclic();
         return node;
     }
@@ -134,10 +129,10 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
         if (node == anchor) return;
         if (node.Next == anchor) return;
 
-        // 先摘�?node（但不清 Owner�?
+
         Detach(node);
 
-        // 再插入到 anchor �?
+
         if (anchor == Head)
         {
             node.Prev = null;
@@ -241,7 +236,7 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
             if (!ReferenceEquals(cur.Prev, prev))
                 throw new InvalidOperationException("Invalid chain: Prev/Next symmetry broken.");
 
-            // Prevent self-loop (most common bug: cur.Next = cur)
+
             if (ReferenceEquals(cur.Next, cur))
                 throw new InvalidOperationException("Invalid chain: self-loop detected (node.Next == node).");
 
@@ -291,5 +286,3 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
         }
     }
 }
-
-

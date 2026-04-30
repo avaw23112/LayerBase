@@ -1,10 +1,5 @@
-﻿using System;
-
 namespace LayerBase.Core.ResponsibilityChain;
 
-/// <summary>
-///     ������ʶ��ID
-/// </summary>
 public struct RcOwnerToken : IEquatable<RcOwnerToken>
 {
     public long Id;
@@ -56,4 +51,3 @@ public struct RcOwnerToken : IEquatable<RcOwnerToken>
         return Id.GetHashCode();
     }
 }
-

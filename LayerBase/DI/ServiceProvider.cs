@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Reflection;
 using LayerBase.Layers;
 
@@ -27,10 +27,10 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
         _ownerLayer = ownerLayer;
         foreach (var d in descriptors)
             if (d.Lifetime == ServiceLifetime.Singleton)
-                // 真正的全局单例�?Root
+
                 _root._map[d.ServiceType] = d;
             else
-                // 局部单�?(Scoped) 或瞬时态进局�?Map
+
                 _map[d.ServiceType] = d;
     }
 
@@ -100,10 +100,10 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
         if (IsDisposed) throw new ObjectDisposedException(nameof(ServiceProvider));
         if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
 
-        // 1. 尝试从本�?Map 解析 (Scoped, Transient, Instance)
+
         if (_map.TryGetValue(serviceType, out var desc)) return Resolve(desc, callstack);
 
-        // 2. 尝试�?Root 解析 (Global Singleton)
+
         if (this != _root && _root._map.TryGetValue(serviceType, out var parentDesc))
             return _root.Resolve(parentDesc, callstack);
 
@@ -121,7 +121,7 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
                            _ => throw new NotSupportedException($"Unsupported lifetime {desc.Lifetime}")
                        };
 
-        // 只要是从本容器解析出来的对象，就自动绑定到该�?
+
         if (_ownerLayer != null) ServiceLayerBinder.Attach(instance, _ownerLayer);
 
         return instance;
@@ -129,13 +129,11 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
 
     private object GetOrCreateCached(ServiceDescriptor desc, HashSet<Type> callstack)
     {
-        // 注意：Singleton �?_root 实例中调用此方法，Scoped 在局部实例中调用
         var lazy = _instances.GetOrAdd(desc.ServiceType, _ =>
         {
             return new Lazy<object>(
                 () =>
                 {
-                    // 使用独立�?callstack 防止跨线程访问非线程安全�?HashSet 及污染检测语�?
                     var localCallstack = new HashSet<Type>();
                     return CreateInstance(desc, localCallstack);
                 },
@@ -226,4 +224,3 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
         public object Instance { get; }
     }
 }
-

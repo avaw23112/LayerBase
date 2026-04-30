@@ -1,5 +1,3 @@
-﻿using System;
-using System.Threading;
 using LayerBase.Layers;
 
 namespace LayerBase.Event.Delay;
@@ -7,7 +5,7 @@ namespace LayerBase.Event.Delay;
 internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherUpdater where T : struct
 {
     private int _hasValueInt;
-    private int _ttlBits; // 使用 int 存储 float 的位模式以支�?Interlocked
+    private int _ttlBits;
     private T _value;
 
     public DelayPublisher(Layer owner)
@@ -53,7 +51,7 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherUpd
     {
         if (Volatile.Read(ref _hasValueInt) == 0) return;
 
-        // 🚀 原子递减逻辑
+
         float current, next;
         int initial, computed;
         do
@@ -88,7 +86,6 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherUpd
         Volatile.Write(ref _ttlBits, BitConverter.SingleToInt32Bits(ttlSeconds));
         Direction = direction;
         ContractId = contractId;
-        Interlocked.Exchange(ref _hasValueInt, 1); // 内存屏障，确保之前的写入对其他线程可�?
+        Interlocked.Exchange(ref _hasValueInt, 1);
     }
 }
-

@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Event.Delay;
@@ -153,9 +153,7 @@ public static class ServiceExtensions
                .SubscribeParallel(handler, reportError ?? LayerHub.ReportLayerEventError);
     }
 
-    /// <summary>
-    ///     获取针对特定事件的链�?API 流�?
-    /// </summary>
+
     public static LayerEventStream<TValue> OnEvent<TValue>(this IService service) where TValue : struct
     {
         return service.GetLayer().OnEvent<TValue>();
@@ -234,7 +232,7 @@ public static class LayerContextExtensions
         service.GetLayer()
                .SubscribeParallel(handler, reportError ?? LayerHub.ReportLayerEventError);
     }
-    
+
     public static LayerEventStream<TValue> OnEvent<TValue>(this ILayerContext service) where TValue : struct
     {
         return service.GetLayer().OnEvent<TValue>();
@@ -250,4 +248,3 @@ public static class LayerContextExtensions
 public sealed class MountAttribute : Attribute
 {
 }
-

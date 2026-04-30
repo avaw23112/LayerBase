@@ -2,9 +2,6 @@
 
 namespace LayerBase.Tools.Job;
 
-/// <summary>
-///     固定线程数的轻量任务调度器�?
-/// </summary>
 public sealed class JobScheduler : IDisposable
 {
     private readonly BlockingCollection<Action> _jobs;
@@ -80,9 +77,7 @@ public sealed class JobScheduler : IDisposable
             }
             catch (Exception ex)
             {
-                // keep worker alive, but report error
                 LayerHub.ReportLayerEventError(-1, "JobScheduler.WorkerLoop", "Job Execution", ex);
             }
     }
 }
-

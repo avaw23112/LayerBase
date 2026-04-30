@@ -1,13 +1,11 @@
-﻿using System;
-
 namespace LayerBase.DI;
 
 public enum ServiceLifetime
 {
-    Singleton, // Globally unique
-    Scoped,    // Layer unique
-    Transient, // Created every time
-    Instance   // Externally pre-created instance (usually acts as Scoped)
+    Singleton,
+    Scoped,
+    Transient,
+    Instance
 }
 
 public sealed class ServiceDescriptor
@@ -73,4 +71,3 @@ public sealed class ServiceDescriptor
         return new ServiceDescriptor(ServiceType, ImplType, Lifetime, Factory, Instance, registrationScopeId);
     }
 }
-

@@ -1,5 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace LayerBase.Core.EventStateTrace;
@@ -21,20 +19,13 @@ internal struct SlotRef
         Version = version;
     }
 
-    /// <summary>
-    ///     当前节点在整个内存空间的相对位置
-    /// </summary>
+
     public int GlobalIndex { get; }
 
-    /// <summary>
-    ///     由于GlobalIndex会被复用,需要额外参数查�?
-    /// </summary>
+
     public ushort Version { get; }
 }
 
-/// <summary>
-///     高性能 Slot 分配�?(FreeList)
-/// </summary>
 internal sealed class FreeList<T> where T : struct
 {
     private readonly List<Slot<T>[]> _slabs = new();
@@ -48,9 +39,7 @@ internal sealed class FreeList<T> where T : struct
         _slabSize = slabSize;
     }
 
-    /// <summary>
-    ///     预热内存空间，提前分配指定容量的 Slab�?
-    /// </summary>
+
     public void Prewarm(int capacity)
     {
         if (capacity <= 0) return;
@@ -62,9 +51,7 @@ internal sealed class FreeList<T> where T : struct
         }
     }
 
-    /// <summary>
-    ///     租用新的 slot
-    /// </summary>
+
     public SlotRef Rent()
     {
         lock (_syncLock)
@@ -84,9 +71,7 @@ internal sealed class FreeList<T> where T : struct
         }
     }
 
-    /// <summary>
-    ///     尝试借用（验证有效性）
-    /// </summary>
+
     public bool TryBorrow(int globalIndex, int version, out SlotRef slotRef)
     {
         lock (_syncLock)
@@ -107,14 +92,11 @@ internal sealed class FreeList<T> where T : struct
     {
         lock (_syncLock)
         {
-            // 在高性能路径上，信任调用者已经通过 TryBorrow 或刚 Rent 到引�?
             return ref GetSlotInternal(slotRef.GlobalIndex);
         }
     }
 
-    /// <summary>
-    ///     回收 Slot
-    /// </summary>
+
     public void Release(in SlotRef slotRef)
     {
         lock (_syncLock)
@@ -157,7 +139,7 @@ internal sealed class FreeList<T> where T : struct
         var baseIndex = _slabs.Count * _slabSize;
         var slab = new Slot<T>[_slabSize];
 
-        // 倒序构建链表，使�?Rent 时能从低索引开始使用（对缓存更友好�?
+
         for (var i = _slabSize - 1; i >= 0; i--)
         {
             slab[i].NextFree = _freeHead;
@@ -174,4 +156,3 @@ internal sealed class FreeList<T> where T : struct
         return next;
     }
 }
-

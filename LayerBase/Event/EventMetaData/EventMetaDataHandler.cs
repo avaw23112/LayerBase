@@ -1,11 +1,8 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using LayerBase.Core.EventCatalogue;
 
 namespace LayerBase.Event.EventMetaData;
 
-/// <summary>
-///     事件元数据调度：注册、查询以及异常回调�?
-/// </summary>
 internal static class EventMetaDataHandler
 {
     private static Dictionary<Type, IEventMetaData> s_metaDataByType = new();
@@ -35,7 +32,6 @@ internal static class EventMetaDataHandler
             }
             catch
             {
-                // Exception observers should not break the layer pump loop.
             }
     }
 
@@ -118,4 +114,3 @@ internal static class EventMetaDataHandler
         public static IEventMetaData? MetaData;
     }
 }
-

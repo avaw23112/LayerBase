@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using LayerBase.Async;
 using LayerBase.Core.EventHandler;
@@ -33,9 +33,9 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     private readonly object _lock = new();
     private readonly Action _onDirty;
     internal List<NotifyHandlerEntry<T>> MasterNotify = new();
-    internal List<NotifyHandlerEntry<T>> MasterSubscribe = new();
     internal List<OrderedHandlerEntry<T>> MasterOrdered = new();
     internal List<ParallelHandlerEntry<T>> MasterParallel = new();
+    internal List<NotifyHandlerEntry<T>> MasterSubscribe = new();
     internal List<UnorderedHandlerEntry<T>> MasterUnordered = new();
 
     public HandlerBucket(Action onDirty)
@@ -185,6 +185,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             _onDirty();
         }
     }
+
     public void RemoveSubscribe(EventNotifyDelegate<T> h)
     {
         lock (_lock)
@@ -202,7 +203,6 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
             _onDirty();
         }
     }
-
 }
 
 internal readonly struct NotifyHandlerEntry<T> where T : struct
@@ -290,7 +290,6 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
 
     public static UnorderedHandlerEntry<T> Create(IEventHandler<T> h)
     {
-        // 核心优化：使用实例方法引用代�?Lambda 闭包，消除订阅时的内存分�?
         return new UnorderedHandlerEntry<T>(
             new SyncHandlerWrapper<T>(h).Invoke,
             null,
@@ -309,7 +308,7 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
             h);
     }
 
-    // 内部包装类，利用实例方法直接绑定，消除闭包开销
+
     private sealed class SyncHandlerWrapper<TValue> where TValue : struct
     {
         private readonly IEventHandler<TValue> _handler;
@@ -493,4 +492,3 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
         }
     }
 }
-

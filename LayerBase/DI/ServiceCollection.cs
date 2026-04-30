@@ -1,8 +1,5 @@
 ﻿namespace LayerBase.DI;
 
-/// <summary>
-///     切片服务容器
-/// </summary>
 public class ServiceCollection : IServiceCollection
 {
     private readonly List<ServiceDescriptor> _descriptors = new();
@@ -14,9 +11,7 @@ public class ServiceCollection : IServiceCollection
         return this;
     }
 
-    /// <summary>
-    ///     Register a global singleton.
-    /// </summary>
+
     public IServiceCollection AddSingleton<TService>(TService instance)
     {
         return Add(ServiceDescriptor.Singleton(instance));
@@ -80,6 +75,3 @@ public class ServiceCollection : IServiceCollection
         }
     }
 }
-
-
-

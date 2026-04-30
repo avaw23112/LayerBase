@@ -15,12 +15,7 @@ public static class EventCatalogue
         return IsSameCategory(origin, token);
     }
 
-    /// <summary>
-    ///     查找两个Token是否有同一个父节点
-    /// </summary>
-    /// <param name="origin"></param>
-    /// <param name="target"></param>
-    /// <returns></returns>
+
     public static bool IsSameCategory(EventCategoryToken origin, EventCategoryToken target)
     {
         if (!s_mapTokenWithNode.TryGetValue(origin, out var originNode) ||
@@ -35,12 +30,7 @@ public static class EventCatalogue
         return originNode.lastNode.eventCategoryToken == targetNode.lastNode.eventCategoryToken;
     }
 
-    /// <summary>
-    ///     查找origin是否是categoryName目录的子节点
-    /// </summary>
-    /// <param name="categoryName"></param>
-    /// <param name="target"></param>
-    /// <returns></returns>
+
     public static bool IsBelongCategory(EventCategoryToken origin, string categoryName)
     {
         if (!s_mapCategoryNameWithToken.TryGetValue(categoryName, out var token)) return false;
@@ -48,12 +38,7 @@ public static class EventCatalogue
         return IsBelongCategory(token, origin);
     }
 
-    /// <summary>
-    ///     查找target是否是origin的子节点
-    /// </summary>
-    /// <param name="origin"></param>
-    /// <param name="target"></param>
-    /// <returns></returns>
+
     public static bool IsBelongCategory(EventCategoryToken origin, EventCategoryToken target)
     {
         if (!s_mapTokenWithNode.TryGetValue(target, out var targetNode)) return false;
@@ -92,4 +77,3 @@ public static class EventCatalogue
         s_mapCategoryNameWithToken.Add(node.Catalogue, node.GetToken());
     }
 }
-

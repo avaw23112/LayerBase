@@ -24,4 +24,3 @@ internal static class LayerCallRouteId<TRequest, TResponse>
 {
     public static readonly int Id = LayerCallRouteRegistry.GetNextId();
 }
-

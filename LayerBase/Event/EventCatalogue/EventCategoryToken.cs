@@ -1,8 +1,5 @@
-﻿namespace LayerBase.Core.EventCatalogue;
+namespace LayerBase.Core.EventCatalogue;
 
-/// <summary>
-///     事件分类的标识符。等价于类型令牌，保证每个分类都有独立Id�?
-/// </summary>
 public readonly struct EventCategoryToken : IEquatable<EventCategoryToken>
 {
     public int Id { get; }
@@ -41,4 +38,3 @@ public readonly struct EventCategoryToken : IEquatable<EventCategoryToken>
         return !left.Equals(right);
     }
 }
-

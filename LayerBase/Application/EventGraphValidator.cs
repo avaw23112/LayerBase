@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Text;
 using LayerBase.DI;
 
 namespace LayerBase;
@@ -58,7 +55,7 @@ internal static class EventGraphValidator
     private static bool CheckCycle(Type u, Dictionary<Type, HashSet<Type>> adj, Dictionary<Type, NodeColor> colors,
                                    List<Type> path, out List<Type>? cyclePath)
     {
-        colors[u] = NodeColor.Gray; 
+        colors[u] = NodeColor.Gray;
         path.Add(u);
         cyclePath = null;
 
@@ -71,7 +68,7 @@ internal static class EventGraphValidator
                 {
                     var startIndex = path.IndexOf(v);
                     cyclePath = path.Skip(startIndex).ToList();
-                    cyclePath.Add(v); 
+                    cyclePath.Add(v);
                     return true;
                 }
 
@@ -81,7 +78,7 @@ internal static class EventGraphValidator
             }
 
         path.RemoveAt(path.Count - 1);
-        colors[u] = NodeColor.Black; 
+        colors[u] = NodeColor.Black;
         return false;
     }
 
@@ -98,7 +95,8 @@ internal static class EventGraphValidator
         }
 
         sb.AppendLine();
-        sb.AppendLine("Solution: Change any [Send] in the loop to [Post] (asynchronous dispatch) to break the synchronous call stack.");
+        sb.AppendLine(
+            "Solution: Change any [Send] in the loop to [Post] (asynchronous dispatch) to break the synchronous call stack.");
 
         throw new EventCycleException(sb.ToString());
     }
@@ -110,4 +108,3 @@ internal static class EventGraphValidator
         Black
     }
 }
-
