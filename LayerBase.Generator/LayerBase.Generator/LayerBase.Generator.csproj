@@ -21,6 +21,7 @@
         <RepositoryUrl>https://github.com/avaw23112/LayerBase.git</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <Version>1.4.3</Version>
+        <PackageOutputPath>$(MSBuildProjectDirectory)/../nupkgs</PackageOutputPath>
     </PropertyGroup>
 
     <ItemGroup>
