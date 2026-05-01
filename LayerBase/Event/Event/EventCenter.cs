@@ -661,11 +661,13 @@ public sealed class EventCenter
         public void AddParallel(int layerIndex, IEventHandler<T> h, Action<int, int, int, Exception> re)
         {
             GetOrCreate(layerIndex).AddParallel(h, re);
+            MarkDirty();
         }
 
         public void AddParallel(int layerIndex, EventNotifyDelegate<T> h, Action<int, int, int, Exception> re)
         {
             GetOrCreate(layerIndex).AddParallel(h, re);
+            MarkDirty();
         }
 
         public void Add(int layerIndex, EventHandleDelegate<T> h)

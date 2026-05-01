@@ -199,18 +199,21 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
 
     public void SetResult(T value)
     {
+        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
         _result = value;
-        Complete(null, default);
+        CompleteCore(null, default);
     }
 
     public void SetException(Exception ex)
     {
-        Complete(ex, default);
+        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
+        CompleteCore(ex, default);
     }
 
     public void SetCanceled(CancellationToken token)
     {
-        Complete(new OperationCanceledException(token), token);
+        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
+        CompleteCore(new OperationCanceledException(token), token);
     }
 
     public T GetResult()
@@ -249,6 +252,11 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
     private void Complete(Exception? ex, CancellationToken canceledToken)
     {
         if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
+        CompleteCore(ex, canceledToken);
+    }
+
+    private void CompleteCore(Exception? ex, CancellationToken canceledToken)
+    {
         _exception = ex;
         _canceledToken = canceledToken;
         Volatile.Write(ref _status, 1);

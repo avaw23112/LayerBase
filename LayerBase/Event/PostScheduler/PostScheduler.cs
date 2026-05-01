@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Numerics;
@@ -16,23 +16,24 @@ public sealed class PostScheduler : IDisposable
     private readonly EventPayloadStorage _payloadStorage;
     private readonly EventCenter _eventCenter;
     private readonly EventRuntimePolicyTable _policyTable;
-    
+
     // Optimized Buffers
     private ulong[] _dirtyPendingBits = Array.Empty<ulong>();
     private ulong[] _latestPendingBits = Array.Empty<ulong>();
-    
+
     // Coalesced: Data Coalescing (Payload merging) - Keep for now, but in slow path
     private readonly Dictionary<CoalescedSlotKey, CoalescedSlot> _coalescedBuffer = new();
     private readonly List<CoalescedSlotKey> _pendingCoalesced = new();
-    
+
     // Latest: Data Coalescing (Last payload only)
     private PayloadHandle[] _latestBuffer = new PayloadHandle[256];
-    
+
     private int[] _pendingCount = new int[256];
     private PostTypePlan[] _postPlans = Array.Empty<PostTypePlan>();
     private PostBitmap _postBitmap = new();
-    
+
     private readonly object _bufferLock = new();
+    private readonly object _queueLock = new();
     private long _sequenceCounter;
     private bool _disposed;
     private bool _isPumping;
@@ -48,7 +49,7 @@ public sealed class PostScheduler : IDisposable
         _readyQueue = new RingBuffer<PostItem>(options.ReadyCapacity);
         _nextQueue = new RingBuffer<PostItem>(options.NextCapacity);
         _payloadStorage = new EventPayloadStorage();
-        
+
         for (int i = 0; i < _latestBuffer.Length; i++) _latestBuffer[i] = PayloadHandle.Invalid;
     }
 
@@ -140,17 +141,20 @@ public sealed class PostScheduler : IDisposable
         var sequenceId = Interlocked.Increment(ref _sequenceCounter);
         var item = new PostItem(typeId, handle, sequenceId, _defaultBackpressure);
 
-        var targetQueue = _isPumping ? _nextQueue : _readyQueue;
-        if (targetQueue.TryEnqueue(in item))
-            return PostResult.Success;
+        lock (_queueLock)
+        {
+            var targetQueue = _isPumping ? _nextQueue : _readyQueue;
+            if (targetQueue.TryEnqueue(in item))
+                return PostResult.Enqueued();
 
-        return HandleQueueFullSlow(in item, store);
+            return HandleQueueFullSlow(in item, store, targetQueue);
+        }
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private PostResult HandleQueueFullSlow<T>(in PostItem item, EventStore<T> store) where T : struct
+    private PostResult HandleQueueFullSlow<T>(in PostItem item, EventStore<T> store, RingBuffer<PostItem> targetQueue) where T : struct
     {
-        return HandleQueueFullInternal(in item);
+        return HandleQueueFullInternal(in item, targetQueue);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -186,6 +190,8 @@ public sealed class PostScheduler : IDisposable
                 {
                     return PostResult.Failure($"Max pending reached for event type {typeId}");
                 }
+
+                FastArray.At(_pendingCount, typeId)++;
             }
         }
 
@@ -195,12 +201,9 @@ public sealed class PostScheduler : IDisposable
         var item = new PostItem(typeId, handle, sequenceId, plan.Backpressure);
 
         var result = EnqueueItemWithPolicy(in item);
-        if (result.IsSuccess && plan.TrackPending)
+        if (!result.CountsAsPending && plan.TrackPending)
         {
-            lock (_bufferLock)
-            {
-                FastArray.At(_pendingCount, typeId)++;
-            }
+            DecrementPendingCount(typeId);
         }
         return result;
     }
@@ -243,7 +246,7 @@ public sealed class PostScheduler : IDisposable
                 {
                     _payloadStorage.Release(handleRef);
                 }
-                
+
                 handleRef = _payloadStorage.Store(_runtimeId, value);
                 if (segment < _latestPendingBits.Length)
                 {
@@ -309,16 +312,18 @@ public sealed class PostScheduler : IDisposable
 
     private PostResult EnqueueItemWithPolicy(in PostItem item)
     {
-        var targetQueue = _isPumping ? _nextQueue : _readyQueue;
-        if (targetQueue.TryEnqueue(in item))
-            return PostResult.Success;
+        lock (_queueLock)
+        {
+            var targetQueue = _isPumping ? _nextQueue : _readyQueue;
+            if (targetQueue.TryEnqueue(in item))
+                return PostResult.Enqueued();
 
-        return HandleQueueFullInternal(in item);
+            return HandleQueueFullInternal(in item, targetQueue);
+        }
     }
 
-    private PostResult HandleQueueFullInternal(in PostItem item)
+    private PostResult HandleQueueFullInternal(in PostItem item, RingBuffer<PostItem> targetQueue)
     {
-        var targetQueue = _isPumping ? _nextQueue : _readyQueue;
         switch (item.Policy)
         {
             case BackpressurePolicy.RejectNew:
@@ -326,7 +331,7 @@ public sealed class PostScheduler : IDisposable
                 return PostResult.Failure("Queue full");
             case BackpressurePolicy.DropNewest:
                 _payloadStorage.Release(item.PayloadHandle);
-                return PostResult.Success; 
+                return PostResult.Dropped();
             case BackpressurePolicy.DropOldest:
                 if (targetQueue.TryDequeue(out var oldItem))
                 {
@@ -346,7 +351,7 @@ public sealed class PostScheduler : IDisposable
     private void DecrementPendingCount(int typeId)
     {
         if (typeId >= _postPlans.Length) return;
-        
+
         var plan = _postPlans[typeId];
         if (plan.TrackPending)
         {
@@ -378,7 +383,7 @@ public sealed class PostScheduler : IDisposable
                     bits &= bits - 1;
                 }
             }
-            
+
             // 2. Coalesced (Data Merging)
             if (_pendingCoalesced.Count > 0)
             {
@@ -424,25 +429,41 @@ public sealed class PostScheduler : IDisposable
 
         long startTimestamp = 0;
         if (_options.MaxMillisecondsPerPump > 0) startTimestamp = Stopwatch.GetTimestamp();
-        
+
         int processed = 0;
         int wavesProcessed = 0;
-        
+
         processed += FlushBuffers();
 
-        _isPumping = true;
+        lock (_queueLock)
+        {
+            _isPumping = true;
+        }
         try
         {
-            if (_readyQueue.IsEmpty && !_nextQueue.IsEmpty) PromoteNextToReady();
-
-            while (!_readyQueue.IsEmpty)
+            lock (_queueLock)
             {
+                if (_readyQueue.IsEmpty && !_nextQueue.IsEmpty) PromoteNextToReady();
+            }
+
+            while (true)
+            {
+                int currentWaveCount;
+                lock (_queueLock)
+                {
+                    if (_readyQueue.IsEmpty) break;
+                    currentWaveCount = _readyQueue.Count;
+                }
+
                 wavesProcessed++;
-                int currentWaveCount = _readyQueue.Count;
                 for (int i = 0; i < currentWaveCount; i++)
                 {
-                    if (!_readyQueue.TryDequeue(out var item)) break;
-                    
+                    PostItem item;
+                    lock (_queueLock)
+                    {
+                        if (!_readyQueue.TryDequeue(out item)) break;
+                    }
+
                     DispatchItem(in item);
                     processed++;
 
@@ -456,23 +477,34 @@ public sealed class PostScheduler : IDisposable
                             goto EndPump;
                     }
                 }
-                
-                if (wavesProcessed < _options.MaxWavesPerPump && !_nextQueue.IsEmpty)
-                    PromoteNextToReady();
-                else
-                    break;
+
+                lock (_queueLock)
+                {
+                    if (wavesProcessed < _options.MaxWavesPerPump && !_nextQueue.IsEmpty)
+                        PromoteNextToReady();
+                    else
+                        break;
+                }
             }
         }
         finally
         {
-            _isPumping = false;
+            lock (_queueLock)
+            {
+                _isPumping = false;
+            }
         }
 
     EndPump:
         var totalElapsedMs = 0.0;
         if (startTimestamp != 0) totalElapsedMs = (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
-        
-        return new PostPumpStats(processed, totalElapsedMs, _readyQueue.Count + _nextQueue.Count, wavesProcessed);
+
+        int pendingQueueCount;
+        lock (_queueLock)
+        {
+            pendingQueueCount = _readyQueue.Count + _nextQueue.Count;
+        }
+        return new PostPumpStats(processed, totalElapsedMs, pendingQueueCount, wavesProcessed);
     }
 
     private void PromoteNextToReady()
@@ -487,24 +519,30 @@ public sealed class PostScheduler : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void DispatchItem(in PostItem item)
     {
-        _payloadStorage.Dispatch(item.PayloadHandle, _eventCenter);
-        _payloadStorage.Release(item.PayloadHandle);
-        DecrementPendingCount(item.EventTypeId);
+        try
+        {
+            _payloadStorage.Dispatch(item.PayloadHandle, _eventCenter);
+        }
+        finally
+        {
+            _payloadStorage.Release(item.PayloadHandle);
+            DecrementPendingCount(item.EventTypeId);
+        }
     }
 
     /// <summary>
-    /// 预热指定事件类型的投递相关存储。
+    /// 棰勭儹鎸囧畾浜嬩欢绫诲瀷鐨勬姇閫掔浉鍏冲瓨鍌ㄣ€?
     /// </summary>
-    /// <typeparam name="T">事件类型。</typeparam>
+    /// <typeparam name="T">浜嬩欢绫诲瀷銆?/typeparam>
     public void PrewarmEvent<T>() where T : struct
     {
         if (_disposed) return;
 
-        // 1. 确保 EventStore 已经创建。
+        // 1. 纭繚 EventStore 宸茬粡鍒涘缓銆?
         _payloadStorage.EnsureStore<T>(_runtimeId);
 
-        // 2. 如果当前没有该事件类型的 Plan，则创建一个默认 Plan。
-        // 这可以让第一次 TryPost 时不再承担 Plan 数组查询或默认创建成本。
+        // 2. 濡傛灉褰撳墠娌℃湁璇ヤ簨浠剁被鍨嬬殑 Plan锛屽垯鍒涘缓涓€涓粯璁?Plan銆?
+        // 杩欏彲浠ヨ绗竴娆?TryPost 鏃朵笉鍐嶆壙鎷?Plan 鏁扮粍鏌ヨ鎴栭粯璁ゅ垱寤烘垚鏈€?
         var typeId = EventTypeId<T>.Id;
         if (typeId >= _postPlans.Length)
         {
@@ -529,7 +567,7 @@ public sealed class PostScheduler : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        
+
         lock (_bufferLock)
         {
             for (int i = 0; i < _latestPendingBits.Length; i++)
@@ -551,9 +589,22 @@ public sealed class PostScheduler : IDisposable
             _pendingCoalesced.Clear();
             _coalescedBuffer.Clear();
         }
-        
+
+        lock (_queueLock)
+        {
+            ReleaseQueuedPayloads(_readyQueue);
+            ReleaseQueuedPayloads(_nextQueue);
+        }
+
         _payloadStorage.Dispose();
-        _readyQueue.Clear();
-        _nextQueue.Clear();
+    }
+
+    private void ReleaseQueuedPayloads(RingBuffer<PostItem> queue)
+    {
+        while (queue.TryDequeue(out var item))
+        {
+            _payloadStorage.Release(item.PayloadHandle);
+            DecrementPendingCount(item.EventTypeId);
+        }
     }
 }

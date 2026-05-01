@@ -123,7 +123,33 @@ internal sealed class DelayBufferWheel
                 
                 current = next;
             }
+
+            if (current != -1)
+            {
+                RequeueRemaining(slot, current);
+            }
         }
+    }
+
+    private void RequeueRemaining(int slot, int head)
+    {
+        var targetSlot = (slot + 1) % _options.WheelSize;
+        _pool[head].Prev = -1;
+        var tail = head;
+        while (true)
+        {
+            _pool[tail].SlotIndex = targetSlot;
+            if (_pool[tail].Next == -1) break;
+            tail = _pool[tail].Next;
+        }
+
+        _pool[tail].Next = _wheel[targetSlot];
+        if (_wheel[targetSlot] != -1)
+        {
+            _pool[_wheel[targetSlot]].Prev = tail;
+        }
+
+        _wheel[targetSlot] = head;
     }
 
     private void RemoveFromWheel(int index)

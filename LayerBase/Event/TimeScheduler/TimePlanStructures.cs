@@ -42,6 +42,7 @@ internal sealed class LongTimerHeap
 {
     private int[] _indices;
     private long[] _expireTicks;
+    private int[] _versions;
     private int _count;
 
     public int Count => _count;
@@ -50,31 +51,35 @@ internal sealed class LongTimerHeap
     {
         _indices = new int[capacity];
         _expireTicks = new long[capacity];
+        _versions = new int[capacity];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Enqueue(int timerIndex, long expireTick)
+    public void Enqueue(int timerIndex, long expireTick, int version)
     {
         if (_count == _indices.Length) GrowSlow();
 
         var i = _count++;
         _indices[i] = timerIndex;
         _expireTicks[i] = expireTick;
+        _versions[i] = version;
         HeapifyUp(i);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryPeek(out int timerIndex, out long expireTick)
+    public bool TryPeek(out int timerIndex, out long expireTick, out int version)
     {
         if (_count == 0)
         {
             timerIndex = -1;
             expireTick = 0;
+            version = 0;
             return false;
         }
 
         timerIndex = _indices[0];
         expireTick = _expireTicks[0];
+        version = _versions[0];
         return true;
     }
 
@@ -85,6 +90,7 @@ internal sealed class LongTimerHeap
         _count--;
         _indices[0] = _indices[_count];
         _expireTicks[0] = _expireTicks[_count];
+        _versions[0] = _versions[_count];
         HeapifyDown(0);
         return result;
     }
@@ -94,6 +100,7 @@ internal sealed class LongTimerHeap
     {
         Array.Resize(ref _indices, _indices.Length * 2);
         Array.Resize(ref _expireTicks, _expireTicks.Length * 2);
+        Array.Resize(ref _versions, _versions.Length * 2);
     }
 
     private void HeapifyUp(int index)
@@ -132,6 +139,7 @@ internal sealed class LongTimerHeap
     {
         (_indices[a], _indices[b]) = (_indices[b], _indices[a]);
         (_expireTicks[a], _expireTicks[b]) = (_expireTicks[b], _expireTicks[a]);
+        (_versions[a], _versions[b]) = (_versions[b], _versions[a]);
     }
 
     public void Clear() => _count = 0;

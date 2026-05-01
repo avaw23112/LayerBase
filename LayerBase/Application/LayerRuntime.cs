@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Text;
 using LayerBase.Async;
 using LayerBase.Call;
@@ -24,14 +24,15 @@ public sealed class LayerRuntime : IDisposable
     public int Id => _id;
     internal WorldServiceRoot Services { get; }
     public EventCenter EventCenter { get; internal set; }
-    
+
     private PostScheduler? _scheduler;
     public PostScheduler Scheduler => _scheduler ?? throw new InvalidOperationException("Runtime not built.");
 
     private TimeScheduler<ITimerAction>? _timer;
     public TimeScheduler<ITimerAction> Timer => _timer ?? throw new InvalidOperationException("Runtime not built.");
-    
+
     private RuntimeTimerSink? _timerSink;
+    internal DelayPublisherManager? DelayManager { get; private set; }
 
     public bool IsDebugMode { get; internal set; }
     public event Action<LayerEventInfo>? OnLayerEventInfo;
@@ -58,7 +59,7 @@ public sealed class LayerRuntime : IDisposable
         {
             var eventId = meta.EventId;
             // Console.WriteLine($"[DEBUG] Registering meta for {type.Name}, id={eventId}");
-            
+
             var postPolicy = meta.GetPostPolicy();
             _policyTable.SetMetaData(eventId, meta);
             if (postPolicy != null)
@@ -81,7 +82,7 @@ public sealed class LayerRuntime : IDisposable
             var effectivePolicy = postPolicy ?? new EventPostPolicy(PostDeliveryMode.Normal, options.DefaultBackpressure, 0);
             plans.Add(new PostTypePlan(eventId, effectivePolicy.Mode, effectivePolicy.Backpressure, effectivePolicy.MaxPending, options.DefaultBackpressure));
         }
-        
+
         _scheduler = new PostScheduler(_id, EventCenter, options, _policyTable);
         EventCenter.PostScheduler = _scheduler;
         _scheduler.BuildPlans(plans.ToArray());
@@ -96,7 +97,7 @@ public sealed class LayerRuntime : IDisposable
 
     internal void InitializeDelay(DelayBufferOptions options)
     {
-        DelayPublisherManager.Initialize(options, _policyTable!);
+        DelayManager = DelayPublisherManager.Create(options, _policyTable!);
     }
 
     internal int GetNextLayerIndex()
@@ -113,38 +114,38 @@ public sealed class LayerRuntime : IDisposable
 
     {
         if (_disposed) return;
-        
+
         if (_context != null)
         {
             using var scope = _context.EnterScope();
-            
+
             // 1. Time tick
             _timer?.Tick(deltaTime, _timerSink!);
-            
+
             // 2. Delay tick (Only if needed)
             if (_chain != null && _chain.HasAnyDelay)
-                DelayPublisherManager.Instance?.Tick(deltaTime);
-            
+                DelayManager?.Tick(deltaTime);
+
             // 3. Completion drain (Stage 5 Concurrency Simplified)
             _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0);
-            
+
             // 4. Post pump
             _scheduler?.Pump();
-            
+
             _chain?.Pump(deltaTime);
         }
         else
         {
             // 1. Time tick
             _timer?.Tick(deltaTime, _timerSink!);
-            
+
             // 2. Delay tick (Only if needed)
             if (_chain != null && _chain.HasAnyDelay)
-                DelayPublisherManager.Instance?.Tick(deltaTime);
-            
+                DelayManager?.Tick(deltaTime);
+
             // 3. Post pump
             _scheduler?.Pump();
-            
+
             _chain?.Pump(deltaTime);
         }
     }
@@ -210,9 +211,9 @@ public sealed class LayerRuntime : IDisposable
     {
         var eventId = EventTypeId<T>.Id;
         var timerPolicy = _policyTable?.GetTimerPolicy(eventId);
-        
+
         return Timer.Schedule(
-            new PostEventAction<T>(value, timerPolicy?.ExpiredPostPolicy), 
+            new PostEventAction<T>(value, timerPolicy?.ExpiredPostPolicy),
             delaySeconds,
             repeatCount: 0,
             intervalSeconds: 0,
@@ -236,7 +237,7 @@ public sealed class LayerRuntime : IDisposable
         where TResponse : struct
     {
         var version = GetLayerTypeBindingsVersion();
-        
+
         if (LayerHub.GetCallCacheVersion<TLayer, TRequest, TResponse>(_id) != version)
             return CallAsyncSlow<TLayer, TRequest, TResponse>(version, request, cancellationToken);
 
@@ -291,12 +292,13 @@ public sealed class LayerRuntime : IDisposable
         _chain?.DisposeLayers();
         _chain = null;
 
-        // 释放当前世界内的 Singleton 实例。
+        // 閲婃斁褰撳墠涓栫晫鍐呯殑 Singleton 瀹炰緥銆?
         Services.Dispose();
 
         _scheduler?.Dispose();
         _timer?.Dispose();
-        DelayPublisherManager.Instance?.Clear();
+        DelayManager?.Clear();
+        DelayManager = null;
         EventCenter.Reset();
         _context?.Dispose();
         LayerHub.Internal_Unregister(this);
@@ -537,16 +539,16 @@ public sealed class LayerRuntime : IDisposable
         public LayerRuntime Build()
         {
             if (_layerChain == null) throw new InvalidOperationException("No layers added.");
-            
+
             if (_runtime._context == null)
                 _runtime._context = LayerBaseSynchronizationContext.Install();
 
             _runtime.Tasks = new WorldTaskApi(_runtime._context);
 
-            _layerChain.Build(1024, true);
             _runtime.InitializeScheduler(_postOptions);
             _runtime.InitializeTimer(_timerOptions);
             _runtime.InitializeDelay(_delayOptions);
+            _layerChain.Build(1024, true);
 
             if (_debugMode)
             {

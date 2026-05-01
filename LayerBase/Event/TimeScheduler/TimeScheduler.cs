@@ -166,13 +166,16 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         
         while (promoted < _maxPromotePerTick && _longHeap.Count > 0)
         {
-            if (_longHeap.TryPeek(out int index, out long expireTick))
+            if (_longHeap.TryPeek(out int index, out long expireTick, out int version))
             {
                 if (expireTick <= wheelEndTick)
                 {
                     _longHeap.Dequeue();
                     ref var entry = ref FastArray.At(_pool, index);
-                    if ((entry.Flags & TimerFlags.Active) != 0)
+                    if ((entry.Flags & TimerFlags.Active) != 0 &&
+                        entry.Version == version &&
+                        entry.ExpireTick == expireTick &&
+                        entry.SlotIndex < 0)
                     {
                         entry.SlotIndex = -1;
                         PlaceInWheel(index);
@@ -303,7 +306,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     {
         ref var entry = ref FastArray.At(_pool, index);
         entry.SlotIndex = -1;
-        _longHeap.Enqueue(index, entry.ExpireTick);
+        _longHeap.Enqueue(index, entry.ExpireTick, entry.Version);
     }
 
     private void RemoveFromStructure(int index)

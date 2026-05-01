@@ -1,4 +1,4 @@
-using LayerBase.Core.Event;
+﻿using LayerBase.Core.Event;
 using LayerBase.Layers;
 
 namespace LayerBase.Event.Delay;
@@ -9,7 +9,7 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
     private bool _hasValue;
     private int _valueVersion;
     private DelayTimerHandle _timerHandle = DelayTimerHandle.Invalid;
-    
+
     private int _publisherId;
     private readonly DelayPublisherManager _manager;
     private readonly object _lock = new();
@@ -62,25 +62,39 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
 
     public void Publish(in T value, float ttlSeconds, int contractId = 0)
     {
+        int finalContractId;
+        int valueVersion;
+        float finalTtl;
+        DelayTimerHandle oldHandle;
+
         lock (_lock)
         {
             var eventId = EventTypeId<T>.Id;
             var policy = _manager.PolicyTable?.GetBufferPolicy(eventId);
-            
-            float finalTtl = ttlSeconds > 0 ? ttlSeconds : (policy?.DefaultTtlSeconds ?? 0.5f);
-            int finalContractId = contractId != 0 ? contractId : (policy?.UseContractReplace == true ? eventId : 0);
+
+            finalTtl = ttlSeconds > 0 ? ttlSeconds : (policy?.DefaultTtlSeconds ?? 0.5f);
+            finalContractId = contractId != 0 ? contractId : (policy?.UseContractReplace == true ? eventId : 0);
 
             _value = value;
             _hasValue = true;
             _valueVersion++;
+            valueVersion = _valueVersion;
             ContractId = finalContractId;
-            
-            if (finalContractId != 0)
+            oldHandle = _timerHandle;
+        }
+
+        if (finalContractId != 0)
+        {
+            _manager.NotifyPublished(_publisherId, finalContractId);
+        }
+
+        var newHandle = _manager.ScheduleExpire(_publisherId, valueVersion, finalTtl, oldHandle);
+        lock (_lock)
+        {
+            if (_hasValue && _valueVersion == valueVersion)
             {
-                _manager.NotifyPublished(_publisherId, finalContractId);
+                _timerHandle = newHandle;
             }
-            
-            _timerHandle = _manager.ScheduleExpire(_publisherId, _valueVersion, finalTtl, _timerHandle);
         }
     }
 

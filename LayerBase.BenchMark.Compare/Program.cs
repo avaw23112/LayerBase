@@ -168,7 +168,7 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
                     auto.AutoBind(layer);
             }
         }
-        _layerRuntime = LayerHub.CreateLayers().Push(layer).Build();
+        _layerRuntime = LayerHub.CreateLayers().Push(layer).Build().Prewarm();
         _center = _layerRuntime.EventCenter;
     }
 

@@ -1,10 +1,45 @@
-﻿using System.Reflection;
 using LayerBase;
 using LayerBase.Core.Event;
+using LayerBase.Core.EventHandler;
 using LayerBase.DI;
+using LayerBase.DI.Options;
+using LayerBase.Event.Delay;
+using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
+using NUnit.Framework;
 
 namespace EventsTest;
+
+public partial struct DropNewestMaxPendingEvent
+{
+    public int Value;
+}
+
+public partial struct QueuedReferencePayloadEvent
+{
+    public object? Value;
+}
+
+public partial struct ParallelRegressionEvent
+{
+    public int Value;
+}
+
+public partial struct InitDelayRegressionEvent
+{
+    public int Value;
+}
+
+public partial struct DelayOverflowRegressionEvent
+{
+    public int Value;
+}
+
+public class DropNewestMaxPendingEventMetaData : EventMetaData<DropNewestMaxPendingEvent>
+{
+    public override EventPostPolicy? PostPolicy =>
+        new(PostDeliveryMode.Normal, BackpressurePolicy.DropNewest, maxPending: 2);
+}
 
 [TestFixture]
 public class RuntimeSafetyRegressionTests
@@ -13,22 +48,54 @@ public class RuntimeSafetyRegressionTests
     public void SetUp()
     {
         LayerHub.Reset();
+        EventMetaDataHandler.Clear();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        LayerHub.Reset();
+        EventMetaDataHandler.Clear();
     }
 
     [Test]
-    public void Reset_clears_generic_bucket_cache_instances()
+    public void PostScheduler_Dispose_releases_payloads_left_in_normal_queues()
     {
-        LayerHub.CreateLayers().Push(new DisposableProbeLayer()).Build();
-        LayerHub.Send(new ResetProbeEvent());
+        var weak = CreateQueuedPayloadAndDispose();
 
-        var cacheField = GetBucketCacheField(typeof(ResetProbeEvent));
-        Assert.That(cacheField.GetValue(null), Is.Not.Null,
-            "Expected the generic bucket cache to be populated after first send.");
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
 
-        LayerHub.Reset();
+        Assert.That(weak.IsAlive, Is.False);
+    }
 
-        Assert.That(cacheField.GetValue(null), Is.Null,
-            "Reset should clear static generic bucket caches so old buckets can be collected.");
+    private static WeakReference CreateQueuedPayloadAndDispose()
+    {
+        var options = new PostSchedulerOptions(readyCapacity: 8,
+            nextCapacity: 8,
+            maxEventsPerPump: 0,
+            maxMillisecondsPerPump: 0,
+            maxWavesPerPump: 1,
+            timeCheckInterval: 64,
+            defaultBackpressure: BackpressurePolicy.RejectNew);
+        var center = new EventCenter();
+        var scheduler = new PostScheduler(251, center, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[]
+        {
+            new PostTypePlan(EventTypeId<QueuedReferencePayloadEvent>.Id,
+                PostDeliveryMode.Normal,
+                options.DefaultBackpressure,
+                maxPending: 0,
+                options.DefaultBackpressure)
+        });
+
+        object payload = new byte[1024 * 1024];
+        var weak = new WeakReference(payload);
+        scheduler.TryPost(new QueuedReferencePayloadEvent { Value = payload });
+        payload = null!;
+        scheduler.Dispose();
+        return weak;
     }
 
     [Test]
@@ -50,18 +117,133 @@ public class RuntimeSafetyRegressionTests
             "Reset should dispose the previous layer chain before clearing global state.");
     }
 
-    private static FieldInfo GetBucketCacheField(Type eventType)
+    [Test]
+    public void DropNewest_does_not_consume_MaxPending_capacity_for_dropped_events()
     {
-        var nested = typeof(EventCenter).GetNestedType("BucketCache`1", BindingFlags.NonPublic);
-        Assert.That(nested, Is.Not.Null, "Failed to locate EventCenter.BucketCache<T>.");
+        EventMetaDataRegistry.RegisterMetaData<DropNewestMaxPendingEvent>(new DropNewestMaxPendingEventMetaData());
 
-        var closed = nested!.MakeGenericType(eventType);
-        var field = closed.GetField("Instance", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.That(field, Is.Not.Null, "Failed to locate BucketCache<T>.Instance field.");
-        return field!;
+        var runtime = LayerHub.CreateLayers()
+            .Push(new EmptyRegressionLayer())
+            .SetPostOptions(new PostSchedulerOptions(readyCapacity: 1,
+                nextCapacity: 1,
+                maxEventsPerPump: 0,
+                maxMillisecondsPerPump: 0,
+                maxWavesPerPump: 1,
+                timeCheckInterval: 64,
+                defaultBackpressure: BackpressurePolicy.RejectNew))
+            .Build();
+
+        var received = new List<int>();
+        runtime.EventCenter.SubscribeNotify<DropNewestMaxPendingEvent>(0, (in DropNewestMaxPendingEvent e) => received.Add(e.Value));
+
+        Assert.That(runtime.Scheduler.TryPost(new DropNewestMaxPendingEvent { Value = 1 }).IsSuccess, Is.True);
+        Assert.That(runtime.Scheduler.TryPost(new DropNewestMaxPendingEvent { Value = 2 }).IsSuccess, Is.True);
+        Assert.That(runtime.Scheduler.TryPost(new DropNewestMaxPendingEvent { Value = 3 }).IsSuccess, Is.True);
+
+        runtime.Scheduler.Pump();
+
+        Assert.That(received, Is.EqualTo(new[] { 1 }));
+        Assert.That(runtime.Scheduler.TryPost(new DropNewestMaxPendingEvent { Value = 4 }).IsSuccess, Is.True);
     }
 
-    private readonly struct ResetProbeEvent
+    [Test]
+    public void Parallel_subscription_is_dispatchable_immediately_after_subscribe()
+    {
+        using var received = new ManualResetEventSlim(false);
+        var center = new EventCenter();
+        center.SubscribeParallel<ParallelRegressionEvent>(0, (in ParallelRegressionEvent _) => received.Set(),
+            (_, _, _, ex) => throw ex);
+
+        center.Send(new ParallelRegressionEvent { Value = 1 });
+
+        Assert.That(received.Wait(TimeSpan.FromSeconds(2)), Is.True);
+    }
+
+    [Test]
+    public void Long_timer_cancel_does_not_promote_reused_slot_from_stale_heap_entry()
+    {
+        var scheduler = new TimeScheduler<int>(new TimeSchedulerOptions(
+            tickDurationSeconds: 1,
+            wheelSize: 4,
+            initialTimerCapacity: 1,
+            longTimerThresholdSeconds: 4,
+            maxExpiredPerTick: 16,
+            maxPromotePerTick: 16,
+            defaultRepeatMode: TimerRepeatMode.Once,
+            defaultCatchUpPolicy: TimerCatchUpPolicy.SkipMissed));
+        var sink = new RecordingTimerSink();
+
+        var first = scheduler.Schedule(1, delaySeconds: 10);
+        Assert.That(scheduler.Cancel(first), Is.True);
+        scheduler.Schedule(2, delaySeconds: 20);
+
+        scheduler.Tick(8.1f, sink);
+        Assert.That(sink.Values, Is.Empty);
+
+        scheduler.Tick(12.1f, sink);
+        Assert.That(sink.Values, Is.EqualTo(new[] { 2 }));
+    }
+
+    [Test]
+    public void Delay_expiration_cap_requeues_remaining_entries_instead_of_losing_them()
+    {
+        var first = new EmptyRegressionLayer();
+        var second = new EmptyRegressionLayer();
+        LayerHub.CreateLayers()
+            .Push(first)
+            .Push(second)
+            .SetDelayOptions(new DelayBufferOptions(tickDurationSeconds: 0.1f,
+                wheelSize: 4,
+                initialCapacity: 4,
+                maxExpiredPerTick: 1))
+            .Build();
+
+        var firstPublisher = first.SubscribeDelay<DelayOverflowRegressionEvent>();
+        var secondPublisher = second.SubscribeDelay<DelayOverflowRegressionEvent>();
+        firstPublisher.Publish(new DelayOverflowRegressionEvent { Value = 1 }, 0.1f);
+        secondPublisher.Publish(new DelayOverflowRegressionEvent { Value = 2 }, 0.1f);
+
+        LayerHub.Pump(0.1f);
+        Assert.That(firstPublisher.HasValue || secondPublisher.HasValue, Is.True);
+
+        LayerHub.Pump(0.1f);
+        Assert.That(firstPublisher.HasValue, Is.False);
+        Assert.That(secondPublisher.HasValue, Is.False);
+    }
+
+    [Test]
+    public void Service_initialize_can_publish_delay_after_runtime_managers_are_ready()
+    {
+        var layer = new InitDelayLayer();
+        layer.RegisterService(new InitDelayService(layer));
+
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        var publisher = layer.SubscribeDelay<InitDelayRegressionEvent>();
+        Assert.That(publisher.TryGet(out var value), Is.True);
+        Assert.That(value.Value, Is.EqualTo(42));
+    }
+
+    [Test]
+    public void Disposing_one_runtime_does_not_clear_another_runtime_delay_publishers()
+    {
+        var first = new EmptyRegressionLayer();
+        var second = new EmptyRegressionLayer();
+        var firstRuntime = LayerHub.CreateLayers().Push(first).Build();
+        LayerHub.CreateLayers().Push(second).Build();
+
+        var firstPublisher = first.SubscribeDelay<DelayOverflowRegressionEvent>();
+        var secondPublisher = second.SubscribeDelay<DelayOverflowRegressionEvent>();
+        firstPublisher.Publish(new DelayOverflowRegressionEvent { Value = 1 }, 10);
+        secondPublisher.Publish(new DelayOverflowRegressionEvent { Value = 2 }, 10);
+
+        firstRuntime.Dispose();
+
+        Assert.That(secondPublisher.TryGet(out var value), Is.True);
+        Assert.That(value.Value, Is.EqualTo(2));
+    }
+
+    private sealed class EmptyRegressionLayer : Layer
     {
     }
 
@@ -86,4 +268,41 @@ public class RuntimeSafetyRegressionTests
             Interlocked.Increment(ref DisposeCount);
         }
     }
+
+    private sealed class InitDelayLayer : Layer
+    {
+    }
+
+    private sealed class InitDelayService : IService, IInitializable
+    {
+        private readonly Layer _layer;
+
+        public InitDelayService(Layer layer)
+        {
+            _layer = layer;
+        }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddSingleton<InitDelayService>(this);
+        }
+
+        public void Initialize()
+        {
+            _layer.SubscribeDelay<InitDelayRegressionEvent>()
+                .Publish(new InitDelayRegressionEvent { Value = 42 }, 10);
+        }
+    }
+
+    private sealed class RecordingTimerSink : IExpiredTimerSink<int>
+    {
+        public List<int> Values { get; } = new();
+
+        public bool TryAcceptExpired(in int payload, TimerHandle handle)
+        {
+            Values.Add(payload);
+            return true;
+        }
+    }
+
 }

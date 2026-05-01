@@ -117,6 +117,11 @@ public abstract class Layer : Node, IDisposable
     public void RegisterService(IService service)
     {
         if (service == null) throw new ArgumentNullException(nameof(service));
+        if (m_serviceProvider != null)
+        {
+            throw new InvalidOperationException(
+                "RegisterService must be called before the layer is built. Register services before LayerHub.CreateLayers().Push(...).Build().");
+        }
 
         if (!m_registeredServiceTypes.Add(service.GetType()))
             return;
@@ -139,13 +144,6 @@ public abstract class Layer : Node, IDisposable
     public T GetService<T>() where T : class
     {
         return m_serviceProvider?.Get<T>() ?? throw new InvalidOperationException("Layer not built.");
-    }
-
-    public void Build()
-    {
-        PrepareBuild();
-        SharedFieldBinder.Bind(GetSharedFieldParticipants(true));
-        FinalizeBuild();
     }
 
     internal void PrepareBuild()
@@ -367,7 +365,7 @@ public abstract class Layer : Node, IDisposable
         var type = typeof(T);
         if (m_delayPublishers.TryGetValue(type, out var existing)) return (IDelayPublisher<T>)existing;
 
-        var manager = DelayPublisherManager.Instance;
+        var manager = OwnerContext?.DelayManager;
         if (manager == null) throw new InvalidOperationException("DelayPublisherManager not initialized.");
 
         var publisher = new DelayPublisher<T>(manager, this);

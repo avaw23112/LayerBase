@@ -59,19 +59,17 @@ public class DiMultiWorldTests
     {
         // World A
         var layerA = new TestLayer();
+        layerA.RegisterService(new CounterModule(ServiceLifetime.Singleton));
         var worldA = LayerHub.CreateLayers()
             .Push(layerA)
             .Build();
-        layerA.RegisterService(new CounterModule(ServiceLifetime.Singleton));
-        layerA.Build();
 
         // World B
         var layerB = new TestLayer();
+        layerB.RegisterService(new CounterModule(ServiceLifetime.Singleton));
         var worldB = LayerHub.CreateLayers()
             .Push(layerB)
             .Build();
-        layerB.RegisterService(new CounterModule(ServiceLifetime.Singleton));
-        layerB.Build();
 
         var counterA = layerA.GetService<ICounter>();
         var counterB = layerB.GetService<ICounter>();
@@ -90,17 +88,14 @@ public class DiMultiWorldTests
     {
         var layerA = new LayerA();
         var layerB = new LayerB();
+        var module = new CounterModule(ServiceLifetime.Singleton);
+        layerA.RegisterService(module);
+        layerB.RegisterService(module);
+
         var runtime = LayerHub.CreateLayers()
             .Push(layerA)
             .Push(layerB)
             .Build();
-
-        var module = new CounterModule(ServiceLifetime.Singleton);
-        layerA.RegisterService(module);
-        layerB.RegisterService(module);
-        
-        layerA.Build();
-        layerB.Build();
 
         var counterA = layerA.GetService<ICounter>();
         var counterB = layerB.GetService<ICounter>();
@@ -113,17 +108,14 @@ public class DiMultiWorldTests
     {
         var layerA = new LayerA();
         var layerB = new LayerB();
+        var module = new CounterModule(ServiceLifetime.Scoped);
+        layerA.RegisterService(module);
+        layerB.RegisterService(module);
+
         var runtime = LayerHub.CreateLayers()
             .Push(layerA)
             .Push(layerB)
             .Build();
-
-        var module = new CounterModule(ServiceLifetime.Scoped);
-        layerA.RegisterService(module);
-        layerB.RegisterService(module);
-        
-        layerA.Build();
-        layerB.Build();
 
         var counterA = layerA.GetService<ICounter>();
         var counterB = layerB.GetService<ICounter>();
@@ -135,12 +127,10 @@ public class DiMultiWorldTests
     public void Transient_Always_Creates_New_Instance()
     {
         var layer = new LayerA();
+        layer.RegisterService(new CounterModule(ServiceLifetime.Transient));
         var runtime = LayerHub.CreateLayers()
             .Push(layer)
             .Build();
-
-        layer.RegisterService(new CounterModule(ServiceLifetime.Transient));
-        layer.Build();
 
         var counter1 = layer.GetService<ICounter>();
         var counter2 = layer.GetService<ICounter>();
@@ -161,23 +151,35 @@ public class DiMultiWorldTests
         var sharedCounter = new Counter();
 
         var layerA = new TestLayer();
+        layerA.RegisterService(new ManualInstanceModule(sharedCounter));
         var worldA = LayerHub.CreateLayers()
             .Push(layerA)
             .Build();
-        layerA.RegisterService(new ManualInstanceModule(sharedCounter));
-        layerA.Build();
 
         var layerB = new TestLayer();
+        layerB.RegisterService(new ManualInstanceModule(sharedCounter));
         var worldB = LayerHub.CreateLayers()
             .Push(layerB)
             .Build();
-        layerB.RegisterService(new ManualInstanceModule(sharedCounter));
-        layerB.Build();
 
         var counterA = layerA.GetService<ICounter>();
         var counterB = layerB.GetService<ICounter>();
 
         Assert.That(ReferenceEquals(counterA, counterB), Is.True);
         Assert.That(ReferenceEquals(counterA, sharedCounter), Is.True);
+    }
+
+    [Test]
+    public void RegisterService_After_Runtime_Build_IsRejected()
+    {
+        var layer = new TestLayer();
+        LayerHub.CreateLayers()
+            .Push(layer)
+            .Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => layer.RegisterService(new CounterModule(ServiceLifetime.Singleton)));
+
+        Assert.That(ex!.Message, Does.Contain("before the layer is built"));
     }
 }
