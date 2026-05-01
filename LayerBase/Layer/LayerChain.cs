@@ -1,6 +1,9 @@
-﻿using System.Text;
+using System.Text;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
+#if NETCOREAPP || NET5_0_OR_GREATER
+using System.Numerics;
+#endif
 
 namespace LayerBase.Layers;
 
@@ -64,37 +67,41 @@ internal sealed class LayerChain
         EventGraphValidator.Validate(allSubscribers, _owner);
     }
 
-    internal void SetLogTracing(Action<string>? logger, int logQueueCapacity)
-    {
-    }
-
     internal void Pump(float deltaTime)
     {
-        var eventMask = _owner.EventCenter.GetEventPendingMask();
-        var logicMask = _logicActiveMask;
-        var activeMask = eventMask | logicMask;
+        var activeMask = _logicActiveMask;
         if (activeMask == 0) return;
 
-        var center = _owner.EventCenter;
         while (activeMask != 0)
         {
-            var index = center.FindFirstBit(activeMask);
+            var index = FindFirstBit(activeMask);
             if (index == -1 || index >= _indexedLayers.Length) break;
 
             var layer = _indexedLayers[index];
             if (layer != null)
             {
-                var bit = 1UL << index;
-                if ((eventMask & bit) != 0) layer.PumpEvents();
-                if ((logicMask & bit) != 0) layer.Pump(deltaTime);
+                layer.Pump(deltaTime);
             }
 
             activeMask &= ~(1UL << index);
         }
     }
 
-    internal void PrintLog()
+    private static int FindFirstBit(ulong mask)
     {
+#if NETCOREAPP || NET5_0_OR_GREATER
+        return BitOperations.TrailingZeroCount(mask);
+#else
+        if (mask == 0) return 64;
+        int count = 0;
+        if ((mask & 0xFFFFFFFF) == 0) { mask >>= 32; count += 32; }
+        if ((mask & 0xFFFF) == 0) { mask >>= 16; count += 16; }
+        if ((mask & 0xFF) == 0) { mask >>= 8; count += 8; }
+        if ((mask & 0xF) == 0) { mask >>= 4; count += 4; }
+        if ((mask & 0x3) == 0) { mask >>= 2; count += 2; }
+        if ((mask & 0x1) == 0) { count += 1; }
+        return count;
+#endif
     }
 
     private void AssignEventBus()
@@ -107,7 +114,6 @@ internal sealed class LayerChain
                 {
                     var index = _owner.GetNextLayerIndex();
                     layer.SetRouteIndex(index);
-                    _owner.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
                 }
 
                 _owner.RegisterLayerInstance(layer);

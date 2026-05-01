@@ -258,13 +258,6 @@ public abstract class Layer : Node, IDisposable
     }
 
 
-    internal void PumpEvents()
-    {
-        if (RouteIndex != -1 && OwnerContext != null)
-            OwnerContext.EventCenter.PumpLayer(RouteIndex);
-    }
-
-
     public virtual void Pump(float deltaTime)
     {
         for (var i = 0; i < m_serviceUpdates.Count; i++) m_serviceUpdates[i].Update();

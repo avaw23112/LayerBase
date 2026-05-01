@@ -4,11 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LayerBase.Async;
 using LayerBase.Core.EventHandler;
-using LayerBase.Core.UnmanagedList;
 using LayerBase.Event.EventMetaData;
-#if NETCOREAPP || NET5_0_OR_GREATER
-using System.Numerics;
-#endif
 
 namespace LayerBase.Core.Event;
 
@@ -18,59 +14,14 @@ public enum Propagation
 }
 
 /// <summary>
-/// 全局事件中心，负责事件的路由、派发及分层事件队列的管理。
+/// 全局事件中心，负责事件的订阅管理及同步派发。
 /// </summary>
 public sealed class EventCenter
 {
     private readonly ConcurrentDictionary<int, Action> _bucketCacheResetters = new();
     private readonly ConcurrentDictionary<int, object> _eventBuckets = new();
     private readonly object _lock = new();
-    private long _eventPendingMask;
     private int _isResetting;
-    private string[] _layerNames = Array.Empty<string>();
-    private IEventQueue[] _layerSlots = Array.Empty<IEventQueue>();
-
-    /// <summary>
-    /// 获取当前挂起的事件掩码。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal ulong GetEventPendingMask()
-    {
-        return (ulong)Volatile.Read(ref _eventPendingMask);
-    }
-
-    /// <summary>
-    /// 确保事件队列槽位已初始化。
-    /// </summary>
-    /// <param name="count">需要的槽位数量。</param>
-    /// <param name="name">Layer 名称。</param>
-    internal void EnsureSlots(int count, string name)
-    {
-        if (_layerSlots.Length < count || (count > 0 && _layerNames.Length < count))
-            lock (_lock)
-            {
-                if (_layerSlots.Length < count)
-                {
-                    var newSlots = new IEventQueue[count];
-                    Array.Copy(_layerSlots, newSlots, _layerSlots.Length);
-                    for (var i = _layerSlots.Length; i < count; i++) newSlots[i] = new LayerEventQueue(this, i);
-
-                    Volatile.Write(ref _layerSlots, newSlots);
-                }
-
-                if (_layerNames.Length < count)
-                {
-                    var newNames = new string[count];
-                    Array.Copy(_layerNames, newNames, _layerNames.Length);
-                    for (var i = 0; i < _layerNames.Length; i++)
-                        if (newNames[i] == null)
-                            newNames[i] = "UnknownLayer";
-                    _layerNames = newNames;
-                }
-            }
-
-        if (count > 0) _layerNames[count - 1] = name;
-    }
 
     internal void SubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
@@ -156,87 +107,6 @@ public sealed class EventCenter
         return GetBucket<T>().Dispatch(in value);
     }
 
-    /// <summary>
-    /// 异步投递事件，通常用于跨帧处理。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void Post<T>(in T value) where T : struct
-    {
-        if (Volatile.Read(ref _isResetting) == 1) return;
-        var cached = BucketCache<T>.Instance;
-        if (cached != null && cached.Owner == this)
-        {
-            cached.Post(in value);
-            return;
-        }
-
-        GetBucket<T>().Post(in value);
-    }
-
-    internal void WakeLayer(int layerIndex)
-    {
-        if (layerIndex >= 0 && layerIndex < 64)
-        {
-#if NET5_0_OR_GREATER
-            Interlocked.Or(ref _eventPendingMask, 1L << layerIndex);
-#else
-            AtomicSetBit(ref _eventPendingMask, layerIndex);
-#endif
-        }
-    }
-
-    internal void PumpLayer(int layerIndex)
-    {
-        if (Volatile.Read(ref _isResetting) == 1) return;
-        var slots = _layerSlots;
-        if (layerIndex >= 0 && layerIndex < slots.Length) slots[layerIndex]?.Pump();
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal EventHandledState InternalDispatchToLayer<T>(int layerIndex, in Event<T> @event) where T : struct
-    {
-        if (Volatile.Read(ref _isResetting) == 1) return EventHandledState.Continue;
-        var cached = BucketCache<T>.Instance;
-        if (cached != null && cached.Owner == this) return cached.InternalDispatchToLayer(layerIndex, in @event);
-        return GetBucket<T>().InternalDispatchToLayer(layerIndex, in @event);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static int InternalFindFirstBit(ulong mask)
-    {
-#if NETCOREAPP || NET5_0_OR_GREATER
-        return BitOperations.TrailingZeroCount(mask);
-#else
-        if (mask == 0) return 64;
-        int count = 0;
-        if ((mask & 0xFFFFFFFF) == 0) { mask >>= 32; count += 32; }
-        if ((mask & 0xFFFF) == 0) { mask >>= 16; count += 16; }
-        if ((mask & 0xFF) == 0) { mask >>= 8; count += 8; }
-        if ((mask & 0xF) == 0) { mask >>= 4; count += 4; }
-        if ((mask & 0x3) == 0) { mask >>= 2; count += 2; }
-        if ((mask & 0x1) == 0) { count += 1; }
-        return count;
-#endif
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static int InternalFindLastBit(ulong mask)
-    {
-#if NETCOREAPP || NET5_0_OR_GREATER
-        return 63 - BitOperations.LeadingZeroCount(mask);
-#else
-        if (mask == 0) return -1;
-        int count = 0;
-        if ((mask & 0xFFFFFFFF00000000UL) == 0) { mask <<= 32; count += 32; }
-        if ((mask & 0xFFFF000000000000UL) == 0) { mask <<= 16; count += 16; }
-        if ((mask & 0xFF00000000000000UL) == 0) { mask <<= 8; count += 8; }
-        if ((mask & 0xF000000000000000UL) == 0) { mask <<= 4; count += 4; }
-        if ((mask & 0xC000000000000000UL) == 0) { mask <<= 2; count += 2; }
-        if ((mask & 0x8000000000000000UL) == 0) { count += 1; }
-        return 63 - count;
-#endif
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static ref TElement GetArrayDataRef<TElement>(TElement[] array)
     {
@@ -245,42 +115,6 @@ public sealed class EventCenter
 #else
         return ref MemoryMarshal.GetReference(array.AsSpan());
 #endif
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal int FindFirstBit(ulong mask)
-    {
-        return InternalFindFirstBit(mask);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal int FindLastBit(ulong mask)
-    {
-        return InternalFindLastBit(mask);
-    }
-
-    private static void AtomicSetBit(ref long mask, int bit)
-    {
-        var bitVal = 1L << bit;
-        long initial, computed;
-        do
-        {
-            initial = Volatile.Read(ref mask);
-            if ((initial & bitVal) != 0) return;
-            computed = initial | bitVal;
-        } while (Interlocked.CompareExchange(ref mask, computed, initial) != initial);
-    }
-
-    private static void AtomicClearBit(ref long mask, int bit)
-    {
-        var bitVal = 1L << bit;
-        long initial, computed;
-        do
-        {
-            initial = Volatile.Read(ref mask);
-            if ((initial & bitVal) == 0) return;
-            computed = initial & ~bitVal;
-        } while (Interlocked.CompareExchange(ref mask, computed, initial) != initial);
     }
 
     internal void Reset()
@@ -295,11 +129,6 @@ public sealed class EventCenter
             _eventBuckets.Clear();
             foreach (var resetter in _bucketCacheResetters.Values) resetter();
             _bucketCacheResetters.Clear();
-            var oldSlots = _layerSlots;
-            _layerSlots = Array.Empty<IEventQueue>();
-            foreach (var slot in oldSlots) slot?.Dispose();
-            _layerNames = Array.Empty<string>();
-            _eventPendingMask = 0;
         }
 
         Volatile.Write(ref _isResetting, 0);
@@ -317,26 +146,6 @@ public sealed class EventCenter
         return bucket;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void EnqueueEventInternal<T>(int layerIndex, in Event<T> @event) where T : struct
-    {
-        var slots = _layerSlots;
-        if (layerIndex >= 0 && layerIndex < slots.Length) slots[layerIndex]?.EnqueueEvent(@event);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void EnqueueEventBatchInternal<T>(int layerIndex, ReadOnlySpan<Event<T>> events) where T : struct
-    {
-        var slots = _layerSlots;
-        if (layerIndex >= 0 && layerIndex < slots.Length)
-        {
-            var s = slots[layerIndex];
-            if (s != null)
-                for (var i = 0; i < events.Length; i++)
-                    s.EnqueueEvent(events[i]);
-        }
-    }
-
     private static class BucketCache<T> where T : struct
     {
         public static EventBucket<T>? Instance;
@@ -345,94 +154,6 @@ public sealed class EventCenter
     private interface IResetable : IDisposable
     {
         void Reset();
-    }
-
-    private interface IEventQueue : IDisposable
-    {
-        void EnqueueEvent<T>(in Event<T> @event) where T : struct;
-        void Pump();
-    }
-
-    private sealed class LayerEventQueue : IEventQueue
-    {
-        private readonly EventCenter _center;
-        private readonly ConcurrentQueue<IUnmanagedList> _dirtyQueues = new();
-        private readonly int _layerIndex;
-        private readonly object _lock = new();
-        private readonly Action<IUnmanagedList> _onDirtyCallback;
-        private bool _disposed;
-        private volatile IUnmanagedList?[] _queuesByTypeArr = new IUnmanagedList?[64];
-
-        public LayerEventQueue(EventCenter center, int layerIndex)
-        {
-            _center = center;
-            _layerIndex = layerIndex;
-            _onDirtyCallback = list => _dirtyQueues.Enqueue(list);
-        }
-
-        public void Dispose()
-        {
-            if (_disposed) return;
-            lock (_lock)
-            {
-                if (_disposed) return;
-                _disposed = true;
-                var arr = _queuesByTypeArr;
-                for (var i = 0; i < arr.Length; i++) arr[i]?.Dispose();
-                _queuesByTypeArr = Array.Empty<IUnmanagedList>();
-            }
-        }
-
-        public void EnqueueEvent<T>(in Event<T> @event) where T : struct
-        {
-            if (_disposed) return;
-            var typeId = EventTypeId<T>.Id;
-
-            var arr = _queuesByTypeArr;
-            IUnmanagedList? list = null;
-
-            if (typeId < arr.Length) list = arr[typeId];
-
-            if (list == null)
-                lock (_lock)
-                {
-                    if (_disposed) return;
-                    if (typeId >= _queuesByTypeArr.Length)
-                    {
-                        var newSize = Math.Max(typeId + 1, _queuesByTypeArr.Length * 2);
-                        var newArr = new IUnmanagedList?[newSize];
-                        Array.Copy(_queuesByTypeArr, newArr, _queuesByTypeArr.Length);
-                        _queuesByTypeArr = newArr;
-                    }
-
-                    if (_queuesByTypeArr[typeId] == null)
-                        _queuesByTypeArr[typeId] = new UnmanagedList<T>(_center, _layerIndex, _onDirtyCallback);
-                    list = _queuesByTypeArr[typeId];
-                }
-
-            ((UnmanagedList<T>)list!).Post(@event);
-        }
-
-        public void Pump()
-        {
-            if (_disposed || _dirtyQueues.IsEmpty) return;
-            AtomicClearBit(ref _center._eventPendingMask, _layerIndex);
-            while (_dirtyQueues.TryDequeue(out var list)) list.Pump();
-        }
-    }
-
-    private struct LayerRange
-    {
-        public int SyncStart,
-            SyncCount,
-            AsyncStart,
-            AsyncCount,
-            ParallelStart,
-            ParallelCount,
-            NotifyStart,
-            NotifyCount,
-            SubscribeStart,
-            SubscribeCount;
     }
 
     private sealed class EventBucketSnapshot<TEvent> where TEvent : struct
@@ -451,7 +172,6 @@ public sealed class EventCenter
             Array.Empty<HandlerCircuit>(),
             Array.Empty<string>(),
             Array.Empty<ParallelHandlerEntry<TEvent>>(),
-            Array.Empty<LayerRange>(),
             0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0);
 
@@ -468,7 +188,6 @@ public sealed class EventCenter
         public readonly HandlerCircuit[] NotifySafeCircuits;
         public readonly string[] NotifySafeNames;
         public readonly ParallelHandlerEntry<TEvent>[] FlatParallel;
-        public readonly LayerRange[] Ranges;
         public readonly int SyncCountTotal;
         public readonly int AsyncCountTotal;
         public readonly int ParallelCountTotal;
@@ -481,7 +200,6 @@ public sealed class EventCenter
         public readonly EventHandleDelegate<TEvent>? SingleSyncHandler;
         public readonly EventNotifyDelegate<TEvent>? SingleNotifyHandler;
         public readonly EventNotifyDelegate<TEvent>? SingleSubscribeHandler;
-        public readonly int SingleRouteLayerIndex;
         public readonly ulong SubscriberMask;
         public readonly ulong SyncMask;
         public readonly ulong AsyncMask;
@@ -503,7 +221,6 @@ public sealed class EventCenter
             HandlerCircuit[] notifySafeCircuits,
             string[] notifySafeNames,
             ParallelHandlerEntry<TEvent>[] flatParallel,
-            LayerRange[] ranges,
             int syncCountTotal,
             int asyncCountTotal,
             int parallelCountTotal,
@@ -529,7 +246,6 @@ public sealed class EventCenter
             NotifySafeCircuits = notifySafeCircuits;
             NotifySafeNames = notifySafeNames;
             FlatParallel = flatParallel;
-            Ranges = ranges;
             SyncCountTotal = syncCountTotal;
             AsyncCountTotal = asyncCountTotal;
             ParallelCountTotal = parallelCountTotal;
@@ -556,19 +272,6 @@ public sealed class EventCenter
 
             IsSmallNotifyFanoutOnly = notifyCountTotal + notifySafeCountTotal is >= 2 and <= 8 &&
                                       asyncCountTotal == 0 && parallelCountTotal == 0 && syncCountTotal == 0;
-            SingleRouteLayerIndex = FindSingleRouteLayerIndex(ranges);
-        }
-
-        private static int FindSingleRouteLayerIndex(LayerRange[] ranges)
-        {
-            for (var i = 0; i < ranges.Length; i++)
-            {
-                ref var r = ref ranges[i];
-                if (r.SyncCount + r.NotifyCount + r.SubscribeCount == 1 && r.AsyncCount == 0 &&
-                    r.ParallelCount == 0) return i;
-            }
-
-            return -1;
         }
     }
 
@@ -602,12 +305,9 @@ public sealed class EventCenter
         private HandlerCircuit[] _notifySafeCircuits = Array.Empty<HandlerCircuit>();
         private string[] _notifySafeNames = Array.Empty<string>();
 
-        private LayerRange[] _ranges = Array.Empty<LayerRange>();
         private HandlerCircuit? _singleNotifyCircuit;
         private EventNotifyDelegate<T>? _singleNotifyHandler;
         private string? _singleNotifyName;
-
-        private int _singleRouteLayerIndex = -1;
 
         private HandlerCircuit? _singleSubscribeCircuit;
         private EventNotifyDelegate<T>? _singleSubscribeHandler;
@@ -666,7 +366,6 @@ public sealed class EventCenter
             _singleSubscribeHandler = null;
             _singleSubscribeCircuit = null;
             _singleSubscribeName = null;
-            _singleRouteLayerIndex = -1;
             _isSingleSync = false;
             _isSingleNotify = false;
             _isSingleNotifySafe = false;
@@ -682,12 +381,6 @@ public sealed class EventCenter
             {
                 ArrayPool<ParallelHandlerEntry<T>>.Shared.Return(_flatParallel, true);
                 _flatParallel = Array.Empty<ParallelHandlerEntry<T>>();
-            }
-
-            if (_ranges != null && _ranges.Length > 0 && _ranges != Array.Empty<LayerRange>())
-            {
-                ArrayPool<LayerRange>.Shared.Return(_ranges, true);
-                _ranges = Array.Empty<LayerRange>();
             }
         }
 
@@ -790,17 +483,8 @@ public sealed class EventCenter
             for (var i = 0; i < _buckets.Length; i++)
             {
                 var b = _buckets[i];
-                if (b == null)
-                {
-                    if (i < _ranges.Length) _ranges[i] = default;
-                    continue;
-                }
+                if (b == null) continue;
 
-                _ranges[i].SyncStart = sIdx;
-                _ranges[i].AsyncStart = aIdx;
-                _ranges[i].ParallelStart = pIdx;
-                _ranges[i].NotifyStart = nIdx;
-                _ranges[i].SubscribeStart = nsIdx;
                 if (b.HasHandlers)
                 {
                     foreach (var h in b.MasterOrdered)
@@ -863,12 +547,6 @@ public sealed class EventCenter
 
                     foreach (var h in b.MasterParallel) _flatParallel[pIdx++] = h;
                 }
-
-                _ranges[i].SyncCount = sIdx - _ranges[i].SyncStart;
-                _ranges[i].AsyncCount = aIdx - _ranges[i].AsyncStart;
-                _ranges[i].ParallelCount = pIdx - _ranges[i].ParallelStart;
-                _ranges[i].NotifyCount = nIdx - _ranges[i].NotifyStart;
-                _ranges[i].SubscribeCount = nsIdx - _ranges[i].SubscribeStart;
             }
 
             ClearArrays(sIdx, aIdx, nIdx, nsIdx, pIdx);
@@ -907,7 +585,6 @@ public sealed class EventCenter
             var notifySafeCircuits = CopyPrefix(_notifySafeCircuits, _notifySafeCountTotal);
             var notifySafeNames = CopyPrefix(_notifySafeNames, _notifySafeCountTotal);
             var flatParallel = CopyPrefix(_flatParallel, _parallelCountTotal);
-            var ranges = CopyPrefix(_ranges, _buckets.Length);
 
             Volatile.Write(ref _snapshot, new EventBucketSnapshot<T>(
                 syncHandlers,
@@ -923,7 +600,6 @@ public sealed class EventCenter
                 notifySafeCircuits,
                 notifySafeNames,
                 flatParallel,
-                ranges,
                 _syncCountTotal,
                 _asyncCountTotal,
                 _parallelCountTotal,
@@ -985,12 +661,6 @@ public sealed class EventCenter
                     ArrayPool<ParallelHandlerEntry<T>>.Shared.Return(_flatParallel, true);
                 _flatParallel = ArrayPool<ParallelHandlerEntry<T>>.Shared.Rent(totalParallel);
             }
-
-            if (_ranges.Length < _buckets.Length)
-            {
-                if (_ranges != Array.Empty<LayerRange>()) ArrayPool<LayerRange>.Shared.Return(_ranges, true);
-                _ranges = ArrayPool<LayerRange>.Shared.Rent(_buckets.Length);
-            }
         }
 
         private void ClearArrays(int sIdx, int aIdx, int nIdx, int nsIdx, int pIdx)
@@ -1044,19 +714,6 @@ public sealed class EventCenter
 
             _isSmallNotifyFanoutOnly = _notifyCountTotal + _notifySafeCountTotal is >= 2 and <= 8 &&
                                        _asyncCountTotal == 0 && _parallelCountTotal == 0 && _syncCountTotal == 0;
-            _singleRouteLayerIndex = FindSingleRouteLayerIndex();
-        }
-
-        private int FindSingleRouteLayerIndex()
-        {
-            for (var i = 0; i < _buckets.Length; i++)
-            {
-                ref var r = ref _ranges[i];
-                if (r.SyncCount + r.NotifyCount + r.SubscribeCount == 1 && r.AsyncCount == 0 &&
-                    r.ParallelCount == 0) return i;
-            }
-
-            return -1;
         }
 
         public void Add(int layerIndex, IEventHandler<T> h)
@@ -1175,28 +832,6 @@ public sealed class EventCenter
                 _buckets[layerIndex]!.Remove(h);
                 MarkDirty();
             }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public EventHandledState InternalDispatchToLayer(int layerIndex, in Event<T> @event)
-        {
-            var snapshot = EnsureClean();
-            if (layerIndex >= snapshot.Ranges.Length) return EventHandledState.Continue;
-            ref var r = ref snapshot.Ranges[layerIndex];
-            
-            if (r.ParallelCount > 0)
-                for (var j = 0; j < r.ParallelCount; j++)
-                    Unsafe.Add(ref GetArrayDataRef(snapshot.FlatParallel), r.ParallelStart + j).Enqueue(layerIndex, in @event.Value);
-            
-            if (r.NotifyCount > 0) DispatchNotify(snapshot, r.NotifyStart, r.NotifyStart + r.NotifyCount, in @event.Value);
-            if (r.SubscribeCount > 0)
-                DispatchNotifySafe(snapshot, r.SubscribeStart, r.SubscribeStart + r.SubscribeCount, in @event.Value);
-            
-            var s = EventHandledState.Continue;
-            if (r.SyncCount > 0) s = DispatchSync(snapshot, r.SyncStart, r.SyncStart + r.SyncCount, in @event.Value);
-            if (s == EventHandledState.Handled) return s;
-            if (r.AsyncCount > 0) DispatchAsync(snapshot, r.AsyncStart, r.AsyncStart + r.AsyncCount, in @event.Value);
-            return s;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1393,7 +1028,7 @@ public sealed class EventCenter
             try
             {
                 for (; i < end; i++)
-                    AsyncFaultContext<T>.Observe(this, -1, snapshot.AsyncCircuits[i], snapshot.AsyncNames[i], in value, hs[i](value));
+                    AsyncFaultContext<T>.Observe(this, snapshot.AsyncCircuits[i], snapshot.AsyncNames[i], in value, hs[i](value));
             }
             catch (Exception e)
             {
@@ -1438,18 +1073,6 @@ public sealed class EventCenter
             }
         }
 
-        public void Post(in T value)
-        {
-            if (Volatile.Read(ref Owner!._isResetting) == 1) return;
-            var snapshot = EnsureClean();
-            var mask = snapshot.SubscriberMask;
-            if (mask == 0) return;
-            var firstLayer = Owner.FindFirstBit(mask);
-            var @event = new Event<T>(value) { TargetMask = mask };
-            Owner.EnqueueEventInternal(firstLayer, in @event);
-            Owner.WakeLayer(firstLayer);
-        }
-
         private void ReturnArraysForRebuild(bool sync, bool async, bool notify, bool subscribe, bool parallel)
         {
             if (sync) ReturnArrayHelper(ref _syncHandlers, ref _syncCircuits, ref _syncNames);
@@ -1490,7 +1113,6 @@ public sealed class EventCenter
         private readonly Action _continuation;
         private HandlerCircuit? _circuit;
         private string? _handlerFullName;
-        private int _layerIndex;
         private EventBucket<T>? _owner;
         private T _payload;
         private LBTask _task;
@@ -1500,13 +1122,12 @@ public sealed class EventCenter
             _continuation = Complete;
         }
 
-        public static void Observe(EventBucket<T> owner, int layerIndex, HandlerCircuit circuit, string handlerFullName,
+        public static void Observe(EventBucket<T> owner, HandlerCircuit circuit, string handlerFullName,
                                    in T           payload, LBTask task)
         {
             if (!s_pool.TryDequeue(out var context)) context = new AsyncFaultContext<T>();
             else Interlocked.Decrement(ref s_poolCount);
             context._owner = owner;
-            context._layerIndex = layerIndex;
             context._circuit = circuit;
             context._handlerFullName = handlerFullName;
             context._payload = payload;
@@ -1525,7 +1146,7 @@ public sealed class EventCenter
                 EventMetaDataHandler.OnEventExpectation(_payload, ex);
                 if (_circuit != null && _circuit.TryDisable())
                 {
-                    LayerHub.ReportLayerEventError(_layerIndex, _handlerFullName!, typeof(T).Name, ex);
+                    LayerHub.ReportLayerEventError(-1, _handlerFullName!, typeof(T).Name, ex);
                     _owner?.MarkDirty();
                 }
             }
