@@ -7,12 +7,14 @@ namespace LayerBase.Layers;
 internal sealed class LayerChain
 {
     private readonly ResponsibilityChain responsibilityChain;
+    private readonly LayerRuntime _owner;
     private Layer?[] _indexedLayers = Array.Empty<Layer?>();
     private ulong _logicActiveMask;
 
-    internal LayerChain(ResponsibilityChain chain)
+    internal LayerChain(ResponsibilityChain chain, LayerRuntime owner)
     {
         responsibilityChain = chain;
+        _owner = owner;
     }
 
     internal IEnumerable<Layer> GetNodes()
@@ -59,7 +61,7 @@ internal sealed class LayerChain
             if (layer.HasActiveLogic) _logicActiveMask |= 1UL << layer.RouteIndex;
         }
 
-        EventGraphValidator.Validate(allSubscribers);
+        EventGraphValidator.Validate(allSubscribers, _owner);
     }
 
     internal void SetLogTracing(Action<string>? logger, int logQueueCapacity)
@@ -68,12 +70,12 @@ internal sealed class LayerChain
 
     internal void Pump(float deltaTime)
     {
-        var eventMask = LayerHub.EventCenter.GetEventPendingMask();
+        var eventMask = _owner.EventCenter.GetEventPendingMask();
         var logicMask = _logicActiveMask;
         var activeMask = eventMask | logicMask;
         if (activeMask == 0) return;
 
-        var center = LayerHub.EventCenter;
+        var center = _owner.EventCenter;
         while (activeMask != 0)
         {
             var index = center.FindFirstBit(activeMask);
@@ -103,12 +105,12 @@ internal sealed class LayerChain
             {
                 if (layer.RouteIndex == -1)
                 {
-                    var index = LayerHub.GetNextLayerIndex();
+                    var index = _owner.GetNextLayerIndex();
                     layer.SetRouteIndex(index);
-                    LayerHub.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
+                    _owner.EventCenter.EnsureSlots(index + 1, layer.GetType().Name);
                 }
 
-                LayerHub.RegisterLayerInstance(layer);
+                _owner.RegisterLayerInstance(layer);
 
                 if (layer.RouteIndex > maxIndex) maxIndex = layer.RouteIndex;
             }

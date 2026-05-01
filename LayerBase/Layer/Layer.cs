@@ -50,7 +50,6 @@ public abstract class Layer : Node, IDisposable
 
 
     public readonly List<Type> SubscribedEvents = new();
-    private GlobalEventCenter _center;
     private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();
 
     private object?[] m_callRouteInvokers = Array.Empty<object?>();
@@ -62,11 +61,17 @@ public abstract class Layer : Node, IDisposable
     private List<ServiceProvider.ResolvedService> m_resolvedServices = new();
     private ServiceProvider? m_serviceProvider;
 
+    public LayerRuntime? OwnerContext { get; private set; }
+
+    internal void AttachToContext(LayerRuntime context)
+    {
+        OwnerContext = context;
+        ServiceLayerBinder.Attach(this, this);
+    }
+
     protected Layer()
     {
-        _center = LayerHub.EventCenter;
         m_serviceCollection = new ServiceCollection();
-        ServiceLayerBinder.Attach(this, this);
     }
 
     /// <summary>
@@ -257,8 +262,8 @@ public abstract class Layer : Node, IDisposable
 
     internal void PumpEvents()
     {
-        if (RouteIndex != -1)
-            LayerHub.EventCenter.PumpLayer(RouteIndex);
+        if (RouteIndex != -1 && OwnerContext != null)
+            OwnerContext.EventCenter.PumpLayer(RouteIndex);
     }
 
 
@@ -276,12 +281,12 @@ public abstract class Layer : Node, IDisposable
     public void SubscribeFlow<T>(EventHandleDelegate<T> handler) where T : struct
     {
         ThrowIfDisposed();
-        if (RouteIndex != -1)
+        if (RouteIndex != -1 && OwnerContext != null)
         {
-            LayerHub.EventCenter.SubscribeFlow(RouteIndex, handler);
+            OwnerContext.EventCenter.SubscribeFlow(RouteIndex, handler);
             lock (m_subscriptions)
             {
-                m_subscriptions.Add(UnsubscribeFlowToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+                m_subscriptions.Add(UnsubscribeFlowToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
             }
         }
         else
@@ -293,12 +298,12 @@ public abstract class Layer : Node, IDisposable
     public void SubscribeNotify<T>(EventNotifyDelegate<T> handler) where T : struct
     {
         ThrowIfDisposed();
-        if (RouteIndex != -1)
+        if (RouteIndex != -1 && OwnerContext != null)
         {
-            LayerHub.EventCenter.SubscribeNotify(RouteIndex, handler);
+            OwnerContext.EventCenter.SubscribeNotify(RouteIndex, handler);
             lock (m_subscriptions)
             {
-                m_subscriptions.Add(UnsubscribeNotifyToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+                m_subscriptions.Add(UnsubscribeNotifyToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
             }
         }
         else
@@ -310,12 +315,12 @@ public abstract class Layer : Node, IDisposable
     public void Subscribe<T>(EventNotifyDelegate<T> handler) where T : struct
     {
         ThrowIfDisposed();
-        if (RouteIndex != -1)
+        if (RouteIndex != -1 && OwnerContext != null)
         {
-            LayerHub.EventCenter.Subscribe(RouteIndex, handler);
+            OwnerContext.EventCenter.Subscribe(RouteIndex, handler);
             lock (m_subscriptions)
             {
-                m_subscriptions.Add(UnsubscribeToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+                m_subscriptions.Add(UnsubscribeToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
             }
         }
         else
@@ -327,12 +332,12 @@ public abstract class Layer : Node, IDisposable
     public void SubscribeAsync<T>(EventHandleDelegateAsync<T> handler) where T : struct
     {
         ThrowIfDisposed();
-        if (RouteIndex != -1)
+        if (RouteIndex != -1 && OwnerContext != null)
         {
-            LayerHub.EventCenter.SubscribeAsync(RouteIndex, handler);
+            OwnerContext.EventCenter.SubscribeAsync(RouteIndex, handler);
             lock (m_subscriptions)
             {
-                m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+                m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
             }
         }
         else
@@ -350,12 +355,12 @@ public abstract class Layer : Node, IDisposable
                                      Action<int, string, string, Exception>? reportError = null) where T : struct
     {
         ThrowIfDisposed();
-        if (RouteIndex != -1)
+        if (RouteIndex != -1 && OwnerContext != null)
         {
-            LayerHub.EventCenter.SubscribeParallel(RouteIndex, handler, reportError ?? LayerHub.ReportLayerEventError);
+            OwnerContext.EventCenter.SubscribeParallel(RouteIndex, handler, reportError ?? OwnerContext.ReportLayerEventError);
             lock (m_subscriptions)
             {
-                m_subscriptions.Add(UnsubscribeParallelToken<T>.Rent(LayerHub.EventCenter, RouteIndex, handler));
+                m_subscriptions.Add(UnsubscribeParallelToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
             }
         }
         else
@@ -476,26 +481,31 @@ public abstract class Layer : Node, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventHandledState SendLocal<T>(in T value) where T : struct
     {
-        return LayerHub.EventCenter.SendLocal(RouteIndex, value);
+        if (OwnerContext == null) throw new InvalidOperationException("Layer not attached to context.");
+        return OwnerContext.EventCenter.SendLocal(RouteIndex, value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventHandledState Send<T>(in T value) where T : struct
     {
-        return LayerHub.EventCenter.Send(value);
+        if (OwnerContext == null) throw new InvalidOperationException("Layer not attached to context.");
+        return OwnerContext.EventCenter.Send(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostLocal<T>(in T value) where T : struct
     {
-        LayerHub.EventCenter.PostLocal(RouteIndex, value);
+        if (OwnerContext == null) throw new InvalidOperationException("Layer not attached to context.");
+        OwnerContext.EventCenter.PostLocal(RouteIndex, value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Post<T>(in T value) where T : struct
     {
-        LayerHub.EventCenter.Post(value);
+        if (OwnerContext == null) throw new InvalidOperationException("Layer not attached to context.");
+        OwnerContext.EventCenter.Post(value);
     }
+
 
     internal readonly struct RegisteredService
     {

@@ -16,13 +16,13 @@ public class ResetAndLimitTests
     public void Reset_Clears_All_State()
     {
         var layer = new TestLayer();
-        LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
         
         LayerHub.Pump(0.1f);
         
         LayerHub.Reset();
         
-        var topology = LayerHub.GetTopologyMarkdown();
+        var topology = runtime.GetTopologyMarkdown();
         Assert.That(topology, Does.Contain("No layers built."), "Topology should be cleared after Reset");
     }
 
@@ -54,13 +54,13 @@ public class ResetAndLimitTests
     }
 
     [Test]
-    public void CreateLayers_requires_reset_before_starting_a_second_chain()
+    public void Multiple_Runtimes_Can_Coexist()
     {
-        LayerHub.CreateLayers().Push(new TestLayer()).Build();
+        var rt1 = LayerHub.CreateLayers().Push(new TestLayer()).Build();
+        var rt2 = LayerHub.CreateLayers().Push(new TestLayer()).Build();
 
-        var nextBuilder = LayerHub.CreateLayers();
-
-        Assert.Throws<InvalidOperationException>(() => nextBuilder.Push(new TestLayer()));
+        Assert.That(rt1, Is.Not.EqualTo(rt2));
+        Assert.That(rt1.Id, Is.Not.EqualTo(rt2.Id));
     }
 
     private class TestLayer : Layer

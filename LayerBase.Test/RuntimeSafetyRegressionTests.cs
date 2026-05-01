@@ -18,6 +18,7 @@ public class RuntimeSafetyRegressionTests
     [Test]
     public void Reset_clears_generic_bucket_cache_instances()
     {
+        LayerHub.CreateLayers().Push(new DisposableProbeLayer()).Build();
         LayerHub.Send(new ResetProbeEvent());
 
         var cacheField = GetBucketCacheField(typeof(ResetProbeEvent));

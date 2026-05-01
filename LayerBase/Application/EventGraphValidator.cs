@@ -12,7 +12,7 @@ public sealed class EventCycleException : Exception
 
 internal static class EventGraphValidator
 {
-    public static void Validate(IEnumerable<IAutoSubscribe> subscribers)
+    public static void Validate(IEnumerable<IAutoSubscribe> subscribers, LayerRuntime runtime)
     {
         var sentEvents = new HashSet<Type>();
         var subscribedEvents = new HashSet<Type>();
@@ -45,10 +45,10 @@ internal static class EventGraphValidator
                         ThrowCycleError(cyclePath!);
         }
 
-        if (LayerHub.IsDebugMode)
+        if (runtime.IsDebugMode)
             foreach (var sent in sentEvents)
                 if (!subscribedEvents.Contains(sent))
-                    LayerHub.ReportWarning(-1, "TopologyAudit", sent.Name,
+                    runtime.ReportWarning(-1, "TopologyAudit", sent.Name,
                         "This event is dispatched synchronously but has no subscribers in current topology.");
     }
 

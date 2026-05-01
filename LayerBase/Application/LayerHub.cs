@@ -11,13 +11,7 @@ using LayerBase.Tools.Job;
 
 namespace LayerBase;
 
-public enum LayerEventInfoType
-{
-    Debug,
-    Info,
-    Warning,
-    Error
-}
+public enum LayerEventInfoType { Debug, Info, Warning, Error }
 
 public readonly struct LayerEventInfo
 {
@@ -47,114 +41,126 @@ public readonly struct LayerEventInfo
 
 public static class LayerHub
 {
-    private static LayerChain? s_chain;
-    private static LayerBaseSynchronizationContext? s_context;
-    private static int s_layerIndexCounter;
-    private static int s_layerTypeBindingsVersion;
-    private static readonly Dictionary<Type, LayerTypeBinding> s_layerTypeBindings = new();
-    private static readonly ConcurrentBag<Action> s_cacheResetters = new();
+    private static readonly List<WeakReference<LayerRuntime>> s_runtimes = new();
     private static readonly object s_lock = new();
+    private static int s_runtimeIdCounter;
+    private static readonly ConcurrentBag<Action> s_cacheResetters = new();
+    private static readonly AsyncLocal<LayerRuntime?> s_currentRuntime = new();
 
-    public static GlobalEventCenter EventCenter { get; internal set; } = new();
+    public static LayerRuntime? Current => s_currentRuntime.Value;
 
-    public static bool IsDebugMode { get; private set; }
+    internal static void SetCurrent(LayerRuntime? runtime) => s_currentRuntime.Value = runtime;
+
     public static event Action<LayerEventInfo>? OnLayerEventInfo;
 
-    internal static int GetNextLayerIndex()
-    {
-        return GetNextLayerIndexInternal();
-    }
-
-
-    private static int GetNextLayerIndexInternal()
-    {
-        return Interlocked.Increment(ref s_layerIndexCounter) - 1;
-    }
-
-    /// <summary>
-    /// 初始化构建器，用于配置并构建分层系统。
-    /// 若当前线程未安装同步上下文，则自动安装 <see cref="LayerBaseSynchronizationContext"/>。
-    /// </summary>
-    public static LayersBuilder CreateLayers()
+    public static LayerRuntime.LayersBuilder CreateLayers()
     {
         lock (s_lock)
         {
-            if (SynchronizationContext.Current == null)
-                s_context = LayerBaseSynchronizationContext.InstallAsCurrent();
-            else if (s_context == null && SynchronizationContext.Current is not LayerBaseSynchronizationContext ctx)
-                s_context = LayerBaseSynchronizationContext.Install();
-
-            return new LayersBuilder();
+            var id = s_runtimeIdCounter++;
+            if (id >= 64) throw new InvalidOperationException("Max 64 concurrent LayerRuntimes supported.");
+            return new LayerRuntime.LayersBuilder(new LayerRuntime(id));
         }
     }
 
-    /// <summary>
-    /// 驱动框架心跳，处理异步任务与分层事件流。
-    /// </summary>
-    /// <param name="deltaTime">自上一帧以来的秒数。</param>
     public static void Pump(float deltaTime)
     {
-        s_context?.Update();
-        s_chain?.Pump(deltaTime);
+        lock (s_lock)
+        {
+            for (var i = s_runtimes.Count - 1; i >= 0; i--)
+            {
+                if (s_runtimes[i].TryGetTarget(out var runtime))
+                {
+                    var prev = Current;
+                    s_currentRuntime.Value = runtime;
+                    try
+                    {
+                        runtime.Pump(deltaTime);
+                    }
+                    finally
+                    {
+                        s_currentRuntime.Value = prev;
+                    }
+                }
+                else
+                {
+                    s_runtimes.RemoveAt(i);
+                }
+            }
+        }
     }
 
-    /// <summary>
-    /// 重置全局状态，包括 Layer 绑定、事件中心、DI 容器与同步上下文。
-    /// 适用于单元测试清理或彻底重新加载场景。
-    /// </summary>
     public static void Reset()
     {
         lock (s_lock)
         {
-            var oldChain = s_chain;
-            s_chain = null;
-            s_layerIndexCounter = 0;
-            s_layerTypeBindings.Clear();
-            InvalidateLayerTargetCaches();
-            oldChain?.DisposeLayers();
+            for (var i = s_runtimes.Count - 1; i >= 0; i--)
+            {
+                if (s_runtimes[i].TryGetTarget(out var runtime)) runtime.Dispose();
+            }
+            s_runtimes.Clear();
+            s_runtimeIdCounter = 0;
+            s_currentRuntime.Value = null;
             foreach (var resetter in s_cacheResetters) resetter();
-            EventCenter.Reset();
             ServiceProvider.ResetRoot();
             ServiceLayerBinder.Reset();
             LayerServiceRegistry.Reset();
             OnLayerEventInfo = null;
-            IsDebugMode = false;
-
-            s_context?.Dispose();
-            if (SynchronizationContext.Current == s_context) SynchronizationContext.SetSynchronizationContext(null);
-            s_context = null;
         }
     }
 
-    internal static void ReportInfo(LayerEventInfo info)
+    internal static void Internal_Register(LayerRuntime runtime)
     {
-        var handler = OnLayerEventInfo;
-        if (handler != null)
-            try
+        lock (s_lock) s_runtimes.Add(new WeakReference<LayerRuntime>(runtime));
+    }
+
+    internal static void Internal_Unregister(LayerRuntime runtime)
+    {
+        lock (s_lock)
+        {
+            for (var i = s_runtimes.Count - 1; i >= 0; i--)
             {
-                handler.Invoke(info);
+                if (s_runtimes[i].TryGetTarget(out var r) && r == runtime)
+                {
+                    s_runtimes.RemoveAt(i);
+                    break;
+                }
             }
-            catch
-            {
-            }
+        }
+    }
+
+    internal static void Internal_NotifyEvent(LayerEventInfo info)
+    {
+        OnLayerEventInfo?.Invoke(info);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void ReportLayerEventError(int layerIndex, string source, string eventName, Exception ex)
     {
-        ReportInfo(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
+        if (Current != null)
+        {
+            Current.ReportLayerEventError(layerIndex, source, eventName, ex);
+        }
+        else
+        {
+            Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error,
+                ex));
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void ReportWarning(int layerIndex, string source, string eventName, string message)
     {
-        ReportInfo(new LayerEventInfo(layerIndex, source, eventName, message, LayerEventInfoType.Warning));
+        if (Current != null)
+        {
+            Current.ReportWarning(layerIndex, source, eventName, message);
+        }
+        else
+        {
+            Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, message, LayerEventInfoType.Warning));
+        }
     }
 
-    /// <summary>
-    /// 初始化任务调度器。
-    /// </summary>
-    /// <param name="workerCount">工作线程数。</param>
     public static void InitializeJobScheduler(int workerCount)
     {
         JobSchedulers.ConfigureDefault(workerCount);
@@ -162,7 +168,8 @@ public static class LayerHub
 
     public static LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer
     {
-        TryResolveLayerTarget<TLayer>(out var layer, out var error);
+        var runtime = Current ?? throw new InvalidOperationException("No current LayerRuntime context.");
+        runtime.TryResolveLayerTarget<TLayer>(out var layer, out var error);
         return new LayerCallTarget<TLayer>(layer, error);
     }
 
@@ -174,270 +181,96 @@ public static class LayerHub
         where TRequest : struct
         where TResponse : struct
     {
-        var version = Volatile.Read(ref s_layerTypeBindingsVersion);
-        if (LayerCallCache<TLayer, TRequest, TResponse>.Version != version)
-            return CallAsyncSlow<TLayer, TRequest, TResponse>(request, version, cancellationToken);
+        var runtime = Current ?? throw new InvalidOperationException("No current LayerRuntime context.");
+        var runtimeId = runtime.Id;
+        var version = runtime.GetLayerTypeBindingsVersion();
+        
+        if (LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId] != version)
+            return CallAsyncSlow<TLayer, TRequest, TResponse>(runtime, version, request, cancellationToken);
 
-        var invoker = LayerCallCache<TLayer, TRequest, TResponse>.Invoker;
+        var invoker = LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId];
         if (invoker != null) return invoker(request, cancellationToken);
 
-        return LBTask<TResponse>.FromException(LayerCallCache<TLayer, TRequest, TResponse>.Error!);
+        return LBTask<TResponse>.FromException(LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId]!);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(TRequest request, int version,
-        CancellationToken                                                                cancellationToken)
+    private static LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(LayerRuntime runtime, int version, TRequest request,
+        CancellationToken cancellationToken)
         where TLayer : Layer
         where TRequest : struct
         where TResponse : struct
     {
-        UpdateLayerCallCache<TLayer, TRequest, TResponse>(version);
+        UpdateLayerCallCache<TLayer, TRequest, TResponse>(runtime, version);
 
-        var invoker = LayerCallCache<TLayer, TRequest, TResponse>.Invoker;
+        var runtimeId = runtime.Id;
+        var invoker = LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId];
         if (invoker != null) return invoker(request, cancellationToken);
 
-        return LBTask<TResponse>.FromException(LayerCallCache<TLayer, TRequest, TResponse>.Error!);
+        return LBTask<TResponse>.FromException(LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId]!);
     }
 
-    private static void UpdateLayerCallCache<TLayer, TRequest, TResponse>(int version)
+    private static void UpdateLayerCallCache<TLayer, TRequest, TResponse>(LayerRuntime runtime, int version)
         where TLayer : Layer
         where TRequest : struct
         where TResponse : struct
     {
+        var runtimeId = runtime.Id;
         lock (s_lock)
         {
-            if (LayerCallCache<TLayer, TRequest, TResponse>.Version == version) return;
+            if (LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId] == version) return;
 
-            if (TryResolveLayerTarget<TLayer>(out var layer, out var error))
+            if (runtime.TryResolveLayerTarget<TLayer>(out var layer, out var error))
             {
                 try
                 {
                     var invoker = layer!.GetCallInvoker<TRequest, TResponse>();
-                    LayerCallCache<TLayer, TRequest, TResponse>.Invoker = invoker;
-                    LayerCallCache<TLayer, TRequest, TResponse>.Error = null;
+                    LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId] = invoker;
+                    LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId] = null;
                 }
                 catch (Exception ex)
                 {
-                    LayerCallCache<TLayer, TRequest, TResponse>.Invoker = null;
-                    LayerCallCache<TLayer, TRequest, TResponse>.Error = ex;
+                    LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId] = null;
+                    LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId] = ex;
                 }
             }
             else
             {
-                LayerCallCache<TLayer, TRequest, TResponse>.Invoker = null;
-                LayerCallCache<TLayer, TRequest, TResponse>.Error = error;
+                LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId] = null;
+                LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId] = error;
             }
 
-            Volatile.Write(ref LayerCallCache<TLayer, TRequest, TResponse>.Version, version);
-        }
-    }
-
-    internal static void RegisterLayerInstance(Layer layer)
-    {
-        var layerType = layer.GetType();
-        lock (s_lock)
-        {
-            if (s_layerTypeBindings.TryGetValue(layerType, out var existing))
-                s_layerTypeBindings[layerType] = existing.WithAdditional(layer);
-            else
-                s_layerTypeBindings[layerType] = LayerTypeBinding.Create(layer);
-            InvalidateLayerTargetCaches();
-        }
-    }
-
-    internal static TLayer ResolveLayerTarget<TLayer>() where TLayer : Layer
-    {
-        if (TryResolveLayerTarget<TLayer>(out var layer, out var error)) return layer!;
-        throw error!;
-    }
-
-    internal static bool TryResolveLayerTarget<TLayer>(out TLayer? layer, out Exception? error)
-        where TLayer : Layer
-    {
-        var version = Volatile.Read(ref s_layerTypeBindingsVersion);
-        if (TryGetCachedTarget(version, out layer, out error)) return error == null;
-
-        lock (s_lock)
-        {
-            version = s_layerTypeBindingsVersion;
-            if (TryGetCachedTarget(version, out layer, out error)) return error == null;
-
-            LayerTargetState state;
-            if (!s_layerTypeBindings.TryGetValue(typeof(TLayer), out var binding))
-            {
-                layer = null;
-                error = new LayerCallTargetNotFoundException(typeof(TLayer));
-                state = LayerTargetState.Missing;
-            }
-            else if (binding.IsAmbiguous)
-            {
-                layer = null;
-                error = new LayerCallTargetAmbiguousException(typeof(TLayer));
-                state = LayerTargetState.Ambiguous;
-            }
-            else
-            {
-                layer = (TLayer)binding.Layer!;
-                error = null;
-                state = LayerTargetState.Found;
-            }
-
-            LayerTargetCache<TLayer>.Layer = layer;
-            LayerTargetCache<TLayer>.State = state;
-            Volatile.Write(ref LayerTargetCache<TLayer>.Version, version);
-            return error == null;
+            Volatile.Write(ref LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId], version);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EventHandledState Send<T>(in T value) where T : struct
     {
-        return EventCenter.Send(value);
+        return Current?.Send(value) ?? EventHandledState.Continue;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Post<T>(in T value) where T : struct
     {
-        EventCenter.Post(value);
-    }
-
-    /// <summary>
-    /// 生成当前分层系统的拓扑结构的 Markdown 报告。
-    /// 包含 Layer 路由、事件订阅、Call 路由、Shared Field 及健康审计。
-    /// </summary>
-    public static string GetTopologyMarkdown()
-    {
-        if (s_chain == null) return "No layers built.";
-
-        var sb = new StringBuilder();
-        sb.AppendLine("# LayerBase Topology Snapshot");
-        sb.AppendLine();
-
-
-        sb.AppendLine("## 1. Layers");
-        sb.AppendLine("| Index | Layer Type | Active Logic |");
-        sb.AppendLine("| :--- | :--- | :--- |");
-        foreach (var layer in s_chain.GetNodes().OfType<Layer>())
-            sb.AppendLine($"| {layer.RouteIndex} | {layer.GetType().Name} | {layer.HasActiveLogic} |");
-        sb.AppendLine();
-
-
-        sb.AppendLine("## 2. Event Subscriptions");
-        sb.AppendLine("| Event Type | Subscribed Layers |");
-        sb.AppendLine("| :--- | :--- |");
-
-        var eventMap = new Dictionary<Type, List<string>>();
-        foreach (var layer in s_chain.GetNodes().OfType<Layer>())
-
-
-        foreach (var evt in layer.SubscribedEvents)
-        {
-            if (!eventMap.TryGetValue(evt, out var layers))
-                eventMap[evt] = layers = new List<string>();
-            layers.Add(layer.GetType().Name);
-        }
-
-        if (eventMap.Count == 0) sb.AppendLine("| (None) | |");
-        foreach (var kvp in eventMap.OrderBy(x => x.Key.Name))
-            sb.AppendLine($"| {kvp.Key.Name} | {string.Join(", ", kvp.Value)} |");
-        sb.AppendLine();
-
-
-        sb.AppendLine("## 3. Call Routes");
-        sb.AppendLine("| Request | Response | Target Layer | Handler |");
-        sb.AppendLine("| :--- | :--- | :--- | :--- |");
-        var hasCalls = false;
-        foreach (var layer in s_chain.GetNodes().OfType<Layer>())
-        foreach (var call in layer.CallHandlers)
-        {
-            sb.AppendLine($"| {call.Req.Name} | {call.Resp.Name} | {layer.GetType().Name} | {call.Handler.Name} |");
-            hasCalls = true;
-        }
-
-        if (!hasCalls) sb.AppendLine("| (None) | | | |");
-        sb.AppendLine();
-
-
-        sb.AppendLine("## 4. Shared Fields");
-        sb.AppendLine("| OwnerType | LocalKey | Type | Role | Layer |");
-        sb.AppendLine("| :--- | :--- | :--- | :--- | :--- |");
-        var hasFields = false;
-        foreach (var layer in s_chain.GetNodes().OfType<Layer>())
-        foreach (var field in layer.SharedFields)
-        {
-            var role = field.IsProvider ? "**Provide**" : "Use";
-            sb.AppendLine(
-                $"| {field.OwnerType.Name} | `{field.Key}` | {field.FieldType.Name} | {role} | {layer.GetType().Name} |");
-            hasFields = true;
-        }
-
-        if (!hasFields) sb.AppendLine("| (None) | | | | |");
-        sb.AppendLine();
-
-
-        sb.AppendLine("## 5. Health Audit");
-        var issues = new List<string>();
-
-        var allLayers = s_chain.GetNodes().OfType<Layer>().ToList();
-        var allSubscribed = allLayers.SelectMany(l => l.SubscribedEvents).ToHashSet();
-        var allProduced = allLayers.SelectMany(l => l.ProducedEvents).ToHashSet();
-        var allCallHandlers = allLayers.SelectMany(l => l.CallHandlers.Select(ch => ch.Req)).ToHashSet();
-        var allCallInvoked = allLayers.SelectMany(l => l.InvokedCalls).Concat(CallUsageTracker.GetUsedRequestTypes())
-                                      .ToHashSet();
-        var allProvideKeys = allLayers.SelectMany(l =>
-            l.SharedFields.Where(f => f.IsProvider).Select(f => $"{f.OwnerType.FullName}_{f.Key}")).ToHashSet();
-        var allUseKeys = allLayers.SelectMany(l =>
-            l.SharedFields.Where(f => !f.IsProvider).Select(f => $"{f.OwnerType.FullName}_{f.Key}")).ToHashSet();
-
-
-        foreach (var evt in allSubscribed)
-            if (!allProduced.Contains(evt))
-                issues.Add($"- **Zombie Event**: `{evt.Name}` is subscribed but never produced (Send/Post).");
-
-
-        foreach (var evt in allProduced)
-            if (!allSubscribed.Contains(evt))
-                issues.Add($"- **Unused Producer**: Event `{evt.Name}` is produced but has no subscribers.");
-
-
-        foreach (var req in allCallHandlers)
-            if (!allCallInvoked.Contains(req))
-                issues.Add(
-                    $"- **Dead Call Route**: Request `{req.Name}` has a handler but is never invoked via `CallAsync`.");
-
-
-        foreach (var key in allProvideKeys)
-            if (!allUseKeys.Contains(key))
-            {
-                var keyName = key.Substring(key.IndexOf('_') + 1);
-                issues.Add(
-                    $"- **Orphaned Provide**: Shared key `{keyName}` is published but never consumed via `[From]`. (Scope: {key.Split('_')[0]})");
-            }
-
-        if (issues.Count == 0)
-            sb.AppendLine("�?No health issues detected. All bindings are active and used.");
-        else
-            foreach (var issue in issues)
-                sb.AppendLine(issue);
-
-        return sb.ToString();
+        Current?.Post(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool TryGetCachedTarget<TLayer>(int version, out TLayer? layer, out Exception? error)
+    internal static bool TryGetCachedTarget<TLayer>(int runtimeId, int version, out TLayer? layer, out Exception? error)
         where TLayer : Layer
     {
-        if (Volatile.Read(ref LayerTargetCache<TLayer>.Version) != version)
+        if (Volatile.Read(ref LayerTargetCache<TLayer>.Versions[runtimeId]) != version)
         {
             layer = null;
             error = null;
             return false;
         }
 
-        switch (LayerTargetCache<TLayer>.State)
+        switch (LayerTargetCache<TLayer>.States[runtimeId])
         {
             case LayerTargetState.Found:
-                layer = LayerTargetCache<TLayer>.Layer;
+                layer = LayerTargetCache<TLayer>.Layers[runtimeId];
                 error = null;
                 return true;
             case LayerTargetState.Missing:
@@ -455,77 +288,17 @@ public static class LayerHub
         }
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void InvalidateLayerTargetCaches()
+    internal static void UpdateLayerTargetCache<TLayer>(int runtimeId, int version, TLayer? layer, LayerTargetState state)
+        where TLayer : Layer
     {
-        Interlocked.Increment(ref s_layerTypeBindingsVersion);
+        LayerTargetCache<TLayer>.Layers[runtimeId] = layer;
+        LayerTargetCache<TLayer>.States[runtimeId] = state;
+        Volatile.Write(ref LayerTargetCache<TLayer>.Versions[runtimeId], version);
     }
 
     private static void RegisterCacheResetter(Action resetter)
     {
         s_cacheResetters.Add(resetter);
-    }
-
-    public sealed class LayersBuilder
-    {
-        private readonly ResponsibilityChain _chain = new(new RcOwnerToken());
-        private bool _debugMode;
-        private LayerChain? _layerChain;
-        private int _pendingLayerCount;
-
-        public LayersBuilder Push(Layer layer)
-        {
-            if (Volatile.Read(ref s_layerIndexCounter) + _pendingLayerCount >= 64)
-                throw new InvalidOperationException(
-                    "LayerBase currently supports a maximum of 64 layers due to bitmap routing constraints.");
-
-            _pendingLayerCount++;
-            if (_layerChain == null)
-                lock (s_lock)
-                {
-                    if (s_chain != null)
-                        throw new InvalidOperationException(
-                            "A LayerBase layer chain already exists. Call LayerHub.Reset() before creating another chain.");
-
-                    _layerChain = new LayerChain(_chain);
-                    s_chain = _layerChain;
-                }
-
-            _layerChain.AddNode(layer);
-            return this;
-        }
-
-        public LayersBuilder SetDebug(bool enabled = true)
-        {
-            _debugMode = enabled;
-            IsDebugMode = enabled;
-            return this;
-        }
-
-        [Obsolete("Use SetDebug(bool) instead.")]
-        public LayersBuilder SetDebugMode(bool enabled)
-        {
-            return SetDebug(enabled);
-        }
-
-        public void Build()
-        {
-            if (_layerChain == null) throw new InvalidOperationException("No layers added.");
-            _layerChain.Build(1024, true);
-            if (_debugMode)
-            {
-                ReportTopology();
-                ReportInfo(new LayerEventInfo(-1, "System", "TopologySnapshot", GetTopologyMarkdown(),
-                    LayerEventInfoType.Info));
-            }
-        }
-
-        private void ReportTopology()
-        {
-            if (_layerChain == null) return;
-            var summary = _layerChain.GetTopologySummary();
-            ReportInfo(new LayerEventInfo(-1, "System", "Topology", summary, LayerEventInfoType.Info));
-        }
     }
 
     public readonly struct LayerCallTarget<TLayer> where TLayer : Layer
@@ -551,8 +324,8 @@ public static class LayerHub
             if (_error != null)
                 return LBTask<TResponse>.FromException(_error);
 
-
-            if (TryResolveLayerTarget<TLayer>(out var layer, out var error))
+            var runtime = Current ?? throw new InvalidOperationException("No current LayerRuntime context.");
+            if (runtime.TryResolveLayerTarget<TLayer>(out var layer, out var error))
                 return layer!.CallAsync<TRequest, TResponse>(request, cancellationToken);
 
             return LBTask<TResponse>.FromException(error!);
@@ -564,47 +337,28 @@ public static class LayerHub
         where TRequest : struct
         where TResponse : struct
     {
-        public static int Version = -1;
-        public static LayerCallInvoker<TRequest, TResponse>? Invoker;
-        public static Exception? Error;
+        public static readonly int[] Versions = new int[64];
+        public static readonly LayerCallInvoker<TRequest, TResponse>?[] Invokers = new LayerCallInvoker<TRequest, TResponse>[64];
+        public static readonly Exception?[] Errors = new Exception[64];
 
         static LayerCallCache()
         {
+            for (int i = 0; i < 64; i++) Versions[i] = -1;
             RegisterCacheResetter(Reset);
         }
 
         private static void Reset()
         {
-            Invoker = null;
-            Error = null;
-            Volatile.Write(ref Version, -1);
+            for (int i = 0; i < 64; i++)
+            {
+                Invokers[i] = null;
+                Errors[i] = null;
+                Volatile.Write(ref Versions[i], -1);
+            }
         }
     }
 
-    private readonly struct LayerTypeBinding
-    {
-        private LayerTypeBinding(Layer? layer, int count)
-        {
-            Layer = layer;
-            Count = count;
-        }
-
-        public Layer? Layer { get; }
-        public int Count { get; }
-        public bool IsAmbiguous => Count > 1;
-
-        public static LayerTypeBinding Create(Layer layer)
-        {
-            return new LayerTypeBinding(layer, 1);
-        }
-
-        public LayerTypeBinding WithAdditional(Layer layer)
-        {
-            return new LayerTypeBinding(Layer ?? layer, Count + 1);
-        }
-    }
-
-    private enum LayerTargetState : byte
+    internal enum LayerTargetState : byte
     {
         Unknown = 0,
         Found = 1,
@@ -614,20 +368,24 @@ public static class LayerHub
 
     private static class LayerTargetCache<TLayer> where TLayer : Layer
     {
-        public static int Version = -1;
-        public static TLayer? Layer;
-        public static LayerTargetState State;
+        public static readonly int[] Versions = new int[64];
+        public static readonly TLayer?[] Layers = new TLayer[64];
+        public static readonly LayerTargetState[] States = new LayerTargetState[64];
 
         static LayerTargetCache()
         {
+            for (int i = 0; i < 64; i++) Versions[i] = -1;
             RegisterCacheResetter(Reset);
         }
 
         private static void Reset()
         {
-            Layer = null;
-            State = LayerTargetState.Unknown;
-            Volatile.Write(ref Version, -1);
+            for (int i = 0; i < 64; i++)
+            {
+                Layers[i] = null;
+                States[i] = LayerTargetState.Unknown;
+                Volatile.Write(ref Versions[i], -1);
+            }
         }
     }
 }

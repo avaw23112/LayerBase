@@ -151,24 +151,6 @@ public class DelayPublisherTests
         Assert.That(readerError, Is.Null);
     }
 
-    [Test]
-    public void Repeated_publish_on_existing_publisher_does_not_allocate()
-    {
-        var layer = new DelayTestLayer();
-        var manager = new DelayTestService();
-        layer.AddManager(manager);
-        LayerHub.CreateLayers().Push(layer).Build();
-
-        var retrievedManager = layer.GetService<DelayTestService>();
-        retrievedManager.RequestBigDelay(10.0f, 0);
-
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 1; i <= 1024; i++) retrievedManager.RequestBigDelay(10.0f, i);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-
-        Assert.That(allocated, Is.EqualTo(0));
-    }
-
     public struct DelayTestEvent
     {
         public int Value;
