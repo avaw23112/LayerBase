@@ -45,24 +45,31 @@ public static class LayerHub
     private static readonly object s_lock = new();
     private static int s_runtimeIdCounter;
     private static readonly ConcurrentBag<Action> s_cacheResetters = new();
-    private static readonly AsyncLocal<LayerRuntime?> s_currentRuntime = new();
-
-    public static LayerRuntime? Current => s_currentRuntime.Value;
-
-    internal static void SetCurrent(LayerRuntime? runtime) => s_currentRuntime.Value = runtime;
+    
+    // Primary runtime for static convenience APIs
+    private static LayerRuntime? s_primaryRuntime;
 
     public static event Action<LayerEventInfo>? OnLayerEventInfo;
 
+    /// <summary>
+    /// Creates a new isolated LayerRuntime. The first one created becomes the Primary runtime.
+    /// </summary>
     public static LayerRuntime.LayersBuilder CreateLayers()
     {
         lock (s_lock)
         {
             var id = s_runtimeIdCounter++;
-            if (id >= 64) throw new InvalidOperationException("Max 64 concurrent LayerRuntimes supported.");
-            return new LayerRuntime.LayersBuilder(new LayerRuntime(id));
+            if (id >= 64) throw new InvalidOperationException("Max 64 concurrent LayerRuntimes supported by static caches.");
+            var runtime = new LayerRuntime(id);
+            if (s_primaryRuntime == null) s_primaryRuntime = runtime;
+            return new LayerRuntime.LayersBuilder(runtime);
         }
     }
 
+    /// <summary>
+    /// Optional: Pumps all active runtimes tracked by the Hub.
+    /// Users can also pump their runtimes manually.
+    /// </summary>
     public static void Pump(float deltaTime)
     {
         lock (s_lock)
@@ -71,16 +78,7 @@ public static class LayerHub
             {
                 if (s_runtimes[i].TryGetTarget(out var runtime))
                 {
-                    var prev = Current;
-                    s_currentRuntime.Value = runtime;
-                    try
-                    {
-                        runtime.Pump(deltaTime);
-                    }
-                    finally
-                    {
-                        s_currentRuntime.Value = prev;
-                    }
+                    runtime.Pump(deltaTime);
                 }
                 else
                 {
@@ -90,23 +88,66 @@ public static class LayerHub
         }
     }
 
+    /// <summary>
+    /// Resets the global registry and static caches. 
+    /// Note: Does NOT dispose runtimes held by external references unless they are the primary one.
+    /// </summary>
     public static void Reset()
     {
         lock (s_lock)
         {
-            for (var i = s_runtimes.Count - 1; i >= 0; i--)
-            {
-                if (s_runtimes[i].TryGetTarget(out var runtime)) runtime.Dispose();
-            }
+            s_primaryRuntime?.Dispose();
+            s_primaryRuntime = null;
             s_runtimes.Clear();
             s_runtimeIdCounter = 0;
-            s_currentRuntime.Value = null;
             foreach (var resetter in s_cacheResetters) resetter();
             ServiceProvider.ResetRoot();
             ServiceLayerBinder.Reset();
             LayerServiceRegistry.Reset();
             OnLayerEventInfo = null;
         }
+    }
+
+    /// <summary>
+    /// Convenience API: Sends event to the Primary runtime.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static EventHandledState Send<T>(in T value) where T : struct
+    {
+        return s_primaryRuntime?.Send(value) ?? EventHandledState.Continue;
+    }
+
+    /// <summary>
+    /// Convenience API: Posts event to the Primary runtime.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void Post<T>(in T value) where T : struct
+    {
+        s_primaryRuntime?.Post(value);
+    }
+
+    /// <summary>
+    /// Convenience API: Creates a call target for the Primary runtime.
+    /// </summary>
+    public static LayerRuntime.LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer
+    {
+        if (s_primaryRuntime == null) throw new InvalidOperationException("No Primary LayerRuntime created. Call CreateLayers().Build() first.");
+        return s_primaryRuntime.For<TLayer>();
+    }
+
+    /// <summary>
+    /// Convenience API: Performs a call on the Primary runtime.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(TRequest request,
+                                                                           CancellationToken cancellationToken =
+                                                                               default)
+        where TLayer : Layer
+        where TRequest : struct
+        where TResponse : struct
+    {
+        if (s_primaryRuntime == null) throw new InvalidOperationException("No Primary LayerRuntime created. Call CreateLayers().Build() first.");
+        return s_primaryRuntime.CallAsync<TLayer, TRequest, TResponse>(request, cancellationToken);
     }
 
     internal static void Internal_Register(LayerRuntime runtime)
@@ -118,6 +159,7 @@ public static class LayerHub
     {
         lock (s_lock)
         {
+            if (ReferenceEquals(s_primaryRuntime, runtime)) s_primaryRuntime = null;
             for (var i = s_runtimes.Count - 1; i >= 0; i--)
             {
                 if (s_runtimes[i].TryGetTarget(out var r) && r == runtime)
@@ -134,126 +176,21 @@ public static class LayerHub
         OnLayerEventInfo?.Invoke(info);
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void ReportLayerEventError(int layerIndex, string source, string eventName, Exception ex)
-    {
-        if (Current != null)
-        {
-            Current.ReportLayerEventError(layerIndex, source, eventName, ex);
-        }
-        else
-        {
-            Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error,
-                ex));
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void ReportWarning(int layerIndex, string source, string eventName, string message)
-    {
-        if (Current != null)
-        {
-            Current.ReportWarning(layerIndex, source, eventName, message);
-        }
-        else
-        {
-            Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, message, LayerEventInfoType.Warning));
-        }
-    }
-
     public static void InitializeJobScheduler(int workerCount)
     {
         JobSchedulers.ConfigureDefault(workerCount);
     }
 
-    public static LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void ReportLayerEventError(int layerIndex, string source, string eventName, Exception ex)
     {
-        var runtime = Current ?? throw new InvalidOperationException("No current LayerRuntime context.");
-        runtime.TryResolveLayerTarget<TLayer>(out var layer, out var error);
-        return new LayerCallTarget<TLayer>(layer, error);
+        Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(TRequest request,
-                                                                           CancellationToken cancellationToken =
-                                                                               default)
-        where TLayer : Layer
-        where TRequest : struct
-        where TResponse : struct
+    internal static void ReportWarning(int layerIndex, string source, string eventName, string message)
     {
-        var runtime = Current ?? throw new InvalidOperationException("No current LayerRuntime context.");
-        var runtimeId = runtime.Id;
-        var version = runtime.GetLayerTypeBindingsVersion();
-        
-        if (LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId] != version)
-            return CallAsyncSlow<TLayer, TRequest, TResponse>(runtime, version, request, cancellationToken);
-
-        var invoker = LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId];
-        if (invoker != null) return invoker(request, cancellationToken);
-
-        return LBTask<TResponse>.FromException(LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId]!);
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(LayerRuntime runtime, int version, TRequest request,
-        CancellationToken cancellationToken)
-        where TLayer : Layer
-        where TRequest : struct
-        where TResponse : struct
-    {
-        UpdateLayerCallCache<TLayer, TRequest, TResponse>(runtime, version);
-
-        var runtimeId = runtime.Id;
-        var invoker = LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId];
-        if (invoker != null) return invoker(request, cancellationToken);
-
-        return LBTask<TResponse>.FromException(LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId]!);
-    }
-
-    private static void UpdateLayerCallCache<TLayer, TRequest, TResponse>(LayerRuntime runtime, int version)
-        where TLayer : Layer
-        where TRequest : struct
-        where TResponse : struct
-    {
-        var runtimeId = runtime.Id;
-        lock (s_lock)
-        {
-            if (LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId] == version) return;
-
-            if (runtime.TryResolveLayerTarget<TLayer>(out var layer, out var error))
-            {
-                try
-                {
-                    var invoker = layer!.GetCallInvoker<TRequest, TResponse>();
-                    LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId] = invoker;
-                    LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId] = null;
-                }
-                catch (Exception ex)
-                {
-                    LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId] = null;
-                    LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId] = ex;
-                }
-            }
-            else
-            {
-                LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId] = null;
-                LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId] = error;
-            }
-
-            Volatile.Write(ref LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId], version);
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static EventHandledState Send<T>(in T value) where T : struct
-    {
-        return Current?.Send(value) ?? EventHandledState.Continue;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Post<T>(in T value) where T : struct
-    {
-        Current?.Post(value);
+        Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, message, LayerEventInfoType.Warning));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -296,40 +233,49 @@ public static class LayerHub
         Volatile.Write(ref LayerTargetCache<TLayer>.Versions[runtimeId], version);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int GetCallCacheVersion<TLayer, TRequest, TResponse>(int runtimeId)
+        where TLayer : Layer
+        where TRequest : struct
+        where TResponse : struct
+    {
+        return Volatile.Read(ref LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId]);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static LayerCallInvoker<TRequest, TResponse>? GetCallInvoker<TLayer, TRequest, TResponse>(int runtimeId)
+        where TLayer : Layer
+        where TRequest : struct
+        where TResponse : struct
+    {
+        return LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static Exception? GetCallError<TLayer, TRequest, TResponse>(int runtimeId)
+        where TLayer : Layer
+        where TRequest : struct
+        where TResponse : struct
+    {
+        return LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId];
+    }
+
+    internal static void UpdateLayerCallCache<TLayer, TRequest, TResponse>(int runtimeId, int version, LayerCallInvoker<TRequest, TResponse>? invoker, Exception? error)
+        where TLayer : Layer
+        where TRequest : struct
+        where TResponse : struct
+    {
+        lock (s_lock)
+        {
+            LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId] = invoker;
+            LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId] = error;
+            Volatile.Write(ref LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId], version);
+        }
+    }
+
     private static void RegisterCacheResetter(Action resetter)
     {
         s_cacheResetters.Add(resetter);
-    }
-
-    public readonly struct LayerCallTarget<TLayer> where TLayer : Layer
-    {
-        private readonly TLayer? _layer;
-        private readonly Exception? _error;
-
-        internal LayerCallTarget(TLayer? layer, Exception? error)
-        {
-            _layer = layer;
-            _error = error;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest          request,
-                                                                CancellationToken cancellationToken = default)
-            where TRequest : struct
-            where TResponse : struct
-        {
-            if (_layer != null)
-                return _layer.CallAsync<TRequest, TResponse>(request, cancellationToken);
-
-            if (_error != null)
-                return LBTask<TResponse>.FromException(_error);
-
-            var runtime = Current ?? throw new InvalidOperationException("No current LayerRuntime context.");
-            if (runtime.TryResolveLayerTarget<TLayer>(out var layer, out var error))
-                return layer!.CallAsync<TRequest, TResponse>(request, cancellationToken);
-
-            return LBTask<TResponse>.FromException(error!);
-        }
     }
 
     private static class LayerCallCache<TLayer, TRequest, TResponse>

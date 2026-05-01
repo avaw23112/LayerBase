@@ -73,6 +73,69 @@ public sealed class LayerRuntime : IDisposable
         EventCenter.Post(value);
     }
 
+    public LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer
+    {
+        TryResolveLayerTarget<TLayer>(out var layer, out var error);
+        return new LayerCallTarget<TLayer>(this, layer, error);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(TRequest request,
+                                                                           CancellationToken cancellationToken =
+                                                                               default)
+        where TLayer : Layer
+        where TRequest : struct
+        where TResponse : struct
+    {
+        var version = GetLayerTypeBindingsVersion();
+        
+        if (LayerHub.GetCallCacheVersion<TLayer, TRequest, TResponse>(_id) != version)
+            return CallAsyncSlow<TLayer, TRequest, TResponse>(version, request, cancellationToken);
+
+        var invoker = LayerHub.GetCallInvoker<TLayer, TRequest, TResponse>(_id);
+        if (invoker != null) return invoker(request, cancellationToken);
+
+        return LBTask<TResponse>.FromException(LayerHub.GetCallError<TLayer, TRequest, TResponse>(_id)!);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(int version, TRequest request,
+        CancellationToken cancellationToken)
+        where TLayer : Layer
+        where TRequest : struct
+        where TResponse : struct
+    {
+        UpdateLayerCallCache<TLayer, TRequest, TResponse>(version);
+
+        var invoker = LayerHub.GetCallInvoker<TLayer, TRequest, TResponse>(_id);
+        if (invoker != null) return invoker(request, cancellationToken);
+
+        return LBTask<TResponse>.FromException(LayerHub.GetCallError<TLayer, TRequest, TResponse>(_id)!);
+    }
+
+    private void UpdateLayerCallCache<TLayer, TRequest, TResponse>(int version)
+        where TLayer : Layer
+        where TRequest : struct
+        where TResponse : struct
+    {
+        if (TryResolveLayerTarget<TLayer>(out var layer, out var error))
+        {
+            try
+            {
+                var invoker = layer!.GetCallInvoker<TRequest, TResponse>();
+                LayerHub.UpdateLayerCallCache<TLayer, TRequest, TResponse>(_id, version, invoker, null);
+            }
+            catch (Exception ex)
+            {
+                LayerHub.UpdateLayerCallCache<TLayer, TRequest, TResponse>(_id, version, null, ex);
+            }
+        }
+        else
+        {
+            LayerHub.UpdateLayerCallCache<TLayer, TRequest, TResponse>(_id, version, null, error);
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -305,9 +368,6 @@ public sealed class LayerRuntime : IDisposable
                 _runtime._context = LayerBaseSynchronizationContext.Install();
 
             _layerChain.Build(1024, true);
-            
-            // Set as current context automatically for the building thread
-            LayerHub.SetCurrent(_runtime);
 
             if (_debugMode)
             {
@@ -338,6 +398,38 @@ public sealed class LayerRuntime : IDisposable
         public LayerTypeBinding WithAdditional(Layer layer)
         {
             return new LayerTypeBinding(Layer ?? layer, Count + 1);
+        }
+    }
+
+    public readonly struct LayerCallTarget<TLayer> where TLayer : Layer
+    {
+        private readonly LayerRuntime _owner;
+        private readonly TLayer? _layer;
+        private readonly Exception? _error;
+
+        internal LayerCallTarget(LayerRuntime owner, TLayer? layer, Exception? error)
+        {
+            _owner = owner;
+            _layer = layer;
+            _error = error;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest          request,
+                                                                CancellationToken cancellationToken = default)
+            where TRequest : struct
+            where TResponse : struct
+        {
+            if (_layer != null)
+                return _layer.CallAsync<TRequest, TResponse>(request, cancellationToken);
+
+            if (_error != null)
+                return LBTask<TResponse>.FromException(_error);
+
+            if (_owner.TryResolveLayerTarget<TLayer>(out var layer, out var error))
+                return layer!.CallAsync<TRequest, TResponse>(request, cancellationToken);
+
+            return LBTask<TResponse>.FromException(error!);
         }
     }
 }

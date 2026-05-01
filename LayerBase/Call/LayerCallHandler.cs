@@ -30,7 +30,9 @@ public static class LayerCallHandlerExtensions
         where TResponse : struct
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
-        return LayerHub.CallAsync<TLayer, TRequest, TResponse>(request, cancellationToken);
+        var layer = ServiceLayerBinder.Require(handler);
+        if (layer.OwnerContext == null) throw new InvalidOperationException("Layer not attached to a runtime context.");
+        return layer.OwnerContext.CallAsync<TLayer, TRequest, TResponse>(request, cancellationToken);
     }
 }
 
