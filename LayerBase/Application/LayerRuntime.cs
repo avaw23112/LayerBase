@@ -14,6 +14,7 @@ public sealed class LayerRuntime : IDisposable
 {
     private LayerChain? _chain;
     private LayerBaseSynchronizationContext? _context;
+    public WorldTaskApi? Tasks { get; private set; }
     private int _layerIndexCounter;
     private int _layerTypeBindingsVersion;
     private readonly Dictionary<Type, LayerTypeBinding> _layerTypeBindings = new();
@@ -92,18 +93,36 @@ public sealed class LayerRuntime : IDisposable
     public void Pump(float deltaTime)
     {
         if (_disposed) return;
-        _context?.Update();
         
-        // 1. Time tick
-        _timer?.Tick(deltaTime, _timerSink!);
-        
-        // 2. Delay tick (Stage 4)
-        DelayPublisherManager.Instance?.Tick(deltaTime);
-        
-        // 3. Post pump
-        _scheduler?.Pump();
-        
-        _chain?.Pump(deltaTime);
+        if (_context != null)
+        {
+            using var scope = _context.EnterScope();
+            _context.Update();
+            
+            // 1. Time tick
+            _timer?.Tick(deltaTime, _timerSink!);
+            
+            // 2. Delay tick (Stage 4)
+            DelayPublisherManager.Instance?.Tick(deltaTime);
+            
+            // 3. Post pump
+            _scheduler?.Pump();
+            
+            _chain?.Pump(deltaTime);
+        }
+        else
+        {
+            // 1. Time tick
+            _timer?.Tick(deltaTime, _timerSink!);
+            
+            // 2. Delay tick (Stage 4)
+            DelayPublisherManager.Instance?.Tick(deltaTime);
+            
+            // 3. Post pump
+            _scheduler?.Pump();
+            
+            _chain?.Pump(deltaTime);
+        }
     }
 
     public void ReportInfo(LayerEventInfo info)
@@ -482,10 +501,10 @@ public sealed class LayerRuntime : IDisposable
         {
             if (_layerChain == null) throw new InvalidOperationException("No layers added.");
             
-            if (SynchronizationContext.Current == null)
-                _runtime._context = LayerBaseSynchronizationContext.InstallAsCurrent();
-            else if (_runtime._context == null && SynchronizationContext.Current is not LayerBaseSynchronizationContext)
+            if (_runtime._context == null)
                 _runtime._context = LayerBaseSynchronizationContext.Install();
+
+            _runtime.Tasks = new WorldTaskApi(_runtime._context);
 
             _layerChain.Build(1024, true);
             _runtime.InitializeScheduler(_postOptions);

@@ -47,7 +47,7 @@ public readonly struct LBTask
     {
         if (token.IsCancellationRequested) return FromCanceled(token);
         ctx ??= SynchronizationContext.Current;
-        var src = ArchTaskSource.Rent();
+        var src = ArchTaskSource.Rent(ctx);
         if (ctx is LayerBaseSynchronizationContext lbCtx)
             lbCtx.ScheduleInFrames(static state => ((ArchTaskSource)state!).SetResult(), src, 1);
         else if (ctx != null)
@@ -83,7 +83,7 @@ public readonly struct LBTask
         if (action == null) throw new ArgumentNullException(nameof(action));
         if (ctx == null) throw new ArgumentNullException(nameof(ctx));
 
-        var src = ArchTaskSource.Rent();
+        var src = ArchTaskSource.Rent(ctx);
         var work = RunActionWorkItem.Rent(action, src);
         ctx.Post(RunActionWorkItem.InvokeOnContext, work);
         return new LBTask(src);
@@ -500,7 +500,7 @@ public readonly struct LBTask<T>
         if (func == null) throw new ArgumentNullException(nameof(func));
         if (ctx == null) throw new ArgumentNullException(nameof(ctx));
 
-        var src = ArchTaskSource<T>.Rent();
+        var src = ArchTaskSource<T>.Rent(ctx);
         var work = RunFuncWorkItem.Rent(func, src);
         ctx.Post(RunFuncWorkItem.InvokeOnContext, work);
         return new LBTask<T>(src);

@@ -105,16 +105,21 @@ internal sealed class ArchTaskSource : IArchTaskSource
         if (Interlocked.Exchange(ref _released, 1) == 0) Pool.Return(this);
     }
 
-    public static ArchTaskSource Rent()
+    public static ArchTaskSource Rent(SynchronizationContext? context)
     {
         var src = Pool.Rent();
         src._continuation = null;
         src._exception = null;
         src._canceledToken = default;
-        src._context = SynchronizationContext.Current;
+        src._context = context;
         src._status = 0;
         src._released = 0;
         return src;
+    }
+
+    public static ArchTaskSource Rent()
+    {
+        return Rent(SynchronizationContext.Current);
     }
 
     private void Complete(Exception? ex, CancellationToken canceledToken)
@@ -223,17 +228,22 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
         if (Interlocked.Exchange(ref _released, 1) == 0) Pool.Return(this);
     }
 
-    public static ArchTaskSource<T> Rent()
+    public static ArchTaskSource<T> Rent(SynchronizationContext? context)
     {
         var src = Pool.Rent();
         src._continuation = null;
         src._exception = null;
         src._canceledToken = default;
         src._result = default!;
-        src._context = SynchronizationContext.Current;
+        src._context = context;
         src._status = 0;
         src._released = 0;
         return src;
+    }
+
+    public static ArchTaskSource<T> Rent()
+    {
+        return Rent(SynchronizationContext.Current);
     }
 
     private void Complete(Exception? ex, CancellationToken canceledToken)

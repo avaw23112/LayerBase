@@ -60,6 +60,28 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         }
     }
 
+    public Scope EnterScope()
+    {
+        return new Scope(this);
+    }
+
+    public readonly struct Scope : IDisposable
+    {
+        private readonly SynchronizationContext? _previous;
+
+        public Scope(LayerBaseSynchronizationContext context)
+        {
+            if (context == null) throw new ArgumentNullException(nameof(context));
+            _previous = Current;
+            SetSynchronizationContext(context);
+        }
+
+        public void Dispose()
+        {
+            SetSynchronizationContext(_previous);
+        }
+    }
+
     public void Dispose()
     {
         _disposed = true;
@@ -74,6 +96,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     }
 
     /// <summary>Install this context as current on the calling thread; returns existing instance if already set.</summary>
+    [Obsolete("InstallAsCurrent is not multi-world safe. Use Install() and EnterScope() instead.")]
     public static LayerBaseSynchronizationContext InstallAsCurrent()
     {
         if (Current is LayerBaseSynchronizationContext existing)
@@ -86,8 +109,6 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
     public static LayerBaseSynchronizationContext Install()
     {
-        if (Current is LayerBaseSynchronizationContext existing)
-            return existing;
         return new LayerBaseSynchronizationContext(Thread.CurrentThread.ManagedThreadId);
     }
 
