@@ -1,6 +1,6 @@
 ﻿namespace LayerBase.Event.Delay;
 
-public interface IDelayPublisherManager
+internal interface IDelayPublisherManager
 {
     void Update(float deltaTime);
     void Clear();

@@ -89,17 +89,28 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// Resets the global registry and static caches. 
-    /// Note: Does NOT dispose runtimes held by external references unless they are the primary one.
+    /// Resets the global registry, disposes every tracked runtime, and clears static caches.
     /// </summary>
     public static void Reset()
     {
         lock (s_lock)
         {
-            s_primaryRuntime?.Dispose();
+            var runtimes = new HashSet<LayerRuntime>();
+            if (s_primaryRuntime != null) runtimes.Add(s_primaryRuntime);
+            foreach (var weak in s_runtimes)
+            {
+                if (weak.TryGetTarget(out var runtime)) runtimes.Add(runtime);
+            }
+
             s_primaryRuntime = null;
             s_runtimes.Clear();
             s_runtimeIdCounter = 0;
+
+            foreach (var runtime in runtimes)
+            {
+                runtime.Dispose();
+            }
+
             foreach (var resetter in s_cacheResetters) resetter();
             ServiceLayerBinder.Reset();
             LayerServiceRegistry.Reset();

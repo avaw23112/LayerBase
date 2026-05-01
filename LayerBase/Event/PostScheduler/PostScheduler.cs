@@ -391,9 +391,15 @@ public sealed class PostScheduler : IDisposable
                 foreach (var key in _pendingCoalesced)
                 {
                     var slot = _coalescedBuffer[key];
-                    _payloadStorage.Dispatch(slot.PayloadHandle, _eventCenter);
-                    _payloadStorage.Release(slot.PayloadHandle);
-                    _coalescedBuffer.Remove(key);
+                    try
+                    {
+                        _payloadStorage.Dispatch(slot.PayloadHandle, _eventCenter);
+                    }
+                    finally
+                    {
+                        _payloadStorage.Release(slot.PayloadHandle);
+                        _coalescedBuffer.Remove(key);
+                    }
                     count++;
                 }
                 _pendingCoalesced.Clear();
@@ -413,8 +419,14 @@ public sealed class PostScheduler : IDisposable
                     ref var handleRef = ref FastArray.At(_latestBuffer, typeId);
                     var handle = handleRef;
                     handleRef = PayloadHandle.Invalid;
-                    _payloadStorage.Dispatch(handle, _eventCenter);
-                    _payloadStorage.Release(handle);
+                    try
+                    {
+                        _payloadStorage.Dispatch(handle, _eventCenter);
+                    }
+                    finally
+                    {
+                        _payloadStorage.Release(handle);
+                    }
                     count++;
                     bits &= bits - 1;
                 }

@@ -32,23 +32,21 @@ public sealed class OwnerLayerAttribute : Attribute
 /// </summary>
 public abstract class Layer : Node, IDisposable
 {
-    public readonly List<(Type Req, Type Resp, Type Handler)> CallHandlers = new();
-    public readonly List<Type> InvokedCalls = new();
+    private readonly List<(Type Req, Type Resp, Type Handler)> m_callHandlers = new();
     private readonly List<RegisteredService> m_activeServices = new();
     private readonly object m_callRouteLock = new();
 
     private readonly ConcurrentDictionary<Type, IDelayPublisherInternal> m_delayPublishers = new();
     private readonly List<RegisteredService> m_manualServices = new();
+    private readonly List<Type> m_producedEvents = new();
 
     private readonly HashSet<Type> m_registeredServiceTypes = new();
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
+    private readonly List<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> m_sharedFields = new();
     private readonly List<IDisposable> m_subscriptions = new();
-    public readonly List<Type> ProducedEvents = new();
-    public readonly List<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> SharedFields = new();
+    private readonly List<Type> m_subscribedEvents = new();
 
-
-    public readonly List<Type> SubscribedEvents = new();
     private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();
 
     private object?[] m_callRouteInvokers = Array.Empty<object?>();
@@ -77,7 +75,11 @@ public abstract class Layer : Node, IDisposable
     /// 获取 Layer 的路由索引。
     /// </summary>
     public int RouteIndex { get; private set; } = -1;
-    public List<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = new();
+    public IReadOnlyList<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = Array.Empty<IAutoSubscribe>();
+    public IReadOnlyList<(Type Req, Type Resp, Type Handler)> CallHandlers => m_callHandlers;
+    public IReadOnlyList<Type> ProducedEvents => m_producedEvents;
+    public IReadOnlyList<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> SharedFields => m_sharedFields;
+    public IReadOnlyList<Type> SubscribedEvents => m_subscribedEvents;
 
 
     public virtual bool HasActiveLogic =>
@@ -161,7 +163,10 @@ public abstract class Layer : Node, IDisposable
         m_serviceCollection.Reset();
         m_callRouteInvokers = Array.Empty<object?>();
         m_callRouteHandlerTypes = Array.Empty<Type?>();
-        CallHandlers.Clear();
+        m_callHandlers.Clear();
+        m_producedEvents.Clear();
+        m_sharedFields.Clear();
+        m_subscribedEvents.Clear();
         m_registeredServiceTypes.Clear();
 
         foreach (var registration in m_manualServices)
@@ -233,6 +238,23 @@ public abstract class Layer : Node, IDisposable
 
         using var _ = m_serviceCollection.PushRegistrationScope(registration.ScopeId);
         registration.Service.ConfigureServices(m_serviceCollection);
+    }
+
+    public void RecordSubscribedEvent(Type eventType)
+    {
+        if (eventType == null) throw new ArgumentNullException(nameof(eventType));
+        m_subscribedEvents.Add(eventType);
+    }
+
+    public void RecordProducedEvent(Type eventType)
+    {
+        if (eventType == null) throw new ArgumentNullException(nameof(eventType));
+        m_producedEvents.Add(eventType);
+    }
+
+    internal void RecordSharedField(Type ownerType, string key, Type fieldType, bool isProvider)
+    {
+        m_sharedFields.Add((ownerType, key, fieldType, isProvider));
     }
 
     private void BindAutoCallHandlers()
@@ -422,7 +444,7 @@ public abstract class Layer : Node, IDisposable
 
             invokers[routeId] = invoker;
             handlerTypes[routeId] = handler.GetType();
-            CallHandlers.Add((typeof(TRequest), typeof(TResponse), handler.GetType()));
+            m_callHandlers.Add((typeof(TRequest), typeof(TResponse), handler.GetType()));
             Volatile.Write(ref m_callRouteInvokers, invokers);
             Volatile.Write(ref m_callRouteHandlerTypes, handlerTypes);
         }

@@ -44,7 +44,7 @@ internal sealed class DelayBufferWheel
         entry.ValueVersion = valueVersion;
         entry.Active = true;
         
-        long delayTicks = (long)Math.Ceiling(ttlSeconds / _tickDuration);
+        long delayTicks = NormalizeDelayTicks(ttlSeconds);
         entry.ExpireTick = _currentTick + delayTicks;
         
         int slot = (int)(entry.ExpireTick % _options.WheelSize);
@@ -150,6 +150,26 @@ internal sealed class DelayBufferWheel
         }
 
         _wheel[targetSlot] = head;
+    }
+
+    private long NormalizeDelayTicks(float seconds)
+    {
+        if (float.IsNaN(seconds) || seconds <= 0) return 1;
+        return Math.Max(1, (long)Math.Ceiling(seconds / _tickDuration));
+    }
+
+    public void Clear()
+    {
+        Array.Fill(_wheel, -1);
+        _freeList.Clear();
+        for (var i = 0; i < _poolSize; i++)
+        {
+            _pool[i] = default;
+            _pool[i].EntryVersion = 1;
+            _freeList.Push(i);
+        }
+        _currentTick = 0;
+        _accumulator = 0;
     }
 
     private void RemoveFromWheel(int index)

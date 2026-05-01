@@ -10,20 +10,9 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
     private readonly DelayBufferWheel _wheel;
     private readonly object _lock = new();
     private readonly object _wheelLock = new();
-
-    public static DelayPublisherManager Instance { get; private set; } = null!;
+    private int _disposed;
 
     public EventRuntimePolicyTable? PolicyTable { get; private set; }
-
-    static DelayPublisherManager()
-    {
-        LayerHub.RegisterCacheResetter(() => Instance = null!);
-    }
-
-    internal static void Initialize(DelayBufferOptions options, EventRuntimePolicyTable policyTable)
-    {
-        Instance = new DelayPublisherManager(options, policyTable);
-    }
 
     internal static DelayPublisherManager Create(DelayBufferOptions options, EventRuntimePolicyTable policyTable)
     {
@@ -39,8 +28,10 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
 
     public int RegisterPublisher(IDelayPublisherInternal publisher)
     {
+        ThrowIfDisposed();
         lock (_lock)
         {
+            ThrowIfDisposed();
             int id = _publishers.Count;
             _publishers.Add(publisher);
             return id;
@@ -49,8 +40,10 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
 
     public DelayTimerHandle ScheduleExpire(int publisherId, int valueVersion, float ttlSeconds, DelayTimerHandle oldHandle)
     {
+        ThrowIfDisposed();
         lock (_wheelLock)
         {
+            ThrowIfDisposed();
             if (oldHandle.IsValid) _wheel.Cancel(oldHandle);
             return _wheel.Schedule(publisherId, valueVersion, ttlSeconds);
         }
@@ -58,6 +51,7 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
 
     public void Tick(float deltaTime)
     {
+        if (Volatile.Read(ref _disposed) != 0) return;
         lock (_wheelLock)
         {
             _wheel.Tick(deltaTime);
@@ -66,6 +60,7 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
 
     internal void ExpirePublisher(int publisherId, int valueVersion)
     {
+        if (Volatile.Read(ref _disposed) != 0) return;
         IDelayPublisherInternal? pub = null;
         lock (_lock)
         {
@@ -79,6 +74,7 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
 
     public void NotifyPublished(int publisherId, int contractId)
     {
+        if (Volatile.Read(ref _disposed) != 0) return;
         if (contractId == 0) return;
 
         var key = new DelayContractKey(0, contractId);
@@ -102,10 +98,28 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
 
     public void Clear()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+        IDelayPublisherInternal[] publishers;
         lock (_lock)
         {
-            foreach (var pub in _publishers) pub.ClearValue();
+            publishers = _publishers.ToArray();
+            _publishers.Clear();
             _contractToActivePublisher.Clear();
+            PolicyTable = null;
         }
+
+        lock (_wheelLock)
+        {
+            _wheel.Clear();
+        }
+
+        foreach (var pub in publishers) pub.Deactivate();
+    }
+
+    internal void ThrowIfDisposed()
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+            throw new ObjectDisposedException(nameof(DelayPublisherManager));
     }
 }

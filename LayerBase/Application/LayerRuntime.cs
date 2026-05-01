@@ -440,7 +440,7 @@ public sealed class LayerRuntime : IDisposable
         var allSubscribed = allLayers.SelectMany(l => l.SubscribedEvents).ToHashSet();
         var allProduced = allLayers.SelectMany(l => l.ProducedEvents).ToHashSet();
         var allCallHandlers = allLayers.SelectMany(l => l.CallHandlers.Select(ch => ch.Req)).ToHashSet();
-        var allCallInvoked = allLayers.SelectMany(l => l.InvokedCalls).ToHashSet();
+        var allCallInvoked = CallUsageTracker.GetUsedRequestTypes().ToHashSet();
         var allProvideKeys = allLayers.SelectMany(l =>
             l.SharedFields.Where(f => f.IsProvider).Select(f => $"{f.OwnerType.FullName}_{f.Key}")).ToHashSet();
         var allUseKeys = allLayers.SelectMany(l =>
@@ -490,11 +490,13 @@ public sealed class LayerRuntime : IDisposable
         private PostSchedulerOptions _postOptions = PostSchedulerOptions.Default;
         private TimeSchedulerOptions _timerOptions = TimeSchedulerOptions.Default;
         private DelayBufferOptions _delayOptions = DelayBufferOptions.Default;
+        private bool _built;
 
         internal LayersBuilder(LayerRuntime runtime) => _runtime = runtime;
 
         public LayersBuilder Push(Layer layer)
         {
+            if (_built) throw new InvalidOperationException("Cannot push layers after Build has been called.");
             if (_pendingLayerCount >= 64)
                 throw new InvalidOperationException(
                     "LayerBase currently supports a maximum of 64 layers due to bitmap routing constraints.");
@@ -538,7 +540,9 @@ public sealed class LayerRuntime : IDisposable
 
         public LayerRuntime Build()
         {
+            if (_built) throw new InvalidOperationException("LayersBuilder.Build can only be called once.");
             if (_layerChain == null) throw new InvalidOperationException("No layers added.");
+            _built = true;
 
             if (_runtime._context == null)
                 _runtime._context = LayerBaseSynchronizationContext.Install();

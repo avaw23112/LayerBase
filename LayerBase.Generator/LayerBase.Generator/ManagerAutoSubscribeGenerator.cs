@@ -203,17 +203,17 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                     h.Attr == "SubscribeFlow" || h.Attr == "SubscribeFlowAttribute" ? "SubscribeFlow" : "Subscribe";
 
                 sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
-                sb.AppendLine($"            layer.SubscribedEvents.Add(typeof({h.Evt}));");
+                sb.AppendLine($"            layer.RecordSubscribedEvent(typeof({h.Evt}));");
 
                 foreach (var produced in h.ProducedEvts)
-                    sb.AppendLine($"            layer.ProducedEvents.Add(typeof({produced}));");
+                    sb.AppendLine($"            layer.RecordProducedEvent(typeof({produced}));");
             }
 
             foreach (var p in meta.DelayProps)
             {
                 var parts = p.Split('|');
                 sb.AppendLine($"            this.{parts[0]} = layer.SubscribeDelay<{parts[1]}>();");
-                sb.AppendLine($"            layer.SubscribedEvents.Add(typeof({parts[1]}));");
+                sb.AppendLine($"            layer.RecordSubscribedEvent(typeof({parts[1]}));");
             }
 
             sb.AppendLine("        }");

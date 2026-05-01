@@ -99,8 +99,8 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 
         
         entry.RemainingRepeatCount = repeatCount;
-        entry.ExpireTick = _currentTick + (long)MathF.Ceiling(delaySeconds * _tickDurationReciprocal);
-        entry.IntervalTicks = (long)MathF.Ceiling(intervalSeconds * _tickDurationReciprocal);
+        entry.ExpireTick = _currentTick + NormalizeDelayTicks(delaySeconds);
+        entry.IntervalTicks = repeatCount == 0 ? 0 : NormalizeDelayTicks(intervalSeconds);
         
         PlaceEntry(index);
         
@@ -231,9 +231,31 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         
         if (current != -1)
         {
-            wheelSlotRef = current;
-            FastArray.At(_pool, current).Prev = -1;
+            RequeueRemainingForNextTick(current);
         }
+    }
+
+    private void RequeueRemainingForNextTick(int head)
+    {
+        var targetSlot = (int)((_currentTick + 1) & _wheelMask);
+        FastArray.At(_pool, head).Prev = -1;
+
+        var tail = head;
+        while (true)
+        {
+            FastArray.At(_pool, tail).SlotIndex = targetSlot;
+            if (FastArray.At(_pool, tail).Next == -1) break;
+            tail = FastArray.At(_pool, tail).Next;
+        }
+
+        ref var targetHead = ref FastArray.At(_wheel, targetSlot);
+        FastArray.At(_pool, tail).Next = targetHead;
+        if (targetHead != -1)
+        {
+            FastArray.At(_pool, targetHead).Prev = tail;
+        }
+
+        targetHead = head;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -257,6 +279,13 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         
         entry.ExpireTick = nextExpire;
         PlaceEntry(index);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private long NormalizeDelayTicks(float seconds)
+    {
+        if (float.IsNaN(seconds) || seconds <= 0) return 1;
+        return Math.Max(1, (long)MathF.Ceiling(seconds * _tickDurationReciprocal));
     }
 
 

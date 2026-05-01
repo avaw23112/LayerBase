@@ -47,15 +47,15 @@ internal static class SharedFieldBinder
                         item.Field,
                         value);
 
-                    participant.Layer.SharedFields.Add((item.ProvideAttribute.OwnerType, item.ProvideAttribute.LocalKey,
-                        item.Field.FieldType, true));
+                    participant.Layer.RecordSharedField(item.ProvideAttribute.OwnerType, item.ProvideAttribute.LocalKey,
+                        item.Field.FieldType, true);
                 }
 
                 if (item.FromAttribute != null)
                 {
                     pendingConsumers.Add((participant, item.Field, item.FromAttribute));
-                    participant.Layer.SharedFields.Add((item.FromAttribute.OwnerType, item.FromAttribute.LocalKey,
-                        item.Field.FieldType, false));
+                    participant.Layer.RecordSharedField(item.FromAttribute.OwnerType, item.FromAttribute.LocalKey,
+                        item.Field.FieldType, false);
                 }
             }
         }

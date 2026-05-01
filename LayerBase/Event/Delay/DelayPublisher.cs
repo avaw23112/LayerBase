@@ -11,6 +11,7 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
     private DelayTimerHandle _timerHandle = DelayTimerHandle.Invalid;
 
     private int _publisherId;
+    private bool _deactivated;
     private readonly DelayPublisherManager _manager;
     private readonly object _lock = new();
 
@@ -69,6 +70,9 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
 
         lock (_lock)
         {
+            if (_deactivated) throw new ObjectDisposedException(nameof(DelayPublisher<T>));
+            _manager.ThrowIfDisposed();
+
             var eventId = EventTypeId<T>.Id;
             var policy = _manager.PolicyTable?.GetBufferPolicy(eventId);
 
@@ -112,6 +116,15 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
     {
         lock (_lock)
         {
+            ClearInternal();
+        }
+    }
+
+    public void Deactivate()
+    {
+        lock (_lock)
+        {
+            _deactivated = true;
             ClearInternal();
         }
     }

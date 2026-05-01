@@ -35,6 +35,11 @@ public partial struct DelayOverflowRegressionEvent
     public int Value;
 }
 
+public partial struct LatestThrowingPayloadEvent
+{
+    public object? Value;
+}
+
 public class DropNewestMaxPendingEventMetaData : EventMetaData<DropNewestMaxPendingEvent>
 {
     public override EventPostPolicy? PostPolicy =>
@@ -118,6 +123,79 @@ public class RuntimeSafetyRegressionTests
     }
 
     [Test]
+    public void Reset_disposes_all_tracked_runtimes_before_reusing_runtime_ids()
+    {
+        DisposableProbeService.DisposeCount = 0;
+
+        var first = new DisposableProbeLayer();
+        first.RegisterService(new DisposableProbeRegistrar());
+        LayerHub.CreateLayers().Push(first).Build();
+
+        var second = new DisposableProbeLayer();
+        second.RegisterService(new DisposableProbeRegistrar());
+        LayerHub.CreateLayers().Push(second).Build();
+
+        LayerHub.Reset();
+
+        Assert.That(DisposableProbeService.DisposeCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void LayersBuilder_rejects_repeated_build_and_push_after_build()
+    {
+        var builder = LayerHub.CreateLayers().Push(new EmptyRegressionLayer());
+        builder.Build();
+
+        Assert.Throws<InvalidOperationException>(() => builder.Build());
+        Assert.Throws<InvalidOperationException>(() => builder.Push(new EmptyRegressionLayer()));
+    }
+
+    [Test]
+    public void Latest_flush_releases_payload_when_handler_throws()
+    {
+        var weak = CreateLatestPayloadAndThrowDuringFlush();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.That(weak.IsAlive, Is.False);
+    }
+
+    private static WeakReference CreateLatestPayloadAndThrowDuringFlush()
+    {
+        var options = new PostSchedulerOptions(readyCapacity: 8,
+            nextCapacity: 8,
+            maxEventsPerPump: 16,
+            maxMillisecondsPerPump: 0,
+            maxWavesPerPump: 1,
+            timeCheckInterval: 64,
+            defaultBackpressure: BackpressurePolicy.RejectNew);
+        var center = new EventCenter();
+        center.SubscribeNotify<LatestThrowingPayloadEvent>(0, (in LatestThrowingPayloadEvent _) =>
+            throw new InvalidOperationException("expected"));
+
+        var scheduler = new PostScheduler(252, center, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[]
+        {
+            new PostTypePlan(EventTypeId<LatestThrowingPayloadEvent>.Id,
+                PostDeliveryMode.Latest,
+                options.DefaultBackpressure,
+                maxPending: 0,
+                options.DefaultBackpressure)
+        });
+
+        object payload = new byte[1024 * 1024];
+        var weak = new WeakReference(payload);
+        scheduler.TryPost(new LatestThrowingPayloadEvent { Value = payload });
+        payload = null!;
+
+        Assert.Throws<InvalidOperationException>(() => scheduler.Pump());
+        scheduler.Dispose();
+        return weak;
+    }
+
+    [Test]
     public void DropNewest_does_not_consume_MaxPending_capacity_for_dropped_events()
     {
         EventMetaDataRegistry.RegisterMetaData<DropNewestMaxPendingEvent>(new DropNewestMaxPendingEventMetaData());
@@ -185,6 +263,53 @@ public class RuntimeSafetyRegressionTests
     }
 
     [Test]
+    public void TimeScheduler_expiration_cap_requeues_remaining_timers_to_next_tick()
+    {
+        var scheduler = new TimeScheduler<int>(new TimeSchedulerOptions(
+            tickDurationSeconds: 1,
+            wheelSize: 4,
+            initialTimerCapacity: 2,
+            longTimerThresholdSeconds: 4,
+            maxExpiredPerTick: 1,
+            maxPromotePerTick: 16,
+            defaultRepeatMode: TimerRepeatMode.Once,
+            defaultCatchUpPolicy: TimerCatchUpPolicy.SkipMissed));
+        var sink = new RecordingTimerSink();
+
+        scheduler.Schedule(1, delaySeconds: 1);
+        scheduler.Schedule(2, delaySeconds: 1);
+
+        scheduler.Tick(1.1f, sink);
+        Assert.That(sink.Values.Count, Is.EqualTo(1));
+
+        scheduler.Tick(1.1f, sink);
+        Assert.That(sink.Values.OrderBy(static x => x), Is.EqualTo(new[] { 1, 2 }));
+    }
+
+    [Test]
+    public void TimeScheduler_normalizes_non_positive_repeat_interval_to_one_tick()
+    {
+        var scheduler = new TimeScheduler<int>(new TimeSchedulerOptions(
+            tickDurationSeconds: 1,
+            wheelSize: 4,
+            initialTimerCapacity: 1,
+            longTimerThresholdSeconds: 4,
+            maxExpiredPerTick: 16,
+            maxPromotePerTick: 16,
+            defaultRepeatMode: TimerRepeatMode.FixedDelay,
+            defaultCatchUpPolicy: TimerCatchUpPolicy.SkipMissed));
+        var sink = new RecordingTimerSink();
+
+        scheduler.Schedule(7, delaySeconds: -1, repeatCount: 2, intervalSeconds: 0);
+
+        scheduler.Tick(1.1f, sink);
+        scheduler.Tick(1.1f, sink);
+        scheduler.Tick(1.1f, sink);
+
+        Assert.That(sink.Values, Is.EqualTo(new[] { 7, 7, 7 }));
+    }
+
+    [Test]
     public void Delay_expiration_cap_requeues_remaining_entries_instead_of_losing_them()
     {
         var first = new EmptyRegressionLayer();
@@ -241,6 +366,19 @@ public class RuntimeSafetyRegressionTests
 
         Assert.That(secondPublisher.TryGet(out var value), Is.True);
         Assert.That(value.Value, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void DelayPublisher_rejects_publish_after_owning_runtime_is_disposed()
+    {
+        var layer = new EmptyRegressionLayer();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
+        var publisher = layer.SubscribeDelay<DelayOverflowRegressionEvent>();
+
+        runtime.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() =>
+            publisher.Publish(new DelayOverflowRegressionEvent { Value = 1 }, 1));
     }
 
     private sealed class EmptyRegressionLayer : Layer
