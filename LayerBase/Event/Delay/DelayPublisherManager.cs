@@ -1,92 +1,90 @@
-﻿using LayerBase.Layers;
+using LayerBase.Core.Event;
+using LayerBase.Layers;
 
 namespace LayerBase.Event.Delay;
 
-internal interface IDelayPublisherUpdater
-{
-    Layer Owner { get; }
-    int ContractId { get; }
-    bool HasValue { get; }
-    void Update(float deltaTime);
-    void Reset();
-    void ClearValue();
-}
-
 internal sealed class DelayPublisherManager : IDelayPublisherManager
 {
+    private readonly List<IDelayPublisherInternal> _publishers = new();
+    private readonly Dictionary<DelayContractKey, int> _contractToActivePublisher = new();
+    private readonly DelayBufferWheel _wheel;
     private readonly object _lock = new();
-    private readonly List<IDelayPublisherUpdater> _publishers = new(64);
-    private readonly HashSet<IDelayPublisherUpdater> _set = new();
 
-    private DelayPublisherManager()
+    public static DelayPublisherManager Instance { get; private set; } = null!;
+
+    public EventRuntimePolicyTable? PolicyTable { get; private set; }
+
+    internal static void Initialize(DelayBufferOptions options, EventRuntimePolicyTable policyTable)
     {
+        Instance = new DelayPublisherManager(options, policyTable);
     }
 
-    public static DelayPublisherManager Instance { get; } = new();
-
-    public void Update(float deltaTime)
+    private DelayPublisherManager(DelayBufferOptions options, EventRuntimePolicyTable policyTable)
     {
-        if (deltaTime < 0)
-            throw new ArgumentOutOfRangeException(nameof(deltaTime));
+        _wheel = new DelayBufferWheel(options, this);
+        PolicyTable = policyTable;
+    }
 
+    public int RegisterPublisher(IDelayPublisherInternal publisher)
+    {
         lock (_lock)
         {
-            for (var i = 0; i < _publishers.Count; i++) _publishers[i].Update(deltaTime);
+            int id = _publishers.Count;
+            _publishers.Add(publisher);
+            return id;
         }
     }
+
+    public DelayTimerHandle ScheduleExpire(int publisherId, int valueVersion, float ttlSeconds, DelayTimerHandle oldHandle)
+    {
+        if (oldHandle.IsValid) _wheel.Cancel(oldHandle);
+        return _wheel.Schedule(publisherId, valueVersion, ttlSeconds);
+    }
+
+    public void Tick(float deltaTime)
+    {
+        _wheel.Tick(deltaTime);
+    }
+
+    internal void ExpirePublisher(int publisherId, int valueVersion)
+    {
+        IDelayPublisherInternal? pub = null;
+        lock (_lock)
+        {
+            if (publisherId >= 0 && publisherId < _publishers.Count)
+            {
+                pub = _publishers[publisherId];
+            }
+        }
+        pub?.TryExpire(valueVersion);
+    }
+
+    public void NotifyPublished(int publisherId, int contractId)
+    {
+        if (contractId == 0) return;
+        
+        var key = new DelayContractKey(0, contractId);
+        lock (_lock)
+        {
+            if (_contractToActivePublisher.TryGetValue(key, out int activeId))
+            {
+                if (activeId != publisherId)
+                {
+                    _publishers[activeId].ClearValue();
+                }
+            }
+            _contractToActivePublisher[key] = publisherId;
+        }
+    }
+
+    public void Update(float deltaTime) => Tick(deltaTime);
 
     public void Clear()
     {
         lock (_lock)
         {
-            foreach (var publisher in _publishers) publisher.Reset();
-            _publishers.Clear();
-            _set.Clear();
-        }
-    }
-
-    internal void Register(IDelayPublisherUpdater publisher)
-    {
-        if (publisher == null) throw new ArgumentNullException(nameof(publisher));
-
-        lock (_lock)
-        {
-            if (_set.Add(publisher)) _publishers.Add(publisher);
-        }
-    }
-
-    internal void Unregister(IDelayPublisherUpdater publisher)
-    {
-        if (publisher == null) return;
-        lock (_lock)
-        {
-            if (_set.Remove(publisher)) _publishers.Remove(publisher);
-        }
-    }
-
-    internal void UnregisterRange(IEnumerable<IDelayPublisherUpdater> publishers)
-    {
-        if (publishers == null) return;
-        lock (_lock)
-        {
-            foreach (var publisher in publishers)
-                if (_set.Remove(publisher))
-                    _publishers.Remove(publisher);
-        }
-    }
-
-    internal void NotifyPublished(Layer owner, int contractId, IDelayPublisherUpdater source)
-    {
-        if (contractId == 0) return;
-
-        lock (_lock)
-        {
-            for (var i = 0; i < _publishers.Count; i++)
-            {
-                var pub = _publishers[i];
-                if (!ReferenceEquals(pub, source) && ReferenceEquals(pub.Owner, owner) && pub.HasValue &&
-                    pub.ContractId == contractId) pub.ClearValue();
-            }
+            foreach (var pub in _publishers) pub.ClearValue();
+            _contractToActivePublisher.Clear();
         }
     }
 }

@@ -72,6 +72,15 @@ internal static class EventMetaDataHandler
         s_pendingExpectations.Enqueue(new EventExpectation<EventType>(metaData, in e, exception));
     }
 
+    internal static IEnumerable<(Type Type, IEventMetaData MetaData)> GetAllMetaData()
+    {
+        var byType = Volatile.Read(ref s_metaDataByType);
+        foreach (var kvp in byType)
+        {
+            yield return (kvp.Key, kvp.Value);
+        }
+    }
+
     private static IEventMetaData? ResolveMetaData<EventType>() where EventType : struct
     {
         var version = Volatile.Read(ref s_registryVersion);

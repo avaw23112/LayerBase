@@ -1,170 +1,111 @@
+using LayerBase.Core.Event;
 using LayerBase.Layers;
 
 namespace LayerBase.Event.Delay;
 
-internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherUpdater where T : struct
+internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInternal where T : struct
 {
-    private int _contractId;
-    private DelayDirection _direction;
-    private int _ttlBits;
     private T _value;
-    private int _version;
-    private int _writeLock;
+    private bool _hasValue;
+    private int _valueVersion;
+    private DelayTimerHandle _timerHandle = DelayTimerHandle.Invalid;
+    
+    private int _publisherId;
+    private readonly DelayPublisherManager _manager;
+    private readonly object _lock = new();
 
-    public DelayPublisher(Layer owner)
+    public DelayPublisher(DelayPublisherManager manager, Layer owner)
     {
+        _manager = manager;
         Owner = owner;
     }
 
+    internal void SetId(int id) => _publisherId = id;
+
+    public Layer Owner { get; }
+
     public bool HasValue
     {
-        get
-        {
-            while (true)
-            {
-                var before = Volatile.Read(ref _version);
-                if ((before & 1) != 0)
-                {
-                    Thread.Yield();
-                    continue;
-                }
-
-                var ttlBits = Volatile.Read(ref _ttlBits);
-                var after = Volatile.Read(ref _version);
-                if (before == after) return BitConverter.Int32BitsToSingle(ttlBits) > 0;
-            }
-        }
+        get { lock (_lock) return _hasValue; }
     }
 
-    public DelayDirection Direction
-    {
-        get
-        {
-            while (true)
-            {
-                var before = Volatile.Read(ref _version);
-                if ((before & 1) != 0)
-                {
-                    Thread.Yield();
-                    continue;
-                }
+    public DelayDirection Direction => DelayDirection.None;
 
-                var direction = _direction;
-                var after = Volatile.Read(ref _version);
-                if (before == after) return direction;
-            }
-        }
-    }
-
-    public int ContractId
-    {
-        get
-        {
-            while (true)
-            {
-                var before = Volatile.Read(ref _version);
-                if ((before & 1) != 0)
-                {
-                    Thread.Yield();
-                    continue;
-                }
-
-                var contractId = _contractId;
-                var after = Volatile.Read(ref _version);
-                if (before == after) return contractId;
-            }
-        }
-    }
+    public int ContractId { get; private set; }
 
     public bool TryGet(out T value)
     {
-        while (true)
+        lock (_lock)
         {
-            var before = Volatile.Read(ref _version);
-            if ((before & 1) != 0)
-            {
-                Thread.Yield();
-                continue;
-            }
-
-            var ttlBits = Volatile.Read(ref _ttlBits);
-            var snapshot = _value;
-            var after = Volatile.Read(ref _version);
-            if (before != after) continue;
-
-            if (BitConverter.Int32BitsToSingle(ttlBits) <= 0)
+            if (!_hasValue)
             {
                 value = default;
                 return false;
             }
-
-            value = snapshot;
+            value = _value;
             return true;
         }
     }
 
     public bool TryTake(out T value)
     {
-        AcquireWrite();
-        try
+        lock (_lock)
         {
-            BeginWrite();
-            if (BitConverter.Int32BitsToSingle(_ttlBits) <= 0)
+            if (!_hasValue)
             {
-                EndWrite();
                 value = default;
                 return false;
             }
-
             value = _value;
-            ClearFields();
-            EndWrite();
+            ClearInternal();
             return true;
-        }
-        finally
-        {
-            ReleaseWrite();
         }
     }
 
-    public Layer Owner { get; }
-
-    public void Update(float deltaTime)
+    public void Publish(in T value, float ttlSeconds, int contractId = 0)
     {
-        AcquireWrite();
-        try
+        lock (_lock)
         {
-            BeginWrite();
-            var current = BitConverter.Int32BitsToSingle(_ttlBits);
-            if (current > 0)
-            {
-                var next = current - deltaTime;
-                if (next > 0)
-                    _ttlBits = BitConverter.SingleToInt32Bits(next);
-                else
-                    ClearFields();
-            }
+            var eventId = EventTypeId<T>.Id;
+            var policy = _manager.PolicyTable?.GetBufferPolicy(eventId);
+            
+            float finalTtl = ttlSeconds > 0 ? ttlSeconds : (policy?.DefaultTtlSeconds ?? 0.5f);
+            int finalContractId = contractId != 0 ? contractId : (policy?.UseContractReplace == true ? eventId : 0);
 
-            EndWrite();
+            _value = value;
+            _hasValue = true;
+            _valueVersion++;
+            ContractId = finalContractId;
+            
+            if (finalContractId != 0)
+            {
+                _manager.NotifyPublished(_publisherId, finalContractId);
+            }
+            
+            _timerHandle = _manager.ScheduleExpire(_publisherId, _valueVersion, finalTtl, _timerHandle);
         }
-        finally
+    }
+
+    public void Publish(in T value, float ttlSeconds, DelayDirection direction, int contractId = 0)
+    {
+        Publish(value, ttlSeconds, contractId);
+    }
+
+    public bool TryExpire(int valueVersion)
+    {
+        lock (_lock)
         {
-            ReleaseWrite();
+            if (!_hasValue || _valueVersion != valueVersion) return false;
+            ClearInternal();
+            return true;
         }
     }
 
     public void ClearValue()
     {
-        AcquireWrite();
-        try
+        lock (_lock)
         {
-            BeginWrite();
-            ClearFields();
-            EndWrite();
-        }
-        finally
-        {
-            ReleaseWrite();
+            ClearInternal();
         }
     }
 
@@ -173,52 +114,11 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherUpd
         ClearValue();
     }
 
-    internal void Publish(in T value, float ttlSeconds, DelayDirection direction, int contractId = 0)
+    private void ClearInternal()
     {
-        AcquireWrite();
-        try
-        {
-            BeginWrite();
-            _value = value;
-            _ttlBits = BitConverter.SingleToInt32Bits(ttlSeconds);
-            _direction = direction;
-            _contractId = contractId;
-            EndWrite();
-        }
-        finally
-        {
-            ReleaseWrite();
-        }
-    }
-
-    private void AcquireWrite()
-    {
-        var spin = new SpinWait();
-        while (Interlocked.CompareExchange(ref _writeLock, 1, 0) != 0) spin.SpinOnce();
-    }
-
-    private void ReleaseWrite()
-    {
-        Volatile.Write(ref _writeLock, 0);
-    }
-
-    private void BeginWrite()
-    {
-        var version = Volatile.Read(ref _version);
-        if ((version & 1) == 0) version++;
-        Volatile.Write(ref _version, version);
-    }
-
-    private void EndWrite()
-    {
-        Volatile.Write(ref _version, Volatile.Read(ref _version) + 1);
-    }
-
-    private void ClearFields()
-    {
-        _ttlBits = 0;
+        _hasValue = false;
         _value = default;
-        _direction = DelayDirection.None;
-        _contractId = 0;
+        _timerHandle = DelayTimerHandle.Invalid;
+        ContractId = 0;
     }
 }

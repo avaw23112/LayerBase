@@ -5,6 +5,7 @@ using LayerBase.Call;
 using LayerBase.Core.Event;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
+using LayerBase.Event.Delay;
 using LayerBase.Layers;
 
 namespace LayerBase;
@@ -21,6 +22,15 @@ public sealed class LayerRuntime : IDisposable
 
     public int Id => _id;
     public GlobalEventCenter EventCenter { get; internal set; }
+    
+    private PostScheduler? _scheduler;
+    public PostScheduler Scheduler => _scheduler ?? throw new InvalidOperationException("Runtime not built.");
+
+    private TimeScheduler<ITimerAction>? _timer;
+    public TimeScheduler<ITimerAction> Timer => _timer ?? throw new InvalidOperationException("Runtime not built.");
+    
+    private RuntimeTimerSink? _timerSink;
+
     public bool IsDebugMode { get; internal set; }
     public event Action<LayerEventInfo>? OnLayerEventInfo;
 
@@ -29,6 +39,48 @@ public sealed class LayerRuntime : IDisposable
         _id = id;
         EventCenter = new GlobalEventCenter();
         LayerHub.Internal_Register(this);
+    }
+
+    private EventRuntimePolicyTable? _policyTable;
+    public EventRuntimePolicyTable PolicyTable => _policyTable ?? throw new InvalidOperationException("Runtime not built.");
+
+    internal void InitializeScheduler(PostSchedulerOptions options)
+    {
+        _policyTable = new EventRuntimePolicyTable(options.DefaultBackpressure);
+        foreach (var (type, meta) in LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData())
+        {
+            var eventId = EventTypeId.GetId(type);
+            
+            var postPolicy = meta.GetPostPolicy();
+            if (postPolicy != null)
+            {
+                _policyTable.SetPostPolicy(eventId, postPolicy.Value);
+            }
+
+            var timerPolicy = meta.GetTimerPolicy();
+            if (timerPolicy != null)
+            {
+                _policyTable.SetTimerPolicy(eventId, timerPolicy.Value);
+            }
+
+            var bufferPolicy = meta.GetBufferPolicy();
+            if (bufferPolicy != null)
+            {
+                _policyTable.SetBufferPolicy(eventId, bufferPolicy.Value);
+            }
+        }
+        _scheduler = new PostScheduler(EventCenter, options, _policyTable);
+    }
+
+    internal void InitializeTimer(TimeSchedulerOptions options)
+    {
+        _timer = new TimeScheduler<ITimerAction>(options);
+        _timerSink = new RuntimeTimerSink(_scheduler!, _policyTable!);
+    }
+
+    internal void InitializeDelay(DelayBufferOptions options)
+    {
+        DelayPublisherManager.Initialize(options, _policyTable!);
     }
 
     internal int GetNextLayerIndex()
@@ -40,6 +92,16 @@ public sealed class LayerRuntime : IDisposable
     {
         if (_disposed) return;
         _context?.Update();
+        
+        // 1. Time tick
+        _timer?.Tick(deltaTime, _timerSink!);
+        
+        // 2. Delay tick (Stage 4)
+        DelayPublisherManager.Instance?.Tick(deltaTime);
+        
+        // 3. Post pump
+        _scheduler?.Pump();
+        
         _chain?.Pump(deltaTime);
     }
 
@@ -70,7 +132,22 @@ public sealed class LayerRuntime : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Post<T>(in T value) where T : struct
     {
-        EventCenter.Post(value);
+        Scheduler.TryPost(value);
+    }
+
+    public TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
+    {
+        var eventId = EventTypeId.GetId(typeof(T));
+        var timerPolicy = _policyTable?.GetTimerPolicy(eventId);
+        
+        return Timer.Schedule(
+            new PostEventAction<T>(value, timerPolicy?.ExpiredPostPolicy), 
+            delaySeconds,
+            repeatCount: 0,
+            intervalSeconds: 0,
+            repeatMode: timerPolicy?.RepeatMode,
+            catchUpPolicy: timerPolicy?.CatchUpPolicy
+        );
     }
 
     public LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer
@@ -142,6 +219,9 @@ public sealed class LayerRuntime : IDisposable
         _disposed = true;
         _chain?.DisposeLayers();
         _chain = null;
+        _scheduler?.Dispose();
+        _timer?.Dispose();
+        DelayPublisherManager.Instance?.Clear();
         EventCenter.Reset();
         _context?.Dispose();
         LayerHub.Internal_Unregister(this);
@@ -330,6 +410,9 @@ public sealed class LayerRuntime : IDisposable
         private bool _debugMode;
         private LayerChain? _layerChain;
         private int _pendingLayerCount;
+        private PostSchedulerOptions _postOptions = PostSchedulerOptions.Default;
+        private TimeSchedulerOptions _timerOptions = TimeSchedulerOptions.Default;
+        private DelayBufferOptions _delayOptions = DelayBufferOptions.Default;
 
         internal LayersBuilder(LayerRuntime runtime) => _runtime = runtime;
 
@@ -358,6 +441,24 @@ public sealed class LayerRuntime : IDisposable
             return this;
         }
 
+        public LayersBuilder SetPostOptions(PostSchedulerOptions options)
+        {
+            _postOptions = options;
+            return this;
+        }
+
+        public LayersBuilder SetTimerOptions(TimeSchedulerOptions options)
+        {
+            _timerOptions = options;
+            return this;
+        }
+
+        public LayersBuilder SetDelayOptions(DelayBufferOptions options)
+        {
+            _delayOptions = options;
+            return this;
+        }
+
         public LayerRuntime Build()
         {
             if (_layerChain == null) throw new InvalidOperationException("No layers added.");
@@ -368,6 +469,9 @@ public sealed class LayerRuntime : IDisposable
                 _runtime._context = LayerBaseSynchronizationContext.Install();
 
             _layerChain.Build(1024, true);
+            _runtime.InitializeScheduler(_postOptions);
+            _runtime.InitializeTimer(_timerOptions);
+            _runtime.InitializeDelay(_delayOptions);
 
             if (_debugMode)
             {
@@ -431,5 +535,17 @@ public sealed class LayerRuntime : IDisposable
 
             return LBTask<TResponse>.FromException(error!);
         }
+    }
+
+    private sealed class RuntimeTimerSink : IExpiredTimerSink<ITimerAction>
+    {
+        private readonly PostScheduler _scheduler;
+        private readonly EventRuntimePolicyTable _policyTable;
+        public RuntimeTimerSink(PostScheduler scheduler, EventRuntimePolicyTable policyTable)
+        {
+            _scheduler = scheduler;
+            _policyTable = policyTable;
+        }
+        public bool TryAcceptExpired(in ITimerAction payload, TimerHandle handle) => payload.Execute(_scheduler);
     }
 }

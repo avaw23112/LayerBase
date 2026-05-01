@@ -37,8 +37,7 @@ public abstract class Layer : Node, IDisposable
     private readonly List<RegisteredService> m_activeServices = new();
     private readonly object m_callRouteLock = new();
 
-    private readonly ConcurrentDictionary<Type, IDelayPublisherUpdater> m_delayPublishers = new();
-    private readonly List<IDelayPublisherUpdater> m_delayUpdaters = new();
+    private readonly ConcurrentDictionary<Type, IDelayPublisherInternal> m_delayPublishers = new();
     private readonly List<RegisteredService> m_manualServices = new();
 
     private readonly HashSet<Type> m_registeredServiceTypes = new();
@@ -82,7 +81,7 @@ public abstract class Layer : Node, IDisposable
 
 
     public virtual bool HasActiveLogic =>
-        m_serviceUpdates.Count > 0 || m_delayUpdaters.Count > 0;
+        m_serviceUpdates.Count > 0 || m_delayPublishers.Count > 0;
 
     /// <summary>
     /// 释放 Layer 资源。
@@ -155,7 +154,6 @@ public abstract class Layer : Node, IDisposable
         }
 
         m_delayPublishers.Clear();
-        m_delayUpdaters.Clear();
         m_serviceUpdates.Clear();
         m_activeServices.Clear();
         m_resolvedServices.Clear();
@@ -269,7 +267,6 @@ public abstract class Layer : Node, IDisposable
 
     public virtual void Pump(float deltaTime)
     {
-        for (var i = 0; i < m_delayUpdaters.Count; i++) m_delayUpdaters[i].Update(deltaTime);
         for (var i = 0; i < m_serviceUpdates.Count; i++) m_serviceUpdates[i].Update();
     }
 
@@ -374,16 +371,14 @@ public abstract class Layer : Node, IDisposable
         var type = typeof(T);
         if (m_delayPublishers.TryGetValue(type, out var existing)) return (IDelayPublisher<T>)existing;
 
-        var publisher = new DelayPublisher<T>(this);
-        var actual = m_delayPublishers.GetOrAdd(type, publisher);
-        if (ReferenceEquals(actual, publisher))
-        {
-            lock (m_delayUpdaters)
-            {
-                m_delayUpdaters.Add(publisher);
-            }
-        }
+        var manager = DelayPublisherManager.Instance;
+        if (manager == null) throw new InvalidOperationException("DelayPublisherManager not initialized.");
 
+        var publisher = new DelayPublisher<T>(manager, this);
+        int id = manager.RegisterPublisher(publisher);
+        publisher.SetId(id);
+
+        var actual = m_delayPublishers.GetOrAdd(type, publisher);
         return (IDelayPublisher<T>)actual;
     }
 
@@ -503,7 +498,7 @@ public abstract class Layer : Node, IDisposable
     public void Post<T>(in T value) where T : struct
     {
         if (OwnerContext == null) throw new InvalidOperationException("Layer not attached to context.");
-        OwnerContext.EventCenter.Post(value);
+        OwnerContext.Post(value);
     }
 
 
