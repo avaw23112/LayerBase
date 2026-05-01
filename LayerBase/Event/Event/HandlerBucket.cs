@@ -114,7 +114,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     }
 
 
-    public void AddParallel(IEventHandler<T> h, Action<int, string, string, Exception> re)
+    public void AddParallel(IEventHandler<T> h, Action<int, int, int, Exception> re)
     {
         lock (_lock)
         {
@@ -123,7 +123,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         }
     }
 
-    public void AddParallel(EventNotifyDelegate<T> h, Action<int, string, string, Exception> re)
+    public void AddParallel(EventNotifyDelegate<T> h, Action<int, int, int, Exception> re)
     {
         lock (_lock)
         {
@@ -228,30 +228,21 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
 internal readonly struct NotifyHandlerEntry<T> where T : struct
 {
     public readonly EventNotifyDelegate<T> Handler;
-    public readonly string FullName;
+    public readonly int HandlerNameId;
     public readonly HandlerCircuit Circuit;
     public readonly object? Source;
 
-    private NotifyHandlerEntry(EventNotifyDelegate<T> h, string n, HandlerCircuit c, object? src)
+    private NotifyHandlerEntry(EventNotifyDelegate<T> h, int n, HandlerCircuit c, object? src)
     {
         Handler = h;
-        FullName = n;
+        HandlerNameId = n;
         Circuit = c;
         Source = src;
     }
 
     public static NotifyHandlerEntry<T> Create(EventNotifyDelegate<T> h)
     {
-        return new NotifyHandlerEntry<T>(h, GetName(h), new HandlerCircuit(), null);
-    }
-
-    private static string GetName(Delegate d)
-    {
-        var m = d.Method;
-        var t = m.DeclaringType?.FullName ?? d.Target?.GetType()?.FullName ?? "Global";
-        var nm = m.Name;
-        if (nm.StartsWith("<") && nm.Contains(">")) nm = "lambda";
-        return $"{t}.{nm}";
+        return new NotifyHandlerEntry<T>(h, HandlerNameSymbol.FromDelegate(h), new HandlerCircuit(), null);
     }
 }
 
@@ -259,34 +250,25 @@ internal readonly struct OrderedHandlerEntry<T> where T : struct
 {
     public readonly EventHandleDelegate<T>? SyncHandler;
     public readonly EventHandleDelegateAsync<T>? AsyncHandler;
-    public readonly string FullName;
+    public readonly int HandlerNameId;
     public readonly HandlerCircuit Circuit;
 
-    private OrderedHandlerEntry(EventHandleDelegate<T>? s, EventHandleDelegateAsync<T>? a, string n, HandlerCircuit c)
+    private OrderedHandlerEntry(EventHandleDelegate<T>? s, EventHandleDelegateAsync<T>? a, int n, HandlerCircuit c)
     {
         SyncHandler = s;
         AsyncHandler = a;
-        FullName = n;
+        HandlerNameId = n;
         Circuit = c;
     }
 
     public static OrderedHandlerEntry<T> Create(EventHandleDelegate<T> h)
     {
-        return new OrderedHandlerEntry<T>(h, null, GetName(h), new HandlerCircuit());
+        return new OrderedHandlerEntry<T>(h, null, HandlerNameSymbol.FromDelegate(h), new HandlerCircuit());
     }
 
     public static OrderedHandlerEntry<T> Create(EventHandleDelegateAsync<T> h)
     {
-        return new OrderedHandlerEntry<T>(null, h, GetName(h), new HandlerCircuit());
-    }
-
-    private static string GetName(Delegate d)
-    {
-        var m = d.Method;
-        var t = m.DeclaringType?.FullName ?? d.Target?.GetType()?.FullName ?? "Global";
-        var nm = m.Name;
-        if (nm.StartsWith("<") && nm.Contains(">")) nm = "lambda";
-        return $"{t}.{nm}";
+        return new OrderedHandlerEntry<T>(null, h, HandlerNameSymbol.FromDelegate(h), new HandlerCircuit());
     }
 }
 
@@ -294,16 +276,16 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
 {
     public readonly EventHandleDelegate<T>? SyncWrapper;
     public readonly EventHandleDelegateAsync<T>? AsyncWrapper;
-    public readonly string FullName;
+    public readonly int HandlerNameId;
     public readonly HandlerCircuit Circuit;
     public readonly object Source;
 
-    private UnorderedHandlerEntry(EventHandleDelegate<T>? s, EventHandleDelegateAsync<T>? a, string n, HandlerCircuit c,
+    private UnorderedHandlerEntry(EventHandleDelegate<T>? s, EventHandleDelegateAsync<T>? a, int n, HandlerCircuit c,
                                   object                  src)
     {
         SyncWrapper = s;
         AsyncWrapper = a;
-        FullName = n;
+        HandlerNameId = n;
         Circuit = c;
         Source = src;
     }
@@ -313,7 +295,7 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
         return new UnorderedHandlerEntry<T>(
             new SyncHandlerWrapper<T>(h).Invoke,
             null,
-            h.GetType().Name,
+            HandlerNameSymbol.FromInstance(h),
             new HandlerCircuit(),
             h);
     }
@@ -323,7 +305,7 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
         return new UnorderedHandlerEntry<T>(
             null,
             new AsyncHandlerWrapper<T>(h).Invoke,
-            h.GetType().Name,
+            HandlerNameSymbol.FromInstance(h),
             new HandlerCircuit(),
             h);
     }
@@ -373,12 +355,12 @@ internal readonly struct ParallelHandlerEntry<T> where T : struct
         _q = q;
     }
 
-    public static ParallelHandlerEntry<T> Create(IEventHandler<T> h, Action<int, string, string, Exception> re)
+    public static ParallelHandlerEntry<T> Create(IEventHandler<T> h, Action<int, int, int, Exception> re)
     {
         return new ParallelHandlerEntry<T>(new ParallelSubscriptionQueue<T>(h, re));
     }
 
-    public static ParallelHandlerEntry<T> Create(EventNotifyDelegate<T> h, Action<int, string, string, Exception> re)
+    public static ParallelHandlerEntry<T> Create(EventNotifyDelegate<T> h, Action<int, int, int, Exception> re)
     {
         return new ParallelHandlerEntry<T>(new ParallelSubscriptionQueue<T>(h, re));
     }
@@ -418,29 +400,29 @@ internal readonly struct ParallelHandlerEntry<T> where T : struct
 internal sealed class ParallelSubscriptionQueue<T> where T : struct
 {
     private readonly Action _drainInstance;
-    private readonly string _eName, _fName;
-    private readonly Action<int, string, string, Exception> _err;
+    private readonly int _eventNameId, _handlerNameId;
+    private readonly Action<int, int, int, Exception> _err;
     private readonly ConcurrentQueue<T> _evs = new();
     private readonly EventNotifyDelegate<T>? _sd;
     private readonly IEventHandler<T>? _sh;
     public readonly HandlerCircuit Circuit = new();
     private int _lIdx, _sched;
 
-    public ParallelSubscriptionQueue(IEventHandler<T> h, Action<int, string, string, Exception> re)
+    public ParallelSubscriptionQueue(IEventHandler<T> h, Action<int, int, int, Exception> re)
     {
         _sh = h;
         _err = re;
-        _fName = h.GetType().Name;
-        _eName = typeof(T).Name;
+        _handlerNameId = HandlerNameSymbol.FromInstance(h);
+        _eventNameId = EventTypeSymbol<T>.NameId;
         _drainInstance = Drain;
     }
 
-    public ParallelSubscriptionQueue(EventNotifyDelegate<T> h, Action<int, string, string, Exception> re)
+    public ParallelSubscriptionQueue(EventNotifyDelegate<T> h, Action<int, int, int, Exception> re)
     {
         _sd = h;
         _err = re;
-        _fName = "Delegate";
-        _eName = typeof(T).Name;
+        _handlerNameId = HandlerNameSymbol.FromDelegate(h);
+        _eventNameId = EventTypeSymbol<T>.NameId;
         _drainInstance = Drain;
     }
 
@@ -500,7 +482,7 @@ internal sealed class ParallelSubscriptionQueue<T> where T : struct
                 catch (Exception e)
                 {
                     EventMetaDataHandler.OnEventExpectation(p, e);
-                    if (Circuit.TryDisable()) _err(_lIdx, _fName, _eName, e);
+                    if (Circuit.TryDisable()) _err(_lIdx, _handlerNameId, _eventNameId, e);
                     break;
                 }
             }

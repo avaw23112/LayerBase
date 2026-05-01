@@ -211,7 +211,29 @@ public static class LayerHub
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void ReportLayerEventError(int layerIndex, string source, string eventName, Exception ex)
     {
-        Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
+        if (s_primaryRuntime != null)
+        {
+            s_primaryRuntime.ReportLayerEventError(layerIndex, source, eventName, ex);
+        }
+        else
+        {
+            Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void ReportLayerEventError(int layerIndex, int sourceId, int eventNameId, Exception ex)
+    {
+        if (s_primaryRuntime != null)
+        {
+            s_primaryRuntime.ReportLayerEventError(layerIndex, sourceId, eventNameId, ex);
+        }
+        else
+        {
+            var source = EventDiagnosticSymbols.Resolve(sourceId);
+            var eventName = EventDiagnosticSymbols.Resolve(eventNameId);
+            Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -57,7 +57,7 @@ public readonly struct LayerEventStream<T> where T : struct
     }
 
 
-    public void HandleParallel(EventNotifyDelegate<T> handler, Action<int, string, string, Exception> reportError)
+    public void HandleParallel(EventNotifyDelegate<T> handler, Action<int, int, int, Exception> reportError)
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
         if (_predicate == null)

@@ -341,8 +341,8 @@ public abstract class Layer : Node, IDisposable
         return new LayerEventStream<T>(this);
     }
 
-    public void SubscribeParallel<T>(EventNotifyDelegate<T>                  handler,
-                                     Action<int, string, string, Exception>? reportError = null) where T : struct
+    public void SubscribeParallel<T>(EventNotifyDelegate<T>               handler,
+                                     Action<int, int, int, Exception>? reportError = null) where T : struct
     {
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)

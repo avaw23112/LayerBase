@@ -157,11 +157,11 @@ public static class ServiceExtensions
     }
 
     public static void SubscribeParallel<TValue>(this IService service, EventNotifyDelegate<TValue> handler,
-                                                 Action<int, string, string, Exception>? reportError = null)
+                                                 Action<int, int, int, Exception>? reportError = null)
         where TValue : struct
     {
         service.GetLayer()
-               .SubscribeParallel(handler, reportError ?? LayerHub.ReportLayerEventError);
+               .SubscribeParallel(handler, reportError);
     }
 
 
@@ -219,11 +219,11 @@ public static class LayerContextExtensions
     }
 
     public static void SubscribeParallel<TValue>(this ILayerContext service, EventNotifyDelegate<TValue> handler,
-                                                 Action<int, string, string, Exception>? reportError = null)
+                                                 Action<int, int, int, Exception>? reportError = null)
         where TValue : struct
     {
         service.GetLayer()
-               .SubscribeParallel(handler, reportError ?? LayerHub.ReportLayerEventError);
+               .SubscribeParallel(handler, reportError);
     }
 
     public static LayerEventStream<TValue> OnEvent<TValue>(this ILayerContext service) where TValue : struct

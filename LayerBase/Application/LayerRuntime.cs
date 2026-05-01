@@ -140,6 +140,14 @@ public sealed class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void ReportLayerEventError(int layerIndex, int sourceId, int eventNameId, Exception ex)
+    {
+        var source = EventDiagnosticSymbols.Resolve(sourceId);
+        var eventName = EventDiagnosticSymbols.Resolve(eventNameId);
+        ReportInfo(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void ReportWarning(int layerIndex, string source, string eventName, string message)
     {
         ReportInfo(new LayerEventInfo(layerIndex, source, eventName, message, LayerEventInfoType.Warning));
