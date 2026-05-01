@@ -65,6 +65,16 @@ internal sealed class EventStore<T> : IEventStore where T : struct
         }
     }
 
+    public ref T GetRef(int index, int version)
+    {
+        // Internal use, assuming lock is held by caller if needed or handled by design.
+        // Actually, PostScheduler uses _bufferLock for coalescing.
+        if (index < 0 || index >= _capacity || _versions[index] != version)
+            throw new InvalidOperationException("Invalid payload handle");
+        
+        return ref _buffer[index];
+    }
+
     public void Release(int index, int version)
     {
         lock (_lock)
@@ -126,6 +136,15 @@ internal sealed class EventPayloadStorage : IDisposable
         var typeId = EventTypeId<T>.Id;
         var store = (EventStore<T>)_stores.GetOrAdd(typeId, _ => new EventStore<T>());
         return store.Add(in payload);
+    }
+
+    public ref T GetRef<T>(PayloadHandle handle) where T : struct
+    {
+        if (_stores.TryGetValue(handle.EventTypeId, out var store))
+        {
+            return ref ((EventStore<T>)store).GetRef(handle.Index, handle.Version);
+        }
+        throw new InvalidOperationException("Store not found");
     }
 
     public void EnsureStore<T>() where T : struct

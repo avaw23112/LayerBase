@@ -77,7 +77,7 @@ public class DelayPublisherTests
         var publisher = layer.SubscribeDelay<DelayTestEvent>();
 
         Assert.That(publisher.HasValue, Is.True);
-        layer.Pump(0.1f);
+        LayerHub.Pump(0.1f);
         Assert.That(publisher.HasValue, Is.False);
     }
 

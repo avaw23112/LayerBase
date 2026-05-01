@@ -18,6 +18,13 @@ public class Phase5Benchmarks
     {
         public override EventPostPolicy? PostPolicy => new EventPostPolicy(PostDeliveryMode.Normal, BackpressurePolicy.RejectNew, 0);
         public override EventBufferPolicy? BufferPolicy => new EventBufferPolicy(BufferMode.Latest, 0.5f, 1, BufferOverflowPolicy.ReplaceLatest, false);
+
+        public override int GetPostCoalesceKey(in BenchEvent value) => value.Value % 10;
+        public override bool TryMergePostEvent(ref BenchEvent current, in BenchEvent next)
+        {
+            current.Value += next.Value;
+            return true;
+        }
     }
 
     [GlobalSetup]
@@ -41,6 +48,17 @@ public class Phase5Benchmarks
         for (int i = 0; i < 100000; i++)
         {
             _scheduler.TryPost(new BenchEvent { Value = i });
+        }
+        _scheduler.Pump();
+    }
+
+    [Benchmark(OperationsPerInvoke = 100000)]
+    public void PostCoalesced_DataMerging()
+    {
+        for (int i = 0; i < 100000; i++)
+        {
+            // Merging into 10 different slots
+            _scheduler.TryPost(new BenchEvent { Value = i }, new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0));
         }
         _scheduler.Pump();
     }

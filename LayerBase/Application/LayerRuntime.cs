@@ -49,9 +49,10 @@ public sealed class LayerRuntime : IDisposable
         _policyTable = new EventRuntimePolicyTable(options.DefaultBackpressure);
         foreach (var (type, meta) in LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData())
         {
-            var eventId = EventTypeId.GetId(type);
+            var eventId = meta.EventId;
             
             var postPolicy = meta.GetPostPolicy();
+            _policyTable.SetMetaData(eventId, meta);
             if (postPolicy != null)
             {
                 _policyTable.SetPostPolicy(eventId, postPolicy.Value);
@@ -135,9 +136,27 @@ public sealed class LayerRuntime : IDisposable
         Scheduler.TryPost(value);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void MarkDirty<T>() where T : struct
+    {
+        Scheduler.MarkDirty<T>();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void PostLatest<T>(in T value) where T : struct
+    {
+        Scheduler.TryPost(value, new EventPostPolicy(PostDeliveryMode.Latest, BackpressurePolicy.RejectNew, 0));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void PostCoalesced<T>(in T value) where T : struct
+    {
+        Scheduler.TryPost(value, new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0));
+    }
+
     public TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
     {
-        var eventId = EventTypeId.GetId(typeof(T));
+        var eventId = EventTypeId<T>.Id;
         var timerPolicy = _policyTable?.GetTimerPolicy(eventId);
         
         return Timer.Schedule(

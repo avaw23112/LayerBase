@@ -127,6 +127,33 @@ public static class LayerHub
     }
 
     /// <summary>
+    /// Convenience API: Marks an event type as dirty in the Primary runtime.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void MarkDirty<T>() where T : struct
+    {
+        s_primaryRuntime?.MarkDirty<T>();
+    }
+
+    /// <summary>
+    /// Convenience API: Posts a latest event to the Primary runtime.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void PostLatest<T>(in T value) where T : struct
+    {
+        s_primaryRuntime?.PostLatest(value);
+    }
+
+    /// <summary>
+    /// Convenience API: Posts a coalesced event to the Primary runtime.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void PostCoalesced<T>(in T value) where T : struct
+    {
+        s_primaryRuntime?.PostCoalesced(value);
+    }
+
+    /// <summary>
     /// Convenience API: Creates a call target for the Primary runtime.
     /// </summary>
     public static LayerRuntime.LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer

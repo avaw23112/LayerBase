@@ -14,9 +14,15 @@ public sealed class PostScheduler : IDisposable
     private readonly GlobalEventCenter _eventCenter;
     private readonly EventRuntimePolicyTable _policyTable;
     
-    private BitArray _coalescedBuffer = new(256);
-    private readonly List<int> _pendingCoalesced = new();
+    // DirtySignal: Signal Coalescing (Signal only, no payload)
+    private BitArray _dirtySignalBuffer = new(256);
+    private readonly List<int> _pendingDirtySignals = new();
     
+    // Coalesced: Data Coalescing (Payload merging)
+    private readonly Dictionary<CoalescedSlotKey, CoalescedSlot> _coalescedBuffer = new();
+    private readonly List<CoalescedSlotKey> _pendingCoalesced = new();
+    
+    // Latest: Data Coalescing (Last payload only)
     private PayloadHandle[] _latestBuffer = new PayloadHandle[256];
     private readonly List<int> _pendingLatest = new();
     
@@ -50,12 +56,32 @@ public sealed class PostScheduler : IDisposable
         {
             case PostDeliveryMode.Normal:
                 return EnqueueNormal(typeId, value, policy);
+            case PostDeliveryMode.DirtySignal:
+                return MarkDirty<T>();
             case PostDeliveryMode.Coalesced:
-                return EnqueueCoalesced<T>(typeId);
+                return EnqueueCoalesced(typeId, value, policy);
             case PostDeliveryMode.Latest:
                 return EnqueueLatest(typeId, value);
             default:
                 return PostResult.Failure("Unknown delivery mode");
+        }
+    }
+
+    public PostResult MarkDirty<T>() where T : struct
+    {
+        if (_disposed) return PostResult.Failure("Scheduler disposed");
+        
+        var typeId = EventTypeId<T>.Id;
+        lock (_bufferLock)
+        {
+            if (typeId >= _dirtySignalBuffer.Length) ExpandDirtySignalBuffer(typeId);
+            if (!_dirtySignalBuffer[typeId])
+            {
+                _dirtySignalBuffer.Set(typeId, true);
+                _pendingDirtySignals.Add(typeId);
+                _payloadStorage.EnsureStore<T>();
+            }
+            return PostResult.Coalesced();
         }
     }
 
@@ -88,18 +114,70 @@ public sealed class PostScheduler : IDisposable
         return result;
     }
 
-    private PostResult EnqueueCoalesced<T>(int typeId) where T : struct
+    private PostResult EnqueueCoalesced<T>(int typeId, in T value, EventPostPolicy policy) where T : struct
     {
+        var meta = _policyTable.GetMetaData<T>(typeId);
+        int coalesceKey = meta?.GetPostCoalesceKey(value) ?? 0;
+        var slotKey = new CoalescedSlotKey(typeId, coalesceKey);
+
         lock (_bufferLock)
         {
-            if (typeId >= _coalescedBuffer.Length) ExpandBuffers(typeId);
-            if (!_coalescedBuffer[typeId])
+            if (_coalescedBuffer.TryGetValue(slotKey, out var slot))
             {
-                _coalescedBuffer.Set(typeId, true);
-                _pendingCoalesced.Add(typeId);
-                _payloadStorage.EnsureStore<T>();
+                ref T current = ref _payloadStorage.GetRef<T>(slot.PayloadHandle);
+                if (meta != null && meta.TryMergePostEvent(ref current, in value))
+                {
+                    slot.LastSequenceId = Interlocked.Increment(ref _sequenceCounter);
+                    slot.MergeCount++;
+                    _coalescedBuffer[slotKey] = slot;
+                    return PostResult.Coalesced();
+                }
+
+                // Merge failed
+                return HandleMergeFailure(slotKey, value, policy.MergeFailure);
             }
-            return PostResult.Success;
+
+            // New slot
+            var handle = _payloadStorage.Store(value);
+            var seq = Interlocked.Increment(ref _sequenceCounter);
+            var newSlot = new CoalescedSlot
+            {
+                Key = slotKey,
+                PayloadHandle = handle,
+                FirstSequenceId = seq,
+                LastSequenceId = seq,
+                MergeCount = 1,
+                Active = true
+            };
+            _coalescedBuffer[slotKey] = newSlot;
+            _pendingCoalesced.Add(slotKey);
+            return PostResult.Enqueued();
+        }
+    }
+
+    private PostResult HandleMergeFailure<T>(CoalescedSlotKey slotKey, in T value, MergeFailurePolicy failurePolicy) where T : struct
+    {
+        switch (failurePolicy)
+        {
+            case MergeFailurePolicy.Reject:
+                return PostResult.Failure("Merge failed and policy is Reject");
+            case MergeFailurePolicy.FallbackToLatest:
+                // Effectively overwrite
+                if (_coalescedBuffer.TryGetValue(slotKey, out var slot))
+                {
+                    _payloadStorage.Release(slot.PayloadHandle);
+                    slot.PayloadHandle = _payloadStorage.Store(value);
+                    slot.LastSequenceId = Interlocked.Increment(ref _sequenceCounter);
+                    slot.MergeCount++;
+                    _coalescedBuffer[slotKey] = slot;
+                    return PostResult.Coalesced();
+                }
+                return PostResult.Failure("Slot missing during fallback");
+            case MergeFailurePolicy.FallbackToNormal:
+                // This is complex as it requires mixing modes. For now, we'll just treat it as normal post.
+                return EnqueueNormal(slotKey.EventTypeId, value, _policyTable.GetPostPolicy(slotKey.EventTypeId));
+            default:
+                return PostResult.Failure("Unknown merge failure policy");
         }
     }
 
@@ -233,17 +311,36 @@ public sealed class PostScheduler : IDisposable
         int count = 0;
         lock (_bufferLock)
         {
-            if (_pendingCoalesced.Count > 0)
+            // 1. Dirty Signals
+            if (_pendingDirtySignals.Count > 0)
             {
-                foreach (var typeId in _pendingCoalesced)
+                foreach (var typeId in _pendingDirtySignals)
                 {
                     _payloadStorage.DispatchDefault(typeId, _eventCenter);
-                    _coalescedBuffer.Set(typeId, false);
+                    _dirtySignalBuffer.Set(typeId, false);
+                    count++;
+                }
+                _pendingDirtySignals.Clear();
+            }
+            
+            // 2. Coalesced (Data Merging)
+            if (_pendingCoalesced.Count > 0)
+            {
+                // Sort by FirstSequenceId to maintain original appearance order between slots
+                _pendingCoalesced.Sort((a, b) => _coalescedBuffer[a].FirstSequenceId.CompareTo(_coalescedBuffer[b].FirstSequenceId));
+                
+                foreach (var key in _pendingCoalesced)
+                {
+                    var slot = _coalescedBuffer[key];
+                    _payloadStorage.Dispatch(slot.PayloadHandle, _eventCenter);
+                    _payloadStorage.Release(slot.PayloadHandle);
+                    _coalescedBuffer.Remove(key);
                     count++;
                 }
                 _pendingCoalesced.Clear();
             }
-            
+
+            // 3. Latest
             if (_pendingLatest.Count > 0)
             {
                 foreach (var typeId in _pendingLatest)
@@ -277,10 +374,15 @@ public sealed class PostScheduler : IDisposable
         DecrementPendingCount(item.EventTypeId);
     }
 
+    private void ExpandDirtySignalBuffer(int minCapacity)
+    {
+        int newSize = Math.Max(minCapacity + 1, _dirtySignalBuffer.Length * 2);
+        _dirtySignalBuffer.Length = newSize;
+    }
+
     private void ExpandBuffers(int minCapacity)
     {
-        int newSize = Math.Max(minCapacity + 1, _coalescedBuffer.Length * 2);
-        _coalescedBuffer.Length = newSize;
+        int newSize = Math.Max(minCapacity + 1, _latestBuffer.Length * 2);
         
         var newLatest = new PayloadHandle[newSize];
         Array.Copy(_latestBuffer, newLatest, _latestBuffer.Length);
@@ -306,6 +408,13 @@ public sealed class PostScheduler : IDisposable
                 _payloadStorage.Release(_latestBuffer[typeId]);
             }
             _pendingLatest.Clear();
+
+            foreach (var key in _pendingCoalesced)
+            {
+                _payloadStorage.Release(_coalescedBuffer[key].PayloadHandle);
+            }
+            _pendingCoalesced.Clear();
+            _coalescedBuffer.Clear();
         }
         
         _payloadStorage.Dispose();

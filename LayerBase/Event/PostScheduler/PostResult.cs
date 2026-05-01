@@ -13,4 +13,7 @@ public readonly struct PostResult
 
     public static PostResult Success => new(true);
     public static PostResult Failure(string message) => new(false, message);
+
+    public static PostResult Enqueued() => new(true);
+    public static PostResult Coalesced() => new(true);
 }

@@ -9,10 +9,21 @@ namespace LayerBase.Test;
 [TestFixture]
 public class Phase5Tests
 {
+    public partial struct Phase5DirtySignalEvent { public int Value; }
+    public class Phase5DirtySignalEventMeta : EventMetaData<Phase5DirtySignalEvent>
+    {
+        public override EventPostPolicy? PostPolicy => new EventPostPolicy(PostDeliveryMode.DirtySignal, BackpressurePolicy.RejectNew, 0);
+    }
+
     public partial struct Phase5CoalescedEvent { public int Value; }
     public class Phase5CoalescedEventMeta : EventMetaData<Phase5CoalescedEvent>
     {
         public override EventPostPolicy? PostPolicy => new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0);
+        public override bool TryMergePostEvent(ref Phase5CoalescedEvent current, in Phase5CoalescedEvent next)
+        {
+            current.Value += next.Value;
+            return true;
+        }
     }
 
     public partial struct Phase5CustomTimerEvent { public int Value; }
@@ -47,6 +58,26 @@ public class Phase5Tests
     }
 
     [Test]
+    public void TestDirtySignalPolicyFromMetaData()
+    {
+        EventMetaDataHandler.RegisterMetaData<Phase5DirtySignalEvent>(new Phase5DirtySignalEventMeta());
+        
+        var runtime = new LayerRuntime.LayersBuilder(new LayerRuntime(101))
+            .Push(new TestLayer())
+            .Build();
+
+        int callCount = 0;
+        runtime.EventCenter.SubscribeNotify<Phase5DirtySignalEvent>(0, (in Phase5DirtySignalEvent _) => callCount++);
+
+        runtime.MarkDirty<Phase5DirtySignalEvent>();
+        runtime.MarkDirty<Phase5DirtySignalEvent>();
+
+        runtime.Pump(0);
+
+        Assert.That(callCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public void TestPostPolicyFromMetaData()
     {
         EventMetaDataHandler.RegisterMetaData<Phase5CoalescedEvent>(new Phase5CoalescedEventMeta());
@@ -56,15 +87,20 @@ public class Phase5Tests
             .Build();
 
         int callCount = 0;
-        runtime.EventCenter.SubscribeNotify<Phase5CoalescedEvent>(0, (in Phase5CoalescedEvent _) => callCount++);
+        int lastValue = 0;
+        runtime.EventCenter.SubscribeNotify<Phase5CoalescedEvent>(0, (in Phase5CoalescedEvent e) => {
+            callCount++;
+            lastValue = e.Value;
+        });
 
-        runtime.Post(new Phase5CoalescedEvent { Value = 1 });
-        runtime.Post(new Phase5CoalescedEvent { Value = 2 });
-        runtime.Post(new Phase5CoalescedEvent { Value = 3 });
+        runtime.PostCoalesced(new Phase5CoalescedEvent { Value = 1 });
+        runtime.PostCoalesced(new Phase5CoalescedEvent { Value = 2 });
+        runtime.PostCoalesced(new Phase5CoalescedEvent { Value = 3 });
 
         runtime.Pump(0);
 
         Assert.That(callCount, Is.EqualTo(1));
+        Assert.That(lastValue, Is.EqualTo(6)); // 1 + 2 + 3
     }
 
     [Test]

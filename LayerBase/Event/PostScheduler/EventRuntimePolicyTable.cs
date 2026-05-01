@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Core.Event;
 
@@ -7,6 +8,7 @@ public sealed class EventRuntimePolicyTable
     private EventPostPolicy[] _postPolicies = new EventPostPolicy[64];
     private EventTimerPolicy?[] _timerPolicies = new EventTimerPolicy?[64];
     private EventBufferPolicy?[] _bufferPolicies = new EventBufferPolicy?[64];
+    private IEventMetaData?[] _metaDatas = new IEventMetaData?[64];
     private readonly object _lock = new();
     private readonly BackpressurePolicy _defaultBackpressure;
 
@@ -17,6 +19,25 @@ public sealed class EventRuntimePolicyTable
         {
             _postPolicies[i] = new EventPostPolicy(PostDeliveryMode.Normal, _defaultBackpressure, 0);
         }
+    }
+
+    public void SetMetaData(int eventTypeId, IEventMetaData metaData)
+    {
+        lock (_lock)
+        {
+            if (eventTypeId >= _metaDatas.Length)
+            {
+                Array.Resize(ref _metaDatas, Math.Max(eventTypeId + 1, _metaDatas.Length * 2));
+            }
+            _metaDatas[eventTypeId] = metaData;
+        }
+    }
+
+    public EventMetaData<T>? GetMetaData<T>(int eventTypeId) where T : struct
+    {
+        var metas = _metaDatas;
+        if (eventTypeId < 0 || eventTypeId >= metas.Length) return null;
+        return metas[eventTypeId] as EventMetaData<T>;
     }
 
     public void SetPostPolicy(int eventTypeId, EventPostPolicy policy)
