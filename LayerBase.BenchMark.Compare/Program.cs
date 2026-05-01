@@ -132,7 +132,8 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
     private ISubscriber<NotifyPayload> _messagePipeSubscriber = null!;
     private IDisposable[] _messagePipeSubscriptions = Array.Empty<IDisposable>();
     private IServiceProvider _provider = null!;
-
+    private LayerRuntime _layerRuntime = null!;
+    
     [Params(4)] public int SubscriberCount { get; set; }
 
     [GlobalSetup]
@@ -167,7 +168,7 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
                     auto.AutoBind(layer);
             }
         }
-        LayerHub.CreateLayers().Push(layer).Build();
+        _layerRuntime = LayerHub.CreateLayers().Push(layer).Build();
     }
 
     [GlobalCleanup]
@@ -198,7 +199,7 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
     public void LayerBase()
     {
         for (var i = 0; i < OneMillion; i++)
-            LayerHub.Send(NotifyPayload.Instance);
+            _layerRuntime.EventCenter.Send(NotifyPayload.Instance);
     }
 }
 
