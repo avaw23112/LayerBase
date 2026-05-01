@@ -11,7 +11,7 @@ public sealed class PostScheduler : IDisposable
     private readonly RingBuffer<PostItem> _readyQueue;
     private readonly RingBuffer<PostItem> _nextQueue;
     private readonly EventPayloadStorage _payloadStorage;
-    private readonly GlobalEventCenter _eventCenter;
+    private readonly EventCenter _eventCenter;
     private readonly EventRuntimePolicyTable _policyTable;
     
     // DirtySignal: Signal Coalescing (Signal only, no payload)
@@ -33,7 +33,7 @@ public sealed class PostScheduler : IDisposable
     private bool _disposed;
     private bool _isPumping;
 
-    public PostScheduler(GlobalEventCenter eventCenter, PostSchedulerOptions options, EventRuntimePolicyTable policyTable)
+    public PostScheduler(EventCenter eventCenter, PostSchedulerOptions options, EventRuntimePolicyTable policyTable)
     {
         _eventCenter = eventCenter;
         _options = options;

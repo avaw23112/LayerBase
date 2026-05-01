@@ -20,7 +20,7 @@ public enum Propagation
 /// <summary>
 /// 全局事件中心，负责事件的路由、派发及分层事件队列的管理。
 /// </summary>
-public sealed class GlobalEventCenter
+public sealed class EventCenter
 {
     private readonly ConcurrentDictionary<int, Action> _bucketCacheResetters = new();
     private readonly ConcurrentDictionary<int, object> _eventBuckets = new();
@@ -157,18 +157,6 @@ public sealed class GlobalEventCenter
     }
 
     /// <summary>
-    /// 在特定 Layer 范围内派发事件。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal EventHandledState SendLocal<T>(int layerIndex, in T value) where T : struct
-    {
-        if (Volatile.Read(ref _isResetting) == 1) return EventHandledState.Continue;
-        var cached = BucketCache<T>.Instance;
-        if (cached != null && cached.Owner == this) return cached.DispatchLocal(layerIndex, in value);
-        return GetBucket<T>().DispatchLocal(layerIndex, in value);
-    }
-
-    /// <summary>
     /// 异步投递事件，通常用于跨帧处理。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -183,23 +171,6 @@ public sealed class GlobalEventCenter
         }
 
         GetBucket<T>().Post(in value);
-    }
-
-    /// <summary>
-    /// 在特定 Layer 范围内异步投递事件。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void PostLocal<T>(int layerIndex, in T value) where T : struct
-    {
-        if (Volatile.Read(ref _isResetting) == 1) return;
-        var cached = BucketCache<T>.Instance;
-        if (cached != null && cached.Owner == this)
-        {
-            cached.PostLocal(layerIndex, in value);
-            return;
-        }
-
-        GetBucket<T>().PostLocal(layerIndex, in value);
     }
 
     internal void WakeLayer(int layerIndex)
@@ -222,12 +193,12 @@ public sealed class GlobalEventCenter
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal EventHandledState DispatchLocal<T>(int layerIndex, in Event<T> @event) where T : struct
+    internal EventHandledState InternalDispatchToLayer<T>(int layerIndex, in Event<T> @event) where T : struct
     {
         if (Volatile.Read(ref _isResetting) == 1) return EventHandledState.Continue;
         var cached = BucketCache<T>.Instance;
-        if (cached != null && cached.Owner == this) return cached.DispatchLocal(layerIndex, in @event);
-        return GetBucket<T>().DispatchLocal(layerIndex, in @event);
+        if (cached != null && cached.Owner == this) return cached.InternalDispatchToLayer(layerIndex, in @event);
+        return GetBucket<T>().InternalDispatchToLayer(layerIndex, in @event);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -384,7 +355,7 @@ public sealed class GlobalEventCenter
 
     private sealed class LayerEventQueue : IEventQueue
     {
-        private readonly GlobalEventCenter _center;
+        private readonly EventCenter _center;
         private readonly ConcurrentQueue<IUnmanagedList> _dirtyQueues = new();
         private readonly int _layerIndex;
         private readonly object _lock = new();
@@ -392,7 +363,7 @@ public sealed class GlobalEventCenter
         private bool _disposed;
         private volatile IUnmanagedList?[] _queuesByTypeArr = new IUnmanagedList?[64];
 
-        public LayerEventQueue(GlobalEventCenter center, int layerIndex)
+        public LayerEventQueue(EventCenter center, int layerIndex)
         {
             _center = center;
             _layerIndex = layerIndex;
@@ -604,7 +575,7 @@ public sealed class GlobalEventCenter
     private sealed class EventBucket<T> : IResetable where T : struct
     {
         private readonly object _lock = new();
-        public readonly GlobalEventCenter? Owner;
+        public readonly EventCenter? Owner;
         private EventBucketSnapshot<T> _snapshot = EventBucketSnapshot<T>.Empty;
         private HandlerCircuit[] _asyncCircuits = Array.Empty<HandlerCircuit>();
 
@@ -652,7 +623,7 @@ public sealed class GlobalEventCenter
         private EventHandleDelegate<T>[] _syncHandlers = Array.Empty<EventHandleDelegate<T>>();
         private string[] _syncNames = Array.Empty<string>();
 
-        public EventBucket(GlobalEventCenter center)
+        public EventBucket(EventCenter center)
         {
             Owner = center;
         }
@@ -1207,6 +1178,28 @@ public sealed class GlobalEventCenter
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public EventHandledState InternalDispatchToLayer(int layerIndex, in Event<T> @event)
+        {
+            var snapshot = EnsureClean();
+            if (layerIndex >= snapshot.Ranges.Length) return EventHandledState.Continue;
+            ref var r = ref snapshot.Ranges[layerIndex];
+            
+            if (r.ParallelCount > 0)
+                for (var j = 0; j < r.ParallelCount; j++)
+                    Unsafe.Add(ref GetArrayDataRef(snapshot.FlatParallel), r.ParallelStart + j).Enqueue(layerIndex, in @event.Value);
+            
+            if (r.NotifyCount > 0) DispatchNotify(snapshot, r.NotifyStart, r.NotifyStart + r.NotifyCount, in @event.Value);
+            if (r.SubscribeCount > 0)
+                DispatchNotifySafe(snapshot, r.SubscribeStart, r.SubscribeStart + r.SubscribeCount, in @event.Value);
+            
+            var s = EventHandledState.Continue;
+            if (r.SyncCount > 0) s = DispatchSync(snapshot, r.SyncStart, r.SyncStart + r.SyncCount, in @event.Value);
+            if (s == EventHandledState.Handled) return s;
+            if (r.AsyncCount > 0) DispatchAsync(snapshot, r.AsyncStart, r.AsyncStart + r.AsyncCount, in @event.Value);
+            return s;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public EventHandledState Dispatch(in T value)
         {
             var snapshot = EnsureClean();
@@ -1236,45 +1229,6 @@ public sealed class GlobalEventCenter
                     snapshot.FlatParallel[j].Enqueue(-1, in value);
 
             return res;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public EventHandledState DispatchLocal(int layerIndex, in T value)
-        {
-            var snapshot = EnsureClean();
-            if (layerIndex >= snapshot.Ranges.Length) return EventHandledState.Continue;
-            if (layerIndex == snapshot.SingleRouteLayerIndex)
-            {
-                if (snapshot.IsSingleNotifySafe) return DispatchSingleNotifySafe(snapshot, in value);
-                if (snapshot.IsSingleNotify) return DispatchSingleNotify(snapshot, in value);
-                if (snapshot.IsSingleSync) return DispatchSingleSync(snapshot, in value);
-            }
-
-            ref var r = ref snapshot.Ranges[layerIndex];
-            if (r.SubscribeCount == 1 && r.NotifyCount == 0 && r.SyncCount == 0 && r.AsyncCount == 0 &&
-                r.ParallelCount == 0)
-            {
-                DispatchNotifySafe(snapshot, r.SubscribeStart, r.SubscribeStart + 1, in value);
-                return EventHandledState.Continue;
-            }
-
-            if (r.ParallelCount > 0)
-                for (var j = 0; j < r.ParallelCount; j++)
-                    Unsafe.Add(ref GetArrayDataRef(snapshot.FlatParallel), r.ParallelStart + j).Enqueue(layerIndex, in value);
-            if (r.NotifyCount > 0) DispatchNotify(snapshot, r.NotifyStart, r.NotifyStart + r.NotifyCount, in value);
-            if (r.SubscribeCount > 0)
-                DispatchNotifySafe(snapshot, r.SubscribeStart, r.SubscribeStart + r.SubscribeCount, in value);
-            var s = EventHandledState.Continue;
-            if (r.SyncCount > 0) s = DispatchSync(snapshot, r.SyncStart, r.SyncStart + r.SyncCount, in value);
-            if (s == EventHandledState.Handled) return s;
-            if (r.AsyncCount > 0) DispatchAsync(snapshot, r.AsyncStart, r.AsyncStart + r.AsyncCount, in value);
-            return s;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal EventHandledState DispatchLocal(int layerIndex, in Event<T> @event)
-        {
-            return DispatchLocal(layerIndex, in @event.Value);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1502,18 +1456,6 @@ public sealed class GlobalEventCenter
             if (async) ReturnArrayHelper(ref _asyncHandlers, ref _asyncCircuits, ref _asyncNames);
             if (notify) ReturnArrayHelper(ref _notifyHandlers, ref _notifyCircuits, ref _notifyNames);
             if (subscribe) ReturnArrayHelper(ref _subscribeHandlers, ref _notifySafeCircuits, ref _notifySafeNames);
-        }
-
-        public void PostLocal(int layerIndex, in T value)
-        {
-            if (Volatile.Read(ref Owner!._isResetting) == 1) return;
-            var snapshot = EnsureClean();
-            if (layerIndex >= 0 && layerIndex < 64 && (snapshot.SubscriberMask & (1UL << layerIndex)) != 0)
-            {
-                var @event = new Event<T>(value) { TargetMask = 1UL << layerIndex };
-                Owner.EnqueueEventInternal(layerIndex, in @event);
-                Owner.WakeLayer(layerIndex);
-            }
         }
 
         private HandlerBucket<T> GetOrCreate(int layerIndex)

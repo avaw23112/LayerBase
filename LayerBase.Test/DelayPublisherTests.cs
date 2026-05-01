@@ -32,7 +32,7 @@ public class DelayPublisherTests
 
         public void RequestDelay(float ttl, int value, int contractId = 0)
         {
-            this.DelayLocal(new DelayTestEvent { Value = value }, ttl, contractId);
+            this.Delay(new DelayTestEvent { Value = value }, ttl, contractId);
         }
 
         public void RequestGlobalDelay(float ttl, int value)
@@ -42,12 +42,12 @@ public class DelayPublisherTests
 
         public void RequestBigDelay(float ttl, int value)
         {
-            this.DelayLocal(new BigDelayEvent(value), ttl);
+            this.Delay(new BigDelayEvent(value), ttl);
         }
     }
 
     [Test]
-    public void DelayLocal_is_stored_and_can_be_retrieved_via_service()
+    public void Delay_is_stored_and_can_be_retrieved_via_service()
     {
         var layer = new DelayTestLayer();
         var manager = new DelayTestService();

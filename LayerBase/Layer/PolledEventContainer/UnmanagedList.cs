@@ -12,7 +12,7 @@ internal interface IUnmanagedList : IDisposable
 
 internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
 {
-    private readonly GlobalEventCenter _center;
+    private readonly EventCenter _center;
     private readonly int _layerIndex;
     private readonly object _lock = new();
     private readonly Action<IUnmanagedList> _onDirty;
@@ -23,7 +23,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     private int _forwardCount;
     private int _isDirty;
 
-    public UnmanagedList(GlobalEventCenter center, int layerIndex, Action<IUnmanagedList> onDirty)
+    public UnmanagedList(EventCenter center, int layerIndex, Action<IUnmanagedList> onDirty)
     {
         _center = center;
         _queue = new PooledChunkedOverwriteQueue<Event<Value>>();
@@ -114,7 +114,7 @@ internal class UnmanagedList<Value> : IUnmanagedList where Value : struct
     private void ProcessEvent(in Event<Value> @event, ref bool forwarded, ref int lastTargetLayer)
     {
         var state = (@event.TargetMask & (1UL << _layerIndex)) != 0
-            ? _center.DispatchLocal(_layerIndex, in @event)
+            ? _center.InternalDispatchToLayer(_layerIndex, in @event)
             : EventHandledState.Continue;
 
         if (state == EventHandledState.Continue) ForwardOnly(in @event, ref forwarded, ref lastTargetLayer);

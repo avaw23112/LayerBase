@@ -5,8 +5,8 @@ namespace LayerBase.Core.Event;
 internal interface IEventStore : IDisposable
 {
     void Release(int index, int version);
-    void Dispatch(int index, int version, GlobalEventCenter center);
-    void DispatchDefault(GlobalEventCenter center);
+    void Dispatch(int index, int version, EventCenter center);
+    void DispatchDefault(EventCenter center);
 }
 
 internal sealed class EventStore<T> : IEventStore where T : struct
@@ -90,7 +90,7 @@ internal sealed class EventStore<T> : IEventStore where T : struct
         }
     }
 
-    public void Dispatch(int index, int version, GlobalEventCenter center)
+    public void Dispatch(int index, int version, EventCenter center)
     {
         if (TryGet(new PayloadHandle(EventTypeId<T>.Id, index, version), out var value))
         {
@@ -98,7 +98,7 @@ internal sealed class EventStore<T> : IEventStore where T : struct
         }
     }
 
-    public void DispatchDefault(GlobalEventCenter center)
+    public void DispatchDefault(EventCenter center)
     {
         center.Send(default(T));
     }
@@ -149,8 +149,7 @@ internal sealed class EventPayloadStorage : IDisposable
 
     public void EnsureStore<T>() where T : struct
     {
-        var typeId = EventTypeId<T>.Id;
-        _stores.GetOrAdd(typeId, _ => new EventStore<T>());
+        _stores.GetOrAdd(EventTypeId<T>.Id, _ => new EventStore<T>());
     }
     
     public void Release(PayloadHandle handle)
@@ -162,7 +161,7 @@ internal sealed class EventPayloadStorage : IDisposable
         }
     }
 
-    public void Dispatch(PayloadHandle handle, GlobalEventCenter center)
+    public void Dispatch(PayloadHandle handle, EventCenter center)
     {
         if (handle.IsInvalid) return;
         if (_stores.TryGetValue(handle.EventTypeId, out var store))
@@ -171,7 +170,7 @@ internal sealed class EventPayloadStorage : IDisposable
         }
     }
 
-    public void DispatchDefault(int eventTypeId, GlobalEventCenter center)
+    public void DispatchDefault(int eventTypeId, EventCenter center)
     {
         if (_stores.TryGetValue(eventTypeId, out var store))
         {

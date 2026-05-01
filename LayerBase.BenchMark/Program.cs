@@ -204,12 +204,13 @@ public class RoutingShapeBench : EventBenchmarkBase
         builder.Push(_tailLayer).Build();
     }
 
-    [Benchmark(Baseline = true, Description = "定向本地分发 (目标�?订阅) - 100万次")]
+    [Benchmark(Baseline = true, Description = "定向分发 (目标层1订阅) - 100万次")]
     [BenchmarkCategory("02.Dispatch", "Dispatch.Sync", "Dispatch.Routing")]
-    public void Local()
+    public void Direct()
     {
-        for (var i = 0; i < OneMillion; i++) _tailLayer.SendLocal(RoutedEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _tailLayer.Send(RoutedEvent.Instance);
     }
+
 
     [Benchmark(Description = "全局分发命中尾层 (4�?尾层1订阅) - 100万次")]
     [BenchmarkCategory("02.Dispatch", "Dispatch.Sync", "Dispatch.Routing")]

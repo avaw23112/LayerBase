@@ -36,12 +36,12 @@ public class TestPostLayer : Layer {}
 [TestFixture]
 public class PostSchedulerTests
 {
-    private GlobalEventCenter _eventCenter;
+    private EventCenter _eventCenter;
     
     [SetUp]
     public void SetUp()
     {
-        _eventCenter = new GlobalEventCenter();
+        _eventCenter = new EventCenter();
         EventMetaDataHandler.Clear();
     }
 

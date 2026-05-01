@@ -66,9 +66,9 @@ public partial class TestManagerC : ILayerContext
         return EventHandledState.Continue;
     }
 
-    public void DoLocalSend()
+    public void DoSend()
     {
-        this.SendLocal(new CapabilityEvent());
+        this.Send(new CapabilityEvent());
     }
 }
 
@@ -109,7 +109,7 @@ public class ManagerAutoSubscriptionTests
         LayerHub.CreateLayers().Push(layer).Build();
 
         var manager = layer.GetService<TestManagerC>();
-        manager.DoLocalSend();
+        manager.DoSend();
 
         Assert.That(_trace, Is.EqualTo(new[] { "HandledByManager" }));
     }

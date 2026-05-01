@@ -121,20 +121,10 @@ public static class ServiceExtensions
         return ServiceLayerBinder.Require(service);
     }
 
-    public static EventHandledState SendLocal<TValue>(this IService service, in TValue value) where TValue : struct
-    {
-        return service.GetLayer().SendLocal(value);
-    }
-
     public static EventHandledState Send<TValue>(this IService service, in TValue value)
         where TValue : struct
     {
         return service.GetLayer().Send(value);
-    }
-
-    public static void PostLocal<TValue>(this IService service, in TValue value) where TValue : struct
-    {
-        service.GetLayer().PostLocal(value);
     }
 
     public static void Post<TValue>(this IService service, in TValue value) where TValue : struct
@@ -142,18 +132,10 @@ public static class ServiceExtensions
         service.GetLayer().Post(value);
     }
 
-    public static void DelayLocal<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
-        where TValue : struct
-    {
-        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl, DelayDirection.Local,
-            contractId);
-    }
-
     public static void Delay<TValue>(this IService service, in TValue value, float ttl, int contractId = 0)
         where TValue : struct
     {
-        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl,
-            DelayDirection.BroadCast, contractId);
+        service.GetLayer().SubscribeDelay<TValue>().Publish(value, ttl, contractId);
     }
 
     public static void SubscribeFlow<TValue>(this IService service, EventHandleDelegate<TValue> handler)
@@ -201,20 +183,10 @@ public static class LayerContextExtensions
         return ServiceLayerBinder.Require(service);
     }
 
-    public static EventHandledState SendLocal<TValue>(this ILayerContext service, in TValue value) where TValue : struct
-    {
-        return service.GetLayer().SendLocal(value);
-    }
-
     public static EventHandledState Send<TValue>(this ILayerContext service, in TValue value)
         where TValue : struct
     {
         return service.GetLayer().Send(value);
-    }
-
-    public static void PostLocal<TValue>(this ILayerContext service, in TValue value) where TValue : struct
-    {
-        service.GetLayer().PostLocal(value);
     }
 
     public static void Post<TValue>(this ILayerContext service, in TValue value) where TValue : struct
@@ -222,18 +194,10 @@ public static class LayerContextExtensions
         service.GetLayer().Post(value);
     }
 
-    public static void DelayLocal<TValue>(this ILayerContext service, in TValue value, float ttl, int contractId = 0)
-        where TValue : struct
-    {
-        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl, DelayDirection.Local,
-            contractId);
-    }
-
     public static void Delay<TValue>(this ILayerContext service, in TValue value, float ttl, int contractId = 0)
         where TValue : struct
     {
-        ((DelayPublisher<TValue>)service.GetLayer().SubscribeDelay<TValue>()).Publish(value, ttl,
-            DelayDirection.BroadCast, contractId);
+        service.GetLayer().SubscribeDelay<TValue>().Publish(value, ttl, contractId);
     }
 
     public static void SubscribeFlow<TValue>(this ILayerContext service, EventHandleDelegate<TValue> handler)

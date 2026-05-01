@@ -21,7 +21,7 @@ public sealed class LayerRuntime : IDisposable
     private readonly int _id;
 
     public int Id => _id;
-    public GlobalEventCenter EventCenter { get; internal set; }
+    public EventCenter EventCenter { get; internal set; }
     
     private PostScheduler? _scheduler;
     public PostScheduler Scheduler => _scheduler ?? throw new InvalidOperationException("Runtime not built.");
@@ -37,7 +37,7 @@ public sealed class LayerRuntime : IDisposable
     internal LayerRuntime(int id)
     {
         _id = id;
-        EventCenter = new GlobalEventCenter();
+        EventCenter = new EventCenter();
         LayerHub.Internal_Register(this);
     }
 

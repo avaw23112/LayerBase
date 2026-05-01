@@ -976,16 +976,13 @@ call extension methods directly to dispatch events:
 
 ```csharp
 // ⚔️ [Send Family: Synchronous execution, the current thread blocks until dispatch finishes]
-this.SendLocal(new DamageEvent());  // [Local] Broadcast only within the current layer
-this.Send(new DamageEvent()); // [Global] Penetrate and broadcast across all layers
+this.Send(new DamageEvent()); // Broadcast across all layers
 
 // 📨 [Post Family: Asynchronous delivery for work that is not urgent and can be spread across frames.
-this.PostLocal(new DamageEvent());
 this.Post(new DamageEvent()); 
 
 // ⏳ [Delay Family: Publish a timed event into the event buffer pipeline]
-this.DelayGlobal(new PlayerDeathEvent(), 3.5f); // The event stays in the pipeline for 3.5 seconds until overwritten, expired, or taken out.
-this.DelayLocal(new PlayerDeathEvent(), 3.5f); 
+this.Delay(new PlayerDeathEvent(), 3.5f); // The event stays in the pipeline for 3.5 seconds until overwritten, expired, or taken out.
 
 // Note: global events are specially optimized and perform better than other kinds.
 LayerHub.Send(new MyEvent());

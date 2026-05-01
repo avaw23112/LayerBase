@@ -92,8 +92,7 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
 
     private bool IsDispatchMethod(string name)
     {
-        return name == "Send" || name == "Post" || name.Contains("SendGlobal") ||
-               name.Contains("SendLocal");
+        return name == "Send" || name == "Post";
     }
 
     private bool IsDeprecatedMethod(string name)

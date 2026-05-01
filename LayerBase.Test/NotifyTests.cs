@@ -47,7 +47,7 @@ public class NotifyTests
     }
 
     [Test]
-    public void Notify_Small_Fanout_SendLocal_Preserves_Registration_Order()
+    public void Notify_Small_Fanout_Direct_Send_Preserves_Registration_Order()
     {
         var layer = new TestLayer();
         var trace = new List<string>();
@@ -58,7 +58,7 @@ public class NotifyTests
         layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("Second"); });
         layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("Third"); });
 
-        layer.SendLocal(new TestEvent { Value = 9, Trace = trace });
+        layer.Send(new TestEvent { Value = 9, Trace = trace });
 
         Assert.That(trace, Is.EqualTo(new[] { "First", "Second", "Third" }));
     }

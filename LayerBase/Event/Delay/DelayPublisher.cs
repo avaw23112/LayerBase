@@ -29,8 +29,6 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
         get { lock (_lock) return _hasValue; }
     }
 
-    public DelayDirection Direction => DelayDirection.None;
-
     public int ContractId { get; private set; }
 
     public bool TryGet(out T value)
@@ -84,11 +82,6 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
             
             _timerHandle = _manager.ScheduleExpire(_publisherId, _valueVersion, finalTtl, _timerHandle);
         }
-    }
-
-    public void Publish(in T value, float ttlSeconds, DelayDirection direction, int contractId = 0)
-    {
-        Publish(value, ttlSeconds, contractId);
     }
 
     public bool TryExpire(int valueVersion)

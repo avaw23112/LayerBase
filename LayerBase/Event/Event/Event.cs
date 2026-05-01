@@ -22,7 +22,7 @@ public struct Event<T> where T : struct
         TargetMask = 0;
     }
 
-    internal int FindNextTarget(int currentLayer, GlobalEventCenter center)
+    internal int FindNextTarget(int currentLayer, EventCenter center)
     {
         var nextMask = TargetMask & ~((1UL << (currentLayer + 1)) - 1);
         return center.FindFirstBit(nextMask);

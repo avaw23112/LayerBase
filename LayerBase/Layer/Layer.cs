@@ -474,24 +474,10 @@ public abstract class Layer : Node, IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EventHandledState SendLocal<T>(in T value) where T : struct
-    {
-        if (OwnerContext == null) throw new InvalidOperationException("Layer not attached to context.");
-        return OwnerContext.EventCenter.SendLocal(RouteIndex, value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventHandledState Send<T>(in T value) where T : struct
     {
         if (OwnerContext == null) throw new InvalidOperationException("Layer not attached to context.");
         return OwnerContext.EventCenter.Send(value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostLocal<T>(in T value) where T : struct
-    {
-        if (OwnerContext == null) throw new InvalidOperationException("Layer not attached to context.");
-        OwnerContext.EventCenter.PostLocal(RouteIndex, value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -532,7 +518,7 @@ public abstract class Layer : Node, IDisposable
     private sealed class UnsubscribeFlowToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeFlowToken<T>> Pool = new();
-        private GlobalEventCenter? _center;
+        private EventCenter? _center;
         private EventHandleDelegate<T>? _handler;
         private int _disposed;
         private int _layerIndex;
@@ -546,7 +532,7 @@ public abstract class Layer : Node, IDisposable
             Pool.Add(this);
         }
 
-        public static UnsubscribeFlowToken<T> Rent(GlobalEventCenter c, int l, EventHandleDelegate<T> h)
+        public static UnsubscribeFlowToken<T> Rent(EventCenter c, int l, EventHandleDelegate<T> h)
         {
             if (!Pool.TryTake(out var t)) t = new UnsubscribeFlowToken<T>();
             t._center = c;
@@ -560,7 +546,7 @@ public abstract class Layer : Node, IDisposable
     private sealed class UnsubscribeDelegateAsyncToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeDelegateAsyncToken<T>> Pool = new();
-        private GlobalEventCenter? _center;
+        private EventCenter? _center;
         private EventHandleDelegateAsync<T>? _handler;
         private int _disposed;
         private int _layerIndex;
@@ -574,7 +560,7 @@ public abstract class Layer : Node, IDisposable
             Pool.Add(this);
         }
 
-        public static UnsubscribeDelegateAsyncToken<T> Rent(GlobalEventCenter c, int l, EventHandleDelegateAsync<T> h)
+        public static UnsubscribeDelegateAsyncToken<T> Rent(EventCenter c, int l, EventHandleDelegateAsync<T> h)
         {
             if (!Pool.TryTake(out var t)) t = new UnsubscribeDelegateAsyncToken<T>();
             t._center = c;
@@ -588,7 +574,7 @@ public abstract class Layer : Node, IDisposable
     private sealed class UnsubscribeNotifyToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeNotifyToken<T>> Pool = new();
-        private GlobalEventCenter? _center;
+        private EventCenter? _center;
         private EventNotifyDelegate<T>? _handler;
         private int _disposed;
         private int _layerIndex;
@@ -602,7 +588,7 @@ public abstract class Layer : Node, IDisposable
             Pool.Add(this);
         }
 
-        public static UnsubscribeNotifyToken<T> Rent(GlobalEventCenter c, int l, EventNotifyDelegate<T> h)
+        public static UnsubscribeNotifyToken<T> Rent(EventCenter c, int l, EventNotifyDelegate<T> h)
         {
             if (!Pool.TryTake(out var t)) t = new UnsubscribeNotifyToken<T>();
             t._center = c;
@@ -616,7 +602,7 @@ public abstract class Layer : Node, IDisposable
     private sealed class UnsubscribeToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeToken<T>> Pool = new();
-        private GlobalEventCenter? _center;
+        private EventCenter? _center;
         private EventNotifyDelegate<T>? _handler;
         private int _disposed;
         private int _layerIndex;
@@ -630,7 +616,7 @@ public abstract class Layer : Node, IDisposable
             Pool.Add(this);
         }
 
-        public static UnsubscribeToken<T> Rent(GlobalEventCenter c, int l, EventNotifyDelegate<T> h)
+        public static UnsubscribeToken<T> Rent(EventCenter c, int l, EventNotifyDelegate<T> h)
         {
             if (!Pool.TryTake(out var t)) t = new UnsubscribeToken<T>();
             t._center = c;
@@ -644,7 +630,7 @@ public abstract class Layer : Node, IDisposable
     private sealed class UnsubscribeParallelToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeParallelToken<T>> Pool = new();
-        private GlobalEventCenter? _center;
+        private EventCenter? _center;
         private EventNotifyDelegate<T>? _handler;
         private int _disposed;
         private int _layerIndex;
@@ -658,7 +644,7 @@ public abstract class Layer : Node, IDisposable
             Pool.Add(this);
         }
 
-        public static UnsubscribeParallelToken<T> Rent(GlobalEventCenter c, int l, EventNotifyDelegate<T> h)
+        public static UnsubscribeParallelToken<T> Rent(EventCenter c, int l, EventNotifyDelegate<T> h)
         {
             if (!Pool.TryTake(out var t)) t = new UnsubscribeParallelToken<T>();
             t._center = c;

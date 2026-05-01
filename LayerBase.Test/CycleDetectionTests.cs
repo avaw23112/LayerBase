@@ -20,7 +20,7 @@ public partial class DirectCycleManager : ILayerContext
     [SubscribeFlow]
     public EventHandledState OnEvent(in Event_A e)
     {
-        this.SendLocal(new Event_A());
+        this.Send(new Event_A());
         return EventHandledState.Continue;
     }
 }
@@ -30,7 +30,7 @@ public partial class IndirectManagerA : ILayerContext
     [SubscribeFlow]
     public EventHandledState OnA(in Event_A e)
     {
-        this.SendLocal(new Event_B());
+        this.Send(new Event_B());
         return EventHandledState.Continue;
     }
 }
@@ -40,7 +40,7 @@ public partial class IndirectManagerB : ILayerContext
     [SubscribeFlow]
     public EventHandledState OnB(in Event_B e)
     {
-        this.SendLocal(new Event_A());
+        this.Send(new Event_A());
         return EventHandledState.Continue;
     }
 }
