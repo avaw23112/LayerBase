@@ -22,6 +22,8 @@ public sealed class EventCenter
     private readonly ConcurrentDictionary<int, object> _eventBuckets = new();
     private readonly object _lock = new();
     private int _isResetting;
+    
+    internal PostScheduler? PostScheduler { get; set; }
 
     internal void SubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
@@ -134,6 +136,44 @@ public sealed class EventCenter
         Volatile.Write(ref _isResetting, 0);
     }
 
+    /// <summary>
+    /// 预热单个事件类型。
+    /// </summary>
+    /// <typeparam name="TEvent">要预热的事件类型。</typeparam>
+    /// <param name="options">预热参数。</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void PrewarmEvent<TEvent>(in LayerPrewarmOptions options)
+        where TEvent : struct
+    {
+        // 1. 预热 EventTypeId
+        if ((options.Targets & LayerPrewarmTargets.EventTypeId) != 0)
+        {
+            _ = EventTypeId<TEvent>.Id;
+        }
+
+        EventBucket<TEvent>? bucket = null;
+
+        // 2. 预热 Bucket
+        if ((options.Targets & LayerPrewarmTargets.Bucket) != 0 ||
+            (options.Targets & LayerPrewarmTargets.DispatchTable) != 0)
+        {
+            bucket = GetBucket<TEvent>();
+        }
+
+        // 3. 预热派发表
+        if ((options.Targets & LayerPrewarmTargets.DispatchTable) != 0)
+        {
+            bucket ??= GetBucket<TEvent>();
+            bucket.PrewarmDispatchTable();
+        }
+
+        // 4. 预热 Post 队列
+        if ((options.Targets & LayerPrewarmTargets.PostQueue) != 0)
+        {
+            PostScheduler?.PrewarmEvent<TEvent>();
+        }
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private EventBucket<T> GetBucket<T>() where T : struct
     {
@@ -200,6 +240,15 @@ public sealed class EventCenter
         public EventBucket(EventCenter center)
         {
             Owner = center;
+        }
+
+        /// <summary>
+        /// 预热当前事件类型的派发表。
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void PrewarmDispatchTable()
+        {
+            EnsureClean();
         }
 
         public void Dispose()

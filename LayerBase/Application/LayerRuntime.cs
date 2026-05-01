@@ -83,6 +83,7 @@ public sealed class LayerRuntime : IDisposable
         }
         
         _scheduler = new PostScheduler(_id, EventCenter, options, _policyTable);
+        EventCenter.PostScheduler = _scheduler;
         _scheduler.BuildPlans(plans.ToArray());
     }
 

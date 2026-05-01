@@ -492,6 +492,39 @@ public sealed class PostScheduler : IDisposable
         DecrementPendingCount(item.EventTypeId);
     }
 
+    /// <summary>
+    /// 预热指定事件类型的投递相关存储。
+    /// </summary>
+    /// <typeparam name="T">事件类型。</typeparam>
+    public void PrewarmEvent<T>() where T : struct
+    {
+        if (_disposed) return;
+
+        // 1. 确保 EventStore 已经创建。
+        _payloadStorage.EnsureStore<T>(_runtimeId);
+
+        // 2. 如果当前没有该事件类型的 Plan，则创建一个默认 Plan。
+        // 这可以让第一次 TryPost 时不再承担 Plan 数组查询或默认创建成本。
+        var typeId = EventTypeId<T>.Id;
+        if (typeId >= _postPlans.Length)
+        {
+            lock (_bufferLock)
+            {
+                if (typeId >= _postPlans.Length)
+                {
+                    var newSize = Math.Max(typeId + 1, _postPlans.Length * 2);
+                    var newPlans = new PostTypePlan[newSize];
+                    Array.Copy(_postPlans, newPlans, _postPlans.Length);
+                    for (int i = _postPlans.Length; i < newPlans.Length; i++)
+                    {
+                        newPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure);
+                    }
+                    _postPlans = newPlans;
+                }
+            }
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
