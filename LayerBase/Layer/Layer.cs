@@ -83,6 +83,9 @@ public abstract class Layer : Node, IDisposable
     public virtual bool HasActiveLogic =>
         m_serviceUpdates.Count > 0 || m_delayPublishers.Count > 0;
 
+    internal bool HasDelayPublisher => m_delayPublishers.Count > 0;
+
+
     /// <summary>
     /// 释放 Layer 资源。
     /// </summary>
@@ -372,8 +375,13 @@ public abstract class Layer : Node, IDisposable
         publisher.SetId(id);
 
         var actual = m_delayPublishers.GetOrAdd(type, publisher);
+        if (actual == publisher)
+        {
+            OwnerContext?.MarkDelayDirty();
+        }
         return (IDelayPublisher<T>)actual;
     }
+
 
     protected internal void RegisterCallHandler<TRequest, TResponse>(ILayerCallHandler<TRequest, TResponse> handler)
         where TRequest : struct

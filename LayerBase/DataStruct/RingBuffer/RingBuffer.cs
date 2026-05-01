@@ -1,9 +1,12 @@
+using System.Runtime.CompilerServices;
+
 namespace LayerBase.Core.DataStruct;
 
 internal sealed class RingBuffer<T>
 {
     private readonly T[] _buffer;
     private readonly int _capacity;
+    private readonly int _mask;
     private int _head;
     private int _tail;
     private int _count;
@@ -11,7 +14,17 @@ internal sealed class RingBuffer<T>
     public RingBuffer(int capacity)
     {
         if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+        
+        // Force power of two
+        if ((capacity & (capacity - 1)) != 0)
+        {
+            int p = 1;
+            while (p < capacity) p <<= 1;
+            capacity = p;
+        }
+
         _capacity = capacity;
+        _mask = capacity - 1;
         _buffer = new T[capacity];
     }
 
@@ -19,27 +32,30 @@ internal sealed class RingBuffer<T>
     public bool IsFull => _count == _capacity;
     public bool IsEmpty => _count == 0;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryEnqueue(in T item)
     {
         if (_count == _capacity) return false;
         
         _buffer[_tail] = item;
-        _tail = (_tail + 1) % _capacity;
+        _tail = (_tail + 1) & _mask;
         _count++;
         return true;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryDequeue(out T item)
     {
         if (_count == 0)
         {
-            item = default;
+            item = default!;
             return false;
         }
+
         
         item = _buffer[_head];
-        _buffer[_head] = default;
-        _head = (_head + 1) % _capacity;
+        _buffer[_head] = default!;
+        _head = (_head + 1) & _mask;
         _count--;
         return true;
     }
@@ -52,11 +68,12 @@ internal sealed class RingBuffer<T>
         _count = 0;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryPeek(out T item)
     {
         if (_count == 0)
         {
-            item = default;
+            item = default!;
             return false;
         }
         item = _buffer[_head];
@@ -66,16 +83,18 @@ internal sealed class RingBuffer<T>
     public void DropOldest()
     {
         if (_count == 0) return;
-        _buffer[_head] = default;
-        _head = (_head + 1) % _capacity;
+        _buffer[_head] = default!;
+        _head = (_head + 1) & _mask;
         _count--;
     }
     
     public void DropNewest()
     {
         if (_count == 0) return;
-        _tail = (_tail - 1 + _capacity) % _capacity;
-        _buffer[_tail] = default;
+        _tail = (_tail - 1) & _mask;
+        _buffer[_tail] = default!;
         _count--;
     }
+
 }
+

@@ -53,9 +53,10 @@ public class Phase5Tests
     [SetUp]
     public void SetUp()
     {
-        // Metadata is registered via source generator's static constructor in the event struct
-        // But we might want to clear existing state if needed.
+        LayerHub.Reset();
+        EventMetaDataHandler.Clear();
     }
+
 
     [Test]
     public void TestDirtySignalPolicyFromMetaData()

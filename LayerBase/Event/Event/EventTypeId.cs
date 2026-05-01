@@ -42,7 +42,10 @@ internal static class EventTypeIdAllocator
     {
         return Interlocked.Increment(ref s_nextId);
     }
+
+    public static int MaxId => Volatile.Read(ref s_nextId);
 }
+
 
 /// <summary>
 /// 每一种事件类型对应的静态 ID 容器。

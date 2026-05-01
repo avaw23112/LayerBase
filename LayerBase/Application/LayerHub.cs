@@ -59,7 +59,7 @@ public static class LayerHub
         lock (s_lock)
         {
             var id = s_runtimeIdCounter++;
-            if (id >= 64) throw new InvalidOperationException("Max 64 concurrent LayerRuntimes supported by static caches.");
+            if (id >= 256) throw new InvalidOperationException("Max 256 concurrent LayerRuntimes supported by static caches.");
             var runtime = new LayerRuntime(id);
             if (s_primaryRuntime == null) s_primaryRuntime = runtime;
             return new LayerRuntime.LayersBuilder(runtime);
@@ -246,6 +246,13 @@ public static class LayerHub
     internal static bool TryGetCachedTarget<TLayer>(int runtimeId, int version, out TLayer? layer, out Exception? error)
         where TLayer : Layer
     {
+        if (runtimeId >= 256)
+        {
+             layer = null;
+             error = null;
+             return false;
+        }
+
         if (Volatile.Read(ref LayerTargetCache<TLayer>.Versions[runtimeId]) != version)
         {
             layer = null;
@@ -277,6 +284,7 @@ public static class LayerHub
     internal static void UpdateLayerTargetCache<TLayer>(int runtimeId, int version, TLayer? layer, LayerTargetState state)
         where TLayer : Layer
     {
+        if (runtimeId >= 256) return;
         LayerTargetCache<TLayer>.Layers[runtimeId] = layer;
         LayerTargetCache<TLayer>.States[runtimeId] = state;
         Volatile.Write(ref LayerTargetCache<TLayer>.Versions[runtimeId], version);
@@ -288,6 +296,7 @@ public static class LayerHub
         where TRequest : struct
         where TResponse : struct
     {
+        if (runtimeId >= 256) return -1;
         return Volatile.Read(ref LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId]);
     }
 
@@ -297,6 +306,7 @@ public static class LayerHub
         where TRequest : struct
         where TResponse : struct
     {
+        if (runtimeId >= 256) return null;
         return LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId];
     }
 
@@ -306,6 +316,7 @@ public static class LayerHub
         where TRequest : struct
         where TResponse : struct
     {
+        if (runtimeId >= 256) return null;
         return LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId];
     }
 
@@ -314,6 +325,7 @@ public static class LayerHub
         where TRequest : struct
         where TResponse : struct
     {
+        if (runtimeId >= 256) return;
         lock (s_lock)
         {
             LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId] = invoker;
@@ -322,7 +334,7 @@ public static class LayerHub
         }
     }
 
-    private static void RegisterCacheResetter(Action resetter)
+    internal static void RegisterCacheResetter(Action resetter)
     {
         s_cacheResetters.Add(resetter);
     }
@@ -332,19 +344,19 @@ public static class LayerHub
         where TRequest : struct
         where TResponse : struct
     {
-        public static readonly int[] Versions = new int[64];
-        public static readonly LayerCallInvoker<TRequest, TResponse>?[] Invokers = new LayerCallInvoker<TRequest, TResponse>[64];
-        public static readonly Exception?[] Errors = new Exception[64];
+        public static readonly int[] Versions = new int[256];
+        public static readonly LayerCallInvoker<TRequest, TResponse>?[] Invokers = new LayerCallInvoker<TRequest, TResponse>[256];
+        public static readonly Exception?[] Errors = new Exception[256];
 
         static LayerCallCache()
         {
-            for (int i = 0; i < 64; i++) Versions[i] = -1;
+            for (int i = 0; i < 256; i++) Versions[i] = -1;
             RegisterCacheResetter(Reset);
         }
 
         private static void Reset()
         {
-            for (int i = 0; i < 64; i++)
+            for (int i = 0; i < 256; i++)
             {
                 Invokers[i] = null;
                 Errors[i] = null;
@@ -363,19 +375,19 @@ public static class LayerHub
 
     private static class LayerTargetCache<TLayer> where TLayer : Layer
     {
-        public static readonly int[] Versions = new int[64];
-        public static readonly TLayer?[] Layers = new TLayer[64];
-        public static readonly LayerTargetState[] States = new LayerTargetState[64];
+        public static readonly int[] Versions = new int[256];
+        public static readonly TLayer?[] Layers = new TLayer[256];
+        public static readonly LayerTargetState[] States = new LayerTargetState[256];
 
         static LayerTargetCache()
         {
-            for (int i = 0; i < 64; i++) Versions[i] = -1;
+            for (int i = 0; i < 256; i++) Versions[i] = -1;
             RegisterCacheResetter(Reset);
         }
 
         private static void Reset()
         {
-            for (int i = 0; i < 64; i++)
+            for (int i = 0; i < 256; i++)
             {
                 Layers[i] = null;
                 States[i] = LayerTargetState.Unknown;

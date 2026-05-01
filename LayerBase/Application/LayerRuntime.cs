@@ -48,9 +48,14 @@ public sealed class LayerRuntime : IDisposable
     internal void InitializeScheduler(PostSchedulerOptions options)
     {
         _policyTable = new EventRuntimePolicyTable(options.DefaultBackpressure);
-        foreach (var (type, meta) in LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData())
+        var metaData = LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData().ToList();
+        var plans = new List<PostTypePlan>();
+
+        // Console.WriteLine($"[DEBUG] InitializeScheduler: metaData count = {metaData.Count}");
+        foreach (var (type, meta) in metaData)
         {
             var eventId = meta.EventId;
+            // Console.WriteLine($"[DEBUG] Registering meta for {type.Name}, id={eventId}");
             
             var postPolicy = meta.GetPostPolicy();
             _policyTable.SetMetaData(eventId, meta);
@@ -70,9 +75,15 @@ public sealed class LayerRuntime : IDisposable
             {
                 _policyTable.SetBufferPolicy(eventId, bufferPolicy.Value);
             }
+
+            var effectivePolicy = postPolicy ?? new EventPostPolicy(PostDeliveryMode.Normal, options.DefaultBackpressure, 0);
+            plans.Add(new PostTypePlan(eventId, effectivePolicy.Mode, effectivePolicy.Backpressure, effectivePolicy.MaxPending, options.DefaultBackpressure));
         }
-        _scheduler = new PostScheduler(EventCenter, options, _policyTable);
+        
+        _scheduler = new PostScheduler(_id, EventCenter, options, _policyTable);
+        _scheduler.BuildPlans(plans.ToArray());
     }
+
 
     internal void InitializeTimer(TimeSchedulerOptions options)
     {
@@ -90,7 +101,13 @@ public sealed class LayerRuntime : IDisposable
         return Interlocked.Increment(ref _layerIndexCounter) - 1;
     }
 
+    internal void MarkDelayDirty()
+    {
+        _chain?.MarkDelayDirty();
+    }
+
     public void Pump(float deltaTime)
+
     {
         if (_disposed) return;
         
@@ -101,8 +118,9 @@ public sealed class LayerRuntime : IDisposable
             // 1. Time tick
             _timer?.Tick(deltaTime, _timerSink!);
             
-            // 2. Delay tick (Stage 4)
-            DelayPublisherManager.Instance?.Tick(deltaTime);
+            // 2. Delay tick (Only if needed)
+            if (_chain != null && _chain.HasAnyDelay)
+                DelayPublisherManager.Instance?.Tick(deltaTime);
             
             // 3. Completion drain (Stage 5 Concurrency Simplified)
             _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0);
@@ -117,8 +135,9 @@ public sealed class LayerRuntime : IDisposable
             // 1. Time tick
             _timer?.Tick(deltaTime, _timerSink!);
             
-            // 2. Delay tick (Stage 4)
-            DelayPublisherManager.Instance?.Tick(deltaTime);
+            // 2. Delay tick (Only if needed)
+            if (_chain != null && _chain.HasAnyDelay)
+                DelayPublisherManager.Instance?.Tick(deltaTime);
             
             // 3. Post pump
             _scheduler?.Pump();
@@ -126,6 +145,7 @@ public sealed class LayerRuntime : IDisposable
             _chain?.Pump(deltaTime);
         }
     }
+
 
     public void ReportInfo(LayerEventInfo info)
     {

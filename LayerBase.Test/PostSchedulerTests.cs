@@ -42,14 +42,17 @@ public class PostSchedulerTests
     public void SetUp()
     {
         _eventCenter = new EventCenter();
+        LayerHub.Reset();
         EventMetaDataHandler.Clear();
     }
+
 
     [Test]
     public void Basic_Post_And_Pump()
     {
         var options = PostSchedulerOptions.Default;
-        var scheduler = new PostScheduler(_eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         int callCount = 0;
         
         _eventCenter.SubscribeNotify<TestPostEvent>(0, (in TestPostEvent e) => callCount++);
@@ -65,7 +68,8 @@ public class PostSchedulerTests
     public void Wave_Isolation_Post_During_Pump_Goes_To_Next_Wave()
     {
         var options = new PostSchedulerOptions(1024, 1024, 0, 0, 1, 64, BackpressurePolicy.RejectNew);
-        var scheduler = new PostScheduler(_eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         int callCount = 0;
         
         _eventCenter.SubscribeNotify<TestPostEvent>(0, (in TestPostEvent e) => 
@@ -92,7 +96,8 @@ public class PostSchedulerTests
     public void MaxWavesPerPump_Processes_Multiple_Waves()
     {
         var options = new PostSchedulerOptions(1024, 1024, 0, 0, 2, 64, BackpressurePolicy.RejectNew);
-        var scheduler = new PostScheduler(_eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         int callCount = 0;
         
         _eventCenter.SubscribeNotify<TestPostEvent>(0, (in TestPostEvent e) => 
@@ -113,7 +118,8 @@ public class PostSchedulerTests
     public void EventCount_Budget_Limits_Processing()
     {
         var options = new PostSchedulerOptions(1024, 1024, 5, 0, 1, 64, BackpressurePolicy.RejectNew);
-        var scheduler = new PostScheduler(_eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         int callCount = 0;
         
         _eventCenter.SubscribeNotify<TestPostEvent>(0, (in TestPostEvent e) => callCount++);
@@ -131,7 +137,8 @@ public class PostSchedulerTests
     public void Time_Budget_Limits_Processing()
     {
         var options = new PostSchedulerOptions(1024, 1024, 0, 1.0, 1, 1, BackpressurePolicy.RejectNew);
-        var scheduler = new PostScheduler(_eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         int callCount = 0;
         
         _eventCenter.SubscribeNotify<TestPostEvent>(0, (in TestPostEvent e) => 
@@ -150,9 +157,11 @@ public class PostSchedulerTests
     [Test]
     public void Backpressure_RejectNew()
     {
-        var options = new PostSchedulerOptions(3, 3, 0, 0, 1, 64, BackpressurePolicy.RejectNew);
-        var scheduler = new PostScheduler(_eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var options = new PostSchedulerOptions(4, 4, 0, 0, 1, 64, BackpressurePolicy.RejectNew);
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         
+        Assert.That(scheduler.TryPost(new TestPostEvent()).IsSuccess, Is.True);
         Assert.That(scheduler.TryPost(new TestPostEvent()).IsSuccess, Is.True);
         Assert.That(scheduler.TryPost(new TestPostEvent()).IsSuccess, Is.True);
         Assert.That(scheduler.TryPost(new TestPostEvent()).IsSuccess, Is.True);
@@ -162,8 +171,9 @@ public class PostSchedulerTests
     [Test]
     public void Backpressure_DropOldest()
     {
-        var options = new PostSchedulerOptions(3, 3, 0, 0, 1, 64, BackpressurePolicy.DropOldest);
-        var scheduler = new PostScheduler(_eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var options = new PostSchedulerOptions(4, 4, 0, 0, 1, 64, BackpressurePolicy.DropOldest);
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<DropOldestTestEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         var received = new List<int>();
         
         _eventCenter.SubscribeNotify<DropOldestTestEvent>(0, (in DropOldestTestEvent e) => received.Add(e.Value));
@@ -171,17 +181,19 @@ public class PostSchedulerTests
         Assert.That(scheduler.TryPost(new DropOldestTestEvent { Value = 1 }).IsSuccess, Is.True);
         Assert.That(scheduler.TryPost(new DropOldestTestEvent { Value = 2 }).IsSuccess, Is.True);
         Assert.That(scheduler.TryPost(new DropOldestTestEvent { Value = 3 }).IsSuccess, Is.True);
-        Assert.That(scheduler.TryPost(new DropOldestTestEvent { Value = 4 }).IsSuccess, Is.True); 
+        Assert.That(scheduler.TryPost(new DropOldestTestEvent { Value = 4 }).IsSuccess, Is.True);
+        Assert.That(scheduler.TryPost(new DropOldestTestEvent { Value = 5 }).IsSuccess, Is.True); 
         
         scheduler.Pump();
-        Assert.That(received, Is.EqualTo(new[] { 2, 3, 4 }));
+        Assert.That(received, Is.EqualTo(new[] { 2, 3, 4, 5 }));
     }
 
     [Test]
     public void Backpressure_DropNewest()
     {
-        var options = new PostSchedulerOptions(3, 3, 0, 0, 1, 64, BackpressurePolicy.DropNewest);
-        var scheduler = new PostScheduler(_eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var options = new PostSchedulerOptions(4, 4, 0, 0, 1, 64, BackpressurePolicy.DropNewest);
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         var received = new List<int>();
         
         _eventCenter.SubscribeNotify<TestPostEvent>(0, (in TestPostEvent e) => received.Add(e.Value));
@@ -189,11 +201,14 @@ public class PostSchedulerTests
         scheduler.TryPost(new TestPostEvent { Value = 1 });
         scheduler.TryPost(new TestPostEvent { Value = 2 });
         scheduler.TryPost(new TestPostEvent { Value = 3 });
-        scheduler.TryPost(new TestPostEvent { Value = 4 }); 
+        scheduler.TryPost(new TestPostEvent { Value = 4 });
+        scheduler.TryPost(new TestPostEvent { Value = 5 }); 
         
         scheduler.Pump();
-        Assert.That(received, Is.EqualTo(new[] { 1, 2, 3 }));
+        Assert.That(received, Is.EqualTo(new[] { 1, 2, 3, 4 }));
     }
+
+
 
     [Test]
     public void Coalesced_Mode_Processes_Only_Once_Per_Pump()

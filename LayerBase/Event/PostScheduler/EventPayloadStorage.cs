@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using LayerBase.Core.DataStruct;
 
 namespace LayerBase.Core.Event;
 
@@ -7,6 +9,21 @@ internal interface IEventStore : IDisposable
     void Release(int index, int version);
     void Dispatch(int index, int version, EventCenter center);
     void DispatchDefault(EventCenter center);
+}
+
+internal static class PayloadStoreCache<T> where T : struct
+{
+    public static readonly EventStore<T>?[] Stores = new EventStore<T>[1024];
+
+    static PayloadStoreCache()
+    {
+        LayerHub.RegisterCacheResetter(Reset);
+    }
+
+    private static void Reset()
+    {
+        for (int i = 0; i < 1024; i++) Stores[i] = null;
+    }
 }
 
 internal sealed class EventStore<T> : IEventStore where T : struct
@@ -67,8 +84,6 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
     public ref T GetRef(int index, int version)
     {
-        // Internal use, assuming lock is held by caller if needed or handled by design.
-        // Actually, PostScheduler uses _bufferLock for coalescing.
         if (index < 0 || index >= _capacity || _versions[index] != version)
             throw new InvalidOperationException("Invalid payload handle");
         
@@ -129,61 +144,132 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
 internal sealed class EventPayloadStorage : IDisposable
 {
-    private readonly ConcurrentDictionary<int, IEventStore> _stores = new();
-    
-    public PayloadHandle Store<T>(in T payload) where T : struct
+    private IEventStore?[] _typeIdStores = new IEventStore[256];
+
+    public PayloadHandle Store<T>(int runtimeId, in T payload) where T : struct
     {
-        var typeId = EventTypeId<T>.Id;
-        var store = (EventStore<T>)_stores.GetOrAdd(typeId, _ => new EventStore<T>());
+        var store = GetStoreFast<T>(runtimeId);
         return store.Add(in payload);
     }
 
-    public ref T GetRef<T>(PayloadHandle handle) where T : struct
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EventStore<T> GetStoreFast<T>(int runtimeId) where T : struct
     {
-        if (_stores.TryGetValue(handle.EventTypeId, out var store))
+        var typeId = EventTypeId<T>.Id;
+        if ((uint)typeId < (uint)_typeIdStores.Length)
         {
-            return ref ((EventStore<T>)store).GetRef(handle.Index, handle.Version);
+            var s = _typeIdStores[typeId];
+            if (s != null) return (EventStore<T>)s;
         }
-        throw new InvalidOperationException("Store not found");
+        
+        return GetStoreFastSlow<T>(runtimeId, typeId);
     }
 
-    public void EnsureStore<T>() where T : struct
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private EventStore<T> GetStoreFastSlow<T>(int runtimeId, int typeId) where T : struct
     {
-        _stores.GetOrAdd(EventTypeId<T>.Id, _ => new EventStore<T>());
+        EventStore<T>? store = null;
+        if ((uint)runtimeId < 1024)
+        {
+            store = PayloadStoreCache<T>.Stores[runtimeId];
+        }
+
+        if (store == null)
+        {
+            store = CreateStoreGlobal<T>(runtimeId);
+        }
+
+        RegisterStoreLocal(typeId, store);
+        return store;
+    }
+
+    private void RegisterStoreLocal(int typeId, IEventStore store)
+    {
+        if (typeId >= _typeIdStores.Length)
+        {
+            Array.Resize(ref _typeIdStores, Math.Max(typeId + 1, _typeIdStores.Length * 2));
+        }
+        _typeIdStores[typeId] = store;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private EventStore<T> CreateStoreGlobal<T>(int runtimeId) where T : struct
+    {
+        lock (PayloadStoreCache<T>.Stores)
+        {
+            EventStore<T>? store = null;
+            if ((uint)runtimeId < 1024)
+            {
+                store = PayloadStoreCache<T>.Stores[runtimeId];
+                if (store != null) return store;
+
+                store = new EventStore<T>();
+                PayloadStoreCache<T>.Stores[runtimeId] = store;
+            }
+            else
+            {
+                store = new EventStore<T>();
+            }
+            return store;
+        }
+    }
+
+    public ref T GetRef<T>(int runtimeId, PayloadHandle handle) where T : struct
+    {
+        var store = GetStoreFast<T>(runtimeId);
+        return ref store.GetRef(handle.Index, handle.Version);
+    }
+
+    public void EnsureStore<T>(int runtimeId) where T : struct
+    {
+        GetStoreFast<T>(runtimeId);
     }
     
     public void Release(PayloadHandle handle)
     {
         if (handle.IsInvalid) return;
-        if (_stores.TryGetValue(handle.EventTypeId, out var store))
-        {
-            store.Release(handle.Index, handle.Version);
-        }
+        var store = GetStoreByTypeId(handle.EventTypeId);
+        store?.Release(handle.Index, handle.Version);
     }
 
     public void Dispatch(PayloadHandle handle, EventCenter center)
     {
         if (handle.IsInvalid) return;
-        if (_stores.TryGetValue(handle.EventTypeId, out var store))
+        var store = GetStoreByTypeId(handle.EventTypeId);
+        if (store == null)
         {
-            store.Dispatch(handle.Index, handle.Version, center);
+            // Console.WriteLine($"[DEBUG] Store not found for typeId {handle.EventTypeId}");
+            return;
         }
+        store.Dispatch(handle.Index, handle.Version, center);
     }
 
     public void DispatchDefault(int eventTypeId, EventCenter center)
     {
-        if (_stores.TryGetValue(eventTypeId, out var store))
+        var store = GetStoreByTypeId(eventTypeId);
+        if (store == null)
         {
-            store.DispatchDefault(center);
+            // Console.WriteLine($"[DEBUG] Store not found for default typeId {eventTypeId}");
+            return;
         }
+        store.DispatchDefault(center);
+    }
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private IEventStore? GetStoreByTypeId(int typeId)
+    {
+        if ((uint)typeId < (uint)_typeIdStores.Length)
+        {
+            return _typeIdStores[typeId];
+        }
+        return null;
     }
 
     public void Dispose()
     {
-        foreach (var store in _stores.Values)
-        {
-            store.Dispose();
-        }
-        _stores.Clear();
+        // Local stores are shared globally, so we don't dispose them here.
+        // They are cleared via Reset registration in LayerHub.
+        Array.Clear(_typeIdStores, 0, _typeIdStores.Length);
     }
 }

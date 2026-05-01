@@ -14,10 +14,16 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
 
     public EventRuntimePolicyTable? PolicyTable { get; private set; }
 
+    static DelayPublisherManager()
+    {
+        LayerHub.RegisterCacheResetter(() => Instance = null!);
+    }
+
     internal static void Initialize(DelayBufferOptions options, EventRuntimePolicyTable policyTable)
     {
         Instance = new DelayPublisherManager(options, policyTable);
     }
+
 
     private DelayPublisherManager(DelayBufferOptions options, EventRuntimePolicyTable policyTable)
     {

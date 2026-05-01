@@ -1,4 +1,5 @@
-using System.Text;
+﻿using System.Text;
+using LayerBase.Core.DataStruct;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 #if NETCOREAPP || NET5_0_OR_GREATER
@@ -13,6 +14,36 @@ internal sealed class LayerChain
     private readonly LayerRuntime _owner;
     private Layer?[] _indexedLayers = Array.Empty<Layer?>();
     private ulong _logicActiveMask;
+    private ulong _hasDelayMask;
+    private bool _delayDirty;
+
+    public bool HasAnyDelay
+    {
+        get
+        {
+            if (_delayDirty) RebuildDelayMask();
+            return _hasDelayMask != 0;
+        }
+    }
+
+    internal void MarkDelayDirty()
+    {
+        _delayDirty = true;
+    }
+
+    private void RebuildDelayMask()
+    {
+        _hasDelayMask = 0;
+        foreach (var node in responsibilityChain)
+        {
+            if (node is Layer layer && layer.HasDelayPublisher)
+            {
+                _hasDelayMask |= 1UL << layer.RouteIndex;
+            }
+        }
+        _delayDirty = false;
+    }
+
 
     internal LayerChain(ResponsibilityChain chain, LayerRuntime owner)
     {
@@ -55,6 +86,7 @@ internal sealed class LayerChain
             builtLayers.SelectMany(static layer => layer.GetSharedFieldParticipants(true)));
 
         _logicActiveMask = 0;
+        _hasDelayMask = 0;
         var allSubscribers = new List<IAutoSubscribe>();
         foreach (var layer in builtLayers)
         {
@@ -62,10 +94,12 @@ internal sealed class LayerChain
             allSubscribers.AddRange(layer.DiscoveredSubscribers);
 
             if (layer.HasActiveLogic) _logicActiveMask |= 1UL << layer.RouteIndex;
+            if (layer.HasDelayPublisher) _hasDelayMask |= 1UL << layer.RouteIndex;
         }
 
         EventGraphValidator.Validate(allSubscribers, _owner);
     }
+
 
     internal void Pump(float deltaTime)
     {
@@ -89,20 +123,9 @@ internal sealed class LayerChain
 
     private static int FindFirstBit(ulong mask)
     {
-#if NETCOREAPP || NET5_0_OR_GREATER
-        return BitOperations.TrailingZeroCount(mask);
-#else
-        if (mask == 0) return 64;
-        int count = 0;
-        if ((mask & 0xFFFFFFFF) == 0) { mask >>= 32; count += 32; }
-        if ((mask & 0xFFFF) == 0) { mask >>= 16; count += 16; }
-        if ((mask & 0xFF) == 0) { mask >>= 8; count += 8; }
-        if ((mask & 0xF) == 0) { mask >>= 4; count += 4; }
-        if ((mask & 0x3) == 0) { mask >>= 2; count += 2; }
-        if ((mask & 0x1) == 0) { count += 1; }
-        return count;
-#endif
+        return BitHelper.TrailingZeroCount(mask);
     }
+
 
     private void AssignEventBus()
     {
