@@ -16,7 +16,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Version>1.4.3</Version>
+        <Version>1.4.4</Version>
         <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
         <PackageOutputPath>$(MSBuildProjectDirectory)/../nupkgs</PackageOutputPath>
     </PropertyGroup>
