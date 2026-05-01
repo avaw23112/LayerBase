@@ -189,9 +189,9 @@ public sealed class EventCenter
         private int _notifyCountTotal;
         private int _notifySafeCountTotal;
 
-        private bool _isSingleSync;
-        private bool _isSingleNotify;
-        private bool _isSingleNotifySafe;
+        private volatile bool _isSingleSync;
+        private volatile bool _isSingleNotify;
+        private volatile bool _isSingleNotifySafe;
         private bool _isSmallNotifyFanoutOnly;
 
         private EventHandleDelegate<T>? _singleSyncHandler;
@@ -517,28 +517,43 @@ public sealed class EventCenter
 
         private void IdentifySpecializations()
         {
-            _singleSyncHandler = null;
-            _singleNotifyHandler = null;
-            _singleSubscribeHandler = null;
-            _isSingleSync = _syncCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
-                            _notifyCountTotal == 0 && _notifySafeCountTotal == 0;
-            if (_isSingleSync)
+            var singleSync = _syncCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
+                             _notifyCountTotal == 0 && _notifySafeCountTotal == 0;
+            if (singleSync)
             {
                 _singleSyncHandler = _syncHandlers[0];
+                _isSingleSync = true;
+            }
+            else
+            {
+                _isSingleSync = false;
+                _singleSyncHandler = null;
             }
 
-            _isSingleNotify = _notifyCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
-                              _syncCountTotal == 0 && _notifySafeCountTotal == 0;
-            if (_isSingleNotify)
+            var singleNotify = _notifyCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
+                               _syncCountTotal == 0 && _notifySafeCountTotal == 0;
+            if (singleNotify)
             {
                 _singleNotifyHandler = _notifyHandlers[0];
+                _isSingleNotify = true;
+            }
+            else
+            {
+                _isSingleNotify = false;
+                _singleNotifyHandler = null;
             }
 
-            _isSingleNotifySafe = _notifySafeCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
+            var singleSubscribe = _notifySafeCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
                                   _syncCountTotal == 0 && _notifyCountTotal == 0;
-            if (_isSingleNotifySafe)
+            if (singleSubscribe)
             {
                 _singleSubscribeHandler = _subscribeHandlers[0];
+                _isSingleNotifySafe = true;
+            }
+            else
+            {
+                _isSingleNotifySafe = false;
+                _singleSubscribeHandler = null;
             }
 
             _isSmallNotifyFanoutOnly = _notifyCountTotal + _notifySafeCountTotal is >= 2 and <= 8 &&

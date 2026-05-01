@@ -13,7 +13,7 @@ namespace LayerBase;
 public sealed class LayerRuntime : IDisposable
 {
     private LayerChain? _chain;
-    private LayerBaseSynchronizationContext? _context;
+    internal LayerBaseSynchronizationContext? _context;
     public WorldTaskApi? Tasks { get; private set; }
     private int _layerIndexCounter;
     private int _layerTypeBindingsVersion;
@@ -97,7 +97,6 @@ public sealed class LayerRuntime : IDisposable
         if (_context != null)
         {
             using var scope = _context.EnterScope();
-            _context.Update();
             
             // 1. Time tick
             _timer?.Tick(deltaTime, _timerSink!);
@@ -105,7 +104,10 @@ public sealed class LayerRuntime : IDisposable
             // 2. Delay tick (Stage 4)
             DelayPublisherManager.Instance?.Tick(deltaTime);
             
-            // 3. Post pump
+            // 3. Completion drain (Stage 5 Concurrency Simplified)
+            _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0);
+            
+            // 4. Post pump
             _scheduler?.Pump();
             
             _chain?.Pump(deltaTime);

@@ -2,7 +2,7 @@
 
 namespace LayerBase.Async;
 
-internal interface IArchTaskSource
+internal interface ILBTaskSource
 {
     bool IsCompleted { get; }
     void OnCompleted(Action continuation);
@@ -13,7 +13,7 @@ internal interface IArchTaskSource
     void TryRelease(); // 新增：安全尝试回�?
 }
 
-internal interface IArchTaskSource<T>
+internal interface ILBTaskSource<T>
 {
     bool IsCompleted { get; }
     void OnCompleted(Action            continuation);
@@ -24,9 +24,9 @@ internal interface IArchTaskSource<T>
     void TryRelease(); // 新增：安全尝试回�?
 }
 
-internal sealed class ArchTaskSource : IArchTaskSource
+internal sealed class LBTaskSource : ILBTaskSource
 {
-    private static readonly ObjectPool<ArchTaskSource> Pool = new(() => new ArchTaskSource());
+    private static readonly ObjectPool<LBTaskSource> Pool = new(() => new LBTaskSource());
     private CancellationToken _canceledToken;
     private SynchronizationContext? _context;
 
@@ -35,7 +35,7 @@ internal sealed class ArchTaskSource : IArchTaskSource
     private int _released; // 0 = in use, 1 = released
     private int _status;   // 0 = pending, -1 = completing, 1 = completed
 
-    private ArchTaskSource()
+    private LBTaskSource()
     {
         _context = SynchronizationContext.Current;
     }
@@ -105,7 +105,7 @@ internal sealed class ArchTaskSource : IArchTaskSource
         if (Interlocked.Exchange(ref _released, 1) == 0) Pool.Return(this);
     }
 
-    public static ArchTaskSource Rent(SynchronizationContext? context)
+    public static LBTaskSource Rent(SynchronizationContext? context)
     {
         var src = Pool.Rent();
         src._continuation = null;
@@ -117,7 +117,7 @@ internal sealed class ArchTaskSource : IArchTaskSource
         return src;
     }
 
-    public static ArchTaskSource Rent()
+    public static LBTaskSource Rent()
     {
         return Rent(SynchronizationContext.Current);
     }
@@ -143,9 +143,9 @@ internal sealed class ArchTaskSource : IArchTaskSource
     }
 }
 
-internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
+internal sealed class LBTaskSource<T> : ILBTaskSource<T>
 {
-    private static readonly ObjectPool<ArchTaskSource<T>> Pool = new(() => new ArchTaskSource<T>());
+    private static readonly ObjectPool<LBTaskSource<T>> Pool = new(() => new LBTaskSource<T>());
     private CancellationToken _canceledToken;
     private SynchronizationContext? _context;
 
@@ -155,7 +155,7 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
     private T _result = default!;
     private int _status; // 0 = pending, -1 = completing, 1 = completed
 
-    private ArchTaskSource()
+    private LBTaskSource()
     {
         _context = SynchronizationContext.Current;
     }
@@ -228,7 +228,7 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
         if (Interlocked.Exchange(ref _released, 1) == 0) Pool.Return(this);
     }
 
-    public static ArchTaskSource<T> Rent(SynchronizationContext? context)
+    public static LBTaskSource<T> Rent(SynchronizationContext? context)
     {
         var src = Pool.Rent();
         src._continuation = null;
@@ -241,7 +241,7 @@ internal sealed class ArchTaskSource<T> : IArchTaskSource<T>
         return src;
     }
 
-    public static ArchTaskSource<T> Rent()
+    public static LBTaskSource<T> Rent()
     {
         return Rent(SynchronizationContext.Current);
     }

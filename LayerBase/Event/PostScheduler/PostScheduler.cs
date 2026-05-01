@@ -8,6 +8,7 @@ namespace LayerBase.Core.Event;
 public sealed class PostScheduler : IDisposable
 {
     private readonly PostSchedulerOptions _options;
+    public PostSchedulerOptions Options => _options;
     private readonly RingBuffer<PostItem> _readyQueue;
     private readonly RingBuffer<PostItem> _nextQueue;
     private readonly EventPayloadStorage _payloadStorage;

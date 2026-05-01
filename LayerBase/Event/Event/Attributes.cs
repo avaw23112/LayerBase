@@ -20,6 +20,16 @@ public sealed class SubscribeAsyncAttribute : Attribute
 {
 }
 
+/// <summary>
+/// SubscribeParallel is fire-and-forget background execution.
+/// <para>Constraints:</para>
+/// <list type="bullet">
+/// <item>Fire-and-forget: caller does not wait for results.</item>
+/// <item>Not thread-safe: users must handle synchronization for shared state.</item>
+/// <item>No order guarantee: events may be processed out of order.</item>
+/// <item>No results: return values (if any) are ignored.</item>
+/// </list>
+/// </summary>
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class SubscribeParallelAttribute : Attribute
 {

@@ -12,6 +12,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     private readonly object _lock = new();
     private readonly int _mainThreadId;
     private readonly ConcurrentQueue<WorkItem> _queue = new();
+    internal MainThreadCompletionQueue CompletionQueue { get; } = new();
     private bool _disposed;
 
     private LayerBaseSynchronizationContext(int mainThreadId)
@@ -23,6 +24,9 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     public void Update(int maxItems = 0)
     {
         if (_disposed) return;
+
+        // Drain completion queue first as per design
+        CompletionQueue.Drain(maxItems);
 
         lock (_lock)
         {

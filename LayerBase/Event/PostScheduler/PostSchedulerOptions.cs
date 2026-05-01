@@ -8,6 +8,7 @@ public readonly struct PostSchedulerOptions
     public readonly double MaxMillisecondsPerPump;
     public readonly int MaxWavesPerPump;
     public readonly int TimeCheckInterval;
+    public readonly int MaxCompletionsPerPump;
     public readonly BackpressurePolicy DefaultBackpressure;
 
     public PostSchedulerOptions(
@@ -17,7 +18,8 @@ public readonly struct PostSchedulerOptions
         double maxMillisecondsPerPump,
         int maxWavesPerPump,
         int timeCheckInterval,
-        BackpressurePolicy defaultBackpressure)
+        BackpressurePolicy defaultBackpressure,
+        int maxCompletionsPerPump = 0)
     {
         ReadyCapacity = readyCapacity;
         NextCapacity = nextCapacity;
@@ -25,6 +27,7 @@ public readonly struct PostSchedulerOptions
         MaxMillisecondsPerPump = maxMillisecondsPerPump;
         MaxWavesPerPump = maxWavesPerPump <= 0 ? 1 : maxWavesPerPump;
         TimeCheckInterval = timeCheckInterval <= 0 ? 64 : timeCheckInterval;
+        MaxCompletionsPerPump = maxCompletionsPerPump;
         DefaultBackpressure = defaultBackpressure;
     }
     
@@ -35,5 +38,6 @@ public readonly struct PostSchedulerOptions
         maxMillisecondsPerPump: 0,
         maxWavesPerPump: 1,
         timeCheckInterval: 64,
+        maxCompletionsPerPump: 0,
         defaultBackpressure: BackpressurePolicy.RejectNew);
 }

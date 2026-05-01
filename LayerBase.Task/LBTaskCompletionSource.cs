@@ -3,12 +3,12 @@
 /// <summary>Manual completion for ArchTask.</summary>
 public sealed class LBTaskCompletionSource : IDisposable
 {
-    private readonly ArchTaskSource _source;
+    private readonly LBTaskSource _source;
     private int _disposed;
 
     public LBTaskCompletionSource()
     {
-        _source = ArchTaskSource.Rent();
+        _source = LBTaskSource.Rent();
     }
 
     public LBTask Task => new(_source);
@@ -83,12 +83,12 @@ public sealed class LBTaskCompletionSource : IDisposable
 /// <summary>Manual completion for ArchTask{T}.</summary>
 public sealed class LBTaskCompletionSource<T> : IDisposable
 {
-    private readonly ArchTaskSource<T> _source;
+    private readonly LBTaskSource<T> _source;
     private int _disposed;
 
     public LBTaskCompletionSource()
     {
-        _source = ArchTaskSource<T>.Rent();
+        _source = LBTaskSource<T>.Rent();
     }
 
     public LBTask<T> Task => new(_source);

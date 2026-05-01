@@ -7,9 +7,9 @@ namespace LayerBase.Async;
 [AsyncMethodBuilder(typeof(LBTaskMethodBuilder))]
 public readonly struct LBTask
 {
-    internal readonly IArchTaskSource? Source;
+    internal readonly ILBTaskSource? Source;
 
-    internal LBTask(IArchTaskSource? source)
+    internal LBTask(ILBTaskSource? source)
     {
         Source = source;
     }
@@ -24,22 +24,22 @@ public readonly struct LBTask
     public static LBTask FromException(Exception ex)
     {
         if (ex == null) throw new ArgumentNullException(nameof(ex));
-        var src = ArchTaskSource.Rent();
+        var src = LBTaskSource.Rent();
         src.SetException(ex);
         return new LBTask(src);
     }
 
     public static LBTask FromCanceled(CancellationToken token)
     {
-        var src = ArchTaskSource.Rent();
+        var src = LBTaskSource.Rent();
         src.SetCanceled(token);
         return new LBTask(src);
     }
 
     public static LBTask Yield()
     {
-        var src = ArchTaskSource.Rent();
-        ThreadPool.QueueUserWorkItem(static state => ((ArchTaskSource)state!).SetResult(), src);
+        var src = LBTaskSource.Rent();
+        ThreadPool.QueueUserWorkItem(static state => ((LBTaskSource)state!).SetResult(), src);
         return new LBTask(src);
     }
 
@@ -47,13 +47,13 @@ public readonly struct LBTask
     {
         if (token.IsCancellationRequested) return FromCanceled(token);
         ctx ??= SynchronizationContext.Current;
-        var src = ArchTaskSource.Rent(ctx);
+        var src = LBTaskSource.Rent(ctx);
         if (ctx is LayerBaseSynchronizationContext lbCtx)
-            lbCtx.ScheduleInFrames(static state => ((ArchTaskSource)state!).SetResult(), src, 1);
+            lbCtx.ScheduleInFrames(static state => ((LBTaskSource)state!).SetResult(), src, 1);
         else if (ctx != null)
-            ctx.Post(static state => ((ArchTaskSource)state!).SetResult(), src);
+            ctx.Post(static state => ((LBTaskSource)state!).SetResult(), src);
         else
-            ThreadPool.QueueUserWorkItem(static state => ((ArchTaskSource)state!).SetResult(), src);
+            ThreadPool.QueueUserWorkItem(static state => ((LBTaskSource)state!).SetResult(), src);
         return new LBTask(src);
     }
 
@@ -62,7 +62,7 @@ public readonly struct LBTask
         if (delay <= TimeSpan.Zero) return CompletedTask;
         if (token.IsCancellationRequested) return FromCanceled(token);
 
-        var src = ArchTaskSource.Rent();
+        var src = LBTaskSource.Rent();
         var work = DelayWorkItem.Rent(src, token);
         DelayScheduler.Schedule(work, delay);
         work.RegisterCancellation();
@@ -72,7 +72,7 @@ public readonly struct LBTask
     public static LBTask Run(Action action)
     {
         if (action == null) throw new ArgumentNullException(nameof(action));
-        var src = ArchTaskSource.Rent();
+        var src = LBTaskSource.Rent();
         var work = RunActionWorkItem.Rent(action, src);
         ThreadPool.QueueUserWorkItem(RunActionWorkItem.InvokeOnThreadPool, work);
         return new LBTask(src);
@@ -83,9 +83,209 @@ public readonly struct LBTask
         if (action == null) throw new ArgumentNullException(nameof(action));
         if (ctx == null) throw new ArgumentNullException(nameof(ctx));
 
-        var src = ArchTaskSource.Rent(ctx);
+        var src = LBTaskSource.Rent(ctx);
         var work = RunActionWorkItem.Rent(action, src);
         ctx.Post(RunActionWorkItem.InvokeOnContext, work);
+        return new LBTask(src);
+    }
+
+    public static LBTask RunBackground(Action action)
+    {
+        if (action == null) throw new ArgumentNullException(nameof(action));
+        var ctx = SynchronizationContext.Current as LayerBaseSynchronizationContext;
+        var src = LBTaskSource.Rent(ctx);
+
+        var success = ParallelExecutor.Instance.TrySchedule(() =>
+        {
+            try
+            {
+                action();
+                if (ctx != null)
+                {
+                    ctx.CompletionQueue.Enqueue(() => src.SetResult());
+                }
+                else
+                {
+                    src.SetResult();
+                }
+            }
+            catch (Exception ex)
+            {
+                if (ctx != null)
+                {
+                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
+                }
+                else
+                {
+                    src.SetException(ex);
+                }
+            }
+        });
+
+        if (!success)
+        {
+            src.SetException(new InvalidOperationException("Background task queue is full (Backpressure: RejectNew)."));
+        }
+
+        return new LBTask(src);
+    }
+
+    public static LBTask RunBackground(Action<CancellationToken> action, CancellationToken cancellationToken)
+    {
+        if (action == null) throw new ArgumentNullException(nameof(action));
+        var ctx = SynchronizationContext.Current as LayerBaseSynchronizationContext;
+        var src = LBTaskSource.Rent(ctx);
+
+        var success = ParallelExecutor.Instance.TrySchedule(() =>
+        {
+            try
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
+                    else src.SetCanceled(cancellationToken);
+                    return;
+                }
+
+                action(cancellationToken);
+
+                if (ctx != null)
+                {
+                    ctx.CompletionQueue.Enqueue(() => src.SetResult());
+                }
+                else
+                {
+                    src.SetResult();
+                }
+            }
+            catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
+            {
+                if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
+                else src.SetCanceled(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                if (ctx != null)
+                {
+                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
+                }
+                else
+                {
+                    src.SetException(ex);
+                }
+            }
+        });
+
+        if (!success)
+        {
+            src.SetException(new InvalidOperationException("Background task queue is full (Backpressure: RejectNew)."));
+        }
+
+        return new LBTask(src);
+    }
+
+    public static LBTask<TResult> RunBackground<TResult>(Func<TResult> func)
+    {
+        if (func == null) throw new ArgumentNullException(nameof(func));
+        var ctx = SynchronizationContext.Current as LayerBaseSynchronizationContext;
+        var src = LBTaskSource<TResult>.Rent(ctx);
+
+        var success = ParallelExecutor.Instance.TrySchedule(() =>
+        {
+            try
+            {
+                var result = func();
+                if (ctx != null)
+                {
+                    ctx.CompletionQueue.Enqueue(() => src.SetResult(result));
+                }
+                else
+                {
+                    src.SetResult(result);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (ctx != null)
+                {
+                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
+                }
+                else
+                {
+                    src.SetException(ex);
+                }
+            }
+        });
+
+        if (!success)
+        {
+            src.SetException(new InvalidOperationException("Background task queue is full (Backpressure: RejectNew)."));
+        }
+
+        return new LBTask<TResult>(src);
+    }
+
+    public static LBTask<TResult> RunBackground<TResult>(Func<CancellationToken, TResult> func, CancellationToken cancellationToken)
+    {
+        if (func == null) throw new ArgumentNullException(nameof(func));
+        var ctx = SynchronizationContext.Current as LayerBaseSynchronizationContext;
+        var src = LBTaskSource<TResult>.Rent(ctx);
+
+        var success = ParallelExecutor.Instance.TrySchedule(() =>
+        {
+            try
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
+                    else src.SetCanceled(cancellationToken);
+                    return;
+                }
+
+                var result = func(cancellationToken);
+
+                if (ctx != null)
+                {
+                    ctx.CompletionQueue.Enqueue(() => src.SetResult(result));
+                }
+                else
+                {
+                    src.SetResult(result);
+                }
+            }
+            catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
+            {
+                if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
+                else src.SetCanceled(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                if (ctx != null)
+                {
+                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
+                }
+                else
+                {
+                    src.SetException(ex);
+                }
+            }
+        });
+
+        if (!success)
+        {
+            src.SetException(new InvalidOperationException("Background task queue is full (Backpressure: RejectNew)."));
+        }
+
+        return new LBTask<TResult>(src);
+    }
+
+    public static LBTask SwitchToMainThread()
+    {
+        var ctx = SynchronizationContext.Current as LayerBaseSynchronizationContext;
+        if (ctx == null) return CompletedTask;
+
+        var src = LBTaskSource.Rent(ctx);
+        ctx.CompletionQueue.Enqueue(() => src.SetResult());
         return new LBTask(src);
     }
 
@@ -100,7 +300,7 @@ public readonly struct LBTask
         private long _dueTimestamp;
         private int _registrationInitializing;
         private int _returnPending;
-        private ArchTaskSource? _source;
+        private LBTaskSource? _source;
         private CancellationToken _token;
 
         public CancellationTokenRegistration CancellationRegistration;
@@ -111,7 +311,7 @@ public readonly struct LBTask
             set => Volatile.Write(ref _dueTimestamp, value);
         }
 
-        public static DelayWorkItem Rent(ArchTaskSource source, CancellationToken token)
+        public static DelayWorkItem Rent(LBTaskSource source, CancellationToken token)
         {
             var work = Pool.Rent();
             work._source = source;
@@ -378,9 +578,9 @@ public readonly struct LBTask
             ((RunActionWorkItem)state!).Invoke();
 
         private Action? _action;
-        private ArchTaskSource? _source;
+        private LBTaskSource? _source;
 
-        public static RunActionWorkItem Rent(Action action, ArchTaskSource source)
+        public static RunActionWorkItem Rent(Action action, LBTaskSource source)
         {
             var work = Pool.Rent();
             work._action = action;
@@ -410,9 +610,9 @@ public readonly struct LBTask
 
     public readonly struct Awaiter : INotifyCompletion
     {
-        private readonly IArchTaskSource? _source;
+        private readonly ILBTaskSource? _source;
 
-        internal Awaiter(IArchTaskSource? source)
+        internal Awaiter(ILBTaskSource? source)
         {
             _source = source;
         }
@@ -441,11 +641,11 @@ public readonly struct LBTask
 [AsyncMethodBuilder(typeof(LBTaskMethodBuilder<>))]
 public readonly struct LBTask<T>
 {
-    internal readonly IArchTaskSource<T>? Source;
+    internal readonly ILBTaskSource<T>? Source;
     internal readonly T? Result;
     internal readonly bool HasResult;
 
-    internal LBTask(IArchTaskSource<T>? source)
+    internal LBTask(ILBTaskSource<T>? source)
     {
         Source = source;
         Result = default;
@@ -474,14 +674,14 @@ public readonly struct LBTask<T>
     public static LBTask<T> FromException(Exception ex)
     {
         if (ex == null) throw new ArgumentNullException(nameof(ex));
-        var src = ArchTaskSource<T>.Rent();
+        var src = LBTaskSource<T>.Rent();
         src.SetException(ex);
         return new LBTask<T>(src);
     }
 
     public static LBTask<T> FromCanceled(CancellationToken token)
     {
-        var src = ArchTaskSource<T>.Rent();
+        var src = LBTaskSource<T>.Rent();
         src.SetCanceled(token);
         return new LBTask<T>(src);
     }
@@ -489,7 +689,7 @@ public readonly struct LBTask<T>
     public static LBTask<T> Run(Func<T> func)
     {
         if (func == null) throw new ArgumentNullException(nameof(func));
-        var src = ArchTaskSource<T>.Rent();
+        var src = LBTaskSource<T>.Rent();
         var work = RunFuncWorkItem.Rent(func, src);
         ThreadPool.QueueUserWorkItem(RunFuncWorkItem.InvokeOnThreadPool, work);
         return new LBTask<T>(src);
@@ -500,7 +700,7 @@ public readonly struct LBTask<T>
         if (func == null) throw new ArgumentNullException(nameof(func));
         if (ctx == null) throw new ArgumentNullException(nameof(ctx));
 
-        var src = ArchTaskSource<T>.Rent(ctx);
+        var src = LBTaskSource<T>.Rent(ctx);
         var work = RunFuncWorkItem.Rent(func, src);
         ctx.Post(RunFuncWorkItem.InvokeOnContext, work);
         return new LBTask<T>(src);
@@ -517,9 +717,9 @@ public readonly struct LBTask<T>
             ((RunFuncWorkItem)state!).Invoke();
 
         private Func<T>? _func;
-        private ArchTaskSource<T>? _source;
+        private LBTaskSource<T>? _source;
 
-        public static RunFuncWorkItem Rent(Func<T> func, ArchTaskSource<T> source)
+        public static RunFuncWorkItem Rent(Func<T> func, LBTaskSource<T> source)
         {
             var work = Pool.Rent();
             work._func = func;
