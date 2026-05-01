@@ -4,33 +4,32 @@ using LayerBase.Layers;
 
 namespace LayerBase.DI;
 
-public sealed class ServiceProvider : IServiceProvider, IDisposable
+internal sealed class ServiceProvider : IServiceProvider, IDisposable
 {
-    private static ServiceProvider _root = new();
-
     private readonly ConcurrentDictionary<Type, Lazy<object>> _instances = new();
     private readonly ConcurrentDictionary<Type, ServiceDescriptor> _map;
+    private readonly WorldServiceRoot _worldRoot;
     private readonly Layer? _ownerLayer;
     private int _disposed;
 
-    internal ServiceProvider()
+    internal ServiceProvider(WorldServiceRoot worldRoot)
     {
+        _worldRoot = worldRoot ?? throw new ArgumentNullException(nameof(worldRoot));
         _map = new ConcurrentDictionary<Type, ServiceDescriptor>();
         _ownerLayer = null;
     }
 
-    public ServiceProvider(IEnumerable<ServiceDescriptor> descriptors, Layer? ownerLayer = null)
+    public ServiceProvider(WorldServiceRoot worldRoot, IEnumerable<ServiceDescriptor> descriptors, Layer? ownerLayer = null)
     {
+        _worldRoot = worldRoot ?? throw new ArgumentNullException(nameof(worldRoot));
         if (descriptors == null) throw new ArgumentNullException(nameof(descriptors));
 
         _map = new ConcurrentDictionary<Type, ServiceDescriptor>();
         _ownerLayer = ownerLayer;
         foreach (var d in descriptors)
             if (d.Lifetime == ServiceLifetime.Singleton)
-
-                _root._map[d.ServiceType] = d;
+                _worldRoot.Register(d);
             else
-
                 _map[d.ServiceType] = d;
     }
 
@@ -58,12 +57,6 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
         if (service == null)
             throw new InvalidOperationException($"Service not registered: {typeof(T)}");
         return (T)service;
-    }
-
-    public static void ResetRoot()
-    {
-        var oldRoot = Interlocked.Exchange(ref _root, new ServiceProvider());
-        oldRoot.Dispose();
     }
 
     internal List<IAutoSubscribe> InitializeAutoSubscriptions(Layer                          owner,
@@ -104,8 +97,8 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
         if (_map.TryGetValue(serviceType, out var desc)) return Resolve(desc, callstack);
 
 
-        if (this != _root && _root._map.TryGetValue(serviceType, out var parentDesc))
-            return _root.Resolve(parentDesc, callstack);
+        if (_worldRoot.TryGetDescriptor(serviceType, out var parentDesc))
+            return _worldRoot.GetOrCreate(parentDesc!, _ownerLayer, () => CreateInstance(parentDesc!, callstack));
 
         return null;
     }
@@ -115,7 +108,7 @@ public sealed class ServiceProvider : IServiceProvider, IDisposable
         var instance = desc.Lifetime switch
                        {
                            ServiceLifetime.Instance => desc.Instance!,
-                           ServiceLifetime.Singleton => GetOrCreateCached(desc, callstack),
+                           ServiceLifetime.Singleton => _worldRoot.GetOrCreate(desc, _ownerLayer, () => CreateInstance(desc, callstack)),
                            ServiceLifetime.Scoped => GetOrCreateCached(desc, callstack),
                            ServiceLifetime.Transient => CreateInstance(desc, callstack),
                            _ => throw new NotSupportedException($"Unsupported lifetime {desc.Lifetime}")

@@ -101,7 +101,6 @@ public static class LayerHub
             s_runtimes.Clear();
             s_runtimeIdCounter = 0;
             foreach (var resetter in s_cacheResetters) resetter();
-            ServiceProvider.ResetRoot();
             ServiceLayerBinder.Reset();
             LayerServiceRegistry.Reset();
             OnLayerEventInfo = null;

@@ -22,6 +22,7 @@ public sealed class LayerRuntime : IDisposable
     private readonly int _id;
 
     public int Id => _id;
+    internal WorldServiceRoot Services { get; }
     public EventCenter EventCenter { get; internal set; }
     
     private PostScheduler? _scheduler;
@@ -39,6 +40,7 @@ public sealed class LayerRuntime : IDisposable
     {
         _id = id;
         EventCenter = new EventCenter();
+        Services = new WorldServiceRoot(this);
         LayerHub.Internal_Register(this);
     }
 
@@ -287,6 +289,10 @@ public sealed class LayerRuntime : IDisposable
         _disposed = true;
         _chain?.DisposeLayers();
         _chain = null;
+
+        // 释放当前世界内的 Singleton 实例。
+        Services.Dispose();
+
         _scheduler?.Dispose();
         _timer?.Dispose();
         DelayPublisherManager.Instance?.Clear();

@@ -177,7 +177,7 @@ public abstract class Layer : Node, IDisposable
         m_collectingGeneratedServices = false;
 
         var descriptors = m_serviceCollection.ToDescriptors();
-        var newProvider = new ServiceProvider(descriptors, this);
+        var newProvider = new ServiceProvider(OwnerContext!.Services, descriptors, this);
         var oldProvider = Interlocked.Exchange(ref m_serviceProvider, newProvider);
         oldProvider?.Dispose();
         m_resolvedServices = newProvider.ResolveOrderedServices(descriptors);

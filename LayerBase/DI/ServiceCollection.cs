@@ -17,6 +17,18 @@ public class ServiceCollection : IServiceCollection
         return Add(ServiceDescriptor.Singleton(instance));
     }
 
+    public IServiceCollection AddSingleton<TService, TImpl>()
+        where TImpl : TService
+    {
+        return Add(ServiceDescriptor.Singleton<TService, TImpl>());
+    }
+
+    public IServiceCollection AddSingleton<TService>(
+        Func<IServiceProvider, TService> factory)
+    {
+        return Add(ServiceDescriptor.Singleton(factory));
+    }
+
     public IServiceCollection AddTransient<TService, TImpl>() where TImpl : TService
     {
         return Add(ServiceDescriptor.Transient<TService, TImpl>());

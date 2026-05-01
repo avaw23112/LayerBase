@@ -35,12 +35,28 @@ public interface IService
 /// </summary>
 public interface IServiceCollection
 {
-    IServiceCollection Add(ServiceDescriptor           descriptor);
+    IServiceCollection Add(ServiceDescriptor descriptor);
+
     IServiceCollection AddSingleton<TService>(TService instance);
-    IServiceCollection AddTransient<TService, TImpl>() where TImpl : TService;
-    IServiceCollection AddTransient<TService>(Func<IServiceProvider, TService> factory);
-    IServiceCollection AddScoped<TService, TImpl>() where TImpl : TService;
-    IServiceCollection AddScoped<TService>(Func<IServiceProvider, TService> factory);
+
+    IServiceCollection AddSingleton<TService, TImpl>()
+        where TImpl : TService;
+
+    IServiceCollection AddSingleton<TService>(
+        Func<IServiceProvider, TService> factory);
+
+    IServiceCollection AddTransient<TService, TImpl>()
+        where TImpl : TService;
+
+    IServiceCollection AddTransient<TService>(
+        Func<IServiceProvider, TService> factory);
+
+    IServiceCollection AddScoped<TService, TImpl>()
+        where TImpl : TService;
+
+    IServiceCollection AddScoped<TService>(
+        Func<IServiceProvider, TService> factory);
+
     IReadOnlyList<ServiceDescriptor> ToDescriptors();
 }
 
