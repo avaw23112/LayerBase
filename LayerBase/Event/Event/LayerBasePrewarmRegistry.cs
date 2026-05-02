@@ -4,6 +4,11 @@ using LayerBase.Core.Event;
 
 namespace LayerBase.Core.Event;
 
+public partial struct EventPrewarmBootstrapper
+{
+    
+}
+
 /// <summary>
 /// 事件预热注册表。
 /// 该类维护了一系列由源生成器或手动添加的预热动作。

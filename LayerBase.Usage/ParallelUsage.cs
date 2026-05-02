@@ -1,11 +1,17 @@
 ﻿using LayerBase.Core.Event;
+using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 
 namespace LayerBase.Usage;
 
-public struct HeavyComputeEvent
+public partial struct HeavyComputeEvent
 {
     public int Data;
+}
+
+public class HeavyComputeEventMetaData : EventMetaData<HeavyComputeEvent>
+{
+    
 }
 
 public partial class ComputeLayer : Layer

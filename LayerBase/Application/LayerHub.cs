@@ -62,6 +62,7 @@ public static class LayerHub
             if (id >= 256) throw new InvalidOperationException("Max 256 concurrent LayerRuntimes supported by static caches.");
             var runtime = new LayerRuntime(id);
             if (s_primaryRuntime == null) s_primaryRuntime = runtime;
+            new EventPrewarmBootstrapper();
             return new LayerRuntime.LayersBuilder(runtime);
         }
     }
