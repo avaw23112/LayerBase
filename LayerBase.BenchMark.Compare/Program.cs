@@ -65,6 +65,7 @@ public class PublishSingleSubscriberCompareBench : CompareBenchmarkBase
     private ISubscriber<NotifyPayload> _messagePipeSubscriber = null!;
     private IDisposable _messagePipeSubscription = null!;
     private IServiceProvider _provider = null!;
+    private EventCenter _center = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -81,7 +82,8 @@ public class PublishSingleSubscriberCompareBench : CompareBenchmarkBase
         LayerHub.Reset();
         var layer = new CompareLayer();
         layer.RegisterService(new CompareNotifyManager());
-        LayerHub.CreateLayers().Push(layer).Build();
+        _center = LayerHub.CreateLayers().Push(layer).Build().Prewarm().EventCenter;
+        
     }
 
     [GlobalCleanup]
@@ -121,7 +123,7 @@ public class PublishSingleSubscriberCompareBench : CompareBenchmarkBase
     public void LayerBase()
     {
         for (var i = 0; i < OneMillion; i++)
-            LayerHub.Send(NotifyPayload.Instance);
+            _center.Send(NotifyPayload.Instance);
     }
 }
 
@@ -134,7 +136,7 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
     private IServiceProvider _provider = null!;
     private LayerRuntime _layerRuntime = null!;
     private EventCenter _center = null;
-    [Params(4)] public int SubscriberCount { get; set; }
+    [Params(1,4,8,16)] public int SubscriberCount { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -180,13 +182,13 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
         LayerHub.Reset();
     }
 
-    //[Benchmark(Baseline = true, Description = "C# event Notify扇出 (N订阅者) - 100万次")]
-    //[BenchmarkCategory("Compare.Notify", "CSharpEvent")]
-    //public void CSharpEvent()
-    //{
-    //    for (var i = 0; i < OneMillion; i++)
-    //        _publisher.Publish(in NotifyPayload.Instance);
-    //}
+    [Benchmark(Baseline = true, Description = "C# event Notify扇出 (N订阅者) - 100万次")]
+    [BenchmarkCategory("Compare.Notify", "CSharpEvent")]
+    public void CSharpEvent()
+    {
+        for (var i = 0; i < OneMillion; i++)
+            _publisher.Publish(in NotifyPayload.Instance);
+    }
     [Benchmark(Description = "MessagePipe Notify扇出 (N订阅者) - 100万次")]
     [BenchmarkCategory("Compare.Notify", "MessagePipe")]
     public void MessagePipe()
@@ -210,6 +212,7 @@ public class RequestResponseCompareBench : CompareBenchmarkBase
     private readonly CompareRequest _request = new(123);
     private IRequestHandler<CompareRequest, CompareResponse> _messagePipeHandler = null!;
     private IServiceProvider _provider = null!;
+    private EventCenter _center = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -221,7 +224,7 @@ public class RequestResponseCompareBench : CompareBenchmarkBase
         _messagePipeHandler = _provider.GetRequiredService<IRequestHandler<CompareRequest, CompareResponse>>();
 
         LayerHub.Reset();
-        LayerHub.CreateLayers().Push(new CompareCallLayer()).Build();
+        LayerHub.CreateLayers().Push(new CompareCallLayer()).Build().Prewarm();
     }
 
     [GlobalCleanup]
@@ -262,6 +265,7 @@ public class ManyNotifyFixedBatch32CompareBench : CompareBenchmarkBase
     private List<IDisposable> _messagePipeSubscriptions = null!;
     private IServiceProvider _provider = null!;
     private ManyNotifyBatch32Publishers _publishers = null!;
+    private EventCenter _center = null!;
 
     [Params(2, 3)] public int SubscribersPerEvent { get; set; }
 
@@ -273,7 +277,7 @@ public class ManyNotifyFixedBatch32CompareBench : CompareBenchmarkBase
         LayerHub.Reset();
         var layer = new CompareLayer();
         ManyNotifyFixedBatchRegistry.RegisterLayerBase32(layer, SubscribersPerEvent);
-        LayerHub.CreateLayers().Push(layer).Build();
+        LayerHub.CreateLayers().Push(layer).Build().Prewarm();
 
         var services = new ServiceCollection();
         services.AddMessagePipe();
@@ -330,7 +334,7 @@ public class ManyNotifyFixedBatch128CompareBench : CompareBenchmarkBase
         LayerHub.Reset();
         var layer = new CompareLayer();
         ManyNotifyFixedBatchRegistry.RegisterLayerBase128(layer, SubscribersPerEvent);
-        LayerHub.CreateLayers().Push(layer).Build();
+        LayerHub.CreateLayers().Push(layer).Build().Prewarm();
 
         var services = new ServiceCollection();
         services.AddMessagePipe();
@@ -387,7 +391,7 @@ public class ManyNotifyFixedBatch256CompareBench : CompareBenchmarkBase
         LayerHub.Reset();
         var layer = new CompareLayer();
         ManyNotifyFixedBatchRegistry.RegisterLayerBase256(layer, SubscribersPerEvent);
-        LayerHub.CreateLayers().Push(layer).Build();
+        LayerHub.CreateLayers().Push(layer).Build().Prewarm();
 
         var services = new ServiceCollection();
         services.AddMessagePipe();

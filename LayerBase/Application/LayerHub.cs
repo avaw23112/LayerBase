@@ -138,7 +138,7 @@ public static class LayerHub
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EventHandledState Send<T>(in T value) where T : struct
     {
-        return s_primaryRuntime?.Send(value) ?? EventHandledState.Continue;
+        return s_primaryRuntime.Send(value);
     }
 
     /// <summary>
