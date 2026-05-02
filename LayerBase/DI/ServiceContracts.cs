@@ -1,8 +1,6 @@
-using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
-using LayerBase.Event.Delay;
 using LayerBase.Layers;
 
 namespace LayerBase.DI;
@@ -458,6 +456,7 @@ internal static class ServiceLayerBinder
 
 public static class ServiceExtensions
 {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ServiceLayerBinding GetBinding(this IService service)
     {
         return ServiceLayerBinder.RequireBinding(service);
@@ -1050,7 +1049,7 @@ public static class LayerContextExtensions
     {
         return ServiceLayerBinder.RequireLayer(context.GetBinding()).OnEvent<TValue>();
     }
-
+    
     public static T GetService<T>(this ILayerContext context)
         where T : class
     {
