@@ -11,7 +11,7 @@ public struct NotificationEvent
 }
 
 // 1. 定义 Service 负责业务逻辑
-public class NotifyManager : IService
+public partial class NotifyManager : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {

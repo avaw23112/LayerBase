@@ -1,4 +1,4 @@
-﻿using LayerBase;
+using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.DI.Options;
@@ -6,7 +6,7 @@ using LayerBase.Layers;
 
 namespace EventsTest;
 
-public class ServiceRegistrationTests
+public partial class ServiceRegistrationTests
 {
     [SetUp]
     public void SetUp()
@@ -129,7 +129,7 @@ public class ServiceRegistrationTests
         Assert.That(service.TickCount, Is.EqualTo(2));
     }
 
-    private class InstanceServiceModule : IService
+    private partial class InstanceServiceModule : IService
     {
         private readonly object _instance;
 
@@ -156,7 +156,7 @@ public class ServiceRegistrationTests
     {
     }
 
-    public class DemoServiceModule : IService
+    public partial class DemoServiceModule : IService
     {
         public void ConfigureServices(IServiceCollection services)
         {
@@ -164,7 +164,7 @@ public class ServiceRegistrationTests
         }
     }
 
-    public class ConcurrentServiceModule : IService
+    public partial class ConcurrentServiceModule : IService
     {
         public void ConfigureServices(IServiceCollection services)
         {
@@ -182,7 +182,7 @@ public class ServiceRegistrationTests
         public int Id { get; } = Id;
     }
 
-    public class UpdatingServiceModule : IService
+    public partial class UpdatingServiceModule : IService
     {
         public void ConfigureServices(IServiceCollection services)
         {
@@ -190,7 +190,7 @@ public class ServiceRegistrationTests
         }
     }
 
-    public class UpdatingService : IService, IUpdate
+    public partial class UpdatingService : IService, IUpdate
     {
         public int TickCount { get; private set; }
 
@@ -204,4 +204,3 @@ public class ServiceRegistrationTests
         }
     }
 }
-

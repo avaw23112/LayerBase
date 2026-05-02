@@ -8,7 +8,7 @@ using NUnit.Framework;
 namespace EventsTest;
 
 [TestFixture]
-public class SubscribeTests
+public partial class SubscribeTests
 {
     [SetUp]
     public void Setup()
@@ -59,7 +59,7 @@ public class SubscribeTests
     public struct Event_X { }
     public struct Event_Y { }
 
-    private class MockCycleSubscriber : IService, IAutoSubscribe
+    private partial class MockCycleSubscriber : IService, IAutoSubscribe
     {
         public void ConfigureServices(IServiceCollection services) => services.AddSingleton(this);
         public void AutoBind(Layer layer) { }

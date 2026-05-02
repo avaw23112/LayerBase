@@ -73,7 +73,7 @@ public partial class TestManagerC : ILayerContext
 }
 
 [TestFixture]
-public class ManagerAutoSubscriptionTests
+public partial class ManagerAutoSubscriptionTests
 {
     [SetUp]
     public void SetUp()
@@ -118,7 +118,7 @@ public class ManagerAutoSubscriptionTests
     {
     }
 
-    private class OrderTestService : IService
+    private partial class OrderTestService : IService
     {
         private readonly List<string> _trace;
 
@@ -129,13 +129,12 @@ public class ManagerAutoSubscriptionTests
 
         public void ConfigureServices(IServiceCollection services)
         {
-            // 浣跨敤宸ュ巶妯″紡娉ㄥ唽锛岃В鍐虫瀯閫犲嚱鏁版敞鍏?Trace 鐨勯棶棰?
             services.AddSingleton<TestManagerA>(new TestManagerA(_trace));
             services.AddSingleton<TestManagerB>(new TestManagerB(_trace));
         }
     }
 
-    private class CapabilityTestService : IService
+    private partial class CapabilityTestService : IService
     {
         private readonly List<string> _trace;
 
@@ -150,4 +149,3 @@ public class ManagerAutoSubscriptionTests
         }
     }
 }
-

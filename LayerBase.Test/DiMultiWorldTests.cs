@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace EventsTest;
 
 [TestFixture]
-public class DiMultiWorldTests
+public partial class DiMultiWorldTests
 {
     [SetUp]
     public void SetUp()
@@ -24,7 +24,7 @@ public class DiMultiWorldTests
         public int Value { get; set; }
     }
 
-    public class CounterModule : IService
+    public partial class CounterModule : IService
     {
         private readonly ServiceLifetime _lifetime;
 
@@ -138,7 +138,7 @@ public class DiMultiWorldTests
         Assert.That(ReferenceEquals(counter1, counter2), Is.False);
     }
 
-    public class ManualInstanceModule : IService
+    public partial class ManualInstanceModule : IService
     {
         private readonly ICounter _instance;
         public ManualInstanceModule(ICounter instance) => _instance = instance;

@@ -3,7 +3,7 @@ using LayerBase.Layers;
 
 namespace LayerBase.Usage;
 
-public sealed class SharedInventoryService : IService
+public sealed partial class SharedInventoryService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -12,7 +12,7 @@ public sealed class SharedInventoryService : IService
     }
 }
 
-public sealed class SharedStatePublisherService : IService
+public sealed partial class SharedStatePublisherService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -20,7 +20,7 @@ public sealed class SharedStatePublisherService : IService
     }
 }
 
-public sealed class SharedStateReaderService : IService
+public sealed partial class SharedStateReaderService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -28,7 +28,7 @@ public sealed class SharedStateReaderService : IService
     }
 }
 
-public sealed class InventoryStorageModule : ILayerContext
+public sealed partial class InventoryStorageModule : ILayerContext
 {
     [Provide(typeof(SharedInventoryService), "items")]
     private readonly List<string> _items = new();
@@ -39,7 +39,7 @@ public sealed class InventoryStorageModule : ILayerContext
     }
 }
 
-public sealed class InventoryQueryModule : ILayerContext
+public sealed partial class InventoryQueryModule : ILayerContext
 {
     [From(typeof(SharedInventoryService), "items")]
     private readonly IReadOnlyList<string> _items = default!;
@@ -50,7 +50,7 @@ public sealed class InventoryQueryModule : ILayerContext
     }
 }
 
-public sealed class InventoryStateModule : ILayerContext
+public sealed partial class InventoryStateModule : ILayerContext
 {
     [Provide(typeof(SharedFieldLayer), "equip-state")]
     private readonly Dictionary<string, bool> _equipped = new();
@@ -61,7 +61,7 @@ public sealed class InventoryStateModule : ILayerContext
     }
 }
 
-public sealed class InventoryHudModule : ILayerContext
+public sealed partial class InventoryHudModule : ILayerContext
 {
     [From(typeof(SharedFieldLayer), "equip-state")]
     private readonly IReadOnlyDictionary<string, bool> _equipped = default!;
@@ -102,4 +102,3 @@ public static class SharedFieldUsage
         Console.WriteLine($"[Layer Scope] Sword equipped: {hud.IsEquipped("Sword")}");
     }
 }
-

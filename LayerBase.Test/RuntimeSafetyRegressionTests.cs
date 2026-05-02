@@ -47,7 +47,7 @@ public class DropNewestMaxPendingEventMetaData : EventMetaData<DropNewestMaxPend
 }
 
 [TestFixture]
-public class RuntimeSafetyRegressionTests
+public partial class RuntimeSafetyRegressionTests
 {
     [SetUp]
     public void SetUp()
@@ -389,7 +389,7 @@ public class RuntimeSafetyRegressionTests
     {
     }
 
-    private sealed class DisposableProbeRegistrar : IService
+    private sealed partial class DisposableProbeRegistrar : IService
     {
         public void ConfigureServices(IServiceCollection services)
         {
@@ -411,7 +411,7 @@ public class RuntimeSafetyRegressionTests
     {
     }
 
-    private sealed class InitDelayService : IService, IInitializable
+    private sealed partial class InitDelayService : IService, IInitializable
     {
         private readonly Layer _layer;
 

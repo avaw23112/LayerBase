@@ -28,6 +28,8 @@ internal static class Program
         Console.WriteLine();
 
         Console.WriteLine("=== Showcase Finished ===");
+        // 9. 验证生成器逻辑
+        GeneratorVerification.Run();
     }
 }
 

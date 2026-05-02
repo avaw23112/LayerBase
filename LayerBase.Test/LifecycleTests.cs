@@ -1,4 +1,4 @@
-﻿using LayerBase;
+using LayerBase;
 using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.Layers;
@@ -6,7 +6,7 @@ using LayerBase.Layers;
 namespace EventsTest;
 
 [TestFixture]
-public class LifecycleTests
+public partial class LifecycleTests
 {
     [SetUp]
     public void SetUp()
@@ -23,10 +23,10 @@ public class LifecycleTests
         var layer = new LifecycleLayer();
         layer.RegisterService(new LifecycleTestService(_trace));
 
-        // 运行构建�?
+        // 运行构建?
         LayerHub.CreateLayers().Push(layer).Build();
 
-        // 验证执行顺序�?. AutoBind -> 2. Initialize
+        // 验证执行顺序?. AutoBind -> 2. Initialize
         Assert.That(_trace, Is.EqualTo(new[] { "AutoBind_A", "AutoBind_B", "Init_A", "Init_B" }),
             "Should bind all first, then initialize all, maintaining registration order.");
 
@@ -42,7 +42,7 @@ public class LifecycleTests
     {
     }
 
-    private class LifecycleTestService : IService
+    private partial class LifecycleTestService : IService
     {
         private readonly List<string> _trace;
 
@@ -61,7 +61,7 @@ public class LifecycleTests
 
     // --- Mock Managers ---
 
-    public class ManagerA : ILayerContext, IAutoSubscribe, IInitializable, IUpdate
+    public partial class ManagerA : ILayerContext, IAutoSubscribe, IInitializable, IUpdate
     {
         private readonly List<string> _trace;
 
@@ -98,7 +98,7 @@ public class LifecycleTests
         }
     }
 
-    public class ManagerB : ILayerContext, IAutoSubscribe, IInitializable, IUpdate
+    public partial class ManagerB : ILayerContext, IAutoSubscribe, IInitializable, IUpdate
     {
         private readonly List<string> _trace;
 
@@ -135,4 +135,3 @@ public class LifecycleTests
         }
     }
 }
-

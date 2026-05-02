@@ -1,4 +1,4 @@
-﻿using LayerBase;
+using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Layers;
@@ -46,7 +46,7 @@ public partial class IndirectManagerB : ILayerContext
 }
 
 [TestFixture]
-public class CycleDetectionTests
+public partial class CycleDetectionTests
 {
     [SetUp]
     public void SetUp()
@@ -105,7 +105,7 @@ public class CycleDetectionTests
     {
     }
 
-    private class DirectCycleService : IService
+    private partial class DirectCycleService : IService
     {
         public void ConfigureServices(IServiceCollection services)
         {
@@ -113,7 +113,7 @@ public class CycleDetectionTests
         }
     }
 
-    private class IndirectCycleService : IService
+    private partial class IndirectCycleService : IService
     {
         public void ConfigureServices(IServiceCollection services)
         {
@@ -122,4 +122,3 @@ public class CycleDetectionTests
         }
     }
 }
-

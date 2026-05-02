@@ -1,11 +1,11 @@
-﻿using LayerBase;
+using LayerBase;
 using LayerBase.DI;
 using LayerBase.Layers;
 
 namespace EventsTest;
 
 [TestFixture]
-public class SharedFieldBindingTests
+public partial class SharedFieldBindingTests
 {
     [SetUp]
     public void SetUp()
@@ -106,7 +106,7 @@ public class SharedFieldLayer : Layer
 {
 }
 
-public sealed class ServiceScopeSharingService : IService
+public sealed partial class ServiceScopeSharingService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -115,7 +115,7 @@ public sealed class ServiceScopeSharingService : IService
     }
 }
 
-public sealed class PlayerStateService : IService
+public sealed partial class PlayerStateService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -123,7 +123,7 @@ public sealed class PlayerStateService : IService
     }
 }
 
-public sealed class PlayerHudService : IService
+public sealed partial class PlayerHudService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -131,7 +131,7 @@ public sealed class PlayerHudService : IService
     }
 }
 
-public sealed class GlobalPublisherService : IService
+public sealed partial class GlobalPublisherService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -139,7 +139,7 @@ public sealed class GlobalPublisherService : IService
     }
 }
 
-public sealed class GlobalConsumerService : IService
+public sealed partial class GlobalConsumerService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -147,7 +147,7 @@ public sealed class GlobalConsumerService : IService
     }
 }
 
-public sealed class DuplicatePublisherServiceA : IService
+public sealed partial class DuplicatePublisherServiceA : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -155,7 +155,7 @@ public sealed class DuplicatePublisherServiceA : IService
     }
 }
 
-public sealed class DuplicatePublisherServiceB : IService
+public sealed partial class DuplicatePublisherServiceB : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -163,7 +163,7 @@ public sealed class DuplicatePublisherServiceB : IService
     }
 }
 
-public sealed class MissingPublisherConsumerService : IService
+public sealed partial class MissingPublisherConsumerService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -171,7 +171,7 @@ public sealed class MissingPublisherConsumerService : IService
     }
 }
 
-public sealed class WritableConsumerService : IService
+public sealed partial class WritableConsumerService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -180,7 +180,7 @@ public sealed class WritableConsumerService : IService
     }
 }
 
-public sealed class PlayerStorageModule : ILayerContext
+public sealed partial class PlayerStorageModule : ILayerContext
 {
     [Provide(typeof(ServiceScopeSharingService), "players")]
     private readonly List<int> _players = new();
@@ -191,7 +191,7 @@ public sealed class PlayerStorageModule : ILayerContext
     }
 }
 
-public sealed class PlayerQueryModule : ILayerContext
+public sealed partial class PlayerQueryModule : ILayerContext
 {
     [From(typeof(ServiceScopeSharingService), "players")]
     private readonly IReadOnlyList<int> _players = default!;
@@ -211,7 +211,7 @@ public sealed class PlayerQueryModule : ILayerContext
     }
 }
 
-public sealed class PlayerStateModule : ILayerContext
+public sealed partial class PlayerStateModule : ILayerContext
 {
     [Provide(typeof(Layer_A), "player_states")]
     private readonly Dictionary<int, bool> _states = new();
@@ -222,7 +222,7 @@ public sealed class PlayerStateModule : ILayerContext
     }
 }
 
-public sealed class PlayerHudModule : ILayerContext
+public sealed partial class PlayerHudModule : ILayerContext
 {
     [From(typeof(Layer_A), "player_states")]
     private readonly IReadOnlyDictionary<int, bool> _states = default!;
@@ -233,7 +233,7 @@ public sealed class PlayerHudModule : ILayerContext
     }
 }
 
-public sealed class SharedReferencePublisherModule : ILayerContext
+public sealed partial class SharedReferencePublisherModule : ILayerContext
 {
     [Provide(typeof(GlobalScope), "shared-ref")]
     private readonly SharedReferenceBox _box = new();
@@ -244,7 +244,7 @@ public sealed class SharedReferencePublisherModule : ILayerContext
     }
 }
 
-public sealed class SharedReferenceConsumerModule : ILayerContext
+public sealed partial class SharedReferenceConsumerModule : ILayerContext
 {
     [From(typeof(GlobalScope), "shared-ref")]
     private readonly SharedReferenceBox _box = default!;
@@ -255,25 +255,25 @@ public sealed class SharedReferenceConsumerModule : ILayerContext
     }
 }
 
-public sealed class DuplicateLayerPublisherModuleA : ILayerContext
+public sealed partial class DuplicateLayerPublisherModuleA : ILayerContext
 {
     [Provide(typeof(Layer_A), "duplicate-layer-key")]
     private Dictionary<int, int> _state = new();
 }
 
-public sealed class DuplicateLayerPublisherModuleB : ILayerContext
+public sealed partial class DuplicateLayerPublisherModuleB : ILayerContext
 {
     [Provide(typeof(Layer_A), "duplicate-layer-key")]
     private Dictionary<int, int> _state = new();
 }
 
-public sealed class MissingPublisherConsumerModule : ILayerContext
+public sealed partial class MissingPublisherConsumerModule : ILayerContext
 {
     [From(typeof(Layer_A), "missing-layer-key")]
     private IReadOnlyDictionary<int, int> _state = default!;
 }
 
-public sealed class WritableListConsumerModule : ILayerContext
+public sealed partial class WritableListConsumerModule : ILayerContext
 {
     [From(typeof(ServiceScopeSharingService), "players")]
     private List<int> _players = default!;

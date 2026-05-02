@@ -1,4 +1,4 @@
-﻿using LayerBase;
+using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Layers;
@@ -38,7 +38,7 @@ public class TestDiagLayer : Layer
 {
 }
 
-public class TestDiagService : IService
+public partial class TestDiagService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -46,7 +46,7 @@ public class TestDiagService : IService
     }
 }
 
-public class ProducerService : IService
+public partial class ProducerService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -94,14 +94,13 @@ public class DiagnosticTests
         LayerHub.CreateLayers()
                 .Push(layer)
                 .SetDebug()
-                .Build(); // 期待在此处触�?TopologyAudit
+                .Build(); // 期待在此处触?TopologyAudit
 
         var warningLog = _logs.Find(l => l.Source == "TopologyAudit" && l.Type == LayerEventInfoType.Warning);
 
-        // 验证警告内容 (LayerEventInfo �?struct，所以查 EventName 是否被填�?
+        // 验证警告内容 (LayerEventInfo ?struct，所以查 EventName 是否被填?
         Assert.That(warningLog.EventName, Is.EqualTo("UnsubscribedEvent"));
 
         TestContext.Out.WriteLine("Captured Build-Time Dead Letter Log: " + warningLog.Message);
     }
 }
-

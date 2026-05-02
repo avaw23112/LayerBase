@@ -1,11 +1,11 @@
-﻿using LayerBase;
+using LayerBase;
 using LayerBase.DI;
 using LayerBase.Layers;
 
 namespace EventsTest;
 
 [TestFixture]
-public class DelayPublisherTests
+public partial class DelayPublisherTests
 {
     [SetUp]
     public void SetUp()
@@ -22,7 +22,7 @@ public class DelayPublisherTests
         }
     }
 
-    private class DelayTestService : IService
+    private partial class DelayTestService : IService
     {
         public void ConfigureServices(IServiceCollection services)
         {
@@ -172,4 +172,3 @@ public class DelayPublisherTests
         }
     }
 }
-

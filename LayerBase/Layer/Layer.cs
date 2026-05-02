@@ -124,6 +124,18 @@ public abstract class Layer : Node, IDisposable
     }
 
     /// <summary>
+    /// 初始化 Layer 的服务。
+    /// </summary>
+    internal void InitializeServices()
+    {
+        // 触发生成器实现的 Layer 自动挂载逻辑
+        if (this is IAutoLayerMount layerMount)
+        {
+            layerMount.__AutoMountServices(this);
+        }
+    }
+
+    /// <summary>
     /// 手动注册一个服务到当前 Layer。
     /// </summary>
     /// <param name="service">要注册的服务实例。</param>
@@ -138,6 +150,15 @@ public abstract class Layer : Node, IDisposable
 
         if (!m_registeredServiceTypes.Add(service.GetType()))
             return;
+
+        // 绑定 Service 到当前 Layer (写入绑定槽位)
+        ServiceLayerBinder.Attach(service, this);
+
+        // 触发生成器实现的 Service 内部 Module 自动注册逻辑
+        if (service is IAutoServiceMount serviceMount)
+        {
+            serviceMount.__AutoMountModules(m_serviceCollection);
+        }
 
         var registration = new RegisteredService(service, Interlocked.Increment(ref m_nextServiceScopeId));
         if (m_collectingGeneratedServices)

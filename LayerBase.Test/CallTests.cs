@@ -1,4 +1,4 @@
-﻿using LayerBase;
+using LayerBase;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.DI;
@@ -7,7 +7,7 @@ using LayerBase.Layers;
 namespace EventsTest;
 
 [TestFixture]
-public class CallTests
+public partial class CallTests
 {
     [SetUp]
     public void SetUp()
@@ -401,7 +401,7 @@ public sealed class AudioScopedService
     public string MixerName => "MainMixer";
 }
 
-public sealed class CoreLayerServicesModule : IService
+public sealed partial class CoreLayerServicesModule : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -409,7 +409,7 @@ public sealed class CoreLayerServicesModule : IService
     }
 }
 
-public sealed class AudioLayerServicesModule : IService
+public sealed partial class AudioLayerServicesModule : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -568,4 +568,3 @@ public sealed class DuplicateCallHandlerA : ILayerCallHandler<DuplicateRequest, 
         return LBTask<DuplicateResponse>.FromResult(new DuplicateResponse("A"));
     }
 }
-

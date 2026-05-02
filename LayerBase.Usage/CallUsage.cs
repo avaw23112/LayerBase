@@ -65,7 +65,7 @@ public partial class SceneLayer : Layer
     }
 }
 
-public sealed partial class SceneEchoService : IService
+public partial class SceneEchoService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {

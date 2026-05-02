@@ -23,7 +23,6 @@ public struct DataRequestEvent
     public string Query;
 }
 
-// 3. �?Layer 中使用服�?
 public partial class ServiceLayer : Layer
 {
     [SubscribeFlow]

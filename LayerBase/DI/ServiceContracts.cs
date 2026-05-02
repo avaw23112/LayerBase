@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
@@ -19,9 +20,40 @@ public interface IInternalLayerContext : ILayerContext
 }
 
 /// <summary>
+/// 由 LayerBase 源生成器自动实现的隐藏绑定接口。
+///
+/// 作用：
+/// 让 IService / ILayerContext 实例自身携带 Layer 绑定信息，
+/// 避免 Send、Post、Subscribe 等高频扩展方法每次都进入 ConditionalWeakTable。
+/// </summary>
+public interface ILayerBindingAccessor
+{
+    /// <summary>
+    /// 当前对象的 Layer 绑定信息。
+    /// </summary>
+    object? __LayerBaseBinding { get; set; }
+}
+
+/// <summary>
+/// 由生成器为 Layer 实现的自动挂载接口。
+/// </summary>
+public interface IAutoLayerMount
+{
+    void __AutoMountServices(Layers.Layer layer);
+}
+
+/// <summary>
+/// 由生成器为 Service 实现的自动挂载接口。
+/// </summary>
+public interface IAutoServiceMount
+{
+    void __AutoMountModules(IServiceCollection services);
+}
+
+/// <summary>
 /// 服务接口，用于配置分层 DI 容器。
 /// </summary>
-public interface IService
+public interface IService 
 {
     /// <summary>
     /// 配置服务集合。
@@ -104,11 +136,20 @@ public interface IAutoSubscribe
 /// <summary>
 /// 服务对象与某个 LayerRuntime 的绑定信息。
 ///
-/// 该对象作为 ServiceLayerBinder 的 ConditionalWeakTable value 使用。
-/// 它不注入到 service 对象自身，因此本轮不会改变对象实例布局。
+/// 该对象保存 service / manager / handler 所属的 Layer、Runtime、EventCenter。
+/// 扩展方法拿到它之后，可以直接访问对应运行时能力。
 /// </summary>
 internal sealed class ServiceLayerBinding
 {
+    /// <summary>
+    /// 当前绑定版本。
+    ///
+    /// ServiceLayerBinder.Reset() 会递增全局版本号。
+    /// 对象自身字段里的旧绑定无法被统一清空，
+    /// 因此需要通过 Version 判断该绑定是否仍然有效。
+    /// </summary>
+    public readonly int Version;
+
     /// <summary>
     /// 当前对象所属 Runtime 的 ID。
     /// 用于多世界下识别对象绑定在哪个 Runtime。
@@ -142,6 +183,10 @@ internal sealed class ServiceLayerBinding
     /// <summary>
     /// 创建服务绑定信息。
     /// </summary>
+    /// <param name="version">
+    /// 当前 ServiceLayerBinder 的绑定版本号。
+    /// 用于 Reset 后识别旧绑定。
+    /// </param>
     /// <param name="runtimeId">
     /// 当前对象所属 Runtime 的 ID。
     /// </param>
@@ -155,11 +200,13 @@ internal sealed class ServiceLayerBinding
     /// 当前对象所属 Runtime。
     /// </param>
     public ServiceLayerBinding(
+        int version,
         int runtimeId,
         int layerIndex,
         Layer layer,
         LayerRuntime runtime)
     {
+        Version = version;
         RuntimeId = runtimeId;
         LayerIndex = layerIndex;
         Layer = layer;
@@ -171,17 +218,30 @@ internal sealed class ServiceLayerBinding
 /// <summary>
 /// 服务对象与 LayerRuntime 的绑定器。
 ///
-/// 当前版本只负责多世界绑定，不做字段注入优化。
+/// 设计目标：
+/// 1. 支持多世界绑定。
+/// 2. 优先读取对象自身的绑定槽位，避免热路径查表。
+/// 3. 保留 ConditionalWeakTable 作为兜底，兼容未被源生成器增强的对象。
 /// </summary>
 internal static class ServiceLayerBinder
 {
     /// <summary>
-    /// 对象到绑定信息的弱引用表。
+    /// 兜底绑定表。
     ///
+    /// 只有对象没有实现 ILayerBindingAccessor 时才使用。
     /// key 是 service / manager / handler 实例。
     /// value 是该对象所属 Runtime 与 Layer 的绑定信息。
     /// </summary>
     private static ConditionalWeakTable<object, ServiceLayerBinding> s_bindingMap = new();
+
+    /// <summary>
+    /// 当前绑定版本号。
+    ///
+    /// Reset 会替换 ConditionalWeakTable。
+    /// 但对象自身字段中的旧绑定无法被统一清空。
+    /// 所以这里用版本号让旧绑定失效。
+    /// </summary>
+    private static int s_version;
 
     /// <summary>
     /// 重置绑定表。
@@ -189,6 +249,11 @@ internal static class ServiceLayerBinder
     public static void Reset()
     {
         s_bindingMap = new ConditionalWeakTable<object, ServiceLayerBinding>();
+
+        unchecked
+        {
+            s_version++;
+        }
     }
 
     /// <summary>
@@ -215,13 +280,25 @@ internal static class ServiceLayerBinder
         }
 
         var binding = new ServiceLayerBinding(
+            version: s_version,
             runtimeId: runtime.Id,
             layerIndex: layer.RouteIndex,
             layer: layer,
             runtime: runtime);
 
-        s_bindingMap.Remove(service);
-        s_bindingMap.Add(service, binding);
+        if (service is ILayerBindingAccessor accessor)
+        {
+            // 快速路径：
+            // 源生成器增强过的 IService / ILayerContext 会走这里。
+            accessor.__LayerBaseBinding = binding;
+        }
+        else
+        {
+            // 兜底路径：
+            // 兼容没有被源生成器增强的对象。
+            s_bindingMap.Remove(service);
+            s_bindingMap.Add(service, binding);
+        }
 
         if (service is IInternalLayerContext internalContext)
         {
@@ -238,9 +315,33 @@ internal static class ServiceLayerBinder
     /// <returns>
     /// 该对象所属 Runtime 与 Layer 的绑定信息。
     /// </returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ServiceLayerBinding RequireBinding(object service)
     {
-        if (s_bindingMap.TryGetValue(service, out var binding))
+        if (service is ILayerBindingAccessor accessor &&
+            accessor.__LayerBaseBinding is ServiceLayerBinding binding &&
+            binding.Version == s_version)
+        {
+            return binding;
+        }
+
+        return RequireBindingSlow(service);
+    }
+
+    /// <summary>
+    /// 慢路径绑定查找。
+    /// </summary>
+    /// <param name="service">
+    /// 已绑定到 Layer 的对象。
+    /// </param>
+    /// <returns>
+    /// 该对象所属 Runtime 与 Layer 的绑定信息。
+    /// </returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static ServiceLayerBinding RequireBindingSlow(object service)
+    {
+        if (s_bindingMap.TryGetValue(service, out var binding) &&
+            binding.Version == s_version)
         {
             return binding;
         }
@@ -259,6 +360,7 @@ internal static class ServiceLayerBinder
     /// <returns>
     /// 对象所属 Layer。
     /// </returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Layer Require(object service)
     {
         return RequireBinding(service).Layer;
@@ -273,6 +375,7 @@ internal static class ServiceLayerBinder
     /// <returns>
     /// LayerIndex。
     /// </returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetIndex(ILayerContext context)
     {
         if (context is IInternalLayerContext internalContext &&

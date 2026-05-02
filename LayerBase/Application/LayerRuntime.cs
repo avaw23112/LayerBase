@@ -521,6 +521,7 @@ public sealed class LayerRuntime : IDisposable
             }
 
             layer.AttachToContext(_runtime);
+            layer.InitializeServices(); // 触发自动挂载
             _layerChain.AddNode(layer);
             return this;
         }
