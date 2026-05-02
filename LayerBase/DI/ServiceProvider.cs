@@ -119,13 +119,25 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
 
         if (desc.Lifetime == ServiceLifetime.Singleton || desc.Lifetime == ServiceLifetime.Instance)
         {
-            if (!ServiceLayerBinder.HasLayerBinding(instance))
+            var existingBinding = ServiceLayerBinder.GetBinding(instance);
+
+            if (existingBinding != null && existingBinding.RuntimeId != _worldRoot.Runtime.Id)
             {
+                throw new InvalidOperationException(
+                    $"Singleton/Instance service {instance.GetType().Name} is already bound to another LayerRuntime.");
+            }
+
+            if (existingBinding == null || existingBinding.Layer != null)
+            {
+                // Singleton / Instance 是 Runtime 级服务。
+                // 即使它之前被某个 Layer 绑定过，也要覆盖成 Runtime binding。
                 ServiceLayerBinder.AttachRuntime(instance, _worldRoot.Runtime);
             }
         }
         else if (_ownerLayer != null)
         {
+            // Scoped / Transient 是 Layer 级服务。
+            // 它们需要知道自己属于哪个 Layer，才能使用 Subscribe、Delay、OnEvent 等 Layer-only API。
             ServiceLayerBinder.AttachLayer(instance, _ownerLayer);
         }
 
@@ -175,13 +187,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
             if (desc.Factory != null)
                 return desc.Factory(this);
 
-            var ctor = desc.ImplType!
-                           .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                           .OrderByDescending(c => c.GetParameters().Length)
-                           .FirstOrDefault();
-
-            if (ctor == null)
-                throw new InvalidOperationException($"No accessible constructor found for {desc.ImplType}");
+            var ctor = SelectConstructor(desc.ImplType!);
 
             var parameters = ctor.GetParameters();
             var args = new object?[parameters.Length];
@@ -203,6 +209,57 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
             _activeResolutionContext = previousContext;
             context.CallStack.Remove(implementationType);
         }
+    }
+
+    private static ConstructorInfo SelectConstructor(Type implementationType)
+    {
+        // implementationType：
+        // 当前需要由 DI 创建的实现类型。
+        // 例如 CombatService、DamageManager、SomeRepository。
+
+        var allConstructors = implementationType.GetConstructors(
+            BindingFlags.Instance |
+            BindingFlags.Public |
+            BindingFlags.NonPublic);
+
+        var markedConstructors = allConstructors
+            .Where(static ctor => ctor.GetCustomAttribute<MountAttribute>() != null)
+            .ToArray();
+
+        if (markedConstructors.Length > 1)
+        {
+            throw new InvalidOperationException(
+                $"Multiple [Mount] constructors found for {implementationType}.");
+        }
+
+        if (markedConstructors.Length == 1)
+        {
+            return markedConstructors[0];
+        }
+
+        var publicConstructors = implementationType.GetConstructors(
+            BindingFlags.Instance |
+            BindingFlags.Public);
+
+        if (publicConstructors.Length == 0)
+        {
+            throw new InvalidOperationException(
+                $"No public constructor found for {implementationType}. Use [Mount] on a non-public constructor if it should be used by DI.");
+        }
+
+        var maxParameterCount = publicConstructors.Max(static ctor => ctor.GetParameters().Length);
+
+        var candidates = publicConstructors
+            .Where(ctor => ctor.GetParameters().Length == maxParameterCount)
+            .ToArray();
+
+        if (candidates.Length > 1)
+        {
+            throw new InvalidOperationException(
+                $"Ambiguous public constructors found for {implementationType}. Use [Mount] to select the constructor explicitly.");
+        }
+
+        return candidates[0];
     }
 
     private void InjectMembers(object instance, ResolutionContext context)

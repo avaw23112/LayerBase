@@ -10,7 +10,7 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
     private int _valueVersion;
     private DelayTimerHandle _timerHandle = DelayTimerHandle.Invalid;
 
-    private int _publisherId;
+    private int _publisherId = -1;
     private bool _deactivated;
     private readonly DelayPublisherManager _manager;
     private readonly object _lock = new();
@@ -20,6 +20,8 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
         _manager = manager;
         Owner = owner;
     }
+
+    public int PublisherId => _publisherId;
 
     internal void SetId(int id) => _publisherId = id;
 
@@ -130,11 +132,16 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
 
     public void Deactivate()
     {
+        DelayTimerHandle oldHandle;
         lock (_lock)
         {
+            if (_deactivated) return;
             _deactivated = true;
+            oldHandle = _timerHandle;
             ClearInternal();
+            _publisherId = -1;
         }
+        _manager.CancelExpire(oldHandle);
     }
 
     public void Reset()

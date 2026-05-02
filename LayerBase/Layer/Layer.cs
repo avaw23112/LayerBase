@@ -110,13 +110,72 @@ public abstract class Layer : Node, IDisposable
         {
         }
 
-        m_delayPublishers.Clear();
+        DetachResolvedObjects();
+        ReleaseDelayPublishers();
+
         m_serviceUpdates.Clear();
         m_activeServices.Clear();
         m_resolvedServices.Clear();
 
         m_serviceProvider?.Dispose();
         m_serviceProvider = null;
+
+        DetachFromContext();
+    }
+
+    private void ReleaseDelayPublishers()
+    {
+        if (m_delayPublishers.IsEmpty)
+        {
+            return;
+        }
+
+        var manager = OwnerContext?.DelayManager;
+
+        foreach (var publisher in m_delayPublishers.Values)
+        {
+            if (manager != null && publisher.PublisherId >= 0)
+            {
+                // manager.UnregisterPublisher will call publisher.Deactivate()
+                manager.UnregisterPublisher(publisher.PublisherId);
+            }
+            
+            // Safety fallback: ensure publisher is deactivated even if manager is gone 
+            // or if it was registered in a different manager (e.g. during a context switch)
+            publisher.Deactivate();
+        }
+
+        m_delayPublishers.Clear();
+
+        OwnerContext?.MarkDelayDirty();
+    }
+
+    private void DetachResolvedObjects()
+    {
+        ServiceLayerBinder.Detach(this);
+
+        foreach (var registration in m_activeServices)
+        {
+            ServiceLayerBinder.Detach(registration.Service);
+        }
+
+        foreach (var registration in m_manualServices)
+        {
+            ServiceLayerBinder.Detach(registration.Service);
+        }
+
+        foreach (var resolved in m_resolvedServices)
+        {
+            ServiceLayerBinder.Detach(resolved.Instance);
+        }
+    }
+
+    internal void DetachFromContext()
+    {
+        ServiceLayerBinder.Detach(this);
+
+        OwnerContext = null;
+        RouteIndex = -1;
     }
 
     /// <summary>
@@ -184,13 +243,16 @@ public abstract class Layer : Node, IDisposable
 
     internal void PrepareBuild()
     {
+        DetachResolvedObjects();
+
         lock (m_subscriptions)
         {
             foreach (var sub in m_subscriptions) sub.Dispose();
             m_subscriptions.Clear();
         }
 
-        m_delayPublishers.Clear();
+        ReleaseDelayPublishers();
+
         m_serviceUpdates.Clear();
         m_activeServices.Clear();
         m_resolvedServices.Clear();
@@ -211,6 +273,7 @@ public abstract class Layer : Node, IDisposable
 
         m_collectingGeneratedServices = true;
         InitializeServices();
+        ConfigureServices(m_serviceCollection);
         m_collectingGeneratedServices = false;
 
         var descriptors = m_serviceCollection.ToDescriptors();

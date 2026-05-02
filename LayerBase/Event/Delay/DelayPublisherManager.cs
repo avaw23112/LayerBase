@@ -5,7 +5,8 @@ namespace LayerBase.Event.Delay;
 
 internal sealed class DelayPublisherManager : IDelayPublisherManager
 {
-    private readonly List<IDelayPublisherInternal> _publishers = new();
+    private readonly List<IDelayPublisherInternal?> _publishers = new();
+    private readonly Stack<int> _freePublisherIds = new();
     private readonly Dictionary<DelayContractKey, int> _contractToActivePublisher = new();
     private readonly DelayBufferWheel _wheel;
     private readonly object _lock = new();
@@ -28,13 +29,76 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
 
     public int RegisterPublisher(IDelayPublisherInternal publisher)
     {
+        if (publisher == null) throw new ArgumentNullException(nameof(publisher));
         ThrowIfDisposed();
         lock (_lock)
         {
             ThrowIfDisposed();
+            if (_freePublisherIds.Count > 0)
+            {
+                var reusedId = _freePublisherIds.Pop();
+                _publishers[reusedId] = publisher;
+                return reusedId;
+            }
+
             int id = _publishers.Count;
             _publishers.Add(publisher);
             return id;
+        }
+    }
+
+    public void UnregisterPublisher(int publisherId)
+    {
+        if (publisherId < 0) return;
+
+        IDelayPublisherInternal? publisher = null;
+        lock (_lock)
+        {
+            if ((uint)publisherId >= (uint)_publishers.Count) return;
+
+            publisher = _publishers[publisherId];
+            if (publisher == null) return;
+
+            _publishers[publisherId] = null;
+            _freePublisherIds.Push(publisherId);
+
+            RemoveContractsForPublisherLocked(publisherId);
+        }
+
+        publisher.Deactivate();
+    }
+
+    private void RemoveContractsForPublisherLocked(int publisherId)
+    {
+        List<DelayContractKey>? keysToRemove = null;
+
+        foreach (var kvp in _contractToActivePublisher)
+        {
+            if (kvp.Value == publisherId)
+            {
+                keysToRemove ??= new List<DelayContractKey>();
+                keysToRemove.Add(kvp.Key);
+            }
+        }
+
+        if (keysToRemove != null)
+        {
+            foreach (var key in keysToRemove)
+            {
+                _contractToActivePublisher.Remove(key);
+            }
+        }
+    }
+
+    public void CancelExpire(DelayTimerHandle handle)
+    {
+        if (!handle.IsValid) return;
+        if (Volatile.Read(ref _disposed) != 0) return;
+
+        lock (_wheelLock)
+        {
+            if (Volatile.Read(ref _disposed) != 0) return;
+            _wheel.Cancel(handle);
         }
     }
 
@@ -100,11 +164,12 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        IDelayPublisherInternal[] publishers;
+        IDelayPublisherInternal?[] publishers;
         lock (_lock)
         {
             publishers = _publishers.ToArray();
             _publishers.Clear();
+            _freePublisherIds.Clear();
             _contractToActivePublisher.Clear();
             PolicyTable = null;
         }
@@ -114,7 +179,7 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
             _wheel.Clear();
         }
 
-        foreach (var pub in publishers) pub.Deactivate();
+        foreach (var pub in publishers) pub?.Deactivate();
     }
 
     internal void ThrowIfDisposed()

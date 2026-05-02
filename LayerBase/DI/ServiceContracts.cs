@@ -246,6 +246,26 @@ internal static class ServiceLayerBinder
         }
     }
 
+    public static void Detach(object service)
+    {
+        if (service == null)
+        {
+            return;
+        }
+
+        if (service is ILayerBindingAccessor accessor)
+        {
+            accessor.__LayerBaseBinding = null;
+        }
+
+        s_bindingMap.Remove(service);
+
+        if (service is IInternalLayerContext internalContext)
+        {
+            internalContext.LayerIndex = -1;
+        }
+    }
+
     /// <summary>
     /// 把对象绑定到指定 Layer。
     /// </summary>

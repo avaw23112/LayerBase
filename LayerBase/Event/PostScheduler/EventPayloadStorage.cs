@@ -47,6 +47,7 @@ internal sealed class EventStore<T> : IEventStore where T : struct
     private int _freeHead = -1;
     private int _capacity;
     private readonly object _lock = new();
+    private bool _disposed;
 
     public EventStore(int initialCapacity = 256)
     {
@@ -68,6 +69,7 @@ internal sealed class EventStore<T> : IEventStore where T : struct
     {
         lock (_lock)
         {
+            if (_disposed) throw new ObjectDisposedException(nameof(EventStore<T>));
             if (_freeHead == -1) Grow();
             
             int index = _freeHead;
@@ -84,7 +86,7 @@ internal sealed class EventStore<T> : IEventStore where T : struct
     {
         lock (_lock)
         {
-            if (handle.Index < 0 || handle.Index >= _capacity || _versions[handle.Index] != handle.Version)
+            if (_disposed || handle.Index < 0 || handle.Index >= _capacity || _versions[handle.Index] != handle.Version)
             {
                 value = default;
                 return false;
@@ -97,17 +99,21 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
     public ref T GetRef(int index, int version)
     {
-        if (index < 0 || index >= _capacity || _versions[index] != version)
-            throw new InvalidOperationException("Invalid payload handle");
-        
-        return ref _buffer[index];
+        lock (_lock)
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(EventStore<T>));
+            if (index < 0 || index >= _capacity || _versions[index] != version)
+                throw new InvalidOperationException("Invalid payload handle");
+
+            return ref _buffer[index];
+        }
     }
 
     public void Release(int index, int version)
     {
         lock (_lock)
         {
-            if (index < 0 || index >= _capacity || _versions[index] != version) return;
+            if (_disposed || index < 0 || index >= _capacity || _versions[index] != version) return;
             
             _buffer[index] = default;
             _versions[index]++;
@@ -128,6 +134,10 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
     public void DispatchDefault(EventCenter center)
     {
+        lock (_lock)
+        {
+            if (_disposed) return;
+        }
         center.Send(default(T));
     }
 
@@ -152,6 +162,22 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
     public void Dispose()
     {
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            Array.Clear(_buffer, 0, _buffer.Length);
+            Array.Clear(_versions, 0, _versions.Length);
+            Array.Clear(_nextFree, 0, _nextFree.Length);
+
+            _buffer = Array.Empty<T>();
+            _versions = Array.Empty<int>();
+            _nextFree = Array.Empty<int>();
+
+            _freeHead = -1;
+            _capacity = 0;
+        }
     }
 }
 

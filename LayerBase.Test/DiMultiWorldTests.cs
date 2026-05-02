@@ -158,15 +158,10 @@ public partial class DiMultiWorldTests
 
         var layerB = new TestLayer();
         layerB.RegisterService(new ManualInstanceModule(sharedCounter));
-        var worldB = LayerHub.CreateLayers()
-            .Push(layerB)
-            .Build();
+        var builderB = LayerHub.CreateLayers().Push(layerB);
 
-        var counterA = layerA.GetService<ICounter>();
-        var counterB = layerB.GetService<ICounter>();
-
-        Assert.That(ReferenceEquals(counterA, counterB), Is.True);
-        Assert.That(ReferenceEquals(counterA, sharedCounter), Is.True);
+        // 🚀 关键：跨 Runtime 复用同一个 Singleton / Instance 实例时必须抛异常
+        Assert.Throws<InvalidOperationException>(() => builderB.Build());
     }
 
     [Test]
