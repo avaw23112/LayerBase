@@ -749,22 +749,25 @@ inter-layer jump overhead.
 - Everything is computed during layer construction and cached in memory from the very beginning. Therefore, on the hot
   path, we **do not compute, do not look up, do not write, and only ever read**.
 
-### 5. v1.4.2 Ultra Performance Updates
+### 5. v1.4.5 Lifecycle & DI Robustness Updates
 
-To achieve performance comparable to native interface calls in .NET 8/9, v1.4.2 introduces the following deep
-optimizations:
+To address memory fragmentation and object lifecycle management challenges in long-running large projects, v1.4.5
+introduces deep-level resource recycling and DI enhancements:
 
-* **`LBTask<T>` Struct Slimming**: Removed unnecessary fields and utilized `Source == null` as a synchronous completion
-  flag. This reduces struct size and register pressure during parameter passing.
-* **Async Path Short-circuit**: Optimized `LBTaskMethodBuilder` to completely eliminate `ArchTaskSource` leasing
-  overhead when an async method completes synchronously.
-* **Static Generic Call Cache (Ultra Fast Path)**: Introduced a static generic class cache in `LayerHub.CallAsync`. This
-  achieves **zero dictionary lookups, zero lock contention, and zero version checks**, reducing call overhead to a
-  single static field read.
-* **Devirtualized Interface Calls**: Caches `ILayerCallHandler` interface instances instead of delegates. Combined with
-  `sealed` handler classes, the JIT can generate inlined code or direct jumps.
-* **Zero-Copy by Default (`in` modifier)**: All Call paths now enforce the use of `in TRequest`, completely eliminating
-  memory copies for large structs during dispatch.
+* **Strict DI Constructor Selection**: By default, only `public` constructors are scanned, selecting the one with the
+  most parameters. Supports using the `[Mount]` attribute to explicitly specify a constructor with any access modifier,
+  eliminating ambiguity.
+* **DelayPublisher Lifecycle Closure**: Supports explicit `Unregister` and `Deactivate` processes. When a Layer or
+  Runtime is destroyed, all delayed publishers are automatically invalidated and removed from the global manager,
+  completely resolving the risk of memory leaks caused by delayed callbacks.
+* **Automatic ServiceLayerBinding Detach**: A new `Detach` mechanism automatically clears binding slots in service
+  instances when a Runtime or Layer is released. This ensures that even if the business layer still holds service
+  references, old Runtimes/Layers can still be GC collected.
+* **EventStore Memory Footprint Cleanup**: `EventStore<T>` now supports `Dispose`, which actively clears Payload array
+  references in the underlying generic cache, avoiding "implicit long-term holding" issues caused by static generic
+  classes.
+* **Generator Unification**: Refactored the source generator architecture to avoid duplicate registrations and
+  compilation conflicts, improving build speeds for large projects.
 
 ---
 

@@ -336,18 +336,7 @@ internal static class ServiceLayerBinder
         }
     }
 
-    public static bool IsBoundToLayer(object service, LayerRuntime runtime)
-    {
-        var binding = GetBinding(service);
-        return binding != null && binding.Layer != null && binding.RuntimeId == runtime.Id;
-    }
-
-    public static bool HasLayerBinding(object service)
-    {
-        var binding = GetBinding(service);
-        return binding != null && binding.Layer != null;
-    }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ServiceLayerBinding? GetBinding(object service)
     {
         if (service is ILayerBindingAccessor accessor &&
@@ -811,6 +800,7 @@ public static class ServiceExtensions
 
 public static class LayerContextExtensions
 {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ServiceLayerBinding GetBinding(this ILayerContext context)
     {
         return ServiceLayerBinder.RequireBinding(context);

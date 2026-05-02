@@ -136,9 +136,9 @@ public static class LayerHub
     /// Convenience API: Sends event to the Primary runtime.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static EventHandledState Send<T>(in T value) where T : struct
+    public static void Send<T>(in T value) where T : struct
     {
-        return s_primaryRuntime?.Send(value)?? EventHandledState.Continue;
+        s_primaryRuntime?.Send(value);
     }
 
     /// <summary>

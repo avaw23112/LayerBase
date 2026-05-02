@@ -200,9 +200,9 @@ public sealed class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EventHandledState Send<T>(in T value) where T : struct
+    public void Send<T>(in T value) where T : struct
     {
-        return EventCenter.Send(value);
+        EventCenter.Send(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
