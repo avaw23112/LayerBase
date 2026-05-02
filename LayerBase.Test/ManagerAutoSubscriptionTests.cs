@@ -72,6 +72,22 @@ public partial class TestManagerC : ILayerContext
     }
 }
 
+public partial class TestBindableService : IService
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    [Subscribe]
+    public void OnOrder(in OrderEvent e)
+    {
+    }
+}
+
+public partial class PlainLayerContextOnly : ILayerContext
+{
+}
+
 [TestFixture]
 public partial class ManagerAutoSubscriptionTests
 {
@@ -112,6 +128,36 @@ public partial class ManagerAutoSubscriptionTests
         manager.DoSend();
 
         Assert.That(_trace, Is.EqualTo(new[] { "HandledByManager" }));
+    }
+
+    [Test]
+    public void Generated_subscribe_types_should_expose_binding_accessor_slots()
+    {
+        var layer = new GameLayer();
+        var bindableService = new TestBindableService();
+
+        layer.RegisterService(new CapabilityTestService(_trace));
+        layer.RegisterService(bindableService);
+
+        LayerHub.CreateLayers().Push(layer).Build();
+
+        var manager = layer.GetService<TestManagerC>();
+
+        Assert.That(manager, Is.InstanceOf<IInternalLayerContext>());
+        Assert.That(manager, Is.InstanceOf<ILayerBindingAccessor>());
+        Assert.That(((ILayerBindingAccessor)manager).__LayerBaseBinding, Is.Not.Null);
+
+        Assert.That(bindableService, Is.InstanceOf<ILayerBindingAccessor>());
+        Assert.That(((ILayerBindingAccessor)bindableService).__LayerBaseBinding, Is.Not.Null);
+    }
+
+    [Test]
+    public void Plain_layer_context_without_subscribe_should_not_generate_binding_accessor()
+    {
+        var context = new PlainLayerContextOnly();
+
+        Assert.That(context, Is.Not.InstanceOf<IInternalLayerContext>());
+        Assert.That(context, Is.Not.InstanceOf<ILayerBindingAccessor>());
     }
 
     private class GameLayer : Layer

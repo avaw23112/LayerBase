@@ -6,6 +6,14 @@ using LayerBase.Layers;
 
 namespace LayerBase.Usage;
 
+public partial class VerifyManager : ILayerContext                 
+{
+    [Subscribe]
+    public void OnVerify(in ChangeSceneRequest value)
+    {
+        
+    }
+}   
 [OwnerLayer(typeof(VerifyLayer))]
 public partial class VerifyService1 : IService
 {
