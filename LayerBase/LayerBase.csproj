@@ -16,7 +16,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
         <GeneratePackageOnBuild Condition="'$(GITHUB_ACTIONS)' != 'true'">true</GeneratePackageOnBuild>
-        <Version>1.4.5</Version>
+        <Version>1.4.6</Version>
         <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
         <PackageOutputPath>$(MSBuildProjectDirectory)/../nupkgs</PackageOutputPath>
     </PropertyGroup>
