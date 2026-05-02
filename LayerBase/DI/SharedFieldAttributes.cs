@@ -36,13 +36,3 @@ public sealed class FromAttribute : Attribute
     public string LocalKey { get; }
 }
 
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
-public sealed class OwnerServiceAttribute : Attribute
-{
-    public OwnerServiceAttribute(Type serviceType)
-    {
-        ServiceType = serviceType ?? throw new ArgumentNullException(nameof(serviceType));
-    }
-
-    public Type ServiceType { get; }
-}

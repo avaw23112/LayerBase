@@ -14,9 +14,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 {
     private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
     private const string MountAttributeName = "LayerBase.DI.MountAttribute";
-    private const string OwnerServiceAttributeName = "LayerBase.DI.OwnerServiceAttribute";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
-    private const string ILayerContextMetadataName = "LayerBase.DI.ILayerContext";
     private const string LayerMetadataName = "LayerBase.Layers.Layer";
     private const string EventHandlerMetadataName = "LayerBase.Core.EventHandler.IEventHandler`1";
     private const string EventHandlerAsyncMetadataName = "LayerBase.Core.EventHandler.IEventHandlerAsync`1";
@@ -34,19 +32,11 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         var MountFields = context.SyntaxProvider
                                   .ForAttributeWithMetadataName(
                                       MountAttributeName,
-                                      static (node, _) => node is FieldDeclarationSyntax,
+                                      static (node, _) => node is VariableDeclaratorSyntax or FieldDeclarationSyntax,
                                       static (ctx,  _) => (IFieldSymbol)ctx.TargetSymbol);
 
-        var ownerServiceRegistrations = context.SyntaxProvider
-                                               .ForAttributeWithMetadataName(
-                                                   OwnerServiceAttributeName,
-                                                   static (node, _) => node is ClassDeclarationSyntax,
-                                                   static (ctx,  _) => CreateOwnerServiceRegistrations(ctx))
-                                               .SelectMany(static (items, _) => items);
-
         var combined = ownerLayerRegistrations.Collect()
-                                              .Combine(MountFields.Collect())
-                                              .Combine(ownerServiceRegistrations.Collect());
+                                              .Combine(MountFields.Collect());
 
         var compilationAndData = context.CompilationProvider.Combine(combined);
 
@@ -54,27 +44,24 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         {
             var compilation = source.Left;
             var data = source.Right;
-            var ownerLayerList = data.Left.Left;
-            var injectFieldList = data.Left.Right;
-            var ownerServiceList = data.Right;
+            var ownerLayerList = data.Left;
+            var injectFieldList = data.Right;
 
-            Execute(spc, compilation, ownerLayerList, injectFieldList, ownerServiceList);
+            Execute(spc, compilation, ownerLayerList, injectFieldList);
         });
     }
 
     private static void Execute(SourceProductionContext                         spc, Compilation compilation,
                                 ImmutableArray<ServiceRegistration>             ownerLayers,
-                                ImmutableArray<IFieldSymbol>                    MountFields,
-                                ImmutableArray<OwnerServiceRegistration>        ownerServiceRegistrations)
+                                ImmutableArray<IFieldSymbol>                    MountFields)
     {
         var iServiceSymbol = compilation.GetTypeByMetadataName(IServiceMetadataName);
-        var iLayerContextSymbol = compilation.GetTypeByMetadataName(ILayerContextMetadataName);
         var layerSymbol = compilation.GetTypeByMetadataName(LayerMetadataName);
         var eventHandlerSymbol = compilation.GetTypeByMetadataName(EventHandlerMetadataName);
         var eventHandlerAsyncSymbol = compilation.GetTypeByMetadataName(EventHandlerAsyncMetadataName);
         var callHandlerSymbol = compilation.GetTypeByMetadataName(CallHandlerMetadataName);
 
-        if (iServiceSymbol == null || layerSymbol == null || iLayerContextSymbol == null) return;
+        if (iServiceSymbol == null || layerSymbol == null) return;
 
         var classMap = new Dictionary<INamedTypeSymbol, ClassInfo>(SymbolEqualityComparer.Default);
 
@@ -98,12 +85,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             info.MountFields.Add(field);
         }
 
-        foreach (var reg in ownerServiceRegistrations)
-        {
-            var info = GetOrAddClass(reg.ModuleType);
-            info.OwnerServiceRegistrations.Add(reg);
-        }
-
         var callHandlerRegistrations = new List<CallHandlerRegistration>();
 
         foreach (var info in classMap.Values)
@@ -119,6 +100,17 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                     spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LayerMustBePartial,
                         info.MountFields[0].Locations.FirstOrDefault(),
                         info.Symbol.ToDisplayString()));
+                    continue;
+                }
+
+                if (!isLayer)
+                {
+                    foreach (var field in info.MountFields)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountTypeMismatch, field.Locations[0],
+                            field.Name, info.Symbol.Name, field.Type.Name));
+                    }
+
                     continue;
                 }
 
@@ -154,37 +146,33 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
                     if (classMap.TryGetValue(fieldType, out var targetInfo))
                     {
-                        if (isLayer)
+                        var hasMismatch = targetInfo.OwnerLayerRegistrations.Any(r => !SymbolEqualityComparer.Default.Equals(r.LayerType, info.Symbol));
+                        if (hasMismatch)
                         {
-                            var hasMismatch = targetInfo.OwnerLayerRegistrations.Any(r => !SymbolEqualityComparer.Default.Equals(r.LayerType, info.Symbol));
-                            if (hasMismatch)
-                            {
-                                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountOwnerConflict, field.Locations[0],
-                                    fieldType.ToDisplayString(), info.Symbol.ToDisplayString()));
-                            }
-                        }
-                        else if (isService)
-                        {
-                            var hasMismatch = targetInfo.OwnerServiceRegistrations.Any(r => !SymbolEqualityComparer.Default.Equals(r.ModuleType, info.Symbol));
-                            if (hasMismatch)
-                            {
-                                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountOwnerConflict, field.Locations[0],
-                                    fieldType.ToDisplayString(), info.Symbol.ToDisplayString()));
-                            }
+                            spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountOwnerConflict, field.Locations[0],
+                                fieldType.ToDisplayString(), info.Symbol.ToDisplayString()));
                         }
                     }
 
-                    if (isLayer)
+                    if (!ImplementsInterface(fieldType, iServiceSymbol))
                     {
-                        if (!ImplementsInterface(fieldType, iServiceSymbol))
-                            spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountTypeMismatch, field.Locations[0],
-                                field.Name, info.Symbol.Name, fieldType.Name));
+                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountTypeMismatch, field.Locations[0],
+                            field.Name, info.Symbol.Name, fieldType.Name));
+                        continue;
                     }
-                    else if (isService)
+
+                    if (!HasAccessibleParameterlessConstructor(fieldType))
                     {
-                        if (!ImplementsInterface(fieldType, iLayerContextSymbol))
-                            spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountTypeMismatch, field.Locations[0],
-                                field.Name, info.Symbol.Name, fieldType.Name));
+                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceNeedsPublicParameterlessConstructor,
+                            field.Locations[0],
+                            fieldType.ToDisplayString()));
+                    }
+
+                    if (fieldType.IsAbstract)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceCannotBeAbstract,
+                            field.Locations[0],
+                            fieldType.ToDisplayString()));
                     }
                 }
             }
@@ -305,6 +293,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             foreach (var reg in info.OwnerLayerRegistrations)
             {
+                if (!ImplementsInterface(info.Symbol, iServiceSymbol) &&
+                    !ImplementsInterface(info.Symbol, callHandlerSymbol)) continue;
+
                 if (!layerGroups.TryGetValue(reg.LayerType, out var list))
                     layerGroups[reg.LayerType] = list = new List<INamedTypeSymbol>();
                 list.Add(info.Symbol);
@@ -322,7 +313,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             {
                 foreach (var field in layerInfo.MountFields)
                 {
-                    if (field.Type is INamedTypeSymbol s && (ImplementsInterface(s, iServiceSymbol) || ImplementsInterface(s, callHandlerSymbol)))
+                    if (field.Type is INamedTypeSymbol s && ImplementsInterface(s, iServiceSymbol))
                     {
                         injectServices.Add(s);
                     }
@@ -342,64 +333,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 if (!string.IsNullOrEmpty(sourceText))
                 {
                     spc.AddSource(CreateHintName(layerType), SourceText.From(sourceText, Encoding.UTF8));
-                }
-            }
-        }
-
-        // Group modules by Service for code generation
-        var serviceGroups = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
-        foreach (var info in classMap.Values)
-        {
-            if (ImplementsInterface(info.Symbol, iServiceSymbol))
-            {
-                if (!serviceGroups.ContainsKey(info.Symbol))
-                    serviceGroups[info.Symbol] = new List<INamedTypeSymbol>();
-            }
-
-            foreach (var reg in info.OwnerServiceRegistrations)
-            {
-                if (!serviceGroups.TryGetValue(reg.ServiceType, out var list))
-                    serviceGroups[reg.ServiceType] = list = new List<INamedTypeSymbol>();
-                list.Add(info.Symbol);
-            }
-        }
-
-        // Generate Service Partials
-        foreach (var kvp in serviceGroups)
-        {
-            var serviceType = kvp.Key;
-            var ownerModules = kvp.Value.Distinct(SymbolEqualityComparer.Default).Cast<INamedTypeSymbol>().ToList();
-
-            if (!classMap.TryGetValue(serviceType, out var serviceInfo))
-            {
-                serviceInfo = new ClassInfo(serviceType);
-            }
-
-            var injectModules = new List<INamedTypeSymbol>();
-            foreach (var field in serviceInfo.MountFields)
-            {
-                if (field.Type is INamedTypeSymbol m && (ImplementsInterface(m, iLayerContextSymbol) ||
-                                                        ImplementsInterface(m, eventHandlerSymbol) ||
-                                                        ImplementsInterface(m, eventHandlerAsyncSymbol) ||
-                                                        ImplementsInterface(m, callHandlerSymbol)))
-                {
-                    injectModules.Add(m);
-                }
-            }
-
-            if (injectModules.Count > 0 || ownerModules.Count > 0)
-            {
-                var ownerOnlyModules = ownerModules.Where(s => !injectModules.Contains(s, SymbolEqualityComparer.Default)).ToList();
-                if (injectModules.Count > 0 && ownerOnlyModules.Count > 0)
-                {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OwnerOnlyUnorderedTail, serviceType.Locations.FirstOrDefault(),
-                        serviceType.ToDisplayString(), string.Join(", ", ownerOnlyModules.Select(s => s.ToDisplayString()))));
-                }
-
-                var sourceText = GenerateServicePartial(serviceType, injectModules, ownerModules, iLayerContextSymbol, eventHandlerSymbol, eventHandlerAsyncSymbol, callHandlerSymbol);
-                if (!string.IsNullOrEmpty(sourceText))
-                {
-                    spc.AddSource(CreateServiceHintName(serviceType), SourceText.From(sourceText, Encoding.UTF8));
                 }
             }
         }
@@ -425,11 +358,11 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             builder.AppendLine("{");
         }
 
-        builder.Append("partial class ").Append(layerIdentifier).AppendLine();
+        builder.Append("partial class ").Append(layerIdentifier)
+               .AppendLine(" : global::LayerBase.DI.IAutoLayerMount");
         builder.AppendLine("{");
         
-        builder.AppendLine("    [SourceGeneratedServiceInit]");
-        builder.AppendLine("    internal static void __InitLayerServices(Layer layerInstance)");
+        builder.AppendLine("    void global::LayerBase.DI.IAutoLayerMount.__AutoMountServices(global::LayerBase.Layers.Layer layerInstance)");
         builder.AppendLine("    {");
         builder.Append("        var typedLayer = (").Append(layerDisplayName).AppendLine(")layerInstance;");
 
@@ -438,7 +371,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             var serviceDisplay = svc.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (ImplementsInterface(svc, iServiceSymbol))
             {
-                builder.Append("        typedLayer.RegisterService(new ").Append(serviceDisplay).AppendLine("());");
+                builder.Append("        typedLayer.RegisterService((global::LayerBase.DI.IService)global::System.Activator.CreateInstance(typeof(")
+                       .Append(serviceDisplay)
+                       .AppendLine("))!);");
             }
             else if (callHandlerSymbol != null)
             {
@@ -448,7 +383,11 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                     var respDisplay = impl.ResponseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     builder.Append("        typedLayer.RegisterCallHandler<")
                            .Append(reqDisplay).Append(", ").Append(respDisplay)
-                           .Append(">(new ").Append(serviceDisplay).AppendLine("());");
+                           .Append(">((global::LayerBase.Call.ILayerCallHandler<")
+                           .Append(reqDisplay).Append(", ").Append(respDisplay)
+                           .Append(">)global::System.Activator.CreateInstance(typeof(")
+                           .Append(serviceDisplay)
+                           .AppendLine("))!);");
                 }
             }
         }
@@ -472,64 +411,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         return builder.ToString();
     }
 
-    private static string GenerateServicePartial(INamedTypeSymbol serviceType, List<INamedTypeSymbol> injectModules, List<INamedTypeSymbol> ownerModules, INamedTypeSymbol iLayerContextSymbol, INamedTypeSymbol? eventHandlerSymbol, INamedTypeSymbol? eventHandlerAsyncSymbol, INamedTypeSymbol? callHandlerSymbol)
-    {
-        var serviceIdentifier = serviceType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-        var namespaceSymbol = serviceType.ContainingNamespace;
-        var @namespace = namespaceSymbol is { IsGlobalNamespace: false }
-            ? namespaceSymbol.ToDisplayString()
-            : null;
-
-        var builder = new StringBuilder();
-        builder.AppendLine("// <auto-generated />");
-        builder.AppendLine("using LayerBase.DI;");
-
-        if (!string.IsNullOrEmpty(@namespace))
-        {
-            builder.Append("namespace ").Append(@namespace).AppendLine();
-            builder.AppendLine("{");
-        }
-
-        builder.Append("partial class ").Append(serviceIdentifier).AppendLine();
-        builder.AppendLine("{");
-        builder.AppendLine("    public void ConfigureServices(IServiceCollection services)");
-        builder.AppendLine("    {");
-
-        void EmitModuleRegistration(INamedTypeSymbol module)
-        {
-            var moduleDisplay = module.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            
-            // Check interfaces for specialized registration if needed
-            // Currently IServiceCollection only has AddScoped<T, T> which works for all if They are concrete classes.
-            // But we might want to register them as the interface type too.
-            // Requirement says: "添加 IEventHandler 和 ILayerCallHandler的切片支持"
-            // If they implement these interfaces, they will be found by Layer building logic if registered in DI.
-            
-            builder.Append("        services.AddScoped<").Append(moduleDisplay).Append(", ").Append(moduleDisplay).AppendLine(">();");
-            
-            // We could also register as interfaces to support resolving by interface, but Layer build uses concrete type resolution or discovery.
-            // Actually, IAutoSubscribe discovery in Layer.cs uses resolved instance's type.
-        }
-
-        foreach (var module in injectModules)
-        {
-            EmitModuleRegistration(module);
-        }
-
-        foreach (var module in ownerModules)
-        {
-            if (injectModules.Contains(module, SymbolEqualityComparer.Default)) continue;
-            EmitModuleRegistration(module);
-        }
-
-        builder.AppendLine("    }");
-        builder.AppendLine("}");
-
-        if (!string.IsNullOrEmpty(@namespace)) builder.AppendLine("}");
-
-        return builder.ToString();
-    }
-
     private static bool HasStaticConstructor(INamedTypeSymbol type)
     {
         return type.GetMembers().OfType<IMethodSymbol>().Any(m => m.MethodKind == MethodKind.StaticConstructor);
@@ -541,14 +422,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         var sanitized = new StringBuilder(name.Length);
         foreach (var ch in name) sanitized.Append(char.IsLetterOrDigit(ch) ? ch : '_');
         return $"{sanitized}.LayerServices.g.cs";
-    }
-
-    private static string CreateServiceHintName(INamedTypeSymbol serviceType)
-    {
-        var name = serviceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var sanitized = new StringBuilder(name.Length);
-        foreach (var ch in name) sanitized.Append(char.IsLetterOrDigit(ch) ? ch : '_');
-        return $"{sanitized}.ServiceModules.g.cs";
     }
 
     private static ImmutableArray<ServiceRegistration> CreateRegistrations(GeneratorAttributeSyntaxContext context)
@@ -563,23 +436,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
             builder.Add(new ServiceRegistration(serviceSymbol, layerSymbol, location));
-        }
-
-        return builder.ToImmutable();
-    }
-
-    private static ImmutableArray<OwnerServiceRegistration> CreateOwnerServiceRegistrations(GeneratorAttributeSyntaxContext context)
-    {
-        var moduleSymbol = (INamedTypeSymbol)context.TargetSymbol;
-        var builder = ImmutableArray.CreateBuilder<OwnerServiceRegistration>();
-
-        foreach (var attribute in context.Attributes)
-        {
-            if (attribute.ConstructorArguments.Length != 1) continue;
-            if (attribute.ConstructorArguments[0].Value is not INamedTypeSymbol serviceSymbol) continue;
-
-            var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
-            builder.Add(new OwnerServiceRegistration(moduleSymbol, serviceSymbol, location));
         }
 
         return builder.ToImmutable();
@@ -706,7 +562,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             new(
                 "LBG005",
                 "Service cannot be abstract",
-                "Service '{0}' cannot be abstract when used with OwnerLayerAttribute",
+                "Service '{0}' cannot be abstract when used with OwnerLayerAttribute or MountAttribute",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -733,7 +589,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             new(
                 "LBG008",
                 "Inject type mismatch",
-                "Field '{0}' in '{1}' has [Mount] but its type '{2}' is not allowed. In Layers, only IService is allowed. In Services, only ILayerContext is allowed.",
+                "Field '{0}' in '{1}' has [Mount] but its type '{2}' is not allowed. Mount is only supported on Layer fields whose type implements IService.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -772,7 +628,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         public INamedTypeSymbol Symbol { get; }
         public List<IFieldSymbol> MountFields { get; } = new();
         public List<ServiceRegistration> OwnerLayerRegistrations { get; } = new();
-        public List<OwnerServiceRegistration> OwnerServiceRegistrations { get; } = new();
 
         public ClassInfo(INamedTypeSymbol symbol) => Symbol = symbol;
     }
@@ -787,19 +642,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         }
         public INamedTypeSymbol ServiceType { get; }
         public INamedTypeSymbol LayerType { get; }
-        public Location? Location { get; }
-    }
-
-    private sealed class OwnerServiceRegistration
-    {
-        public OwnerServiceRegistration(INamedTypeSymbol moduleType, INamedTypeSymbol serviceType, Location? location)
-        {
-            ModuleType = moduleType;
-            ServiceType = serviceType;
-            Location = location;
-        }
-        public INamedTypeSymbol ModuleType { get; }
-        public INamedTypeSymbol ServiceType { get; }
         public Location? Location { get; }
     }
 

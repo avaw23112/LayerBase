@@ -43,14 +43,6 @@ public interface IAutoLayerMount
 }
 
 /// <summary>
-/// 由生成器为 Service 实现的自动挂载接口。
-/// </summary>
-public interface IAutoServiceMount
-{
-    void __AutoMountModules(IServiceCollection services);
-}
-
-/// <summary>
 /// 服务接口，用于配置分层 DI 容器。
 /// </summary>
 public interface IService 

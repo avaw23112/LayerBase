@@ -151,13 +151,11 @@ public abstract class Layer : Node, IDisposable
         if (!m_registeredServiceTypes.Add(service.GetType()))
             return;
 
-        // 绑定 Service 到当前 Layer (写入绑定槽位)
-        ServiceLayerBinder.Attach(service, this);
-
-        // 触发生成器实现的 Service 内部 Module 自动注册逻辑
-        if (service is IAutoServiceMount serviceMount)
+        // 绑定 Service 到当前 Layer (写入绑定槽位)。允许用户在 Push 前手动注册；
+        // PrepareBuild/AddActiveService 会在 Layer 已附加到 Runtime 后再次写入有效绑定。
+        if (OwnerContext != null)
         {
-            serviceMount.__AutoMountModules(m_serviceCollection);
+            ServiceLayerBinder.Attach(service, this);
         }
 
         var registration = new RegisteredService(service, Interlocked.Increment(ref m_nextServiceScopeId));
@@ -208,6 +206,7 @@ public abstract class Layer : Node, IDisposable
         }
 
         m_collectingGeneratedServices = true;
+        InitializeServices();
         LayerServiceRegistry.Apply(this);
         m_collectingGeneratedServices = false;
 
