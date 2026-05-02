@@ -21,6 +21,12 @@ public sealed class PostScheduler : IDisposable
     private ulong[] _dirtyPendingBits = Array.Empty<ulong>();
     private ulong[] _latestPendingBits = Array.Empty<ulong>();
 
+    // Snapshot Buffers for Reentrancy Safety
+    private ulong[] _dirtySnapshotBits = Array.Empty<ulong>();
+    private ulong[] _latestSnapshotBits = Array.Empty<ulong>();
+    private readonly List<CoalescedSlot> _snapshotCoalesced = new();
+    private PayloadHandle[] _latestSnapshotBuffer = new PayloadHandle[256];
+
     // Coalesced: Data Coalescing (Payload merging) - Keep for now, but in slow path
     private readonly Dictionary<CoalescedSlotKey, CoalescedSlot> _coalescedBuffer = new();
     private readonly List<CoalescedSlotKey> _pendingCoalesced = new();
@@ -75,6 +81,8 @@ public sealed class PostScheduler : IDisposable
         int segmentCount = (maxTypeId >> 6) + 1;
         _dirtyPendingBits = new ulong[segmentCount];
         _latestPendingBits = new ulong[segmentCount];
+        _dirtySnapshotBits = new ulong[segmentCount];
+        _latestSnapshotBits = new ulong[segmentCount];
 
         if (maxTypeId >= _latestBuffer.Length)
         {
@@ -82,6 +90,9 @@ public sealed class PostScheduler : IDisposable
             _latestBuffer = new PayloadHandle[maxTypeId + 1];
             Array.Copy(oldLatest, _latestBuffer, oldLatest.Length);
             for (int i = oldLatest.Length; i < _latestBuffer.Length; i++) _latestBuffer[i] = PayloadHandle.Invalid;
+            
+            _latestSnapshotBuffer = new PayloadHandle[maxTypeId + 1];
+            for (int i = 0; i < _latestSnapshotBuffer.Length; i++) _latestSnapshotBuffer[i] = PayloadHandle.Invalid;
         }
 
         if (maxTypeId >= _pendingCount.Length)
@@ -90,6 +101,22 @@ public sealed class PostScheduler : IDisposable
         }
     }
 
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public PostResult TryPostLatest<T>(in T value) where T : struct
+    {
+        if (_disposed) return FailSchedulerDisposed();
+        var typeId = EventTypeId<T>.Id;
+        return EnqueueLatestInternal(typeId, in value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public PostResult TryPostCoalesced<T>(in T value) where T : struct
+    {
+        if (_disposed) return FailSchedulerDisposed();
+        var typeId = EventTypeId<T>.Id;
+        return EnqueueCoalescedInternal(typeId, in value);
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult TryPost<T>(in T value, EventPostPolicy? policyOverride = null) where T : struct
@@ -365,73 +392,105 @@ public sealed class PostScheduler : IDisposable
     private int FlushBuffers()
     {
         int count = 0;
+        
+        // 1. Snapshot within lock
         lock (_bufferLock)
         {
-            // 1. Dirty Signals
-            for (int i = 0; i < _dirtyPendingBits.Length; i++)
-            {
-                var bits = FastArray.At(_dirtyPendingBits, i);
-                if (bits == 0) continue;
-                FastArray.At(_dirtyPendingBits, i) = 0;
+            // Dirty Signals Snapshot
+            Array.Copy(_dirtyPendingBits, _dirtySnapshotBits, _dirtyPendingBits.Length);
+            Array.Clear(_dirtyPendingBits, 0, _dirtyPendingBits.Length);
 
-                while (bits != 0)
-                {
-                    var bitIndex = BitHelper.TrailingZeroCount(bits);
-                    var typeId = (i << 6) + bitIndex;
-                    _payloadStorage.DispatchDefault(typeId, _eventCenter);
-                    count++;
-                    bits &= bits - 1;
-                }
-            }
-
-            // 2. Coalesced (Data Merging)
+            // Coalesced Snapshot
             if (_pendingCoalesced.Count > 0)
             {
+                // Sort by FirstSequenceId to maintain original order
                 _pendingCoalesced.Sort((a, b) => _coalescedBuffer[a].FirstSequenceId.CompareTo(_coalescedBuffer[b].FirstSequenceId));
                 foreach (var key in _pendingCoalesced)
                 {
-                    var slot = _coalescedBuffer[key];
-                    try
-                    {
-                        _payloadStorage.Dispatch(slot.PayloadHandle, _eventCenter);
-                    }
-                    finally
-                    {
-                        _payloadStorage.Release(slot.PayloadHandle);
-                        _coalescedBuffer.Remove(key);
-                    }
-                    count++;
+                    _snapshotCoalesced.Add(_coalescedBuffer[key]);
+                    _coalescedBuffer.Remove(key);
                 }
                 _pendingCoalesced.Clear();
             }
 
-            // 3. Latest
-            for (int i = 0; i < _latestPendingBits.Length; i++)
+            // Latest Snapshot
+            Array.Copy(_latestPendingBits, _latestSnapshotBits, _latestPendingBits.Length);
+            Array.Clear(_latestPendingBits, 0, _latestPendingBits.Length);
+            
+            // For latest buffer, we only need to copy handles for those with bits set
+            // but for simplicity and safety against race conditions (though we are in lock), 
+            // we copy what's needed.
+            for (int i = 0; i < _latestSnapshotBits.Length; i++)
             {
-                var bits = FastArray.At(_latestPendingBits, i);
-                if (bits == 0) continue;
-                FastArray.At(_latestPendingBits, i) = 0;
-
+                var bits = _latestSnapshotBits[i];
                 while (bits != 0)
                 {
                     var bitIndex = BitHelper.TrailingZeroCount(bits);
                     var typeId = (i << 6) + bitIndex;
-                    ref var handleRef = ref FastArray.At(_latestBuffer, typeId);
-                    var handle = handleRef;
-                    handleRef = PayloadHandle.Invalid;
-                    try
-                    {
-                        _payloadStorage.Dispatch(handle, _eventCenter);
-                    }
-                    finally
-                    {
-                        _payloadStorage.Release(handle);
-                    }
-                    count++;
+                    _latestSnapshotBuffer[typeId] = _latestBuffer[typeId];
+                    _latestBuffer[typeId] = PayloadHandle.Invalid;
                     bits &= bits - 1;
                 }
             }
         }
+
+        // 2. Dispatch outside lock
+        
+        // Dispatch Dirty Signals
+        for (int i = 0; i < _dirtySnapshotBits.Length; i++)
+        {
+            var bits = _dirtySnapshotBits[i];
+            while (bits != 0)
+            {
+                var bitIndex = BitHelper.TrailingZeroCount(bits);
+                var typeId = (i << 6) + bitIndex;
+                _payloadStorage.DispatchDefault(typeId, _eventCenter);
+                count++;
+                bits &= bits - 1;
+            }
+        }
+
+        // Dispatch Coalesced
+        if (_snapshotCoalesced.Count > 0)
+        {
+            foreach (var slot in _snapshotCoalesced)
+            {
+                try
+                {
+                    _payloadStorage.Dispatch(slot.PayloadHandle, _eventCenter);
+                }
+                finally
+                {
+                    _payloadStorage.Release(slot.PayloadHandle);
+                }
+                count++;
+            }
+            _snapshotCoalesced.Clear();
+        }
+
+        // Dispatch Latest
+        for (int i = 0; i < _latestSnapshotBits.Length; i++)
+        {
+            var bits = _latestSnapshotBits[i];
+            while (bits != 0)
+            {
+                var bitIndex = BitHelper.TrailingZeroCount(bits);
+                var typeId = (i << 6) + bitIndex;
+                var handle = _latestSnapshotBuffer[typeId];
+                _latestSnapshotBuffer[typeId] = PayloadHandle.Invalid;
+                try
+                {
+                    _payloadStorage.Dispatch(handle, _eventCenter);
+                }
+                finally
+                {
+                    _payloadStorage.Release(handle);
+                }
+                count++;
+                bits &= bits - 1;
+            }
+        }
+
         return count;
     }
 
@@ -542,19 +601,13 @@ public sealed class PostScheduler : IDisposable
         }
     }
 
-    /// <summary>
-    /// 棰勭儹鎸囧畾浜嬩欢绫诲瀷鐨勬姇閫掔浉鍏冲瓨鍌ㄣ€?
-    /// </summary>
-    /// <typeparam name="T">浜嬩欢绫诲瀷銆?/typeparam>
+  
     public void PrewarmEvent<T>() where T : struct
     {
         if (_disposed) return;
 
-        // 1. 纭繚 EventStore 宸茬粡鍒涘缓銆?
         _payloadStorage.EnsureStore<T>(_runtimeId);
 
-        // 2. 濡傛灉褰撳墠娌℃湁璇ヤ簨浠剁被鍨嬬殑 Plan锛屽垯鍒涘缓涓€涓粯璁?Plan銆?
-        // 杩欏彲浠ヨ绗竴娆?TryPost 鏃朵笉鍐嶆壙鎷?Plan 鏁扮粍鏌ヨ鎴栭粯璁ゅ垱寤烘垚鏈€?
         var typeId = EventTypeId<T>.Id;
         if (typeId >= _postPlans.Length)
         {

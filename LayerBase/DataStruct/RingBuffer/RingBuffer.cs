@@ -5,7 +5,8 @@ namespace LayerBase.Core.DataStruct;
 internal sealed class RingBuffer<T>
 {
     private readonly T[] _buffer;
-    private readonly int _capacity;
+    private readonly int _logicalCapacity;
+    private readonly int _physicalCapacity;
     private readonly int _mask;
     private int _head;
     private int _tail;
@@ -15,27 +16,28 @@ internal sealed class RingBuffer<T>
     {
         if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
         
-        // Force power of two
-        if ((capacity & (capacity - 1)) != 0)
+        _logicalCapacity = capacity;
+        _physicalCapacity = capacity;
+        // Force power of two for physical capacity
+        if ((_physicalCapacity & (_physicalCapacity - 1)) != 0)
         {
             int p = 1;
-            while (p < capacity) p <<= 1;
-            capacity = p;
+            while (p < _physicalCapacity) p <<= 1;
+            _physicalCapacity = p;
         }
 
-        _capacity = capacity;
-        _mask = capacity - 1;
-        _buffer = new T[capacity];
+        _mask = _physicalCapacity - 1;
+        _buffer = new T[_physicalCapacity];
     }
 
     public int Count => _count;
-    public bool IsFull => _count == _capacity;
+    public bool IsFull => _count >= _logicalCapacity;
     public bool IsEmpty => _count == 0;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryEnqueue(in T item)
     {
-        if (_count == _capacity) return false;
+        if (_count >= _logicalCapacity) return false;
         
         _buffer[_tail] = item;
         _tail = (_tail + 1) & _mask;

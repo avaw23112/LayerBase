@@ -50,15 +50,24 @@ public sealed class LayerRuntime : IDisposable
 
     internal void InitializeScheduler(PostSchedulerOptions options)
     {
+        BuildEventPolicies(options);
+    }
+
+    public void RebuildEventPolicies()
+    {
+        if (_scheduler == null) throw new InvalidOperationException("Runtime not built.");
+        BuildEventPolicies(_scheduler.Options);
+    }
+
+    private void BuildEventPolicies(PostSchedulerOptions options)
+    {
         _policyTable = new EventRuntimePolicyTable(options.DefaultBackpressure);
         var metaData = LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData().ToList();
         var plans = new List<PostTypePlan>();
 
-        // Console.WriteLine($"[DEBUG] InitializeScheduler: metaData count = {metaData.Count}");
         foreach (var (type, meta) in metaData)
         {
             var eventId = meta.EventId;
-            // Console.WriteLine($"[DEBUG] Registering meta for {type.Name}, id={eventId}");
 
             var postPolicy = meta.GetPostPolicy();
             _policyTable.SetMetaData(eventId, meta);
@@ -83,8 +92,11 @@ public sealed class LayerRuntime : IDisposable
             plans.Add(new PostTypePlan(eventId, effectivePolicy.Mode, effectivePolicy.Backpressure, effectivePolicy.MaxPending, options.DefaultBackpressure));
         }
 
-        _scheduler = new PostScheduler(_id, EventCenter, options, _policyTable);
-        EventCenter.PostScheduler = _scheduler;
+        if (_scheduler == null)
+        {
+            _scheduler = new PostScheduler(_id, EventCenter, options, _policyTable);
+            EventCenter.PostScheduler = _scheduler;
+        }
         _scheduler.BuildPlans(plans.ToArray());
     }
 
@@ -198,13 +210,13 @@ public sealed class LayerRuntime : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostLatest<T>(in T value) where T : struct
     {
-        Scheduler.TryPost(value, new EventPostPolicy(PostDeliveryMode.Latest, BackpressurePolicy.RejectNew, 0));
+        Scheduler.TryPostLatest(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostCoalesced<T>(in T value) where T : struct
     {
-        Scheduler.TryPost(value, new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0));
+        Scheduler.TryPostCoalesced(value);
     }
 
     public TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct

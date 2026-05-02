@@ -85,7 +85,18 @@ public abstract class Layer : Node, IDisposable
     public virtual bool HasActiveLogic =>
         m_serviceUpdates.Count > 0 || m_delayPublishers.Count > 0;
 
-    internal bool HasDelayPublisher => m_delayPublishers.Count > 0;
+    internal bool HasDelayPublisher
+    {
+        get
+        {
+            if (m_delayPublishers.IsEmpty) return false;
+            foreach (var kvp in m_delayPublishers)
+            {
+                if (kvp.Value.HasActiveDelays) return true;
+            }
+            return false;
+        }
+    }
 
 
     /// <summary>

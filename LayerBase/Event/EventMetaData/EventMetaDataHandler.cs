@@ -10,6 +10,11 @@ internal static class EventMetaDataHandler
     private static int s_registryVersion;
     private static readonly ConcurrentQueue<IEventExpectation> s_pendingExpectations = new();
 
+    static EventMetaDataHandler()
+    {
+        LayerHub.RegisterCacheResetter(Clear);
+    }
+
     internal static void Clear()
     {
         lock (s_lock)

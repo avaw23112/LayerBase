@@ -11,7 +11,7 @@
 
         <RootNamespace>LayerBase.Generator</RootNamespace>
         <PackageId>LayerBase.Generator</PackageId>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <GeneratePackageOnBuild Condition="'$(GITHUB_ACTIONS)' != 'true'">true</GeneratePackageOnBuild>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
         <Title>LayerBase.Generator</Title>
         <Authors>扭矩不足</Authors>
@@ -42,13 +42,15 @@
         <Compile Remove="SourceGeneratorWithAttributes.cs"/>
     </ItemGroup>
     <ItemGroup>
-        <None Include="$(OutputPath)$(AssemblyName).dll"
-              Pack="true"
-              PackagePath="analyzers/dotnet/cs"/>
-        <None Include="$(OutputPath)$(AssemblyName).pdb"
+        <None Include="$(TargetDir)$(AssemblyName).dll"
               Pack="true"
               PackagePath="analyzers/dotnet/cs"
-              Condition="Exists('$(OutputPath)$(AssemblyName).pdb')"/>
+              Visible="false" />
+        <None Include="$(TargetDir)$(AssemblyName).pdb"
+              Pack="true"
+              PackagePath="analyzers/dotnet/cs"
+              Visible="false"
+              Condition="Exists('$(TargetDir)$(AssemblyName).pdb')"/>
     </ItemGroup>
 
 

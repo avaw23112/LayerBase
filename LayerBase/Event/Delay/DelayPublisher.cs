@@ -30,6 +30,8 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
         get { lock (_lock) return _hasValue; }
     }
 
+    public bool HasActiveDelays => HasValue;
+
     public int ContractId { get; private set; }
 
     public bool TryGet(out T value)
@@ -68,9 +70,12 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
         float finalTtl;
         DelayTimerHandle oldHandle;
 
+        bool wasEmpty;
+
         lock (_lock)
         {
-            if (_deactivated) throw new ObjectDisposedException(nameof(DelayPublisher<T>));
+            if (_deactivated)
+                throw new ObjectDisposedException(nameof(DelayPublisher<T>));
             _manager.ThrowIfDisposed();
 
             var eventId = EventTypeId<T>.Id;
@@ -79,6 +84,7 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
             finalTtl = ttlSeconds > 0 ? ttlSeconds : (policy?.DefaultTtlSeconds ?? 0.5f);
             finalContractId = contractId != 0 ? contractId : (policy?.UseContractReplace == true ? eventId : 0);
 
+            wasEmpty = !_hasValue;
             _value = value;
             _hasValue = true;
             _valueVersion++;
@@ -86,6 +92,8 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
             ContractId = finalContractId;
             oldHandle = _timerHandle;
         }
+
+        if (wasEmpty) Owner.OwnerContext?.MarkDelayDirty();
 
         if (finalContractId != 0)
         {
@@ -136,9 +144,11 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
 
     private void ClearInternal()
     {
+        bool wasActive = _hasValue;
         _hasValue = false;
         _value = default;
         _timerHandle = DelayTimerHandle.Invalid;
         ContractId = 0;
+        if (wasActive) Owner.OwnerContext?.MarkDelayDirty();
     }
 }

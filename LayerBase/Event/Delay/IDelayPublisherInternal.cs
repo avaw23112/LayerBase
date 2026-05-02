@@ -6,4 +6,5 @@ internal interface IDelayPublisherInternal
     void Deactivate();
     bool TryExpire(int valueVersion);
     void Reset();
+    bool HasActiveDelays { get; }
 }

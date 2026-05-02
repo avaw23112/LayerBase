@@ -54,8 +54,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             }
             catch (Exception ex)
             {
-                // logging omitted to keep this package independent
-                Debug.WriteLine(ex);
+                throw;
             }
 
             processed++;
@@ -97,18 +96,6 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         while (_queue.TryDequeue(out _))
         {
         }
-    }
-
-    /// <summary>Install this context as current on the calling thread; returns existing instance if already set.</summary>
-    [Obsolete("InstallAsCurrent is not multi-world safe. Use Install() and EnterScope() instead.")]
-    public static LayerBaseSynchronizationContext InstallAsCurrent()
-    {
-        if (Current is LayerBaseSynchronizationContext existing)
-            return existing;
-
-        var ctx = new LayerBaseSynchronizationContext(Thread.CurrentThread.ManagedThreadId);
-        SetSynchronizationContext(ctx);
-        return ctx;
     }
 
     public static LayerBaseSynchronizationContext Install()
