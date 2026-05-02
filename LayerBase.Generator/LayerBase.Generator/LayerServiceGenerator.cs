@@ -371,9 +371,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             var serviceDisplay = svc.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (ImplementsInterface(svc, iServiceSymbol))
             {
-                builder.Append("        typedLayer.RegisterService((global::LayerBase.DI.IService)global::System.Activator.CreateInstance(typeof(")
+                builder.Append("        typedLayer.RegisterService((global::LayerBase.DI.IService)new ")
                        .Append(serviceDisplay)
-                       .AppendLine("))!);");
+                       .AppendLine("());");
             }
             else if (callHandlerSymbol != null)
             {
@@ -381,13 +381,14 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 {
                     var reqDisplay = impl.RequestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     var respDisplay = impl.ResponseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
                     builder.Append("        typedLayer.RegisterCallHandler<")
                            .Append(reqDisplay).Append(", ").Append(respDisplay)
                            .Append(">((global::LayerBase.Call.ILayerCallHandler<")
                            .Append(reqDisplay).Append(", ").Append(respDisplay)
-                           .Append(">)global::System.Activator.CreateInstance(typeof(")
+                           .Append(">)new ")
                            .Append(serviceDisplay)
-                           .AppendLine("))!);");
+                           .AppendLine("());");
                 }
             }
         }

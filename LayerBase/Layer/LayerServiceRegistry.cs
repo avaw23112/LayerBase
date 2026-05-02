@@ -21,21 +21,4 @@ public static class LayerServiceRegistry
         s_registrations.Clear();
         s_initMethods.Clear();
     }
-
-    internal static void Apply(Layer layer)
-    {
-        if (layer == null) throw new ArgumentNullException(nameof(layer));
-
-        var type = layer.GetType();
-
-
-        var initMethod = s_initMethods.GetOrAdd(type, static t =>
-            t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-             .FirstOrDefault(m => m.GetCustomAttribute<SourceGeneratedServiceInitAttribute>() != null));
-
-        initMethod?.Invoke(null, new object[] { layer });
-
-
-        if (s_registrations.TryGetValue(type, out var registrar)) registrar(layer);
-    }
 }

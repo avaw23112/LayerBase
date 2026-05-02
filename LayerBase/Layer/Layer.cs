@@ -11,11 +11,6 @@ using LayerBase.Event.Delay;
 
 namespace LayerBase.Layers;
 
-[AttributeUsage(AttributeTargets.Method)]
-public sealed class SourceGeneratedServiceInitAttribute : Attribute
-{
-}
-
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
 public sealed class OwnerLayerAttribute : Attribute
 {
@@ -207,7 +202,6 @@ public abstract class Layer : Node, IDisposable
 
         m_collectingGeneratedServices = true;
         InitializeServices();
-        LayerServiceRegistry.Apply(this);
         m_collectingGeneratedServices = false;
 
         var descriptors = m_serviceCollection.ToDescriptors();

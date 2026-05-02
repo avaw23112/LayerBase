@@ -1,3 +1,5 @@
+using LayerBase.Async;
+using LayerBase.Call;
 using LayerBase.DI;
 using LayerBase.Layers;
 
@@ -31,12 +33,22 @@ public partial class VerifyService3 : IService
     }
 }
 
+
+[OwnerLayer(typeof(VerifyLayer))]
+public partial class VerifyCallHandler : ILayerCallHandler<ChangeSceneRequest, ChangeSceneResponse>
+{
+    public LBTask<ChangeSceneResponse> HandleAsync(ChangeSceneRequest request, CancellationToken cancellationToken = default)
+    {
+        return LBTask<ChangeSceneResponse>.FromResult(new ChangeSceneResponse(request.SceneName));
+    }
+}
+
 public partial class VerifyLayer : Layer
 {
     // 证明 1：如果生成器工作，这个字段会被 new VerifyService() 赋值
     [Mount] public VerifyService2 MountedService2;
-    [Mount] public VerifyService1 MountedService1;
     [Mount] public VerifyService3 MountedService3;
+    [Mount] public VerifyService1 MountedService1;
 }
 
 public static class GeneratorVerification
