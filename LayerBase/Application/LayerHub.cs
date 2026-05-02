@@ -43,8 +43,10 @@ public static class LayerHub
 {
     private static readonly List<WeakReference<LayerRuntime>> s_runtimes = new();
     private static readonly object s_lock = new();
+    private static readonly Stack<int> s_freeRuntimeIds = new();
     private static int s_runtimeIdCounter;
     private static readonly ConcurrentBag<Action> s_cacheResetters = new();
+    private static readonly ConcurrentBag<Action<int>> s_runtimeCacheResetters = new();
     
     // Primary runtime for static convenience APIs
     private static LayerRuntime? s_primaryRuntime;
@@ -58,8 +60,17 @@ public static class LayerHub
     {
         lock (s_lock)
         {
-            var id = s_runtimeIdCounter++;
-            if (id >= 256) throw new InvalidOperationException("Max 256 concurrent LayerRuntimes supported by static caches.");
+            int id;
+            if (s_freeRuntimeIds.Count > 0)
+            {
+                id = s_freeRuntimeIds.Pop();
+            }
+            else
+            {
+                id = s_runtimeIdCounter++;
+                if (id >= 256) throw new InvalidOperationException("Max 256 concurrent LayerRuntimes supported by static caches.");
+            }
+
             var runtime = new LayerRuntime(id);
             if (s_primaryRuntime == null) s_primaryRuntime = runtime;
             new EventPrewarmBootstrapper();
@@ -105,12 +116,14 @@ public static class LayerHub
 
             s_primaryRuntime = null;
             s_runtimes.Clear();
-            s_runtimeIdCounter = 0;
 
             foreach (var runtime in runtimes)
             {
                 runtime.Dispose();
             }
+
+            s_freeRuntimeIds.Clear();
+            s_runtimeIdCounter = 0;
 
             foreach (var resetter in s_cacheResetters) resetter();
             ServiceLayerBinder.Reset();
@@ -134,7 +147,15 @@ public static class LayerHub
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Post<T>(in T value) where T : struct
     {
-        s_primaryRuntime?.Post(value);
+        _ = TryPost(value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    {
+        return s_primaryRuntime != null
+            ? s_primaryRuntime.TryPost(value, policy)
+            : PostResult.Failure("No Primary LayerRuntime created.");
     }
 
     /// <summary>
@@ -205,6 +226,11 @@ public static class LayerHub
                     s_runtimes.RemoveAt(i);
                     break;
                 }
+            }
+
+            if ((uint)runtime.Id < 256)
+            {
+                s_freeRuntimeIds.Push(runtime.Id);
             }
         }
     }
@@ -350,6 +376,19 @@ public static class LayerHub
         s_cacheResetters.Add(resetter);
     }
 
+    internal static void RegisterRuntimeCacheResetter(Action<int> resetter)
+    {
+        s_runtimeCacheResetters.Add(resetter);
+    }
+
+    internal static void ClearRuntimeCaches(int runtimeId)
+    {
+        foreach (var resetter in s_runtimeCacheResetters)
+        {
+            resetter(runtimeId);
+        }
+    }
+
     private static class LayerCallCache<TLayer, TRequest, TResponse>
         where TLayer : Layer
         where TRequest : struct
@@ -357,12 +396,13 @@ public static class LayerHub
     {
         public static readonly int[] Versions = new int[256];
         public static readonly LayerCallInvoker<TRequest, TResponse>?[] Invokers = new LayerCallInvoker<TRequest, TResponse>[256];
-        public static readonly Exception?[] Errors = new Exception[256];
+        public static readonly Exception?[] Errors = new Exception?[256];
 
         static LayerCallCache()
         {
             for (int i = 0; i < 256; i++) Versions[i] = -1;
             RegisterCacheResetter(Reset);
+            RegisterRuntimeCacheResetter(ResetRuntime);
         }
 
         private static void Reset()
@@ -373,6 +413,15 @@ public static class LayerHub
                 Errors[i] = null;
                 Volatile.Write(ref Versions[i], -1);
             }
+        }
+
+        private static void ResetRuntime(int runtimeId)
+        {
+            if ((uint)runtimeId >= 256) return;
+
+            Invokers[runtimeId] = null;
+            Errors[runtimeId] = null;
+            Volatile.Write(ref Versions[runtimeId], -1);
         }
     }
 
@@ -394,6 +443,7 @@ public static class LayerHub
         {
             for (int i = 0; i < 256; i++) Versions[i] = -1;
             RegisterCacheResetter(Reset);
+            RegisterRuntimeCacheResetter(ResetRuntime);
         }
 
         private static void Reset()
@@ -404,6 +454,15 @@ public static class LayerHub
                 States[i] = LayerTargetState.Unknown;
                 Volatile.Write(ref Versions[i], -1);
             }
+        }
+
+        private static void ResetRuntime(int runtimeId)
+        {
+            if ((uint)runtimeId >= 256) return;
+
+            Layers[runtimeId] = null;
+            States[runtimeId] = LayerTargetState.Unknown;
+            Volatile.Write(ref Versions[runtimeId], -1);
         }
     }
 }

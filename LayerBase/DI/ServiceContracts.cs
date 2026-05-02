@@ -158,7 +158,7 @@ internal sealed class ServiceLayerBinding
     /// 当前对象所属 Layer。
     /// Subscribe、OnEvent、GetService、Delay 等仍然通过 Layer 完成。
     /// </summary>
-    public readonly Layer Layer;
+    public readonly Layer? Layer;
 
     /// <summary>
     /// 当前对象所属 Runtime。
@@ -195,7 +195,7 @@ internal sealed class ServiceLayerBinding
         int version,
         int runtimeId,
         int layerIndex,
-        Layer layer,
+        Layer? layer,
         LayerRuntime runtime)
     {
         Version = version;
@@ -259,6 +259,38 @@ internal static class ServiceLayerBinder
     /// </param>
     public static void Attach(object service, Layer layer)
     {
+        AttachLayer(service, layer);
+    }
+
+    public static void AttachRuntime(object service, LayerRuntime runtime)
+    {
+        if (service == null)
+        {
+            return;
+        }
+
+        if (runtime == null)
+        {
+            throw new ArgumentNullException(nameof(runtime));
+        }
+
+        var binding = new ServiceLayerBinding(
+            version: s_version,
+            runtimeId: runtime.Id,
+            layerIndex: -1,
+            layer: null,
+            runtime: runtime);
+
+        ApplyBinding(service, binding);
+
+        if (service is IInternalLayerContext internalContext)
+        {
+            internalContext.LayerIndex = -1;
+        }
+    }
+
+    public static void AttachLayer(object service, Layer layer)
+    {
         if (service == null || layer == null)
         {
             return;
@@ -278,23 +310,54 @@ internal static class ServiceLayerBinder
             layer: layer,
             runtime: runtime);
 
-        if (service is ILayerBindingAccessor accessor)
-        {
-            // 快速路径：
-            // 源生成器增强过的 IService / ILayerContext 会走这里。
-            accessor.__LayerBaseBinding = binding;
-        }
-        else
-        {
-            // 兜底路径：
-            // 兼容没有被源生成器增强的对象。
-            s_bindingMap.Remove(service);
-            s_bindingMap.Add(service, binding);
-        }
+        ApplyBinding(service, binding);
 
         if (service is IInternalLayerContext internalContext)
         {
             internalContext.LayerIndex = layer.RouteIndex;
+        }
+    }
+
+    public static bool IsBoundToLayer(object service, LayerRuntime runtime)
+    {
+        var binding = GetBinding(service);
+        return binding != null && binding.Layer != null && binding.RuntimeId == runtime.Id;
+    }
+
+    public static bool HasLayerBinding(object service)
+    {
+        var binding = GetBinding(service);
+        return binding != null && binding.Layer != null;
+    }
+
+    public static ServiceLayerBinding? GetBinding(object service)
+    {
+        if (service is ILayerBindingAccessor accessor &&
+            accessor.__LayerBaseBinding is ServiceLayerBinding binding &&
+            binding.Version == s_version)
+        {
+            return binding;
+        }
+
+        if (s_bindingMap.TryGetValue(service, out binding) &&
+            binding.Version == s_version)
+        {
+            return binding;
+        }
+
+        return null;
+    }
+
+    private static void ApplyBinding(object service, ServiceLayerBinding binding)
+    {
+        if (service is ILayerBindingAccessor accessor)
+        {
+            accessor.__LayerBaseBinding = binding;
+        }
+        else
+        {
+            s_bindingMap.Remove(service);
+            s_bindingMap.Add(service, binding);
         }
     }
 
@@ -355,7 +418,20 @@ internal static class ServiceLayerBinder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Layer Require(object service)
     {
-        return RequireBinding(service).Layer;
+        return RequireLayer(RequireBinding(service));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Layer RequireLayer(ServiceLayerBinding binding)
+    {
+        return binding.Layer ?? ThrowRuntimeOnlyLayerRequired();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static Layer ThrowRuntimeOnlyLayerRequired()
+    {
+        throw new InvalidOperationException(
+            "This service is bound to Runtime, not to a specific Layer. Layer-only API is unavailable.");
     }
 
     /// <summary>
@@ -652,9 +728,8 @@ public static class ServiceExtensions
         int contractId = 0)
         where TValue : struct
     {
-        service
-            .GetBinding()
-            .Layer
+        ServiceLayerBinder
+            .RequireLayer(service.GetBinding())
             .SubscribeDelay<TValue>()
             .Publish(value, ttl, contractId);
     }
@@ -664,7 +739,7 @@ public static class ServiceExtensions
         EventHandleDelegate<TValue> handler)
         where TValue : struct
     {
-        service.GetBinding().Layer.SubscribeFlow(handler);
+        ServiceLayerBinder.RequireLayer(service.GetBinding()).SubscribeFlow(handler);
     }
 
     public static void SubscribeAsync<TValue>(
@@ -672,7 +747,7 @@ public static class ServiceExtensions
         EventHandleDelegateAsync<TValue> handler)
         where TValue : struct
     {
-        service.GetBinding().Layer.SubscribeAsync(handler);
+        ServiceLayerBinder.RequireLayer(service.GetBinding()).SubscribeAsync(handler);
     }
 
     public static void Subscribe<TValue>(
@@ -680,7 +755,7 @@ public static class ServiceExtensions
         EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
-        service.GetBinding().Layer.Subscribe(handler);
+        ServiceLayerBinder.RequireLayer(service.GetBinding()).Subscribe(handler);
     }
 
     public static void SubscribeParallel<TValue>(
@@ -690,7 +765,7 @@ public static class ServiceExtensions
     {
         var binding = service.GetBinding();
 
-        binding.Layer.SubscribeParallel(
+        ServiceLayerBinder.RequireLayer(binding).SubscribeParallel(
             handler,
             binding.Runtime.ReportLayerEventError);
     }
@@ -699,13 +774,19 @@ public static class ServiceExtensions
         this IService service)
         where TValue : struct
     {
-        return service.GetBinding().Layer.OnEvent<TValue>();
+        return ServiceLayerBinder.RequireLayer(service.GetBinding()).OnEvent<TValue>();
     }
 
     public static T GetService<T>(this IService service)
         where T : class
     {
-        return service.GetBinding().Layer.GetService<T>();
+        var binding = service.GetBinding();
+        if (binding.Layer != null)
+        {
+            return binding.Layer.GetService<T>();
+        }
+
+        return binding.Runtime.GetService<T>();
     }
 }
 
@@ -921,9 +1002,8 @@ public static class LayerContextExtensions
         int contractId = 0)
         where TValue : struct
     {
-        context
-            .GetBinding()
-            .Layer
+        ServiceLayerBinder
+            .RequireLayer(context.GetBinding())
             .SubscribeDelay<TValue>()
             .Publish(value, ttl, contractId);
     }
@@ -933,7 +1013,7 @@ public static class LayerContextExtensions
         EventHandleDelegate<TValue> handler)
         where TValue : struct
     {
-        context.GetBinding().Layer.SubscribeFlow(handler);
+        ServiceLayerBinder.RequireLayer(context.GetBinding()).SubscribeFlow(handler);
     }
 
     public static void SubscribeAsync<TValue>(
@@ -941,7 +1021,7 @@ public static class LayerContextExtensions
         EventHandleDelegateAsync<TValue> handler)
         where TValue : struct
     {
-        context.GetBinding().Layer.SubscribeAsync(handler);
+        ServiceLayerBinder.RequireLayer(context.GetBinding()).SubscribeAsync(handler);
     }
 
     public static void Subscribe<TValue>(
@@ -949,7 +1029,7 @@ public static class LayerContextExtensions
         EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
-        context.GetBinding().Layer.Subscribe(handler);
+        ServiceLayerBinder.RequireLayer(context.GetBinding()).Subscribe(handler);
     }
 
     public static void SubscribeParallel<TValue>(
@@ -959,7 +1039,7 @@ public static class LayerContextExtensions
     {
         var binding = context.GetBinding();
 
-        binding.Layer.SubscribeParallel(
+        ServiceLayerBinder.RequireLayer(binding).SubscribeParallel(
             handler,
             binding.Runtime.ReportLayerEventError);
     }
@@ -968,13 +1048,19 @@ public static class LayerContextExtensions
         this ILayerContext context)
         where TValue : struct
     {
-        return context.GetBinding().Layer.OnEvent<TValue>();
+        return ServiceLayerBinder.RequireLayer(context.GetBinding()).OnEvent<TValue>();
     }
 
     public static T GetService<T>(this ILayerContext context)
         where T : class
     {
-        return context.GetBinding().Layer.GetService<T>();
+        var binding = context.GetBinding();
+        if (binding.Layer != null)
+        {
+            return binding.Layer.GetService<T>();
+        }
+
+        return binding.Runtime.GetService<T>();
     }
 }
 

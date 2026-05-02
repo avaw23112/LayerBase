@@ -18,6 +18,7 @@ internal sealed class WorldServiceRoot : IDisposable
     /// 不会把 Runtime 注入到每个服务对象中。
     /// </summary>
     private readonly LayerRuntime _runtime;
+    public LayerRuntime Runtime => _runtime;
 
     /// <summary>
     /// 当前世界内的 Singleton 服务描述符表。
@@ -59,6 +60,22 @@ internal sealed class WorldServiceRoot : IDisposable
         if (descriptor == null)
         {
             throw new ArgumentNullException(nameof(descriptor));
+        }
+
+        if (_descriptors.TryGetValue(descriptor.ServiceType, out var existing))
+        {
+            var sameRegistration =
+                existing.ImplType == descriptor.ImplType &&
+                existing.Factory == descriptor.Factory &&
+                ReferenceEquals(existing.Instance, descriptor.Instance);
+
+            if (!sameRegistration)
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate singleton registration: {descriptor.ServiceType}");
+            }
+
+            return;
         }
 
         _descriptors[descriptor.ServiceType] = descriptor;
@@ -141,11 +158,6 @@ internal sealed class WorldServiceRoot : IDisposable
         }
 
         // 第一阶段保留旧绑定逻辑。
-        if (ownerLayer != null)
-        {
-            ServiceLayerBinder.Attach(instance, ownerLayer);
-        }
-
         return instance;
     }
 

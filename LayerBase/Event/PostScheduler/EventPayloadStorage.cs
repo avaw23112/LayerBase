@@ -18,11 +18,24 @@ internal static class PayloadStoreCache<T> where T : struct
     static PayloadStoreCache()
     {
         LayerHub.RegisterCacheResetter(Reset);
+        LayerHub.RegisterRuntimeCacheResetter(ResetRuntime);
     }
 
     private static void Reset()
     {
-        for (int i = 0; i < 1024; i++) Stores[i] = null;
+        for (int i = 0; i < 1024; i++)
+        {
+            Stores[i]?.Dispose();
+            Stores[i] = null;
+        }
+    }
+
+    private static void ResetRuntime(int runtimeId)
+    {
+        if ((uint)runtimeId >= (uint)Stores.Length) return;
+
+        Stores[runtimeId]?.Dispose();
+        Stores[runtimeId] = null;
     }
 }
 

@@ -41,6 +41,7 @@ public sealed class PostScheduler : IDisposable
     private readonly object _bufferLock = new();
     private readonly object _queueLock = new();
     private long _sequenceCounter;
+    private int _sealedMaxEventTypeId = -1;
     private bool _disposed;
     private bool _isPumping;
     private readonly BackpressurePolicy _defaultBackpressure;
@@ -63,6 +64,7 @@ public sealed class PostScheduler : IDisposable
     {
         var maxTypeId = EventTypeIdAllocator.MaxId;
         foreach (var p in plans) if (p.EventTypeId > maxTypeId) maxTypeId = p.EventTypeId;
+        _sealedMaxEventTypeId = maxTypeId;
 
         _postPlans = new PostTypePlan[maxTypeId + 1];
         // Initialize with default plans for all IDs
@@ -107,6 +109,7 @@ public sealed class PostScheduler : IDisposable
     {
         if (_disposed) return FailSchedulerDisposed();
         var typeId = EventTypeId<T>.Id;
+        if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
         return EnqueueLatestInternal(typeId, in value);
     }
 
@@ -115,6 +118,7 @@ public sealed class PostScheduler : IDisposable
     {
         if (_disposed) return FailSchedulerDisposed();
         var typeId = EventTypeId<T>.Id;
+        if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
         return EnqueueCoalescedInternal(typeId, in value);
     }
 
@@ -123,10 +127,11 @@ public sealed class PostScheduler : IDisposable
     {
         if (_disposed) return FailSchedulerDisposed();
 
+        var typeId = EventTypeId<T>.Id;
+        if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
+
         if (policyOverride.HasValue)
             return TryPostOverride(in value, policyOverride.Value);
-
-        var typeId = EventTypeId<T>.Id;
 
         if (!_postBitmap.IsSpecial(typeId))
             return EnqueueNormalFast(typeId, in value);
@@ -144,10 +149,13 @@ public sealed class PostScheduler : IDisposable
                 var plan = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending, _defaultBackpressure);
                 return EnqueueNormalWithPlan(typeId, in value, in plan);
             case PostDeliveryMode.DirtySignal:
+                if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
                 return MarkDirtyById<T>(typeId);
             case PostDeliveryMode.Coalesced:
+                if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
                 return EnqueueCoalescedInternal(typeId, in value);
             case PostDeliveryMode.Latest:
+                if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
                 return EnqueueLatestInternal(typeId, in value);
             default:
                 return PostResult.Failure("Unknown delivery mode");
@@ -187,6 +195,9 @@ public sealed class PostScheduler : IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private PostResult TryPostSpecial<T>(int typeId, in T value) where T : struct
     {
+        if (!IsKnownEventType(typeId))
+            return FailEventTypeNotRegistered<T>();
+
         if (_postBitmap.IsDirty(typeId))
             return MarkDirtyById<T>(typeId);
 
@@ -245,18 +256,36 @@ public sealed class PostScheduler : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private PostResult MarkDirtyById<T>(int typeId) where T : struct
     {
+        if (!IsKnownEventType(typeId))
+            return FailEventTypeNotRegistered<T>();
+
         var segment = typeId >> 6;
         var bit = 1UL << (typeId & 63);
 
         lock (_bufferLock)
         {
-            if (segment < _dirtyPendingBits.Length && (FastArray.At(_dirtyPendingBits, segment) & bit) == 0)
+            if (segment >= _dirtyPendingBits.Length)
+                return PostResult.Failure($"Dirty buffer is not initialized for event type {typeof(T).Name}.");
+
+            if ((FastArray.At(_dirtyPendingBits, segment) & bit) == 0)
             {
                 FastArray.At(_dirtyPendingBits, segment) |= bit;
                 _payloadStorage.EnsureStore<T>(_runtimeId);
             }
         }
         return PostResult.Coalesced();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsKnownEventType(int typeId)
+    {
+        return typeId <= _sealedMaxEventTypeId;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static PostResult FailEventTypeNotRegistered<T>() where T : struct
+    {
+        return PostResult.Failure($"Event type {typeof(T).Name} was not registered before Build.");
     }
 
     private PostResult EnqueueLatestInternal<T>(int typeId, in T value) where T : struct

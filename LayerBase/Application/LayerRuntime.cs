@@ -24,6 +24,11 @@ public sealed class LayerRuntime : IDisposable
     public int Id => _id;
     internal WorldServiceRoot Services { get; }
     public EventCenter EventCenter { get; internal set; }
+    
+    private ServiceProvider? _worldProvider;
+    public LayerBase.DI.IServiceProvider ServiceProvider => _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
+
+    public T GetService<T>() where T : class => ServiceProvider.Get<T>();
 
     private PostScheduler? _scheduler;
     public PostScheduler Scheduler => _scheduler ?? throw new InvalidOperationException("Runtime not built.");
@@ -112,6 +117,11 @@ public sealed class LayerRuntime : IDisposable
         DelayManager = DelayPublisherManager.Create(options, _policyTable!);
     }
 
+    internal void BuildServiceProvider()
+    {
+        _worldProvider = new ServiceProvider(Services);
+    }
+
     internal int GetNextLayerIndex()
     {
         return Interlocked.Increment(ref _layerIndexCounter) - 1;
@@ -198,7 +208,15 @@ public sealed class LayerRuntime : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Post<T>(in T value) where T : struct
     {
-        Scheduler.TryPost(value);
+        _ = TryPost(value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    {
+        return policy.HasValue
+            ? Scheduler.TryPost(value, policy.Value)
+            : Scheduler.TryPost(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -313,6 +331,7 @@ public sealed class LayerRuntime : IDisposable
         DelayManager = null;
         EventCenter.Reset();
         _context?.Dispose();
+        LayerHub.ClearRuntimeCaches(_id);
         LayerHub.Internal_Unregister(this);
     }
 
@@ -564,6 +583,7 @@ public sealed class LayerRuntime : IDisposable
             _runtime.InitializeScheduler(_postOptions);
             _runtime.InitializeTimer(_timerOptions);
             _runtime.InitializeDelay(_delayOptions);
+            _runtime.BuildServiceProvider();
             _layerChain.Build(1024, true);
 
             if (_debugMode)

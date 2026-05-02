@@ -10,6 +10,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
     private readonly ConcurrentDictionary<Type, ServiceDescriptor> _map;
     private readonly WorldServiceRoot _worldRoot;
     private readonly Layer? _ownerLayer;
+    private ResolutionContext? _activeResolutionContext;
     private int _disposed;
 
     internal ServiceProvider(WorldServiceRoot worldRoot)
@@ -27,7 +28,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         _map = new ConcurrentDictionary<Type, ServiceDescriptor>();
         _ownerLayer = ownerLayer;
         foreach (var d in descriptors)
-            if (d.Lifetime == ServiceLifetime.Singleton)
+            if (d.Lifetime == ServiceLifetime.Singleton || d.Lifetime == ServiceLifetime.Instance)
                 _worldRoot.Register(d);
             else
                 _map[d.ServiceType] = d;
@@ -48,7 +49,8 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
 
     public object? GetService(Type serviceType)
     {
-        return GetServiceInternal(serviceType, new HashSet<Type>());
+        var context = _activeResolutionContext ?? new ResolutionContext();
+        return GetServiceInternal(serviceType, context);
     }
 
     public T Get<T>()
@@ -88,47 +90,60 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         return resolved;
     }
 
-    private object? GetServiceInternal(Type serviceType, HashSet<Type> callstack)
+    private object? GetServiceInternal(Type serviceType, ResolutionContext context)
     {
         if (IsDisposed) throw new ObjectDisposedException(nameof(ServiceProvider));
         if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
 
 
-        if (_map.TryGetValue(serviceType, out var desc)) return Resolve(desc, callstack);
+        if (_map.TryGetValue(serviceType, out var desc)) return Resolve(desc, context);
 
 
         if (_worldRoot.TryGetDescriptor(serviceType, out var parentDesc))
-            return _worldRoot.GetOrCreate(parentDesc!, _ownerLayer, () => CreateInstance(parentDesc!, callstack));
+            return Resolve(parentDesc!, context);
 
         return null;
     }
 
-    private object Resolve(ServiceDescriptor desc, HashSet<Type> callstack)
+    private object Resolve(ServiceDescriptor desc, ResolutionContext context)
     {
         var instance = desc.Lifetime switch
                        {
-                           ServiceLifetime.Instance => desc.Instance!,
-                           ServiceLifetime.Singleton => _worldRoot.GetOrCreate(desc, _ownerLayer, () => CreateInstance(desc, callstack)),
-                           ServiceLifetime.Scoped => GetOrCreateCached(desc, callstack),
-                           ServiceLifetime.Transient => CreateInstance(desc, callstack),
+                           ServiceLifetime.Instance => _worldRoot.GetOrCreate(desc, _ownerLayer, () => desc.Instance!),
+                           ServiceLifetime.Singleton => _worldRoot.GetOrCreate(desc, _ownerLayer, () => CreateInstance(desc, context)),
+                           ServiceLifetime.Scoped => GetOrCreateCached(desc, context),
+                           ServiceLifetime.Transient => CreateInstance(desc, context),
                            _ => throw new NotSupportedException($"Unsupported lifetime {desc.Lifetime}")
                        };
 
 
-        if (_ownerLayer != null) ServiceLayerBinder.Attach(instance, _ownerLayer);
+        if (desc.Lifetime == ServiceLifetime.Singleton || desc.Lifetime == ServiceLifetime.Instance)
+        {
+            if (!ServiceLayerBinder.HasLayerBinding(instance))
+            {
+                ServiceLayerBinder.AttachRuntime(instance, _worldRoot.Runtime);
+            }
+        }
+        else if (_ownerLayer != null)
+        {
+            ServiceLayerBinder.AttachLayer(instance, _ownerLayer);
+        }
 
         return instance;
     }
 
-    private object GetOrCreateCached(ServiceDescriptor desc, HashSet<Type> callstack)
+    private object GetOrCreateCached(ServiceDescriptor desc, ResolutionContext context)
     {
+        var implementationType = desc.ImplType ?? desc.ServiceType;
+        if (context.CallStack.Contains(implementationType))
+            throw new InvalidOperationException($"Circular dependency detected: {implementationType}");
+
         var lazy = _instances.GetOrAdd(desc.ServiceType, _ =>
         {
             return new Lazy<object>(
                 () =>
                 {
-                    var localCallstack = new HashSet<Type>();
-                    return CreateInstance(desc, localCallstack);
+                    return CreateInstance(desc, context);
                 },
                 LazyThreadSafetyMode.ExecutionAndPublication);
         });
@@ -144,20 +159,23 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         }
     }
 
-    private object CreateInstance(ServiceDescriptor desc, HashSet<Type> callstack)
+    private object CreateInstance(ServiceDescriptor desc, ResolutionContext context)
     {
-        if (desc.Factory != null)
-            return desc.Factory(this);
-
-        if (desc.ImplType == null)
+        if (desc.ImplType == null && desc.Factory == null)
             throw new InvalidOperationException($"No implementation for {desc.ServiceType}");
 
-        if (!callstack.Add(desc.ImplType))
-            throw new InvalidOperationException($"Circular dependency detected: {desc.ImplType}");
+        var implementationType = desc.ImplType ?? desc.ServiceType;
+        if (!context.CallStack.Add(implementationType))
+            throw new InvalidOperationException($"Circular dependency detected: {implementationType}");
 
+        var previousContext = _activeResolutionContext;
+        _activeResolutionContext = context;
         try
         {
-            var ctor = desc.ImplType
+            if (desc.Factory != null)
+                return desc.Factory(this);
+
+            var ctor = desc.ImplType!
                            .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                            .OrderByDescending(c => c.GetParameters().Length)
                            .FirstOrDefault();
@@ -169,7 +187,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
             var args = new object?[parameters.Length];
             for (var i = 0; i < parameters.Length; i++)
             {
-                var dep = GetServiceInternal(parameters[i].ParameterType, callstack);
+                var dep = GetServiceInternal(parameters[i].ParameterType, context);
                 if (dep == null)
                     throw new InvalidOperationException(
                         $"Unable to resolve dependency {parameters[i].ParameterType} for {desc.ImplType}");
@@ -177,32 +195,38 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
             }
 
             var instance = ctor.Invoke(args);
-            InjectMembers(instance);
+            InjectMembers(instance, context);
             return instance;
         }
         finally
         {
-            callstack.Remove(desc.ImplType);
+            _activeResolutionContext = previousContext;
+            context.CallStack.Remove(implementationType);
         }
     }
 
-    private void InjectMembers(object instance)
+    private void InjectMembers(object instance, ResolutionContext context)
     {
         var t = instance.GetType();
 
         foreach (var f in t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
         {
             if (f.GetCustomAttribute<MountAttribute>() == null) continue;
-            var dep = GetService(f.FieldType);
+            var dep = GetServiceInternal(f.FieldType, context);
             if (dep != null) f.SetValue(instance, dep);
         }
 
         foreach (var p in t.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
         {
             if (p.GetCustomAttribute<MountAttribute>() == null || !p.CanWrite) continue;
-            var dep = GetService(p.PropertyType);
+            var dep = GetServiceInternal(p.PropertyType, context);
             if (dep != null) p.SetValue(instance, dep, null);
         }
+    }
+
+    private sealed class ResolutionContext
+    {
+        public readonly HashSet<Type> CallStack = new();
     }
 
     internal readonly struct ResolvedService

@@ -106,6 +106,15 @@ public abstract class Layer : Node, IDisposable
             m_subscriptions.Clear();
         }
 
+        while (m_pendingOps.TryDequeue(out _))
+        {
+        }
+
+        m_delayPublishers.Clear();
+        m_serviceUpdates.Clear();
+        m_activeServices.Clear();
+        m_resolvedServices.Clear();
+
         m_serviceProvider?.Dispose();
         m_serviceProvider = null;
     }
@@ -529,8 +538,14 @@ public abstract class Layer : Node, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Post<T>(in T value) where T : struct
     {
-        if (OwnerContext == null) throw new InvalidOperationException("Layer not attached to context.");
-        OwnerContext.Post(value);
+        _ = TryPost(value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    {
+        if (OwnerContext == null) return PostResult.Failure("Layer not attached to context.");
+        return OwnerContext.TryPost(value, policy);
     }
 
 
