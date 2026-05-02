@@ -332,20 +332,17 @@ LayerBase 提供了精确控制传播范围的 API。在 `Layer`、`Service` 或
 
 ```csharp
 // 【Send 族：同步执行，当前执行流会等待分发完成】
-this.SendLocal(new DamageEvent());  // 【同层】仅在当前层级广播
 this.Send(new DamageEvent()); // 【全局】穿透所有层级广播
 
-// 【Post 族：异步投递，用在一些不紧急，可分帧执行的任务中。
-this.PostLocal(new DamageEvent());
+// 【Post 族：异步投递，用在一些不紧急，可分帧执行的任务中。有帧预算和背压算法。
 this.Post(new DamageEvent()); 
+this.MarkDirty<DamageEvent>()；           //会合并post事件，但本体没有内容只有default
+this.PostLatest(new DamageEvent())；      //会留下最后一个事件
+this.PostCoalesced(new DamageEvent());    //根据元数据的算法来合并事件，最后只留下一个事件
 
 // 【Delay 族：向事件缓冲管道发布一个定时的事件】
-this.DelayGlobal(new PlayerDeathEvent(), 3.5f); // 该事件会在管道中存在3.5秒，直到有新的事件覆盖、到时间自动消亡、或者被取出。
-this.DelayLocal(new PlayerDeathEvent(), 3.5f); 
+this.Delay(new PlayerDeathEvent(), 3.5f); // 该事件会在管道中存在3.5秒，直到有新的事件覆盖、到时间自动消亡、或者被取出。
 
-// 注意：全局事件都是是经过特殊优化的，性能比其他种类都要好。
-LayerHub.Send(new MyEvent());
-LayerHub.Post(new MyEvent());
 ```
 
 这种设计有助于精简事件流，减少不必要的跨层搜索。
@@ -375,7 +372,8 @@ public class GameRoot : MonoBehaviour
                 .Push(new InteractionLayer()) // 索引 0: 上层交互
                 .Push(new CoreLogicLayer())   // 索引 1: 下层逻辑
                 .SetDebug()                   // 开启Debug模式可以从GetTopologyMarkdown()获得整个系统的构建图。
-                .Build();                     // 自动扫描 [OwnerLayer] 并装配
+                .Build()                      // 自动扫描 [OwnerLayer] 并装配
+                .Prewarm();                   // 预热
 
         //注册全局消息通道，用于捕获框架的异常
         LayerHub.OnLayerEventInfo +=

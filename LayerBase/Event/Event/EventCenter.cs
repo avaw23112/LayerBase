@@ -8,11 +8,6 @@ using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Core.Event;
 
-public enum Propagation
-{
-    Global
-}
-
 /// <summary>
 /// 全局事件中心，负责事件的订阅管理及同步派发。
 /// </summary>
