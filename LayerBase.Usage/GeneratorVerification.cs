@@ -1,5 +1,6 @@
 using LayerBase.Async;
 using LayerBase.Call;
+using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Layers;
 
@@ -30,6 +31,12 @@ public partial class VerifyService3 : IService
     public void ConfigureServices(IServiceCollection services) 
     {
         IsInitialized = true;
+    }
+    
+    [Subscribe]
+    public void OnVerify(in ChangeSceneRequest @event)
+    {
+        
     }
 }
 
