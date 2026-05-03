@@ -21,6 +21,15 @@ public sealed class LayerRuntime : IDisposable
     private bool _disposed;
     private readonly int _id;
 
+    /// <summary>
+    /// 跨线程 Post 入口队列。
+    ///
+    /// 作用：
+    /// 非主线程提交的事件先进入这里，
+    /// Runtime.Pump 开头再统一搬运到 PostScheduler。
+    /// </summary>
+    private readonly PostIngressQueue _postIngress = new();
+
     public int Id => _id;
     internal WorldServiceRoot Services { get; }
     public EventCenter EventCenter { get; internal set; }
@@ -140,6 +149,15 @@ public sealed class LayerRuntime : IDisposable
 
     {
         if (_disposed) return;
+
+        // 先搬运跨线程提交的事件。
+        //
+        // 这样外部线程只接触 PostIngressQueue，
+        // PostScheduler 仍然由 Runtime.Pump 所在线程统一访问。
+        if (_scheduler != null)
+        {
+            _postIngress.DrainTo(_scheduler);
+        }
 
         if (_context != null)
         {
@@ -262,6 +280,69 @@ public sealed class LayerRuntime : IDisposable
         Scheduler.TryPostLatest(value);
     }
 
+    /// <summary>
+    /// 从任意线程提交事件。
+    ///
+    /// 这个方法不会立即派发事件。
+    /// 它只把事件放入跨线程入口队列，
+    /// 真正投递发生在下一次 Runtime.Pump。
+    /// </summary>
+    /// <typeparam name="T">
+    /// 事件类型。
+    /// 必须是 struct。
+    /// </typeparam>
+    /// <param name="value">
+    /// 事件数据。
+    /// </param>
+    /// <param name="policy">
+    /// 可选 Post 策略。
+    /// null 表示使用事件默认策略。
+    /// </param>
+    public void PostFromAnyThread<T>(
+        in T value,
+        EventPostPolicy? policy = default)
+        where T : struct
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _postIngress.Enqueue(value, policy);
+    }
+
+    /// <summary>
+    /// 从任意线程尝试提交事件。
+    /// </summary>
+    /// <typeparam name="T">
+    /// 事件类型。
+    /// 必须是 struct。
+    /// </typeparam>
+    /// <param name="value">
+    /// 事件数据。
+    /// </param>
+    /// <param name="policy">
+    /// 可选 Post 策略。
+    /// null 表示使用事件默认策略。
+    /// </param>
+    /// <returns>
+    /// true 表示已经进入跨线程入口队列。
+    /// false 表示 Runtime 已经释放。
+    /// </returns>
+    public bool TryPostFromAnyThread<T>(
+        in T value,
+        EventPostPolicy? policy = default)
+        where T : struct
+    {
+        if (_disposed)
+        {
+            return false;
+        }
+
+        _postIngress.Enqueue(value, policy);
+        return true;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostCoalesced<T>(in T value) where T : struct
     {
@@ -350,6 +431,10 @@ public sealed class LayerRuntime : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+
+        // 清理尚未搬运到 PostScheduler 的跨线程事件。
+        _postIngress.Clear();
+
         _chain?.DisposeLayers();
         _chain = null;
 

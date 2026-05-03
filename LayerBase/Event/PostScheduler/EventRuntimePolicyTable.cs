@@ -23,14 +23,11 @@ public sealed class EventRuntimePolicyTable
 
     public void SetMetaData(int eventTypeId, IEventMetaData metaData)
     {
-        lock (_lock)
+        if (eventTypeId >= _metaDatas.Length)
         {
-            if (eventTypeId >= _metaDatas.Length)
-            {
-                Array.Resize(ref _metaDatas, Math.Max(eventTypeId + 1, _metaDatas.Length * 2));
-            }
-            _metaDatas[eventTypeId] = metaData;
+            Array.Resize(ref _metaDatas, Math.Max(eventTypeId + 1, _metaDatas.Length * 2));
         }
+        _metaDatas[eventTypeId] = metaData;
     }
 
     public EventMetaData<T>? GetMetaData<T>(int eventTypeId) where T : struct
@@ -42,48 +39,39 @@ public sealed class EventRuntimePolicyTable
 
     public void SetPostPolicy(int eventTypeId, EventPostPolicy policy)
     {
-        lock (_lock)
+        if (eventTypeId >= _postPolicies.Length)
         {
-            if (eventTypeId >= _postPolicies.Length)
+            int oldSize = _postPolicies.Length;
+            int newSize = Math.Max(eventTypeId + 1, oldSize * 2);
+            Array.Resize(ref _postPolicies, newSize);
+            for (int i = oldSize; i < newSize; i++)
             {
-                int oldSize = _postPolicies.Length;
-                int newSize = Math.Max(eventTypeId + 1, oldSize * 2);
-                Array.Resize(ref _postPolicies, newSize);
-                for (int i = oldSize; i < newSize; i++)
-                {
-                    _postPolicies[i] = new EventPostPolicy(PostDeliveryMode.Normal, _defaultBackpressure, 0);
-                }
+                _postPolicies[i] = new EventPostPolicy(PostDeliveryMode.Normal, _defaultBackpressure, 0);
             }
-            _postPolicies[eventTypeId] = policy;
         }
+        _postPolicies[eventTypeId] = policy;
     }
 
     public void SetTimerPolicy(int eventTypeId, EventTimerPolicy policy)
     {
-        lock (_lock)
+        if (eventTypeId >= _timerPolicies.Length)
         {
-            if (eventTypeId >= _timerPolicies.Length)
-            {
-                int oldSize = _timerPolicies.Length;
-                int newSize = Math.Max(eventTypeId + 1, oldSize * 2);
-                Array.Resize(ref _timerPolicies, newSize);
-            }
-            _timerPolicies[eventTypeId] = policy;
+            int oldSize = _timerPolicies.Length;
+            int newSize = Math.Max(eventTypeId + 1, oldSize * 2);
+            Array.Resize(ref _timerPolicies, newSize);
         }
+        _timerPolicies[eventTypeId] = policy;
     }
 
     public void SetBufferPolicy(int eventTypeId, EventBufferPolicy policy)
     {
-        lock (_lock)
+        if (eventTypeId >= _bufferPolicies.Length)
         {
-            if (eventTypeId >= _bufferPolicies.Length)
-            {
-                int oldSize = _bufferPolicies.Length;
-                int newSize = Math.Max(eventTypeId + 1, oldSize * 2);
-                Array.Resize(ref _bufferPolicies, newSize);
-            }
-            _bufferPolicies[eventTypeId] = policy;
+            int oldSize = _bufferPolicies.Length;
+            int newSize = Math.Max(eventTypeId + 1, oldSize * 2);
+            Array.Resize(ref _bufferPolicies, newSize);
         }
+        _bufferPolicies[eventTypeId] = policy;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -118,18 +106,10 @@ public sealed class EventRuntimePolicyTable
 
     public IEnumerable<EventPolicySnapshot> ExportSnapshots()
     {
-        IEventMetaData?[] metas;
-        EventPostPolicy[] postPolicies;
-        EventTimerPolicy?[] timerPolicies;
-        EventBufferPolicy?[] bufferPolicies;
-
-        lock (_lock)
-        {
-            metas = _metaDatas.ToArray();
-            postPolicies = _postPolicies.ToArray();
-            timerPolicies = _timerPolicies.ToArray();
-            bufferPolicies = _bufferPolicies.ToArray();
-        }
+        IEventMetaData?[] metas= _metaDatas.ToArray();
+        EventPostPolicy[] postPolicies= _postPolicies.ToArray();
+        EventTimerPolicy?[] timerPolicies= _timerPolicies.ToArray();
+        EventBufferPolicy?[] bufferPolicies = _bufferPolicies.ToArray();
 
         for (int i = 0; i < metas.Length; i++)
         {

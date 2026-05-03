@@ -67,61 +67,49 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
     public PayloadHandle Add(in T value)
     {
-        lock (_lock)
-        {
-            if (_disposed) throw new ObjectDisposedException(nameof(EventStore<T>));
-            if (_freeHead == -1) Grow();
-            
-            int index = _freeHead;
-            _freeHead = _nextFree[index];
-            
-            _buffer[index] = value;
-            int version = _versions[index];
-            
-            return new PayloadHandle(EventTypeId<T>.Id, index, version);
-        }
+        if (_disposed) throw new ObjectDisposedException(nameof(EventStore<T>));
+        if (_freeHead == -1) Grow();
+        
+        int index = _freeHead;
+        _freeHead = _nextFree[index];
+        
+        _buffer[index] = value;
+        int version = _versions[index];
+        
+        return new PayloadHandle(EventTypeId<T>.Id, index, version);
     }
 
     public bool TryGet(PayloadHandle handle, out T value)
     {
-        lock (_lock)
+        if (_disposed || handle.Index < 0 || handle.Index >= _capacity || _versions[handle.Index] != handle.Version)
         {
-            if (_disposed || handle.Index < 0 || handle.Index >= _capacity || _versions[handle.Index] != handle.Version)
-            {
-                value = default;
-                return false;
-            }
-            
-            value = _buffer[handle.Index];
-            return true;
+            value = default;
+            return false;
         }
+        
+        value = _buffer[handle.Index];
+        return true;
     }
 
     public ref T GetRef(int index, int version)
     {
-        lock (_lock)
-        {
-            if (_disposed) throw new ObjectDisposedException(nameof(EventStore<T>));
-            if (index < 0 || index >= _capacity || _versions[index] != version)
-                throw new InvalidOperationException("Invalid payload handle");
+        if (_disposed) throw new ObjectDisposedException(nameof(EventStore<T>));
+        if (index < 0 || index >= _capacity || _versions[index] != version)
+            throw new InvalidOperationException("Invalid payload handle");
 
-            return ref _buffer[index];
-        }
+        return ref _buffer[index];
     }
 
     public void Release(int index, int version)
     {
-        lock (_lock)
-        {
-            if (_disposed || index < 0 || index >= _capacity || _versions[index] != version) return;
-            
-            _buffer[index] = default;
-            _versions[index]++;
-            if (_versions[index] == 0) _versions[index] = 1;
-            
-            _nextFree[index] = _freeHead;
-            _freeHead = index;
-        }
+        if (_disposed || index < 0 || index >= _capacity || _versions[index] != version) return;
+        
+        _buffer[index] = default;
+        _versions[index]++;
+        if (_versions[index] == 0) _versions[index] = 1;
+        
+        _nextFree[index] = _freeHead;
+        _freeHead = index;
     }
 
     public void Dispatch(int index, int version, EventCenter center)
@@ -134,10 +122,7 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
     public void DispatchDefault(EventCenter center)
     {
-        lock (_lock)
-        {
-            if (_disposed) return;
-        }
+        if (_disposed) return;
         center.Send(default(T));
     }
 
@@ -162,22 +147,19 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
     public void Dispose()
     {
-        lock (_lock)
-        {
-            if (_disposed) return;
-            _disposed = true;
+        if (_disposed) return;
+        _disposed = true;
 
-            Array.Clear(_buffer, 0, _buffer.Length);
-            Array.Clear(_versions, 0, _versions.Length);
-            Array.Clear(_nextFree, 0, _nextFree.Length);
+        Array.Clear(_buffer, 0, _buffer.Length);
+        Array.Clear(_versions, 0, _versions.Length);
+        Array.Clear(_nextFree, 0, _nextFree.Length);
 
-            _buffer = Array.Empty<T>();
-            _versions = Array.Empty<int>();
-            _nextFree = Array.Empty<int>();
+        _buffer = Array.Empty<T>();
+        _versions = Array.Empty<int>();
+        _nextFree = Array.Empty<int>();
 
-            _freeHead = -1;
-            _capacity = 0;
-        }
+        _freeHead = -1;
+        _capacity = 0;
     }
 }
 
@@ -234,23 +216,20 @@ internal sealed class EventPayloadStorage : IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private EventStore<T> CreateStoreGlobal<T>(int runtimeId) where T : struct
     {
-        lock (PayloadStoreCache<T>.Stores)
+        EventStore<T>? store = null;
+        if ((uint)runtimeId < 1024)
         {
-            EventStore<T>? store = null;
-            if ((uint)runtimeId < 1024)
-            {
-                store = PayloadStoreCache<T>.Stores[runtimeId];
-                if (store != null) return store;
+            store = PayloadStoreCache<T>.Stores[runtimeId];
+            if (store != null) return store;
 
-                store = new EventStore<T>();
-                PayloadStoreCache<T>.Stores[runtimeId] = store;
-            }
-            else
-            {
-                store = new EventStore<T>();
-            }
-            return store;
+            store = new EventStore<T>();
+            PayloadStoreCache<T>.Stores[runtimeId] = store;
         }
+        else
+        {
+            store = new EventStore<T>();
+        }
+        return store;
     }
 
     public ref T GetRef<T>(int runtimeId, PayloadHandle handle) where T : struct

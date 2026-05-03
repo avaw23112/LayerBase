@@ -58,24 +58,21 @@ public static class LayerHub
     /// </summary>
     public static LayerRuntime.LayersBuilder CreateLayers()
     {
-        lock (s_lock)
+        int id;
+        if (s_freeRuntimeIds.Count > 0)
         {
-            int id;
-            if (s_freeRuntimeIds.Count > 0)
-            {
-                id = s_freeRuntimeIds.Pop();
-            }
-            else
-            {
-                id = s_runtimeIdCounter++;
-                if (id >= 256) throw new InvalidOperationException("Max 256 concurrent LayerRuntimes supported by static caches.");
-            }
-
-            var runtime = new LayerRuntime(id);
-            if (s_primaryRuntime == null) s_primaryRuntime = runtime;
-            new EventPrewarmBootstrapper();
-            return new LayerRuntime.LayersBuilder(runtime);
+            id = s_freeRuntimeIds.Pop();
         }
+        else
+        {
+            id = s_runtimeIdCounter++;
+            if (id >= 256) throw new InvalidOperationException("Max 256 concurrent LayerRuntimes supported by static caches.");
+        }
+
+        var runtime = new LayerRuntime(id);
+        if (s_primaryRuntime == null) s_primaryRuntime = runtime;
+        new EventPrewarmBootstrapper();
+        return new LayerRuntime.LayersBuilder(runtime);
     }
 
     /// <summary>
@@ -84,18 +81,15 @@ public static class LayerHub
     /// </summary>
     public static void Pump(float deltaTime)
     {
-        lock (s_lock)
+        for (var i = s_runtimes.Count - 1; i >= 0; i--)
         {
-            for (var i = s_runtimes.Count - 1; i >= 0; i--)
+            if (s_runtimes[i].TryGetTarget(out var runtime))
             {
-                if (s_runtimes[i].TryGetTarget(out var runtime))
-                {
-                    runtime.Pump(deltaTime);
-                }
-                else
-                {
-                    s_runtimes.RemoveAt(i);
-                }
+                runtime.Pump(deltaTime);
+            }
+            else
+            {
+                s_runtimes.RemoveAt(i);
             }
         }
     }
@@ -175,6 +169,55 @@ public static class LayerHub
     public static void PostLatest<T>(in T value) where T : struct
     {
         s_primaryRuntime?.PostLatest(value);
+    }
+
+    /// <summary>
+    /// 从任意线程向 Primary Runtime 提交事件。
+    /// </summary>
+    /// <typeparam name="T">
+    /// 事件类型。
+    /// 必须是 struct。
+    /// </typeparam>
+    /// <param name="value">
+    /// 事件数据。
+    /// </param>
+    /// <param name="policy">
+    /// 可选 Post 策略。
+    /// null 表示使用事件默认策略。
+    /// </param>
+    public static void PostFromAnyThread<T>(
+        in T value,
+        EventPostPolicy? policy = default)
+        where T : struct
+    {
+        s_primaryRuntime?.PostFromAnyThread(value, policy);
+    }
+
+    /// <summary>
+    /// 从任意线程尝试向 Primary Runtime 提交事件。
+    /// </summary>
+    /// <typeparam name="T">
+    /// 事件类型。
+    /// 必须是 struct。
+    /// </typeparam>
+    /// <param name="value">
+    /// 事件数据。
+    /// </param>
+    /// <param name="policy">
+    /// 可选 Post 策略。
+    /// null 表示使用事件默认策略。
+    /// </param>
+    /// <returns>
+    /// true 表示已进入 Primary Runtime 的跨线程入口队列。
+    /// false 表示当前没有 Primary Runtime，或 Runtime 已释放。
+    /// </returns>
+    public static bool TryPostFromAnyThread<T>(
+        in T value,
+        EventPostPolicy? policy = default)
+        where T : struct
+    {
+        return s_primaryRuntime != null &&
+               s_primaryRuntime.TryPostFromAnyThread(value, policy);
     }
 
     /// <summary>

@@ -1,0 +1,158 @@
+using System.Collections.Concurrent;
+
+namespace LayerBase.Core.Event;
+
+/// <summary>
+/// 跨线程 Post 入口队列。
+///
+/// 作用：
+/// 允许任意线程提交事件，但不让外部线程直接修改 PostScheduler 内部队列。
+///
+/// 注意：
+/// 这是跨线程慢路径。
+/// 主线程内的 LayerHub.Post / Runtime.Post / Runtime.TryPost 不经过这里。
+/// </summary>
+internal sealed class PostIngressQueue
+{
+    /// <summary>
+    /// 跨线程入口队列。
+    ///
+    /// ConcurrentQueue：
+    /// .NET 提供的线程安全队列。
+    /// 这里允许多个线程同时 Enqueue。
+    /// Runtime.Pump 是唯一消费者。
+    /// </summary>
+    private readonly ConcurrentQueue<IIngressPostItem> _queue = new();
+
+    /// <summary>
+    /// 从任意线程提交一个事件。
+    /// </summary>
+    /// <typeparam name="T">
+    /// 事件类型。
+    /// 必须是 struct，以保持和 LayerBase 当前事件系统一致。
+    /// </typeparam>
+    /// <param name="value">
+    /// 事件数据。
+    /// 这里会复制一份到 IngressPostItem 中，避免保存外部可变引用。
+    /// </param>
+    /// <param name="policy">
+    /// 可选 Post 策略。
+    /// null 表示最终进入 PostScheduler 后使用默认策略。
+    /// </param>
+    public void Enqueue<T>(in T value, EventPostPolicy? policy)
+        where T : struct
+    {
+        _queue.Enqueue(new IngressPostItem<T>(value, policy));
+    }
+
+    /// <summary>
+    /// 把跨线程入口队列中的事件搬运到 PostScheduler。
+    /// </summary>
+    /// <param name="scheduler">
+    /// 当前 Runtime 的 PostScheduler。
+    /// 所有事件最终都通过它进入原有 Post 管线。
+    /// </param>
+    /// <param name="maxCount">
+    /// 本次最多搬运多少个事件。
+    /// 小于等于 0 表示不限制。
+    /// </param>
+    /// <returns>
+    /// 本次实际搬运的事件数量。
+    /// </returns>
+    public int DrainTo(PostScheduler scheduler, int maxCount = 0)
+    {
+        if (scheduler == null)
+        {
+            throw new ArgumentNullException(nameof(scheduler));
+        }
+
+        var count = 0;
+
+        while ((maxCount <= 0 || count < maxCount) &&
+               _queue.TryDequeue(out var item))
+        {
+            item.PostTo(scheduler);
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// 清空入口队列。
+    /// Runtime Dispose 或 Reset 时调用。
+    /// </summary>
+    public void Clear()
+    {
+        while (_queue.TryDequeue(out _))
+        {
+        }
+    }
+}
+
+/// <summary>
+/// 跨线程 Post 项的非泛型接口。
+///
+/// 作用：
+/// PostIngressQueue 需要保存不同事件类型的投递项，
+/// 所以用非泛型接口统一存储。
+/// </summary>
+internal interface IIngressPostItem
+{
+    /// <summary>
+    /// 把事件重新投递到 PostScheduler。
+    /// </summary>
+    /// <param name="scheduler">
+    /// 当前 Runtime 的 PostScheduler。
+    /// </param>
+    void PostTo(PostScheduler scheduler);
+}
+
+/// <summary>
+/// 泛型跨线程 Post 项。
+/// </summary>
+/// <typeparam name="T">
+/// 事件类型。
+/// </typeparam>
+internal sealed class IngressPostItem<T> : IIngressPostItem
+    where T : struct
+{
+    /// <summary>
+    /// 事件数据的副本。
+    /// </summary>
+    private readonly T _value;
+
+    /// <summary>
+    /// 可选 Post 策略。
+    /// null 表示使用事件默认策略。
+    /// </summary>
+    private readonly EventPostPolicy? _policy;
+
+    /// <summary>
+    /// 创建跨线程 Post 项。
+    /// </summary>
+    /// <param name="value">
+    /// 事件数据。
+    /// 构造时复制，避免跨线程持有外部引用。
+    /// </param>
+    /// <param name="policy">
+    /// 可选 Post 策略。
+    /// null 表示使用事件默认策略。
+    /// </param>
+    public IngressPostItem(T value, EventPostPolicy? policy)
+    {
+        _value = value;
+        _policy = policy;
+    }
+
+    /// <summary>
+    /// 在 Runtime.Pump 中重新进入原有 PostScheduler 管线。
+    /// </summary>
+    /// <param name="scheduler">
+    /// 当前 Runtime 的 PostScheduler。
+    /// </param>
+    public void PostTo(PostScheduler scheduler)
+    {
+        scheduler.TryPost(_value, _policy);
+    }
+}

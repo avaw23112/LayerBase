@@ -176,14 +176,11 @@ public sealed class PostScheduler : IDisposable
         var sequenceId = Interlocked.Increment(ref _sequenceCounter);
         var item = new PostItem(typeId, handle, sequenceId, _defaultBackpressure);
 
-        lock (_queueLock)
-        {
-            var targetQueue = _isPumping ? _nextQueue : _readyQueue;
-            if (targetQueue.TryEnqueue(in item))
-                return PostResult.Enqueued();
+        var targetQueue = _isPumping ? _nextQueue : _readyQueue;
+        if (targetQueue.TryEnqueue(in item))
+            return PostResult.Enqueued();
 
-            return HandleQueueFullSlow(in item, store, targetQueue);
-        }
+        return HandleQueueFullSlow(in item, store, targetQueue);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -222,15 +219,12 @@ public sealed class PostScheduler : IDisposable
     {
         if (plan.TrackPending)
         {
-            lock (_bufferLock)
+            if (typeId < _pendingCount.Length && FastArray.At(_pendingCount, typeId) >= plan.MaxPending)
             {
-                if (typeId < _pendingCount.Length && FastArray.At(_pendingCount, typeId) >= plan.MaxPending)
-                {
-                    return PostResult.Failure($"Max pending reached for event type {typeId}");
-                }
-
-                FastArray.At(_pendingCount, typeId)++;
+                return PostResult.Failure($"Max pending reached for event type {typeId}");
             }
+
+            FastArray.At(_pendingCount, typeId)++;
         }
 
         var store = _payloadStorage.GetStoreFast<T>(_runtimeId);
@@ -262,16 +256,13 @@ public sealed class PostScheduler : IDisposable
         var segment = typeId >> 6;
         var bit = 1UL << (typeId & 63);
 
-        lock (_bufferLock)
-        {
-            if (segment >= _dirtyPendingBits.Length)
-                return PostResult.Failure($"Dirty buffer is not initialized for event type {typeof(T).Name}.");
+        if (segment >= _dirtyPendingBits.Length)
+            return PostResult.Failure($"Dirty buffer is not initialized for event type {typeof(T).Name}.");
 
-            if ((FastArray.At(_dirtyPendingBits, segment) & bit) == 0)
-            {
-                FastArray.At(_dirtyPendingBits, segment) |= bit;
-                _payloadStorage.EnsureStore<T>(_runtimeId);
-            }
+        if ((FastArray.At(_dirtyPendingBits, segment) & bit) == 0)
+        {
+            FastArray.At(_dirtyPendingBits, segment) |= bit;
+            _payloadStorage.EnsureStore<T>(_runtimeId);
         }
         return PostResult.Coalesced();
     }
@@ -284,24 +275,21 @@ public sealed class PostScheduler : IDisposable
 
     public void AddSpecialPolicy(int typeId, EventPostPolicy policy)
     {
-        lock (_bufferLock)
+        if (typeId >= _postPlans.Length)
         {
-            if (typeId >= _postPlans.Length)
+            var newSize = Math.Max(typeId + 1, _postPlans.Length * 2);
+            var newPlans = new PostTypePlan[newSize];
+            Array.Copy(_postPlans, newPlans, _postPlans.Length);
+            for (int i = _postPlans.Length; i < newPlans.Length; i++)
             {
-                var newSize = Math.Max(typeId + 1, _postPlans.Length * 2);
-                var newPlans = new PostTypePlan[newSize];
-                Array.Copy(_postPlans, newPlans, _postPlans.Length);
-                for (int i = _postPlans.Length; i < newPlans.Length; i++)
-                {
-                    newPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure, MergeFailurePolicy.Reject);
-                }
-                _postPlans = newPlans;
+                newPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure, MergeFailurePolicy.Reject);
             }
-            
-            _postPlans[typeId] = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending, _defaultBackpressure, policy.MergeFailure);
-            _postBitmap.Build(_postPlans);
-            if (typeId > _sealedMaxEventTypeId) _sealedMaxEventTypeId = typeId;
+            _postPlans = newPlans;
         }
+        
+        _postPlans[typeId] = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending, _defaultBackpressure, policy.MergeFailure);
+        _postBitmap.Build(_postPlans);
+        if (typeId > _sealedMaxEventTypeId) _sealedMaxEventTypeId = typeId;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -314,26 +302,23 @@ public sealed class PostScheduler : IDisposable
     {
         var segment = typeId >> 6;
         var bit = 1UL << (typeId & 63);
-
-        lock (_bufferLock)
+ 
+        if (typeId < _latestBuffer.Length)
         {
-            if (typeId < _latestBuffer.Length)
+            ref var handleRef = ref FastArray.At(_latestBuffer, typeId);
+            if (!handleRef.IsInvalid)
             {
-                ref var handleRef = ref FastArray.At(_latestBuffer, typeId);
-                if (!handleRef.IsInvalid)
-                {
-                    _payloadStorage.Release(handleRef);
-                }
-
-                handleRef = _payloadStorage.Store(_runtimeId, value);
-                if (segment < _latestPendingBits.Length)
-                {
-                    FastArray.At(_latestPendingBits, segment) |= bit;
-                }
-                return PostResult.Success;
+                _payloadStorage.Release(handleRef);
             }
-            return PostResult.Failure("Event type not registered during build.");
+
+            handleRef = _payloadStorage.Store(_runtimeId, value);
+            if (segment < _latestPendingBits.Length)
+            {
+                FastArray.At(_latestPendingBits, segment) |= bit;
+            }
+            return PostResult.Success;
         }
+        return PostResult.Failure("Event type not registered during build.");
     }
 
     private PostResult EnqueueCoalescedInternal<T>(int typeId, in T value) where T : struct
@@ -345,53 +330,50 @@ public sealed class PostScheduler : IDisposable
         bool fallbackToNormal = false;
         PostTypePlan fallbackPlan = default;
 
-        lock (_bufferLock)
+        if (_coalescedBuffer.TryGetValue(slotKey, out var slot))
         {
-            if (_coalescedBuffer.TryGetValue(slotKey, out var slot))
+            ref T current = ref _payloadStorage.GetRef<T>(_runtimeId, slot.PayloadHandle);
+            if (meta != null && meta.TryMergePostEvent(ref current, in value))
             {
-                ref T current = ref _payloadStorage.GetRef<T>(_runtimeId, slot.PayloadHandle);
-                if (meta != null && meta.TryMergePostEvent(ref current, in value))
-                {
-                    slot.LastSequenceId = Interlocked.Increment(ref _sequenceCounter);
-                    slot.MergeCount++;
-                    _coalescedBuffer[slotKey] = slot;
-                    return PostResult.Coalesced();
-                }
-
-                // Merge failed
-                ref readonly var planRef = ref GetPlan(typeId);
-                fallbackPlan = planRef;
-
-                var result = HandleMergeFailureInternalLocked(
-                    slotKey: slotKey,
-                    slot: slot,
-                    value: in value,
-                    plan: in fallbackPlan,
-                    fallbackToNormal: out fallbackToNormal);
-
-                if (!fallbackToNormal)
-                {
-                    return result;
-                }
+                slot.LastSequenceId = Interlocked.Increment(ref _sequenceCounter);
+                slot.MergeCount++;
+                _coalescedBuffer[slotKey] = slot;
+                return PostResult.Coalesced();
             }
-            else
+
+            // Merge failed
+            ref readonly var planRef = ref GetPlan(typeId);
+            fallbackPlan = planRef;
+
+            var result = HandleMergeFailureInternalLocked(
+                slotKey: slotKey,
+                slot: slot,
+                value: in value,
+                plan: in fallbackPlan,
+                fallbackToNormal: out fallbackToNormal);
+
+            if (!fallbackToNormal)
             {
-                // New slot
-                var handle = _payloadStorage.Store(_runtimeId, value);
-                var seq = Interlocked.Increment(ref _sequenceCounter);
-                var newSlot = new CoalescedSlot
-                {
-                    Key = slotKey,
-                    PayloadHandle = handle,
-                    FirstSequenceId = seq,
-                    LastSequenceId = seq,
-                    MergeCount = 1,
-                    Active = true
-                };
-                _coalescedBuffer[slotKey] = newSlot;
-                _pendingCoalesced.Add(slotKey);
-                return PostResult.Enqueued();
+                return result;
             }
+        }
+        else
+        {
+            // New slot
+            var handle = _payloadStorage.Store(_runtimeId, value);
+            var seq = Interlocked.Increment(ref _sequenceCounter);
+            var newSlot = new CoalescedSlot
+            {
+                Key = slotKey,
+                PayloadHandle = handle,
+                FirstSequenceId = seq,
+                LastSequenceId = seq,
+                MergeCount = 1,
+                Active = true
+            };
+            _coalescedBuffer[slotKey] = newSlot;
+            _pendingCoalesced.Add(slotKey);
+            return PostResult.Enqueued();
         }
         
         if (fallbackToNormal)
@@ -437,14 +419,11 @@ public sealed class PostScheduler : IDisposable
 
     private PostResult EnqueueItemWithPolicy(in PostItem item)
     {
-        lock (_queueLock)
-        {
-            var targetQueue = _isPumping ? _nextQueue : _readyQueue;
-            if (targetQueue.TryEnqueue(in item))
-                return PostResult.Enqueued();
+        var targetQueue = _isPumping ? _nextQueue : _readyQueue;
+        if (targetQueue.TryEnqueue(in item))
+            return PostResult.Enqueued();
 
-            return HandleQueueFullInternal(in item, targetQueue);
-        }
+        return HandleQueueFullInternal(in item, targetQueue);
     }
 
     private PostResult HandleQueueFullInternal(in PostItem item, RingBuffer<PostItem> targetQueue)
@@ -480,10 +459,7 @@ public sealed class PostScheduler : IDisposable
         var plan = _postPlans[typeId];
         if (plan.TrackPending)
         {
-            lock (_bufferLock)
-            {
-                if (typeId < _pendingCount.Length) FastArray.At(_pendingCount, typeId)--;
-            }
+            if (typeId < _pendingCount.Length) FastArray.At(_pendingCount, typeId)--;
         }
     }
 
@@ -491,44 +467,40 @@ public sealed class PostScheduler : IDisposable
     {
         int count = 0;
         
-        // 1. Snapshot within lock
-        lock (_bufferLock)
+        // Dirty Signals Snapshot
+        Array.Copy(_dirtyPendingBits, _dirtySnapshotBits, _dirtyPendingBits.Length);
+        Array.Clear(_dirtyPendingBits, 0, _dirtyPendingBits.Length);
+
+        // Coalesced Snapshot
+        if (_pendingCoalesced.Count > 0)
         {
-            // Dirty Signals Snapshot
-            Array.Copy(_dirtyPendingBits, _dirtySnapshotBits, _dirtyPendingBits.Length);
-            Array.Clear(_dirtyPendingBits, 0, _dirtyPendingBits.Length);
-
-            // Coalesced Snapshot
-            if (_pendingCoalesced.Count > 0)
+            // Sort by FirstSequenceId to maintain original order
+            _pendingCoalesced.Sort((a, b) => _coalescedBuffer[a].FirstSequenceId.CompareTo(_coalescedBuffer[b].FirstSequenceId));
+            foreach (var key in _pendingCoalesced)
             {
-                // Sort by FirstSequenceId to maintain original order
-                _pendingCoalesced.Sort((a, b) => _coalescedBuffer[a].FirstSequenceId.CompareTo(_coalescedBuffer[b].FirstSequenceId));
-                foreach (var key in _pendingCoalesced)
-                {
-                    _snapshotCoalesced.Add(_coalescedBuffer[key]);
-                    _coalescedBuffer.Remove(key);
-                }
-                _pendingCoalesced.Clear();
+                _snapshotCoalesced.Add(_coalescedBuffer[key]);
+                _coalescedBuffer.Remove(key);
             }
+            _pendingCoalesced.Clear();
+        }
 
-            // Latest Snapshot
-            Array.Copy(_latestPendingBits, _latestSnapshotBits, _latestPendingBits.Length);
-            Array.Clear(_latestPendingBits, 0, _latestPendingBits.Length);
-            
-            // For latest buffer, we only need to copy handles for those with bits set
-            // but for simplicity and safety against race conditions (though we are in lock), 
-            // we copy what's needed.
-            for (int i = 0; i < _latestSnapshotBits.Length; i++)
+        // Latest Snapshot
+        Array.Copy(_latestPendingBits, _latestSnapshotBits, _latestPendingBits.Length);
+        Array.Clear(_latestPendingBits, 0, _latestPendingBits.Length);
+        
+        // For latest buffer, we only need to copy handles for those with bits set
+        // but for simplicity and safety against race conditions (though we are in lock), 
+        // we copy what's needed.
+        for (int i = 0; i < _latestSnapshotBits.Length; i++)
+        {
+            var bits = _latestSnapshotBits[i];
+            while (bits != 0)
             {
-                var bits = _latestSnapshotBits[i];
-                while (bits != 0)
-                {
-                    var bitIndex = BitHelper.TrailingZeroCount(bits);
-                    var typeId = (i << 6) + bitIndex;
-                    _latestSnapshotBuffer[typeId] = _latestBuffer[typeId];
-                    _latestBuffer[typeId] = PayloadHandle.Invalid;
-                    bits &= bits - 1;
-                }
+                var bitIndex = BitHelper.TrailingZeroCount(bits);
+                var typeId = (i << 6) + bitIndex;
+                _latestSnapshotBuffer[typeId] = _latestBuffer[typeId];
+                _latestBuffer[typeId] = PayloadHandle.Invalid;
+                bits &= bits - 1;
             }
         }
 
@@ -604,34 +576,23 @@ public sealed class PostScheduler : IDisposable
 
         processed += FlushBuffers();
 
-        lock (_queueLock)
-        {
+ 
             _isPumping = true;
-        }
         try
         {
-            lock (_queueLock)
-            {
-                if (_readyQueue.IsEmpty && !_nextQueue.IsEmpty) PromoteNextToReady();
-            }
+            if (_readyQueue.IsEmpty && !_nextQueue.IsEmpty) PromoteNextToReady();
 
             while (true)
             {
-                int currentWaveCount;
-                lock (_queueLock)
-                {
-                    if (_readyQueue.IsEmpty) break;
-                    currentWaveCount = _readyQueue.Count;
-                }
+                if (_readyQueue.IsEmpty) break;
+                int currentWaveCount = _readyQueue.Count;
 
                 wavesProcessed++;
                 for (int i = 0; i < currentWaveCount; i++)
                 {
                     PostItem item;
-                    lock (_queueLock)
-                    {
-                        if (!_readyQueue.TryDequeue(out item)) break;
-                    }
+       
+                    if (!_readyQueue.TryDequeue(out item)) break;
 
                     DispatchItem(in item);
                     processed++;
@@ -647,32 +608,23 @@ public sealed class PostScheduler : IDisposable
                     }
                 }
 
-                lock (_queueLock)
-                {
-                    if (wavesProcessed < _options.MaxWavesPerPump && !_nextQueue.IsEmpty)
-                        PromoteNextToReady();
-                    else
-                        break;
-                }
+          
+                if (wavesProcessed < _options.MaxWavesPerPump && !_nextQueue.IsEmpty)
+                    PromoteNextToReady();
+                else
+                    break;
             }
         }
         finally
         {
-            lock (_queueLock)
-            {
-                _isPumping = false;
-            }
+            _isPumping = false;
         }
 
     EndPump:
         var totalElapsedMs = 0.0;
         if (startTimestamp != 0) totalElapsedMs = (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
 
-        int pendingQueueCount;
-        lock (_queueLock)
-        {
-            pendingQueueCount = _readyQueue.Count + _nextQueue.Count;
-        }
+        int pendingQueueCount = _readyQueue.Count + _nextQueue.Count;
         return new PostPumpStats(processed, totalElapsedMs, pendingQueueCount, wavesProcessed);
     }
 
@@ -709,19 +661,16 @@ public sealed class PostScheduler : IDisposable
         var typeId = EventTypeId<T>.Id;
         if (typeId >= _postPlans.Length)
         {
-            lock (_bufferLock)
+            if (typeId >= _postPlans.Length)
             {
-                if (typeId >= _postPlans.Length)
+                var newSize = Math.Max(typeId + 1, _postPlans.Length * 2);
+                var newPlans = new PostTypePlan[newSize];
+                Array.Copy(_postPlans, newPlans, _postPlans.Length);
+                for (int i = _postPlans.Length; i < newPlans.Length; i++)
                 {
-                    var newSize = Math.Max(typeId + 1, _postPlans.Length * 2);
-                    var newPlans = new PostTypePlan[newSize];
-                    Array.Copy(_postPlans, newPlans, _postPlans.Length);
-                    for (int i = _postPlans.Length; i < newPlans.Length; i++)
-                    {
-                        newPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure, MergeFailurePolicy.Reject);
-                    }
-                    _postPlans = newPlans;
+                    newPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure, MergeFailurePolicy.Reject);
                 }
+                _postPlans = newPlans;
             }
         }
     }
@@ -730,34 +679,29 @@ public sealed class PostScheduler : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-
-        lock (_bufferLock)
+  
+        for (int i = 0; i < _latestPendingBits.Length; i++)
         {
-            for (int i = 0; i < _latestPendingBits.Length; i++)
+            var bits = FastArray.At(_latestPendingBits, i);
+            while (bits != 0)
             {
-                var bits = FastArray.At(_latestPendingBits, i);
-                while (bits != 0)
-                {
-                    var bitIndex = BitHelper.TrailingZeroCount(bits);
-                    var typeId = (i << 6) + bitIndex;
-                    _payloadStorage.Release(_latestBuffer[typeId]);
-                    bits &= bits - 1;
-                }
+                var bitIndex = BitHelper.TrailingZeroCount(bits);
+                var typeId = (i << 6) + bitIndex;
+                _payloadStorage.Release(_latestBuffer[typeId]);
+                bits &= bits - 1;
             }
-
-            foreach (var key in _pendingCoalesced)
-            {
-                _payloadStorage.Release(_coalescedBuffer[key].PayloadHandle);
-            }
-            _pendingCoalesced.Clear();
-            _coalescedBuffer.Clear();
         }
 
-        lock (_queueLock)
+        foreach (var key in _pendingCoalesced)
         {
-            ReleaseQueuedPayloads(_readyQueue);
-            ReleaseQueuedPayloads(_nextQueue);
+            _payloadStorage.Release(_coalescedBuffer[key].PayloadHandle);
         }
+        _pendingCoalesced.Clear();
+        _coalescedBuffer.Clear();
+
+
+        ReleaseQueuedPayloads(_readyQueue);
+        ReleaseQueuedPayloads(_nextQueue);
 
         _payloadStorage.Dispose();
     }

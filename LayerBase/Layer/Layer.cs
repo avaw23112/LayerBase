@@ -443,10 +443,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.SubscribeFlow(RouteIndex, handler);
-            lock (m_subscriptions)
-            {
-                m_subscriptions.Add(UnsubscribeFlowToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
-            }
+            m_subscriptions.Add(UnsubscribeFlowToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
         {
@@ -460,10 +457,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.SubscribeNotify(RouteIndex, handler);
-            lock (m_subscriptions)
-            {
-                m_subscriptions.Add(UnsubscribeNotifyToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
-            }
+            m_subscriptions.Add(UnsubscribeNotifyToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
         {
@@ -477,10 +471,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.Subscribe(RouteIndex, handler);
-            lock (m_subscriptions)
-            {
-                m_subscriptions.Add(UnsubscribeToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
-            }
+            m_subscriptions.Add(UnsubscribeToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
         {
@@ -494,10 +485,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.SubscribeAsync(RouteIndex, handler);
-            lock (m_subscriptions)
-            {
-                m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
-            }
+            m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
         {
@@ -517,10 +505,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.SubscribeParallel(RouteIndex, handler, reportError ?? OwnerContext.ReportLayerEventError);
-            lock (m_subscriptions)
-            {
-                m_subscriptions.Add(UnsubscribeParallelToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
-            }
+            m_subscriptions.Add(UnsubscribeParallelToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
         {
