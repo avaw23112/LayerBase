@@ -128,6 +128,7 @@ public static class LayerHub
             foreach (var resetter in s_cacheResetters) resetter();
             ServiceLayerBinder.Reset();
             LayerServiceRegistry.Reset();
+            EventIdentityRegistry.Reset();
             OnLayerEventInfo = null;
         }
     }
@@ -278,6 +279,7 @@ public static class LayerHub
     {
         Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, message, LayerEventInfoType.Warning));
     }
+    
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool TryGetCachedTarget<TLayer>(int runtimeId, int version, out TLayer? layer, out Exception? error)

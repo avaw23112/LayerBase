@@ -115,4 +115,34 @@ public sealed class EventRuntimePolicyTable
         
         return policies[eventTypeId];
     }
+
+    public IEnumerable<EventPolicySnapshot> ExportSnapshots()
+    {
+        IEventMetaData?[] metas;
+        EventPostPolicy[] postPolicies;
+        EventTimerPolicy?[] timerPolicies;
+        EventBufferPolicy?[] bufferPolicies;
+
+        lock (_lock)
+        {
+            metas = _metaDatas.ToArray();
+            postPolicies = _postPolicies.ToArray();
+            timerPolicies = _timerPolicies.ToArray();
+            bufferPolicies = _bufferPolicies.ToArray();
+        }
+
+        for (int i = 0; i < metas.Length; i++)
+        {
+            var meta = metas[i];
+            if (meta == null) continue;
+
+            yield return new EventPolicySnapshot(
+                runtimeId: i,
+                identity: meta.GetIdentity(),
+                postPolicy: i < postPolicies.Length ? postPolicies[i] : null,
+                timerPolicy: i < timerPolicies.Length ? timerPolicies[i] : null,
+                bufferPolicy: i < bufferPolicies.Length ? bufferPolicies[i] : null
+            );
+        }
+    }
 }

@@ -38,6 +38,10 @@ public abstract class Layer : Node, IDisposable
     private readonly HashSet<Type> m_registeredServiceTypes = new();
     private readonly ServiceCollection m_serviceCollection;
     private readonly List<IUpdate> m_serviceUpdates = new();
+    private readonly List<IPostBuild> m_postBuilds = new();
+    private readonly List<IRuntimeStart> m_runtimeStarts = new();
+    private readonly List<IRuntimeStop> m_runtimeStops = new();
+    private readonly List<IFixedUpdate> m_fixedUpdates = new();
     private readonly List<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> m_sharedFields = new();
     private readonly List<IDisposable> m_subscriptions = new();
     private readonly List<Type> m_subscribedEvents = new();
@@ -78,7 +82,7 @@ public abstract class Layer : Node, IDisposable
 
 
     public virtual bool HasActiveLogic =>
-        m_serviceUpdates.Count > 0 || m_delayPublishers.Count > 0;
+        m_serviceUpdates.Count > 0 || m_delayPublishers.Count > 0 || m_fixedUpdates.Count > 0;
 
     internal bool HasDelayPublisher
     {
@@ -254,6 +258,10 @@ public abstract class Layer : Node, IDisposable
         ReleaseDelayPublishers();
 
         m_serviceUpdates.Clear();
+        m_postBuilds.Clear();
+        m_runtimeStarts.Clear();
+        m_runtimeStops.Clear();
+        m_fixedUpdates.Clear();
         m_activeServices.Clear();
         m_resolvedServices.Clear();
         m_serviceCollection.Reset();
@@ -312,6 +320,47 @@ public abstract class Layer : Node, IDisposable
         {
             if (resolved.Instance is IInitializable init) init.Initialize();
             if (resolved.Instance is IUpdate up) m_serviceUpdates.Add(up);
+            if (resolved.Instance is IFixedUpdate fixedUpdate) m_fixedUpdates.Add(fixedUpdate);
+            if (resolved.Instance is IPostBuild postBuild) m_postBuilds.Add(postBuild);
+            if (resolved.Instance is IRuntimeStart runtimeStart) m_runtimeStarts.Add(runtimeStart);
+            if (resolved.Instance is IRuntimeStop runtimeStop) m_runtimeStops.Add(runtimeStop);
+        }
+
+        if (this is IFixedUpdate layerFixedUpdate) m_fixedUpdates.Add(layerFixedUpdate);
+        if (this is IPostBuild layerPostBuild) m_postBuilds.Add(layerPostBuild);
+        if (this is IRuntimeStart layerRuntimeStart) m_runtimeStarts.Add(layerRuntimeStart);
+        if (this is IRuntimeStop layerRuntimeStop) m_runtimeStops.Add(layerRuntimeStop);
+    }
+
+    internal void RunPostBuild()
+    {
+        for (var i = 0; i < m_postBuilds.Count; i++)
+        {
+            m_postBuilds[i].PostBuild();
+        }
+    }
+
+    internal void RunRuntimeStart()
+    {
+        for (var i = 0; i < m_runtimeStarts.Count; i++)
+        {
+            m_runtimeStarts[i].RuntimeStart();
+        }
+    }
+
+    internal void RunRuntimeStop()
+    {
+        for (var i = 0; i < m_runtimeStops.Count; i++)
+        {
+            m_runtimeStops[i].RuntimeStop();
+        }
+    }
+
+    internal void PumpFixed(float fixedDeltaTime)
+    {
+        for (var i = 0; i < m_fixedUpdates.Count; i++)
+        {
+            m_fixedUpdates[i].FixedUpdate(fixedDeltaTime);
         }
     }
 

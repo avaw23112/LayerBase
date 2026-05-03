@@ -67,6 +67,10 @@ internal sealed class LayerChain
     {
         foreach (var node in responsibilityChain)
             if (node is Layer layer)
+                layer.RunRuntimeStop();
+
+        foreach (var node in responsibilityChain)
+            if (node is Layer layer)
                 layer.Dispose();
     }
 
@@ -97,6 +101,16 @@ internal sealed class LayerChain
             if (layer.HasDelayPublisher) _hasDelayMask |= 1UL << layer.RouteIndex;
         }
 
+        foreach (var layer in builtLayers)
+        {
+            layer.RunPostBuild();
+        }
+
+        foreach (var layer in builtLayers)
+        {
+            layer.RunRuntimeStart();
+        }
+
         EventGraphValidator.Validate(allSubscribers, _owner);
     }
 
@@ -116,6 +130,23 @@ internal sealed class LayerChain
             {
                 layer.Pump(deltaTime);
             }
+
+            activeMask &= ~(1UL << index);
+        }
+    }
+
+    internal void PumpFixed(float fixedDeltaTime)
+    {
+        var activeMask = _logicActiveMask;
+        if (activeMask == 0) return;
+
+        while (activeMask != 0)
+        {
+            var index = FindFirstBit(activeMask);
+            if (index == -1 || index >= _indexedLayers.Length) break;
+
+            var layer = _indexedLayers[index];
+            layer?.PumpFixed(fixedDeltaTime);
 
             activeMask &= ~(1UL << index);
         }

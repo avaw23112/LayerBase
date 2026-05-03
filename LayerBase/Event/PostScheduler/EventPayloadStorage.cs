@@ -277,7 +277,7 @@ internal sealed class EventPayloadStorage : IDisposable
         var store = GetStoreByTypeId(handle.EventTypeId);
         if (store == null)
         {
-            // Console.WriteLine($"[DEBUG] Store not found for typeId {handle.EventTypeId}");
+            LayerHub.ReportWarning(0,"DEBUG","POST",$"Store not found for typeId {handle.EventTypeId}");
             return;
         }
         store.Dispatch(handle.Index, handle.Version, center);
@@ -288,7 +288,7 @@ internal sealed class EventPayloadStorage : IDisposable
         var store = GetStoreByTypeId(eventTypeId);
         if (store == null)
         {
-            // Console.WriteLine($"[DEBUG] Store not found for default typeId {eventTypeId}");
+            LayerHub.ReportWarning(0,"DEBUG","",$"Store not found for typeId {eventTypeId}");
             return;
         }
         store.DispatchDefault(center);
@@ -307,8 +307,6 @@ internal sealed class EventPayloadStorage : IDisposable
 
     public void Dispose()
     {
-        // Local stores are shared globally, so we don't dispose them here.
-        // They are cleared via Reset registration in LayerHub.
         Array.Clear(_typeIdStores, 0, _typeIdStores.Length);
     }
 }

@@ -8,24 +8,27 @@ public readonly struct PostTypePlan
     public readonly PostDeliveryMode Mode;
     public readonly BackpressurePolicy Backpressure;
     public readonly int MaxPending;
-    public readonly bool TrackPending;
-    public readonly bool HasCustomBackpressure;
+    public readonly BackpressurePolicy DefaultBackpressure;
+    public readonly MergeFailurePolicy MergeFailure;
 
     public PostTypePlan(
         int eventTypeId,
         PostDeliveryMode mode,
         BackpressurePolicy backpressure,
         int maxPending,
-        BackpressurePolicy defaultBackpressure
-    )
+        BackpressurePolicy defaultBackpressure,
+        MergeFailurePolicy mergeFailure = MergeFailurePolicy.Reject)
     {
         EventTypeId = eventTypeId;
         Mode = mode;
         Backpressure = backpressure;
         MaxPending = maxPending;
-        TrackPending = maxPending > 0;
-        HasCustomBackpressure = backpressure != defaultBackpressure;
+        DefaultBackpressure = defaultBackpressure;
+        MergeFailure = mergeFailure;
     }
+
+    public bool TrackPending => MaxPending > 0;
+    public bool HasCustomBackpressure => Backpressure != DefaultBackpressure;
 }
 
 public sealed class PostBitmap

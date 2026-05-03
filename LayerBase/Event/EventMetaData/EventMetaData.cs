@@ -13,12 +13,18 @@ public interface IEventMetaData
     EventBufferPolicy? GetBufferPolicy();
     
     int GetPostCoalesceKey(object value);
+    EventIdentity GetIdentity();
 }
 
 public abstract class EventMetaData<TEvent> : IEventMetaData where TEvent : struct
 {
     public int EventId => EventTypeId<TEvent>.Id;
     public virtual EventCategoryToken Category => EventCategoryToken.Empty;
+
+    public EventIdentity GetIdentity()
+    {
+        return EventIdentityRegistry.GetOrCreate<TEvent>();
+    }
 
     public EventCategoryToken GetEventCategoryToken()
     {

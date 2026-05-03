@@ -70,7 +70,7 @@ public sealed class PostScheduler : IDisposable
         // Initialize with default plans for all IDs
         for (int i = 0; i < _postPlans.Length; i++)
         {
-            _postPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure);
+            _postPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure, MergeFailurePolicy.Reject);
         }
 
         foreach (var p in plans)
@@ -146,7 +146,7 @@ public sealed class PostScheduler : IDisposable
         switch (policy.Mode)
         {
             case PostDeliveryMode.Normal:
-                var plan = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending, _defaultBackpressure);
+                var plan = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending, _defaultBackpressure, policy.MergeFailure);
                 return EnqueueNormalWithPlan(typeId, in value, in plan);
             case PostDeliveryMode.DirtySignal:
                 if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
@@ -282,6 +282,28 @@ public sealed class PostScheduler : IDisposable
         return typeId <= _sealedMaxEventTypeId;
     }
 
+    public void AddSpecialPolicy(int typeId, EventPostPolicy policy)
+    {
+        lock (_bufferLock)
+        {
+            if (typeId >= _postPlans.Length)
+            {
+                var newSize = Math.Max(typeId + 1, _postPlans.Length * 2);
+                var newPlans = new PostTypePlan[newSize];
+                Array.Copy(_postPlans, newPlans, _postPlans.Length);
+                for (int i = _postPlans.Length; i < newPlans.Length; i++)
+                {
+                    newPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure, MergeFailurePolicy.Reject);
+                }
+                _postPlans = newPlans;
+            }
+            
+            _postPlans[typeId] = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending, _defaultBackpressure, policy.MergeFailure);
+            _postBitmap.Build(_postPlans);
+            if (typeId > _sealedMaxEventTypeId) _sealedMaxEventTypeId = typeId;
+        }
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static PostResult FailEventTypeNotRegistered<T>() where T : struct
     {
@@ -319,6 +341,9 @@ public sealed class PostScheduler : IDisposable
         var meta = _policyTable.GetMetaData<T>(typeId);
         int coalesceKey = meta?.GetPostCoalesceKey(value) ?? 0;
         var slotKey = new CoalescedSlotKey(typeId, coalesceKey);
+        
+        bool fallbackToNormal = false;
+        PostTypePlan fallbackPlan = default;
 
         lock (_bufferLock)
         {
@@ -334,36 +359,80 @@ public sealed class PostScheduler : IDisposable
                 }
 
                 // Merge failed
-                if (typeId < _postPlans.Length)
+                ref readonly var planRef = ref GetPlan(typeId);
+                fallbackPlan = planRef;
+
+                var result = HandleMergeFailureInternalLocked(
+                    slotKey: slotKey,
+                    slot: slot,
+                    value: in value,
+                    plan: in fallbackPlan,
+                    fallbackToNormal: out fallbackToNormal);
+
+                if (!fallbackToNormal)
                 {
-                    ref readonly var plan = ref GetPlan(typeId);
-                    return HandleMergeFailureInternal(slotKey, value, plan.Backpressure);
+                    return result;
                 }
-
-                return PostResult.Failure("Merge failed and plan not found.");
             }
-
-            // New slot
-            var handle = _payloadStorage.Store(_runtimeId, value);
-            var seq = Interlocked.Increment(ref _sequenceCounter);
-            var newSlot = new CoalescedSlot
+            else
             {
-                Key = slotKey,
-                PayloadHandle = handle,
-                FirstSequenceId = seq,
-                LastSequenceId = seq,
-                MergeCount = 1,
-                Active = true
-            };
-            _coalescedBuffer[slotKey] = newSlot;
-            _pendingCoalesced.Add(slotKey);
-            return PostResult.Enqueued();
+                // New slot
+                var handle = _payloadStorage.Store(_runtimeId, value);
+                var seq = Interlocked.Increment(ref _sequenceCounter);
+                var newSlot = new CoalescedSlot
+                {
+                    Key = slotKey,
+                    PayloadHandle = handle,
+                    FirstSequenceId = seq,
+                    LastSequenceId = seq,
+                    MergeCount = 1,
+                    Active = true
+                };
+                _coalescedBuffer[slotKey] = newSlot;
+                _pendingCoalesced.Add(slotKey);
+                return PostResult.Enqueued();
+            }
         }
+        
+        if (fallbackToNormal)
+        {
+            return EnqueueNormalWithPlan(typeId, in value, in fallbackPlan);
+        }
+
+        return PostResult.Failure("Merge failed");
     }
 
-    private PostResult HandleMergeFailureInternal<T>(CoalescedSlotKey slotKey, in T value, BackpressurePolicy backpressure) where T : struct
+    private PostResult HandleMergeFailureInternalLocked<T>(
+        CoalescedSlotKey slotKey,
+        CoalescedSlot slot,
+        in T value,
+        in PostTypePlan plan,
+        out bool fallbackToNormal)
+        where T : struct
     {
-        return PostResult.Failure("Merge failed");
+        fallbackToNormal = false;
+
+        switch (plan.MergeFailure)
+        {
+            case MergeFailurePolicy.Reject:
+                return PostResult.Failure("Merge failed.");
+
+            case MergeFailurePolicy.FallbackToLatest:
+                _payloadStorage.Release(slot.PayloadHandle);
+                slot.PayloadHandle = _payloadStorage.Store(_runtimeId, value);
+                slot.LastSequenceId = Interlocked.Increment(ref _sequenceCounter);
+                slot.MergeCount = 1;
+                slot.Active = true;
+                _coalescedBuffer[slotKey] = slot;
+                return PostResult.Coalesced();
+
+            case MergeFailurePolicy.FallbackToNormal:
+                fallbackToNormal = true;
+                return PostResult.Enqueued();
+
+            default:
+                return PostResult.Failure($"Unsupported merge failure policy: {plan.MergeFailure}.");
+        }
     }
 
     private PostResult EnqueueItemWithPolicy(in PostItem item)
@@ -649,7 +718,7 @@ public sealed class PostScheduler : IDisposable
                     Array.Copy(_postPlans, newPlans, _postPlans.Length);
                     for (int i = _postPlans.Length; i < newPlans.Length; i++)
                     {
-                        newPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure);
+                        newPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure, MergeFailurePolicy.Reject);
                     }
                     _postPlans = newPlans;
                 }

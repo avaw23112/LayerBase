@@ -21,12 +21,15 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     }
 
     /// <summary>Run queued work and frame-delayed work; call once per frame on the main thread.</summary>
-    public void Update(int maxItems = 0)
+    public void Update(
+        int maxItems = 0,
+        CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
+        Action<Exception>? reportException = null)
     {
         if (_disposed) return;
 
         // Drain completion queue first as per design
-        CompletionQueue.Drain(maxItems);
+        CompletionQueue.Drain(maxItems, exceptionPolicy, reportException);
 
         lock (_lock)
         {
@@ -218,6 +221,9 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
 public interface IArchMainThreadPump
 {
-    void Update(int maxItems = 0);
+    void Update(
+        int maxItems = 0,
+        CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
+        Action<Exception>? reportException = null);
 }
 

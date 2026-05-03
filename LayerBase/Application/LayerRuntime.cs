@@ -42,6 +42,9 @@ public sealed class LayerRuntime : IDisposable
     public bool IsDebugMode { get; internal set; }
     public event Action<LayerEventInfo>? OnLayerEventInfo;
 
+    private FixedUpdateOptions _fixedUpdateOptions = FixedUpdateOptions.Disabled;
+    private float _fixedUpdateAccumulator;
+
     internal LayerRuntime(int id)
     {
         _id = id;
@@ -73,6 +76,7 @@ public sealed class LayerRuntime : IDisposable
         foreach (var (type, meta) in metaData)
         {
             var eventId = meta.EventId;
+            _ = meta.GetIdentity();
 
             var postPolicy = meta.GetPostPolicy();
             _policyTable.SetMetaData(eventId, meta);
@@ -94,7 +98,7 @@ public sealed class LayerRuntime : IDisposable
             }
 
             var effectivePolicy = postPolicy ?? new EventPostPolicy(PostDeliveryMode.Normal, options.DefaultBackpressure, 0);
-            plans.Add(new PostTypePlan(eventId, effectivePolicy.Mode, effectivePolicy.Backpressure, effectivePolicy.MaxPending, options.DefaultBackpressure));
+            plans.Add(new PostTypePlan(eventId, effectivePolicy.Mode, effectivePolicy.Backpressure, effectivePolicy.MaxPending, options.DefaultBackpressure, effectivePolicy.MergeFailure));
         }
 
         if (_scheduler == null)
@@ -149,9 +153,23 @@ public sealed class LayerRuntime : IDisposable
                 DelayManager?.Tick(deltaTime);
 
             // 3. Completion drain (Stage 5 Concurrency Simplified)
-            _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0);
+            var policy = IsDebugMode ? CompletionExceptionPolicy.Throw : CompletionExceptionPolicy.ReportAndContinue;
+            _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0, policy, ex => ReportLayerEventError(-1, "System", "Completion", ex));
 
-            // 4. Post pump
+            // 4. FixedUpdate accumulator
+            if (_fixedUpdateOptions.Enabled)
+            {
+                _fixedUpdateAccumulator += deltaTime;
+                int steps = 0;
+                while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime && steps < _fixedUpdateOptions.MaxStepsPerPump)
+                {
+                    _chain?.PumpFixed(_fixedUpdateOptions.FixedDeltaTime);
+                    _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
+                    steps++;
+                }
+            }
+
+            // 5. Post pump
             _scheduler?.Pump();
 
             _chain?.Pump(deltaTime);
@@ -165,7 +183,20 @@ public sealed class LayerRuntime : IDisposable
             if (_chain != null && _chain.HasAnyDelay)
                 DelayManager?.Tick(deltaTime);
 
-            // 3. Post pump
+            // 3. FixedUpdate accumulator
+            if (_fixedUpdateOptions.Enabled)
+            {
+                _fixedUpdateAccumulator += deltaTime;
+                int steps = 0;
+                while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime && steps < _fixedUpdateOptions.MaxStepsPerPump)
+                {
+                    _chain?.PumpFixed(_fixedUpdateOptions.FixedDeltaTime);
+                    _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
+                    steps++;
+                }
+            }
+
+            // 4. Post pump
             _scheduler?.Pump();
 
             _chain?.Pump(deltaTime);
@@ -394,6 +425,56 @@ public sealed class LayerRuntime : IDisposable
 
     public string GetTopologySummary() => _chain?.GetTopologySummary() ?? "No layers built.";
 
+    public string GetPolicyMarkdown()
+    {
+        if (_policyTable == null)
+        {
+            return "Runtime not built.";
+        }
+
+        var sb = new StringBuilder();
+
+        sb.AppendLine("# LayerBase Runtime Policy Dump");
+        sb.AppendLine();
+        sb.AppendLine("## Event Policies");
+        sb.AppendLine("| RuntimeId | StableId | StableKey | Version | Event Type | Post Mode | Backpressure | MaxPending | MergeFailure | Timer | Buffer |");
+        sb.AppendLine("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |");
+
+        foreach (var snapshot in _policyTable.ExportSnapshots())
+        {
+            var post = snapshot.PostPolicy;
+            var timer = snapshot.TimerPolicy;
+            var buffer = snapshot.BufferPolicy;
+            var identity = snapshot.Identity;
+
+            sb.Append("| ")
+              .Append(snapshot.RuntimeId)
+              .Append(" | ")
+              .Append(identity.StableId)
+              .Append(" | `")
+              .Append(identity.StableKey)
+              .Append("` | ")
+              .Append(identity.Version)
+              .Append(" | ")
+              .Append(identity.EventType.Name)
+              .Append(" | ")
+              .Append(post?.Mode.ToString() ?? "Normal")
+              .Append(" | ")
+              .Append(post?.Backpressure.ToString() ?? "Default")
+              .Append(" | ")
+              .Append(post?.MaxPending.ToString() ?? "0")
+              .Append(" | ")
+              .Append(post?.MergeFailure.ToString() ?? "Reject")
+              .Append(" | ")
+              .Append(timer != null ? "Yes" : "No")
+              .Append(" | ")
+              .Append(buffer != null ? "Yes" : "No")
+              .AppendLine(" |");
+        }
+
+        return sb.ToString();
+    }
+
     public string GetTopologyMarkdown()
     {
         if (_chain == null) return "No layers built.";
@@ -521,6 +602,7 @@ public sealed class LayerRuntime : IDisposable
         private PostSchedulerOptions _postOptions = PostSchedulerOptions.Default;
         private TimeSchedulerOptions _timerOptions = TimeSchedulerOptions.Default;
         private DelayBufferOptions _delayOptions = DelayBufferOptions.Default;
+        private FixedUpdateOptions _fixedUpdateOptions = FixedUpdateOptions.Default;
         private bool _built;
 
         internal LayersBuilder(LayerRuntime runtime) => _runtime = runtime;
@@ -569,6 +651,12 @@ public sealed class LayerRuntime : IDisposable
             return this;
         }
 
+        public LayersBuilder SetFixedUpdateOptions(FixedUpdateOptions options)
+        {
+            _fixedUpdateOptions = options;
+            return this;
+        }
+
         public LayerRuntime Build()
         {
             if (_built) throw new InvalidOperationException("LayersBuilder.Build can only be called once.");
@@ -580,6 +668,7 @@ public sealed class LayerRuntime : IDisposable
 
             _runtime.Tasks = new WorldTaskApi(_runtime._context);
 
+            _runtime._fixedUpdateOptions = _fixedUpdateOptions;
             _runtime.InitializeScheduler(_postOptions);
             _runtime.InitializeTimer(_timerOptions);
             _runtime.InitializeDelay(_delayOptions);
@@ -590,6 +679,7 @@ public sealed class LayerRuntime : IDisposable
             {
                 _runtime.ReportInfo(new LayerEventInfo(-1, "System", "Topology", _runtime.GetTopologySummary(), LayerEventInfoType.Info));
                 _runtime.ReportInfo(new LayerEventInfo(-1, "System", "TopologySnapshot", _runtime.GetTopologyMarkdown(), LayerEventInfoType.Info));
+                _runtime.ReportInfo(new LayerEventInfo(-1, "System", "PolicyDump", _runtime.GetPolicyMarkdown(), LayerEventInfoType.Info));
             }
             return _runtime;
         }

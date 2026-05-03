@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 
 namespace LayerBase.Async;
 
-internal readonly struct MainThreadCompletionItem
+public readonly struct MainThreadCompletionItem
 {
     private readonly Action _complete;
 
@@ -18,7 +18,7 @@ internal readonly struct MainThreadCompletionItem
     }
 }
 
-internal sealed class MainThreadCompletionQueue
+public sealed class MainThreadCompletionQueue
 {
     private readonly ConcurrentQueue<MainThreadCompletionItem> _queue = new();
 
@@ -32,17 +32,34 @@ internal sealed class MainThreadCompletionQueue
         _queue.Enqueue(new MainThreadCompletionItem(action));
     }
 
-    public int Drain(int maxCount)
+    public CompletionDrainStats Drain(
+        int maxCount,
+        CompletionExceptionPolicy exceptionPolicy,
+        Action<Exception>? reportException)
     {
-        var count = 0;
+        var processed = 0;
+        var errors = 0;
 
-        while ((maxCount <= 0 || count < maxCount) &&
+        while ((maxCount <= 0 || processed < maxCount) &&
                _queue.TryDequeue(out var item))
         {
-            item.Complete();
-            count++;
+            try
+            {
+                item.Complete();
+                processed++;
+            }
+            catch (Exception ex)
+            {
+                errors++;
+                if (exceptionPolicy == CompletionExceptionPolicy.Throw)
+                {
+                    throw;
+                }
+                reportException?.Invoke(ex);
+                processed++; // Count as processed even if it failed
+            }
         }
 
-        return count;
+        return new CompletionDrainStats(processed - errors, errors, _queue.Count);
     }
 }
