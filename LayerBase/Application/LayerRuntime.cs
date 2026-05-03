@@ -752,6 +752,7 @@ public sealed class LayerRuntime : IDisposable
                 _runtime._context = LayerBaseSynchronizationContext.Install();
 
             _runtime.Tasks = new WorldTaskApi(_runtime._context);
+            _layerChain.Prebuild();
 
             _runtime._fixedUpdateOptions = _fixedUpdateOptions;
             _runtime.InitializeScheduler(_postOptions);

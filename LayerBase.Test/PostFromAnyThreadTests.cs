@@ -95,7 +95,6 @@ public class PostFromAnyThreadTests
         var received = 0;
 
         var layer = new TestLayer(e => received = e.Value);
-        _ = EventTypeId<TestEvent>.Id;
         LayerHub.CreateLayers()
                 .Push(layer)
                 .Build();

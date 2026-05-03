@@ -291,7 +291,7 @@ public abstract class Layer : Node, IDisposable
         m_resolvedServices = newProvider.ResolveOrderedServices(descriptors);
     }
 
-    internal void FinalizeBuild()
+    internal void BuildAutoBinding()
     {
         BindAutoCallHandlers();
 
@@ -310,12 +310,13 @@ public abstract class Layer : Node, IDisposable
         }
 
         DiscoveredSubscribers = subscribers;
-
         var ops = Interlocked.Exchange(ref m_pendingOps, new ConcurrentQueue<Action<Layer>>());
         if (ops != null)
             foreach (var op in ops)
                 op(this);
-
+    }
+    internal void LifecycleBuild()
+    {
         foreach (var resolved in m_resolvedServices)
         {
             if (resolved.Instance is IInitializable init) init.Initialize();

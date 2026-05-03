@@ -74,15 +74,24 @@ internal sealed class LayerChain
                 layer.Dispose();
     }
 
-    internal void Build(int eventStateSlabSize, bool releaseMode)
+    internal void Prebuild()
     {
         AssignEventBus();
-
+        foreach (var node in responsibilityChain)
+        {
+            if (node is Layer layer)
+            {
+                layer.PrepareBuild();
+                layer.BuildAutoBinding();   
+            }
+        }
+    }
+    internal void Build(int eventStateSlabSize, bool releaseMode)
+    {
         var builtLayers = new List<Layer>();
         foreach (var node in responsibilityChain)
             if (node is Layer layer)
             {
-                layer.PrepareBuild();
                 builtLayers.Add(layer);
             }
 
@@ -94,7 +103,7 @@ internal sealed class LayerChain
         var allSubscribers = new List<IAutoSubscribe>();
         foreach (var layer in builtLayers)
         {
-            layer.FinalizeBuild();
+            layer.LifecycleBuild();
             allSubscribers.AddRange(layer.DiscoveredSubscribers);
 
             if (layer.HasActiveLogic) _logicActiveMask |= 1UL << layer.RouteIndex;
