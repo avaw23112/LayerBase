@@ -48,7 +48,6 @@ public partial class SubscribeTests
         
         var executed = false;
         
-        // Subscribe (原 Subscribe) 具備異常隔離
         layer.Subscribe((in TestEvent e) => throw new Exception("Safe Crash"));
         layer.SubscribeFlow((in TestEvent e) => { executed = true; return EventHandledState.Continue; });
 
@@ -65,9 +64,7 @@ public partial class SubscribeTests
         public void AutoBind(Layer layer) { }
         public IEnumerable<EventDependency> GetEventDependencies()
         {
-            // 模擬 Subscribe 中的 Send 行為：訂閱 X，但在處理 X 時發送 Y (同步)
             yield return new EventDependency(typeof(Event_X), typeof(Event_Y));
-            // 訂閱 Y，但在處理 Y 時發送 X (同步) -> 形成環
             yield return new EventDependency(typeof(Event_Y), typeof(Event_X));
         }
         public IEnumerable<Type> GetSubscribedEvents()
@@ -81,7 +78,6 @@ public partial class SubscribeTests
     public void Subscribe_CycleDetection_ShouldThrow()
     {
         var layer = new TestLayer();
-        // 使用標準註冊流程，確保在 FinalizeBuild 時被納入 DiscoveredSubscribers
         layer.RegisterService(new MockCycleSubscriber());
         
         var ex = Assert.Throws<EventCycleException>(() => {

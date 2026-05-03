@@ -28,12 +28,11 @@ public class ConcurrencyStabilityTests
             {
                 for (int i = 0; i < iterations; i++)
                 {
-                    LayerHub.Send(new StressEvent(i));
-                    LayerHub.Post(new StressEvent(i));
+                    LayerHub.PostFromAnyThread(new StressEvent(i));
                 }
             });
         }
-
+        LayerHub.Pump(0.16f);
         Assert.DoesNotThrow(() => Task.WaitAll(tasks), "Stress test should not cause deadlocks or crashes");
     }
 
