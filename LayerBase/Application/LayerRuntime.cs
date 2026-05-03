@@ -150,15 +150,6 @@ public sealed class LayerRuntime : IDisposable
     {
         if (_disposed) return;
 
-        // 先搬运跨线程提交的事件。
-        //
-        // 这样外部线程只接触 PostIngressQueue，
-        // PostScheduler 仍然由 Runtime.Pump 所在线程统一访问。
-        if (_scheduler != null)
-        {
-            _postIngress.DrainTo(_scheduler);
-        }
-
         if (_context != null)
         {
             using var scope = _context.EnterScope();
@@ -187,6 +178,13 @@ public sealed class LayerRuntime : IDisposable
                 }
             }
 
+            // 在 PostScheduler.Pump 前搬运跨线程事件。
+            // 这样本次 Drain 取出的跨线程事件可以参与本帧 Latest / Coalesced。
+            if (_scheduler != null)
+            {
+                _postIngress.DrainTo(_scheduler);
+            }
+
             // 5. Post pump
             _scheduler?.Pump();
 
@@ -212,6 +210,12 @@ public sealed class LayerRuntime : IDisposable
                     _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
                     steps++;
                 }
+            }
+
+            // 在 PostScheduler.Pump 前搬运跨线程事件。
+            if (_scheduler != null)
+            {
+                _postIngress.DrainTo(_scheduler);
             }
 
             // 4. Post pump

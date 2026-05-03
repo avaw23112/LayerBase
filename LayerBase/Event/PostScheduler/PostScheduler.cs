@@ -38,8 +38,6 @@ public sealed class PostScheduler : IDisposable
     private PostTypePlan[] _postPlans = Array.Empty<PostTypePlan>();
     private PostBitmap _postBitmap = new();
 
-    private readonly object _bufferLock = new();
-    private readonly object _queueLock = new();
     private long _sequenceCounter;
     private int _sealedMaxEventTypeId = -1;
     private bool _disposed;
