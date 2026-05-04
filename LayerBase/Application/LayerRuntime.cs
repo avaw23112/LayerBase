@@ -115,6 +115,11 @@ public sealed class LayerRuntime : IDisposable
             _scheduler = new PostScheduler(_id, EventCenter, options, _policyTable);
             EventCenter.PostScheduler = _scheduler;
         }
+        else
+        {
+            _scheduler.UpdatePolicyTable(_policyTable);
+        }
+        
         _scheduler.BuildPlans(plans.ToArray());
     }
 
@@ -228,9 +233,18 @@ public sealed class LayerRuntime : IDisposable
             // 在 PostScheduler.Pump 前搬运跨线程事件。
             if (_scheduler != null)
             {
-                _postIngress.DrainTo(
+                var ingressResult = _postIngress.DrainTo(
                     _scheduler,
                     _scheduler.Options.MaxIngressPostsPerPump);
+
+                if (IsDebugMode && ingressResult.Failed > 0)
+                {
+                    ReportWarning(
+                        -1,
+                        "PostIngressQueue",
+                        "DrainTo",
+                        $"PostFromAnyThread failed: {ingressResult.Failed}/{ingressResult.Drained}");
+                }
             }
 
             // 4. Post pump

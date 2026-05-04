@@ -15,7 +15,8 @@ public sealed class PostScheduler : IDisposable
     private readonly RingBuffer<PostItem> _nextQueue;
     private readonly EventPayloadStorage _payloadStorage;
     private readonly EventCenter _eventCenter;
-    private readonly EventRuntimePolicyTable _policyTable;
+    
+    private EventRuntimePolicyTable _policyTable;
 
     // Optimized Buffers
     private ulong[] _dirtyPendingBits = Array.Empty<ulong>();
@@ -43,7 +44,6 @@ public sealed class PostScheduler : IDisposable
     private bool _disposed;
     private bool _isPumping;
     private readonly BackpressurePolicy _defaultBackpressure;
-
     public PostScheduler(int runtimeId, EventCenter eventCenter, PostSchedulerOptions options, EventRuntimePolicyTable policyTable)
     {
         _runtimeId = runtimeId;
@@ -511,7 +511,10 @@ public sealed class PostScheduler : IDisposable
             if (typeId < _pendingCount.Length) FastArray.At(_pendingCount, typeId)--;
         }
     }
-
+    public void UpdatePolicyTable(EventRuntimePolicyTable policyTable)
+    {
+        _policyTable = policyTable ?? throw new ArgumentNullException(nameof(policyTable));
+    }
     private int FlushBuffers()
     {
         int count = 0;
@@ -806,6 +809,11 @@ public sealed class PostScheduler : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        
+        // 先释放 snapshot 残留，不能先 Clear。
+        ReleaseRemainingCoalescedSnapshot();
+        _snapshotCoalesced.Clear();
+        ReleaseRemainingLatestSnapshot();
   
         for (int i = 0; i < _latestPendingBits.Length; i++)
         {
@@ -825,14 +833,10 @@ public sealed class PostScheduler : IDisposable
         }
         _pendingCoalesced.Clear();
         _coalescedBuffer.Clear();
-        _snapshotCoalesced.Clear();
-
+                
         ReleaseQueuedPayloads(_readyQueue);
         ReleaseQueuedPayloads(_nextQueue);
-        
-        ReleaseRemainingCoalescedSnapshot();
-        ReleaseRemainingLatestSnapshot();
-        
+
         _payloadStorage.Dispose();
     }
 
