@@ -4,7 +4,6 @@ using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
-using NUnit.Framework;
 
 namespace EventsTest;
 
