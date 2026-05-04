@@ -183,9 +183,19 @@ public sealed class LayerRuntime : IDisposable
             // 防止后台线程持续生产事件导致主线程一帧被拖死。
             if (_scheduler != null)
             {
-                _postIngress.DrainTo(
+                var ingressResult = _postIngress.DrainTo(
                     _scheduler,
                     _scheduler.Options.MaxIngressPostsPerPump);
+                
+                //如果是Debug模式会自动上报失败结果
+                if (IsDebugMode && ingressResult.Failed > 0)
+                {
+                    ReportWarning(
+                        -1,
+                        "PostIngressQueue",
+                        "DrainTo",
+                        $"PostFromAnyThread failed: {ingressResult.Failed}/{ingressResult.Drained}");
+                }
             }
 
             // 5. Post pump

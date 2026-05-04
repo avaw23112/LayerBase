@@ -551,13 +551,23 @@ public sealed class PostScheduler : IDisposable
             }
         }
 
-        // 2. Dispatch Snapshots Safely
-        
-        count += DispatchDirtySnapshotSafely();
-        count += DispatchCoalescedSnapshotSafely();
-        count += DispatchLatestSnapshotSafely();
-
-        return count;
+        // 2. Dispatch snapshots
+        try
+        {
+            count += DispatchDirtySnapshotSafely();
+            count += DispatchCoalescedSnapshotSafely();
+            count += DispatchLatestSnapshotSafely();
+            return count;
+        }
+        finally
+        {
+            // 兜底释放。各 DispatchXXX 内部已经释放过的 handle 会被置 Invalid，
+            // 所以这里不会重复释放。
+            Array.Clear(_dirtySnapshotBits, 0, _dirtySnapshotBits.Length);
+            ReleaseRemainingCoalescedSnapshot();
+            _snapshotCoalesced.Clear();
+            ReleaseRemainingLatestSnapshot();
+        }
     }
 
     private int DispatchDirtySnapshotSafely()
@@ -815,11 +825,14 @@ public sealed class PostScheduler : IDisposable
         }
         _pendingCoalesced.Clear();
         _coalescedBuffer.Clear();
-
+        _snapshotCoalesced.Clear();
 
         ReleaseQueuedPayloads(_readyQueue);
         ReleaseQueuedPayloads(_nextQueue);
-
+        
+        ReleaseRemainingCoalescedSnapshot();
+        ReleaseRemainingLatestSnapshot();
+        
         _payloadStorage.Dispose();
     }
 
