@@ -261,4 +261,45 @@ public class PostSchedulerTests
         
         Assert.That(runtime.Scheduler.TryPost(new MaxPendingTestEvent()).IsSuccess, Is.True);
     }
+
+    [Test]
+    public void PrewarmEvent_Ensures_Capacity_For_All_Modes()
+    {
+        var options = PostSchedulerOptions.Default;
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        
+        // 初始状态没有注册事件
+        
+        // Prewarm 一个高 ID 事件 (强制扩容)
+        // EventTypeIdAllocator.MaxId 可能会影响结果，我们直接用一个新类型
+        scheduler.PrewarmEvent<TestPostEvent>();
+        
+        // 验证基本投递
+        Assert.That(scheduler.TryPost(new TestPostEvent()).IsSuccess, Is.True);
+        
+        // 验证 Latest 投递 (应扩容 latest buffer)
+        Assert.That(scheduler.TryPostLatest(new TestPostEvent()).IsSuccess, Is.True);
+        
+        // 验证 MarkDirty (应扩容 dirty bits)
+        Assert.That(scheduler.MarkDirty<TestPostEvent>().IsSuccess, Is.True);
+    }
+
+    [Test]
+    public void AddSpecialPolicy_Ensures_Capacity()
+    {
+        var options = PostSchedulerOptions.Default;
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        
+        var typeId = EventTypeId<TestPostEvent>.Id;
+        scheduler.AddSpecialPolicy(typeId, new EventPostPolicy(PostDeliveryMode.Latest, BackpressurePolicy.RejectNew, 0));
+        
+        // 应自动扩容并支持 Latest
+        Assert.That(scheduler.TryPost(new TestPostEvent()).IsSuccess, Is.True);
+        
+        // 验证 Pump 正常
+        int callCount = 0;
+        _eventCenter.SubscribeNotify<TestPostEvent>(0, (in TestPostEvent e) => callCount++);
+        scheduler.Pump();
+        Assert.That(callCount, Is.EqualTo(1));
+    }
 }

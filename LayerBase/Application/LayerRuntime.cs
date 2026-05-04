@@ -179,10 +179,13 @@ public sealed class LayerRuntime : IDisposable
             }
 
             // 在 PostScheduler.Pump 前搬运跨线程事件。
-            // 这样本次 Drain 取出的跨线程事件可以参与本帧 Latest / Coalesced。
+            // MaxIngressPostsPerPump 用于限制本帧最多搬运多少个跨线程事件，
+            // 防止后台线程持续生产事件导致主线程一帧被拖死。
             if (_scheduler != null)
             {
-                _postIngress.DrainTo(_scheduler);
+                _postIngress.DrainTo(
+                    _scheduler,
+                    _scheduler.Options.MaxIngressPostsPerPump);
             }
 
             // 5. Post pump
@@ -215,7 +218,9 @@ public sealed class LayerRuntime : IDisposable
             // 在 PostScheduler.Pump 前搬运跨线程事件。
             if (_scheduler != null)
             {
-                _postIngress.DrainTo(_scheduler);
+                _postIngress.DrainTo(
+                    _scheduler,
+                    _scheduler.Options.MaxIngressPostsPerPump);
             }
 
             // 4. Post pump

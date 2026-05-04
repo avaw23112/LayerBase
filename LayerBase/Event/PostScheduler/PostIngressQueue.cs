@@ -3,6 +3,35 @@ using System.Collections.Concurrent;
 namespace LayerBase.Core.Event;
 
 /// <summary>
+/// PostIngressQueue 一次 Drain 的结果。
+/// </summary>
+internal readonly struct PostIngressDrainResult
+{
+    /// <summary>
+    /// drained:
+    ///   本次从跨线程入口队列取出的事件数量。
+    ///
+    /// failed:
+    ///   本次搬运后调用 PostScheduler.TryPost 失败的数量。
+    /// </summary>
+    public PostIngressDrainResult(int drained, int failed)
+    {
+        Drained = drained;
+        Failed = failed;
+    }
+
+    /// <summary>
+    /// 本次实际取出的事件数量。
+    /// </summary>
+    public int Drained { get; }
+
+    /// <summary>
+    /// 本次投递失败的事件数量。
+    /// </summary>
+    public int Failed { get; }
+}
+
+/// <summary>
 /// 跨线程 Post 入口队列。
 ///
 /// 作用：
@@ -57,25 +86,30 @@ internal sealed class PostIngressQueue
     /// 小于等于 0 表示不限制。
     /// </param>
     /// <returns>
-    /// 本次实际搬运的事件数量。
+    /// 本次 Drain 的结果，包含搬运数量和失败数量。
     /// </returns>
-    public int DrainTo(PostScheduler scheduler, int maxCount = 0)
+    public PostIngressDrainResult DrainTo(PostScheduler scheduler, int maxCount = 0)
     {
         if (scheduler == null)
         {
             throw new ArgumentNullException(nameof(scheduler));
         }
 
-        var count = 0;
+        var drained = 0;
+        var failed = 0;
 
-        while ((maxCount <= 0 || count < maxCount) &&
+        while ((maxCount <= 0 || drained < maxCount) &&
                _queue.TryDequeue(out var item))
         {
-            item.PostTo(scheduler);
-            count++;
+            var result = item.PostTo(scheduler);
+            if (!result.IsSuccess)
+            {
+                failed++;
+            }
+            drained++;
         }
 
-        return count;
+        return new PostIngressDrainResult(drained, failed);
     }
 
     /// <summary>
@@ -105,7 +139,10 @@ internal interface IIngressPostItem
     /// <param name="scheduler">
     /// 当前 Runtime 的 PostScheduler。
     /// </param>
-    void PostTo(PostScheduler scheduler);
+    /// <returns>
+    /// PostScheduler.TryPost 的结果。
+    /// </returns>
+    PostResult PostTo(PostScheduler scheduler);
 }
 
 /// <summary>
@@ -151,8 +188,11 @@ internal sealed class IngressPostItem<T> : IIngressPostItem
     /// <param name="scheduler">
     /// 当前 Runtime 的 PostScheduler。
     /// </param>
-    public void PostTo(PostScheduler scheduler)
+    /// <returns>
+    /// PostScheduler.TryPost 的结果。
+    /// </returns>
+    public PostResult PostTo(PostScheduler scheduler)
     {
-        scheduler.TryPost(_value, _policy);
+        return scheduler.TryPost(_value, _policy);
     }
 }

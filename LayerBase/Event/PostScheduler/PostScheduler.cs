@@ -60,45 +60,107 @@ public sealed class PostScheduler : IDisposable
 
     public void BuildPlans(ReadOnlySpan<PostTypePlan> plans)
     {
-        var maxTypeId = EventTypeIdAllocator.MaxId;
-        foreach (var p in plans) if (p.EventTypeId > maxTypeId) maxTypeId = p.EventTypeId;
-        _sealedMaxEventTypeId = maxTypeId;
-
-        _postPlans = new PostTypePlan[maxTypeId + 1];
-        // Initialize with default plans for all IDs
-        for (int i = 0; i < _postPlans.Length; i++)
+        var maxId = EventTypeIdAllocator.MaxId;
+        if (maxId >= 0)
         {
-            _postPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure, MergeFailurePolicy.Reject);
+            EnsureEventCapacity(maxId, rebuildBitmap: false);
         }
 
         foreach (var p in plans)
         {
+            EnsureEventCapacity(p.EventTypeId, rebuildBitmap: false);
             _postPlans[p.EventTypeId] = p;
         }
 
-        _postBitmap.Build(_postPlans); // Build from full array
+        RebuildPostBitmap();
+    }
 
-        int segmentCount = (maxTypeId >> 6) + 1;
-        _dirtyPendingBits = new ulong[segmentCount];
-        _latestPendingBits = new ulong[segmentCount];
-        _dirtySnapshotBits = new ulong[segmentCount];
-        _latestSnapshotBits = new ulong[segmentCount];
-
-        if (maxTypeId >= _latestBuffer.Length)
+    private void EnsureEventCapacity(int typeId, bool rebuildBitmap = true)
+    {
+        if (typeId < 0)
         {
-            var oldLatest = _latestBuffer;
-            _latestBuffer = new PayloadHandle[maxTypeId + 1];
-            Array.Copy(oldLatest, _latestBuffer, oldLatest.Length);
-            for (int i = oldLatest.Length; i < _latestBuffer.Length; i++) _latestBuffer[i] = PayloadHandle.Invalid;
-            
-            _latestSnapshotBuffer = new PayloadHandle[maxTypeId + 1];
-            for (int i = 0; i < _latestSnapshotBuffer.Length; i++) _latestSnapshotBuffer[i] = PayloadHandle.Invalid;
+            throw new ArgumentOutOfRangeException(nameof(typeId));
         }
 
-        if (maxTypeId >= _pendingCount.Length)
+        var requiredLength = typeId + 1;
+
+        if (_postPlans.Length < requiredLength)
         {
-            Array.Resize(ref _pendingCount, maxTypeId + 1);
+            var oldLength = _postPlans.Length;
+            var newLength = BitHelper.NextPowerOfTwo(requiredLength);
+            var newPlans = new PostTypePlan[newLength];
+            Array.Copy(_postPlans, newPlans, oldLength);
+
+            for (var i = oldLength; i < newPlans.Length; i++)
+            {
+                newPlans[i] = PostTypePlan.Default(i, _defaultBackpressure);
+            }
+
+            _postPlans = newPlans;
         }
+
+        if (_pendingCount.Length < requiredLength)
+        {
+            var newPending = new int[BitHelper.NextPowerOfTwo(requiredLength)];
+            Array.Copy(_pendingCount, newPending, _pendingCount.Length);
+            _pendingCount = newPending;
+        }
+
+        if (_latestBuffer.Length < requiredLength)
+        {
+            var oldLength = _latestBuffer.Length;
+            var newLength = BitHelper.NextPowerOfTwo(requiredLength);
+
+            var newLatest = new PayloadHandle[newLength];
+            Array.Copy(_latestBuffer, newLatest, oldLength);
+            for (var i = oldLength; i < newLength; i++)
+            {
+                newLatest[i] = PayloadHandle.Invalid;
+            }
+            _latestBuffer = newLatest;
+
+            var newLatestSnapshot = new PayloadHandle[newLength];
+            Array.Copy(_latestSnapshotBuffer, newLatestSnapshot, _latestSnapshotBuffer.Length);
+            for (var i = _latestSnapshotBuffer.Length; i < newLength; i++)
+            {
+                newLatestSnapshot[i] = PayloadHandle.Invalid;
+            }
+            _latestSnapshotBuffer = newLatestSnapshot;
+        }
+
+        var requiredSegments = (typeId >> 6) + 1;
+
+        EnsureUlongArrayCapacity(ref _dirtyPendingBits, requiredSegments);
+        EnsureUlongArrayCapacity(ref _latestPendingBits, requiredSegments);
+        EnsureUlongArrayCapacity(ref _dirtySnapshotBits, requiredSegments);
+        EnsureUlongArrayCapacity(ref _latestSnapshotBits, requiredSegments);
+
+        if (typeId > _sealedMaxEventTypeId)
+        {
+            _sealedMaxEventTypeId = typeId;
+        }
+
+        if (rebuildBitmap)
+        {
+            RebuildPostBitmap();
+        }
+    }
+
+    private static void EnsureUlongArrayCapacity(ref ulong[] array, int requiredLength)
+    {
+        if (array.Length >= requiredLength)
+        {
+            return;
+        }
+
+        var newArray = new ulong[BitHelper.NextPowerOfTwo(requiredLength)];
+        Array.Copy(array, newArray, array.Length);
+        array = newArray;
+    }
+
+    private void RebuildPostBitmap()
+    {
+        _postBitmap.Build(_postPlans);
     }
 
 
@@ -273,21 +335,10 @@ public sealed class PostScheduler : IDisposable
 
     public void AddSpecialPolicy(int typeId, EventPostPolicy policy)
     {
-        if (typeId >= _postPlans.Length)
-        {
-            var newSize = Math.Max(typeId + 1, _postPlans.Length * 2);
-            var newPlans = new PostTypePlan[newSize];
-            Array.Copy(_postPlans, newPlans, _postPlans.Length);
-            for (int i = _postPlans.Length; i < newPlans.Length; i++)
-            {
-                newPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure, MergeFailurePolicy.Reject);
-            }
-            _postPlans = newPlans;
-        }
+        EnsureEventCapacity(typeId, rebuildBitmap: false);
         
         _postPlans[typeId] = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending, _defaultBackpressure, policy.MergeFailure);
-        _postBitmap.Build(_postPlans);
-        if (typeId > _sealedMaxEventTypeId) _sealedMaxEventTypeId = typeId;
+        RebuildPostBitmap();
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -465,6 +516,8 @@ public sealed class PostScheduler : IDisposable
     {
         int count = 0;
         
+        // 1. Take Snapshots
+        
         // Dirty Signals Snapshot
         Array.Copy(_dirtyPendingBits, _dirtySnapshotBits, _dirtyPendingBits.Length);
         Array.Clear(_dirtyPendingBits, 0, _dirtyPendingBits.Length);
@@ -472,7 +525,6 @@ public sealed class PostScheduler : IDisposable
         // Coalesced Snapshot
         if (_pendingCoalesced.Count > 0)
         {
-            // Sort by FirstSequenceId to maintain original order
             _pendingCoalesced.Sort((a, b) => _coalescedBuffer[a].FirstSequenceId.CompareTo(_coalescedBuffer[b].FirstSequenceId));
             foreach (var key in _pendingCoalesced)
             {
@@ -486,9 +538,6 @@ public sealed class PostScheduler : IDisposable
         Array.Copy(_latestPendingBits, _latestSnapshotBits, _latestPendingBits.Length);
         Array.Clear(_latestPendingBits, 0, _latestPendingBits.Length);
         
-        // For latest buffer, we only need to copy handles for those with bits set
-        // but for simplicity and safety against race conditions (though we are in lock), 
-        // we copy what's needed.
         for (int i = 0; i < _latestSnapshotBits.Length; i++)
         {
             var bits = _latestSnapshotBits[i];
@@ -502,41 +551,124 @@ public sealed class PostScheduler : IDisposable
             }
         }
 
-        // 2. Dispatch outside lock
+        // 2. Dispatch Snapshots Safely
         
-        // Dispatch Dirty Signals
-        for (int i = 0; i < _dirtySnapshotBits.Length; i++)
+        count += DispatchDirtySnapshotSafely();
+        count += DispatchCoalescedSnapshotSafely();
+        count += DispatchLatestSnapshotSafely();
+
+        return count;
+    }
+
+    private int DispatchDirtySnapshotSafely()
+    {
+        var processed = 0;
+        try
         {
-            var bits = _dirtySnapshotBits[i];
-            while (bits != 0)
+            for (int i = 0; i < _dirtySnapshotBits.Length; i++)
             {
-                var bitIndex = BitHelper.TrailingZeroCount(bits);
-                var typeId = (i << 6) + bitIndex;
-                _payloadStorage.DispatchDefault(typeId, _eventCenter);
-                count++;
-                bits &= bits - 1;
+                var bits = _dirtySnapshotBits[i];
+                while (bits != 0)
+                {
+                    var bitIndex = BitHelper.TrailingZeroCount(bits);
+                    var typeId = (i << 6) + bitIndex;
+                    _payloadStorage.DispatchDefault(typeId, _eventCenter);
+                    processed++;
+                    bits &= bits - 1;
+                }
             }
         }
-
-        // Dispatch Coalesced
-        if (_snapshotCoalesced.Count > 0)
+        finally
         {
-            foreach (var slot in _snapshotCoalesced)
+            Array.Clear(_dirtySnapshotBits, 0, _dirtySnapshotBits.Length);
+        }
+        return processed;
+    }
+
+    private int DispatchCoalescedSnapshotSafely()
+    {
+        var processed = 0;
+        try
+        {
+            for (var i = 0; i < _snapshotCoalesced.Count; i++)
             {
+                var slot = _snapshotCoalesced[i];
+                if (slot.PayloadHandle.IsInvalid) continue;
+
                 try
                 {
                     _payloadStorage.Dispatch(slot.PayloadHandle, _eventCenter);
+                    processed++;
                 }
                 finally
                 {
                     _payloadStorage.Release(slot.PayloadHandle);
+                    
+                    // Mark as invalid to prevent double release in outer finally
+                    slot.PayloadHandle = PayloadHandle.Invalid;
+                    _snapshotCoalesced[i] = slot;
                 }
-                count++;
             }
+        }
+        finally
+        {
+            ReleaseRemainingCoalescedSnapshot();
             _snapshotCoalesced.Clear();
         }
+        return processed;
+    }
 
-        // Dispatch Latest
+    private void ReleaseRemainingCoalescedSnapshot()
+    {
+        foreach (var slot in _snapshotCoalesced)
+        {
+            if (!slot.PayloadHandle.IsInvalid)
+            {
+                _payloadStorage.Release(slot.PayloadHandle);
+            }
+        }
+    }
+
+    private int DispatchLatestSnapshotSafely()
+    {
+        var processed = 0;
+        try
+        {
+            for (int i = 0; i < _latestSnapshotBits.Length; i++)
+            {
+                var bits = _latestSnapshotBits[i];
+                while (bits != 0)
+                {
+                    var bitIndex = BitHelper.TrailingZeroCount(bits);
+                    var typeId = (i << 6) + bitIndex;
+                    bits &= bits - 1; // Clear bit now so if Dispatch fails, outer finally clears others
+
+                    var handle = _latestSnapshotBuffer[typeId];
+                    if (handle.IsInvalid) continue;
+
+                    try
+                    {
+                        _payloadStorage.Dispatch(handle, _eventCenter);
+                        processed++;
+                    }
+                    finally
+                    {
+                        _payloadStorage.Release(handle);
+                        _latestSnapshotBuffer[typeId] = PayloadHandle.Invalid;
+                    }
+                }
+                _latestSnapshotBits[i] = 0;
+            }
+        }
+        finally
+        {
+            ReleaseRemainingLatestSnapshot();
+        }
+        return processed;
+    }
+
+    private void ReleaseRemainingLatestSnapshot()
+    {
         for (int i = 0; i < _latestSnapshotBits.Length; i++)
         {
             var bits = _latestSnapshotBits[i];
@@ -545,21 +677,15 @@ public sealed class PostScheduler : IDisposable
                 var bitIndex = BitHelper.TrailingZeroCount(bits);
                 var typeId = (i << 6) + bitIndex;
                 var handle = _latestSnapshotBuffer[typeId];
-                _latestSnapshotBuffer[typeId] = PayloadHandle.Invalid;
-                try
-                {
-                    _payloadStorage.Dispatch(handle, _eventCenter);
-                }
-                finally
+                if (!handle.IsInvalid)
                 {
                     _payloadStorage.Release(handle);
+                    _latestSnapshotBuffer[typeId] = PayloadHandle.Invalid;
                 }
-                count++;
                 bits &= bits - 1;
             }
+            _latestSnapshotBits[i] = 0;
         }
-
-        return count;
     }
 
     public PostPumpStats Pump()
@@ -654,23 +780,16 @@ public sealed class PostScheduler : IDisposable
     {
         if (_disposed) return;
 
-        _payloadStorage.EnsureStore<T>(_runtimeId);
-
         var typeId = EventTypeId<T>.Id;
-        if (typeId >= _postPlans.Length)
+        EnsureEventCapacity(typeId, rebuildBitmap: false);
+
+        if (!_postPlans[typeId].IsRegistered)
         {
-            if (typeId >= _postPlans.Length)
-            {
-                var newSize = Math.Max(typeId + 1, _postPlans.Length * 2);
-                var newPlans = new PostTypePlan[newSize];
-                Array.Copy(_postPlans, newPlans, _postPlans.Length);
-                for (int i = _postPlans.Length; i < newPlans.Length; i++)
-                {
-                    newPlans[i] = new PostTypePlan(i, PostDeliveryMode.Normal, _defaultBackpressure, 0, _defaultBackpressure, MergeFailurePolicy.Reject);
-                }
-                _postPlans = newPlans;
-            }
+            _postPlans[typeId] = PostTypePlan.Default(typeId, _defaultBackpressure);
         }
+
+        _payloadStorage.EnsureStore<T>(_runtimeId);
+        RebuildPostBitmap();
     }
 
     public void Dispose()

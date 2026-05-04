@@ -550,6 +550,10 @@ private AppConfig _config;
   Error 形式提示。
 * **一键修复 (Code Fix)**：按下 `Alt+Enter`，自动修正订阅方法签名、自动补全 `async` 关键字、自动同步共享字段类型。
 
+### 9. 线程模型 (Threading Model)
+
+LayerBase 默认采用单线程 Runtime 模型。详细的 API 线程安全说明请参阅 [THREADING.md](docs/THREADING.md)。
+
 ---
 
 ## ⚠️ 核心设计边界与时序约束 (Core Design Boundaries)

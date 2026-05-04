@@ -10,6 +10,7 @@ public readonly struct PostTypePlan
     public readonly int MaxPending;
     public readonly BackpressurePolicy DefaultBackpressure;
     public readonly MergeFailurePolicy MergeFailure;
+    public readonly bool IsRegistered;
 
     public PostTypePlan(
         int eventTypeId,
@@ -25,6 +26,23 @@ public readonly struct PostTypePlan
         MaxPending = maxPending;
         DefaultBackpressure = defaultBackpressure;
         MergeFailure = mergeFailure;
+        IsRegistered = true;
+    }
+
+    private PostTypePlan(int eventTypeId, BackpressurePolicy defaultBackpressure)
+    {
+        EventTypeId = eventTypeId;
+        Mode = PostDeliveryMode.Normal;
+        Backpressure = defaultBackpressure;
+        MaxPending = 0;
+        DefaultBackpressure = defaultBackpressure;
+        MergeFailure = MergeFailurePolicy.Reject;
+        IsRegistered = false;
+    }
+
+    public static PostTypePlan Default(int eventTypeId, BackpressurePolicy defaultBackpressure)
+    {
+        return new PostTypePlan(eventTypeId, defaultBackpressure);
     }
 
     public bool TrackPending => MaxPending > 0;
