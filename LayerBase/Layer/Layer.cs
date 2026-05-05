@@ -208,14 +208,26 @@ public abstract class Layer : Node, IDisposable
     /// <param name="service">要注册的服务实例。</param>
     public void RegisterService(IService service)
     {
+        RegisterService(service.GetType(), service);
+    }
+
+    /// <summary>
+    /// 手动注册一个服务到当前 Layer，并指定其暴露的服务类型。
+    /// </summary>
+    /// <param name="serviceType">暴露的服务类型（如接口或基类）。</param>
+    /// <param name="service">要注册的服务实例。</param>
+    public void RegisterService(Type serviceType, IService service)
+    {
         if (service == null) throw new ArgumentNullException(nameof(service));
+        if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
+
         if (m_serviceProvider != null)
         {
             throw new InvalidOperationException(
                 "RegisterService must be called before the layer is built. Register services before LayerHub.CreateLayers().Push(...).Build().");
         }
 
-        if (!m_registeredServiceTypes.Add(service.GetType()))
+        if (!m_registeredServiceTypes.Add(serviceType))
             return;
 
         // 绑定 Service 到当前 Layer (写入绑定槽位)。允许用户在 Push 前手动注册；
@@ -225,7 +237,7 @@ public abstract class Layer : Node, IDisposable
             ServiceLayerBinder.Attach(service, this);
         }
 
-        var registration = new RegisteredService(service, Interlocked.Increment(ref m_nextServiceScopeId));
+        var registration = new RegisteredService(serviceType, service, Interlocked.Increment(ref m_nextServiceScopeId));
         if (m_collectingGeneratedServices)
         {
             AddActiveService(registration);
@@ -275,7 +287,7 @@ public abstract class Layer : Node, IDisposable
 
         foreach (var registration in m_manualServices)
         {
-            m_registeredServiceTypes.Add(registration.Service.GetType());
+            m_registeredServiceTypes.Add(registration.ServiceType);
             AddActiveService(registration);
         }
 
@@ -389,6 +401,16 @@ public abstract class Layer : Node, IDisposable
     {
         m_activeServices.Add(registration);
         ServiceLayerBinder.Attach(registration.Service, this);
+
+        // 🚀 核心改进：将已挂载的服务实例注册进 Layer 作用域的 ServiceCollection。
+        // 这样 ServiceProvider.InjectMembers 才能在后续注入过程（如 Layer 的字段注入）中找到这些实例。
+        m_serviceCollection.Add(new ServiceDescriptor(
+            registration.ServiceType,
+            null,
+            ServiceLifetime.Scoped,
+            _ => registration.Service,
+            null,
+            registration.ScopeId));
 
         using var _ = m_serviceCollection.PushRegistrationScope(registration.ScopeId);
 
@@ -662,12 +684,14 @@ public abstract class Layer : Node, IDisposable
 
     internal readonly struct RegisteredService
     {
-        public RegisteredService(IService service, int scopeId)
+        public RegisteredService(Type serviceType, IService service, int scopeId)
         {
+            ServiceType = serviceType;
             Service = service;
             ScopeId = scopeId;
         }
 
+        public Type ServiceType { get; }
         public IService Service { get; }
         public int ScopeId { get; }
     }

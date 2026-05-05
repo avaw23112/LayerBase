@@ -1,6 +1,7 @@
 ﻿using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
+using LayerBase.DI.Options;
 using LayerBase.Layers;
 
 namespace EventsTest;
@@ -81,7 +82,6 @@ public partial class TestNotifyManager : IService
 
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton(this);
     }
 
     [SubscribeNotify]

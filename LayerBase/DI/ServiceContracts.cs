@@ -1075,8 +1075,3 @@ public static class LayerContextExtensions
         return binding.Runtime.GetService<T>();
     }
 }
-
-[AttributeUsage(AttributeTargets.Constructor | AttributeTargets.Field | AttributeTargets.Property)]
-public sealed class MountAttribute : Attribute
-{
-}

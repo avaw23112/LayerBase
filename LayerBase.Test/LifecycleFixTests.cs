@@ -2,6 +2,7 @@ using System.Reflection;
 using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
+using LayerBase.DI.Options;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
 

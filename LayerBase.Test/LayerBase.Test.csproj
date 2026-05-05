@@ -8,6 +8,7 @@
         <IsPackable>false</IsPackable>
         <RootNamespace>EventsTest</RootNamespace>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     </PropertyGroup>
 
     <ItemGroup>

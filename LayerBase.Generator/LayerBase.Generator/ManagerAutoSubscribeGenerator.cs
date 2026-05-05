@@ -20,12 +20,12 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
         "Usage",
         DiagnosticSeverity.Error,
         true,
-        "Subscribe-family attributes require delegate-compatible method signatures.");
+        "Subscribe-family attributes require delegate-compatible method signatures");
 
     private static readonly DiagnosticDescriptor ClassMustBePartial = new(
         "LBGS002",
         "Class must be partial",
-        "Class '{0}' uses Subscribe attributes and must be declared as partial to allow source generation.",
+        "Class '{0}' uses Subscribe attributes and must be declared as partial to allow source generation",
         "Usage",
         DiagnosticSeverity.Error,
         true);
@@ -33,7 +33,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor ConflictingSubscribeAttributes = new(
         "LBGS003",
         "Conflicting subscribe attributes",
-        "Member '{0}' has multiple Subscribe attributes. A method can only have one subscription semantic.",
+        "Member '{0}' has multiple Subscribe attributes. A method can only have one subscription semantic",
         "Usage",
         DiagnosticSeverity.Error,
         true);
