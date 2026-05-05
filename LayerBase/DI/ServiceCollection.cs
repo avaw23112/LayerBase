@@ -49,6 +49,22 @@ public class ServiceCollection : IServiceCollection
         return Add(ServiceDescriptor.LayerScoped(factory));
     }
 
+    public IServiceCollection TryAddScoped<TService, TImpl>()
+        where TImpl : TService
+    {
+        var serviceType = typeof(TService);
+
+        for (var i = 0; i < _descriptors.Count; i++)
+        {
+            if (_descriptors[i].ServiceType == serviceType)
+            {
+                return this;
+            }
+        }
+
+        return AddScoped<TService, TImpl>();
+    }
+
     public IReadOnlyList<ServiceDescriptor> ToDescriptors()
     {
         return _descriptors;

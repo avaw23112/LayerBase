@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -38,12 +40,14 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var classProvider = context.SyntaxProvider.CreateSyntaxProvider(
-                                       static (node, _) => node is ClassDeclarationSyntax,
-                                       static (ctx,  _) => GetClassMeta(ctx))
-                                   .Where(static m => m != null)!;
+        var classMetaProvider = context.SyntaxProvider.CreateSyntaxProvider(
+                                           static (node, _) => node is ClassDeclarationSyntax,
+                                           static (ctx,  _) => GetClassMeta(ctx))
+                                       .Where(static m => m != null)!;
 
-        context.RegisterSourceOutput(classProvider, static (spc, meta) => GenerateCode(spc, meta!));
+        var combined = classMetaProvider.Collect();
+
+        context.RegisterSourceOutput(combined, static (spc, metas) => GenerateMergedCode(spc, metas));
     }
 
     private static ClassMeta? GetClassMeta(GeneratorSyntaxContext ctx)
@@ -57,6 +61,11 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
         var delayProps = new List<string>();
 
         foreach (var member in symbol.GetMembers())
+        {
+            // Only process members declared in THIS syntax node to avoid duplicates when collecting
+            if (!member.DeclaringSyntaxReferences.Any(r => r.SyntaxTree == cds.SyntaxTree && cds.Span.Contains(r.Span)))
+                continue;
+
             if (member is IMethodSymbol method)
             {
                 var subscribeAttributes = method.GetAttributes()
@@ -123,144 +132,157 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                         delayProps.Add($"{field.Name}|{eventType}");
                 }
             }
+        }
 
-        if (handlers.Count == 0 && delayProps.Count == 0 && diagnostics.Count == 0)
-            return null;
-
-        if (!cds.Modifiers.Any(SyntaxKind.PartialKeyword))
-            diagnostics.Add(new HandlerDiagnostic(
-                symbol.Name,
-                "PartialCheck",
-                "partial class",
-                cds.Identifier.GetLocation()));
-
+        var isPartial = cds.Modifiers.Any(SyntaxKind.PartialKeyword);
         var implementsCtx = ImplementsInterfaceNamed(symbol, "ILayerContext");
         var implementsService = ImplementsInterfaceNamed(symbol, "IService");
         var emitsBindingAccessor = implementsCtx || implementsService;
 
         return new ClassMeta(symbol.Name, symbol.ContainingNamespace.ToDisplayString(), symbol.ToDisplayString(),
-            implementsCtx, emitsBindingAccessor, handlers, delayProps, diagnostics);
+            implementsCtx, emitsBindingAccessor, handlers, delayProps, diagnostics, isPartial, cds.Identifier.GetLocation());
     }
 
-    private static void GenerateCode(SourceProductionContext spc, ClassMeta meta)
+    private static void GenerateMergedCode(SourceProductionContext spc, ImmutableArray<ClassMeta> metas)
     {
-        foreach (var diagnostic in meta.Diagnostics)
-            if (diagnostic.AttributeName == "PartialCheck")
+        var groups = metas.GroupBy(m => m.Display);
+
+        foreach (var group in groups)
+        {
+            var first = group.First();
+            var allHandlers = group.SelectMany(m => m.Handlers).ToList();
+            var allDelayProps = group.SelectMany(m => m.DelayProps).Distinct().ToList();
+            var allDiagnostics = group.SelectMany(m => m.Diagnostics).ToList();
+            var isPartial = group.Any(m => m.IsPartial);
+
+            if (allHandlers.Count == 0 && allDelayProps.Count == 0 && allDiagnostics.Count == 0)
+                continue;
+
+            foreach (var diagnostic in allDiagnostics)
+            {
+                if (diagnostic.AttributeName == "Conflict")
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        ConflictingSubscribeAttributes,
+                        diagnostic.Location,
+                        diagnostic.MethodName));
+                else
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        InvalidSubscribeSignature,
+                        diagnostic.Location,
+                        diagnostic.MethodName,
+                        diagnostic.AttributeName,
+                        diagnostic.ExpectedSignature));
+            }
+
+            if (!isPartial)
+            {
                 spc.ReportDiagnostic(Diagnostic.Create(
                     ClassMustBePartial,
-                    diagnostic.Location,
-                    diagnostic.MethodName));
-            else if (diagnostic.AttributeName == "Conflict")
-                spc.ReportDiagnostic(Diagnostic.Create(
-                    ConflictingSubscribeAttributes,
-                    diagnostic.Location,
-                    diagnostic.MethodName));
-            else
-                spc.ReportDiagnostic(Diagnostic.Create(
-                    InvalidSubscribeSignature,
-                    diagnostic.Location,
-                    diagnostic.MethodName,
-                    diagnostic.AttributeName,
-                    diagnostic.ExpectedSignature));
-
-        if (meta.Diagnostics.Any(d => d.AttributeName == "PartialCheck" || d.AttributeName == "Conflict")) return;
-
-        var sb = new StringBuilder();
-        sb.AppendLine("// <auto-generated />");
-        sb.AppendLine("#nullable enable");
-        sb.AppendLine("using System;");
-        sb.AppendLine("using System.Collections.Generic;");
-        sb.AppendLine();
-        if (meta.Namespace != "<global namespace>")
-        {
-            sb.AppendLine($"namespace {meta.Namespace}");
-            sb.AppendLine("{");
-        }
-
-        var interfaces = new List<string>();
-        if (meta.ImplementsLayerContext) interfaces.Add("global::LayerBase.DI.IInternalLayerContext");
-        if (meta.EmitsBindingAccessor) interfaces.Add("global::LayerBase.DI.ILayerBindingAccessor");
-        if (meta.Handlers.Count > 0 || meta.DelayProps.Count > 0) interfaces.Add("global::LayerBase.DI.IAutoSubscribe");
-        var interfaceDecl = interfaces.Count > 0 ? " : " + string.Join(", ", interfaces) : "";
-
-        sb.AppendLine($"    partial class {meta.ClassName}{interfaceDecl}");
-        sb.AppendLine("    {");
-
-        if (meta.ImplementsLayerContext)
-        {
-            sb.AppendLine("        private int __routeIndex = -1;");
-            sb.AppendLine(
-                "        int global::LayerBase.DI.IInternalLayerContext.LayerIndex { get => __routeIndex; set => __routeIndex = value; }");
-        }
-
-        if (meta.EmitsBindingAccessor)
-        {
-            if (meta.ImplementsLayerContext)
-                sb.AppendLine();
-            sb.AppendLine("        private object? __layerBaseBinding;");
-            sb.AppendLine(
-                "        object? global::LayerBase.DI.ILayerBindingAccessor.__LayerBaseBinding { get => __layerBaseBinding; set => __layerBaseBinding = value; }");
-        }
-
-        if (meta.Handlers.Count > 0 || meta.DelayProps.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine(
-                "        void global::LayerBase.DI.IAutoSubscribe.AutoBind(global::LayerBase.Layers.Layer layer)");
-            sb.AppendLine("        {");
-            foreach (var h in meta.Handlers)
-            {
-                var reg = h.Attr.Contains("Async") ? "SubscribeAsync" :
-                    h.Attr.Contains("Parallel")    ? "SubscribeParallel" :
-                    h.Attr.Contains("Notify")      ? "SubscribeNotify" : 
-                    h.Attr == "SubscribeFlow" || h.Attr == "SubscribeFlowAttribute" ? "SubscribeFlow" : "Subscribe";
-
-                sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
-                sb.AppendLine($"            layer.RecordSubscribedEvent(typeof({h.Evt}));");
-
-                foreach (var produced in h.ProducedEvts)
-                    sb.AppendLine($"            layer.RecordProducedEvent(typeof({produced}));");
+                    first.Location,
+                    first.ClassName));
+                continue;
             }
 
-            foreach (var p in meta.DelayProps)
+            if (allDiagnostics.Any(d => d.AttributeName == "Conflict")) continue;
+
+            var sb = new StringBuilder();
+            sb.AppendLine("// <auto-generated />");
+            sb.AppendLine("#nullable enable");
+            sb.AppendLine("using System;");
+            sb.AppendLine("using System.Collections.Generic;");
+            sb.AppendLine();
+            if (first.Namespace != "<global namespace>")
             {
-                var parts = p.Split('|');
-                sb.AppendLine($"            this.{parts[0]} = layer.SubscribeDelay<{parts[1]}>();");
-                sb.AppendLine($"            layer.RecordSubscribedEvent(typeof({parts[1]}));");
+                sb.AppendLine($"namespace {first.Namespace}");
+                sb.AppendLine("{");
             }
 
-            sb.AppendLine("        }");
+            var interfaces = new List<string>();
+            if (first.ImplementsLayerContext) interfaces.Add("global::LayerBase.DI.IInternalLayerContext");
+            if (first.EmitsBindingAccessor) interfaces.Add("global::LayerBase.DI.ILayerBindingAccessor");
+            if (allHandlers.Count > 0 || allDelayProps.Count > 0) interfaces.Add("global::LayerBase.DI.IAutoSubscribe");
+            var interfaceDecl = interfaces.Count > 0 ? " : " + string.Join(", ", interfaces) : "";
 
-            sb.AppendLine();
-            sb.AppendLine(
-                "        global::System.Collections.Generic.IEnumerable<global::LayerBase.DI.EventDependency> global::LayerBase.DI.IAutoSubscribe.GetEventDependencies()");
-            sb.AppendLine("        {");
-            foreach (var h in meta.Handlers)
-            foreach (var produced in h.ProducedEvts)
+            sb.AppendLine($"    partial class {first.ClassName}{interfaceDecl}");
+            sb.AppendLine("    {");
+
+            if (first.ImplementsLayerContext)
+            {
+                sb.AppendLine("        private int __routeIndex = -1;");
                 sb.AppendLine(
-                    $"            yield return new global::LayerBase.DI.EventDependency(typeof({h.Evt}), typeof({produced}));");
-            sb.AppendLine("            yield break;");
-            sb.AppendLine("        }");
-
-            sb.AppendLine();
-            sb.AppendLine(
-                "        global::System.Collections.Generic.IEnumerable<global::System.Type> global::LayerBase.DI.IAutoSubscribe.GetSubscribedEvents()");
-            sb.AppendLine("        {");
-            foreach (var h in meta.Handlers) sb.AppendLine($"            yield return typeof({h.Evt});");
-            foreach (var p in meta.DelayProps)
-            {
-                var parts = p.Split('|');
-                sb.AppendLine($"            yield return typeof({parts[1]});");
+                    "        int global::LayerBase.DI.IInternalLayerContext.LayerIndex { get => __routeIndex; set => __routeIndex = value; }");
             }
 
-            sb.AppendLine("            yield break;");
-            sb.AppendLine("        }");
+            if (first.EmitsBindingAccessor)
+            {
+                if (first.ImplementsLayerContext)
+                    sb.AppendLine();
+                sb.AppendLine("        private object? __layerBaseBinding;");
+                sb.AppendLine(
+                    "        object? global::LayerBase.DI.ILayerBindingAccessor.__LayerBaseBinding { get => __layerBaseBinding; set => __layerBaseBinding = value; }");
+            }
+
+            if (allHandlers.Count > 0 || allDelayProps.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine(
+                    "        void global::LayerBase.DI.IAutoSubscribe.AutoBind(global::LayerBase.Layers.Layer layer)");
+                sb.AppendLine("        {");
+                foreach (var h in allHandlers)
+                {
+                    var reg = h.Attr.Contains("Async") ? "SubscribeAsync" :
+                        h.Attr.Contains("Parallel")    ? "SubscribeParallel" :
+                        h.Attr.Contains("Notify")      ? "SubscribeNotify" : 
+                        h.Attr == "SubscribeFlow" || h.Attr == "SubscribeFlowAttribute" ? "SubscribeFlow" : "Subscribe";
+
+                    sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
+                    sb.AppendLine($"            layer.RecordSubscribedEvent(typeof({h.Evt}));");
+
+                    foreach (var produced in h.ProducedEvts)
+                        sb.AppendLine($"            layer.RecordProducedEvent(typeof({produced}));");
+                }
+
+                foreach (var p in allDelayProps)
+                {
+                    var parts = p.Split('|');
+                    sb.AppendLine($"            this.{parts[0]} = layer.SubscribeDelay<{parts[1]}>();");
+                    sb.AppendLine($"            layer.RecordSubscribedEvent(typeof({parts[1]}));");
+                }
+
+                sb.AppendLine("        }");
+
+                sb.AppendLine();
+                sb.AppendLine(
+                    "        global::System.Collections.Generic.IEnumerable<global::LayerBase.DI.EventDependency> global::LayerBase.DI.IAutoSubscribe.GetEventDependencies()");
+                sb.AppendLine("        {");
+                foreach (var h in allHandlers)
+                foreach (var produced in h.ProducedEvts)
+                    sb.AppendLine(
+                        $"            yield return new global::LayerBase.DI.EventDependency(typeof({h.Evt}), typeof({produced}));");
+                sb.AppendLine("            yield break;");
+                sb.AppendLine("        }");
+
+                sb.AppendLine();
+                sb.AppendLine(
+                    "        global::System.Collections.Generic.IEnumerable<global::System.Type> global::LayerBase.DI.IAutoSubscribe.GetSubscribedEvents()");
+                sb.AppendLine("        {");
+                foreach (var h in allHandlers) sb.AppendLine($"            yield return typeof({h.Evt});");
+                foreach (var p in allDelayProps)
+                {
+                    var parts = p.Split('|');
+                    sb.AppendLine($"            yield return typeof({parts[1]});");
+                }
+
+                sb.AppendLine("            yield break;");
+                sb.AppendLine("        }");
+            }
+
+            sb.AppendLine("    }");
+            if (first.Namespace != "<global namespace>") sb.AppendLine("}");
+
+            var hintName = first.Display.Replace(".", "_").Replace("::", "_").Replace("<", "_").Replace(">", "_");
+            spc.AddSource($"{hintName}.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
         }
-
-        sb.AppendLine("    }");
-        if (meta.Namespace != "<global namespace>") sb.AppendLine("}");
-
-        spc.AddSource($"{meta.Display.Replace(".", "_")}.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
     }
 
     private static bool ImplementsInterfaceNamed(INamedTypeSymbol symbol, string interfaceName)
@@ -282,12 +304,10 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
 
         if (method.Parameters[0].RefKind != RefKind.In) return false;
 
-        // Subscribe (安全/默認) 和 SubscribeNotify 返回 void
         if (attrName == "Subscribe" || attrName == "SubscribeAttribute" || 
             attrName.Contains("Notify") || attrName.Contains("Parallel")) 
             return method.ReturnsVoid;
 
-        // SubscribeFlow (業務流攔截) 返回 EventHandledState
         return IsReturnType(method.ReturnType, "global::LayerBase.Core.Event.EventHandledState");
     }
 
@@ -342,7 +362,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
     private class ClassMeta
     {
         public ClassMeta(string       name,       string ns, string display, bool ctx, bool bindingAccessor, List<HandlerInfo> handlers,
-                         List<string> delayProps, List<HandlerDiagnostic> diagnostics)
+                         List<string> delayProps, List<HandlerDiagnostic> diagnostics, bool isPartial, Location? location)
         {
             ClassName = name;
             Namespace = ns;
@@ -352,6 +372,8 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
             Handlers = handlers;
             DelayProps = delayProps;
             Diagnostics = diagnostics;
+            IsPartial = isPartial;
+            Location = location;
         }
 
         public string ClassName { get; }
@@ -362,6 +384,8 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
         public List<HandlerInfo> Handlers { get; }
         public List<string> DelayProps { get; }
         public List<HandlerDiagnostic> Diagnostics { get; }
+        public bool IsPartial { get; }
+        public Location? Location { get; }
     }
 
     private class HandlerInfo
@@ -396,4 +420,3 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
         public Location? Location { get; }
     }
 }
-

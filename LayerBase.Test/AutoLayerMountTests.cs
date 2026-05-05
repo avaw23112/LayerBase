@@ -24,6 +24,7 @@ public partial class AutoLayerMountTests
 
         var service = layer.GetService<AutoMountLayer.AutoMountedService>();
         Assert.That(service, Is.Not.Null);
+        Assert.That(layer.Service, Is.SameAs(service), "Field _service should be injected");
         Assert.That(AutoMountLayer.AutoMountedService.Created, Is.EqualTo(1));
         Assert.That(service.ResolveSelfThroughBinding(), Is.SameAs(service));
     }
@@ -46,6 +47,7 @@ public partial class AutoLayerMountTests
 public partial class AutoMountLayer : Layer
 {
     [Mount] private AutoMountedService _service = default!;
+    public AutoMountedService Service => _service;
 
     public partial class OwnerAutoMountLayer : Layer
     {

@@ -215,34 +215,35 @@ public partial class PlayerInputManager : ILayerContext, IUpdate
 Service 负责将相关的 Manager 注册到 DI 容器中。
 通过 `[OwnerLayer]` 特性，可以将 Service 静态绑定到指定的 Layer 层级。
 
-此外，您可以使用 `[Mount]` 特性实现**声明式依赖注入**。被 `[Mount]` 标记的字段或属性，源生成器会自动将其类型注册到 DI
-容器中，并在实例创建时自动完成注入。
+此外，您可以使用 `[Mount]` 特性实现**声明式依赖注入**。`[Mount]` 在不同位置有不同语义：
 
+#### 1. Layer 字段 / 属性
 ```csharp
-using LayerBase.DI;
-using LayerBase.Layers;
-
 public partial class GameLogicLayer : Layer
 {
-    // 使用 [Mount] 声明Service的挂载顺序,例如 OtherService 的挂载顺序在 CombatService 之后，因此无论是 update 还是事件注册都是 CombatService 优先。
+    // 表示把 IService 挂载到当前 Layer。挂载顺序决定了 Update 和事件注册的优先级。
     [Mount] private CombatService _combatService;
-    [Mount] private OtherService _otherService;
 }
+```
 
-// 绑定至 GameLogicLayer 层级
-[OwnerLayer(typeof(GameLogicLayer))]
+#### 2. IService 字段 / 属性
+```csharp
 public partial class CombatService : IService 
 {
-    // 使用 [Mount] 声明依赖
-    // 1. 编译期：源生成器会自动在生成的 ConfigureServices 中添加 services.AddScoped<DamageManager, DamageManager>()
-    // 2. 运行期：实例化 CombatService 后，ServiceProvider 会自动注入该字段
+    // 如果字段类型是具体的 ILayerContext 实现，源生成器会自动注册：
+    // services.TryAddScoped<DamageManager, DamageManager>()
+    // 并在运行期自动完成注入。
     [Mount] private DamageManager _damageManager;
+}
+```
 
-    public void ConfigureServices(IServiceCollection services) 
-    { 
-        // 如果使用了 [Mount]，则无需再手动 AddScoped
-        // services.AddScoped<DamageManager, DamageManager>();
-    }
+#### 3. 构造函数
+```csharp
+public class DamageManager : ILayerContext
+{
+    // 表示选择该构造函数作为 DI 构造器。
+    [Mount]
+    public DamageManager(SomeDependency dep) { }
 }
 ```
 
@@ -750,36 +751,36 @@ public partial class PlayerInputManager : ILayerContext, IUpdate
 Services are responsible for registering related Managers into the DI container.
 By using the `[OwnerLayer]` attribute, a Service can be statically bound to a specific Layer.
 
-Additionally, you can use the `[Mount]` attribute for **declarative dependency injection**. Fields or properties marked
-with `[Mount]` are automatically registered in the DI container by the source generator, and dependencies are
-automatically injected upon instance creation.
+Additionally, you can use the `[Mount]` attribute for **declarative dependency injection**. The `[Mount]` attribute has different semantics depending on its location:
 
+#### 1. Layer Fields / Properties
 ```csharp
-using LayerBase.DI;
-using LayerBase.Layers;
-
 public partial class GameLogicLayer : Layer
 {
-    // Use [Mount] to declare the mounting order of Services. 
-    // For example, if OtherService is mounted after CombatService, CombatService will have priority in both Update and Event registration.
+    // Represents mounting an IService to the current Layer. 
+    // The mounting order determines the priority of Updates and event registrations.
     [Mount] private CombatService _combatService;
-    [Mount] private OtherService _otherService;
 }
+```
 
-// Bound to the GameLogicLayer
-[OwnerLayer(typeof(GameLogicLayer))]
+#### 2. IService Fields / Properties
+```csharp
 public partial class CombatService : IService 
 {
-    // Declare dependency via [Mount]
-    // 1. Compile-time: Source generator automatically adds services.AddScoped<DamageManager, DamageManager>()
-    // 2. Runtime: The ServiceProvider automatically injects this field after CombatService is instantiated
+    // If the field type is a concrete ILayerContext implementation, the source generator automatically registers it:
+    // services.TryAddScoped<DamageManager, DamageManager>()
+    // and automatically performs injection at runtime.
     [Mount] private DamageManager _damageManager;
+}
+```
 
-    public void ConfigureServices(IServiceCollection services) 
-    { 
-        // No need to manually AddScoped if [Mount] is used
-        // services.AddScoped<DamageManager, DamageManager>();
-    }
+#### 3. Constructors
+```csharp
+public class DamageManager : ILayerContext
+{
+    // Represents selecting this constructor as the DI constructor.
+    [Mount]
+    public DamageManager(SomeDependency dep) { }
 }
 ```
 

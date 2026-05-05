@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
@@ -15,6 +15,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
     private const string MountAttributeName = "LayerBase.DI.MountAttribute";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
+    private const string ILayerContextMetadataName = "LayerBase.DI.ILayerContext";
     private const string LayerMetadataName = "LayerBase.Layers.Layer";
     private const string EventHandlerMetadataName = "LayerBase.Core.EventHandler.IEventHandler`1";
     private const string EventHandlerAsyncMetadataName = "LayerBase.Core.EventHandler.IEventHandlerAsync`1";
@@ -29,14 +30,14 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                                                  static (ctx,  _) => CreateRegistrations(ctx))
                                              .SelectMany(static (items, _) => items);
 
-        var MountFields = context.SyntaxProvider
+        var mountMembers = context.SyntaxProvider
                                   .ForAttributeWithMetadataName(
                                       MountAttributeName,
-                                      static (node, _) => node is VariableDeclaratorSyntax or FieldDeclarationSyntax,
-                                      static (ctx,  _) => (IFieldSymbol)ctx.TargetSymbol);
+                                      static (node, _) => node is VariableDeclaratorSyntax or FieldDeclarationSyntax or PropertyDeclarationSyntax,
+                                      static (ctx,  _) => ctx.TargetSymbol);
 
         var combined = ownerLayerRegistrations.Collect()
-                                              .Combine(MountFields.Collect());
+                                              .Combine(mountMembers.Collect());
 
         var compilationAndData = context.CompilationProvider.Combine(combined);
 
@@ -45,17 +46,18 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             var compilation = source.Left;
             var data = source.Right;
             var ownerLayerList = data.Left;
-            var injectFieldList = data.Right;
+            var mountMemberList = data.Right;
 
-            Execute(spc, compilation, ownerLayerList, injectFieldList);
+            Execute(spc, compilation, ownerLayerList, mountMemberList);
         });
     }
 
-    private static void Execute(SourceProductionContext                         spc, Compilation compilation,
-                                ImmutableArray<ServiceRegistration>             ownerLayers,
-                                ImmutableArray<IFieldSymbol>                    MountFields)
+    private static void Execute(SourceProductionContext spc, Compilation compilation,
+                                ImmutableArray<ServiceRegistration> ownerLayers,
+                                ImmutableArray<ISymbol> mountMembers)
     {
         var iServiceSymbol = compilation.GetTypeByMetadataName(IServiceMetadataName);
+        var iLayerContextSymbol = compilation.GetTypeByMetadataName(ILayerContextMetadataName);
         var layerSymbol = compilation.GetTypeByMetadataName(LayerMetadataName);
         var eventHandlerSymbol = compilation.GetTypeByMetadataName(EventHandlerMetadataName);
         var eventHandlerAsyncSymbol = compilation.GetTypeByMetadataName(EventHandlerAsyncMetadataName);
@@ -79,10 +81,11 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             info.OwnerLayerRegistrations.Add(reg);
         }
 
-        foreach (var field in MountFields)
+        foreach (var member in mountMembers)
         {
-            var info = GetOrAddClass(field.ContainingType);
-            info.MountFields.Add(field);
+            if (member.ContainingType == null) continue;
+            var info = GetOrAddClass(member.ContainingType);
+            info.MountMembers.Add(member);
         }
 
         var callHandlerRegistrations = new List<CallHandlerRegistration>();
@@ -93,86 +96,35 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             var isService = ImplementsInterface(info.Symbol, iServiceSymbol);
 
             // Validation for [Mount]
-            if (info.MountFields.Count > 0)
+            if (info.MountMembers.Count > 0)
             {
                 if (!IsPartial(info.Symbol))
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LayerMustBePartial,
-                        info.MountFields[0].Locations.FirstOrDefault(),
+                        info.MountMembers[0].Locations.FirstOrDefault(),
                         info.Symbol.ToDisplayString()));
                     continue;
                 }
 
-                if (!isLayer)
+                if (isLayer)
                 {
-                    foreach (var field in info.MountFields)
-                    {
-                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountTypeMismatch, field.Locations[0],
-                            field.Name, info.Symbol.Name, field.Type.Name));
-                    }
-
-                    continue;
+                    ProcessLayerMounts(spc, info, iServiceSymbol, classMap);
                 }
-
-                // Deterministic ordering and partial check
-                var declarations = info.MountFields
-                                       .Select(f => f.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
-                                                     .AncestorsAndSelf().OfType<TypeDeclarationSyntax>()
-                                                     .FirstOrDefault())
-                                       .Distinct()
-                                       .ToList();
-
-                if (declarations.Count > 1)
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountFieldsMustBeInSameDeclaration,
-                        info.MountFields[0].Locations.FirstOrDefault(),
-                        info.Symbol.ToDisplayString()));
-
-                // Sort by location within the same declaration
-                info.MountFields.Sort((a, b) =>
-                    a.Locations[0].SourceSpan.Start.CompareTo(b.Locations[0].SourceSpan.Start));
-
-                var mountedTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-
-                foreach (var field in info.MountFields)
+                else if (isService)
                 {
-                    if (field.Type is not INamedTypeSymbol fieldType) continue;
-
-                    if (!mountedTypes.Add(fieldType))
+                    ProcessServiceMounts(spc, info, iLayerContextSymbol);
+                }
+                else if (ImplementsInterface(info.Symbol, iLayerContextSymbol))
+                {
+                    // Allow [Mount] on ILayerContext classes for member injection.
+                    // No auto-registration is performed for these.
+                }
+                else
+                {
+                    foreach (var member in info.MountMembers)
                     {
-                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.DuplicateMount, field.Locations[0],
-                            field.Name, fieldType.ToDisplayString(), info.Symbol.ToDisplayString()));
-                        continue;
-                    }
-
-                    if (classMap.TryGetValue(fieldType, out var targetInfo))
-                    {
-                        var hasMismatch = targetInfo.OwnerLayerRegistrations.Any(r => !SymbolEqualityComparer.Default.Equals(r.LayerType, info.Symbol));
-                        if (hasMismatch)
-                        {
-                            spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountOwnerConflict, field.Locations[0],
-                                fieldType.ToDisplayString(), info.Symbol.ToDisplayString()));
-                        }
-                    }
-
-                    if (!ImplementsInterface(fieldType, iServiceSymbol))
-                    {
-                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountTypeMismatch, field.Locations[0],
-                            field.Name, info.Symbol.Name, fieldType.Name));
-                        continue;
-                    }
-
-                    if (!HasAccessibleParameterlessConstructor(fieldType))
-                    {
-                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceNeedsPublicParameterlessConstructor,
-                            field.Locations[0],
-                            fieldType.ToDisplayString()));
-                    }
-
-                    if (fieldType.IsAbstract)
-                    {
-                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceCannotBeAbstract,
-                            field.Locations[0],
-                            fieldType.ToDisplayString()));
+                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountTypeMismatch, member.Locations[0],
+                            member.Name, info.Symbol.Name, GetSymbolType(member)?.Name ?? "unknown"));
                     }
                 }
             }
@@ -311,9 +263,10 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             var injectServices = new List<INamedTypeSymbol>();
             if (classMap.TryGetValue(layerType, out var layerInfo))
             {
-                foreach (var field in layerInfo.MountFields)
+                foreach (var member in layerInfo.MountMembers)
                 {
-                    if (field.Type is INamedTypeSymbol s && ImplementsInterface(s, iServiceSymbol))
+                    var type = GetSymbolType(member);
+                    if (type is INamedTypeSymbol s && ImplementsInterface(s, iServiceSymbol))
                     {
                         injectServices.Add(s);
                     }
@@ -336,6 +289,149 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 }
             }
         }
+
+        // Generate IAutoServiceMount for Services
+        foreach (var info in classMap.Values)
+        {
+            if (ImplementsInterface(info.Symbol, iServiceSymbol) && !InheritsFromLayer(info.Symbol, layerSymbol))
+            {
+                var mountedContexts = new List<INamedTypeSymbol>();
+                foreach (var member in info.MountMembers)
+                {
+                    var type = GetSymbolType(member);
+                    if (type is INamedTypeSymbol s && iLayerContextSymbol != null && 
+                        ImplementsInterface(s, iLayerContextSymbol) && !s.IsAbstract && s.TypeKind == TypeKind.Class)
+                    {
+                        if (!mountedContexts.Contains(s, SymbolEqualityComparer.Default))
+                        {
+                            mountedContexts.Add(s);
+                        }
+                    }
+                }
+
+                if (mountedContexts.Count > 0)
+                {
+                    var sourceText = GenerateServicePartial(info.Symbol, mountedContexts);
+                    if (!string.IsNullOrEmpty(sourceText))
+                    {
+                        spc.AddSource(CreateHintName(info.Symbol), SourceText.From(sourceText, Encoding.UTF8));
+                    }
+                }
+            }
+        }
+    }
+
+    private static void ProcessLayerMounts(SourceProductionContext spc, ClassInfo info, INamedTypeSymbol iServiceSymbol, Dictionary<INamedTypeSymbol, ClassInfo> classMap)
+    {
+        // Deterministic ordering and partial check
+        var declarations = info.MountMembers
+                               .Select(f => f.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+                                             .AncestorsAndSelf().OfType<TypeDeclarationSyntax>()
+                                             .FirstOrDefault())
+                               .Distinct()
+                               .ToList();
+
+        if (declarations.Count > 1)
+            spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountFieldsMustBeInSameDeclaration,
+                info.MountMembers[0].Locations.FirstOrDefault(),
+                info.Symbol.ToDisplayString()));
+
+        // Sort by location within the same declaration
+        info.MountMembers.Sort((a, b) =>
+            a.Locations[0].SourceSpan.Start.CompareTo(b.Locations[0].SourceSpan.Start));
+
+        var mountedTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
+        foreach (var member in info.MountMembers)
+        {
+            var type = GetSymbolType(member);
+            if (type is not INamedTypeSymbol fieldType) continue;
+
+            if (!mountedTypes.Add(fieldType))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.DuplicateMount, member.Locations[0],
+                    member.Name, fieldType.ToDisplayString(), info.Symbol.ToDisplayString()));
+                continue;
+            }
+
+            if (classMap.TryGetValue(fieldType, out var targetInfo))
+            {
+                var hasMismatch = targetInfo.OwnerLayerRegistrations.Any(r => !SymbolEqualityComparer.Default.Equals(r.LayerType, info.Symbol));
+                if (hasMismatch)
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountOwnerConflict, member.Locations[0],
+                        fieldType.ToDisplayString(), info.Symbol.ToDisplayString()));
+                }
+            }
+
+            if (!ImplementsInterface(fieldType, iServiceSymbol))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountTypeMismatch, member.Locations[0],
+                    member.Name, info.Symbol.Name, fieldType.Name));
+                continue;
+            }
+
+            if (!HasAccessibleParameterlessConstructor(fieldType))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceNeedsPublicParameterlessConstructor,
+                    member.Locations[0],
+                    fieldType.ToDisplayString()));
+            }
+
+            if (fieldType.IsAbstract)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceCannotBeAbstract,
+                    member.Locations[0],
+                    fieldType.ToDisplayString()));
+            }
+        }
+    }
+
+    private static void ProcessServiceMounts(SourceProductionContext spc, ClassInfo info, INamedTypeSymbol? iLayerContextSymbol)
+    {
+        // Sort for deterministic generation (though not strictly required for correctness here)
+        info.MountMembers.Sort((a, b) =>
+            a.Locations[0].SourceSpan.Start.CompareTo(b.Locations[0].SourceSpan.Start));
+
+        var mountedTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
+        foreach (var member in info.MountMembers)
+        {
+            var type = GetSymbolType(member);
+            if (type is not INamedTypeSymbol contextType) continue;
+
+            if (!mountedTypes.Add(contextType))
+            {
+                // Duplicate mounting same type is allowed in service, generator will de-duplicate TryAddScoped
+                continue;
+            }
+
+            if (iLayerContextSymbol != null && ImplementsInterface(contextType, iLayerContextSymbol))
+            {
+                if (contextType.IsAbstract || contextType.TypeKind != TypeKind.Class)
+                {
+                    // interface / abstract not supported for auto-registration
+                    continue;
+                }
+            }
+            else
+            {
+                // Not an ILayerContext, but has [Mount]. 
+                // Currently [Mount] is only defined for IService (on Layer) or ILayerContext (on IService).
+                // If it's something else, we might want a diagnostic, but existing logic used to just skip or warn.
+                // The guide says: 不自动注册 interface / abstract 类型字段。 不自动注册普通非 ILayerContext 依赖。
+            }
+        }
+    }
+
+    private static ITypeSymbol? GetSymbolType(ISymbol symbol)
+    {
+        return symbol switch
+        {
+            IFieldSymbol field => field.Type,
+            IPropertySymbol property => property.Type,
+            _ => null
+        };
     }
 
     private static string GenerateLayerPartial(INamedTypeSymbol layerType, List<INamedTypeSymbol> injectServices, List<INamedTypeSymbol> ownerLayerServices, INamedTypeSymbol iServiceSymbol, INamedTypeSymbol? callHandlerSymbol)
@@ -412,17 +508,56 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         return builder.ToString();
     }
 
+    private static string GenerateServicePartial(INamedTypeSymbol serviceType, List<INamedTypeSymbol> mountedContexts)
+    {
+        var serviceIdentifier = serviceType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+        var namespaceSymbol = serviceType.ContainingNamespace;
+        var @namespace = namespaceSymbol is { IsGlobalNamespace: false }
+            ? namespaceSymbol.ToDisplayString()
+            : null;
+
+        var builder = new StringBuilder();
+        builder.AppendLine("// <auto-generated />");
+        builder.AppendLine("using LayerBase.DI;");
+
+        if (!string.IsNullOrEmpty(@namespace))
+        {
+            builder.Append("namespace ").Append(@namespace).AppendLine();
+            builder.AppendLine("{");
+        }
+
+        builder.Append("partial class ").Append(serviceIdentifier)
+               .AppendLine(" : global::LayerBase.DI.IAutoServiceMount");
+        builder.AppendLine("{");
+        
+        builder.AppendLine("    void global::LayerBase.DI.IAutoServiceMount.__AutoMountContexts(global::LayerBase.DI.IServiceCollection services)");
+        builder.AppendLine("    {");
+
+        foreach (var context in mountedContexts)
+        {
+            var typeName = context.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            builder.Append("        services.TryAddScoped<").Append(typeName).Append(", ").Append(typeName).AppendLine(">();");
+        }
+
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+
+        if (!string.IsNullOrEmpty(@namespace)) builder.AppendLine("}");
+
+        return builder.ToString();
+    }
+
     private static bool HasStaticConstructor(INamedTypeSymbol type)
     {
         return type.GetMembers().OfType<IMethodSymbol>().Any(m => m.MethodKind == MethodKind.StaticConstructor);
     }
 
-    private static string CreateHintName(INamedTypeSymbol layerType)
+    private static string CreateHintName(INamedTypeSymbol type)
     {
-        var name = layerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var name = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var sanitized = new StringBuilder(name.Length);
         foreach (var ch in name) sanitized.Append(char.IsLetterOrDigit(ch) ? ch : '_');
-        return $"{sanitized}.LayerServices.g.cs";
+        return $"{sanitized}.AutoMount.g.cs";
     }
 
     private static ImmutableArray<ServiceRegistration> CreateRegistrations(GeneratorAttributeSyntaxContext context)
@@ -544,8 +679,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         public static readonly DiagnosticDescriptor LayerMustBePartial =
             new(
                 "LBG003",
-                "Layer must be partial",
-                "Layer '{0}' must be declared as partial to allow generator to emit registrations",
+                "Type must be partial",
+                "Type '{0}' must be declared as partial to allow generator to emit registrations",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -580,8 +715,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         public static readonly DiagnosticDescriptor MountFieldsMustBeInSameDeclaration =
             new(
                 "LBG007",
-                "Inject fields must be in the same declaration",
-                "Type '{0}' is partial, but [Mount] fields are scattered across multiple declarations. All [Mount] fields must be in the same declaration for deterministic ordering.",
+                "Inject members must be in the same declaration",
+                "Type '{0}' is partial, but [Mount] members are scattered across multiple declarations. All [Mount] members must be in the same declaration for deterministic ordering.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -590,7 +725,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             new(
                 "LBG008",
                 "Inject type mismatch",
-                "Field '{0}' in '{1}' has [Mount] but its type '{2}' is not allowed. Mount is only supported on Layer fields whose type implements IService.",
+                "Member '{0}' in '{1}' has [Mount] but its type '{2}' is not allowed.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -599,7 +734,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             new(
                 "LBG009",
                 "Duplicate Mount",
-                "Field '{0}' mounts type '{1}' which is already mounted in '{2}'.",
+                "Member '{0}' mounts type '{1}' which is already mounted in '{2}'.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -617,7 +752,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             new(
                 "LBG011",
                 "Owner-only trailing items",
-                "Type '{0}' has Mount fields but also has owner-only registrations ({1}) which will be appended without guaranteed ordering.",
+                "Type '{0}' has Mount members but also has owner-only registrations ({1}) which will be appended without guaranteed ordering.",
                 Category,
                 DiagnosticSeverity.Warning,
                 true);
@@ -627,7 +762,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private sealed class ClassInfo
     {
         public INamedTypeSymbol Symbol { get; }
-        public List<IFieldSymbol> MountFields { get; } = new();
+        public List<ISymbol> MountMembers { get; } = new();
         public List<ServiceRegistration> OwnerLayerRegistrations { get; } = new();
 
         public ClassInfo(INamedTypeSymbol symbol) => Symbol = symbol;

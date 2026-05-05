@@ -79,6 +79,9 @@ public interface IServiceCollection
     IServiceCollection AddScoped<TService>(
         Func<IServiceProvider, TService> factory);
 
+    IServiceCollection TryAddScoped<TService, TImpl>()
+        where TImpl : TService;
+
     IReadOnlyList<ServiceDescriptor> ToDescriptors();
 }
 

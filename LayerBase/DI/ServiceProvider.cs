@@ -90,6 +90,11 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         return resolved;
     }
 
+    internal void InjectMembers(object instance)
+    {
+        InjectMembers(instance, new ResolutionContext());
+    }
+
     private object? GetServiceInternal(Type serviceType, ResolutionContext context)
     {
         if (IsDisposed) throw new ObjectDisposedException(nameof(ServiceProvider));

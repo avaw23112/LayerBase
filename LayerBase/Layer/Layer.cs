@@ -288,6 +288,13 @@ public abstract class Layer : Node, IDisposable
         var newProvider = new ServiceProvider(OwnerContext!.Services, descriptors, this);
         var oldProvider = Interlocked.Exchange(ref m_serviceProvider, newProvider);
         oldProvider?.Dispose();
+
+        newProvider.InjectMembers(this);
+        foreach (var registration in m_activeServices)
+        {
+            newProvider.InjectMembers(registration.Service);
+        }
+
         m_resolvedServices = newProvider.ResolveOrderedServices(descriptors);
     }
 
@@ -384,6 +391,12 @@ public abstract class Layer : Node, IDisposable
         ServiceLayerBinder.Attach(registration.Service, this);
 
         using var _ = m_serviceCollection.PushRegistrationScope(registration.ScopeId);
+
+        if (registration.Service is IAutoServiceMount autoMount)
+        {
+            autoMount.__AutoMountContexts(m_serviceCollection);
+        }
+
         registration.Service.ConfigureServices(m_serviceCollection);
     }
 
