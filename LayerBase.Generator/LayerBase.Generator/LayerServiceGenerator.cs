@@ -116,8 +116,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             {
                 if (!IsPartial(info.Symbol))
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountServiceMustBePartial,
-                        info.MountMembers[0].Locations.FirstOrDefault(),
+                    var diagnostic = isLayer ? Diagnostics.MountLayerMustBePartial : Diagnostics.MountServiceMustBePartial;
+                    spc.ReportDiagnostic(Diagnostic.Create(diagnostic,
+                        info.Symbol.Locations.FirstOrDefault(),
                         info.Symbol.ToDisplayString()));
                     continue;
                 }
@@ -855,6 +856,15 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 "LBMOUNT005",
                 "Mount field type invalid",
                 "Mount field type '{0}' is interface or abstract. Use [Mount(typeof(ImplementationType))] or register it manually in ConfigureServices.",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor MountLayerMustBePartial =
+            new(
+                "LBMOUNT006",
+                "Layer type must be partial",
+                "Layer type '{0}' contains [Mount] IService members and must be declared partial.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);

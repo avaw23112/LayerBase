@@ -195,11 +195,6 @@ public sealed partial class LifecycleDamageManagerImplType :
     }
 }
 
-public partial class DuplicateLayerImplType : Layer
-{
-    [Mount] private DuplicateMountServiceImplType _service = null!;
-}
-
 public partial class DuplicateMountLayerImplType : Layer
 {
     [Mount] private DuplicateMountServiceImplType _service = null!;
