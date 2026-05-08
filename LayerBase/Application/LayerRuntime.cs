@@ -1,5 +1,7 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
+using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
@@ -33,6 +35,7 @@ public sealed class LayerRuntime : IDisposable
     public int Id => _id;
     internal WorldServiceRoot Services { get; }
     public EventCenter EventCenter { get; internal set; }
+    public ActorWorld Actors { get; }
     
     private ServiceProvider? _worldProvider;
     public LayerBase.DI.IServiceProvider ServiceProvider => _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
@@ -58,6 +61,7 @@ public sealed class LayerRuntime : IDisposable
     {
         _id = id;
         EventCenter = new EventCenter();
+        Actors = new ActorWorld(this);
         Services = new WorldServiceRoot(this);
         LayerHub.Internal_Register(this);
     }
@@ -204,7 +208,14 @@ public sealed class LayerRuntime : IDisposable
             }
 
             // 5. Post pump
-            _scheduler?.Pump();
+            PostPumpStats postStats = _scheduler?.Pump()
+                ?? new PostPumpStats(0, 0, 0, 0);
+
+            if (_scheduler != null)
+            {
+                RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
+                Actors.Pump(ref actorBudget);
+            }
 
             _chain?.Pump(deltaTime);
         }
@@ -248,12 +259,35 @@ public sealed class LayerRuntime : IDisposable
             }
 
             // 4. Post pump
-            _scheduler?.Pump();
+            PostPumpStats postStats = _scheduler?.Pump()
+                ?? new PostPumpStats(0, 0, 0, 0);
+
+            if (_scheduler != null)
+            {
+                RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
+                Actors.Pump(ref actorBudget);
+            }
 
             _chain?.Pump(deltaTime);
         }
     }
 
+
+    private static RuntimeFrameBudget CreateActorBudget(PostSchedulerOptions options, PostPumpStats postStats)
+    {
+        long deadlineTicks = 0;
+
+        if (options.MaxMillisecondsPerPump > 0)
+        {
+            long budgetTicks = (long)(Stopwatch.Frequency * options.MaxMillisecondsPerPump / 1000.0);
+            deadlineTicks = Stopwatch.GetTimestamp() + budgetTicks;
+        }
+
+        return new RuntimeFrameBudget(
+            maxEvents: options.MaxEventsPerPump,
+            usedEvents: postStats.ProcessedCount,
+            deadlineTicks: deadlineTicks);
+    }
 
     public void ReportInfo(LayerEventInfo info)
     {

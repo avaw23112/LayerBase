@@ -27,6 +27,9 @@ internal static class Program
         SharedFieldUsage.Run();
         Console.WriteLine();
 
+        ActorRuntimeUsage.Run();
+        Console.WriteLine();
+
         Console.WriteLine("=== Showcase Finished ===");
         // 9. 验证生成器逻辑
         GeneratorVerification.Run();
