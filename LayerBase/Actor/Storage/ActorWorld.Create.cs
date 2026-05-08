@@ -20,6 +20,7 @@ public sealed partial class ActorWorld
             generation: storage.GetGeneration(slotIndex));
 
         generated.ActorInit(new ActorContext(this, actorId));
+        storage.RegisterLifecycleInterfaces(actor, actorId, slotIndex, this);
         return actor;
     }
 }

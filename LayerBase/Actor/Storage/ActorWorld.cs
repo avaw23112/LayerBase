@@ -7,23 +7,28 @@ public sealed partial class ActorWorld
     private readonly Dictionary<BehaviourSignature, ActorQueryCache> _queryCacheBySignature = new();
     private IActorEventBucket[] _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
     private int _bucketCursor;
+    internal ActorLifecycleScheduler Lifecycle { get; }
+    private bool _hasPendingDestroy;
     internal LayerRuntime? Runtime { get; }
     internal ActorMailOptions DefaultMailOptions { get; }
 
     internal ActorWorld()
     {
         DefaultMailOptions = ActorMailOptions.Default;
+        Lifecycle = new ActorLifecycleScheduler(this);
     }
 
     internal ActorWorld(ActorMailOptions defaultMailOptions)
     {
         DefaultMailOptions = defaultMailOptions;
+        Lifecycle = new ActorLifecycleScheduler(this);
     }
 
     internal ActorWorld(LayerRuntime runtime)
     {
         Runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         DefaultMailOptions = ActorMailOptions.Default;
+        Lifecycle = new ActorLifecycleScheduler(this);
     }
 
     private BehaviourArchetype GetOrCreateArchetype(BehaviourSignature signature)

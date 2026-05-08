@@ -20,4 +20,14 @@ public static class ActorExtensions
     {
         return ActorGeneratedAccess.RequireGenerated(actor).TryPost(in value);
     }
+
+    public static bool GetEnable(this IActor actor)
+    {
+        return ActorGeneratedAccess.RequireGenerated(actor).GetEnable();
+    }
+
+    public static bool SetEnable(this IActor actor, bool enable)
+    {
+        return ActorGeneratedAccess.RequireGenerated(actor).SetEnable(enable);
+    }
 }

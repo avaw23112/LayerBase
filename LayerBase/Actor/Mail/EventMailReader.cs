@@ -40,4 +40,17 @@ internal static class EventMailReader
         bufferPool.Release(mail.BufferId);
         mail = default;
     }
+
+    public static void ForceRelease<TEvent>(
+        ref EventMail<TEvent> mail,
+        RingQueueBuffer<TEvent> bufferPool)
+        where TEvent : struct
+    {
+        if (mail.BufferId != 0)
+        {
+            bufferPool.Release(mail.BufferId);
+        }
+
+        mail = default;
+    }
 }

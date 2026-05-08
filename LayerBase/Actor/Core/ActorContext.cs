@@ -25,4 +25,14 @@ public readonly struct ActorContext
     {
         return World.TryPost(ActorId, in value);
     }
+
+    public bool IsEnable()
+    {
+        return World.IsEnable(ActorId);
+    }
+
+    public bool SetEnable(bool enable)
+    {
+        return World.SetEnable(ActorId, enable);
+    }
 }

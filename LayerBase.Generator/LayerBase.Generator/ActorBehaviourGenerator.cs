@@ -275,6 +275,26 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         builder.AppendLine();
 
         builder.Append(memberIndent);
+        builder.AppendLine("bool global::LayerBase.Actor.IGeneratedActorMeta.GetEnable()");
+        builder.Append(memberIndent);
+        builder.AppendLine("{");
+        builder.Append(memberIndent);
+        builder.AppendLine("    return __actorContext.IsEnable();");
+        builder.Append(memberIndent);
+        builder.AppendLine("}");
+        builder.AppendLine();
+
+        builder.Append(memberIndent);
+        builder.AppendLine("bool global::LayerBase.Actor.IGeneratedActorMeta.SetEnable(bool enable)");
+        builder.Append(memberIndent);
+        builder.AppendLine("{");
+        builder.Append(memberIndent);
+        builder.AppendLine("    return __actorContext.SetEnable(enable);");
+        builder.Append(memberIndent);
+        builder.AppendLine("}");
+        builder.AppendLine();
+
+        builder.Append(memberIndent);
         builder.AppendLine("global::LayerBase.Core.Event.PostResult global::LayerBase.Actor.IGeneratedActorMeta.Post<TEvent>(in TEvent value)");
         builder.Append(memberIndent);
         builder.AppendLine("    where TEvent : struct");

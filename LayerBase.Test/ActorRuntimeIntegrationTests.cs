@@ -1,8 +1,8 @@
 using LayerBase.Actor;
 using LayerBase.Core.Event;
 using LayerBase.DI;
-using LayerBase.DI.Options;
 using LayerBase.Layers;
+using ServiceUpdate = LayerBase.DI.Options.IUpdate;
 
 namespace LayerBase.Test;
 
@@ -39,7 +39,7 @@ internal sealed class BudgetLayer : Layer
 {
 }
 
-internal sealed partial class UpdateOrderingService : IService, IUpdate
+internal sealed partial class UpdateOrderingService : IService, ServiceUpdate
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -76,6 +76,35 @@ internal sealed partial class IntegrationActor : IActor
     private void OnActor(in RuntimeActorEvent value)
     {
         ActorRuntimeIntegrationTrace.Entries.Add($"actor:{value.Value}");
+    }
+}
+
+internal sealed partial class RuntimeLifecycleActor : IActor, LayerBase.Actor.IStart, LayerBase.Actor.IFixedUpdate, LayerBase.Actor.IUpdate, LayerBase.Actor.ILateUpdate
+{
+    [ActorBehaviour]
+    private void OnActor(in RuntimeActorEvent value)
+    {
+        ActorRuntimeIntegrationTrace.Entries.Add($"actor:{value.Value}");
+    }
+
+    public void Start()
+    {
+        ActorRuntimeIntegrationTrace.Entries.Add("start");
+    }
+
+    public void FixedUpdate(float fixedDeltaTime)
+    {
+        ActorRuntimeIntegrationTrace.Entries.Add($"fixed:{fixedDeltaTime:0.###}");
+    }
+
+    void LayerBase.Actor.IUpdate.Update(float deltaTime)
+    {
+        ActorRuntimeIntegrationTrace.Entries.Add($"actor-update:{deltaTime:0.###}");
+    }
+
+    public void LateUpdate(float deltaTime)
+    {
+        ActorRuntimeIntegrationTrace.Entries.Add($"late:{deltaTime:0.###}");
     }
 }
 
@@ -141,6 +170,42 @@ public class ActorRuntimeIntegrationTests
 
         runtime.Pump(0.016f);
         Assert.That(ActorRuntimeIntegrationTrace.Entries, Is.EqualTo(new[] { "scheduler:9", "actor:3" }));
+    }
+
+    [Test]
+    public void Actor_lifecycle_runs_after_behaviour_and_before_layer_update()
+    {
+        LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(), PostSchedulerOptions.Default);
+        RuntimeLifecycleActor actor = runtime.Actors.CreateActor<RuntimeLifecycleActor>();
+
+        runtime.Post(new RuntimeSchedulerEvent(1));
+        actor.Post(new RuntimeActorEvent(2));
+
+        runtime.Pump(0.016f);
+
+        Assert.That(
+            ActorRuntimeIntegrationTrace.Entries,
+            Is.EqualTo(new[] { "scheduler:1", "actor:2", "start", "fixed:0.017", "actor-update:0.016", "late:0.016", "update" }));
+    }
+
+    [Test]
+    public void Actor_fixed_update_is_controlled_by_runtime_fixed_update_options()
+    {
+        var runtime = new LayerRuntime(1);
+        var layer = new UpdateOrderingLayer();
+        layer.RegisterService(new UpdateOrderingService());
+
+        var builder = new LayerRuntime.LayersBuilder(runtime);
+        builder.Push(layer);
+        builder.SetPostOptions(PostSchedulerOptions.Default);
+        builder.SetFixedUpdateOptions(new FixedUpdateOptions(true, 0.02f, 4));
+        runtime = builder.Build();
+
+        runtime.Actors.CreateActor<RuntimeLifecycleActor>();
+
+        runtime.Pump(0.016f);
+
+        Assert.That(ActorRuntimeIntegrationTrace.Entries, Does.Contain("fixed:0.02"));
     }
 
     private static LayerRuntime BuildRuntime(Layer layer, IService service, PostSchedulerOptions options)

@@ -10,6 +10,10 @@ public interface IGeneratedActorMeta
 
     void ActorInit(ActorContext context);
 
+    bool GetEnable();
+
+    bool SetEnable(bool enable);
+
     PostResult Post<TEvent>(in TEvent value)
         where TEvent : struct;
 

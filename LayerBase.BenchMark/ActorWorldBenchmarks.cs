@@ -104,7 +104,7 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
             }
 
             var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
-            _actorWorld.Pump(ref budget);
+            _actorWorld.Pump(0f, 0f, false, ref budget);
         }
     }
 

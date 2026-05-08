@@ -62,6 +62,13 @@ internal sealed class EventColumn<TActor, TEvent> :
             return false;
         }
 
+        if (!_owner.IsAliveSlot(slotIndex))
+        {
+            _dirtySlots.Pop();
+            EventMailReader.ReleaseIfEmpty(ref mail, _bufferPool, _options);
+            return false;
+        }
+
         TActor? actor = _owner.Actors[slotIndex];
         if (actor == null)
         {
@@ -96,5 +103,16 @@ internal sealed class EventColumn<TActor, TEvent> :
         }
 
         Array.Resize(ref _mails, newSize);
+    }
+
+    public override void ClearMail(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_mails.Length)
+        {
+            return;
+        }
+
+        ref EventMail<TEvent> mail = ref _mails[slotIndex];
+        EventMailReader.ForceRelease(ref mail, _bufferPool);
     }
 }

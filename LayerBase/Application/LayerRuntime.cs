@@ -220,7 +220,16 @@ public sealed class LayerRuntime : IDisposable
             if (_scheduler != null)
             {
                 RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
-                Actors.Pump(ref actorBudget);
+                bool pumpActorFixedUpdate = _fixedUpdateOptions.Enabled;
+                float actorFixedDeltaTime = _fixedUpdateOptions.Enabled
+                    ? _fixedUpdateOptions.FixedDeltaTime
+                    : 0f;
+
+                Actors.Pump(
+                    deltaTime: deltaTime,
+                    fixedDeltaTime: actorFixedDeltaTime,
+                    pumpFixedUpdate: pumpActorFixedUpdate,
+                    budget: ref actorBudget);
             }
 
             _chain?.Pump(deltaTime);
@@ -271,7 +280,16 @@ public sealed class LayerRuntime : IDisposable
             if (_scheduler != null)
             {
                 RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
-                Actors.Pump(ref actorBudget);
+                bool pumpActorFixedUpdate = _fixedUpdateOptions.Enabled;
+                float actorFixedDeltaTime = _fixedUpdateOptions.Enabled
+                    ? _fixedUpdateOptions.FixedDeltaTime
+                    : 0f;
+
+                Actors.Pump(
+                    deltaTime: deltaTime,
+                    fixedDeltaTime: actorFixedDeltaTime,
+                    pumpFixedUpdate: pumpActorFixedUpdate,
+                    budget: ref actorBudget);
             }
 
             _chain?.Pump(deltaTime);

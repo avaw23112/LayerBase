@@ -61,6 +61,58 @@ internal sealed class BehaviourArchetype
         return storage.Post(actorId.SlotIndex, in value, postPolicy, fullPolicy);
     }
 
+    internal bool IsAlive(ActorId actorId)
+    {
+        ushort storageIndex = actorId.TypeStorageIndex;
+        if ((uint)storageIndex >= (uint)_storages.Length)
+        {
+            return false;
+        }
+
+        return _storages[storageIndex].IsAlive(actorId.SlotIndex, actorId.Generation);
+    }
+
+    internal bool IsEnable(ActorId actorId)
+    {
+        ushort storageIndex = actorId.TypeStorageIndex;
+        if ((uint)storageIndex >= (uint)_storages.Length)
+        {
+            return false;
+        }
+
+        return _storages[storageIndex].IsEnable(actorId.SlotIndex, actorId.Generation);
+    }
+
+    internal bool SetEnable(ActorId actorId, bool enable)
+    {
+        ushort storageIndex = actorId.TypeStorageIndex;
+        if ((uint)storageIndex >= (uint)_storages.Length)
+        {
+            return false;
+        }
+
+        return _storages[storageIndex].SetEnable(actorId.SlotIndex, actorId.Generation, enable);
+    }
+
+    internal bool MarkPendingDestroy(ActorId actorId)
+    {
+        ushort storageIndex = actorId.TypeStorageIndex;
+        if ((uint)storageIndex >= (uint)_storages.Length)
+        {
+            return false;
+        }
+
+        return _storages[storageIndex].MarkPendingDestroy(actorId.SlotIndex, actorId.Generation);
+    }
+
+    internal void SweepPendingDestroy(ActorWorld world)
+    {
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            _storages[i].SweepPendingDestroy(world);
+        }
+    }
+
     public void PostToAliveActors<TEvent>(
         in TEvent value,
         ActorPostPolicy? postPolicy,

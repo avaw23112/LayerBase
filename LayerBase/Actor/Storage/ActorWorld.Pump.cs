@@ -4,7 +4,27 @@ namespace LayerBase.Actor;
 
 public sealed partial class ActorWorld
 {
-    public void Pump(ref RuntimeFrameBudget budget)
+    public void Pump(
+        float deltaTime,
+        float fixedDeltaTime,
+        bool pumpFixedUpdate,
+        ref RuntimeFrameBudget budget)
+    {
+        PumpActorBehaviours(ref budget);
+        SweepPendingDestroy();
+        Lifecycle.PumpStart();
+
+        if (pumpFixedUpdate)
+        {
+            Lifecycle.PumpFixedUpdate(fixedDeltaTime);
+        }
+
+        Lifecycle.PumpUpdate(deltaTime);
+        Lifecycle.PumpLateUpdate(deltaTime);
+        SweepPendingDestroy();
+    }
+
+    private void PumpActorBehaviours(ref RuntimeFrameBudget budget)
     {
         while (budget.HasRemainingEventBudget())
         {

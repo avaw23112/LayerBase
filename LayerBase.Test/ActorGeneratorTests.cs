@@ -40,6 +40,8 @@ public class ActorGeneratorTests
         string generated = result.GeneratedSources.Single().SourceText.ToString();
         Assert.That(generated, Does.Contain("partial class EnemyActor : global::LayerBase.Actor.IGeneratedActorMeta"));
         Assert.That(generated, Does.Contain("private global::LayerBase.Actor.ActorContext __actorContext;"));
+        Assert.That(generated, Does.Contain("bool global::LayerBase.Actor.IGeneratedActorMeta.GetEnable()"));
+        Assert.That(generated, Does.Contain("bool global::LayerBase.Actor.IGeneratedActorMeta.SetEnable(bool enable)"));
         Assert.That(generated, Does.Contain("builder.AddBehaviour<global::Sample.EnemyActor, global::Sample.DamageEvent>("));
         Assert.That(generated, Does.Contain("builder.AddBehaviour<global::Sample.EnemyActor, global::Sample.DeadEvent>("));
     }
@@ -206,6 +208,16 @@ public class ActorGeneratorTests
 
             public void ActorInit(ActorContext context)
             {
+            }
+
+            public bool GetEnable()
+            {
+                return true;
+            }
+
+            public bool SetEnable(bool enable)
+            {
+                return enable;
             }
 
             public PostResult Post<TEvent>(in TEvent value) where TEvent : struct

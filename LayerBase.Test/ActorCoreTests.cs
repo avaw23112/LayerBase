@@ -118,6 +118,16 @@ public class ActorCoreTests
         {
         }
 
+        public bool GetEnable()
+        {
+            return true;
+        }
+
+        public bool SetEnable(bool enable)
+        {
+            return enable;
+        }
+
         public PostResult Post<TEvent>(in TEvent value)
             where TEvent : struct
         {

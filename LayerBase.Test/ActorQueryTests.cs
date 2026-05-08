@@ -109,7 +109,7 @@ public class ActorQueryTests
         query.PostAll(new ActorQueryDamageEvent(7));
 
         var budget = new RuntimeFrameBudget(32, 0, 0);
-        world.Pump(ref budget);
+        world.Pump(0f, 0f, false, ref budget);
 
         Assert.That(ActorQueryTrace.Entries, Is.EqualTo(new[] { "damage-only:7", "damage-dead:7" }));
     }

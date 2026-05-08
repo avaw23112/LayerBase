@@ -234,7 +234,7 @@ public class ActorMailPolicyTests
     private static void Pump(ActorWorld world)
     {
         var budget = new RuntimeFrameBudget(64, 0, 0);
-        world.Pump(ref budget);
+        world.Pump(0f, 0f, false, ref budget);
     }
 
     private static TField GetMailField<TField>(ActorWorld world, ActorId actorId, string fieldName)

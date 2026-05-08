@@ -46,7 +46,7 @@ public partial class ActorPostPumpTests
         Assert.That(RecordingActor.Trace, Is.Empty);
 
         var budget = new RuntimeFrameBudget(maxEvents: 8, usedEvents: 0, deadlineTicks: 0);
-        world.Pump(ref budget);
+        world.Pump(0f, 0f, false, ref budget);
 
         Assert.That(RecordingActor.Trace, Is.EqualTo(new[] { "R:7" }));
         Assert.That(budget.UsedEvents, Is.EqualTo(1));
@@ -63,7 +63,7 @@ public partial class ActorPostPumpTests
         actor.Post(new ActorDamageEvent(3));
 
         var budget = new RuntimeFrameBudget(8, 0, 0);
-        world.Pump(ref budget);
+        world.Pump(0f, 0f, false, ref budget);
 
         Assert.That(RecordingActor.Trace, Is.EqualTo(new[] { "R:1", "R:2", "R:3" }));
     }
@@ -96,13 +96,13 @@ public partial class ActorPostPumpTests
         actor.Post(new ActorDamageEvent(11));
 
         var budget = new RuntimeFrameBudget(maxEvents: 1, usedEvents: 0, deadlineTicks: 0);
-        world.Pump(ref budget);
+        world.Pump(0f, 0f, false, ref budget);
 
         Assert.That(RecordingActor.Trace, Is.EqualTo(new[] { "R:10" }));
         Assert.That(budget.UsedEvents, Is.EqualTo(1));
 
         budget = new RuntimeFrameBudget(maxEvents: 1, usedEvents: 0, deadlineTicks: 0);
-        world.Pump(ref budget);
+        world.Pump(0f, 0f, false, ref budget);
 
         Assert.That(RecordingActor.Trace, Is.EqualTo(new[] { "R:10", "R:11" }));
     }
@@ -119,7 +119,7 @@ public partial class ActorPostPumpTests
         actorB.Post(new ActorDamageEvent(100));
 
         var budget = new RuntimeFrameBudget(maxEvents: 2, usedEvents: 0, deadlineTicks: 0);
-        world.Pump(ref budget);
+        world.Pump(0f, 0f, false, ref budget);
 
         string[] combined = RecordingActor.Trace.Concat(SecondaryRecordingActor.Trace).ToArray();
         Assert.That(combined, Has.Length.EqualTo(2));
@@ -197,6 +197,6 @@ public partial class ActorPostPumpTests
     private static void PumpOnce(ActorWorld world)
     {
         var budget = new RuntimeFrameBudget(8, 0, 0);
-        world.Pump(ref budget);
+        world.Pump(0f, 0f, false, ref budget);
     }
 }

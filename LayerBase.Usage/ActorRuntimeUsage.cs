@@ -35,7 +35,7 @@ public static class ActorRuntimeUsage
         actor.Post(new UsageActorEvent(42));
 
         var budget = new RuntimeFrameBudget(maxEvents: 8, usedEvents: 0, deadlineTicks: 0);
-        world.Pump(ref budget);
+        world.Pump(0f, 0f, false, ref budget);
 
         Console.WriteLine($"Actor runtime processed value: {actor.LastValue}");
     }

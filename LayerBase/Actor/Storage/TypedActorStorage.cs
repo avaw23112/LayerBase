@@ -12,6 +12,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private ActorEventColumnRuntime[] _columnsByEventId;
     private TActor?[] _actors;
     private int[] _generations;
+    private ActorSlotState[] _states;
+    private bool[] _enabled;
+    private ActorLifecycleHandles[] _lifecycleHandles;
     private ActorSlotFreeList _freeList;
     private int _nextSlotIndex;
 
@@ -22,8 +25,17 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     {
         TypeStorageIndex = typeStorageIndex;
         _columnsByEventId = new ActorEventColumnRuntime[Math.Max(maxEventTypeId + 1, 1)];
-        _actors = new TActor?[Math.Max(initialCapacity, 1)];
+        int capacity = Math.Max(initialCapacity, 1);
+        _actors = new TActor?[capacity];
         _generations = new int[_actors.Length];
+        _states = new ActorSlotState[_actors.Length];
+        _enabled = new bool[_actors.Length];
+        _lifecycleHandles = new ActorLifecycleHandles[_actors.Length];
+        for (int i = 0; i < _lifecycleHandles.Length; i++)
+        {
+            _lifecycleHandles[i] = ActorLifecycleHandles.Empty;
+        }
+
         _freeList = new ActorSlotFreeList(_actors.Length);
         _nextSlotIndex = 0;
     }
@@ -35,6 +47,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             : AllocateNewSlot();
 
         _actors[slotIndex] = actor;
+        _states[slotIndex] = ActorSlotState.Alive;
+        _enabled[slotIndex] = true;
+        _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
         EnsureColumnCapacity(slotIndex);
         return slotIndex;
     }
@@ -47,8 +62,33 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     public override bool IsAlive(int slotIndex, int generation)
     {
         return (uint)slotIndex < (uint)_actors.Length
+               && _states[slotIndex] == ActorSlotState.Alive
                && _actors[slotIndex] != null
                && _generations[slotIndex] == generation;
+    }
+
+    internal bool IsAliveSlot(int slotIndex)
+    {
+        return (uint)slotIndex < (uint)_actors.Length
+               && _states[slotIndex] == ActorSlotState.Alive
+               && _actors[slotIndex] != null;
+    }
+
+    public override bool IsEnable(int slotIndex, int generation)
+    {
+        return IsAlive(slotIndex, generation)
+               && _enabled[slotIndex];
+    }
+
+    public override bool SetEnable(int slotIndex, int generation, bool enable)
+    {
+        if (!IsAlive(slotIndex, generation))
+        {
+            return false;
+        }
+
+        _enabled[slotIndex] = enable;
+        return true;
     }
 
     public override PostResult Post<TEvent>(
@@ -94,6 +134,11 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         int maxSlot = Math.Min(_nextSlotIndex, _actors.Length);
         for (int slotIndex = 0; slotIndex < maxSlot; slotIndex++)
         {
+            if (_states[slotIndex] != ActorSlotState.Alive)
+            {
+                continue;
+            }
+
             if (_actors[slotIndex] == null)
             {
                 continue;
@@ -108,6 +153,11 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         int maxSlot = Math.Min(_nextSlotIndex, _actors.Length);
         for (int slotIndex = 0; slotIndex < maxSlot; slotIndex++)
         {
+            if (_states[slotIndex] != ActorSlotState.Alive)
+            {
+                continue;
+            }
+
             if (_actors[slotIndex] is IActor actor)
             {
                 yield return actor;
@@ -144,6 +194,63 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         world.RegisterColumn(eventTypeId, column);
     }
 
+    internal void RegisterLifecycleInterfaces(
+        TActor actor,
+        ActorId actorId,
+        int slotIndex,
+        ActorWorld world)
+    {
+        ActorLifecycleHandles handles = ActorLifecycleHandles.Empty;
+
+        if (actor is IStart start)
+        {
+            handles.Start = world.Lifecycle.AddStart(actorId, start);
+        }
+
+        if (actor is IUpdate update)
+        {
+            handles.Update = world.Lifecycle.AddUpdate(actorId, update);
+        }
+
+        if (actor is ILateUpdate lateUpdate)
+        {
+            handles.LateUpdate = world.Lifecycle.AddLateUpdate(actorId, lateUpdate);
+        }
+
+        if (actor is IFixedUpdate fixedUpdate)
+        {
+            handles.FixedUpdate = world.Lifecycle.AddFixedUpdate(actorId, fixedUpdate);
+        }
+
+        _lifecycleHandles[slotIndex] = handles;
+    }
+
+    public override bool MarkPendingDestroy(int slotIndex, int generation)
+    {
+        if (!IsAlive(slotIndex, generation))
+        {
+            return false;
+        }
+
+        _states[slotIndex] = ActorSlotState.PendingDestroy;
+        _enabled[slotIndex] = false;
+        return true;
+    }
+
+    public override void SweepPendingDestroy(ActorWorld world)
+    {
+        int maxSlot = Math.Min(_nextSlotIndex, _actors.Length);
+        for (int slotIndex = 0; slotIndex < maxSlot; slotIndex++)
+        {
+            if (_states[slotIndex] != ActorSlotState.PendingDestroy)
+            {
+                continue;
+            }
+
+            DestroyNow(slotIndex, _generations[slotIndex], world);
+        }
+    }
+
     private int AllocateNewSlot()
     {
         int slotIndex = _nextSlotIndex;
@@ -159,6 +266,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             return;
         }
 
+        int oldSize = _actors.Length;
         int newSize = _actors.Length == 0 ? 4 : _actors.Length;
         while (newSize < required)
         {
@@ -167,6 +275,13 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
         Array.Resize(ref _actors, newSize);
         Array.Resize(ref _generations, newSize);
+        Array.Resize(ref _states, newSize);
+        Array.Resize(ref _enabled, newSize);
+        Array.Resize(ref _lifecycleHandles, newSize);
+        for (int i = oldSize; i < newSize; i++)
+        {
+            _lifecycleHandles[i] = ActorLifecycleHandles.Empty;
+        }
     }
 
     private void EnsureColumnCapacity(int slotIndex)
@@ -191,5 +306,63 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         Array.Resize(ref _columnsByEventId, newSize);
+    }
+
+    private bool DestroyNow(int slotIndex, int generation, ActorWorld world)
+    {
+        if ((uint)slotIndex >= (uint)_actors.Length)
+        {
+            return false;
+        }
+
+        if (_generations[slotIndex] != generation)
+        {
+            return false;
+        }
+
+        TActor? actor = _actors[slotIndex];
+        if (actor == null)
+        {
+            return false;
+        }
+
+        if (actor is IDestroy destroy)
+        {
+            destroy.Destroy();
+        }
+
+        UnregisterLifecycleInterfaces(slotIndex, world);
+        ClearAllMails(slotIndex);
+
+        _actors[slotIndex] = null;
+        _enabled[slotIndex] = false;
+        _states[slotIndex] = ActorSlotState.Empty;
+        _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
+
+        unchecked
+        {
+            _generations[slotIndex]++;
+        }
+
+        _freeList.Push(slotIndex);
+        return true;
+    }
+
+    private void UnregisterLifecycleInterfaces(int slotIndex, ActorWorld world)
+    {
+        ActorLifecycleHandles handles = _lifecycleHandles[slotIndex];
+        world.Lifecycle.RemoveStart(handles.Start);
+        world.Lifecycle.RemoveUpdate(handles.Update);
+        world.Lifecycle.RemoveLateUpdate(handles.LateUpdate);
+        world.Lifecycle.RemoveFixedUpdate(handles.FixedUpdate);
+        _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
+    }
+
+    private void ClearAllMails(int slotIndex)
+    {
+        foreach (ActorEventColumnRuntime? column in _columnsByEventId)
+        {
+            column?.ClearMail(slotIndex);
+        }
     }
 }
