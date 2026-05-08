@@ -13,6 +13,10 @@ internal abstract class TypedStorageRuntime
     public abstract bool MarkPendingDestroy(int slotIndex, int generation);
 
     public abstract void SweepPendingDestroy(ActorWorld world);
+    
+    public abstract bool IsLifecycleRunnable(
+        int slotIndex,
+        int generation);
 
     public abstract PostResult Post<TEvent>(
         int slotIndex,

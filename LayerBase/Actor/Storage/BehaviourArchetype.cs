@@ -15,7 +15,21 @@ internal sealed class BehaviourArchetype
         ArchetypeId = archetypeId;
         Signature = signature;
     }
+    internal bool IsLifecycleRunnable(ActorId actorId)
+    {
+        // actorId 参数表示目标 Actor。
+        // TypeStorageIndex 用于定位当前 Archetype 内的具体 Actor 类型存储。
+        ushort storageIndex = actorId.TypeStorageIndex;
 
+        if (storageIndex >= (uint)_storages.Length)
+        {
+            return false;
+        }
+
+        return _storages[storageIndex].IsLifecycleRunnable(
+            slotIndex: actorId.SlotIndex,
+            generation: actorId.Generation);
+    }
     public TypedActorStorage<TActor> GetOrCreateStorage<TActor>(ActorTypeMeta<TActor> meta, ActorWorld world)
         where TActor : class, IActor
     {

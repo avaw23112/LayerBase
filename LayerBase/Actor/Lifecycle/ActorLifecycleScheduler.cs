@@ -3,7 +3,6 @@ namespace LayerBase.Actor;
 internal sealed class ActorLifecycleScheduler
 {
     private readonly ActorWorld _world;
-    private readonly ActorLifecycleFreeList<IStart> _starts = new();
     private readonly ActorLifecycleFreeList<IUpdate> _updates = new();
     private readonly ActorLifecycleFreeList<ILateUpdate> _lateUpdates = new();
     private readonly ActorLifecycleFreeList<IFixedUpdate> _fixedUpdates = new();
@@ -11,11 +10,6 @@ internal sealed class ActorLifecycleScheduler
     public ActorLifecycleScheduler(ActorWorld world)
     {
         _world = world;
-    }
-
-    public ActorLifecycleHandle AddStart(ActorId actorId, IStart start)
-    {
-        return _starts.Add(actorId, start);
     }
 
     public ActorLifecycleHandle AddUpdate(ActorId actorId, IUpdate update)
@@ -33,10 +27,7 @@ internal sealed class ActorLifecycleScheduler
         return _fixedUpdates.Add(actorId, fixedUpdate);
     }
 
-    public void RemoveStart(ActorLifecycleHandle handle)
-    {
-        _starts.Remove(handle);
-    }
+
 
     public void RemoveUpdate(ActorLifecycleHandle handle)
     {
@@ -53,69 +44,73 @@ internal sealed class ActorLifecycleScheduler
         _fixedUpdates.Remove(handle);
     }
 
-    public void PumpStart()
+  
+    public void PumpFixedUpdate(
+        float                  fixedDeltaTime,
+        ref RuntimeFrameBudget budget)
     {
-        var state = new LifecycleFrameState(_world, 0f);
+        // fixedDeltaTime 参数表示固定逻辑步长。
+        // budget 参数表示当前帧剩余预算。
+        var state = new LifecycleFrameState(
+            world: _world,
+            deltaTime: fixedDeltaTime);
 
-        _starts.ForEachRemoveIf(
-            ref state,
-            static (in ActorLifecycleEntry<IStart> entry, ref LifecycleFrameState frameState) =>
+        _fixedUpdates.PumpBudgeted(
+            state: ref state,
+            budget: ref budget,
+            invoker: static (
+                IFixedUpdate instance,
+                float        deltaTime) =>
             {
-                if (!frameState.World.IsAlive(entry.ActorId))
-                {
-                    return true;
-                }
-
-                entry.Instance.Start();
-                return true;
+                // instance 参数表示具体 IFixedUpdate Actor。
+                // deltaTime 参数表示固定逻辑步长。
+                instance.FixedUpdate(deltaTime);
             });
     }
 
-    public void PumpFixedUpdate(float fixedDeltaTime)
+    public void PumpUpdate(
+        float                  deltaTime,
+        ref RuntimeFrameBudget budget)
     {
-        var state = new LifecycleFrameState(_world, fixedDeltaTime);
-        _fixedUpdates.ForEach(
-            ref state,
-            static (in ActorLifecycleEntry<IFixedUpdate> entry, ref LifecycleFrameState frameState) =>
-            {
-                if (!frameState.World.IsAlive(entry.ActorId) || !frameState.World.IsEnable(entry.ActorId))
-                {
-                    return;
-                }
+        // deltaTime 参数表示当前帧间隔。
+        // budget 参数表示当前帧剩余预算。
+        var state = new LifecycleFrameState(
+            world: _world,
+            deltaTime: deltaTime);
 
-                entry.Instance.FixedUpdate(frameState.DeltaTime);
+        _updates.PumpBudgeted(
+            state: ref state,
+            budget: ref budget,
+            invoker: static (
+                IUpdate instance,
+                float   deltaTime) =>
+            {
+                // instance 参数表示具体 IUpdate Actor。
+                // deltaTime 参数表示当前帧间隔。
+                instance.Update(deltaTime);
             });
     }
 
-    public void PumpUpdate(float deltaTime)
+    public void PumpLateUpdate(
+        float                  deltaTime,
+        ref RuntimeFrameBudget budget)
     {
-        var state = new LifecycleFrameState(_world, deltaTime);
-        _updates.ForEach(
-            ref state,
-            static (in ActorLifecycleEntry<IUpdate> entry, ref LifecycleFrameState frameState) =>
+        // deltaTime 参数表示当前帧间隔。
+        // budget 参数表示当前帧剩余预算。
+        var state = new LifecycleFrameState(
+            world: _world,
+            deltaTime: deltaTime);
+
+        _lateUpdates.PumpBudgeted(
+            state: ref state,
+            budget: ref budget,
+            invoker: static (
+                ILateUpdate instance,
+                float       deltaTime) =>
             {
-                if (!frameState.World.IsAlive(entry.ActorId) || !frameState.World.IsEnable(entry.ActorId))
-                {
-                    return;
-                }
-
-                entry.Instance.Update(frameState.DeltaTime);
-            });
-    }
-
-    public void PumpLateUpdate(float deltaTime)
-    {
-        var state = new LifecycleFrameState(_world, deltaTime);
-        _lateUpdates.ForEach(
-            ref state,
-            static (in ActorLifecycleEntry<ILateUpdate> entry, ref LifecycleFrameState frameState) =>
-            {
-                if (!frameState.World.IsAlive(entry.ActorId) || !frameState.World.IsEnable(entry.ActorId))
-                {
-                    return;
-                }
-
-                entry.Instance.LateUpdate(frameState.DeltaTime);
+                // instance 参数表示具体 ILateUpdate Actor。
+                // deltaTime 参数表示当前帧间隔。
+                instance.LateUpdate(deltaTime);
             });
     }
 }

@@ -39,7 +39,19 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _freeList = new ActorSlotFreeList(_actors.Length);
         _nextSlotIndex = 0;
     }
-
+    public override bool IsLifecycleRunnable(
+        int slotIndex,
+        int generation)
+    {
+        // slotIndex 参数来自 ActorId。
+        // generation 参数用于避免旧 ActorId 命中新 Actor。
+        // 只有 Alive 且 Enable=true 的 Actor 才允许执行 Update 类生命周期。
+        return (uint)slotIndex < (uint)_actors.Length
+               && _generations[slotIndex] == generation
+               && _states[slotIndex] == ActorSlotState.Alive
+               && _enabled[slotIndex]
+               && _actors[slotIndex] != null;
+    }
     public int AllocateSlot(TActor actor)
     {
         int slotIndex = _freeList.TryPop(out int freeSlot)
@@ -204,9 +216,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
         if (actor is IStart start)
         {
-            handles.Start = world.Lifecycle.AddStart(actorId, start);
+            start.Start();
         }
-
         if (actor is IUpdate update)
         {
             handles.Update = world.Lifecycle.AddUpdate(actorId, update);
@@ -351,7 +362,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private void UnregisterLifecycleInterfaces(int slotIndex, ActorWorld world)
     {
         ActorLifecycleHandles handles = _lifecycleHandles[slotIndex];
-        world.Lifecycle.RemoveStart(handles.Start);
         world.Lifecycle.RemoveUpdate(handles.Update);
         world.Lifecycle.RemoveLateUpdate(handles.LateUpdate);
         world.Lifecycle.RemoveFixedUpdate(handles.FixedUpdate);

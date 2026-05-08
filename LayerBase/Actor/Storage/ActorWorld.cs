@@ -17,7 +17,18 @@ public sealed partial class ActorWorld
         DefaultMailOptions = ActorMailOptions.Default;
         Lifecycle = new ActorLifecycleScheduler(this);
     }
+    internal bool IsLifecycleRunnable(ActorId actorId)
+    {
+        // actorId 参数表示要检查的 Actor。
+        // 返回 true 表示该 Actor 仍然 Alive，并且 Enable=true。
+        if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
+        {
+            return false;
+        }
 
+        return _archetypes[actorId.ArchetypeId]
+            .IsLifecycleRunnable(actorId);
+    }
     internal ActorWorld(ActorMailOptions defaultMailOptions)
     {
         DefaultMailOptions = defaultMailOptions;

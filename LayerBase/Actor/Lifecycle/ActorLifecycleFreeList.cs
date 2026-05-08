@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace LayerBase.Actor;
 
 internal sealed class ActorLifecycleFreeList<TLifecycle>
@@ -9,6 +11,7 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
     private int[] _free = new int[4];
     private int _freeCount;
     private int _count;
+    private int _cursor;
 
     public ActorLifecycleHandle Add(
         ActorId actorId,
@@ -35,7 +38,9 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
     }
 
     public bool Remove(ActorLifecycleHandle handle)
-    {
+    {  
+        // handle 参数表示 Add 时返回的生命周期条目位置。
+        // Version 不匹配时说明该位置已经被释放并复用，不能删除。
         if (!handle.IsValid)
         {
             return false;
@@ -71,6 +76,7 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
 
         _free[_freeCount] = handle.Index;
         _freeCount++;
+
         return true;
     }
 
@@ -89,6 +95,63 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
         }
     }
 
+    public void PumpBudgeted(
+        ref LifecycleFrameState   state,
+        ref RuntimeFrameBudget    budget,
+        LifecycleCall<TLifecycle> invoker)
+    {
+        // state 参数表示生命周期遍历上下文。
+        // budget 参数表示当前帧剩余预算。
+        // invoker 参数表示具体调用哪个生命周期方法。
+        if (_count == 0)
+        {
+            return;
+        }
+
+        int checkedCount = 0;
+        int maxCount = _count;
+
+        while (checkedCount < maxCount)
+        {
+            if (!budget.HasRemainingEventBudget())
+            {
+                return;
+            }
+
+            if (!budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp()))
+            {
+                return;
+            }
+
+            int index = _cursor;
+
+            _cursor = index + 1 == _count
+                ? 0
+                : index + 1;
+
+            checkedCount++;
+
+            if (!_occupied[index])
+            {
+                continue;
+            }
+
+            ActorLifecycleEntry<TLifecycle> entry = _entries[index];
+
+            if (!state.World.IsLifecycleRunnable(entry.ActorId))
+            {
+                continue;
+            }
+
+            invoker(
+                instance: entry.Instance,
+                deltaTime: state.DeltaTime);
+
+            // 每调用一个生命周期方法，消耗一个预算单元。
+            // 当前 RuntimeFrameBudget 叫 Event，但这里实际作为 WorkUnit 使用。
+            budget.ConsumeEvent();
+        }
+    }
     public void ForEachRemoveIf<TState>(
         ref TState state,
         LifecycleRemovePredicate<TLifecycle, TState> predicate)
@@ -136,4 +199,9 @@ internal delegate void LifecycleInvoker<TLifecycle, TState>(
 internal delegate bool LifecycleRemovePredicate<TLifecycle, TState>(
     in ActorLifecycleEntry<TLifecycle> entry,
     ref TState state)
+    where TLifecycle : class;
+
+internal delegate void LifecycleCall<TLifecycle>(
+    TLifecycle instance,
+    float      deltaTime)
     where TLifecycle : class;
