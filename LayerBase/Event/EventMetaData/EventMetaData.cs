@@ -1,5 +1,6 @@
 using LayerBase.Core.Event;
 using LayerBase.Core.EventCatalogue;
+using LayerBase.Actor;
 
 namespace LayerBase.Event.EventMetaData;
 
@@ -11,6 +12,7 @@ public interface IEventMetaData
     EventPostPolicy? GetPostPolicy();
     EventTimerPolicy? GetTimerPolicy();
     EventBufferPolicy? GetBufferPolicy();
+    ActorMailOptions? GetActorMailOptions();
     
     int GetPostCoalesceKey(object value);
     EventIdentity GetIdentity();
@@ -39,10 +41,12 @@ public abstract class EventMetaData<TEvent> : IEventMetaData where TEvent : stru
     public virtual EventPostPolicy? PostPolicy => null;
     public virtual EventTimerPolicy? TimerPolicy => null;
     public virtual EventBufferPolicy? BufferPolicy => null;
+    public virtual ActorMailOptions? ActorMailOptions => null;
 
     public EventPostPolicy? GetPostPolicy() => PostPolicy;
     public EventTimerPolicy? GetTimerPolicy() => TimerPolicy;
     public EventBufferPolicy? GetBufferPolicy() => BufferPolicy;
+    public ActorMailOptions? GetActorMailOptions() => ActorMailOptions;
 
     public virtual int GetPostCoalesceKey(in TEvent value)
     {

@@ -75,28 +75,68 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         return column.Post(slotIndex, in value, postPolicy, fullPolicy);
     }
 
+    public override void PostToAliveActors<TEvent>(
+        in TEvent value,
+        ActorPostPolicy? postPolicy,
+        ActorMailFullPolicy? fullPolicy)
+    {
+        int eventId = EventTypeId<TEvent>.Id;
+        if ((uint)eventId >= (uint)_columnsByEventId.Length)
+        {
+            return;
+        }
+
+        if (_columnsByEventId[eventId] is not EventColumn<TActor, TEvent> column)
+        {
+            return;
+        }
+
+        int maxSlot = Math.Min(_nextSlotIndex, _actors.Length);
+        for (int slotIndex = 0; slotIndex < maxSlot; slotIndex++)
+        {
+            if (_actors[slotIndex] == null)
+            {
+                continue;
+            }
+
+            _ = column.Post(slotIndex, in value, postPolicy, fullPolicy);
+        }
+    }
+
+    public override IEnumerable<IActor> EnumerateActors()
+    {
+        int maxSlot = Math.Min(_nextSlotIndex, _actors.Length);
+        for (int slotIndex = 0; slotIndex < maxSlot; slotIndex++)
+        {
+            if (_actors[slotIndex] is IActor actor)
+            {
+                yield return actor;
+            }
+        }
+    }
+
     public void BuildColumns(ActorTypeMeta<TActor> meta, ActorWorld world)
     {
         foreach (ActorBehaviourEntry entry in meta.Behaviours)
         {
-            BuildColumnFromEntry(entry, world);
+            BuildColumnFromEntry(entry, world, world.ResolveMailOptions(entry.EventTypeId));
         }
     }
 
-    private void BuildColumnFromEntry(ActorBehaviourEntry entry, ActorWorld world)
+    private void BuildColumnFromEntry(ActorBehaviourEntry entry, ActorWorld world, ActorMailOptions options)
     {
         MethodInfo method = s_buildColumnMethod.MakeGenericMethod(entry.EventType);
-        method.Invoke(this, new object?[] { entry.Invoker, world, entry.EventTypeId });
+        method.Invoke(this, new object?[] { entry.Invoker, world, entry.EventTypeId, options });
     }
 
-    private void BuildColumnCore<TEvent>(object invokerObject, ActorWorld world, int eventTypeId)
+    private void BuildColumnCore<TEvent>(object invokerObject, ActorWorld world, int eventTypeId, ActorMailOptions options)
         where TEvent : struct
     {
         var invoker = (ActorBehaviourInvoker<TActor, TEvent>)invokerObject;
         var column = new EventColumn<TActor, TEvent>(
             owner: this,
             invoker: invoker,
-            options: ActorMailOptions.Default,
+            options: options,
             initialSlotCapacity: _actors.Length);
 
         EnsureEventColumnCapacity(eventTypeId);

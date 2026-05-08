@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using LayerBase.Actor;
 using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Core.Event;
@@ -8,6 +9,7 @@ public sealed class EventRuntimePolicyTable
     private EventPostPolicy[] _postPolicies = new EventPostPolicy[64];
     private EventTimerPolicy?[] _timerPolicies = new EventTimerPolicy?[64];
     private EventBufferPolicy?[] _bufferPolicies = new EventBufferPolicy?[64];
+    private ActorMailOptions?[] _actorMailOptionsByEventId = new ActorMailOptions?[64];
     private IEventMetaData?[] _metaDatas = new IEventMetaData?[64];
     private readonly object _lock = new();
     private readonly BackpressurePolicy _defaultBackpressure;
@@ -23,10 +25,7 @@ public sealed class EventRuntimePolicyTable
 
     public void SetMetaData(int eventTypeId, IEventMetaData metaData)
     {
-        if (eventTypeId >= _metaDatas.Length)
-        {
-            Array.Resize(ref _metaDatas, Math.Max(eventTypeId + 1, _metaDatas.Length * 2));
-        }
+        EnsureMetaDataCapacity(eventTypeId);
         _metaDatas[eventTypeId] = metaData;
     }
 
@@ -74,6 +73,12 @@ public sealed class EventRuntimePolicyTable
         _bufferPolicies[eventTypeId] = policy;
     }
 
+    public void SetActorMailOptions(int eventTypeId, ActorMailOptions options)
+    {
+        EnsureActorMailCapacity(eventTypeId);
+        _actorMailOptionsByEventId[eventTypeId] = options;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventPostPolicy GetPostPolicy(int eventTypeId)
     {
@@ -104,6 +109,18 @@ public sealed class EventRuntimePolicyTable
         return policies[eventTypeId];
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ActorMailOptions GetActorMailOptions(int eventTypeId)
+    {
+        var options = _actorMailOptionsByEventId;
+        if (eventTypeId < 0 || eventTypeId >= options.Length)
+        {
+            return ActorMailOptions.Default;
+        }
+
+        return options[eventTypeId] ?? ActorMailOptions.Default;
+    }
+
     public IEnumerable<EventPolicySnapshot> ExportSnapshots()
     {
         IEventMetaData?[] metas= _metaDatas.ToArray();
@@ -124,5 +141,31 @@ public sealed class EventRuntimePolicyTable
                 bufferPolicy: i < bufferPolicies.Length ? bufferPolicies[i] : null
             );
         }
+    }
+
+    private void EnsureMetaDataCapacity(int eventTypeId)
+    {
+        if (eventTypeId < _metaDatas.Length)
+        {
+            return;
+        }
+
+        Array.Resize(ref _metaDatas, Math.Max(eventTypeId + 1, _metaDatas.Length * 2));
+    }
+
+    private void EnsureActorMailCapacity(int eventTypeId)
+    {
+        if ((uint)eventTypeId < (uint)_actorMailOptionsByEventId.Length)
+        {
+            return;
+        }
+
+        int newSize = _actorMailOptionsByEventId.Length == 0 ? 8 : _actorMailOptionsByEventId.Length;
+        while (newSize <= eventTypeId)
+        {
+            newSize *= 2;
+        }
+
+        Array.Resize(ref _actorMailOptionsByEventId, newSize);
     }
 }

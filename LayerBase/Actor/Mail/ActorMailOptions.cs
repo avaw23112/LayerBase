@@ -4,10 +4,10 @@ public readonly struct ActorMailOptions
 {
     public static ActorMailOptions Default => new(
         postPolicy: ActorPostPolicy.Queued,
-        fullPolicy: ActorMailFullPolicy.RejectNew,
+        fullPolicy: ActorMailFullPolicy.Grow,
         growFailurePolicy: ActorMailFullPolicy.RejectNew,
         initialCapacity: 4,
-        maxCapacity: 4,
+        maxCapacity: 64,
         growFactor: 2,
         releaseWhenEmpty: true);
 

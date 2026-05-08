@@ -110,6 +110,12 @@ public sealed class LayerRuntime : IDisposable
                 _policyTable.SetBufferPolicy(eventId, bufferPolicy.Value);
             }
 
+            var actorMailOptions = meta.GetActorMailOptions();
+            if (actorMailOptions != null)
+            {
+                _policyTable.SetActorMailOptions(eventId, actorMailOptions.Value);
+            }
+
             var effectivePolicy = postPolicy ?? new EventPostPolicy(PostDeliveryMode.Normal, options.DefaultBackpressure, 0);
             plans.Add(new PostTypePlan(eventId, effectivePolicy.Mode, effectivePolicy.Backpressure, effectivePolicy.MaxPending, options.DefaultBackpressure, effectivePolicy.MergeFailure));
         }

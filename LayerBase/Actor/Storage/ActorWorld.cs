@@ -4,17 +4,26 @@ public sealed partial class ActorWorld
 {
     private BehaviourArchetype[] _archetypes = Array.Empty<BehaviourArchetype>();
     private readonly Dictionary<BehaviourSignature, BehaviourArchetype> _archetypeMap = new();
+    private readonly Dictionary<BehaviourSignature, ActorQueryCache> _queryCacheBySignature = new();
     private IActorEventBucket[] _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
     private int _bucketCursor;
     internal LayerRuntime? Runtime { get; }
+    internal ActorMailOptions DefaultMailOptions { get; }
 
     internal ActorWorld()
     {
+        DefaultMailOptions = ActorMailOptions.Default;
+    }
+
+    internal ActorWorld(ActorMailOptions defaultMailOptions)
+    {
+        DefaultMailOptions = defaultMailOptions;
     }
 
     internal ActorWorld(LayerRuntime runtime)
     {
         Runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        DefaultMailOptions = ActorMailOptions.Default;
     }
 
     private BehaviourArchetype GetOrCreateArchetype(BehaviourSignature signature)
@@ -37,6 +46,7 @@ public sealed partial class ActorWorld
 
     private void InvalidateQueryCache()
     {
+        _queryCacheBySignature.Clear();
     }
 
     internal void RegisterColumn<TEvent>(int eventTypeId, IActorEventColumn<TEvent> column)
@@ -51,6 +61,16 @@ public sealed partial class ActorWorld
         }
 
         bucket.AddColumn(column);
+    }
+
+    internal ActorMailOptions ResolveMailOptions(int eventTypeId)
+    {
+        if (Runtime?.PolicyTable != null)
+        {
+            return Runtime.PolicyTable.GetActorMailOptions(eventTypeId);
+        }
+
+        return DefaultMailOptions;
     }
 
     private void EnsureEventBucketCapacity(int eventTypeId)

@@ -58,6 +58,24 @@ internal sealed class RingQueueBuffer<TEvent>
         _freeIds.Push(bufferId);
     }
 
+    public void Resize(int bufferId, int head, int count, int newCapacity)
+    {
+        if (newCapacity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(newCapacity));
+        }
+
+        TEvent[] oldBuffer = GetBuffer(bufferId);
+        var newBuffer = new TEvent[newCapacity];
+
+        for (int i = 0; i < count; i++)
+        {
+            newBuffer[i] = oldBuffer[(head + i) % oldBuffer.Length];
+        }
+
+        _buffers[bufferId - 1] = newBuffer;
+    }
+
     private TEvent[] GetBuffer(int bufferId)
     {
         if (bufferId <= 0 || bufferId > _buffers.Length)

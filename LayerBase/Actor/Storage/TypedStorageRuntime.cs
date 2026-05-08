@@ -12,4 +12,12 @@ internal abstract class TypedStorageRuntime
         ActorPostPolicy? postPolicy,
         ActorMailFullPolicy? fullPolicy)
         where TEvent : struct;
+
+    public abstract void PostToAliveActors<TEvent>(
+        in TEvent value,
+        ActorPostPolicy? postPolicy,
+        ActorMailFullPolicy? fullPolicy)
+        where TEvent : struct;
+
+    public abstract IEnumerable<IActor> EnumerateActors();
 }

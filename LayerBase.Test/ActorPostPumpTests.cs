@@ -141,7 +141,14 @@ public partial class ActorPostPumpTests
     [Test]
     public void Reject_new_is_used_when_mailbox_is_full()
     {
-        var world = new ActorWorld();
+        var world = new ActorWorld(new ActorMailOptions(
+            postPolicy: ActorPostPolicy.Queued,
+            fullPolicy: ActorMailFullPolicy.RejectNew,
+            growFailurePolicy: ActorMailFullPolicy.RejectNew,
+            initialCapacity: 4,
+            maxCapacity: 4,
+            growFactor: 2,
+            releaseWhenEmpty: true));
         RecordingActor actor = world.CreateActor<RecordingActor>();
 
         Assert.That(actor.Post(new ActorDamageEvent(1)).IsSuccess, Is.True);

@@ -60,4 +60,27 @@ internal sealed class BehaviourArchetype
 
         return storage.Post(actorId.SlotIndex, in value, postPolicy, fullPolicy);
     }
+
+    public void PostToAliveActors<TEvent>(
+        in TEvent value,
+        ActorPostPolicy? postPolicy,
+        ActorMailFullPolicy? fullPolicy)
+        where TEvent : struct
+    {
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            _storages[i].PostToAliveActors(in value, postPolicy, fullPolicy);
+        }
+    }
+
+    public IEnumerable<IActor> EnumerateActors()
+    {
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            foreach (IActor actor in _storages[i].EnumerateActors())
+            {
+                yield return actor;
+            }
+        }
+    }
 }
