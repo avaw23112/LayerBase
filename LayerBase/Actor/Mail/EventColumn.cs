@@ -316,12 +316,37 @@ internal sealed class EventColumn<TActor, TEvent> :
         int slotIndex,
         in TEvent value)
     {
-        if (mail.BufferId == 0)
+        if (mail.Count == 0)
         {
-            mail.BufferId = _bufferPool.Rent(_options.InitialCapacity);
+            if (mail.BufferId == 0)
+            {
+                mail.SingleValue = value;
+                mail.Head = 0;
+                mail.Count = 1;
+                mail.Capacity = 0;
+                _dirtySlots.AddIfNotExists(slotIndex);
+                NotifyBucketDirty();
+                return PostResult.Success;
+            }
+
             mail.Head = 0;
             mail.Count = 0;
             mail.Capacity = _bufferPool.GetCapacity(mail.BufferId);
+            _bufferPool.Write(mail.BufferId, 0, in value);
+            mail.Count = 1;
+            _dirtySlots.AddIfNotExists(slotIndex);
+            NotifyBucketDirty();
+            return PostResult.Success;
+        }
+
+        if (mail.BufferId == 0)
+        {
+            mail.BufferId = _bufferPool.Rent(Math.Max(_options.InitialCapacity, 2));
+            mail.Head = 0;
+            mail.Count = 1;
+            mail.Capacity = _bufferPool.GetCapacity(mail.BufferId);
+            _bufferPool.Write(mail.BufferId, 0, in mail.SingleValue);
+            mail.SingleValue = default;
         }
 
         if (mail.Count >= mail.Capacity && !TryGrowFast(ref mail))
@@ -335,12 +360,6 @@ internal sealed class EventColumn<TActor, TEvent> :
         int tail = ActorMailCapacity.Wrap(mail.Head + mail.Count, mail.Capacity);
         mail.Count++;
         _bufferPool.Write(mail.BufferId, tail, in value);
-
-        if (mail.Count == 1)
-        {
-            _dirtySlots.AddIfNotExists(slotIndex);
-            NotifyBucketDirty();
-        }
 
         return PostResult.Success;
     }

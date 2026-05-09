@@ -10,8 +10,18 @@ internal static class EventMailReader
     {
         if (mail.Count == 0 || mail.BufferId == 0)
         {
-            value = default;
-            return false;
+            if (mail.Count == 0)
+            {
+                value = default;
+                return false;
+            }
+
+            value = mail.SingleValue;
+            mail.SingleValue = default;
+            mail.Count = 0;
+            mail.Head = 0;
+            mail.Capacity = 0;
+            return true;
         }
 
         value = bufferPool.Read(mail.BufferId, mail.Head);
@@ -32,7 +42,18 @@ internal static class EventMailReader
         ActorMailOptions options)
         where TEvent : struct
     {
-        if (mail.Count != 0 || !options.ReleaseWhenEmpty || mail.BufferId == 0)
+        if (mail.Count != 0)
+        {
+            return;
+        }
+
+        if (mail.BufferId == 0)
+        {
+            mail = default;
+            return;
+        }
+
+        if (!options.ReleaseWhenEmpty)
         {
             return;
         }

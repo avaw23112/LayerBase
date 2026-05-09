@@ -217,6 +217,52 @@ public class ActorMailPolicyTests
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Count)), Is.EqualTo(0));
     }
 
+    [Test]
+    public void Single_queued_post_uses_inline_storage_until_queue_grows()
+    {
+        var world = CreateWorld(new ActorMailOptions(
+            postPolicy: ActorPostPolicy.Queued,
+            fullPolicy: ActorMailFullPolicy.Grow,
+            growFailurePolicy: ActorMailFullPolicy.RejectNew,
+            initialCapacity: 4,
+            maxCapacity: 16,
+            growFactor: 2,
+            releaseWhenEmpty: false));
+
+        ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
+        ActorId actorId = actor.GetActorId();
+
+        Assert.That(world.TryPost(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
+
+        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)), Is.EqualTo(0));
+        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Count)), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Second_queued_post_promotes_inline_storage_to_buffer()
+    {
+        var world = CreateWorld(new ActorMailOptions(
+            postPolicy: ActorPostPolicy.Queued,
+            fullPolicy: ActorMailFullPolicy.Grow,
+            growFailurePolicy: ActorMailFullPolicy.RejectNew,
+            initialCapacity: 4,
+            maxCapacity: 16,
+            growFactor: 2,
+            releaseWhenEmpty: false));
+
+        ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
+        ActorId actorId = actor.GetActorId();
+
+        Assert.That(world.TryPost(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
+        Assert.That(world.TryPost(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
+
+        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)), Is.GreaterThan(0));
+        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Count)), Is.EqualTo(2));
+
+        Pump(world);
+        Assert.That(ActorMailPolicyTrace.Values, Is.EqualTo(new[] { 1, 2 }));
+    }
+
     private static ActorWorld CreateWorld(ActorMailOptions options)
     {
         return new ActorWorld(options);

@@ -42,7 +42,31 @@ internal static class EventMailWriter
         where TEvent : struct
     {
         bool wasEmpty = mail.Count == 0;
-        EnsureMailAllocated(ref mail, bufferPool, options);
+        if (mail.BufferId == 0)
+        {
+            if (wasEmpty)
+            {
+                mail.SingleValue = value;
+                mail.Head = 0;
+                mail.Count = 1;
+                mail.Capacity = 0;
+                dirtySlots.AddIfNotExists(slotIndex);
+                return PostResult.Success;
+            }
+
+            TEvent mergedSingle = value;
+            TEvent currentSingle = mail.SingleValue;
+            if (!EventMetaData.TryMergePostEvent(in currentSingle, in value, out mergedSingle))
+            {
+                return PostResult.Failure(
+                    ActorPostStatus.MergeFailed,
+                    "EventMetaData.TryMergePostEvent failed.",
+                    PostFailureKind.MergeFailed);
+            }
+
+            mail.SingleValue = mergedSingle;
+            return PostResult.Coalesced();
+        }
 
         TEvent merged = value;
         if (!wasEmpty)
@@ -80,12 +104,30 @@ internal static class EventMailWriter
         ActorMailFullPolicy? fullPolicy)
         where TEvent : struct
     {
-        if (mail.BufferId == 0)
+        if (mail.Count == 0)
         {
-            mail.BufferId = bufferPool.Rent(options.InitialCapacity);
+            if (mail.BufferId == 0)
+            {
+                mail.SingleValue = value;
+                mail.Head = 0;
+                mail.Count = 1;
+                mail.Capacity = 0;
+                dirtySlots.AddIfNotExists(slotIndex);
+                return PostResult.Success;
+            }
+
             mail.Head = 0;
             mail.Count = 0;
             mail.Capacity = bufferPool.GetCapacity(mail.BufferId);
+            bufferPool.Write(mail.BufferId, 0, in value);
+            mail.Count = 1;
+            dirtySlots.AddIfNotExists(slotIndex);
+            return PostResult.Success;
+        }
+
+        if (mail.BufferId == 0)
+        {
+            PromoteSingleToBuffer(ref mail, bufferPool, options);
         }
 
         if (mail.Count >= mail.Capacity)
@@ -101,11 +143,6 @@ internal static class EventMailWriter
         bufferPool.Write(mail.BufferId, tail, in value);
         mail.Count++;
 
-        if (mail.Count == 1)
-        {
-            dirtySlots.AddIfNotExists(slotIndex);
-        }
-
         return PostResult.Success;
     }
 
@@ -119,7 +156,21 @@ internal static class EventMailWriter
         where TEvent : struct
     {
         bool wasEmpty = mail.Count == 0;
-        EnsureMailAllocated(ref mail, bufferPool, options);
+        if (mail.BufferId == 0)
+        {
+            mail.SingleValue = value;
+            mail.Head = 0;
+            mail.Count = 1;
+            mail.Capacity = 0;
+
+            if (wasEmpty)
+            {
+                dirtySlots.AddIfNotExists(slotIndex);
+                return PostResult.Success;
+            }
+
+            return PostResult.Coalesced();
+        }
 
         bufferPool.Write(mail.BufferId, 0, in value);
         mail.Head = 0;
@@ -148,7 +199,16 @@ internal static class EventMailWriter
             return PostResult.Coalesced();
         }
 
-        EnsureMailAllocated(ref mail, bufferPool, options);
+        if (mail.BufferId == 0)
+        {
+            mail.SingleValue = value;
+            mail.Head = 0;
+            mail.Count = 1;
+            mail.Capacity = 0;
+            dirtySlots.AddIfNotExists(slotIndex);
+            return PostResult.Success;
+        }
+
         bufferPool.Write(mail.BufferId, 0, in value);
         mail.Head = 0;
         mail.Count = 1;
@@ -289,5 +349,20 @@ internal static class EventMailWriter
         mail.Head = 0;
         mail.Count = 0;
         mail.Capacity = bufferPool.GetCapacity(mail.BufferId);
+    }
+
+    private static void PromoteSingleToBuffer<TEvent>(
+        ref EventMail<TEvent> mail,
+        RingQueueBuffer<TEvent> bufferPool,
+        ActorMailOptions options)
+        where TEvent : struct
+    {
+        TEvent existingValue = mail.SingleValue;
+        mail.BufferId = bufferPool.Rent(Math.Max(options.InitialCapacity, 2));
+        mail.Head = 0;
+        mail.Count = 1;
+        mail.Capacity = bufferPool.GetCapacity(mail.BufferId);
+        bufferPool.Write(mail.BufferId, 0, in existingValue);
+        mail.SingleValue = default;
     }
 }
