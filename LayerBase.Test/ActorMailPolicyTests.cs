@@ -218,7 +218,7 @@ public class ActorMailPolicyTests
     }
 
     [Test]
-    public void Single_queued_post_uses_inline_storage_until_queue_grows()
+    public void Single_queued_post_allocates_buffer_for_default_hot_path()
     {
         var world = CreateWorld(new ActorMailOptions(
             postPolicy: ActorPostPolicy.Queued,
@@ -234,12 +234,13 @@ public class ActorMailPolicyTests
 
         Assert.That(world.TryPost(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
 
-        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)), Is.EqualTo(0));
+        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)), Is.GreaterThan(0));
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Count)), Is.EqualTo(1));
+        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Tail)), Is.EqualTo(1));
     }
 
     [Test]
-    public void Second_queued_post_promotes_inline_storage_to_buffer()
+    public void Queued_posts_advance_tail_and_preserve_fifo()
     {
         var world = CreateWorld(new ActorMailOptions(
             postPolicy: ActorPostPolicy.Queued,
@@ -258,6 +259,7 @@ public class ActorMailPolicyTests
 
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)), Is.GreaterThan(0));
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Count)), Is.EqualTo(2));
+        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Tail)), Is.EqualTo(2));
 
         Pump(world);
         Assert.That(ActorMailPolicyTrace.Values, Is.EqualTo(new[] { 1, 2 }));

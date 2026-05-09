@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Async;
 using System.Text;

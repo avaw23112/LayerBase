@@ -20,6 +20,7 @@ internal static class EventMailReader
             mail.SingleValue = default;
             mail.Count = 0;
             mail.Head = 0;
+            mail.Tail = 0;
             mail.Capacity = 0;
             return true;
         }
@@ -31,6 +32,7 @@ internal static class EventMailReader
         if (mail.Count == 0)
         {
             mail.Head = 0;
+            mail.Tail = 0;
         }
 
         return true;

@@ -1,7 +1,10 @@
+using System.Runtime.CompilerServices;
+
 namespace LayerBase.Actor;
 
 internal static class ActorGeneratedAccess
 {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static IGeneratedActorMeta RequireGenerated(IActor actor)
     {
         if (actor == null)

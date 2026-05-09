@@ -6,6 +6,7 @@ internal struct EventMail<TEvent>
     public TEvent SingleValue;
     public int BufferId;
     public int Head;
+    public int Tail;
     public int Count;
     public int Capacity;
 }

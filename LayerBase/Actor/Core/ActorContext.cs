@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Async;
 using LayerBase.Layers;
@@ -17,23 +18,27 @@ public readonly struct ActorContext
         Runtime = world.Runtime;
         ActorId = actorId;
     }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
 
     public PostResult Post<TEvent>(in TEvent value)
         where TEvent : struct
     {
         return World.Post(ActorId, in value);
     }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
 
     public PostResult TryPost<TEvent>(in TEvent value)
         where TEvent : struct
     {
         return World.TryPost(ActorId, in value);
     }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
 
     public bool IsEnable()
     {
         return World.IsEnable(ActorId);
     }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
 
     public bool SetEnable(bool enable)
     {

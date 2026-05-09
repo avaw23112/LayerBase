@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 
 namespace LayerBase.Actor;
@@ -12,6 +13,9 @@ internal sealed class EventColumn<TActor, TEvent> :
     private readonly RingQueueBuffer<TEvent> _bufferPool;
     private readonly DirtySlotList _dirtySlots;
     private readonly ActorMailOptions _options;
+    private readonly ActorMailWriteMode _writeMode;
+    private readonly ActorSlotFlags _postRejectMask;
+    private readonly bool _rejectDisabled;
     private EventMail<TEvent>[] _mails;
 
     public EventColumn(
@@ -26,64 +30,25 @@ internal sealed class EventColumn<TActor, TEvent> :
         _mails = new EventMail<TEvent>[Math.Max(initialSlotCapacity, 1)];
         _bufferPool = new RingQueueBuffer<TEvent>();
         _dirtySlots = new DirtySlotList(initialSlotCapacity);
+        _writeMode = ResolveWriteMode(options);
+        _postRejectMask = ActorSlotFlags.PendingDestroy | ActorSlotFlags.Destroying;
+        _rejectDisabled = options.DisabledPolicy == ActorMailDisabledPolicy.Reject;
     }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult Post(
         int slotIndex,
         in TEvent value,
         ActorPostPolicy? postPolicy,
         ActorMailFullPolicy? fullPolicy)
     {
-        ActorSlotState slotState = _owner.GetSlotState(slotIndex);
-        if (slotState == ActorSlotState.PendingDestroy)
+        if (postPolicy == null &&
+            fullPolicy == null &&
+            _writeMode == ActorMailWriteMode.QueuedGrow)
         {
-            return PostResult.Failure(
-                ActorPostStatus.ActorPendingDestroy,
-                "Actor is pending destroy.",
-                PostFailureKind.PendingDestroy);
+            return PostQueuedGrowFast(slotIndex, in value);
         }
-
-        if (slotState == ActorSlotState.Destroying)
-        {
-            return PostResult.Failure(
-                ActorPostStatus.ActorNotAlive,
-                "Actor is destroying.",
-                PostFailureKind.Destroying);
-        }
-
-        if (_options.DisabledPolicy == ActorMailDisabledPolicy.Reject
-            && !_owner.IsSlotEnabled(slotIndex))
-        {
-            return PostResult.Failure(
-                ActorPostStatus.ActorDisabledRejected,
-                "Actor is disabled.",
-                PostFailureKind.DisabledActor);
-        }
-
-        EnsureSlotCapacity(slotIndex);
-        ref EventMail<TEvent> mail = ref _mails[slotIndex];
-        if (CanUseQueuedFastPath(postPolicy, fullPolicy))
-        {
-            return PostQueuedFast(ref mail, slotIndex, in value);
-        }
-
-        int previousCount = mail.Count;
-        PostResult result = EventMailWriter.Enqueue(
-            ref mail,
-            in value,
-            _bufferPool,
-            _dirtySlots,
-            slotIndex,
-            _options,
-            postPolicy,
-            fullPolicy);
-
-        if (previousCount == 0 && result.IsSuccess && result.CountsAsPending && mail.Count > 0)
-        {
-            NotifyBucketDirty();
-        }
-
-        return result;
+        
+        return PostGeneral(slotIndex, in value, postPolicy, fullPolicy);
     }
 
     public override ActorColumnPumpResult PumpOne(
@@ -274,33 +239,23 @@ internal sealed class EventColumn<TActor, TEvent> :
     {
         for (int slotIndex = 0; slotIndex < maxSlot; slotIndex++)
         {
-            if (actors[slotIndex] == null || states[slotIndex] != ActorSlotState.Alive)
+            if (!_owner.CanPostFast(slotIndex, _postRejectMask, _rejectDisabled))
             {
                 continue;
             }
 
-            if (_options.DisabledPolicy == ActorMailDisabledPolicy.Reject && !enabled[slotIndex])
-            {
-                continue;
-            }
-
-            ref EventMail<TEvent> mail = ref _mails[slotIndex];
-            _ = PostQueuedFast(ref mail, slotIndex, in value);
+            _ = PostQueuedGrowFast(slotIndex, in value);
         }
     }
 
     internal bool CanUseDefaultPostFastPath()
     {
-        return _options.PostPolicy == ActorPostPolicy.Queued
-               && _options.FullPolicy == ActorMailFullPolicy.Grow
-               && _options.GrowFailurePolicy == ActorMailFullPolicy.RejectNew;
+        return _writeMode == ActorMailWriteMode.QueuedGrow;
     }
 
     internal PostResult PostQueuedFast(int slotIndex, in TEvent value)
     {
-        EnsureSlotCapacity(slotIndex);
-        ref EventMail<TEvent> mail = ref _mails[slotIndex];
-        return PostQueuedFast(ref mail, slotIndex, in value);
+        return PostQueuedGrowFast(slotIndex, in value);
     }
 
     private bool CanUsePumpFastPath(in ActorMailPumpOptions options)
@@ -309,81 +264,137 @@ internal sealed class EventColumn<TActor, TEvent> :
                && !_options.ReleaseWhenEmpty;
     }
 
-    private bool CanUseQueuedFastPath(
+    private PostResult PostGeneral(
+        int slotIndex,
+        in TEvent value,
         ActorPostPolicy? postPolicy,
         ActorMailFullPolicy? fullPolicy)
     {
-        return (postPolicy ?? _options.PostPolicy) == ActorPostPolicy.Queued
-               && (fullPolicy ?? _options.FullPolicy) == ActorMailFullPolicy.Grow
-               && _options.GrowFailurePolicy == ActorMailFullPolicy.RejectNew;
-    }
-
-    private PostResult PostQueuedFast(
-        ref EventMail<TEvent> mail,
-        int slotIndex,
-        in TEvent value)
-    {
-        if (mail.Count == 0)
-        {
-            if (mail.BufferId == 0)
-            {
-                mail.SingleValue = value;
-                mail.Head = 0;
-                mail.Count = 1;
-                mail.Capacity = 0;
-                _dirtySlots.AddIfNotExists(slotIndex);
-                NotifyBucketDirty();
-                return PostResult.Success;
-            }
-
-            mail.Head = 0;
-            mail.Count = 0;
-            mail.Capacity = _bufferPool.GetCapacity(mail.BufferId);
-            _bufferPool.Write(mail.BufferId, 0, in value);
-            mail.Count = 1;
-            _dirtySlots.AddIfNotExists(slotIndex);
-            NotifyBucketDirty();
-            return PostResult.Success;
-        }
-
-        if (mail.BufferId == 0)
-        {
-            mail.BufferId = _bufferPool.Rent(Math.Max(_options.InitialCapacity, 2));
-            mail.Head = 0;
-            mail.Count = 1;
-            mail.Capacity = _bufferPool.GetCapacity(mail.BufferId);
-            _bufferPool.Write(mail.BufferId, 0, in mail.SingleValue);
-            mail.SingleValue = default;
-        }
-
-        if (mail.Count >= mail.Capacity && !TryGrowFast(ref mail))
+        ActorSlotState slotState = _owner.GetSlotState(slotIndex);
+        if (slotState == ActorSlotState.PendingDestroy)
         {
             return PostResult.Failure(
-                ActorPostStatus.MailFullRejected,
-                "Actor mail reached max capacity.",
-                PostFailureKind.MailboxFull);
+                ActorPostStatus.ActorPendingDestroy,
+                "Actor is pending destroy.",
+                PostFailureKind.PendingDestroy);
         }
 
-        int tail = ActorMailCapacity.Wrap(mail.Head + mail.Count, mail.Capacity);
-        mail.Count++;
-        _bufferPool.Write(mail.BufferId, tail, in value);
+        if (slotState == ActorSlotState.Destroying)
+        {
+            return PostResult.Failure(
+                ActorPostStatus.ActorNotAlive,
+                "Actor is destroying.",
+                PostFailureKind.Destroying);
+        }
 
+        if (_options.DisabledPolicy == ActorMailDisabledPolicy.Reject
+            && !_owner.IsSlotEnabled(slotIndex))
+        {
+            return PostResult.Failure(
+                ActorPostStatus.ActorDisabledRejected,
+                "Actor is disabled.",
+                PostFailureKind.DisabledActor);
+        }
+
+        EnsureSlotCapacity(slotIndex);
+        ref EventMail<TEvent> mail = ref _mails[slotIndex];
+        int previousCount = mail.Count;
+        PostResult result = EventMailWriter.Enqueue(
+            ref mail,
+            in value,
+            _bufferPool,
+            _dirtySlots,
+            slotIndex,
+            _options,
+            postPolicy,
+            fullPolicy);
+
+        if (previousCount == 0 && result.IsSuccess && result.CountsAsPending && mail.Count > 0)
+        {
+            NotifyBucketDirty();
+        }
+
+        return result;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private PostResult PostQueuedGrowFast(int slotIndex, in TEvent value)
+    {
+        if (!_owner.CanPostFast(slotIndex, _postRejectMask, _rejectDisabled))
+        {
+            return PostGeneral(slotIndex, in value, postPolicy: null, fullPolicy: null);
+        }
+
+        EnsureSlotCapacity(slotIndex);
+        ref EventMail<TEvent> mail = ref _mails[slotIndex];
+        EnsureMailAllocatedFast(ref mail);
+
+        if (mail.Count >= mail.Capacity)
+        {
+            if (!TryGrowQueuedFast(ref mail))
+            {
+                return PostResult.Failure(
+                    ActorPostStatus.MailFullRejected,
+                    "Actor mail reached max capacity.",
+                    PostFailureKind.MailboxFull);
+            }
+        }
+
+        EnqueueFast(ref mail, in value, slotIndex);
         return PostResult.Success;
     }
 
-    private bool TryGrowFast(ref EventMail<TEvent> mail)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void EnsureMailAllocatedFast(ref EventMail<TEvent> mail)
+    {
+        if (mail.BufferId != 0)
+        {
+            return;
+        }
+
+        mail.BufferId = _bufferPool.Rent(_options.InitialCapacity);
+        mail.Head = 0;
+        mail.Tail = 0;
+        mail.Count = 0;
+        mail.Capacity = _bufferPool.GetCapacity(mail.BufferId);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void EnqueueFast(
+        ref EventMail<TEvent> mail,
+        in TEvent value,
+        int slotIndex)
+    {
+        _bufferPool.Write(mail.BufferId, mail.Tail, in value);
+        mail.Tail++;
+        if (mail.Tail == mail.Capacity)
+        {
+            mail.Tail = 0;
+        }
+
+        mail.Count++;
+        if (mail.Count == 1)
+        {
+            _dirtySlots.AddIfNotExists(slotIndex);
+            NotifyBucketDirty();
+        }
+    }
+
+    private bool TryGrowQueuedFast(ref EventMail<TEvent> mail)
     {
         if (mail.Capacity >= _options.MaxCapacity)
         {
             return false;
         }
 
-        int nextCapacity = ActorMailCapacity.NormalizePowerOfTwo(
-            mail.Capacity * Math.Max(_options.GrowFactor, 2));
-        if (nextCapacity > _options.MaxCapacity)
+        int growFactor = Math.Max(_options.GrowFactor, 2);
+        int nextCapacity = mail.Capacity * growFactor;
+        if (nextCapacity <= mail.Capacity)
         {
-            nextCapacity = _options.MaxCapacity;
+            nextCapacity = mail.Capacity + 1;
         }
+
+        nextCapacity = Math.Min(nextCapacity, _options.MaxCapacity);
 
         if (nextCapacity <= mail.Capacity)
         {
@@ -392,7 +403,35 @@ internal sealed class EventColumn<TActor, TEvent> :
 
         _bufferPool.Resize(mail.BufferId, mail.Head, mail.Count, nextCapacity);
         mail.Head = 0;
+        mail.Tail = mail.Count;
         mail.Capacity = nextCapacity;
         return true;
+    }
+
+    private static ActorMailWriteMode ResolveWriteMode(in ActorMailOptions options)
+    {
+        if (options.PostPolicy == ActorPostPolicy.Queued &&
+            options.FullPolicy == ActorMailFullPolicy.Grow &&
+            options.GrowFailurePolicy == ActorMailFullPolicy.RejectNew)
+        {
+            return ActorMailWriteMode.QueuedGrow;
+        }
+
+        if (options.PostPolicy == ActorPostPolicy.Latest)
+        {
+            return ActorMailWriteMode.Latest;
+        }
+
+        if (options.PostPolicy == ActorPostPolicy.Dirty)
+        {
+            return ActorMailWriteMode.Dirty;
+        }
+
+        if (options.PostPolicy == ActorPostPolicy.Coalesced)
+        {
+            return ActorMailWriteMode.Coalesced;
+        }
+
+        return ActorMailWriteMode.General;
     }
 }

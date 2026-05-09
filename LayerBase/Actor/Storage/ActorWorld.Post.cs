@@ -1,9 +1,11 @@
+using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 
 namespace LayerBase.Actor;
 
 public sealed partial class ActorWorld
 {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult Post<TEvent>(
         ActorId actorId,
         in TEvent value,
@@ -13,7 +15,7 @@ public sealed partial class ActorWorld
     {
         return TryPost(actorId, in value, postPolicy, fullPolicy);
     }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult TryPost<TEvent>(
         ActorId actorId,
         in TEvent value,
@@ -32,7 +34,7 @@ public sealed partial class ActorWorld
         BehaviourArchetype archetype = _archetypes[actorId.ArchetypeId];
         return archetype.Post(actorId, in value, postPolicy, fullPolicy);
     }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostMany<TEvent>(
         ReadOnlySpan<ActorId> actorIds,
         in TEvent value,

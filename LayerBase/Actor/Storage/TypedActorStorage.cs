@@ -19,6 +19,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private TActor?[] _actors;
     private int[] _generations;
     private ActorSlotState[] _states;
+    private ActorSlotFlags[] _slotFlags;
     private bool[] _enabled;
     private bool[] _createdFromPool;
     private ActorLifecycleHandles[] _lifecycleHandles;
@@ -47,6 +48,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _actors = new TActor?[capacity];
         _generations = new int[_actors.Length];
         _states = new ActorSlotState[_actors.Length];
+        _slotFlags = new ActorSlotFlags[_actors.Length];
         _enabled = new bool[_actors.Length];
         _createdFromPool = new bool[_actors.Length];
         _lifecycleHandles = new ActorLifecycleHandles[_actors.Length];
@@ -77,6 +79,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _actors[slotIndex] = actor;
         _states[slotIndex] = ActorSlotState.Alive;
         _enabled[slotIndex] = true;
+        _slotFlags[slotIndex] = ActorSlotFlags.Alive | ActorSlotFlags.Enabled;
         _createdFromPool[slotIndex] = createdFromPool;
         _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
         EnsureColumnCapacity(slotIndex);
@@ -122,6 +125,36 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool CanPostFast(
+        int slotIndex,
+        ActorSlotFlags rejectMask,
+        bool rejectDisabled)
+    {
+        if ((uint)slotIndex >= (uint)_slotFlags.Length)
+        {
+            return false;
+        }
+
+        ActorSlotFlags flags = _slotFlags[slotIndex];
+        if ((flags & ActorSlotFlags.Alive) == 0)
+        {
+            return false;
+        }
+
+        if ((flags & rejectMask) != 0)
+        {
+            return false;
+        }
+
+        if (rejectDisabled && (flags & ActorSlotFlags.Enabled) == 0)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal long GetActorPumpKey(int slotIndex)
     {
         return ((long)_archetypeId << 32) | (uint)slotIndex;
@@ -141,6 +174,14 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         _enabled[slotIndex] = enable;
+        if (enable)
+        {
+            _slotFlags[slotIndex] |= ActorSlotFlags.Enabled;
+        }
+        else
+        {
+            _slotFlags[slotIndex] &= ~ActorSlotFlags.Enabled;
+        }
         
         var onEnable = _actors[slotIndex] as IEnable;
         var onDisable = _actors[slotIndex] as IDisable;
@@ -154,7 +195,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
         return true;
     }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override PostResult Post<TEvent>(
         int slotIndex,
         in TEvent value,
@@ -1392,6 +1433,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
         _states[slotIndex] = ActorSlotState.PendingDestroy;
         _enabled[slotIndex] = false;
+        _slotFlags[slotIndex] |= ActorSlotFlags.PendingDestroy;
+        _slotFlags[slotIndex] &= ~ActorSlotFlags.Enabled;
         return true;
     }
 
@@ -1568,6 +1611,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _actors, newSize);
         Array.Resize(ref _generations, newSize);
         Array.Resize(ref _states, newSize);
+        Array.Resize(ref _slotFlags, newSize);
         Array.Resize(ref _enabled, newSize);
         Array.Resize(ref _createdFromPool, newSize);
         Array.Resize(ref _lifecycleHandles, newSize);
@@ -1631,6 +1675,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         _states[slotIndex] = ActorSlotState.Destroying;
+        _slotFlags[slotIndex] |= ActorSlotFlags.Destroying;
 
         if (actor is IDestroy destroy)
         {
@@ -1645,6 +1690,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _actors[slotIndex] = null;
         _enabled[slotIndex] = false;
         _states[slotIndex] = ActorSlotState.Empty;
+        _slotFlags[slotIndex] = ActorSlotFlags.None;
         _createdFromPool[slotIndex] = false;
         _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
 

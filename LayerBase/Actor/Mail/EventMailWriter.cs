@@ -48,6 +48,7 @@ internal static class EventMailWriter
             {
                 mail.SingleValue = value;
                 mail.Head = 0;
+                mail.Tail = 0;
                 mail.Count = 1;
                 mail.Capacity = 0;
                 dirtySlots.AddIfNotExists(slotIndex);
@@ -83,6 +84,7 @@ internal static class EventMailWriter
 
         bufferPool.Write(mail.BufferId, 0, in merged);
         mail.Head = 0;
+        mail.Tail = 0;
         mail.Count = 1;
 
         if (wasEmpty)
@@ -110,6 +112,7 @@ internal static class EventMailWriter
             {
                 mail.SingleValue = value;
                 mail.Head = 0;
+                mail.Tail = 0;
                 mail.Count = 1;
                 mail.Capacity = 0;
                 dirtySlots.AddIfNotExists(slotIndex);
@@ -117,6 +120,7 @@ internal static class EventMailWriter
             }
 
             mail.Head = 0;
+            mail.Tail = 1;
             mail.Count = 0;
             mail.Capacity = bufferPool.GetCapacity(mail.BufferId);
             bufferPool.Write(mail.BufferId, 0, in value);
@@ -139,8 +143,12 @@ internal static class EventMailWriter
             }
         }
 
-        int tail = ActorMailCapacity.Wrap(mail.Head + mail.Count, mail.Capacity);
-        bufferPool.Write(mail.BufferId, tail, in value);
+        bufferPool.Write(mail.BufferId, mail.Tail, in value);
+        mail.Tail++;
+        if (mail.Tail == mail.Capacity)
+        {
+            mail.Tail = 0;
+        }
         mail.Count++;
 
         return PostResult.Success;
@@ -160,6 +168,7 @@ internal static class EventMailWriter
         {
             mail.SingleValue = value;
             mail.Head = 0;
+            mail.Tail = 0;
             mail.Count = 1;
             mail.Capacity = 0;
 
@@ -174,6 +183,7 @@ internal static class EventMailWriter
 
         bufferPool.Write(mail.BufferId, 0, in value);
         mail.Head = 0;
+        mail.Tail = 0;
         mail.Count = 1;
 
         if (wasEmpty)
@@ -203,6 +213,7 @@ internal static class EventMailWriter
         {
             mail.SingleValue = value;
             mail.Head = 0;
+            mail.Tail = 0;
             mail.Count = 1;
             mail.Capacity = 0;
             dirtySlots.AddIfNotExists(slotIndex);
@@ -211,6 +222,7 @@ internal static class EventMailWriter
 
         bufferPool.Write(mail.BufferId, 0, in value);
         mail.Head = 0;
+        mail.Tail = 0;
         mail.Count = 1;
         dirtySlots.AddIfNotExists(slotIndex);
         return PostResult.Success;
@@ -248,6 +260,10 @@ internal static class EventMailWriter
                 {
                     mail.Head = ActorMailCapacity.Wrap(mail.Head + 1, mail.Capacity);
                     mail.Count--;
+                    if (mail.Count == 0)
+                    {
+                        mail.Tail = 0;
+                    }
                 }
 
                 return PostResult.Success;
@@ -290,6 +306,10 @@ internal static class EventMailWriter
                 {
                     mail.Head = ActorMailCapacity.Wrap(mail.Head + 1, mail.Capacity);
                     mail.Count--;
+                    if (mail.Count == 0)
+                    {
+                        mail.Tail = 0;
+                    }
                 }
 
                 return PostResult.Success;
@@ -330,6 +350,7 @@ internal static class EventMailWriter
 
         bufferPool.Resize(mail.BufferId, mail.Head, mail.Count, nextCapacity);
         mail.Head = 0;
+        mail.Tail = mail.Count;
         mail.Capacity = nextCapacity;
         return true;
     }
@@ -347,6 +368,7 @@ internal static class EventMailWriter
 
         mail.BufferId = bufferPool.Rent(options.InitialCapacity);
         mail.Head = 0;
+        mail.Tail = 0;
         mail.Count = 0;
         mail.Capacity = bufferPool.GetCapacity(mail.BufferId);
     }
@@ -360,6 +382,7 @@ internal static class EventMailWriter
         TEvent existingValue = mail.SingleValue;
         mail.BufferId = bufferPool.Rent(Math.Max(options.InitialCapacity, 2));
         mail.Head = 0;
+        mail.Tail = 1;
         mail.Count = 1;
         mail.Capacity = bufferPool.GetCapacity(mail.BufferId);
         bufferPool.Write(mail.BufferId, 0, in existingValue);
