@@ -8,32 +8,48 @@ internal sealed class EventColumn<TActor, TEvent> :
     where TActor : class, IActor
     where TEvent : struct
 {
+    private readonly ActorWorld _world;
     private readonly TypedActorStorage<TActor> _owner;
     private readonly ActorBehaviourInvoker<TActor, TEvent> _invoker;
-    private readonly RingQueueBuffer<TEvent> _bufferPool;
+    private readonly EventMailPool<TEvent> _mailPool;
     private readonly DirtySlotList _dirtySlots;
     private readonly ActorMailOptions _options;
     private readonly ActorMailWriteMode _writeMode;
     private readonly ActorSlotFlags _postRejectMask;
     private readonly bool _rejectDisabled;
+    private readonly int _bucketIndex;
+    private readonly BehaviourType _behaviourType;
     private EventMail<TEvent>[] _mails;
 
+    internal EventMail<TEvent>[] Mails => _mails;
+    internal DirtySlotList DirtySlots => _dirtySlots;
+    internal int BucketIndex => _bucketIndex;
+    internal BehaviourType BehaviourType => _behaviourType;
+    internal ActorMailOptions Options => _options;
+
     public EventColumn(
+        ActorWorld world,
         TypedActorStorage<TActor> owner,
         ActorBehaviourInvoker<TActor, TEvent> invoker,
         ActorMailOptions options,
+        BehaviourType behaviourType,
+        int bucketIndex,
         int initialSlotCapacity)
     {
+        _world = world;
         _owner = owner;
         _invoker = invoker;
         _options = options;
+        _behaviourType = behaviourType;
+        _bucketIndex = bucketIndex;
         _mails = new EventMail<TEvent>[Math.Max(initialSlotCapacity, 1)];
-        _bufferPool = new RingQueueBuffer<TEvent>();
+        _mailPool = world.GetOrCreateEventMailPool<TEvent>();
         _dirtySlots = new DirtySlotList(initialSlotCapacity);
         _writeMode = ResolveWriteMode(options);
         _postRejectMask = ActorSlotFlags.PendingDestroy | ActorSlotFlags.Destroying;
         _rejectDisabled = options.DisabledPolicy == ActorMailDisabledPolicy.Reject;
     }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult Post(
         int slotIndex,
@@ -47,7 +63,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         {
             return PostQueuedGrowFast(slotIndex, in value);
         }
-        
+
         return PostGeneral(slotIndex, in value, postPolicy, fullPolicy);
     }
 
@@ -64,17 +80,17 @@ internal sealed class EventColumn<TActor, TEvent> :
         while (_dirtySlots.TryPeek(out int slotIndex))
         {
             ref EventMail<TEvent> mail = ref _mails[slotIndex];
-            if (!EventMailReader.TryDequeue(ref mail, _bufferPool, out TEvent value))
+            if (!EventMailReader.TryDequeue(ref mail, _mailPool, out TEvent value))
             {
                 _dirtySlots.Pop();
-                EventMailReader.ReleaseIfEmpty(ref mail, _bufferPool, _options);
+                EventMailReader.ReleaseIfEmpty(ref mail, _mailPool, _options);
                 continue;
             }
 
             if (!_owner.IsAliveSlot(slotIndex))
             {
                 _dirtySlots.Pop();
-                EventMailReader.ReleaseIfEmpty(ref mail, _bufferPool, _options);
+                EventMailReader.ReleaseIfEmpty(ref mail, _mailPool, _options);
                 continue;
             }
 
@@ -90,7 +106,7 @@ internal sealed class EventColumn<TActor, TEvent> :
             if (actor == null)
             {
                 _dirtySlots.Pop();
-                EventMailReader.ReleaseIfEmpty(ref mail, _bufferPool, _options);
+                EventMailReader.ReleaseIfEmpty(ref mail, _mailPool, _options);
                 continue;
             }
 
@@ -104,7 +120,7 @@ internal sealed class EventColumn<TActor, TEvent> :
             if (mail.Count == 0)
             {
                 _dirtySlots.Pop();
-                EventMailReader.ReleaseIfEmpty(ref mail, _bufferPool, _options);
+                EventMailReader.ReleaseIfEmpty(ref mail, _mailPool, _options);
             }
             else
             {
@@ -122,7 +138,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         while (_dirtySlots.TryPeek(out int slotIndex))
         {
             ref EventMail<TEvent> mail = ref _mails[slotIndex];
-            if (!EventMailReader.TryDequeue(ref mail, _bufferPool, out TEvent value))
+            if (!EventMailReader.TryDequeue(ref mail, _mailPool, out TEvent value))
             {
                 _dirtySlots.Pop();
                 continue;
@@ -177,6 +193,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override void EnsureSlotCapacity(int slotIndex)
     {
         if ((uint)slotIndex < (uint)_mails.Length)
@@ -191,6 +208,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         }
 
         Array.Resize(ref _mails, newSize);
+        _world.InvalidateAllFastCaches<TEvent>();
     }
 
     public override void ClearMail(int slotIndex)
@@ -201,7 +219,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         }
 
         ref EventMail<TEvent> mail = ref _mails[slotIndex];
-        EventMailReader.ForceRelease(ref mail, _bufferPool);
+        EventMailReader.ForceRelease(ref mail, _mailPool);
     }
 
     public override int GetPendingCount(int slotIndex)
@@ -253,6 +271,12 @@ internal sealed class EventColumn<TActor, TEvent> :
         return _writeMode == ActorMailWriteMode.QueuedGrow;
     }
 
+    internal bool SupportsFastCacheBinding()
+    {
+        return _behaviourType != BehaviourType.Cold
+               && _writeMode == ActorMailWriteMode.QueuedGrow;
+    }
+
     internal PostResult PostQueuedFast(int slotIndex, in TEvent value)
     {
         return PostQueuedGrowFast(slotIndex, in value);
@@ -302,7 +326,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         PostResult result = EventMailWriter.Enqueue(
             ref mail,
             in value,
-            _bufferPool,
+            _mailPool,
             _dirtySlots,
             slotIndex,
             _options,
@@ -352,11 +376,11 @@ internal sealed class EventColumn<TActor, TEvent> :
             return;
         }
 
-        mail.BufferId = _bufferPool.Rent(_options.InitialCapacity);
+        mail.BufferId = _mailPool.Rent(_options.InitialCapacity);
         mail.Head = 0;
         mail.Tail = 0;
         mail.Count = 0;
-        mail.Capacity = _bufferPool.GetCapacity(mail.BufferId);
+        mail.Capacity = _mailPool.GetCapacity(mail.BufferId);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -365,7 +389,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         in TEvent value,
         int slotIndex)
     {
-        _bufferPool.Write(mail.BufferId, mail.Tail, in value);
+        _mailPool.Write(mail.BufferId, mail.Tail, in value);
         mail.Tail++;
         if (mail.Tail == mail.Capacity)
         {
@@ -395,13 +419,12 @@ internal sealed class EventColumn<TActor, TEvent> :
         }
 
         nextCapacity = Math.Min(nextCapacity, _options.MaxCapacity);
-
         if (nextCapacity <= mail.Capacity)
         {
             return false;
         }
 
-        _bufferPool.Resize(mail.BufferId, mail.Head, mail.Count, nextCapacity);
+        _mailPool.Resize(mail.BufferId, mail.Head, mail.Count, nextCapacity);
         mail.Head = 0;
         mail.Tail = mail.Count;
         mail.Capacity = nextCapacity;

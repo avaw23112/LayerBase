@@ -21,11 +21,17 @@ public sealed partial class ActorWorld
         TypedActorStorage<TActor> storage = archetype.GetOrCreateStorage(meta, this);
 
         int slotIndex = storage.AllocateSlot(actor, usePool);
+        int fastIndex = AllocateFastIndex();
+        storage.BindFastIndex(slotIndex, fastIndex);
+        BindFastState(fastIndex, slotIndex, storage.GetGeneration(slotIndex), storageRouteId: storage.StorageRouteId);
         ActorId actorId = new(
             archetypeId: archetype.ArchetypeId,
             typeStorageIndex: storage.TypeStorageIndex,
             slotIndex: slotIndex,
-            generation: storage.GetGeneration(slotIndex));
+            generation: storage.GetGeneration(slotIndex),
+            fastIndex: fastIndex);
+
+        storage.BindPrewarmHotFastCaches(this, fastIndex, slotIndex, actorId.Generation, GetFastStateRef(fastIndex).Version);
 
         generated.ActorInit(new ActorContext(this, actorId));
         storage.RegisterLifecycleInterfaces(actor, actorId, slotIndex, this);

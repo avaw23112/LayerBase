@@ -80,14 +80,20 @@ public class ActorCoreTests
     {
         var builder = new ActorTypeMetaBuilder();
 
-        builder.AddBehaviour<BuilderActor, ActorCoreEventB>(static (BuilderActor _, in ActorCoreEventB _) => { });
-        builder.AddBehaviour<BuilderActor, ActorCoreEventA>(static (BuilderActor _, in ActorCoreEventA _) => { });
+        builder.AddBehaviour<BuilderActor, ActorCoreEventB>(
+            static (BuilderActor _, in ActorCoreEventB _) => { },
+            BehaviourType.Hot);
+        builder.AddBehaviour<BuilderActor, ActorCoreEventA>(
+            static (BuilderActor _, in ActorCoreEventA _) => { },
+            BehaviourType.PrewarmHot);
 
         ActorTypeMeta<BuilderActor> meta = builder.Build<BuilderActor>();
 
         Assert.That(meta.Behaviours, Has.Length.EqualTo(2));
         Assert.That(meta.Signature.EventTypeIds.ToArray(), Is.Ordered.Ascending);
         Assert.That(meta.Behaviours.Select(static entry => entry.EventTypeId).ToArray(), Is.EqualTo(meta.Signature.EventTypeIds.ToArray()));
+        Assert.That(meta.Behaviours.Single(static entry => entry.EventType == typeof(ActorCoreEventA)).BehaviourType, Is.EqualTo(BehaviourType.PrewarmHot));
+        Assert.That(meta.Behaviours.Single(static entry => entry.EventType == typeof(ActorCoreEventB)).BehaviourType, Is.EqualTo(BehaviourType.Hot));
     }
 
     [Test]

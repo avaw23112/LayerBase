@@ -12,6 +12,11 @@ public sealed partial class ActorWorld
         bool marked = _archetypes[actorId.ArchetypeId].MarkPendingDestroy(actorId);
         if (marked)
         {
+            if (actorId.FastIndex >= 0)
+            {
+                MarkFastStateDead(actorId.FastIndex);
+            }
+
             _pendingDestroyCount++;
         }
 

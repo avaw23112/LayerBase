@@ -11,7 +11,9 @@ public sealed class ActorTypeMetaBuilder
     private readonly HashSet<int> _tagIds = new();
     private readonly HashSet<int> _groupIds = new();
 
-    public void AddBehaviour<TActor, TEvent>(ActorBehaviourInvoker<TActor, TEvent> invoker)
+    public void AddBehaviour<TActor, TEvent>(
+        ActorBehaviourInvoker<TActor, TEvent> invoker,
+        BehaviourType behaviourType = BehaviourType.Cold)
         where TActor : class, IActor
         where TEvent : struct
     {
@@ -30,7 +32,14 @@ public sealed class ActorTypeMetaBuilder
         _entries.Add(new ActorBehaviourEntry(
             eventTypeId,
             typeof(TEvent),
-            invoker));
+            invoker,
+            behaviourType,
+            static (storage, rawInvoker, world, mode) =>
+            {
+                var typedStorage = (TypedActorStorage<TActor>)storage;
+                var typedInvoker = (ActorBehaviourInvoker<TActor, TEvent>)rawInvoker;
+                return typedStorage.BuildColumnDirect(world, typedInvoker, mode);
+            }));
     }
 
     public void AddCallBehaviour<TActor, TRequest, TResponse>(
@@ -55,7 +64,13 @@ public sealed class ActorTypeMetaBuilder
             routeId,
             typeof(TRequest),
             typeof(TResponse),
-            invoker));
+            invoker,
+            static (storage, rawInvoker, world) =>
+            {
+                var typedStorage = (TypedActorStorage<TActor>)storage;
+                var typedInvoker = (ActorCallInvoker<TActor, TRequest, TResponse>)rawInvoker;
+                return typedStorage.BuildCallColumnDirect(world, typedInvoker);
+            }));
     }
 
     public void AddTag<TTag>()

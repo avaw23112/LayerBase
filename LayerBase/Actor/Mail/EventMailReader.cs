@@ -4,7 +4,7 @@ internal static class EventMailReader
 {
     public static bool TryDequeue<TEvent>(
         ref EventMail<TEvent> mail,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         out TEvent value)
         where TEvent : struct
     {
@@ -40,7 +40,7 @@ internal static class EventMailReader
 
     public static void ReleaseIfEmpty<TEvent>(
         ref EventMail<TEvent> mail,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         ActorMailOptions options)
         where TEvent : struct
     {
@@ -66,7 +66,7 @@ internal static class EventMailReader
 
     public static void ForceRelease<TEvent>(
         ref EventMail<TEvent> mail,
-        RingQueueBuffer<TEvent> bufferPool)
+        EventMailPool<TEvent> bufferPool)
         where TEvent : struct
     {
         if (mail.BufferId != 0)

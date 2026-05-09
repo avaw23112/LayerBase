@@ -20,6 +20,21 @@ internal abstract class TypedStorageRuntime
 
     public abstract void SweepPendingDestroy(ActorWorld world);
 
+    public abstract void BindPrewarmHotFastCaches(
+        ActorWorld world,
+        int fastIndex,
+        int slotIndex,
+        int generation,
+        int version);
+
+    public abstract bool TryBindHotFastCache<TEvent>(
+        ActorWorld world,
+        int fastIndex,
+        int version,
+        int slotIndex,
+        int generation)
+        where TEvent : struct;
+
     public abstract bool IsLifecycleRunnable(int slotIndex, int generation);
 
     public abstract PostResult Post<TEvent>(

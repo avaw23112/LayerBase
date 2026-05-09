@@ -50,11 +50,14 @@ internal sealed class BehaviourArchetype
         }
 
         ushort storageIndex = checked((ushort)_storages.Length);
+        int storageRouteId = world.AllocateStorageRouteId();
         var storage = new TypedActorStorage<TActor>(
             storageIndex,
             ArchetypeId,
+            storageRouteId,
             Math.Max(EventTypeIdAllocator.MaxId, 1),
             4);
+        world.BindStorageRoute(storageRouteId, storage);
 
         storage.BuildColumns(meta, world);
 

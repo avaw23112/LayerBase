@@ -76,6 +76,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
                 MethodName: methodSymbol.Name,
                 MethodDisplay: methodSymbol.ToDisplayString(),
                 EventType: methodSymbol.Parameters.Length == 1 ? methodSymbol.Parameters[0].Type : null,
+                BehaviourTypeExpression: GetBehaviourTypeExpression(methodSymbol),
                 MethodSymbol: methodSymbol,
                 Location: methodSymbol.Locations.FirstOrDefault()));
         }
@@ -426,7 +427,11 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             builder.Append(method.MethodName);
             builder.AppendLine("(in e);");
             builder.Append(memberIndent);
-            builder.AppendLine("        });");
+            builder.AppendLine("        },");
+            builder.Append(memberIndent);
+            builder.Append("        ");
+            builder.Append(method.BehaviourTypeExpression);
+            builder.AppendLine(");");
         }
 
         foreach (CallMethodCandidate method in callMethods.OrderBy(static method => method.MethodName, StringComparer.Ordinal))
@@ -624,13 +629,47 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
     {
         foreach (AttributeData attribute in methodSymbol.GetAttributes())
         {
-            if (attribute.AttributeClass?.ToDisplayString() == "LayerBase.Actor.ActorBehaviourAttribute")
+            string? attributeName = attribute.AttributeClass?.ToDisplayString();
+            if (attributeName == "LayerBase.Actor.ActorBehaviourAttribute"
+                || attributeName == "LayerBase.Actor.ActorBehavioursAttribute")
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private static string GetBehaviourTypeExpression(IMethodSymbol methodSymbol)
+    {
+        foreach (AttributeData attribute in methodSymbol.GetAttributes())
+        {
+            string? attributeName = attribute.AttributeClass?.ToDisplayString();
+            if (attributeName != "LayerBase.Actor.ActorBehaviourAttribute"
+                && attributeName != "LayerBase.Actor.ActorBehavioursAttribute")
+            {
+                continue;
+            }
+
+            if (attribute.ConstructorArguments.Length == 1
+                && attribute.ConstructorArguments[0].Type?.ToDisplayString() == "LayerBase.Actor.BehaviourType"
+                && attribute.ConstructorArguments[0].Value is { } rawValue)
+            {
+                int enumValue = Convert.ToInt32(rawValue);
+                string enumName = enumValue switch
+                {
+                    1 => "Hot",
+                    2 => "PrewarmHot",
+                    _ => "Cold"
+                };
+
+                return $"global::LayerBase.Actor.BehaviourType.{enumName}";
+            }
+
+            break;
+        }
+
+        return "global::LayerBase.Actor.BehaviourType.Cold";
     }
 
     private static bool HasActorCallBehaviourAttribute(IMethodSymbol methodSymbol)
@@ -731,6 +770,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         string MethodName,
         string MethodDisplay,
         ITypeSymbol? EventType,
+        string BehaviourTypeExpression,
         IMethodSymbol MethodSymbol,
         Location? Location);
 

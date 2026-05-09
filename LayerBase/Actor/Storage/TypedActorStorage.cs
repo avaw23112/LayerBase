@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -10,22 +9,23 @@ namespace LayerBase.Actor;
 internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     where TActor : class, IActor
 {
-    private static readonly MethodInfo s_buildColumnMethod = typeof(TypedActorStorage<TActor>)
-        .GetMethod(nameof(BuildColumnCore), BindingFlags.Instance | BindingFlags.NonPublic)!;
-    private static readonly MethodInfo s_buildCallColumnMethod = typeof(TypedActorStorage<TActor>)
-        .GetMethod(nameof(BuildCallColumnCore), BindingFlags.Instance | BindingFlags.NonPublic)!;
+    private delegate void PrewarmHotBinder(ActorWorld world, int fastIndex, int version, int slotIndex, int generation);
 
     private ActorEventColumnRuntime[] _columnsByEventId;
     private TActor?[] _actors;
     private int[] _generations;
+    private int[] _fastIndices;
     private ActorSlotState[] _states;
     private ActorSlotFlags[] _slotFlags;
     private bool[] _enabled;
     private bool[] _createdFromPool;
     private ActorLifecycleHandles[] _lifecycleHandles;
     private ActorSlotFreeList _freeList;
+    private PrewarmHotBinder[] _prewarmHotBinders = Array.Empty<PrewarmHotBinder>();
+    private int _prewarmHotBinderCount;
     private int _nextSlotIndex;
     private readonly int _archetypeId;
+    private readonly int _storageRouteId;
     private ActorTypeMeta<TActor>? _meta;
     private object?[] _callInvokersByRouteId = Array.Empty<object?>();
     private ActorCallColumnRuntime?[] _callColumnsByRouteId = Array.Empty<ActorCallColumnRuntime?>();
@@ -33,20 +33,23 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private Type?[] _callResponseTypesByRouteId = Array.Empty<Type?>();
 
     public ushort TypeStorageIndex { get; }
+    internal int StorageRouteId => _storageRouteId;
     public override string ActorTypeName => typeof(TActor).Name;
     public TActor?[] Actors => _actors;
     public ActorSlotState[] States => _states;
     public bool[] Enabled => _enabled;
     public int MaxSlot => Math.Min(_nextSlotIndex, _actors.Length);
 
-    public TypedActorStorage(ushort typeStorageIndex, int archetypeId, int maxEventTypeId, int initialCapacity)
+    public TypedActorStorage(ushort typeStorageIndex, int archetypeId, int storageRouteId, int maxEventTypeId, int initialCapacity)
     {
         TypeStorageIndex = typeStorageIndex;
         _archetypeId = archetypeId;
+        _storageRouteId = storageRouteId;
         _columnsByEventId = new ActorEventColumnRuntime[Math.Max(maxEventTypeId + 1, 1)];
         int capacity = Math.Max(initialCapacity, 1);
         _actors = new TActor?[capacity];
         _generations = new int[_actors.Length];
+        _fastIndices = new int[_actors.Length];
         _states = new ActorSlotState[_actors.Length];
         _slotFlags = new ActorSlotFlags[_actors.Length];
         _enabled = new bool[_actors.Length];
@@ -56,6 +59,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             _lifecycleHandles[i] = ActorLifecycleHandles.Empty;
         }
+        Array.Fill(_fastIndices, -1);
 
         _freeList = new ActorSlotFreeList(_actors.Length);
         _nextSlotIndex = 0;
@@ -80,10 +84,16 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _states[slotIndex] = ActorSlotState.Alive;
         _enabled[slotIndex] = true;
         _slotFlags[slotIndex] = ActorSlotFlags.Alive | ActorSlotFlags.Enabled;
+        _fastIndices[slotIndex] = -1;
         _createdFromPool[slotIndex] = createdFromPool;
         _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
         EnsureColumnCapacity(slotIndex);
         return slotIndex;
+    }
+
+    internal void BindFastIndex(int slotIndex, int fastIndex)
+    {
+        _fastIndices[slotIndex] = fastIndex;
     }
 
     public override int GetGeneration(int slotIndex)
@@ -358,8 +368,16 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         if (CanUsePostAllFastPath(column1, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column2, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+            }
             return;
         }
 
@@ -402,9 +420,17 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             && CanUsePostAllFastPath(column2, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column3, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
-            column3.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value3);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column3.PostQueuedFast(slotIndex, in value3);
+            }
             return;
         }
 
@@ -455,10 +481,18 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             && CanUsePostAllFastPath(column3, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column4, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
-            column3.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value3);
-            column4.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value4);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column3.PostQueuedFast(slotIndex, in value3);
+                _ = column4.PostQueuedFast(slotIndex, in value4);
+            }
             return;
         }
 
@@ -517,11 +551,19 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             && CanUsePostAllFastPath(column4, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column5, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
-            column3.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value3);
-            column4.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value4);
-            column5.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value5);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column3.PostQueuedFast(slotIndex, in value3);
+                _ = column4.PostQueuedFast(slotIndex, in value4);
+                _ = column5.PostQueuedFast(slotIndex, in value5);
+            }
             return;
         }
 
@@ -588,12 +630,20 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             && CanUsePostAllFastPath(column5, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column6, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
-            column3.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value3);
-            column4.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value4);
-            column5.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value5);
-            column6.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value6);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column3.PostQueuedFast(slotIndex, in value3);
+                _ = column4.PostQueuedFast(slotIndex, in value4);
+                _ = column5.PostQueuedFast(slotIndex, in value5);
+                _ = column6.PostQueuedFast(slotIndex, in value6);
+            }
             return;
         }
 
@@ -668,13 +718,21 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             && CanUsePostAllFastPath(column6, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column7, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
-            column3.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value3);
-            column4.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value4);
-            column5.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value5);
-            column6.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value6);
-            column7.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value7);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column3.PostQueuedFast(slotIndex, in value3);
+                _ = column4.PostQueuedFast(slotIndex, in value4);
+                _ = column5.PostQueuedFast(slotIndex, in value5);
+                _ = column6.PostQueuedFast(slotIndex, in value6);
+                _ = column7.PostQueuedFast(slotIndex, in value7);
+            }
             return;
         }
 
@@ -757,14 +815,22 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             && CanUsePostAllFastPath(column7, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column8, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
-            column3.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value3);
-            column4.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value4);
-            column5.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value5);
-            column6.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value6);
-            column7.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value7);
-            column8.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value8);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column3.PostQueuedFast(slotIndex, in value3);
+                _ = column4.PostQueuedFast(slotIndex, in value4);
+                _ = column5.PostQueuedFast(slotIndex, in value5);
+                _ = column6.PostQueuedFast(slotIndex, in value6);
+                _ = column7.PostQueuedFast(slotIndex, in value7);
+                _ = column8.PostQueuedFast(slotIndex, in value8);
+            }
             return;
         }
 
@@ -855,15 +921,23 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             && CanUsePostAllFastPath(column8, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column9, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
-            column3.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value3);
-            column4.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value4);
-            column5.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value5);
-            column6.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value6);
-            column7.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value7);
-            column8.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value8);
-            column9.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value9);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column3.PostQueuedFast(slotIndex, in value3);
+                _ = column4.PostQueuedFast(slotIndex, in value4);
+                _ = column5.PostQueuedFast(slotIndex, in value5);
+                _ = column6.PostQueuedFast(slotIndex, in value6);
+                _ = column7.PostQueuedFast(slotIndex, in value7);
+                _ = column8.PostQueuedFast(slotIndex, in value8);
+                _ = column9.PostQueuedFast(slotIndex, in value9);
+            }
             return;
         }
 
@@ -962,16 +1036,24 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             && CanUsePostAllFastPath(column9, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column10, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
-            column3.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value3);
-            column4.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value4);
-            column5.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value5);
-            column6.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value6);
-            column7.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value7);
-            column8.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value8);
-            column9.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value9);
-            column10.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value10);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column3.PostQueuedFast(slotIndex, in value3);
+                _ = column4.PostQueuedFast(slotIndex, in value4);
+                _ = column5.PostQueuedFast(slotIndex, in value5);
+                _ = column6.PostQueuedFast(slotIndex, in value6);
+                _ = column7.PostQueuedFast(slotIndex, in value7);
+                _ = column8.PostQueuedFast(slotIndex, in value8);
+                _ = column9.PostQueuedFast(slotIndex, in value9);
+                _ = column10.PostQueuedFast(slotIndex, in value10);
+            }
             return;
         }
 
@@ -1078,17 +1160,25 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             && CanUsePostAllFastPath(column10, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column11, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
-            column3.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value3);
-            column4.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value4);
-            column5.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value5);
-            column6.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value6);
-            column7.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value7);
-            column8.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value8);
-            column9.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value9);
-            column10.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value10);
-            column11.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value11);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column3.PostQueuedFast(slotIndex, in value3);
+                _ = column4.PostQueuedFast(slotIndex, in value4);
+                _ = column5.PostQueuedFast(slotIndex, in value5);
+                _ = column6.PostQueuedFast(slotIndex, in value6);
+                _ = column7.PostQueuedFast(slotIndex, in value7);
+                _ = column8.PostQueuedFast(slotIndex, in value8);
+                _ = column9.PostQueuedFast(slotIndex, in value9);
+                _ = column10.PostQueuedFast(slotIndex, in value10);
+                _ = column11.PostQueuedFast(slotIndex, in value11);
+            }
             return;
         }
 
@@ -1203,18 +1293,26 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             && CanUsePostAllFastPath(column11, postPolicy, fullPolicy)
             && CanUsePostAllFastPath(column12, postPolicy, fullPolicy))
         {
-            column1.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value1);
-            column2.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value2);
-            column3.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value3);
-            column4.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value4);
-            column5.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value5);
-            column6.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value6);
-            column7.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value7);
-            column8.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value8);
-            column9.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value9);
-            column10.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value10);
-            column11.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value11);
-            column12.PostToAliveSlotsFast(_actors, _states, _enabled, MaxSlot, in value12);
+            for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+            {
+                if (!IsSlotPostable(slotIndex))
+                {
+                    continue;
+                }
+
+                _ = column1.PostQueuedFast(slotIndex, in value1);
+                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column3.PostQueuedFast(slotIndex, in value3);
+                _ = column4.PostQueuedFast(slotIndex, in value4);
+                _ = column5.PostQueuedFast(slotIndex, in value5);
+                _ = column6.PostQueuedFast(slotIndex, in value6);
+                _ = column7.PostQueuedFast(slotIndex, in value7);
+                _ = column8.PostQueuedFast(slotIndex, in value8);
+                _ = column9.PostQueuedFast(slotIndex, in value9);
+                _ = column10.PostQueuedFast(slotIndex, in value10);
+                _ = column11.PostQueuedFast(slotIndex, in value11);
+                _ = column12.PostQueuedFast(slotIndex, in value12);
+            }
             return;
         }
 
@@ -1264,7 +1362,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
         foreach (ActorBehaviourEntry entry in meta.Behaviours)
         {
-            BuildColumnFromEntry(entry, world, world.ResolveMailOptions(entry.EventTypeId));
+            EnsureEventColumnCapacity(entry.EventTypeId);
+            _columnsByEventId[entry.EventTypeId] = entry.Factory(this, entry.Invoker, world, entry.BehaviourType);
         }
     }
 
@@ -1305,55 +1404,67 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         action(_actors, _states, _enabled, MaxSlot, ref state);
     }
 
-    private void BuildColumnFromEntry(ActorBehaviourEntry entry, ActorWorld world, ActorMailOptions options)
-    {
-        MethodInfo method = s_buildColumnMethod.MakeGenericMethod(entry.EventType);
-        method.Invoke(this, new object?[] { entry.Invoker, world, entry.EventTypeId, options });
-    }
-
-    private void BuildColumnCore<TEvent>(object invokerObject, ActorWorld world, int eventTypeId, ActorMailOptions options)
+    internal ActorEventColumnRuntime BuildColumnDirect<TEvent>(
+        ActorWorld world,
+        ActorBehaviourInvoker<TActor, TEvent> invoker,
+        BehaviourType behaviourType)
         where TEvent : struct
     {
-        var invoker = (ActorBehaviourInvoker<TActor, TEvent>)invokerObject;
+        int eventTypeId = EventTypeId<TEvent>.Id;
+        ActorMailOptions options = world.ResolveMailOptions(eventTypeId);
         var column = new EventColumn<TActor, TEvent>(
+            world: world,
             owner: this,
             invoker: invoker,
             options: options,
+            behaviourType: behaviourType,
+            bucketIndex: eventTypeId,
             initialSlotCapacity: _actors.Length);
 
-        EnsureEventColumnCapacity(eventTypeId);
-        _columnsByEventId[eventTypeId] = column;
         world.RegisterColumn<TEvent>(eventTypeId, column);
+        if (behaviourType == BehaviourType.PrewarmHot && column.SupportsFastCacheBinding())
+        {
+            AddPrewarmHotBinder((bindWorld, fastIndex, version, slotIndex, generation) =>
+            {
+                bindWorld.GetOrCreateFastCache<TEvent>().Bind(
+                    fastIndex,
+                    version,
+                    slotIndex,
+                    generation,
+                    column.Mails,
+                    column.DirtySlots,
+                    column.BucketIndex,
+                    column.Options);
+            });
+        }
+
+        return column;
     }
 
     private void BuildCallColumns(ActorTypeMeta<TActor> meta, ActorWorld world)
     {
         foreach (ActorCallEntry entry in meta.CallBehaviours)
         {
-            BuildCallColumnFromEntry(entry, world);
+            EnsureCallRouteCapacity(entry.RouteId);
+            _callColumnsByRouteId[entry.RouteId] = entry.Factory(this, entry.Invoker, world);
         }
     }
 
-    private void BuildCallColumnFromEntry(ActorCallEntry entry, ActorWorld world)
-    {
-        MethodInfo method = s_buildCallColumnMethod.MakeGenericMethod(entry.RequestType, entry.ResponseType);
-        method.Invoke(this, new object?[] { entry.Invoker, world, entry.RouteId });
-    }
-
-    private void BuildCallColumnCore<TRequest, TResponse>(object invokerObject, ActorWorld world, int routeId)
+    internal ActorCallColumnRuntime BuildCallColumnDirect<TRequest, TResponse>(
+        ActorWorld world,
+        ActorCallInvoker<TActor, TRequest, TResponse> invoker)
         where TRequest : struct
         where TResponse : struct
     {
-        var invoker = (ActorCallInvoker<TActor, TRequest, TResponse>)invokerObject;
+        int routeId = ActorCallRouteId<TRequest, TResponse>.Id;
         var column = new ActorCallColumn<TActor, TRequest, TResponse>(
             owner: this,
             invoker: invoker,
             options: world.DefaultMailOptions,
             initialSlotCapacity: _actors.Length);
 
-        EnsureCallRouteCapacity(routeId);
-        _callColumnsByRouteId[routeId] = column;
         world.RegisterCallColumn<TRequest, TResponse>(routeId, column);
+        return column;
     }
 
     private void BuildCallRoutes(ActorTypeMeta<TActor> meta)
@@ -1391,6 +1502,66 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _callColumnsByRouteId, newSize);
         Array.Resize(ref _callRequestTypesByRouteId, newSize);
         Array.Resize(ref _callResponseTypesByRouteId, newSize);
+    }
+
+    private void AddPrewarmHotBinder(PrewarmHotBinder binder)
+    {
+        if (_prewarmHotBinderCount == _prewarmHotBinders.Length)
+        {
+            int newSize = _prewarmHotBinders.Length == 0 ? 4 : _prewarmHotBinders.Length * 2;
+            Array.Resize(ref _prewarmHotBinders, newSize);
+        }
+
+        _prewarmHotBinders[_prewarmHotBinderCount] = binder;
+        _prewarmHotBinderCount++;
+    }
+
+    public override void BindPrewarmHotFastCaches(
+        ActorWorld world,
+        int fastIndex,
+        int slotIndex,
+        int generation,
+        int version)
+    {
+        for (int i = 0; i < _prewarmHotBinderCount; i++)
+        {
+            _prewarmHotBinders[i](world, fastIndex, version, slotIndex, generation);
+        }
+    }
+
+    public override bool TryBindHotFastCache<TEvent>(
+        ActorWorld world,
+        int fastIndex,
+        int version,
+        int slotIndex,
+        int generation)
+        where TEvent : struct
+    {
+        if (!TryGetColumn(out EventColumn<TActor, TEvent>? column)
+            || column == null
+            || !column.SupportsFastCacheBinding())
+        {
+            return false;
+        }
+
+        if ((uint)slotIndex >= (uint)_actors.Length
+            || _states[slotIndex] != ActorSlotState.Alive
+            || _actors[slotIndex] == null
+            || _generations[slotIndex] != generation)
+        {
+            return false;
+        }
+
+        world.GetOrCreateFastCache<TEvent>().Bind(
+            fastIndex,
+            version,
+            slotIndex,
+            generation,
+            column.Mails,
+            column.DirtySlots,
+            column.BucketIndex,
+            column.Options);
+        return true;
     }
 
     internal void RegisterLifecycleInterfaces(
@@ -1610,6 +1781,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
         Array.Resize(ref _actors, newSize);
         Array.Resize(ref _generations, newSize);
+        Array.Resize(ref _fastIndices, newSize);
         Array.Resize(ref _states, newSize);
         Array.Resize(ref _slotFlags, newSize);
         Array.Resize(ref _enabled, newSize);
@@ -1617,6 +1789,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _lifecycleHandles, newSize);
         for (int i = oldSize; i < newSize; i++)
         {
+            _fastIndices[i] = -1;
             _lifecycleHandles[i] = ActorLifecycleHandles.Empty;
         }
     }
@@ -1686,11 +1859,13 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         ClearAllMails(slotIndex);
 
         bool returnToPool = _createdFromPool[slotIndex];
+        int fastIndex = _fastIndices[slotIndex];
 
         _actors[slotIndex] = null;
         _enabled[slotIndex] = false;
         _states[slotIndex] = ActorSlotState.Empty;
         _slotFlags[slotIndex] = ActorSlotFlags.None;
+        _fastIndices[slotIndex] = -1;
         _createdFromPool[slotIndex] = false;
         _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
 
@@ -1700,6 +1875,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         _freeList.Push(slotIndex);
+        if (fastIndex >= 0)
+        {
+            world.ReleaseFastIndex(fastIndex);
+        }
 
         if (returnToPool)
         {

@@ -64,6 +64,31 @@ public class ActorGeneratorTests
     }
 
     [Test]
+    public void Actor_behaviour_attribute_can_emit_behaviour_type_metadata()
+    {
+        GeneratorRunResult result = RunGenerator("""
+            using LayerBase.Actor;
+
+            namespace Sample;
+
+            public struct DamageEvent { }
+
+            public sealed partial class EnemyActor : IActor
+            {
+                [ActorBehaviour(BehaviourType.Hot)]
+                private void OnDamage(in DamageEvent e)
+                {
+                }
+            }
+            """);
+
+        Assert.That(GetGeneratorDiagnostics(result), Is.Empty);
+
+        string generated = result.GeneratedSources.Single().SourceText.ToString();
+        Assert.That(generated, Does.Contain("global::LayerBase.Actor.BehaviourType.Hot"));
+    }
+
+    [Test]
     public void Actor_call_behaviour_generates_call_route_registration()
     {
         GeneratorRunResult result = RunGenerator("""

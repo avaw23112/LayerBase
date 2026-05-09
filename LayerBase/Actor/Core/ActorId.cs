@@ -6,13 +6,20 @@ public readonly struct ActorId : IEquatable<ActorId>
     public readonly ushort TypeStorageIndex;
     public readonly int SlotIndex;
     public readonly int Generation;
+    public readonly int FastIndex;
 
     public ActorId(int archetypeId, ushort typeStorageIndex, int slotIndex, int generation)
+        : this(archetypeId, typeStorageIndex, slotIndex, generation, -1)
+    {
+    }
+
+    public ActorId(int archetypeId, ushort typeStorageIndex, int slotIndex, int generation, int fastIndex)
     {
         ArchetypeId = archetypeId;
         TypeStorageIndex = typeStorageIndex;
         SlotIndex = slotIndex;
         Generation = generation;
+        FastIndex = fastIndex;
     }
 
     public bool Equals(ActorId other)
@@ -20,7 +27,8 @@ public readonly struct ActorId : IEquatable<ActorId>
         return ArchetypeId == other.ArchetypeId
             && TypeStorageIndex == other.TypeStorageIndex
             && SlotIndex == other.SlotIndex
-            && Generation == other.Generation;
+            && Generation == other.Generation
+            && FastIndex == other.FastIndex;
     }
 
     public override bool Equals(object? obj)
@@ -30,6 +38,6 @@ public readonly struct ActorId : IEquatable<ActorId>
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(ArchetypeId, TypeStorageIndex, SlotIndex, Generation);
+        return HashCode.Combine(ArchetypeId, TypeStorageIndex, SlotIndex, Generation, FastIndex);
     }
 }

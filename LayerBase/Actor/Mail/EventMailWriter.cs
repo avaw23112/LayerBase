@@ -8,7 +8,7 @@ internal static class EventMailWriter
     public static PostResult Enqueue<TEvent>(
         ref EventMail<TEvent> mail,
         in TEvent value,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         DirtySlotList dirtySlots,
         int slotIndex,
         ActorMailOptions options,
@@ -35,7 +35,7 @@ internal static class EventMailWriter
     private static PostResult EnqueueMerge<TEvent>(
         ref EventMail<TEvent> mail,
         in TEvent value,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         DirtySlotList dirtySlots,
         int slotIndex,
         ActorMailOptions options)
@@ -99,7 +99,7 @@ internal static class EventMailWriter
     private static PostResult EnqueueQueued<TEvent>(
         ref EventMail<TEvent> mail,
         in TEvent value,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         DirtySlotList dirtySlots,
         int slotIndex,
         ActorMailOptions options,
@@ -157,7 +157,7 @@ internal static class EventMailWriter
     private static PostResult EnqueueLatest<TEvent>(
         ref EventMail<TEvent> mail,
         in TEvent value,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         DirtySlotList dirtySlots,
         int slotIndex,
         ActorMailOptions options)
@@ -198,7 +198,7 @@ internal static class EventMailWriter
     private static PostResult EnqueueDirty<TEvent>(
         ref EventMail<TEvent> mail,
         in TEvent value,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         DirtySlotList dirtySlots,
         int slotIndex,
         ActorMailOptions options)
@@ -231,7 +231,7 @@ internal static class EventMailWriter
     private static PostResult HandleFull<TEvent>(
         ref EventMail<TEvent> mail,
         in TEvent value,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         DirtySlotList dirtySlots,
         int slotIndex,
         ActorMailOptions options,
@@ -289,7 +289,7 @@ internal static class EventMailWriter
     private static PostResult HandleGrowFailure<TEvent>(
         ref EventMail<TEvent> mail,
         in TEvent value,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         ActorMailOptions options)
         where TEvent : struct
     {
@@ -324,7 +324,7 @@ internal static class EventMailWriter
 
     private static bool TryGrow<TEvent>(
         ref EventMail<TEvent> mail,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         ActorMailOptions options)
         where TEvent : struct
     {
@@ -357,7 +357,7 @@ internal static class EventMailWriter
 
     private static void EnsureMailAllocated<TEvent>(
         ref EventMail<TEvent> mail,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         ActorMailOptions options)
         where TEvent : struct
     {
@@ -375,7 +375,7 @@ internal static class EventMailWriter
 
     private static void PromoteSingleToBuffer<TEvent>(
         ref EventMail<TEvent> mail,
-        RingQueueBuffer<TEvent> bufferPool,
+        EventMailPool<TEvent> bufferPool,
         ActorMailOptions options)
         where TEvent : struct
     {

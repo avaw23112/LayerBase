@@ -11,7 +11,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
 {
     private readonly TypedActorStorage<TActor> _owner;
     private readonly ActorCallInvoker<TActor, TRequest, TResponse> _invoker;
-    private readonly RingQueueBuffer<ActorCallMail<TRequest, TResponse>> _bufferPool;
+    private readonly EventMailPool<ActorCallMail<TRequest, TResponse>> _bufferPool;
     private readonly DirtySlotList _dirtySlots;
     private readonly ActorMailOptions _options;
     private EventMail<ActorCallMail<TRequest, TResponse>>[] _mails;
@@ -26,7 +26,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         _invoker = invoker;
         _options = options;
         _mails = new EventMail<ActorCallMail<TRequest, TResponse>>[Math.Max(initialSlotCapacity, 1)];
-        _bufferPool = new RingQueueBuffer<ActorCallMail<TRequest, TResponse>>();
+        _bufferPool = new EventMailPool<ActorCallMail<TRequest, TResponse>>();
         _dirtySlots = new DirtySlotList(initialSlotCapacity);
     }
 
