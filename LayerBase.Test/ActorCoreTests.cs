@@ -1,5 +1,7 @@
 using System.Reflection;
+using System.Threading;
 using LayerBase.Actor;
+using LayerBase.Async;
 using LayerBase.Core.Event;
 
 namespace LayerBase.Test;
@@ -9,6 +11,14 @@ public struct ActorCoreEventA
 }
 
 public struct ActorCoreEventB
+{
+}
+
+public struct ActorCoreCallRequest
+{
+}
+
+public struct ActorCoreCallResponse
 {
 }
 
@@ -78,6 +88,22 @@ public class ActorCoreTests
         Assert.That(meta.Behaviours, Has.Length.EqualTo(2));
         Assert.That(meta.Signature.EventTypeIds.ToArray(), Is.Ordered.Ascending);
         Assert.That(meta.Behaviours.Select(static entry => entry.EventTypeId).ToArray(), Is.EqualTo(meta.Signature.EventTypeIds.ToArray()));
+    }
+
+    [Test]
+    public void ActorTypeMetaBuilder_collects_call_behaviours_and_sorts_routes()
+    {
+        var builder = new ActorTypeMetaBuilder();
+
+        builder.AddCallBehaviour<BuilderActor, ActorCoreCallRequest, ActorCoreCallResponse>(
+            static (BuilderActor _, in ActorCoreCallRequest _, CancellationToken _) => LBTask<ActorCoreCallResponse>.FromResult(default));
+
+        ActorTypeMeta<BuilderActor> meta = builder.Build<BuilderActor>();
+
+        Assert.That(meta.CallBehaviours, Has.Length.EqualTo(1));
+        Assert.That(meta.CallBehaviours.Select(static entry => entry.RouteId).ToArray(), Is.Ordered.Ascending);
+        Assert.That(meta.CallBehaviours[0].RequestType, Is.EqualTo(typeof(ActorCoreCallRequest)));
+        Assert.That(meta.CallBehaviours[0].ResponseType, Is.EqualTo(typeof(ActorCoreCallResponse)));
     }
 
     [Test]

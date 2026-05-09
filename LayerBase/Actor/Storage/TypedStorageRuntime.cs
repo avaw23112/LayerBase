@@ -1,4 +1,5 @@
 using LayerBase.Core.Event;
+using LayerBase.Async;
 using System.Text;
 
 namespace LayerBase.Actor;
@@ -231,6 +232,26 @@ internal abstract class TypedStorageRuntime
         where TEvent10 : struct
         where TEvent11 : struct
         where TEvent12 : struct;
+
+    public abstract DispatchResult DispatchNow<TEvent>(
+        int slotIndex,
+        int generation,
+        in TEvent value)
+        where TEvent : struct;
+
+    public abstract LBTask<TResponse> ImmediatelyAsk<TRequest, TResponse>(
+        int slotIndex,
+        int generation,
+        in TRequest request,
+        CancellationToken cancellationToken)
+        where TRequest : struct
+        where TResponse : struct;
+
+    public abstract PostResult PostCall<TRequest, TResponse>(
+        int slotIndex,
+        in ActorCallMail<TRequest, TResponse> mail)
+        where TRequest : struct
+        where TResponse : struct;
 
     public abstract IEnumerable<IActor> EnumerateActors();
 

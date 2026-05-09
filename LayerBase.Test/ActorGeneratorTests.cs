@@ -100,6 +100,68 @@ public class ActorGeneratorTests
     }
 
     [Test]
+    public void Actor_call_behaviour_generates_call_route_registration()
+    {
+        GeneratorRunResult result = RunGenerator("""
+            using System.Threading;
+            using LayerBase.Actor;
+            using LayerBase.Async;
+
+            namespace Sample;
+
+            public struct GetHpRequest { }
+            public struct GetHpResponse { public int Value; }
+
+            public sealed partial class EnemyActor : IActor
+            {
+                [ActorCallBehaviour]
+                private LBTask<GetHpResponse> OnGetHp(in GetHpRequest request, CancellationToken cancellationToken)
+                {
+                    return LBTask<GetHpResponse>.FromResult(new GetHpResponse { Value = 7 });
+                }
+            }
+            """);
+
+        Assert.That(GetGeneratorDiagnostics(result), Is.Empty);
+
+        string generated = result.GeneratedSources.Single().SourceText.ToString();
+        Assert.That(generated, Does.Contain("builder.AddCallBehaviour<global::Sample.EnemyActor, global::Sample.GetHpRequest, global::Sample.GetHpResponse>("));
+        Assert.That(generated, Does.Contain("return actor.OnGetHp(in request, cancellationToken);"));
+    }
+
+    [Test]
+    public void Generated_actor_call_code_compiles_without_errors()
+    {
+        (GeneratorRunResult result, Compilation outputCompilation) = RunGeneratorWithCompilation("""
+            using System.Threading;
+            using LayerBase.Actor;
+            using LayerBase.Async;
+
+            namespace Sample;
+
+            public struct GetHpRequest { }
+            public struct GetHpResponse { public int Value; }
+
+            public sealed partial class EnemyActor : IActor
+            {
+                [ActorCallBehaviour]
+                private LBTask<GetHpResponse> OnGetHp(in GetHpRequest request, CancellationToken cancellationToken)
+                {
+                    return LBTask<GetHpResponse>.FromResult(new GetHpResponse { Value = 1 });
+                }
+            }
+            """);
+
+        Assert.That(GetGeneratorDiagnostics(result), Is.Empty);
+
+        ImmutableArray<Diagnostic> errors = outputCompilation.GetDiagnostics()
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty, string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+    }
+
+    [Test]
     public void Generated_tag_group_actor_code_compiles_without_errors()
     {
         (GeneratorRunResult result, Compilation outputCompilation) = RunGeneratorWithCompilation("""
@@ -282,6 +344,95 @@ public class ActorGeneratorTests
             public PostResult TryPost<TEvent>(in TEvent value) where TEvent : struct
             {
                 return PostResult.Success;
+            }
+        }
+        """)]
+    [TestCase("LBACTOR202", """
+        using System.Threading;
+        using LayerBase.Actor;
+
+        public struct GetHpRequest { }
+        public struct GetHpResponse { }
+
+        public sealed partial class EnemyActor : IActor
+        {
+            [ActorCallBehaviour]
+            private GetHpResponse OnGetHp(in GetHpRequest request, CancellationToken cancellationToken)
+            {
+                return default;
+            }
+        }
+        """)]
+    [TestCase("LBACTOR203", """
+        using LayerBase.Actor;
+        using LayerBase.Async;
+
+        public struct GetHpRequest { }
+        public struct GetHpResponse { }
+
+        public sealed partial class EnemyActor : IActor
+        {
+            [ActorCallBehaviour]
+            private LBTask<GetHpResponse> OnGetHp(in GetHpRequest request)
+            {
+                return LBTask<GetHpResponse>.FromResult(default);
+            }
+        }
+        """)]
+    [TestCase("LBACTOR204", """
+        using System.Threading;
+        using LayerBase.Actor;
+        using LayerBase.Async;
+
+        public sealed class GetHpRequest { }
+        public struct GetHpResponse { }
+
+        public sealed partial class EnemyActor : IActor
+        {
+            [ActorCallBehaviour]
+            private LBTask<GetHpResponse> OnGetHp(in GetHpRequest request, CancellationToken cancellationToken)
+            {
+                return LBTask<GetHpResponse>.FromResult(default);
+            }
+        }
+        """)]
+    [TestCase("LBACTOR205", """
+        using System.Threading;
+        using LayerBase.Actor;
+        using LayerBase.Async;
+
+        public struct GetHpRequest { }
+        public sealed class GetHpResponse { }
+
+        public sealed partial class EnemyActor : IActor
+        {
+            [ActorCallBehaviour]
+            private LBTask<GetHpResponse> OnGetHp(in GetHpRequest request, CancellationToken cancellationToken)
+            {
+                return LBTask<GetHpResponse>.FromResult(new GetHpResponse());
+            }
+        }
+        """)]
+    [TestCase("LBACTOR206", """
+        using System.Threading;
+        using LayerBase.Actor;
+        using LayerBase.Async;
+
+        public struct GetHpRequest { }
+        public struct GetHpResponse { }
+
+        public sealed partial class EnemyActor : IActor
+        {
+            [ActorCallBehaviour]
+            private LBTask<GetHpResponse> OnGetHp(in GetHpRequest request, CancellationToken cancellationToken)
+            {
+                return LBTask<GetHpResponse>.FromResult(default);
+            }
+
+            [ActorCallBehaviour]
+            private LBTask<GetHpResponse> OnGetHpAgain(in GetHpRequest request, CancellationToken cancellationToken)
+            {
+                return LBTask<GetHpResponse>.FromResult(default);
             }
         }
         """)]

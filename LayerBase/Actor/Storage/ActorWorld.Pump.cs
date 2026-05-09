@@ -10,14 +10,13 @@ public sealed partial class ActorWorld
         bool                   pumpFixedUpdate,
         ref RuntimeFrameBudget budget)
     {
-        // deltaTime 参数表示当前帧间隔，通常单位是秒。
-        // fixedDeltaTime 参数表示固定逻辑步长，通常用于 IFixedUpdate。
-        // pumpFixedUpdate 参数表示本帧是否允许执行 Actor 的 IFixedUpdate。
-        // budget 参数表示当前帧剩余调度预算。
-        // 当前 RuntimeFrameBudget 名字里叫 Event，但这里可以临时把一次生命周期调用也视为一个调度工作单元。
+        if (_state == ActorWorldState.Disposed || _state == ActorWorldState.Stopping)
+        {
+            return;
+        }
 
+        DelayScheduler.Tick(deltaTime);
         LastMailPumpStats = PumpActorBehaviours(ref budget, MailPumpOptions);
-        // ActorBehaviour 阶段里 DestroyActor 的对象，本帧不再进入生命周期。
         SweepPendingDestroy();
         if (!CanContinue(ref budget))
         {
@@ -51,16 +50,15 @@ public sealed partial class ActorWorld
             deltaTime: deltaTime,
             budget: ref budget);
 
-        // 生命周期阶段里 DestroyActor 的对象，本帧末尾清理。
         SweepPendingDestroy();
     }
+
     private static bool CanContinue(ref RuntimeFrameBudget budget)
     {
-        // budget 参数表示当前帧剩余预算。
-        // 同时检查数量预算和真实时间预算。
         return budget.HasRemainingEventBudget()
                && budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp());
     }
+
     private ActorMailPumpStats PumpActorBehaviours(
         ref RuntimeFrameBudget budget,
         in ActorMailPumpOptions options)
@@ -111,7 +109,34 @@ public sealed partial class ActorWorld
         in ActorMailPumpOptions options,
         ActorMailPumpStatsBuilder stats)
     {
-        IActorEventBucket[] buckets = _eventBucketsByEventId;
+        PumpOneResult callResult = TryPumpOneFromBuckets(
+            _callBucketsByRouteId,
+            ref _callBucketCursor,
+            ref budget,
+            options,
+            stats);
+        if (callResult == PumpOneResult.Processed
+            || callResult == PumpOneResult.BucketLimited
+            || callResult == PumpOneResult.ActorLimited)
+        {
+            return callResult;
+        }
+
+        return TryPumpOneFromBuckets(
+            _eventBucketsByEventId,
+            ref _bucketCursor,
+            ref budget,
+            options,
+            stats);
+    }
+
+    private static PumpOneResult TryPumpOneFromBuckets(
+        IActorEventBucket[] buckets,
+        ref int cursor,
+        ref RuntimeFrameBudget budget,
+        in ActorMailPumpOptions options,
+        ActorMailPumpStatsBuilder stats)
+    {
         if (buckets.Length == 0)
         {
             return PumpOneResult.NoWork;
@@ -122,8 +147,8 @@ public sealed partial class ActorWorld
         bool sawActorLimit = false;
         while (checkedCount < buckets.Length)
         {
-            int index = _bucketCursor;
-            _bucketCursor = index + 1 == buckets.Length ? 0 : index + 1;
+            int index = cursor;
+            cursor = index + 1 == buckets.Length ? 0 : index + 1;
             checkedCount++;
 
             IActorEventBucket? current = buckets[index];
@@ -164,6 +189,14 @@ public sealed partial class ActorWorld
     private int CountRemainingDirtyBuckets()
     {
         int count = 0;
+        for (int i = 0; i < _callBucketsByRouteId.Length; i++)
+        {
+            if (_callBucketsByRouteId[i]?.HasPendingWork() == true)
+            {
+                count++;
+            }
+        }
+
         for (int i = 0; i < _eventBucketsByEventId.Length; i++)
         {
             if (_eventBucketsByEventId[i]?.HasPendingWork() == true)

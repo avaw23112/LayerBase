@@ -1,37 +1,26 @@
-﻿using LayerBase.Actor;
-using LayerBase.Core.Event;
+using System.Runtime.CompilerServices;
+using LayerBase.Actor;
+using LayerBase.Async;
 
 namespace LayerBase;
 
-public partial class LayerRuntime
+public sealed partial class LayerRuntime
 {
-    public PostResult Post<TEvent>(
-        ActorId              actorId,
-        in TEvent            value,
-        ActorPostPolicy?     postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
-        where TEvent : struct
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public TActor CreateActor<TActor>(bool usePool = false)
+        where TActor : class, IActor, new()
     {
-        return Actors.Post(actorId,in value, postPolicy, fullPolicy);
+        return Actors.CreateActor<TActor>(usePool);
     }
 
-    public PostResult TryPost<TEvent>(
-        ActorId              actorId,
-        in TEvent            value,
-        ActorPostPolicy?     postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
-        where TEvent : struct
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public LBTask<TResponse> AskActor<TRequest, TResponse>(
+        ActorId actorId,
+        in TRequest request,
+        CancellationToken cancellationToken = default)
+        where TRequest : struct
+        where TResponse : struct
     {
-        return Actors.TryPost(actorId,in value, postPolicy, fullPolicy);
-    }
-
-    public void PostMany<TEvent>(
-        ReadOnlySpan<ActorId> actorIds,
-        in TEvent             value,
-        ActorPostPolicy?      postPolicy = null,
-        ActorMailFullPolicy?  fullPolicy = null)
-        where TEvent : struct
-    {
-         Actors.PostMany(actorIds,in value, postPolicy, fullPolicy);
+        return Actors.Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
     }
 }

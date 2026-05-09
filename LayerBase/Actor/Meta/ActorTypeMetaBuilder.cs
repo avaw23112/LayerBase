@@ -5,7 +5,9 @@ namespace LayerBase.Actor;
 public sealed class ActorTypeMetaBuilder
 {
     private readonly List<ActorBehaviourEntry> _entries = new();
+    private readonly List<ActorCallEntry> _callEntries = new();
     private readonly HashSet<int> _eventIds = new();
+    private readonly HashSet<int> _callRouteIds = new();
     private readonly HashSet<int> _tagIds = new();
     private readonly HashSet<int> _groupIds = new();
 
@@ -31,6 +33,31 @@ public sealed class ActorTypeMetaBuilder
             invoker));
     }
 
+    public void AddCallBehaviour<TActor, TRequest, TResponse>(
+        ActorCallInvoker<TActor, TRequest, TResponse> invoker)
+        where TActor : class, IActor
+        where TRequest : struct
+        where TResponse : struct
+    {
+        if (invoker == null)
+        {
+            throw new ArgumentNullException(nameof(invoker));
+        }
+
+        int routeId = ActorCallRouteId<TRequest, TResponse>.Id;
+        if (!_callRouteIds.Add(routeId))
+        {
+            throw new InvalidOperationException(
+                $"Actor type {typeof(TActor).Name} already has call behaviour for request {typeof(TRequest).Name} and response {typeof(TResponse).Name}.");
+        }
+
+        _callEntries.Add(new ActorCallEntry(
+            routeId,
+            typeof(TRequest),
+            typeof(TResponse),
+            invoker));
+    }
+
     public void AddTag<TTag>()
         where TTag : struct, IActorTag
     {
@@ -50,6 +77,10 @@ public sealed class ActorTypeMetaBuilder
             .OrderBy(static entry => entry.EventTypeId)
             .ToArray();
 
+        ActorCallEntry[] callEntries = _callEntries
+            .OrderBy(static entry => entry.RouteId)
+            .ToArray();
+
         int[] eventTypeIds = entries
             .Select(static entry => entry.EventTypeId)
             .ToArray();
@@ -65,6 +96,7 @@ public sealed class ActorTypeMetaBuilder
         return new ActorTypeMeta<TActor>(
             new BehaviourSignature(eventTypeIds),
             entries,
+            callEntries,
             tagIds,
             groupIds);
     }

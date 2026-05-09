@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Linq;
 using System.Text;
 using LayerBase.Core.Event;
+using LayerBase.Async;
 
 namespace LayerBase.Actor;
 
@@ -10,6 +11,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 {
     private static readonly MethodInfo s_buildColumnMethod = typeof(TypedActorStorage<TActor>)
         .GetMethod(nameof(BuildColumnCore), BindingFlags.Instance | BindingFlags.NonPublic)!;
+    private static readonly MethodInfo s_buildCallColumnMethod = typeof(TypedActorStorage<TActor>)
+        .GetMethod(nameof(BuildCallColumnCore), BindingFlags.Instance | BindingFlags.NonPublic)!;
 
     private ActorEventColumnRuntime[] _columnsByEventId;
     private TActor?[] _actors;
@@ -22,6 +25,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private int _nextSlotIndex;
     private readonly int _archetypeId;
     private ActorTypeMeta<TActor>? _meta;
+    private object?[] _callInvokersByRouteId = Array.Empty<object?>();
+    private ActorCallColumnRuntime?[] _callColumnsByRouteId = Array.Empty<ActorCallColumnRuntime?>();
+    private Type?[] _callRequestTypesByRouteId = Array.Empty<Type?>();
+    private Type?[] _callResponseTypesByRouteId = Array.Empty<Type?>();
 
     public ushort TypeStorageIndex { get; }
     public override string ActorTypeName => typeof(TActor).Name;
@@ -149,6 +156,103 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         return column.Post(slotIndex, in value, postPolicy, fullPolicy);
+    }
+
+    public override DispatchResult DispatchNow<TEvent>(
+        int slotIndex,
+        int generation,
+        in TEvent value)
+    {
+        if (!IsAlive(slotIndex, generation))
+        {
+            return DispatchResult.Failure(
+                DispatchFailureKind.ActorNotFound,
+                "Actor slot is not alive.");
+        }
+
+        if (!TryGetColumn(out EventColumn<TActor, TEvent>? column))
+        {
+            return DispatchResult.Failure(
+                DispatchFailureKind.UnsupportedEvent,
+                $"Actor type {typeof(TActor).Name} does not support event {typeof(TEvent).Name}.");
+        }
+
+        TActor? actor = _actors[slotIndex];
+        if (actor == null)
+        {
+            return DispatchResult.Failure(
+                DispatchFailureKind.ActorNotFound,
+                "Actor slot is empty.");
+        }
+
+        return column.DispatchNow(actor, in value);
+    }
+
+    public override LBTask<TResponse> ImmediatelyAsk<TRequest, TResponse>(
+        int slotIndex,
+        int generation,
+        in TRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!IsAlive(slotIndex, generation))
+        {
+            return ActorCallFailure.InvalidActor<TResponse>(
+                ActorCallFailureKind.ActorNotFound);
+        }
+
+        int routeId = ActorCallRouteId<TRequest, TResponse>.Id;
+        object?[] invokers = _callInvokersByRouteId;
+
+        if ((uint)routeId >= (uint)invokers.Length)
+        {
+            return ActorCallFailure.Unsupported<TResponse, TRequest, TResponse>();
+        }
+
+        var invoker = invokers[routeId] as ActorCallInvoker<TActor, TRequest, TResponse>;
+        if (invoker == null)
+        {
+            return ActorCallFailure.Unsupported<TResponse, TRequest, TResponse>();
+        }
+
+        TActor? actor = _actors[slotIndex];
+        if (actor == null)
+        {
+            return ActorCallFailure.InvalidActor<TResponse>(
+                ActorCallFailureKind.ActorNotFound);
+        }
+
+        try
+        {
+            return invoker(actor, in request, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            return LBTask<TResponse>.FromException(exception);
+        }
+    }
+
+    public override PostResult PostCall<TRequest, TResponse>(
+        int slotIndex,
+        in ActorCallMail<TRequest, TResponse> mail)
+    {
+        int routeId = ActorCallRouteId<TRequest, TResponse>.Id;
+        if ((uint)routeId >= (uint)_callColumnsByRouteId.Length)
+        {
+            return PostResult.Failure(
+                ActorPostStatus.EventNotSupported,
+                $"Actor type {typeof(TActor).Name} does not support request {typeof(TRequest).Name} / response {typeof(TResponse).Name}.",
+                PostFailureKind.UnsupportedEvent);
+        }
+
+        if (_callColumnsByRouteId[routeId] is not ActorCallColumn<TActor, TRequest, TResponse> column)
+        {
+            return PostResult.Failure(
+                ActorPostStatus.EventNotSupported,
+                $"Actor type {typeof(TActor).Name} does not support request {typeof(TRequest).Name} / response {typeof(TResponse).Name}.",
+                PostFailureKind.UnsupportedEvent);
+        }
+
+        return column.Post(slotIndex, in mail);
     }
 
     public override void PostToAliveActors<TEvent>(
@@ -884,6 +988,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     public void BuildColumns(ActorTypeMeta<TActor> meta, ActorWorld world)
     {
         _meta = meta;
+        BuildCallRoutes(meta);
+        BuildCallColumns(meta, world);
 
         foreach (ActorBehaviourEntry entry in meta.Behaviours)
         {
@@ -947,6 +1053,73 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         EnsureEventColumnCapacity(eventTypeId);
         _columnsByEventId[eventTypeId] = column;
         world.RegisterColumn(eventTypeId, column);
+    }
+
+    private void BuildCallColumns(ActorTypeMeta<TActor> meta, ActorWorld world)
+    {
+        foreach (ActorCallEntry entry in meta.CallBehaviours)
+        {
+            BuildCallColumnFromEntry(entry, world);
+        }
+    }
+
+    private void BuildCallColumnFromEntry(ActorCallEntry entry, ActorWorld world)
+    {
+        MethodInfo method = s_buildCallColumnMethod.MakeGenericMethod(entry.RequestType, entry.ResponseType);
+        method.Invoke(this, new object?[] { entry.Invoker, world, entry.RouteId });
+    }
+
+    private void BuildCallColumnCore<TRequest, TResponse>(object invokerObject, ActorWorld world, int routeId)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        var invoker = (ActorCallInvoker<TActor, TRequest, TResponse>)invokerObject;
+        var column = new ActorCallColumn<TActor, TRequest, TResponse>(
+            owner: this,
+            invoker: invoker,
+            options: world.DefaultMailOptions,
+            initialSlotCapacity: _actors.Length);
+
+        EnsureCallRouteCapacity(routeId);
+        _callColumnsByRouteId[routeId] = column;
+        world.RegisterCallColumn(routeId, column);
+    }
+
+    private void BuildCallRoutes(ActorTypeMeta<TActor> meta)
+    {
+        foreach (ActorCallEntry entry in meta.CallBehaviours)
+        {
+            EnsureCallRouteCapacity(entry.RouteId);
+
+            if (_callInvokersByRouteId[entry.RouteId] != null)
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate ActorCall route on actor type {typeof(TActor).Name}.");
+            }
+
+            _callInvokersByRouteId[entry.RouteId] = entry.Invoker;
+            _callRequestTypesByRouteId[entry.RouteId] = entry.RequestType;
+            _callResponseTypesByRouteId[entry.RouteId] = entry.ResponseType;
+        }
+    }
+
+    private void EnsureCallRouteCapacity(int routeId)
+    {
+        if ((uint)routeId < (uint)_callInvokersByRouteId.Length)
+        {
+            return;
+        }
+
+        int newSize = _callInvokersByRouteId.Length == 0 ? 4 : _callInvokersByRouteId.Length;
+        while (newSize <= routeId)
+        {
+            newSize *= 2;
+        }
+
+        Array.Resize(ref _callInvokersByRouteId, newSize);
+        Array.Resize(ref _callColumnsByRouteId, newSize);
+        Array.Resize(ref _callRequestTypesByRouteId, newSize);
+        Array.Resize(ref _callResponseTypesByRouteId, newSize);
     }
 
     internal void RegisterLifecycleInterfaces(
@@ -1051,6 +1224,14 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     {
         int count = 0;
         foreach (ActorEventColumnRuntime? column in _columnsByEventId)
+        {
+            if (column != null)
+            {
+                count += column.GetTotalPendingCount();
+            }
+        }
+
+        foreach (ActorCallColumnRuntime? column in _callColumnsByRouteId)
         {
             if (column != null)
             {
@@ -1172,6 +1353,11 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             column?.EnsureSlotCapacity(slotIndex);
         }
+
+        foreach (ActorCallColumnRuntime? column in _callColumnsByRouteId)
+        {
+            column?.EnsureSlotCapacity(slotIndex);
+        }
     }
 
     private void EnsureEventColumnCapacity(int eventTypeId)
@@ -1262,6 +1448,11 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             column?.ClearMail(slotIndex);
         }
+
+        foreach (ActorCallColumnRuntime? column in _callColumnsByRouteId)
+        {
+            column?.ClearMail(slotIndex);
+        }
     }
 
     private bool IsSlotPostable(int slotIndex)
@@ -1288,6 +1479,14 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     {
         int count = 0;
         foreach (ActorEventColumnRuntime? column in _columnsByEventId)
+        {
+            if (column != null)
+            {
+                count += column.GetPendingCount(slotIndex);
+            }
+        }
+
+        foreach (ActorCallColumnRuntime? column in _callColumnsByRouteId)
         {
             if (column != null)
             {

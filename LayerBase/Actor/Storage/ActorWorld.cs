@@ -1,19 +1,23 @@
 namespace LayerBase.Actor;
 
-public sealed partial class ActorWorld
+public sealed partial class ActorWorld : IDisposable
 {
     private BehaviourArchetype[] _archetypes = Array.Empty<BehaviourArchetype>();
     private readonly Dictionary<ActorArchetypeKey, BehaviourArchetype> _archetypeMap = new();
     private readonly Dictionary<ActorQueryDescriptor, ActorQueryCache> _queryCacheByDescriptor = new();
     private IActorEventBucket[] _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
+    private IActorEventBucket[] _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
     private int _bucketCursor;
+    private int _callBucketCursor;
     internal int QueryVersion { get; private set; }
     public ActorMailPumpOptions MailPumpOptions { get; set; }
     public ActorMailPumpStats LastMailPumpStats { get; private set; }
     internal ActorLifecycleScheduler Lifecycle { get; }
+    internal ActorDelayScheduler DelayScheduler { get; }
     private bool _hasPendingDestroy;
     internal LayerRuntime? Runtime { get; }
     internal ActorMailOptions DefaultMailOptions { get; }
+    private ActorWorldState _state;
 
     internal ActorWorld()
     {
@@ -21,6 +25,8 @@ public sealed partial class ActorWorld
         MailPumpOptions = ActorMailPumpOptions.Default;
         LastMailPumpStats = default;
         Lifecycle = new ActorLifecycleScheduler(this);
+        DelayScheduler = new ActorDelayScheduler(this, ActorTimeWheelOptions.Default);
+        _state = ActorWorldState.Running;
     }
     internal bool IsLifecycleRunnable(ActorId actorId)
     {
@@ -40,6 +46,8 @@ public sealed partial class ActorWorld
         MailPumpOptions = ActorMailPumpOptions.Default;
         LastMailPumpStats = default;
         Lifecycle = new ActorLifecycleScheduler(this);
+        DelayScheduler = new ActorDelayScheduler(this, ActorTimeWheelOptions.Default);
+        _state = ActorWorldState.Running;
     }
 
     internal ActorWorld(LayerRuntime runtime)
@@ -49,6 +57,8 @@ public sealed partial class ActorWorld
         MailPumpOptions = ActorMailPumpOptions.Default;
         LastMailPumpStats = default;
         Lifecycle = new ActorLifecycleScheduler(this);
+        DelayScheduler = new ActorDelayScheduler(this, ActorTimeWheelOptions.Default);
+        _state = ActorWorldState.Created;
     }
 
     private BehaviourArchetype GetOrCreateArchetype(ActorArchetypeKey key)
@@ -93,6 +103,21 @@ public sealed partial class ActorWorld
         bucket.AddColumn(column);
     }
 
+    internal void RegisterCallColumn<TRequest, TResponse>(int routeId, IActorCallColumn<TRequest, TResponse> column)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        EnsureCallBucketCapacity(routeId);
+
+        if (_callBucketsByRouteId[routeId] is not ActorCallBucket<TRequest, TResponse> bucket)
+        {
+            bucket = new ActorCallBucket<TRequest, TResponse>();
+            _callBucketsByRouteId[routeId] = bucket;
+        }
+
+        bucket.AddColumn(column);
+    }
+
     internal ActorMailOptions ResolveMailOptions(int eventTypeId)
     {
         if (Runtime?.PolicyTable != null)
@@ -117,5 +142,21 @@ public sealed partial class ActorWorld
         }
 
         Array.Resize(ref _eventBucketsByEventId, newSize);
+    }
+
+    private void EnsureCallBucketCapacity(int routeId)
+    {
+        if ((uint)routeId < (uint)_callBucketsByRouteId.Length)
+        {
+            return;
+        }
+
+        int newSize = _callBucketsByRouteId.Length == 0 ? 4 : _callBucketsByRouteId.Length;
+        while (newSize <= routeId)
+        {
+            newSize *= 2;
+        }
+
+        Array.Resize(ref _callBucketsByRouteId, newSize);
     }
 }

@@ -75,4 +75,52 @@ internal static class ActorBehaviourDiagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor CallMethodCannotBeGeneric = new(
+        id: "LBACTOR201",
+        title: "ActorCallBehaviour method cannot be generic",
+        messageFormat: "ActorCallBehaviour method '{0}' cannot be generic",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor CallMethodMustReturnLBTask = new(
+        id: "LBACTOR202",
+        title: "ActorCallBehaviour method must return LBTask<TResponse>",
+        messageFormat: "ActorCallBehaviour method '{0}' must return LayerBase.Async.LBTask<TResponse>",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor CallMethodMustHaveRequestAndCancellationToken = new(
+        id: "LBACTOR203",
+        title: "ActorCallBehaviour method signature is invalid",
+        messageFormat: "ActorCallBehaviour method '{0}' must have parameters '(in TRequest request, CancellationToken cancellationToken)'",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor CallRequestTypeMustBeStruct = new(
+        id: "LBACTOR204",
+        title: "ActorCallBehaviour request type must be a struct",
+        messageFormat: "ActorCallBehaviour method '{0}' request type '{1}' must be a struct",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor CallResponseTypeMustBeStruct = new(
+        id: "LBACTOR205",
+        title: "ActorCallBehaviour response type must be a struct",
+        messageFormat: "ActorCallBehaviour method '{0}' response type '{1}' must be a struct",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DuplicateCallRoute = new(
+        id: "LBACTOR206",
+        title: "ActorCallBehaviour request/response pair must be unique per actor",
+        messageFormat: "Actor type '{0}' already defines an ActorCallBehaviour for request '{1}' and response '{2}'",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

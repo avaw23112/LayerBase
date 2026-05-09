@@ -1,39 +1,39 @@
+using LayerBase.Async;
 using LayerBase.Core.Event;
 
 namespace LayerBase.Actor;
 
-internal sealed class EventColumn<TActor, TEvent> :
-    ActorEventColumnRuntime,
-    IActorEventColumn<TEvent>
+internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
+    ActorCallColumnRuntime,
+    IActorCallColumn<TRequest, TResponse>
     where TActor : class, IActor
-    where TEvent : struct
+    where TRequest : struct
+    where TResponse : struct
 {
     private readonly TypedActorStorage<TActor> _owner;
-    private readonly ActorBehaviourInvoker<TActor, TEvent> _invoker;
-    private readonly RingQueueBuffer<TEvent> _bufferPool;
+    private readonly ActorCallInvoker<TActor, TRequest, TResponse> _invoker;
+    private readonly RingQueueBuffer<ActorCallMail<TRequest, TResponse>> _bufferPool;
     private readonly DirtySlotList _dirtySlots;
     private readonly ActorMailOptions _options;
-    private EventMail<TEvent>[] _mails;
+    private EventMail<ActorCallMail<TRequest, TResponse>>[] _mails;
 
-    public EventColumn(
+    public ActorCallColumn(
         TypedActorStorage<TActor> owner,
-        ActorBehaviourInvoker<TActor, TEvent> invoker,
+        ActorCallInvoker<TActor, TRequest, TResponse> invoker,
         ActorMailOptions options,
         int initialSlotCapacity)
     {
         _owner = owner;
         _invoker = invoker;
         _options = options;
-        _mails = new EventMail<TEvent>[Math.Max(initialSlotCapacity, 1)];
-        _bufferPool = new RingQueueBuffer<TEvent>();
+        _mails = new EventMail<ActorCallMail<TRequest, TResponse>>[Math.Max(initialSlotCapacity, 1)];
+        _bufferPool = new RingQueueBuffer<ActorCallMail<TRequest, TResponse>>();
         _dirtySlots = new DirtySlotList();
     }
 
     public PostResult Post(
         int slotIndex,
-        in TEvent value,
-        ActorPostPolicy? postPolicy,
-        ActorMailFullPolicy? fullPolicy)
+        in ActorCallMail<TRequest, TResponse> mail)
     {
         ActorSlotState slotState = _owner.GetSlotState(slotIndex);
         if (slotState == ActorSlotState.PendingDestroy)
@@ -64,13 +64,13 @@ internal sealed class EventColumn<TActor, TEvent> :
         EnsureSlotCapacity(slotIndex);
         return EventMailWriter.Enqueue(
             ref _mails[slotIndex],
-            in value,
+            in mail,
             _bufferPool,
             _dirtySlots,
             slotIndex,
             _options,
-            postPolicy,
-            fullPolicy);
+            ActorPostPolicy.Queued,
+            null);
     }
 
     public ActorColumnPumpResult PumpOne(
@@ -80,8 +80,8 @@ internal sealed class EventColumn<TActor, TEvent> :
     {
         while (_dirtySlots.TryPeek(out int slotIndex))
         {
-            ref EventMail<TEvent> mail = ref _mails[slotIndex];
-            if (!EventMailReader.TryDequeue(ref mail, _bufferPool, out TEvent value))
+            ref EventMail<ActorCallMail<TRequest, TResponse>> mail = ref _mails[slotIndex];
+            if (!EventMailReader.TryDequeue(ref mail, _bufferPool, out ActorCallMail<TRequest, TResponse> value))
             {
                 _dirtySlots.Pop();
                 EventMailReader.ReleaseIfEmpty(ref mail, _bufferPool, _options);
@@ -90,6 +90,7 @@ internal sealed class EventColumn<TActor, TEvent> :
 
             if (!_owner.IsAliveSlot(slotIndex))
             {
+                value.Source.SetException(new ActorCallException(ActorCallFailureKind.ActorNotFound));
                 _dirtySlots.Pop();
                 EventMailReader.ReleaseIfEmpty(ref mail, _bufferPool, _options);
                 continue;
@@ -106,12 +107,13 @@ internal sealed class EventColumn<TActor, TEvent> :
             TActor? actor = _owner.Actors[slotIndex];
             if (actor == null)
             {
+                value.Source.SetException(new ActorCallException(ActorCallFailureKind.ActorNotFound));
                 _dirtySlots.Pop();
                 EventMailReader.ReleaseIfEmpty(ref mail, _bufferPool, _options);
                 continue;
             }
 
-            _invoker(actor, in value);
+            Dispatch(actor, in value);
             budget.ConsumeEvent();
             stats.RecordActorProcessed(actorKey);
 
@@ -131,21 +133,29 @@ internal sealed class EventColumn<TActor, TEvent> :
         return ActorColumnPumpResult.NoWork;
     }
 
-    public DispatchResult DispatchNow(
-        TActor actor,
-        in TEvent value)
+    public bool HasPendingWork()
     {
+        return _dirtySlots.Count > 0;
+    }
+
+    public void Dispatch(
+        TActor actor,
+        in ActorCallMail<TRequest, TResponse> mail)
+    {
+        if (mail.CancellationToken.IsCancellationRequested)
+        {
+            mail.Source.SetCanceled(mail.CancellationToken);
+            return;
+        }
+
         try
         {
-            _invoker(actor, in value);
-            return DispatchResult.Success();
+            LBTask<TResponse> task = _invoker(actor, in mail.Request, mail.CancellationToken);
+            ActorCallTaskBridge.Forward(task, mail.Source);
         }
         catch (Exception exception)
         {
-            return DispatchResult.Failure(
-                DispatchFailureKind.HandlerException,
-                $"Actor behaviour '{typeof(TEvent).Name}' threw during DispatchNow.",
-                exception);
+            mail.Source.SetException(exception);
         }
     }
 
@@ -172,7 +182,12 @@ internal sealed class EventColumn<TActor, TEvent> :
             return;
         }
 
-        ref EventMail<TEvent> mail = ref _mails[slotIndex];
+        ref EventMail<ActorCallMail<TRequest, TResponse>> mail = ref _mails[slotIndex];
+        while (EventMailReader.TryDequeue(ref mail, _bufferPool, out ActorCallMail<TRequest, TResponse> value))
+        {
+            value.Source.SetException(new ActorCallException(ActorCallFailureKind.PendingDestroy));
+        }
+
         EventMailReader.ForceRelease(ref mail, _bufferPool);
     }
 
@@ -195,10 +210,5 @@ internal sealed class EventColumn<TActor, TEvent> :
         }
 
         return count;
-    }
-
-    public bool HasPendingWork()
-    {
-        return _dirtySlots.Count > 0;
     }
 }

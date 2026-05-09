@@ -2,6 +2,51 @@ namespace LayerBase.Actor;
 
 public sealed partial class ActorWorld
 {
+    internal void PrepareRuntimeBuild()
+    {
+        if (_state == ActorWorldState.Disposed)
+        {
+            throw new ObjectDisposedException(nameof(ActorWorld));
+        }
+
+        _state = ActorWorldState.Building;
+    }
+
+    internal void CompleteRuntimeBuild()
+    {
+        if (_state == ActorWorldState.Disposed)
+        {
+            throw new ObjectDisposedException(nameof(ActorWorld));
+        }
+
+        _state = ActorWorldState.Running;
+    }
+
+    internal void RuntimeStop()
+    {
+        if (_state == ActorWorldState.Disposed)
+        {
+            return;
+        }
+
+        _state = ActorWorldState.Stopping;
+        DelayScheduler.Clear();
+    }
+
+    public void Dispose()
+    {
+        if (_state == ActorWorldState.Disposed)
+        {
+            return;
+        }
+
+        _state = ActorWorldState.Disposed;
+        DelayScheduler.Clear();
+        _queryCacheByDescriptor.Clear();
+        _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
+        _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
+    }
+
     public bool IsEnable(ActorId actorId)
     {
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)

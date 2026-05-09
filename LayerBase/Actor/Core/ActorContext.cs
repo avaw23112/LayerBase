@@ -1,4 +1,6 @@
 using LayerBase.Core.Event;
+using LayerBase.Async;
+using LayerBase.Layers;
 
 namespace LayerBase.Actor;
 
@@ -7,10 +9,12 @@ public readonly struct ActorContext
     public ActorId ActorId { get; }
 
     internal ActorWorld World { get; }
+    internal LayerRuntime? Runtime { get; }
 
     internal ActorContext(ActorWorld world, ActorId actorId)
     {
         World = world;
+        Runtime = world.Runtime;
         ActorId = actorId;
     }
 

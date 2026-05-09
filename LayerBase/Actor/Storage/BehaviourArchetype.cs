@@ -1,4 +1,5 @@
 using LayerBase.Core.Event;
+using LayerBase.Async;
 using System.Text;
 
 namespace LayerBase.Actor;
@@ -113,6 +114,105 @@ internal sealed class BehaviourArchetype
         }
 
         return storage.Post(actorId.SlotIndex, in value, postPolicy, fullPolicy);
+    }
+
+    public PostResult PostCall<TRequest, TResponse>(
+        ActorId actorId,
+        in ActorCallMail<TRequest, TResponse> mail)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        ushort storageIndex = actorId.TypeStorageIndex;
+        if ((uint)storageIndex >= (uint)_storages.Length)
+        {
+            return PostResult.Failure(
+                ActorPostStatus.ActorNotFound,
+                "Invalid ActorId.TypeStorageIndex.",
+                PostFailureKind.InvalidActorId);
+        }
+
+        TypedStorageRuntime storage = _storages[storageIndex];
+        if (!storage.IsAlive(actorId.SlotIndex, actorId.Generation))
+        {
+            ActorSlotState state = storage.GetSlotState(actorId.SlotIndex);
+            if (state == ActorSlotState.PendingDestroy)
+            {
+                return PostResult.Failure(
+                    ActorPostStatus.ActorPendingDestroy,
+                    "Actor is pending destroy.",
+                    PostFailureKind.PendingDestroy);
+            }
+
+            return PostResult.Failure(
+                ActorPostStatus.ActorNotAlive,
+                "ActorId is stale or actor slot is not alive.",
+                PostFailureKind.InvalidActorId);
+        }
+
+        return storage.PostCall(actorId.SlotIndex, in mail);
+    }
+
+    public DispatchResult DispatchNow<TEvent>(
+        ActorId actorId,
+        in TEvent value)
+        where TEvent : struct
+    {
+        ushort storageIndex = actorId.TypeStorageIndex;
+        if ((uint)storageIndex >= (uint)_storages.Length)
+        {
+            return DispatchResult.Failure(
+                DispatchFailureKind.InvalidActorId,
+                "Invalid ActorId.TypeStorageIndex.");
+        }
+
+        TypedStorageRuntime storage = _storages[storageIndex];
+        ActorSlotState state = storage.GetSlotState(actorId.SlotIndex);
+        if (state == ActorSlotState.PendingDestroy)
+        {
+            return DispatchResult.Failure(
+                DispatchFailureKind.PendingDestroy,
+                "Actor is pending destroy.");
+        }
+
+        if (!storage.IsAlive(actorId.SlotIndex, actorId.Generation))
+        {
+            return DispatchResult.Failure(
+                DispatchFailureKind.ActorNotFound,
+                "ActorId is stale or actor slot is not alive.");
+        }
+
+        return storage.DispatchNow(actorId.SlotIndex, actorId.Generation, in value);
+    }
+
+    public LBTask<TResponse> ImmediatelyAsk<TRequest, TResponse>(
+        ActorId actorId,
+        in TRequest request,
+        CancellationToken cancellationToken)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        ushort storageIndex = actorId.TypeStorageIndex;
+        if ((uint)storageIndex >= (uint)_storages.Length)
+        {
+            return ActorCallFailure.InvalidActor<TResponse>(
+                actorId,
+                ActorCallFailureKind.InvalidActorId);
+        }
+
+        TypedStorageRuntime storage = _storages[storageIndex];
+        ActorSlotState state = storage.GetSlotState(actorId.SlotIndex);
+        if (state == ActorSlotState.PendingDestroy)
+        {
+            return ActorCallFailure.InvalidActor<TResponse>(
+                actorId,
+                ActorCallFailureKind.PendingDestroy);
+        }
+
+        return storage.ImmediatelyAsk<TRequest, TResponse>(
+            actorId.SlotIndex,
+            actorId.Generation,
+            in request,
+            cancellationToken);
     }
 
     internal bool IsAlive(ActorId actorId)

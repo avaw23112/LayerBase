@@ -44,6 +44,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         }
 
         var methods = new List<MethodCandidate>();
+        var callMethods = new List<CallMethodCandidate>();
         foreach (MemberDeclarationSyntax member in declaration.Members)
         {
             if (member is not MethodDeclarationSyntax methodDeclaration)
@@ -58,6 +59,16 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
             if (!HasActorBehaviourAttribute(methodSymbol))
             {
+                if (!HasActorCallBehaviourAttribute(methodSymbol))
+                {
+                    continue;
+                }
+
+                callMethods.Add(new CallMethodCandidate(
+                    MethodName: methodSymbol.Name,
+                    MethodDisplay: methodSymbol.ToDisplayString(),
+                    MethodSymbol: methodSymbol,
+                    Location: methodSymbol.Locations.FirstOrDefault()));
                 continue;
             }
 
@@ -71,7 +82,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
         bool manuallyImplementsGeneratedMeta = ImplementsInterface(classSymbol, "LayerBase.Actor.IGeneratedActorMeta");
         bool hasTagOrGroupMetadata = HasTagOrGroupMetadata(classSymbol);
-        if (methods.Count == 0 && !manuallyImplementsGeneratedMeta && !hasTagOrGroupMetadata)
+        if (methods.Count == 0 && callMethods.Count == 0 && !manuallyImplementsGeneratedMeta && !hasTagOrGroupMetadata)
         {
             return null;
         }
@@ -80,6 +91,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             ClassSymbol: classSymbol,
             Declaration: declaration,
             Methods: methods.ToImmutableArray(),
+            CallMethods: callMethods.ToImmutableArray(),
             ManuallyImplementsGeneratedMeta: manuallyImplementsGeneratedMeta,
             HasTagOrGroupMetadata: hasTagOrGroupMetadata);
     }
@@ -104,13 +116,19 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             .Select(static group => group.First())
             .ToImmutableArray();
 
+        ImmutableArray<CallMethodCandidate> callMethods = candidates
+            .SelectMany(static candidate => candidate.CallMethods)
+            .GroupBy(static method => method.MethodDisplay)
+            .Select(static group => group.First())
+            .ToImmutableArray();
+
         bool hasTagOrGroupMetadata = candidates.Any(static candidate => candidate.HasTagOrGroupMetadata);
-        if (methods.Length == 0 && !hasTagOrGroupMetadata)
+        if (methods.Length == 0 && callMethods.Length == 0 && !hasTagOrGroupMetadata)
         {
             return;
         }
 
-        List<Diagnostic> diagnostics = CollectDiagnostics(classSymbol, candidates, methods);
+        List<Diagnostic> diagnostics = CollectDiagnostics(classSymbol, candidates, methods, callMethods);
         foreach (Diagnostic diagnostic in diagnostics)
         {
             context.ReportDiagnostic(diagnostic);
@@ -121,14 +139,15 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             return;
         }
 
-        string source = GenerateSource(classSymbol, methods);
+        string source = GenerateSource(classSymbol, methods, callMethods);
         context.AddSource(GetHintName(classSymbol), SourceText.From(source, Encoding.UTF8));
     }
 
     private static List<Diagnostic> CollectDiagnostics(
         INamedTypeSymbol classSymbol,
         ImmutableArray<ClassCandidate> candidates,
-        ImmutableArray<MethodCandidate> methods)
+        ImmutableArray<MethodCandidate> methods,
+        ImmutableArray<CallMethodCandidate> callMethods)
     {
         var diagnostics = new List<Diagnostic>();
 
@@ -223,10 +242,113 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             seenEventTypes.Add(parameter.Type, method);
         }
 
+        var seenCallRoutes = new Dictionary<string, CallMethodCandidate>(StringComparer.Ordinal);
+        foreach (CallMethodCandidate method in callMethods)
+        {
+            IMethodSymbol methodSymbol = method.MethodSymbol;
+
+            if (methodSymbol.IsStatic)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.MethodMustBeInstance,
+                    method.Location,
+                    method.MethodName));
+                continue;
+            }
+
+            if (methodSymbol.IsGenericMethod)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.CallMethodCannotBeGeneric,
+                    method.Location,
+                    method.MethodName));
+                continue;
+            }
+
+            if (!TryGetLBTaskResultType(methodSymbol.ReturnType, out ITypeSymbol? responseType))
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.CallMethodMustReturnLBTask,
+                    method.Location,
+                    method.MethodName));
+                continue;
+            }
+
+            if (responseType!.IsValueType == false)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.CallResponseTypeMustBeStruct,
+                    method.Location,
+                    method.MethodName,
+                    responseType.ToDisplayString()));
+                continue;
+            }
+
+            if (methodSymbol.Parameters.Length != 2)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.CallMethodMustHaveRequestAndCancellationToken,
+                    method.Location,
+                    method.MethodName));
+                continue;
+            }
+
+            IParameterSymbol requestParameter = methodSymbol.Parameters[0];
+            if (requestParameter.RefKind != RefKind.In)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.CallMethodMustHaveRequestAndCancellationToken,
+                    requestParameter.Locations.FirstOrDefault() ?? method.Location,
+                    method.MethodName));
+                continue;
+            }
+
+            if (requestParameter.Type.IsValueType == false)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.CallRequestTypeMustBeStruct,
+                    requestParameter.Locations.FirstOrDefault() ?? method.Location,
+                    method.MethodName,
+                    requestParameter.Type.ToDisplayString()));
+                continue;
+            }
+
+            IParameterSymbol cancellationTokenParameter = methodSymbol.Parameters[1];
+            if (cancellationTokenParameter.RefKind != RefKind.None
+                || cancellationTokenParameter.Type.ToDisplayString() != "System.Threading.CancellationToken")
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.CallMethodMustHaveRequestAndCancellationToken,
+                    cancellationTokenParameter.Locations.FirstOrDefault() ?? method.Location,
+                    method.MethodName));
+                continue;
+            }
+
+            string routeKey = requestParameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                              + "->"
+                              + responseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            if (seenCallRoutes.ContainsKey(routeKey))
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.DuplicateCallRoute,
+                    method.Location,
+                    classSymbol.Name,
+                    requestParameter.Type.ToDisplayString(),
+                    responseType.ToDisplayString()));
+                continue;
+            }
+
+            seenCallRoutes.Add(routeKey, method);
+        }
+
         return diagnostics;
     }
 
-    private static string GenerateSource(INamedTypeSymbol classSymbol, ImmutableArray<MethodCandidate> methods)
+    private static string GenerateSource(
+        INamedTypeSymbol classSymbol,
+        ImmutableArray<MethodCandidate> methods,
+        ImmutableArray<CallMethodCandidate> callMethods)
     {
         var builder = new StringBuilder();
         builder.AppendLine("// <auto-generated />");
@@ -348,6 +470,40 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             builder.Append("            actor.");
             builder.Append(method.MethodName);
             builder.AppendLine("(in e);");
+            builder.Append(memberIndent);
+            builder.AppendLine("        });");
+        }
+
+        foreach (CallMethodCandidate method in callMethods.OrderBy(static method => method.MethodName, StringComparer.Ordinal))
+        {
+            IMethodSymbol methodSymbol = method.MethodSymbol;
+            ITypeSymbol requestType = methodSymbol.Parameters[0].Type;
+            ITypeSymbol responseType = ((INamedTypeSymbol)methodSymbol.ReturnType).TypeArguments[0];
+            string requestTypeName = requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            string responseTypeName = responseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            builder.Append(memberIndent);
+            builder.Append("    builder.AddCallBehaviour<");
+            builder.Append(actorTypeName);
+            builder.Append(", ");
+            builder.Append(requestTypeName);
+            builder.Append(", ");
+            builder.Append(responseTypeName);
+            builder.AppendLine(">(");
+            builder.Append(memberIndent);
+            builder.Append("        static (");
+            builder.Append(actorTypeName);
+            builder.Append(" actor, in ");
+            builder.Append(requestTypeName);
+            builder.Append(" request, global::System.Threading.CancellationToken cancellationToken) =>");
+            builder.AppendLine();
+            builder.Append(memberIndent);
+            builder.AppendLine("        {");
+            builder.Append(memberIndent);
+            builder.Append("            return actor.");
+            builder.Append(method.MethodName);
+            builder.Append("(in request, cancellationToken);");
+            builder.AppendLine();
             builder.Append(memberIndent);
             builder.AppendLine("        });");
         }
@@ -522,6 +678,34 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         return false;
     }
 
+    private static bool HasActorCallBehaviourAttribute(IMethodSymbol methodSymbol)
+    {
+        foreach (AttributeData attribute in methodSymbol.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() == "LayerBase.Actor.ActorCallBehaviourAttribute")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetLBTaskResultType(ITypeSymbol returnType, out ITypeSymbol? resultType)
+    {
+        if (returnType is INamedTypeSymbol namedType
+            && namedType.Arity == 1
+            && namedType.Name == "LBTask"
+            && namedType.ContainingNamespace.ToDisplayString() == "LayerBase.Async")
+        {
+            resultType = namedType.TypeArguments[0];
+            return true;
+        }
+
+        resultType = null;
+        return false;
+    }
+
     private static bool HasTagOrGroupMetadata(INamedTypeSymbol classSymbol)
     {
         return GetTagTypes(classSymbol).Length > 0
@@ -584,6 +768,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         INamedTypeSymbol ClassSymbol,
         ClassDeclarationSyntax Declaration,
         ImmutableArray<MethodCandidate> Methods,
+        ImmutableArray<CallMethodCandidate> CallMethods,
         bool ManuallyImplementsGeneratedMeta,
         bool HasTagOrGroupMetadata);
 
@@ -591,6 +776,12 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         string MethodName,
         string MethodDisplay,
         ITypeSymbol? EventType,
+        IMethodSymbol MethodSymbol,
+        Location? Location);
+
+    private sealed record CallMethodCandidate(
+        string MethodName,
+        string MethodDisplay,
         IMethodSymbol MethodSymbol,
         Location? Location);
 }
