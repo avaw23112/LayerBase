@@ -39,6 +39,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         if (slotState == ActorSlotState.PendingDestroy)
         {
             return PostResult.Failure(
+                ActorPostStatus.ActorPendingDestroy,
                 "Actor is pending destroy.",
                 PostFailureKind.PendingDestroy);
         }
@@ -46,6 +47,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         if (slotState == ActorSlotState.Destroying)
         {
             return PostResult.Failure(
+                ActorPostStatus.ActorNotAlive,
                 "Actor is destroying.",
                 PostFailureKind.Destroying);
         }
@@ -54,6 +56,7 @@ internal sealed class EventColumn<TActor, TEvent> :
             && !_owner.IsSlotEnabled(slotIndex))
         {
             return PostResult.Failure(
+                ActorPostStatus.ActorDisabledRejected,
                 "Actor is disabled.",
                 PostFailureKind.DisabledActor);
         }

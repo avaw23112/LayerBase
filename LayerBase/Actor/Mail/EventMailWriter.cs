@@ -1,4 +1,5 @@
 using LayerBase.Core.Event;
+using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Actor;
 
@@ -40,13 +41,6 @@ internal static class EventMailWriter
         ActorMailOptions options)
         where TEvent : struct
     {
-        if (!ActorMailMergeInvoker<TEvent>.CanMerge)
-        {
-            return PostResult.Failure(
-                $"Event type {typeof(TEvent).Name} does not support merge delivery.",
-                PostFailureKind.Unknown);
-        }
-
         bool wasEmpty = mail.Count == 0;
         EnsureMailAllocated(ref mail, bufferPool, options);
 
@@ -54,7 +48,13 @@ internal static class EventMailWriter
         if (!wasEmpty)
         {
             TEvent oldValue = bufferPool.Read(mail.BufferId, mail.Head);
-            merged = ActorMailMergeInvoker<TEvent>.Merge(in oldValue, in value);
+            if (!EventMetaData.TryMergePostEvent(in oldValue, in value, out merged))
+            {
+                return PostResult.Failure(
+                    ActorPostStatus.MergeFailed,
+                    "EventMetaData.TryMergePostEvent failed.",
+                    PostFailureKind.MergeFailed);
+            }
         }
 
         bufferPool.Write(mail.BufferId, 0, in merged);
@@ -178,7 +178,10 @@ internal static class EventMailWriter
                 return HandleGrowFailure(ref mail, in value, bufferPool, options);
 
             case ActorMailFullPolicy.RejectNew:
-                return PostResult.Failure("Actor mail is full.");
+                return PostResult.Failure(
+                    ActorPostStatus.MailFullRejected,
+                    "Actor mail is full.",
+                    PostFailureKind.MailboxFull);
 
             case ActorMailFullPolicy.DropOldest:
                 if (mail.Count > 0)
@@ -217,7 +220,10 @@ internal static class EventMailWriter
         switch (options.GrowFailurePolicy)
         {
             case ActorMailFullPolicy.RejectNew:
-                return PostResult.Failure("Actor mail reached max capacity.");
+                return PostResult.Failure(
+                    ActorPostStatus.MailFullRejected,
+                    "Actor mail reached max capacity.",
+                    PostFailureKind.MailboxFull);
 
             case ActorMailFullPolicy.DropOldest:
                 if (mail.Count > 0)

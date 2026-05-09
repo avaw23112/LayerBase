@@ -9,5 +9,6 @@ public enum PostFailureKind
     MailboxFull = 4,
     DisabledActor = 5,
     PendingDestroy = 6,
-    Destroying = 7
+    Destroying = 7,
+    MergeFailed = 8
 }

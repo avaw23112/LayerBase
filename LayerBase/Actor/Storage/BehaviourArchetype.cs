@@ -72,7 +72,10 @@ internal sealed class BehaviourArchetype
         ushort storageIndex = actorId.TypeStorageIndex;
         if ((uint)storageIndex >= (uint)_storages.Length)
         {
-            return PostResult.Failure("Invalid ActorId.TypeStorageIndex.");
+            return PostResult.Failure(
+                ActorPostStatus.ActorNotFound,
+                "Invalid ActorId.TypeStorageIndex.",
+                PostFailureKind.InvalidActorId);
         }
 
         TypedStorageRuntime storage = _storages[storageIndex];
@@ -81,20 +84,32 @@ internal sealed class BehaviourArchetype
             ActorSlotState state = storage.GetSlotState(actorId.SlotIndex);
             if (state == ActorSlotState.PendingDestroy)
             {
-                return PostResult.Failure("Actor is pending destroy.", PostFailureKind.PendingDestroy);
+                return PostResult.Failure(
+                    ActorPostStatus.ActorPendingDestroy,
+                    "Actor is pending destroy.",
+                    PostFailureKind.PendingDestroy);
             }
 
             if (state == ActorSlotState.Destroying)
             {
-                return PostResult.Failure("Actor is destroying.", PostFailureKind.Destroying);
+                return PostResult.Failure(
+                    ActorPostStatus.ActorNotAlive,
+                    "Actor is destroying.",
+                    PostFailureKind.Destroying);
             }
 
             if (storage.GetGeneration(actorId.SlotIndex) != actorId.Generation)
             {
-                return PostResult.Failure("ActorId generation mismatch.", PostFailureKind.InvalidActorId);
+                return PostResult.Failure(
+                    ActorPostStatus.ActorNotFound,
+                    "ActorId generation mismatch.",
+                    PostFailureKind.InvalidActorId);
             }
 
-            return PostResult.Failure("ActorId is stale or actor slot is not alive.", PostFailureKind.InvalidActorId);
+            return PostResult.Failure(
+                ActorPostStatus.ActorNotAlive,
+                "ActorId is stale or actor slot is not alive.",
+                PostFailureKind.InvalidActorId);
         }
 
         return storage.Post(actorId.SlotIndex, in value, postPolicy, fullPolicy);

@@ -1,5 +1,6 @@
 using LayerBase.Actor;
 using LayerBase.Core.Event;
+using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Test;
 
@@ -13,7 +14,7 @@ public struct ActorHardeningEvent
     }
 }
 
-public struct ActorHardeningMergeEvent : IActorMailMerge<ActorHardeningMergeEvent>
+public partial struct ActorHardeningMergeEvent
 {
     public int Value;
 
@@ -21,10 +22,24 @@ public struct ActorHardeningMergeEvent : IActorMailMerge<ActorHardeningMergeEven
     {
         Value = value;
     }
+}
 
-    public ActorHardeningMergeEvent Merge(in ActorHardeningMergeEvent oldValue, in ActorHardeningMergeEvent newValue)
+public struct ActorHardeningUnmergeableEvent
+{
+    public int Value;
+
+    public ActorHardeningUnmergeableEvent(int value)
     {
-        return new ActorHardeningMergeEvent(oldValue.Value + newValue.Value);
+        Value = value;
+    }
+}
+
+public sealed class ActorHardeningMergeEventMetaData : EventMetaData<ActorHardeningMergeEvent>
+{
+    public override bool TryMergePostEvent(ref ActorHardeningMergeEvent current, in ActorHardeningMergeEvent next)
+    {
+        current = new ActorHardeningMergeEvent(current.Value + next.Value);
+        return true;
     }
 }
 
@@ -62,6 +77,12 @@ internal sealed partial class HardeningProbeActor : IActor, LayerBase.Actor.IUpd
     private void OnMerge(in ActorHardeningMergeEvent value)
     {
         ActorHardeningTrace.Entries.Add($"merge:{value.Value}");
+    }
+
+    [ActorBehaviour]
+    private void OnUnmergeable(in ActorHardeningUnmergeableEvent value)
+    {
+        ActorHardeningTrace.Entries.Add($"unmergeable:{value.Value}");
     }
 
     void LayerBase.Actor.IUpdate.Update(float deltaTime)
@@ -103,6 +124,9 @@ public class ActorHardeningTests
     [SetUp]
     public void SetUp()
     {
+        LayerHub.Reset();
+        EventMetaDataHandler.Clear();
+        EventMetaDataHandler.RegisterMetaData<ActorHardeningMergeEvent>(new ActorHardeningMergeEventMetaData());
         ActorHardeningTrace.Reset();
     }
 
@@ -196,6 +220,35 @@ public class ActorHardeningTests
         world.Pump(0f, 0f, false, ref budget);
 
         Assert.That(ActorHardeningTrace.Entries, Is.EqualTo(new[] { "merge:6", "update:0" }));
+    }
+
+    [Test]
+    public void Merge_policy_returns_explicit_failure_when_event_metadata_cannot_merge()
+    {
+        var world = new ActorWorld(new ActorMailOptions(
+            postPolicy: ActorPostPolicy.Coalesced,
+            fullPolicy: ActorMailFullPolicy.Grow,
+            growFailurePolicy: ActorMailFullPolicy.RejectNew,
+            initialCapacity: 4,
+            maxCapacity: 16,
+            growFactor: 2,
+            releaseWhenEmpty: true));
+
+        HardeningProbeActor actor = world.CreateActor<HardeningProbeActor>();
+        ActorId actorId = actor.GetActorId();
+
+        PostResult first = world.TryPost(actorId, new ActorHardeningUnmergeableEvent(4));
+        PostResult second = world.TryPost(actorId, new ActorHardeningUnmergeableEvent(5));
+
+        Assert.That(first.IsSuccess, Is.True);
+        Assert.That(second.IsSuccess, Is.False);
+        Assert.That(second.ActorStatus, Is.EqualTo(ActorPostStatus.MergeFailed));
+        Assert.That(second.FailureKind, Is.EqualTo(PostFailureKind.MergeFailed));
+
+        var budget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        Assert.That(ActorHardeningTrace.Entries, Is.EqualTo(new[] { "unmergeable:4", "update:0" }));
     }
 
     [Test]

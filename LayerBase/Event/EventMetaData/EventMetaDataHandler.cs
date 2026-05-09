@@ -77,6 +77,25 @@ internal static class EventMetaDataHandler
         s_pendingExpectations.Enqueue(new EventExpectation<EventType>(metaData, in e, exception));
     }
 
+    internal static bool TryMergePostEvent<TEvent>(
+        in TEvent oldValue,
+        in TEvent newValue,
+        out TEvent mergedValue)
+        where TEvent : struct
+    {
+        if (ResolveMetaData<TEvent>() is EventMetaData<TEvent> metaData)
+        {
+            mergedValue = oldValue;
+            if (metaData.TryMergePostEvent(ref mergedValue, in newValue))
+            {
+                return true;
+            }
+        }
+
+        mergedValue = default;
+        return false;
+    }
+
     internal static IEnumerable<(Type Type, IEventMetaData MetaData)> GetAllMetaData()
     {
         var byType = Volatile.Read(ref s_metaDataByType);

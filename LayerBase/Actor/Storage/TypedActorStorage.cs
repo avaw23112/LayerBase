@@ -143,7 +143,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         if (!TryGetColumn(out EventColumn<TActor, TEvent>? column))
         {
             return PostResult.Failure(
-                $"Actor type {typeof(TActor).Name} does not support event {typeof(TEvent).Name}.");
+                ActorPostStatus.EventNotSupported,
+                $"Actor type {typeof(TActor).Name} does not support event {typeof(TEvent).Name}.",
+                PostFailureKind.UnsupportedEvent);
         }
 
         return column.Post(slotIndex, in value, postPolicy, fullPolicy);

@@ -18,6 +18,18 @@ public interface IEventMetaData
     EventIdentity GetIdentity();
 }
 
+public static class EventMetaData
+{
+    public static bool TryMergePostEvent<TEvent>(
+        in TEvent oldValue,
+        in TEvent newValue,
+        out TEvent mergedValue)
+        where TEvent : struct
+    {
+        return EventMetaDataHandler.TryMergePostEvent(in oldValue, in newValue, out mergedValue);
+    }
+}
+
 public abstract class EventMetaData<TEvent> : IEventMetaData where TEvent : struct
 {
     public int EventId => EventTypeId<TEvent>.Id;
