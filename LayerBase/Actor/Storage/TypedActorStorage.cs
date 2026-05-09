@@ -137,6 +137,17 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         _enabled[slotIndex] = enable;
+        
+        var onEnable = _actors[slotIndex] as IEnable;
+        var onDisable = _actors[slotIndex] as IDisable;
+        if (onEnable != null && enable)
+        {
+            onEnable.OnEnable();
+        }
+        else if(onDisable != null && !enable)
+        {
+            onDisable.OnDisable();
+        }
         return true;
     }
 
