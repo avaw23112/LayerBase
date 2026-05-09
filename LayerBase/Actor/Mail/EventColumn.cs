@@ -296,6 +296,13 @@ internal sealed class EventColumn<TActor, TEvent> :
                && _options.GrowFailurePolicy == ActorMailFullPolicy.RejectNew;
     }
 
+    internal PostResult PostQueuedFast(int slotIndex, in TEvent value)
+    {
+        EnsureSlotCapacity(slotIndex);
+        ref EventMail<TEvent> mail = ref _mails[slotIndex];
+        return PostQueuedFast(ref mail, slotIndex, in value);
+    }
+
     private bool CanUsePumpFastPath(in ActorMailPumpOptions options)
     {
         return options.MaxMailsPerActorPerPump <= 0

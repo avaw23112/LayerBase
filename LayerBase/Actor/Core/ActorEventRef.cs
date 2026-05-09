@@ -35,6 +35,6 @@ public readonly struct ActorEventRef<TActor, TEvent>
                 PostFailureKind.InvalidActorId);
         }
 
-        return _column.Post(_slotIndex, in value, null, null);
+        return _column.PostQueuedFast(_slotIndex, in value);
     }
 }
