@@ -11,42 +11,6 @@ namespace LayerBase.Test;
 public class ActorGeneratorTests
 {
     [Test]
-    public void Partial_actor_with_actor_behaviours_generates_IGeneratedActorMeta()
-    {
-        GeneratorRunResult result = RunGenerator("""
-            using LayerBase.Actor;
-
-            namespace Sample;
-
-            public struct DamageEvent { }
-            public struct DeadEvent { }
-
-            public sealed partial class EnemyActor : IActor
-            {
-                [ActorBehaviour]
-                private void OnDamage(in DamageEvent e)
-                {
-                }
-
-                [ActorBehaviour]
-                private void OnDead(in DeadEvent e)
-                {
-                }
-            }
-            """);
-
-        Assert.That(GetGeneratorDiagnostics(result), Is.Empty);
-
-        string generated = result.GeneratedSources.Single().SourceText.ToString();
-        Assert.That(generated, Does.Contain("partial class EnemyActor : global::LayerBase.Actor.IGeneratedActorMeta"));
-        Assert.That(generated, Does.Contain("private global::LayerBase.Actor.ActorContext __actorContext;"));
-        Assert.That(generated, Does.Contain("bool global::LayerBase.Actor.IGeneratedActorMeta.GetEnable()"));
-        Assert.That(generated, Does.Contain("bool global::LayerBase.Actor.IGeneratedActorMeta.SetEnable(bool enable)"));
-        Assert.That(generated, Does.Contain("builder.AddBehaviour<global::Sample.EnemyActor, global::Sample.DamageEvent>("));
-        Assert.That(generated, Does.Contain("builder.AddBehaviour<global::Sample.EnemyActor, global::Sample.DeadEvent>("));
-    }
-
-    [Test]
     public void Tag_and_group_attributes_generate_actor_meta_entries_even_without_behaviours()
     {
         GeneratorRunResult result = RunGenerator("""

@@ -70,7 +70,7 @@ public sealed partial class ActorRefTests
         Assert.That(staleActorRefResult.IsSuccess, Is.False);
         Assert.That(staleActorEventRefResult.IsSuccess, Is.False);
 
-        second.Post(new ActorRefEvent(3));
+        second.PostInside(new ActorRefEvent(3));
         budget = new RuntimeFrameBudget(8, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
 

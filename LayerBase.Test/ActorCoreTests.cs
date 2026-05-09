@@ -177,6 +177,8 @@ public class ActorCoreTests
     {
         public int BuildCount { get; private set; }
 
+        public ActorContext Context { get; }
+
         public void __BuildActorMeta(ActorTypeMetaBuilder builder)
         {
             BuildCount++;

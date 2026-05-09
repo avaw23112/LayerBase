@@ -85,7 +85,7 @@ public class ActorLifecycleTests
         Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "start" }));
         ActorLifecycleTrace.Entries.Clear();
 
-        actor.Post(new ActorLifecycleEvent(1));
+        actor.PostInside(new ActorLifecycleEvent(1));
 
         var budget = new RuntimeFrameBudget(32, 0, 0);
         world.Pump(
@@ -124,7 +124,7 @@ public class ActorLifecycleTests
         Assert.That(actor.SetEnable(false), Is.True);
         Assert.That(actor.GetEnable(), Is.False);
 
-        actor.Post(new ActorLifecycleEvent(3));
+        actor.PostInside(new ActorLifecycleEvent(3));
 
         var budget = new RuntimeFrameBudget(32, 0, 0);
         world.Pump(
@@ -161,7 +161,7 @@ public class ActorLifecycleTests
 
         Assert.That(world.DestroyActor(oldId), Is.True);
         Assert.That(world.IsAlive(oldId), Is.False);
-        Assert.That(world.TryPost(oldId, new ActorLifecycleEvent(8)).IsSuccess, Is.False);
+        Assert.That(world.TryPostTo(oldId, new ActorLifecycleEvent(8)).IsSuccess, Is.False);
 
         ActorQueryResult query = world.QueryActor<ActorLifecycleEvent>();
         Assert.That(query.DebugActors, Is.Empty);
@@ -180,7 +180,7 @@ public class ActorLifecycleTests
 
         Assert.That(newId.SlotIndex, Is.EqualTo(oldId.SlotIndex));
         Assert.That(newId.Generation, Is.GreaterThan(oldId.Generation));
-        Assert.That(world.TryPost(oldId, new ActorLifecycleEvent(9)).IsSuccess, Is.False);
+        Assert.That(world.TryPostTo(oldId, new ActorLifecycleEvent(9)).IsSuccess, Is.False);
         Assert.That(world.IsAlive(newId), Is.True);
     }
 
@@ -192,7 +192,7 @@ public class ActorLifecycleTests
         Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "start" }));
         ActorLifecycleTrace.Entries.Clear();
 
-        actor.Post(new ActorLifecycleEvent(5));
+        actor.PostInside(new ActorLifecycleEvent(5));
         Assert.That(world.DestroyActor(actor.GetActorId()), Is.True);
 
         var budget = new RuntimeFrameBudget(32, 0, 0);
@@ -217,7 +217,7 @@ public class ActorLifecycleTests
         ActorId actorId = actor.GetActorId();
         LifecycleProbeActor.BehaviourHook = _ => world.DestroyActor(actorId);
 
-        actor.Post(new ActorLifecycleEvent(11));
+        actor.PostInside(new ActorLifecycleEvent(11));
 
         var budget = new RuntimeFrameBudget(32, 0, 0);
         world.Pump(

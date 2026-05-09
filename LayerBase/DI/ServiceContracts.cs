@@ -755,7 +755,7 @@ public static class ServiceExtensions
     {
         return service
                .GetBinding()
-               .Runtime.Post(actorId,in value, postPolicy, fullPolicy);
+               .Runtime.PostTo(actorId,in value, postPolicy, fullPolicy);
     }
 
     public static PostResult TryPostTo<TEvent>(
@@ -768,7 +768,7 @@ public static class ServiceExtensions
     {
         return service
                .GetBinding()
-               .Runtime.TryPost(actorId,in value, postPolicy, fullPolicy);
+               .Runtime.TryPostTo(actorId,in value, postPolicy, fullPolicy);
     }
 
     public static void PostToMany<TEvent>(
@@ -781,7 +781,7 @@ public static class ServiceExtensions
     {
         service
             .GetBinding()
-            .Runtime.PostMany(actorIds,in value, postPolicy, fullPolicy);
+            .Runtime.PostToMany(actorIds,in value, postPolicy, fullPolicy);
     }
     public static void SubscribeFlow<TValue>(
         this IService service,
@@ -1068,7 +1068,7 @@ public static class LayerContextExtensions
     {
         return context
                .GetBinding()
-               .Runtime.Post(actorId,in value, postPolicy, fullPolicy);
+               .Runtime.PostTo(actorId,in value, postPolicy, fullPolicy);
     }
 
     public static PostResult TryPostTo<TEvent>(
@@ -1081,7 +1081,7 @@ public static class LayerContextExtensions
     {
         return context
                .GetBinding()
-               .Runtime.TryPost(actorId,in value, postPolicy, fullPolicy);
+               .Runtime.TryPostTo(actorId,in value, postPolicy, fullPolicy);
     }
 
     public static void PostToMany<TEvent>(
@@ -1094,7 +1094,7 @@ public static class LayerContextExtensions
     {
         context
             .GetBinding()
-            .Runtime.PostMany(actorIds,in value, postPolicy, fullPolicy);
+            .Runtime.PostToMany(actorIds,in value, postPolicy, fullPolicy);
     }
 
     public static void SubscribeFlow<TValue>(

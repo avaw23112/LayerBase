@@ -4,19 +4,14 @@ namespace LayerBase.Actor;
 
 public interface IGeneratedActorMeta
 {
+    /// <summary>
+    /// Actor 运行时上下文。
+    /// </summary>
+    ActorContext Context { get; }
+    
     void __BuildActorMeta(ActorTypeMetaBuilder builder);
 
     ActorId GetId();
 
     void ActorInit(ActorContext context);
-
-    bool GetEnable();
-
-    bool SetEnable(bool enable);
-
-    PostResult Post<TEvent>(in TEvent value)
-        where TEvent : struct;
-
-    PostResult TryPost<TEvent>(in TEvent value)
-        where TEvent : struct;
 }

@@ -46,10 +46,10 @@ public sealed partial class ActorWorldHotPathTests
         HotPathProbeActor actorB = world.CreateActor<HotPathProbeActor>();
 
         HotPathTrace.Values.Clear();
-        actorA.Post(new HotPathEvent(1));
-        actorA.Post(new HotPathEvent(2));
-        actorB.Post(new HotPathEvent(10));
-        actorB.Post(new HotPathEvent(11));
+        actorA.PostInside(new HotPathEvent(1));
+        actorA.PostInside(new HotPathEvent(2));
+        actorB.PostInside(new HotPathEvent(10));
+        actorB.PostInside(new HotPathEvent(11));
 
         var budget = new RuntimeFrameBudget(16, 0, 0);
         world.Pump(0f, 0f, false, ref budget);

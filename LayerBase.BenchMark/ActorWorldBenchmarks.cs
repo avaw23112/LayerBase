@@ -136,7 +136,7 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
         {
             for (int j = 0; j < BatchSize; j++)
             {
-                _actor.Post(ActorBenchEvent.Instance);
+                _actor.PostInside(ActorBenchEvent.Instance);
             }
 
             var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
@@ -157,7 +157,7 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
     {
         for (int i = 0; i < OneMillion; i++)
         {
-            _postOnlyActor.Post(ActorBenchEvent.Instance);
+            _postOnlyActor.PostInside(ActorBenchEvent.Instance);
         }
     }
 
@@ -200,7 +200,7 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
     {
         for (int i = 0; i < OneMillion; i++)
         {
-            _pumpOnlyActor.Post(ActorBenchEvent.Instance);
+            _pumpOnlyActor.PostInside(ActorBenchEvent.Instance);
         }
     }
 
@@ -250,7 +250,7 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
     {
         for (int i = 0; i < capacity; i++)
         {
-            actor.Post(ActorBenchEvent.Instance);
+            actor.PostInside(ActorBenchEvent.Instance);
         }
 
         var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);

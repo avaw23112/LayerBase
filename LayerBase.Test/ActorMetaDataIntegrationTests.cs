@@ -120,8 +120,8 @@ public class ActorMetaDataIntegrationTests
             growFactor: 2,
             releaseWhenEmpty: true));
 
-        actor.Post(new ActorMetaConfiguredEvent(1));
-        actor.Post(new ActorMetaConfiguredEvent(2));
+        actor.PostInside(new ActorMetaConfiguredEvent(1));
+        actor.PostInside(new ActorMetaConfiguredEvent(2));
 
         runtime.Pump(0.016f);
 

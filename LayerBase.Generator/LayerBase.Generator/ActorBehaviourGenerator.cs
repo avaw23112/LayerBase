@@ -376,15 +376,14 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
         string memberIndent = indent + "    ";
         builder.Append(memberIndent);
-        builder.AppendLine("private global::LayerBase.Actor.ActorContext __actorContext;");
+        builder.AppendLine("public global::LayerBase.Actor.ActorContext Context { get; private set; }");
         builder.AppendLine();
-
         builder.Append(memberIndent);
         builder.AppendLine("global::LayerBase.Actor.ActorId global::LayerBase.Actor.IGeneratedActorMeta.GetId()");
         builder.Append(memberIndent);
         builder.AppendLine("{");
         builder.Append(memberIndent);
-        builder.AppendLine("    return __actorContext.ActorId;");
+        builder.AppendLine("    return Context.ActorId;");
         builder.Append(memberIndent);
         builder.AppendLine("}");
         builder.AppendLine();
@@ -394,51 +393,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         builder.Append(memberIndent);
         builder.AppendLine("{");
         builder.Append(memberIndent);
-        builder.AppendLine("    __actorContext = context;");
-        builder.Append(memberIndent);
-        builder.AppendLine("}");
-        builder.AppendLine();
-
-        builder.Append(memberIndent);
-        builder.AppendLine("bool global::LayerBase.Actor.IGeneratedActorMeta.GetEnable()");
-        builder.Append(memberIndent);
-        builder.AppendLine("{");
-        builder.Append(memberIndent);
-        builder.AppendLine("    return __actorContext.IsEnable();");
-        builder.Append(memberIndent);
-        builder.AppendLine("}");
-        builder.AppendLine();
-
-        builder.Append(memberIndent);
-        builder.AppendLine("bool global::LayerBase.Actor.IGeneratedActorMeta.SetEnable(bool enable)");
-        builder.Append(memberIndent);
-        builder.AppendLine("{");
-        builder.Append(memberIndent);
-        builder.AppendLine("    return __actorContext.SetEnable(enable);");
-        builder.Append(memberIndent);
-        builder.AppendLine("}");
-        builder.AppendLine();
-
-        builder.Append(memberIndent);
-        builder.AppendLine("global::LayerBase.Core.Event.PostResult global::LayerBase.Actor.IGeneratedActorMeta.Post<TEvent>(in TEvent value)");
-        builder.Append(memberIndent);
-        builder.AppendLine("    where TEvent : struct");
-        builder.Append(memberIndent);
-        builder.AppendLine("{");
-        builder.Append(memberIndent);
-        builder.AppendLine("    return __actorContext.Post(in value);");
-        builder.Append(memberIndent);
-        builder.AppendLine("}");
-        builder.AppendLine();
-
-        builder.Append(memberIndent);
-        builder.AppendLine("global::LayerBase.Core.Event.PostResult global::LayerBase.Actor.IGeneratedActorMeta.TryPost<TEvent>(in TEvent value)");
-        builder.Append(memberIndent);
-        builder.AppendLine("    where TEvent : struct");
-        builder.Append(memberIndent);
-        builder.AppendLine("{");
-        builder.Append(memberIndent);
-        builder.AppendLine("    return __actorContext.TryPost(in value);");
+        builder.AppendLine("    Context = context;");
         builder.Append(memberIndent);
         builder.AppendLine("}");
         builder.AppendLine();

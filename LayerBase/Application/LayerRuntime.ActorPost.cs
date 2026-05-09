@@ -7,35 +7,35 @@ namespace LayerBase;
 public sealed partial class LayerRuntime
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult Post<TEvent>(
+    public PostResult PostTo<TEvent>(
         ActorId actorId,
         in TEvent value,
         ActorPostPolicy? postPolicy = null,
         ActorMailFullPolicy? fullPolicy = null)
         where TEvent : struct
     {
-        return Actors.Post(actorId, in value, postPolicy, fullPolicy);
+        return Actors.PostTo(actorId, in value, postPolicy, fullPolicy);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPost<TEvent>(
+    public PostResult TryPostTo<TEvent>(
         ActorId actorId,
         in TEvent value,
         ActorPostPolicy? postPolicy = null,
         ActorMailFullPolicy? fullPolicy = null)
         where TEvent : struct
     {
-        return Actors.TryPost(actorId, in value, postPolicy, fullPolicy);
+        return Actors.TryPostTo(actorId, in value, postPolicy, fullPolicy);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostMany<TEvent>(
+    public void PostToMany<TEvent>(
         ReadOnlySpan<ActorId> actorIds,
         in TEvent value,
         ActorPostPolicy? postPolicy = null,
         ActorMailFullPolicy? fullPolicy = null)
         where TEvent : struct
     {
-        Actors.PostMany(actorIds, in value, postPolicy, fullPolicy);
+        Actors.PostToMany(actorIds, in value, postPolicy, fullPolicy);
     }
 }

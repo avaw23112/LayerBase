@@ -6,17 +6,17 @@ namespace LayerBase.Actor;
 public sealed partial class ActorWorld
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult Post<TEvent>(
+    public PostResult PostTo<TEvent>(
         ActorId actorId,
         in TEvent value,
         ActorPostPolicy? postPolicy = null,
         ActorMailFullPolicy? fullPolicy = null)
         where TEvent : struct
     {
-        return TryPost(actorId, in value, postPolicy, fullPolicy);
+        return TryPostTo(actorId, in value, postPolicy, fullPolicy);
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPost<TEvent>(
+    public PostResult TryPostTo<TEvent>(
         ActorId actorId,
         in TEvent value,
         ActorPostPolicy? postPolicy = null,
@@ -35,7 +35,7 @@ public sealed partial class ActorWorld
         return archetype.Post(actorId, in value, postPolicy, fullPolicy);
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostMany<TEvent>(
+    public void PostToMany<TEvent>(
         ReadOnlySpan<ActorId> actorIds,
         in TEvent value,
         ActorPostPolicy? postPolicy = null,
@@ -44,7 +44,7 @@ public sealed partial class ActorWorld
     {
         foreach (ActorId actorId in actorIds)
         {
-            _ = TryPost(actorId, in value, postPolicy, fullPolicy);
+            _ = TryPostTo(actorId, in value, postPolicy, fullPolicy);
         }
     }
 }

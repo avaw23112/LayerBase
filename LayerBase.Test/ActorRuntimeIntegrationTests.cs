@@ -126,7 +126,7 @@ public class ActorRuntimeIntegrationTests
         Assert.That(runtime.Actors, Is.Not.Null);
 
         IntegrationActor actor = runtime.Actors.CreateActor<IntegrationActor>();
-        actor.Post(new RuntimeActorEvent(7));
+        actor.PostInside(new RuntimeActorEvent(7));
 
         runtime.Pump(0.016f);
 
@@ -140,7 +140,7 @@ public class ActorRuntimeIntegrationTests
         IntegrationActor actor = runtime.Actors.CreateActor<IntegrationActor>();
 
         runtime.Post(new RuntimeSchedulerEvent(1));
-        actor.Post(new RuntimeActorEvent(2));
+        actor.PostInside(new RuntimeActorEvent(2));
 
         runtime.Pump(0.016f);
 
@@ -163,7 +163,7 @@ public class ActorRuntimeIntegrationTests
         IntegrationActor actor = runtime.Actors.CreateActor<IntegrationActor>();
 
         runtime.Post(new RuntimeSchedulerEvent(9));
-        actor.Post(new RuntimeActorEvent(3));
+        actor.PostInside(new RuntimeActorEvent(3));
 
         runtime.Pump(0.016f);
         Assert.That(ActorRuntimeIntegrationTrace.Entries, Is.EqualTo(new[] { "scheduler:9" }));
@@ -182,7 +182,7 @@ public class ActorRuntimeIntegrationTests
         ActorRuntimeIntegrationTrace.Entries.Clear();
 
         runtime.Post(new RuntimeSchedulerEvent(1));
-        actor.Post(new RuntimeActorEvent(2));
+        actor.PostInside(new RuntimeActorEvent(2));
 
         runtime.Pump(0.016f);
 

@@ -23,13 +23,6 @@ public sealed partial class LayerRuntime : IDisposable
     private bool _disposed;
     private readonly int _id;
 
-    /// <summary>
-    /// ¿çÏß³Ì Post Èë¿Ú¶ÓÁĞ¡£
-    ///
-    /// ×÷ÓÃ£º
-    /// ·ÇÖ÷Ïß³ÌÌá½»µÄÊÂ¼şÏÈ½øÈëÕâÀï£¬
-    /// Runtime.Pump ¿ªÍ·ÔÙÍ³Ò»°áÔËµ½ PostScheduler¡£
-    /// </summary>
     private readonly PostIngressQueue _postIngress = new();
 
     public int Id => _id;
@@ -193,16 +186,16 @@ public sealed partial class LayerRuntime : IDisposable
                 }
             }
 
-            // ÔÚ PostScheduler.Pump Ç°°áÔË¿çÏß³ÌÊÂ¼ş¡£
-            // MaxIngressPostsPerPump ÓÃÓÚÏŞÖÆ±¾Ö¡×î¶à°áÔË¶àÉÙ¸ö¿çÏß³ÌÊÂ¼ş£¬
-            // ·ÀÖ¹ºóÌ¨Ïß³Ì³ÖĞøÉú²úÊÂ¼şµ¼ÖÂÖ÷Ïß³ÌÒ»Ö¡±»ÍÏËÀ¡£
+            // ï¿½ï¿½ PostScheduler.Pump Ç°ï¿½ï¿½ï¿½Ë¿ï¿½ï¿½ß³ï¿½ï¿½Â¼ï¿½ï¿½ï¿½
+            // MaxIngressPostsPerPump ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ±ï¿½Ö¡ï¿½ï¿½ï¿½ï¿½ï¿½Ë¶ï¿½ï¿½Ù¸ï¿½ï¿½ï¿½ï¿½ß³ï¿½ï¿½Â¼ï¿½ï¿½ï¿½
+            // ï¿½ï¿½Ö¹ï¿½ï¿½Ì¨ï¿½ß³Ì³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß³ï¿½Ò»Ö¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
             if (_scheduler != null)
             {
                 var ingressResult = _postIngress.DrainTo(
                     _scheduler,
                     _scheduler.Options.MaxIngressPostsPerPump);
                 
-                //Èç¹ûÊÇDebugÄ£Ê½»á×Ô¶¯ÉÏ±¨Ê§°Ü½á¹û
+                //ï¿½ï¿½ï¿½ï¿½ï¿½DebugÄ£Ê½ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½Ï±ï¿½Ê§ï¿½Ü½ï¿½ï¿½
                 if (IsDebugMode && ingressResult.Failed > 0)
                 {
                     ReportWarning(
@@ -256,7 +249,6 @@ public sealed partial class LayerRuntime : IDisposable
                 }
             }
 
-            // ÔÚ PostScheduler.Pump Ç°°áÔË¿çÏß³ÌÊÂ¼ş¡£
             if (_scheduler != null)
             {
                 var ingressResult = _postIngress.DrainTo(
@@ -372,22 +364,22 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     /// <summary>
-    /// ´ÓÈÎÒâÏß³ÌÌá½»ÊÂ¼ş¡£
+    /// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß³ï¿½ï¿½á½»ï¿½Â¼ï¿½ï¿½ï¿½
     ///
-    /// Õâ¸ö·½·¨²»»áÁ¢¼´ÅÉ·¢ÊÂ¼ş¡£
-    /// ËüÖ»°ÑÊÂ¼ş·ÅÈë¿çÏß³ÌÈë¿Ú¶ÓÁĞ£¬
-    /// ÕæÕıÍ¶µİ·¢ÉúÔÚÏÂÒ»´Î Runtime.Pump¡£
+    /// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É·ï¿½ï¿½Â¼ï¿½ï¿½ï¿½
+    /// ï¿½ï¿½Ö»ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß³ï¿½ï¿½ï¿½Ú¶ï¿½ï¿½Ğ£ï¿½
+    /// ï¿½ï¿½ï¿½ï¿½Í¶ï¿½İ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ Runtime.Pumpï¿½ï¿½
     /// </summary>
     /// <typeparam name="T">
-    /// ÊÂ¼şÀàĞÍ¡£
-    /// ±ØĞëÊÇ struct¡£
+    /// ï¿½Â¼ï¿½ï¿½ï¿½ï¿½Í¡ï¿½
+    /// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ structï¿½ï¿½
     /// </typeparam>
     /// <param name="value">
-    /// ÊÂ¼şÊı¾İ¡£
+    /// ï¿½Â¼ï¿½ï¿½ï¿½ï¿½İ¡ï¿½
     /// </param>
     /// <param name="policy">
-    /// ¿ÉÑ¡ Post ²ßÂÔ¡£
-    /// null ±íÊ¾Ê¹ÓÃÊÂ¼şÄ¬ÈÏ²ßÂÔ¡£
+    /// ï¿½ï¿½Ñ¡ Post ï¿½ï¿½ï¿½Ô¡ï¿½
+    /// null ï¿½ï¿½Ê¾Ê¹ï¿½ï¿½ï¿½Â¼ï¿½Ä¬ï¿½Ï²ï¿½ï¿½Ô¡ï¿½
     /// </param>
     public void PostFromAnyThread<T>(
         in T value,
@@ -403,22 +395,22 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     /// <summary>
-    /// ´ÓÈÎÒâÏß³Ì³¢ÊÔÌá½»ÊÂ¼ş¡£
+    /// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß³Ì³ï¿½ï¿½ï¿½ï¿½á½»ï¿½Â¼ï¿½ï¿½ï¿½
     /// </summary>
     /// <typeparam name="T">
-    /// ÊÂ¼şÀàĞÍ¡£
-    /// ±ØĞëÊÇ struct¡£
+    /// ï¿½Â¼ï¿½ï¿½ï¿½ï¿½Í¡ï¿½
+    /// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ structï¿½ï¿½
     /// </typeparam>
     /// <param name="value">
-    /// ÊÂ¼şÊı¾İ¡£
+    /// ï¿½Â¼ï¿½ï¿½ï¿½ï¿½İ¡ï¿½
     /// </param>
     /// <param name="policy">
-    /// ¿ÉÑ¡ Post ²ßÂÔ¡£
-    /// null ±íÊ¾Ê¹ÓÃÊÂ¼şÄ¬ÈÏ²ßÂÔ¡£
+    /// ï¿½ï¿½Ñ¡ Post ï¿½ï¿½ï¿½Ô¡ï¿½
+    /// null ï¿½ï¿½Ê¾Ê¹ï¿½ï¿½ï¿½Â¼ï¿½Ä¬ï¿½Ï²ï¿½ï¿½Ô¡ï¿½
     /// </param>
     /// <returns>
-    /// true ±íÊ¾ÒÑ¾­½øÈë¿çÏß³ÌÈë¿Ú¶ÓÁĞ¡£
-    /// false ±íÊ¾ Runtime ÒÑ¾­ÊÍ·Å¡£
+    /// true ï¿½ï¿½Ê¾ï¿½Ñ¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß³ï¿½ï¿½ï¿½Ú¶ï¿½ï¿½Ğ¡ï¿½
+    /// false ï¿½ï¿½Ê¾ Runtime ï¿½Ñ¾ï¿½ï¿½Í·Å¡ï¿½
     /// </returns>
     public bool TryPostFromAnyThread<T>(
         in T value,
@@ -523,7 +515,6 @@ public sealed partial class LayerRuntime : IDisposable
         if (_disposed) return;
         _disposed = true;
 
-        // ÇåÀíÉĞÎ´°áÔËµ½ PostScheduler µÄ¿çÏß³ÌÊÂ¼ş¡£
         _postIngress.Clear();
 
         _chain?.DisposeLayers();
@@ -531,7 +522,7 @@ public sealed partial class LayerRuntime : IDisposable
         Actors.RuntimeStop();
         Actors.Dispose();
 
-        // é‡Šæ”¾å½“å‰ä¸–ç•Œå†…çš„ Singleton å®ä¾‹ã€?
+        // é‡Šæ”¾å½“å‰ä¸–ç•Œå†…çš„ Singleton å®ä¾‹ï¿½?
         Services.Dispose();
 
         _scheduler?.Dispose();

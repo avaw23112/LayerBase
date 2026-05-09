@@ -41,7 +41,7 @@ public partial class ActorPostPumpTests
         var world = new ActorWorld();
         RecordingActor actor = world.CreateActor<RecordingActor>();
 
-        PostResult postResult = actor.Post(new ActorDamageEvent(7));
+        PostResult postResult = actor.PostInside(new ActorDamageEvent(7));
 
         Assert.That(postResult.IsSuccess, Is.True);
         Assert.That(RecordingActor.Trace, Is.Empty);
@@ -59,9 +59,9 @@ public partial class ActorPostPumpTests
         var world = new ActorWorld();
         RecordingActor actor = world.CreateActor<RecordingActor>();
 
-        actor.Post(new ActorDamageEvent(1));
-        actor.Post(new ActorDamageEvent(2));
-        actor.Post(new ActorDamageEvent(3));
+        actor.PostInside(new ActorDamageEvent(1));
+        actor.PostInside(new ActorDamageEvent(2));
+        actor.PostInside(new ActorDamageEvent(3));
 
         var budget = new RuntimeFrameBudget(8, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
@@ -76,10 +76,10 @@ public partial class ActorPostPumpTests
         RecordingActor actor = world.CreateActor<RecordingActor>();
         ActorId validId = actor.GetActorId();
 
-        PostResult invalidArchetype = world.TryPost(new ActorId(validId.ArchetypeId + 99, validId.TypeStorageIndex, validId.SlotIndex, validId.Generation), new ActorDamageEvent(1));
-        PostResult invalidStorage = world.TryPost(new ActorId(validId.ArchetypeId, (ushort)(validId.TypeStorageIndex + 99), validId.SlotIndex, validId.Generation), new ActorDamageEvent(1));
-        PostResult staleGeneration = world.TryPost(new ActorId(validId.ArchetypeId, validId.TypeStorageIndex, validId.SlotIndex, validId.Generation + 1), new ActorDamageEvent(1));
-        PostResult unsupportedEvent = world.TryPost(validId, new ActorHealEvent(2));
+        PostResult invalidArchetype = world.TryPostTo(new ActorId(validId.ArchetypeId + 99, validId.TypeStorageIndex, validId.SlotIndex, validId.Generation), new ActorDamageEvent(1));
+        PostResult invalidStorage = world.TryPostTo(new ActorId(validId.ArchetypeId, (ushort)(validId.TypeStorageIndex + 99), validId.SlotIndex, validId.Generation), new ActorDamageEvent(1));
+        PostResult staleGeneration = world.TryPostTo(new ActorId(validId.ArchetypeId, validId.TypeStorageIndex, validId.SlotIndex, validId.Generation + 1), new ActorDamageEvent(1));
+        PostResult unsupportedEvent = world.TryPostTo(validId, new ActorHealEvent(2));
 
         Assert.That(invalidArchetype.IsSuccess, Is.False);
         Assert.That(invalidStorage.IsSuccess, Is.False);
@@ -93,8 +93,8 @@ public partial class ActorPostPumpTests
         var world = new ActorWorld();
         RecordingActor actor = world.CreateActor<RecordingActor>();
 
-        actor.Post(new ActorDamageEvent(10));
-        actor.Post(new ActorDamageEvent(11));
+        actor.PostInside(new ActorDamageEvent(10));
+        actor.PostInside(new ActorDamageEvent(11));
 
         var budget = new RuntimeFrameBudget(maxEvents: 1, usedEvents: 0, deadlineTicks: 0);
         world.Pump(0f, 0f, false, ref budget);
@@ -115,9 +115,9 @@ public partial class ActorPostPumpTests
         RecordingActor actorA = world.CreateActor<RecordingActor>();
         SecondaryRecordingActor actorB = world.CreateActor<SecondaryRecordingActor>();
 
-        actorA.Post(new ActorDamageEvent(1));
-        actorA.Post(new ActorDamageEvent(2));
-        actorB.Post(new ActorDamageEvent(100));
+        actorA.PostInside(new ActorDamageEvent(1));
+        actorA.PostInside(new ActorDamageEvent(2));
+        actorB.PostInside(new ActorDamageEvent(100));
 
         var budget = new RuntimeFrameBudget(maxEvents: 2, usedEvents: 0, deadlineTicks: 0);
         world.Pump(0f, 0f, false, ref budget);
@@ -133,7 +133,7 @@ public partial class ActorPostPumpTests
     {
         var world = new ActorWorld();
         ThrowingActor actor = world.CreateActor<ThrowingActor>();
-        actor.Post(new ActorDamageEvent(5));
+        actor.PostInside(new ActorDamageEvent(5));
 
         Assert.Throws<InvalidOperationException>(() => PumpOnce(world));
         Assert.That(ThrowingActor.Invocations, Is.EqualTo(1));
@@ -152,12 +152,12 @@ public partial class ActorPostPumpTests
             releaseWhenEmpty: true));
         RecordingActor actor = world.CreateActor<RecordingActor>();
 
-        Assert.That(actor.Post(new ActorDamageEvent(1)).IsSuccess, Is.True);
-        Assert.That(actor.Post(new ActorDamageEvent(2)).IsSuccess, Is.True);
-        Assert.That(actor.Post(new ActorDamageEvent(3)).IsSuccess, Is.True);
-        Assert.That(actor.Post(new ActorDamageEvent(4)).IsSuccess, Is.True);
+        Assert.That(actor.PostInside(new ActorDamageEvent(1)).IsSuccess, Is.True);
+        Assert.That(actor.PostInside(new ActorDamageEvent(2)).IsSuccess, Is.True);
+        Assert.That(actor.PostInside(new ActorDamageEvent(3)).IsSuccess, Is.True);
+        Assert.That(actor.PostInside(new ActorDamageEvent(4)).IsSuccess, Is.True);
 
-        PostResult rejected = actor.Post(new ActorDamageEvent(5));
+        PostResult rejected = actor.PostInside(new ActorDamageEvent(5));
         Assert.That(rejected.IsSuccess, Is.False);
     }
 

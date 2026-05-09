@@ -32,7 +32,7 @@ public static class ActorRuntimeUsage
         var world = new ActorWorld();
         UsageActor actor = world.CreateActor<UsageActor>();
 
-        actor.Post(new UsageActorEvent(42));
+        actor.PostInside(new UsageActorEvent(42));
 
         var budget = new RuntimeFrameBudget(maxEvents: 8, usedEvents: 0, deadlineTicks: 0);
         world.Pump(0f, 0f, false, ref budget);

@@ -25,7 +25,7 @@ internal sealed class DelayPostTask<TEvent> : IActorDelayTask
 
     public void Execute()
     {
-        _ = _world.Post(_actorId, in _value, _postPolicy, _fullPolicy);
+        _ = _world.PostTo(_actorId, in _value, _postPolicy, _fullPolicy);
     }
 
     public void Cancel()
