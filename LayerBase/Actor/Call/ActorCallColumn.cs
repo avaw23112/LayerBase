@@ -4,8 +4,7 @@ using LayerBase.Core.Event;
 namespace LayerBase.Actor;
 
 internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
-    ActorCallColumnRuntime,
-    IActorCallColumn<TRequest, TResponse>
+    ActorCallColumnRuntime
     where TActor : class, IActor
     where TRequest : struct
     where TResponse : struct
@@ -62,8 +61,10 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         }
 
         EnsureSlotCapacity(slotIndex);
-        return EventMailWriter.Enqueue(
-            ref _mails[slotIndex],
+        ref EventMail<ActorCallMail<TRequest, TResponse>> queuedMail = ref _mails[slotIndex];
+        int previousCount = queuedMail.Count;
+        PostResult result = EventMailWriter.Enqueue(
+            ref queuedMail,
             in mail,
             _bufferPool,
             _dirtySlots,
@@ -71,13 +72,25 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
             _options,
             ActorPostPolicy.Queued,
             null);
+
+        if (previousCount == 0 && result.IsSuccess && result.CountsAsPending && queuedMail.Count > 0)
+        {
+            NotifyBucketDirty();
+        }
+
+        return result;
     }
 
-    public ActorColumnPumpResult PumpOne(
+    public override ActorColumnPumpResult PumpOne(
         ref RuntimeFrameBudget budget,
         in ActorMailPumpOptions options,
         ActorMailPumpStatsBuilder stats)
     {
+        if (CanUsePumpFastPath(options))
+        {
+            return PumpOneFast(ref budget);
+        }
+
         while (_dirtySlots.TryPeek(out int slotIndex))
         {
             ref EventMail<ActorCallMail<TRequest, TResponse>> mail = ref _mails[slotIndex];
@@ -115,7 +128,10 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
 
             Dispatch(actor, in value);
             budget.ConsumeEvent();
-            stats.RecordActorProcessed(actorKey);
+            if (options.MaxMailsPerActorPerPump > 0)
+            {
+                stats.RecordActorProcessed(actorKey);
+            }
 
             if (mail.Count == 0)
             {
@@ -133,9 +149,53 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         return ActorColumnPumpResult.NoWork;
     }
 
-    public bool HasPendingWork()
+    public override bool HasPendingWork()
     {
         return _dirtySlots.Count > 0;
+    }
+
+    public ActorColumnPumpResult PumpOneFast(ref RuntimeFrameBudget budget)
+    {
+        while (_dirtySlots.TryPeek(out int slotIndex))
+        {
+            ref EventMail<ActorCallMail<TRequest, TResponse>> mail = ref _mails[slotIndex];
+            if (!EventMailReader.TryDequeue(ref mail, _bufferPool, out ActorCallMail<TRequest, TResponse> value))
+            {
+                _dirtySlots.Pop();
+                continue;
+            }
+
+            if (!_owner.IsAliveSlot(slotIndex))
+            {
+                value.Source.SetException(new ActorCallException(ActorCallFailureKind.ActorNotFound));
+                _dirtySlots.Pop();
+                continue;
+            }
+
+            TActor? actor = _owner.Actors[slotIndex];
+            if (actor == null)
+            {
+                value.Source.SetException(new ActorCallException(ActorCallFailureKind.ActorNotFound));
+                _dirtySlots.Pop();
+                continue;
+            }
+
+            Dispatch(actor, in value);
+            budget.ConsumeEvent();
+
+            if (mail.Count == 0)
+            {
+                _dirtySlots.Pop();
+            }
+            else
+            {
+                _dirtySlots.MoveHeadToTail();
+            }
+
+            return ActorColumnPumpResult.Processed;
+        }
+
+        return ActorColumnPumpResult.NoWork;
     }
 
     public void Dispatch(
@@ -210,5 +270,11 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         }
 
         return count;
+    }
+
+    private bool CanUsePumpFastPath(in ActorMailPumpOptions options)
+    {
+        return options.MaxMailsPerActorPerPump <= 0
+               && !_options.ReleaseWhenEmpty;
     }
 }

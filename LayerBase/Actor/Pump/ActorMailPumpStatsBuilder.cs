@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace LayerBase.Actor;
 
 internal sealed class ActorMailPumpStatsBuilder
@@ -10,6 +12,7 @@ internal sealed class ActorMailPumpStatsBuilder
     public int ActorLimitHits;
     public int EmptyBucketChecks;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Reset()
     {
         _actorProcessedCounts.Clear();
@@ -20,6 +23,7 @@ internal sealed class ActorMailPumpStatsBuilder
         EmptyBucketChecks = 0;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool CanProcessBucket(int bucketIndex, in ActorMailPumpOptions options)
     {
         if (options.MaxMailsPerBucketPerPump <= 0)
@@ -31,6 +35,7 @@ internal sealed class ActorMailPumpStatsBuilder
                || count < options.MaxMailsPerBucketPerPump;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void RecordBucketProcessed(int bucketIndex)
     {
         if (_bucketProcessedCounts.TryGetValue(bucketIndex, out int count))
@@ -43,6 +48,7 @@ internal sealed class ActorMailPumpStatsBuilder
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool CanProcessActor(long actorKey, in ActorMailPumpOptions options)
     {
         if (options.MaxMailsPerActorPerPump <= 0)
@@ -54,6 +60,7 @@ internal sealed class ActorMailPumpStatsBuilder
                || count < options.MaxMailsPerActorPerPump;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void RecordActorProcessed(long actorKey)
     {
         if (_actorProcessedCounts.TryGetValue(actorKey, out int count))

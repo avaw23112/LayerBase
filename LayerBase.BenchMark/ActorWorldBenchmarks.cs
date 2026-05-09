@@ -16,6 +16,15 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
     private LayerRuntime _runtime = null!;
     private ActorWorld _actorWorld = null!;
     private BenchmarkActor _actor = null!;
+    private ActorWorld _postOnlyWorld = null!;
+    private BenchmarkActor _postOnlyActor = null!;
+    private ActorWorld _pumpOnlyWorld = null!;
+    private BenchmarkActor _pumpOnlyActor = null!;
+    private ActorWorld _actorRefWorld = null!;
+    private BenchmarkActor _actorRefActor = null!;
+    private ActorRef<BenchmarkActor> _actorRef = default;
+    private ActorWorld _queryWorld = null!;
+    private ActorQueryResult _query = default;
     private ActorId _dictionaryActorId;
     private Dictionary<ActorId, IActorDispatchReceiver> _dictionaryDispatch = null!;
     private DictionaryActorDispatchReceiver _dictionaryReceiver = null!;
@@ -51,8 +60,33 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
             .SetPostOptions(postOptions)
             .Build();
 
-        _actorWorld = new ActorWorld();
+        _actorWorld = CreateBenchmarkWorld(BatchSize);
         _actor = _actorWorld.CreateActor<BenchmarkActor>();
+        WarmupActorWorld(_actorWorld, _actor, BatchSize);
+
+        _postOnlyWorld = CreateBenchmarkWorld(OneMillion);
+        _postOnlyActor = _postOnlyWorld.CreateActor<BenchmarkActor>();
+        WarmupActorWorld(_postOnlyWorld, _postOnlyActor, OneMillion);
+
+        _pumpOnlyWorld = CreateBenchmarkWorld(OneMillion);
+        _pumpOnlyActor = _pumpOnlyWorld.CreateActor<BenchmarkActor>();
+        WarmupActorWorld(_pumpOnlyWorld, _pumpOnlyActor, OneMillion);
+
+        _actorRefWorld = CreateBenchmarkWorld(OneMillion);
+        _actorRefActor = _actorRefWorld.CreateActor<BenchmarkActor>();
+        WarmupActorWorld(_actorRefWorld, _actorRefActor, OneMillion);
+        _actorRef = _actorRefWorld.GetActorRef<BenchmarkActor>(_actorRefActor.GetActorId());
+
+        _queryWorld = CreateBenchmarkWorld(2048);
+        for (int i = 0; i < 1000; i++)
+        {
+            _queryWorld.CreateActor<BenchmarkActor>();
+        }
+
+        _query = _queryWorld.QueryActor<ActorBenchEvent>();
+        _query.PostAll(ActorBenchEvent.Instance);
+        var warmupBudget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
+        _queryWorld.Pump(0f, 0f, false, ref warmupBudget);
     }
 
     [Benchmark(Baseline = true, Description = "Direct method call - 20万次")]
@@ -108,6 +142,66 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
         }
     }
 
+    [IterationCleanup(Target = nameof(ActorWorldPostOnly))]
+    public void CleanupPostOnly()
+    {
+        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
+        _postOnlyWorld.Pump(0f, 0f, false, ref budget);
+    }
+
+    [Benchmark(Description = "ActorWorld Post only - 20涓囨")]
+    [BenchmarkCategory("08.Actor", "ActorRuntime", "Compare.ActorWorld.Split")]
+    public void ActorWorldPostOnly()
+    {
+        for (int i = 0; i < OneMillion; i++)
+        {
+            _postOnlyActor.Post(ActorBenchEvent.Instance);
+        }
+    }
+
+    [IterationCleanup(Target = nameof(ActorRefPostOnly))]
+    public void CleanupActorRefPostOnly()
+    {
+        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
+        _actorRefWorld.Pump(0f, 0f, false, ref budget);
+    }
+
+    [Benchmark(Description = "ActorRef Post only - 20涓囨")]
+    [BenchmarkCategory("08.Actor", "ActorRuntime", "Compare.ActorRef")]
+    public void ActorRefPostOnly()
+    {
+        for (int i = 0; i < OneMillion; i++)
+        {
+            _actorRef.Post(ActorBenchEvent.Instance);
+        }
+    }
+
+    [IterationSetup(Target = nameof(ActorWorldPumpOnlyPreposted))]
+    public void SetupPumpOnly()
+    {
+        for (int i = 0; i < OneMillion; i++)
+        {
+            _pumpOnlyActor.Post(ActorBenchEvent.Instance);
+        }
+    }
+
+    [Benchmark(Description = "ActorWorld Pump only - 20涓囨")]
+    [BenchmarkCategory("08.Actor", "ActorRuntime", "Compare.ActorWorld.Split")]
+    public void ActorWorldPumpOnlyPreposted()
+    {
+        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
+        _pumpOnlyWorld.Pump(0f, 0f, false, ref budget);
+    }
+
+    [Benchmark(Description = "ActorWorld Query.PostAll + Pump - 1000 Actors")]
+    [BenchmarkCategory("08.Actor", "ActorRuntime", "Compare.QueryPostAll")]
+    public void ActorWorldQueryPostAll()
+    {
+        _query.PostAll(ActorBenchEvent.Instance);
+        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
+        _queryWorld.Pump(0f, 0f, false, ref budget);
+    }
+
     [Benchmark(Description = "Dictionary<ActorId, Actor> + interface call - 20万次")]
     [BenchmarkCategory("08.Actor", "ActorRuntime", "Compare.Dictionary")]
     public void DictionaryActorDispatch()
@@ -119,6 +213,29 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
                 receiver.Handle(in ActorBenchEvent.Instance);
             }
         }
+    }
+
+    private static ActorWorld CreateBenchmarkWorld(int maxCapacity)
+    {
+        return new ActorWorld(new ActorMailOptions(
+            postPolicy: ActorPostPolicy.Queued,
+            fullPolicy: ActorMailFullPolicy.Grow,
+            growFailurePolicy: ActorMailFullPolicy.RejectNew,
+            initialCapacity: maxCapacity,
+            maxCapacity: maxCapacity,
+            growFactor: 2,
+            releaseWhenEmpty: false));
+    }
+
+    private static void WarmupActorWorld(ActorWorld world, BenchmarkActor actor, int capacity)
+    {
+        for (int i = 0; i < capacity; i++)
+        {
+            actor.Post(ActorBenchEvent.Instance);
+        }
+
+        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
+        world.Pump(0f, 0f, false, ref budget);
     }
 }
 

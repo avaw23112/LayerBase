@@ -4,14 +4,15 @@ internal sealed class ActorCallBucket<TRequest, TResponse> : IActorEventBucket
     where TRequest : struct
     where TResponse : struct
 {
-    private IActorCallColumn<TRequest, TResponse>[] _columns = Array.Empty<IActorCallColumn<TRequest, TResponse>>();
+    private ActorCallColumnRuntime[] _columns = Array.Empty<ActorCallColumnRuntime>();
+    private int _count;
     private int _cursor;
 
-    public void AddColumn(IActorCallColumn<TRequest, TResponse> column)
+    public void AddColumn(ActorCallColumnRuntime column)
     {
-        int oldLength = _columns.Length;
-        Array.Resize(ref _columns, oldLength + 1);
-        _columns[oldLength] = column;
+        EnsureCapacity(_count + 1);
+        _columns[_count] = column;
+        _count++;
     }
 
     public PumpOneResult PumpOne(
@@ -20,7 +21,7 @@ internal sealed class ActorCallBucket<TRequest, TResponse> : IActorEventBucket
         ActorMailPumpStatsBuilder stats,
         int bucketIndex)
     {
-        if (_columns.Length == 0)
+        if (_count == 0)
         {
             return PumpOneResult.NoWork;
         }
@@ -33,17 +34,20 @@ internal sealed class ActorCallBucket<TRequest, TResponse> : IActorEventBucket
 
         int checkedCount = 0;
         bool actorLimited = false;
-        while (checkedCount < _columns.Length)
+        while (checkedCount < _count)
         {
             int index = _cursor;
-            _cursor = index + 1 == _columns.Length ? 0 : index + 1;
+            _cursor = index + 1 == _count ? 0 : index + 1;
             checkedCount++;
 
             ActorColumnPumpResult result = _columns[index].PumpOne(ref budget, options, stats);
             if (result == ActorColumnPumpResult.Processed)
             {
                 stats.ProcessedTotal++;
-                stats.RecordBucketProcessed(bucketIndex);
+                if (options.MaxMailsPerBucketPerPump > 0)
+                {
+                    stats.RecordBucketProcessed(bucketIndex);
+                }
                 return PumpOneResult.Processed;
             }
 
@@ -60,7 +64,7 @@ internal sealed class ActorCallBucket<TRequest, TResponse> : IActorEventBucket
 
     public bool HasPendingWork()
     {
-        for (int i = 0; i < _columns.Length; i++)
+        for (int i = 0; i < _count; i++)
         {
             if (_columns[i].HasPendingWork())
             {
@@ -69,5 +73,21 @@ internal sealed class ActorCallBucket<TRequest, TResponse> : IActorEventBucket
         }
 
         return false;
+    }
+
+    private void EnsureCapacity(int required)
+    {
+        if (required <= _columns.Length)
+        {
+            return;
+        }
+
+        int newCapacity = _columns.Length == 0 ? 4 : _columns.Length;
+        while (newCapacity < required)
+        {
+            newCapacity *= 2;
+        }
+
+        Array.Resize(ref _columns, newCapacity);
     }
 }

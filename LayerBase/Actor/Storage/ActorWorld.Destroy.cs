@@ -12,7 +12,7 @@ public sealed partial class ActorWorld
         bool marked = _archetypes[actorId.ArchetypeId].MarkPendingDestroy(actorId);
         if (marked)
         {
-            _hasPendingDestroy = true;
+            _pendingDestroyCount++;
         }
 
         return marked;
@@ -30,7 +30,7 @@ public sealed partial class ActorWorld
 
     private void SweepPendingDestroy()
     {
-        if (!_hasPendingDestroy)
+        if (_pendingDestroyCount <= 0)
         {
             return;
         }
@@ -40,6 +40,6 @@ public sealed partial class ActorWorld
             archetype.SweepPendingDestroy(this);
         }
 
-        _hasPendingDestroy = false;
+        _pendingDestroyCount = 0;
     }
 }

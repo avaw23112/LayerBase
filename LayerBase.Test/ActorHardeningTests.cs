@@ -307,7 +307,8 @@ public class ActorHardeningTests
             maxTotalMailsPerPump: 8,
             maxMailsPerBucketPerPump: 8,
             maxMailsPerActorPerPump: 1,
-            maxEmptyBucketChecksPerPump: 8);
+            maxEmptyBucketChecksPerPump: 8,
+            timeCheckInterval: 1);
 
         HardeningProbeActor actorA = world.CreateActor<HardeningProbeActor>();
         HardeningProbeActor actorB = world.CreateActor<HardeningProbeActor>();

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace LayerBase.Actor;
 
@@ -15,7 +16,11 @@ public sealed partial class ActorWorld
             return;
         }
 
-        DelayScheduler.Tick(deltaTime);
+        if (DelayScheduler.HasPending)
+        {
+            DelayScheduler.Tick(deltaTime);
+        }
+
         LastMailPumpStats = PumpActorBehaviours(ref budget, MailPumpOptions);
         SweepPendingDestroy();
         if (!CanContinue(ref budget))
@@ -53,6 +58,7 @@ public sealed partial class ActorWorld
         SweepPendingDestroy();
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool CanContinue(ref RuntimeFrameBudget budget)
     {
         return budget.HasRemainingEventBudget()
@@ -65,17 +71,24 @@ public sealed partial class ActorWorld
     {
         ActorMailPumpStatsBuilder stats = _mailPumpStatsBuilder;
         stats.Reset();
+        int processedSinceTimeCheck = 0;
         while (budget.HasRemainingEventBudget()
                && (options.MaxTotalMailsPerPump <= 0 || stats.ProcessedTotal < options.MaxTotalMailsPerPump))
         {
-            if (!budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp()))
+            if (processedSinceTimeCheck <= 0)
             {
-                break;
+                if (!budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp()))
+                {
+                    break;
+                }
+
+                processedSinceTimeCheck = options.TimeCheckInterval;
             }
 
             PumpOneResult result = TryPumpOne(ref budget, options, stats);
             if (result == PumpOneResult.Processed)
             {
+                processedSinceTimeCheck--;
                 continue;
             }
 
@@ -110,7 +123,8 @@ public sealed partial class ActorWorld
         in ActorMailPumpOptions options,
         ActorMailPumpStatsBuilder stats)
     {
-        PumpOneResult callResult = TryPumpOneFromBuckets(
+        PumpOneResult callResult = TryPumpOneFromDirtyBuckets(
+            _dirtyCallBuckets,
             _callBucketsByRouteId,
             ref _callBucketCursor,
             ref budget,
@@ -123,7 +137,8 @@ public sealed partial class ActorWorld
             return callResult;
         }
 
-        return TryPumpOneFromBuckets(
+        return TryPumpOneFromDirtyBuckets(
+            _dirtyEventBuckets,
             _eventBucketsByEventId,
             ref _bucketCursor,
             ref budget,
@@ -131,14 +146,15 @@ public sealed partial class ActorWorld
             stats);
     }
 
-    private static PumpOneResult TryPumpOneFromBuckets(
+    private static PumpOneResult TryPumpOneFromDirtyBuckets(
+        DirtyBucketList dirtyBuckets,
         IActorEventBucket[] buckets,
         ref int cursor,
         ref RuntimeFrameBudget budget,
         in ActorMailPumpOptions options,
         ActorMailPumpStatsBuilder stats)
     {
-        if (buckets.Length == 0)
+        if (dirtyBuckets.Count == 0 || buckets.Length == 0)
         {
             return PumpOneResult.NoWork;
         }
@@ -146,31 +162,47 @@ public sealed partial class ActorWorld
         int checkedCount = 0;
         bool sawBucketLimit = false;
         bool sawActorLimit = false;
-        while (checkedCount < buckets.Length)
+        int initialCount = dirtyBuckets.Count;
+        while (checkedCount < initialCount && dirtyBuckets.TryPeek(out int bucketIndex))
         {
-            int index = cursor;
-            cursor = index + 1 == buckets.Length ? 0 : index + 1;
+            cursor = bucketIndex;
             checkedCount++;
 
-            IActorEventBucket? current = buckets[index];
+            IActorEventBucket? current = buckets[bucketIndex];
             if (current == null)
             {
+                dirtyBuckets.Pop();
                 continue;
             }
 
-            PumpOneResult result = current.PumpOne(ref budget, options, stats, index);
+            PumpOneResult result = current.PumpOne(ref budget, options, stats, bucketIndex);
             if (result == PumpOneResult.Processed)
             {
+                if (current.HasPendingWork())
+                {
+                    dirtyBuckets.MoveHeadToTail();
+                }
+                else
+                {
+                    dirtyBuckets.Pop();
+                }
+
                 return PumpOneResult.Processed;
             }
 
             if (result == PumpOneResult.BucketLimited)
             {
                 sawBucketLimit = true;
+                dirtyBuckets.MoveHeadToTail();
             }
             else if (result == PumpOneResult.ActorLimited)
             {
                 sawActorLimit = true;
+                dirtyBuckets.MoveHeadToTail();
+            }
+            else
+            {
+                dirtyBuckets.Pop();
             }
         }
 
@@ -189,23 +221,6 @@ public sealed partial class ActorWorld
 
     private int CountRemainingDirtyBuckets()
     {
-        int count = 0;
-        for (int i = 0; i < _callBucketsByRouteId.Length; i++)
-        {
-            if (_callBucketsByRouteId[i]?.HasPendingWork() == true)
-            {
-                count++;
-            }
-        }
-
-        for (int i = 0; i < _eventBucketsByEventId.Length; i++)
-        {
-            if (_eventBucketsByEventId[i]?.HasPendingWork() == true)
-            {
-                count++;
-            }
-        }
-
-        return count;
+        return _dirtyCallBuckets.Count + _dirtyEventBuckets.Count;
     }
 }

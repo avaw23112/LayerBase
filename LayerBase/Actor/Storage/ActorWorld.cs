@@ -7,6 +7,8 @@ public sealed partial class ActorWorld : IDisposable
     private readonly Dictionary<ActorQueryDescriptor, ActorQueryCache> _queryCacheByDescriptor = new();
     private IActorEventBucket[] _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
     private IActorEventBucket[] _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
+    private readonly DirtyBucketList _dirtyEventBuckets = new();
+    private readonly DirtyBucketList _dirtyCallBuckets = new();
     private int _bucketCursor;
     private int _callBucketCursor;
     private readonly ActorMailPumpStatsBuilder _mailPumpStatsBuilder = new();
@@ -15,7 +17,7 @@ public sealed partial class ActorWorld : IDisposable
     public ActorMailPumpStats LastMailPumpStats { get; private set; }
     internal ActorLifecycleScheduler Lifecycle { get; }
     internal ActorDelayScheduler DelayScheduler { get; }
-    private bool _hasPendingDestroy;
+    private int _pendingDestroyCount;
     internal LayerRuntime? Runtime { get; }
     internal ActorMailOptions DefaultMailOptions { get; }
     private ActorWorldState _state;
@@ -90,7 +92,7 @@ public sealed partial class ActorWorld : IDisposable
         QueryVersion++;
     }
 
-    internal void RegisterColumn<TEvent>(int eventTypeId, IActorEventColumn<TEvent> column)
+    internal void RegisterColumn<TEvent>(int eventTypeId, ActorEventColumnRuntime column)
         where TEvent : struct
     {
         EnsureEventBucketCapacity(eventTypeId);
@@ -102,9 +104,10 @@ public sealed partial class ActorWorld : IDisposable
         }
 
         bucket.AddColumn(column);
+        column.BindDirtyBucket(_dirtyEventBuckets, eventTypeId);
     }
 
-    internal void RegisterCallColumn<TRequest, TResponse>(int routeId, IActorCallColumn<TRequest, TResponse> column)
+    internal void RegisterCallColumn<TRequest, TResponse>(int routeId, ActorCallColumnRuntime column)
         where TRequest : struct
         where TResponse : struct
     {
@@ -117,6 +120,7 @@ public sealed partial class ActorWorld : IDisposable
         }
 
         bucket.AddColumn(column);
+        column.BindDirtyBucket(_dirtyCallBuckets, routeId);
     }
 
     internal ActorMailOptions ResolveMailOptions(int eventTypeId)

@@ -237,6 +237,19 @@ internal sealed class BehaviourArchetype
         return _storages[storageIndex].IsEnable(actorId.SlotIndex, actorId.Generation);
     }
 
+    internal bool TryGetStorage<TActor>(ushort storageIndex, out TypedActorStorage<TActor>? storage)
+        where TActor : class, IActor
+    {
+        if ((uint)storageIndex >= (uint)_storages.Length)
+        {
+            storage = null;
+            return false;
+        }
+
+        storage = _storages[storageIndex] as TypedActorStorage<TActor>;
+        return storage != null;
+    }
+
     internal bool SetEnable(ActorId actorId, bool enable)
     {
         ushort storageIndex = actorId.TypeStorageIndex;

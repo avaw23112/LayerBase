@@ -4,6 +4,8 @@ internal sealed class ActorDelayScheduler
 {
     private readonly ActorTimeWheel _timeWheel;
 
+    public bool HasPending => _timeWheel.HasPending;
+
     public ActorDelayScheduler(
         ActorWorld world,
         ActorTimeWheelOptions options)

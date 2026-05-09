@@ -29,6 +29,8 @@ internal sealed class ActorTimeWheel
         _entries = new List<Entry>(options.InitialCapacity);
     }
 
+    public bool HasPending => _entries.Count > 0;
+
     public DelayPostHandle Schedule(ActorDelayScheduler scheduler, IActorDelayTask task, float delaySeconds)
     {
         var entry = new Entry

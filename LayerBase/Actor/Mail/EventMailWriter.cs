@@ -97,7 +97,7 @@ internal static class EventMailWriter
             }
         }
 
-        int tail = (mail.Head + mail.Count) % mail.Capacity;
+        int tail = ActorMailCapacity.Wrap(mail.Head + mail.Count, mail.Capacity);
         bufferPool.Write(mail.BufferId, tail, in value);
         mail.Count++;
 
@@ -186,7 +186,7 @@ internal static class EventMailWriter
             case ActorMailFullPolicy.DropOldest:
                 if (mail.Count > 0)
                 {
-                    mail.Head = (mail.Head + 1) % mail.Capacity;
+                    mail.Head = ActorMailCapacity.Wrap(mail.Head + 1, mail.Capacity);
                     mail.Count--;
                 }
 
@@ -198,7 +198,7 @@ internal static class EventMailWriter
             case ActorMailFullPolicy.OverwriteLatest:
                 if (mail.Count > 0)
                 {
-                    int latestIndex = (mail.Head + mail.Count - 1) % mail.Capacity;
+                    int latestIndex = ActorMailCapacity.Wrap(mail.Head + mail.Count - 1, mail.Capacity);
                     bufferPool.Write(mail.BufferId, latestIndex, in value);
                     return PostResult.Coalesced();
                 }
@@ -228,7 +228,7 @@ internal static class EventMailWriter
             case ActorMailFullPolicy.DropOldest:
                 if (mail.Count > 0)
                 {
-                    mail.Head = (mail.Head + 1) % mail.Capacity;
+                    mail.Head = ActorMailCapacity.Wrap(mail.Head + 1, mail.Capacity);
                     mail.Count--;
                 }
 
@@ -253,13 +253,16 @@ internal static class EventMailWriter
             return false;
         }
 
-        int nextCapacity = mail.Capacity * Math.Max(options.GrowFactor, 2);
+        int nextCapacity = ActorMailCapacity.NormalizePowerOfTwo(
+            mail.Capacity * Math.Max(options.GrowFactor, 2));
         if (nextCapacity <= mail.Capacity)
         {
             nextCapacity = mail.Capacity + 1;
         }
 
-        nextCapacity = Math.Min(nextCapacity, options.MaxCapacity);
+        nextCapacity = Math.Min(
+            ActorMailCapacity.NormalizePowerOfTwo(nextCapacity),
+            options.MaxCapacity);
         if (nextCapacity <= mail.Capacity)
         {
             return false;

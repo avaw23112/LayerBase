@@ -46,15 +46,18 @@ public readonly struct ActorMailOptions
         ActorMailDisabledPolicy disabledPolicy = ActorMailDisabledPolicy.Accept,
         ActorMailPendingDestroyPolicy pendingDestroyPolicy = ActorMailPendingDestroyPolicy.Reject)
     {
+        int normalizedInitialCapacity = ActorMailCapacity.NormalizePowerOfTwo(Math.Max(initialCapacity, 1));
+        int normalizedMaxCapacity = ActorMailCapacity.NormalizePowerOfTwo(Math.Max(maxCapacity, normalizedInitialCapacity));
+
         PostPolicy = postPolicy;
         DeliveryMode = ToDeliveryMode(postPolicy);
         FullPolicy = fullPolicy;
         GrowFailurePolicy = growFailurePolicy;
         DisabledPolicy = disabledPolicy;
         PendingDestroyPolicy = pendingDestroyPolicy;
-        InitialCapacity = initialCapacity;
-        MaxCapacity = maxCapacity;
-        GrowFactor = growFactor;
+        InitialCapacity = normalizedInitialCapacity;
+        MaxCapacity = Math.Max(normalizedInitialCapacity, normalizedMaxCapacity);
+        GrowFactor = Math.Max(growFactor, 2);
         ReleaseWhenEmpty = releaseWhenEmpty;
     }
 

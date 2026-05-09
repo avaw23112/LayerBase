@@ -9,7 +9,7 @@ internal sealed class RingQueueBuffer<TEvent>
 
     public int Rent(int initialCapacity)
     {
-        int capacity = Math.Max(initialCapacity, 1);
+        int capacity = ActorMailCapacity.NormalizePowerOfTwo(Math.Max(initialCapacity, 1));
 
         if (_freeIds.Count > 0)
         {
@@ -78,17 +78,19 @@ internal sealed class RingQueueBuffer<TEvent>
 
     public void Resize(int bufferId, int head, int count, int newCapacity)
     {
-        if (newCapacity <= 0)
+        int capacity = ActorMailCapacity.NormalizePowerOfTwo(newCapacity);
+        if (capacity <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(newCapacity));
         }
 
         TEvent[] oldBuffer = GetBuffer(bufferId);
-        var newBuffer = new TEvent[newCapacity];
+        var newBuffer = new TEvent[capacity];
+        int mask = oldBuffer.Length - 1;
 
         for (int i = 0; i < count; i++)
         {
-            newBuffer[i] = oldBuffer[(head + i) % oldBuffer.Length];
+            newBuffer[i] = oldBuffer[(head + i) & mask];
         }
 
         _buffers[bufferId - 1] = newBuffer;

@@ -15,7 +15,7 @@ internal static class EventMailReader
         }
 
         value = bufferPool.Read(mail.BufferId, mail.Head);
-        mail.Head = (mail.Head + 1) % mail.Capacity;
+        mail.Head = ActorMailCapacity.Wrap(mail.Head + 1, mail.Capacity);
         mail.Count--;
 
         if (mail.Count == 0)
