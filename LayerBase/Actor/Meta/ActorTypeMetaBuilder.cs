@@ -6,6 +6,8 @@ public sealed class ActorTypeMetaBuilder
 {
     private readonly List<ActorBehaviourEntry> _entries = new();
     private readonly HashSet<int> _eventIds = new();
+    private readonly HashSet<int> _tagIds = new();
+    private readonly HashSet<int> _groupIds = new();
 
     public void AddBehaviour<TActor, TEvent>(ActorBehaviourInvoker<TActor, TEvent> invoker)
         where TActor : class, IActor
@@ -29,6 +31,18 @@ public sealed class ActorTypeMetaBuilder
             invoker));
     }
 
+    public void AddTag<TTag>()
+        where TTag : struct, IActorTag
+    {
+        _tagIds.Add(ActorTagId<TTag>.Id);
+    }
+
+    public void AddGroup<TGroup>()
+        where TGroup : struct, IActorGroup
+    {
+        _groupIds.Add(ActorGroupId<TGroup>.Id);
+    }
+
     internal ActorTypeMeta<TActor> Build<TActor>()
         where TActor : class, IActor
     {
@@ -40,8 +54,18 @@ public sealed class ActorTypeMetaBuilder
             .Select(static entry => entry.EventTypeId)
             .ToArray();
 
+        int[] tagIds = _tagIds
+            .OrderBy(static id => id)
+            .ToArray();
+
+        int[] groupIds = _groupIds
+            .OrderBy(static id => id)
+            .ToArray();
+
         return new ActorTypeMeta<TActor>(
             new BehaviourSignature(eventTypeIds),
-            entries);
+            entries,
+            tagIds,
+            groupIds);
     }
 }

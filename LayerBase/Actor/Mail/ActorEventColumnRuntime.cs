@@ -5,10 +5,19 @@ internal abstract class ActorEventColumnRuntime
     public abstract void EnsureSlotCapacity(int slotIndex);
 
     public abstract void ClearMail(int slotIndex);
+
+    public abstract int GetPendingCount(int slotIndex);
+
+    public abstract int GetTotalPendingCount();
 }
 
 internal interface IActorEventColumn<TEvent>
     where TEvent : struct
 {
-    bool PumpOne(ref RuntimeFrameBudget budget);
+    ActorColumnPumpResult PumpOne(
+        ref RuntimeFrameBudget budget,
+        in ActorMailPumpOptions options,
+        ActorMailPumpStatsBuilder stats);
+
+    bool HasPendingWork();
 }

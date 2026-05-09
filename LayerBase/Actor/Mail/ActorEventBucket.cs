@@ -13,21 +13,55 @@ internal sealed class ActorEventBucket<TEvent> : IActorEventBucket
         _columns[oldLength] = column;
     }
 
-    public bool PumpOne(ref RuntimeFrameBudget budget)
+    public PumpOneResult PumpOne(
+        ref RuntimeFrameBudget budget,
+        in ActorMailPumpOptions options,
+        ActorMailPumpStatsBuilder stats,
+        int bucketIndex)
     {
         if (_columns.Length == 0)
         {
-            return false;
+            return PumpOneResult.NoWork;
+        }
+
+        if (!stats.CanProcessBucket(bucketIndex, options))
+        {
+            stats.BucketLimitHits++;
+            return PumpOneResult.BucketLimited;
         }
 
         int checkedCount = 0;
+        bool actorLimited = false;
         while (checkedCount < _columns.Length)
         {
             int index = _cursor;
             _cursor = index + 1 == _columns.Length ? 0 : index + 1;
             checkedCount++;
 
-            if (_columns[index].PumpOne(ref budget))
+            ActorColumnPumpResult result = _columns[index].PumpOne(ref budget, options, stats);
+            if (result == ActorColumnPumpResult.Processed)
+            {
+                stats.ProcessedTotal++;
+                stats.RecordBucketProcessed(bucketIndex);
+                return PumpOneResult.Processed;
+            }
+
+            if (result == ActorColumnPumpResult.ActorLimited)
+            {
+                actorLimited = true;
+            }
+        }
+
+        return actorLimited
+            ? PumpOneResult.ActorLimited
+            : PumpOneResult.EmptyBucket;
+    }
+
+    public bool HasPendingWork()
+    {
+        for (int i = 0; i < _columns.Length; i++)
+        {
+            if (_columns[i].HasPendingWork())
             {
                 return true;
             }

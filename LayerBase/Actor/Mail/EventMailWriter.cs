@@ -22,11 +22,52 @@ internal static class EventMailWriter
                 return EnqueueQueued(ref mail, in value, bufferPool, dirtySlots, slotIndex, options, fullPolicy);
             case ActorPostPolicy.Latest:
                 return EnqueueLatest(ref mail, in value, bufferPool, dirtySlots, slotIndex, options);
+            case ActorPostPolicy.Coalesced:
+                return EnqueueMerge(ref mail, in value, bufferPool, dirtySlots, slotIndex, options);
             case ActorPostPolicy.Dirty:
                 return EnqueueDirty(ref mail, in value, bufferPool, dirtySlots, slotIndex, options);
             default:
                 return PostResult.Failure($"Actor post policy '{effectivePostPolicy}' is not supported in this phase.");
         }
+    }
+
+    private static PostResult EnqueueMerge<TEvent>(
+        ref EventMail<TEvent> mail,
+        in TEvent value,
+        RingQueueBuffer<TEvent> bufferPool,
+        DirtySlotList dirtySlots,
+        int slotIndex,
+        ActorMailOptions options)
+        where TEvent : struct
+    {
+        if (!ActorMailMergeInvoker<TEvent>.CanMerge)
+        {
+            return PostResult.Failure(
+                $"Event type {typeof(TEvent).Name} does not support merge delivery.",
+                PostFailureKind.Unknown);
+        }
+
+        bool wasEmpty = mail.Count == 0;
+        EnsureMailAllocated(ref mail, bufferPool, options);
+
+        TEvent merged = value;
+        if (!wasEmpty)
+        {
+            TEvent oldValue = bufferPool.Read(mail.BufferId, mail.Head);
+            merged = ActorMailMergeInvoker<TEvent>.Merge(in oldValue, in value);
+        }
+
+        bufferPool.Write(mail.BufferId, 0, in merged);
+        mail.Head = 0;
+        mail.Count = 1;
+
+        if (wasEmpty)
+        {
+            dirtySlots.AddIfNotExists(slotIndex);
+            return PostResult.Success;
+        }
+
+        return PostResult.Coalesced();
     }
 
     private static PostResult EnqueueQueued<TEvent>(
@@ -150,6 +191,16 @@ internal static class EventMailWriter
 
             case ActorMailFullPolicy.DropNewest:
                 return PostResult.Dropped();
+
+            case ActorMailFullPolicy.OverwriteLatest:
+                if (mail.Count > 0)
+                {
+                    int latestIndex = (mail.Head + mail.Count - 1) % mail.Capacity;
+                    bufferPool.Write(mail.BufferId, latestIndex, in value);
+                    return PostResult.Coalesced();
+                }
+
+                return PostResult.Success;
 
             default:
                 return PostResult.Failure($"Actor full policy '{effectiveFullPolicy}' is not supported.");

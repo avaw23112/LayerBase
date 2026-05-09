@@ -22,11 +22,34 @@ public struct ActorQueryDeadEvent
     }
 }
 
+public readonly struct ActorEnemyTag : IActorTag
+{
+}
+
+public readonly struct ActorFriendlyTag : IActorTag
+{
+}
+
+public readonly struct ActorDamageableTag : IActorTag
+{
+}
+
+public readonly struct ActorBattleGroup : IActorGroup
+{
+}
+
+public readonly struct ActorUiGroup : IActorGroup
+{
+}
+
 internal static class ActorQueryTrace
 {
     public static List<string> Entries { get; } = new();
 }
 
+[Tag<ActorEnemyTag>]
+[Tag<ActorDamageableTag>]
+[Group<ActorBattleGroup>]
 internal sealed partial class ActorDamageOnly : IActor
 {
     [ActorBehaviour]
@@ -36,6 +59,9 @@ internal sealed partial class ActorDamageOnly : IActor
     }
 }
 
+[Tag<ActorFriendlyTag>]
+[Tag<ActorDamageableTag>]
+[Group<ActorBattleGroup>]
 internal sealed partial class ActorDamageAndDead : IActor
 {
     [ActorBehaviour]
@@ -51,6 +77,7 @@ internal sealed partial class ActorDamageAndDead : IActor
     }
 }
 
+[Group<ActorUiGroup>]
 internal sealed partial class ActorDeadOnly : IActor
 {
     [ActorBehaviour]
@@ -98,6 +125,42 @@ public class ActorQueryTests
     }
 
     [Test]
+    public void Query_builder_filters_by_tags_and_groups()
+    {
+        var world = new ActorWorld();
+        world.CreateActor<ActorDamageOnly>();
+        world.CreateActor<ActorDamageAndDead>();
+        world.CreateActor<ActorDeadOnly>();
+
+        ActorQueryResult enemyBattleActors = world.Query()
+            .AllBehaviours<ActorQueryDamageEvent>()
+            .AllTags<ActorEnemyTag>()
+            .AllGroups<ActorBattleGroup>()
+            .Build();
+
+        Type[] actorTypes = enemyBattleActors.DebugActors.Select(static actor => actor.GetType()).ToArray();
+        Assert.That(actorTypes, Is.EqualTo(new[] { typeof(ActorDamageOnly) }));
+    }
+
+    [Test]
+    public void Query_builder_supports_exclusion_filters()
+    {
+        var world = new ActorWorld();
+        world.CreateActor<ActorDamageOnly>();
+        world.CreateActor<ActorDamageAndDead>();
+        world.CreateActor<ActorDeadOnly>();
+
+        ActorQueryResult query = world.Query()
+            .AllBehaviours<ActorQueryDamageEvent>()
+            .NoneTags<ActorFriendlyTag>()
+            .NoneGroups<ActorUiGroup>()
+            .Build();
+
+        Type[] actorTypes = query.DebugActors.Select(static actor => actor.GetType()).ToArray();
+        Assert.That(actorTypes, Is.EqualTo(new[] { typeof(ActorDamageOnly) }));
+    }
+
+    [Test]
     public void PostAll_posts_without_materializing_actor_list()
     {
         var world = new ActorWorld();
@@ -130,6 +193,24 @@ public class ActorQueryTests
     }
 
     [Test]
+    public void RefreshIfNeeded_rebuilds_stale_query_results_after_new_archetype_creation()
+    {
+        var world = new ActorWorld();
+        world.CreateActor<ActorDamageOnly>();
+
+        ActorQueryResult stale = world.Query().AllBehaviours<ActorQueryDamageEvent>().Build();
+        Assert.That(stale.IsValid, Is.True);
+
+        world.CreateActor<ActorDamageAndDead>();
+
+        Assert.That(stale.IsValid, Is.False);
+
+        ActorQueryResult refreshed = stale.RefreshIfNeeded();
+        Assert.That(refreshed.IsValid, Is.True);
+        Assert.That(refreshed.DebugActors.Count(), Is.EqualTo(2));
+    }
+
+    [Test]
     public void DebugActors_enumerates_live_actors_for_debugging()
     {
         var world = new ActorWorld();
@@ -141,5 +222,66 @@ public class ActorQueryTests
 
         Assert.That(actors, Does.Contain(actorA));
         Assert.That(actors, Does.Contain(actorB));
+    }
+
+    [Test]
+    public void ForEachActor_iterates_matching_actor_type_without_materializing_lists()
+    {
+        var world = new ActorWorld();
+        world.CreateActor<ActorDamageOnly>();
+        world.CreateActor<ActorDamageOnly>();
+        world.CreateActor<ActorDamageAndDead>();
+
+        ActorQueryResult query = world.Query().AllBehaviours<ActorQueryDamageEvent>().Build();
+        int count = 0;
+
+        query.ForEachActor<ActorDamageOnly, int>(
+            ref count,
+            static (ActorDamageOnly _, ref int state) => state++);
+
+        Assert.That(count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void ForEachStorage_exposes_storage_arrays_for_matching_actor_type()
+    {
+        var world = new ActorWorld();
+        world.CreateActor<ActorDamageOnly>();
+        world.CreateActor<ActorDamageOnly>();
+        world.CreateActor<ActorDamageAndDead>();
+
+        ActorQueryResult query = world.Query().AllBehaviours<ActorQueryDamageEvent>().Build();
+        int aliveCount = 0;
+
+        query.ForEachStorage<ActorDamageOnly, int>(
+            ref aliveCount,
+            static (ActorDamageOnly?[] actors, ActorSlotState[] states, bool[] _, int maxSlot, ref int state) =>
+            {
+                for (int i = 0; i < maxSlot; i++)
+                {
+                    if (states[i] == ActorSlotState.Alive && actors[i] != null)
+                    {
+                        state++;
+                    }
+                }
+            });
+
+        Assert.That(aliveCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Pending_destroy_actor_is_filtered_from_query_traversal()
+    {
+        var world = new ActorWorld();
+        ActorDamageOnly actorA = world.CreateActor<ActorDamageOnly>();
+        world.CreateActor<ActorDamageOnly>();
+
+        Assert.That(world.DestroyActor(actorA.GetActorId()), Is.True);
+
+        ActorQueryResult query = world.Query().AllBehaviours<ActorQueryDamageEvent>().Build();
+        int count = 0;
+        query.ForEachActor<ActorDamageOnly>(_ => count++);
+
+        Assert.That(count, Is.EqualTo(1));
     }
 }

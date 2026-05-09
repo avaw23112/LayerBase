@@ -12,6 +12,18 @@ public struct ActorCoreEventB
 {
 }
 
+public readonly struct ActorCoreEnemyTag : IActorTag
+{
+}
+
+public readonly struct ActorCoreDamageableTag : IActorTag
+{
+}
+
+public readonly struct ActorCoreBattleGroup : IActorGroup
+{
+}
+
 [TestFixture]
 public class ActorCoreTests
 {
@@ -69,6 +81,23 @@ public class ActorCoreTests
     }
 
     [Test]
+    public void ActorTypeMetaBuilder_collects_tags_and_groups_with_stable_sorting()
+    {
+        var builder = new ActorTypeMetaBuilder();
+
+        builder.AddTag<ActorCoreDamageableTag>();
+        builder.AddTag<ActorCoreEnemyTag>();
+        builder.AddTag<ActorCoreDamageableTag>();
+        builder.AddGroup<ActorCoreBattleGroup>();
+
+        ActorTypeMeta<BuilderActor> meta = builder.Build<BuilderActor>();
+
+        Assert.That(meta.TagIds, Has.Length.EqualTo(2));
+        Assert.That(meta.TagIds, Is.Ordered.Ascending);
+        Assert.That(meta.GroupIds, Is.EqualTo(new[] { ActorGroupId<ActorCoreBattleGroup>.Id }));
+    }
+
+    [Test]
     public void BehaviourSignature_contains_all_across_multiple_mask_words()
     {
         var full = new BehaviourSignature(new[] { 1, 64, 130 });
@@ -77,6 +106,25 @@ public class ActorCoreTests
 
         Assert.That(full.ContainsAll(subset), Is.True);
         Assert.That(full.ContainsAll(missing), Is.False);
+    }
+
+    [Test]
+    public void Tag_and_group_signatures_support_contains_queries()
+    {
+        var tags = new ActorTagSignature(new[]
+        {
+            ActorTagId<ActorCoreEnemyTag>.Id,
+            ActorTagId<ActorCoreDamageableTag>.Id
+        });
+
+        var groups = new ActorGroupSignature(new[]
+        {
+            ActorGroupId<ActorCoreBattleGroup>.Id
+        });
+
+        Assert.That(tags.ContainsAll(new ActorTagSignature(new[] { ActorTagId<ActorCoreEnemyTag>.Id })), Is.True);
+        Assert.That(tags.ContainsAny(new ActorTagSignature(new[] { ActorTagId<ActorCoreDamageableTag>.Id })), Is.True);
+        Assert.That(groups.ContainsAll(new ActorGroupSignature(new[] { ActorGroupId<ActorCoreBattleGroup>.Id })), Is.True);
     }
 
     [Test]

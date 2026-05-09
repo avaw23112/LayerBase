@@ -31,6 +31,7 @@ public partial class ActorPostPumpTests
     {
         RecordingActor.Trace.Clear();
         SecondaryRecordingActor.Trace.Clear();
+        DualRecordingActor.Trace.Clear();
         ThrowingActor.Invocations = 0;
     }
 
@@ -160,6 +161,23 @@ public partial class ActorPostPumpTests
         Assert.That(rejected.IsSuccess, Is.False);
     }
 
+    [Test]
+    public void Query_postall_with_multiple_events_delivers_all_events_to_matching_actor()
+    {
+        var world = new ActorWorld();
+        world.CreateActor<DualRecordingActor>();
+        world.CreateActor<RecordingActor>();
+
+        ActorQueryResult query = world.QueryActor<ActorDamageEvent, ActorHealEvent>();
+        query.PostAll(new ActorDamageEvent(7), new ActorHealEvent(9));
+
+        var budget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        Assert.That(DualRecordingActor.Trace, Is.EqualTo(new[] { "D:7", "H:9" }));
+        Assert.That(RecordingActor.Trace, Is.Empty);
+    }
+
     public sealed partial class RecordingActor : IActor
     {
         public static List<string> Trace { get; } = new();
@@ -179,6 +197,23 @@ public partial class ActorPostPumpTests
         private void OnDamage(in ActorDamageEvent value)
         {
             Trace.Add($"S:{value.Value}");
+        }
+    }
+
+    public sealed partial class DualRecordingActor : IActor
+    {
+        public static List<string> Trace { get; } = new();
+
+        [ActorBehaviour]
+        private void OnDamage(in ActorDamageEvent value)
+        {
+            Trace.Add($"D:{value.Value}");
+        }
+
+        [ActorBehaviour]
+        private void OnHeal(in ActorHealEvent value)
+        {
+            Trace.Add($"H:{value.Value}");
         }
     }
 

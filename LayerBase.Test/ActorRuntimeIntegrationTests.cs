@@ -178,6 +178,9 @@ public class ActorRuntimeIntegrationTests
         LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(), PostSchedulerOptions.Default);
         RuntimeLifecycleActor actor = runtime.Actors.CreateActor<RuntimeLifecycleActor>();
 
+        Assert.That(ActorRuntimeIntegrationTrace.Entries, Is.EqualTo(new[] { "start" }));
+        ActorRuntimeIntegrationTrace.Entries.Clear();
+
         runtime.Post(new RuntimeSchedulerEvent(1));
         actor.Post(new RuntimeActorEvent(2));
 
@@ -185,7 +188,7 @@ public class ActorRuntimeIntegrationTests
 
         Assert.That(
             ActorRuntimeIntegrationTrace.Entries,
-            Is.EqualTo(new[] { "scheduler:1", "actor:2", "start", "fixed:0.017", "actor-update:0.016", "late:0.016", "update" }));
+            Is.EqualTo(new[] { "scheduler:1", "actor:2", "fixed:0.017", "actor-update:0.016", "late:0.016", "update" }));
     }
 
     [Test]
@@ -202,6 +205,8 @@ public class ActorRuntimeIntegrationTests
         runtime = builder.Build();
 
         runtime.Actors.CreateActor<RuntimeLifecycleActor>();
+        Assert.That(ActorRuntimeIntegrationTrace.Entries, Is.EqualTo(new[] { "start" }));
+        ActorRuntimeIntegrationTrace.Entries.Clear();
 
         runtime.Pump(0.016f);
 

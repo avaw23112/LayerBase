@@ -3,10 +3,13 @@ namespace LayerBase.Actor;
 public sealed partial class ActorWorld
 {
     private BehaviourArchetype[] _archetypes = Array.Empty<BehaviourArchetype>();
-    private readonly Dictionary<BehaviourSignature, BehaviourArchetype> _archetypeMap = new();
-    private readonly Dictionary<BehaviourSignature, ActorQueryCache> _queryCacheBySignature = new();
+    private readonly Dictionary<ActorArchetypeKey, BehaviourArchetype> _archetypeMap = new();
+    private readonly Dictionary<ActorQueryDescriptor, ActorQueryCache> _queryCacheByDescriptor = new();
     private IActorEventBucket[] _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
     private int _bucketCursor;
+    internal int QueryVersion { get; private set; }
+    public ActorMailPumpOptions MailPumpOptions { get; set; }
+    public ActorMailPumpStats LastMailPumpStats { get; private set; }
     internal ActorLifecycleScheduler Lifecycle { get; }
     private bool _hasPendingDestroy;
     internal LayerRuntime? Runtime { get; }
@@ -15,6 +18,8 @@ public sealed partial class ActorWorld
     internal ActorWorld()
     {
         DefaultMailOptions = ActorMailOptions.Default;
+        MailPumpOptions = ActorMailPumpOptions.Default;
+        LastMailPumpStats = default;
         Lifecycle = new ActorLifecycleScheduler(this);
     }
     internal bool IsLifecycleRunnable(ActorId actorId)
@@ -32,6 +37,8 @@ public sealed partial class ActorWorld
     internal ActorWorld(ActorMailOptions defaultMailOptions)
     {
         DefaultMailOptions = defaultMailOptions;
+        MailPumpOptions = ActorMailPumpOptions.Default;
+        LastMailPumpStats = default;
         Lifecycle = new ActorLifecycleScheduler(this);
     }
 
@@ -39,22 +46,28 @@ public sealed partial class ActorWorld
     {
         Runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         DefaultMailOptions = ActorMailOptions.Default;
+        MailPumpOptions = ActorMailPumpOptions.Default;
+        LastMailPumpStats = default;
         Lifecycle = new ActorLifecycleScheduler(this);
     }
 
-    private BehaviourArchetype GetOrCreateArchetype(BehaviourSignature signature)
+    private BehaviourArchetype GetOrCreateArchetype(ActorArchetypeKey key)
     {
-        if (_archetypeMap.TryGetValue(signature, out BehaviourArchetype? existing))
+        if (_archetypeMap.TryGetValue(key, out BehaviourArchetype? existing))
         {
             return existing;
         }
 
         int archetypeId = _archetypes.Length;
-        var archetype = new BehaviourArchetype(archetypeId, signature);
+        var archetype = new BehaviourArchetype(
+            archetypeId,
+            key.Behaviour,
+            key.Tags,
+            key.Groups);
 
         Array.Resize(ref _archetypes, archetypeId + 1);
         _archetypes[archetypeId] = archetype;
-        _archetypeMap.Add(signature, archetype);
+        _archetypeMap.Add(key, archetype);
 
         InvalidateQueryCache();
         return archetype;
@@ -62,7 +75,8 @@ public sealed partial class ActorWorld
 
     private void InvalidateQueryCache()
     {
-        _queryCacheBySignature.Clear();
+        _queryCacheByDescriptor.Clear();
+        QueryVersion++;
     }
 
     internal void RegisterColumn<TEvent>(int eventTypeId, IActorEventColumn<TEvent> column)

@@ -9,11 +9,16 @@ public readonly struct ActorMailOptions
         initialCapacity: 4,
         maxCapacity: 64,
         growFactor: 2,
-        releaseWhenEmpty: true);
+        releaseWhenEmpty: true,
+        disabledPolicy: ActorMailDisabledPolicy.Accept,
+        pendingDestroyPolicy: ActorMailPendingDestroyPolicy.Reject);
 
     public readonly ActorPostPolicy PostPolicy;
+    public readonly ActorMailDeliveryMode DeliveryMode;
     public readonly ActorMailFullPolicy FullPolicy;
     public readonly ActorMailFullPolicy GrowFailurePolicy;
+    public readonly ActorMailDisabledPolicy DisabledPolicy;
+    public readonly ActorMailPendingDestroyPolicy PendingDestroyPolicy;
     public readonly int InitialCapacity;
     public readonly int MaxCapacity;
     public readonly int GrowFactor;
@@ -26,14 +31,29 @@ public readonly struct ActorMailOptions
         int initialCapacity,
         int maxCapacity,
         int growFactor,
-        bool releaseWhenEmpty)
+        bool releaseWhenEmpty,
+        ActorMailDisabledPolicy disabledPolicy = ActorMailDisabledPolicy.Accept,
+        ActorMailPendingDestroyPolicy pendingDestroyPolicy = ActorMailPendingDestroyPolicy.Reject)
     {
         PostPolicy = postPolicy;
+        DeliveryMode = ToDeliveryMode(postPolicy);
         FullPolicy = fullPolicy;
         GrowFailurePolicy = growFailurePolicy;
+        DisabledPolicy = disabledPolicy;
+        PendingDestroyPolicy = pendingDestroyPolicy;
         InitialCapacity = initialCapacity;
         MaxCapacity = maxCapacity;
         GrowFactor = growFactor;
         ReleaseWhenEmpty = releaseWhenEmpty;
+    }
+
+    private static ActorMailDeliveryMode ToDeliveryMode(ActorPostPolicy postPolicy)
+    {
+        return postPolicy switch
+        {
+            ActorPostPolicy.Latest => ActorMailDeliveryMode.LatestOnly,
+            ActorPostPolicy.Coalesced => ActorMailDeliveryMode.Merge,
+            _ => ActorMailDeliveryMode.Queue
+        };
     }
 }

@@ -7,6 +7,8 @@ internal sealed class DirtySlotList
     private int _count;
     private readonly HashSet<int> _contains = new();
 
+    public int Count => _count;
+
     public void AddIfNotExists(int slotIndex)
     {
         if (!_contains.Add(slotIndex))
@@ -47,6 +49,19 @@ internal sealed class DirtySlotList
         {
             _head = 0;
         }
+    }
+
+    public void MoveHeadToTail()
+    {
+        if (_count <= 1)
+        {
+            return;
+        }
+
+        int headValue = _items[_head];
+        _head = (_head + 1) % _items.Length;
+        int tail = (_head + _count - 1) % _items.Length;
+        _items[tail] = headValue;
     }
 
     private void EnsureCapacity(int required)

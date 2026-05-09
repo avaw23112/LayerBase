@@ -47,6 +47,31 @@ public class ActorGeneratorTests
     }
 
     [Test]
+    public void Tag_and_group_attributes_generate_actor_meta_entries_even_without_behaviours()
+    {
+        GeneratorRunResult result = RunGenerator("""
+            using LayerBase.Actor;
+
+            namespace Sample;
+
+            public readonly struct EnemyTag : IActorTag { }
+            public readonly struct BattleGroup : IActorGroup { }
+
+            [Tag<EnemyTag>]
+            [Group<BattleGroup>]
+            public sealed partial class EnemyActor : IActor
+            {
+            }
+            """);
+
+        Assert.That(GetGeneratorDiagnostics(result), Is.Empty);
+
+        string generated = result.GeneratedSources.Single().SourceText.ToString();
+        Assert.That(generated, Does.Contain("builder.AddTag<global::Sample.EnemyTag>();"));
+        Assert.That(generated, Does.Contain("builder.AddGroup<global::Sample.BattleGroup>();"));
+    }
+
+    [Test]
     public void Generated_actor_code_compiles_without_errors()
     {
         (GeneratorRunResult result, Compilation outputCompilation) = RunGeneratorWithCompilation("""
@@ -62,6 +87,35 @@ public class ActorGeneratorTests
                 private void OnDamage(in DamageEvent e)
                 {
                 }
+            }
+            """);
+
+        Assert.That(GetGeneratorDiagnostics(result), Is.Empty);
+
+        ImmutableArray<Diagnostic> errors = outputCompilation.GetDiagnostics()
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty, string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+    }
+
+    [Test]
+    public void Generated_tag_group_actor_code_compiles_without_errors()
+    {
+        (GeneratorRunResult result, Compilation outputCompilation) = RunGeneratorWithCompilation("""
+            using LayerBase.Actor;
+
+            namespace Sample;
+
+            public readonly struct EnemyTag : IActorTag { }
+            public readonly struct DamageableTag : IActorTag { }
+            public readonly struct BattleGroup : IActorGroup { }
+
+            [Tag<EnemyTag>]
+            [Tag<DamageableTag>]
+            [Group<BattleGroup>]
+            public sealed partial class EnemyActor : IActor
+            {
             }
             """);
 
@@ -247,14 +301,16 @@ public class ActorGeneratorTests
 
     private static (GeneratorRunResult Result, Compilation OutputCompilation) RunGeneratorWithCompilation(string source)
     {
-        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest));
+        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
         CSharpCompilation compilation = CSharpCompilation.Create(
             assemblyName: "ActorGeneratorTests_" + Guid.NewGuid().ToString("N"),
             syntaxTrees: new[] { syntaxTree },
             references: GetMetadataReferences(),
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new ActorBehaviourGenerator().AsSourceGenerator());
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new[] { new ActorBehaviourGenerator().AsSourceGenerator() },
+            parseOptions: new CSharpParseOptions(LanguageVersion.Preview));
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out Compilation outputCompilation, out _);
 
         ImmutableArray<GeneratorRunResult> results = driver.GetRunResult().Results;

@@ -23,7 +23,7 @@ public sealed partial class ActorWorld
     {
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
         {
-            return PostResult.Failure("Invalid ActorId.ArchetypeId.");
+            return PostResult.Failure("Invalid ActorId.ArchetypeId.", PostFailureKind.InvalidActorId);
         }
 
         BehaviourArchetype archetype = _archetypes[actorId.ArchetypeId];

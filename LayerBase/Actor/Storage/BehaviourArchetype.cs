@@ -1,4 +1,5 @@
 using LayerBase.Core.Event;
+using System.Text;
 
 namespace LayerBase.Actor;
 
@@ -9,27 +10,34 @@ internal sealed class BehaviourArchetype
 
     public int ArchetypeId { get; }
     public BehaviourSignature Signature { get; }
+    public ActorTagSignature Tags { get; }
+    public ActorGroupSignature Groups { get; }
 
-    public BehaviourArchetype(int archetypeId, BehaviourSignature signature)
+    public BehaviourArchetype(
+        int archetypeId,
+        BehaviourSignature signature,
+        ActorTagSignature tags,
+        ActorGroupSignature groups)
     {
         ArchetypeId = archetypeId;
         Signature = signature;
+        Tags = tags;
+        Groups = groups;
     }
+
     internal bool IsLifecycleRunnable(ActorId actorId)
     {
-        // actorId 参数表示目标 Actor。
-        // TypeStorageIndex 用于定位当前 Archetype 内的具体 Actor 类型存储。
         ushort storageIndex = actorId.TypeStorageIndex;
-
         if (storageIndex >= (uint)_storages.Length)
         {
             return false;
         }
 
         return _storages[storageIndex].IsLifecycleRunnable(
-            slotIndex: actorId.SlotIndex,
-            generation: actorId.Generation);
+            actorId.SlotIndex,
+            actorId.Generation);
     }
+
     public TypedActorStorage<TActor> GetOrCreateStorage<TActor>(ActorTypeMeta<TActor> meta, ActorWorld world)
         where TActor : class, IActor
     {
@@ -41,9 +49,10 @@ internal sealed class BehaviourArchetype
 
         ushort storageIndex = checked((ushort)_storages.Length);
         var storage = new TypedActorStorage<TActor>(
-            typeStorageIndex: storageIndex,
-            maxEventTypeId: Math.Max(EventTypeIdAllocator.MaxId, 1),
-            initialCapacity: 4);
+            storageIndex,
+            ArchetypeId,
+            Math.Max(EventTypeIdAllocator.MaxId, 1),
+            4);
 
         storage.BuildColumns(meta, world);
 
@@ -69,7 +78,23 @@ internal sealed class BehaviourArchetype
         TypedStorageRuntime storage = _storages[storageIndex];
         if (!storage.IsAlive(actorId.SlotIndex, actorId.Generation))
         {
-            return PostResult.Failure("ActorId is stale or actor slot is not alive.");
+            ActorSlotState state = storage.GetSlotState(actorId.SlotIndex);
+            if (state == ActorSlotState.PendingDestroy)
+            {
+                return PostResult.Failure("Actor is pending destroy.", PostFailureKind.PendingDestroy);
+            }
+
+            if (state == ActorSlotState.Destroying)
+            {
+                return PostResult.Failure("Actor is destroying.", PostFailureKind.Destroying);
+            }
+
+            if (storage.GetGeneration(actorId.SlotIndex) != actorId.Generation)
+            {
+                return PostResult.Failure("ActorId generation mismatch.", PostFailureKind.InvalidActorId);
+            }
+
+            return PostResult.Failure("ActorId is stale or actor slot is not alive.", PostFailureKind.InvalidActorId);
         }
 
         return storage.Post(actorId.SlotIndex, in value, postPolicy, fullPolicy);
@@ -126,7 +151,78 @@ internal sealed class BehaviourArchetype
             _storages[i].SweepPendingDestroy(world);
         }
     }
-    
+
+    internal ActorDebugInfo GetDebugInfo(ActorId actorId)
+    {
+        ushort storageIndex = actorId.TypeStorageIndex;
+        if ((uint)storageIndex >= (uint)_storages.Length)
+        {
+            return ActorDebugInfo.Invalid(actorId, "Invalid TypeStorageIndex.");
+        }
+
+        return _storages[storageIndex].GetDebugInfo(actorId, Describe());
+    }
+
+    internal string Describe()
+    {
+        return $"Behaviours=[{string.Join(", ", Signature.EventTypeIds.ToArray())}], Tags=[{string.Join(", ", Tags.Ids.ToArray())}], Groups=[{string.Join(", ", Groups.Ids.ToArray())}]";
+    }
+
+    internal int CountAlive()
+    {
+        int count = 0;
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            count += _storages[i].CountAlive();
+        }
+
+        return count;
+    }
+
+    internal int CountEnabled()
+    {
+        int count = 0;
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            count += _storages[i].CountEnabled();
+        }
+
+        return count;
+    }
+
+    internal bool HasAnyAlive()
+    {
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            if (_storages[i].HasAnyAlive())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal int GetTotalPendingMailCount()
+    {
+        int count = 0;
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            count += _storages[i].GetTotalPendingMailCount();
+        }
+
+        return count;
+    }
+
+    internal void AppendDebugRows(StringBuilder builder)
+    {
+        string archetypeInfo = Describe();
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            _storages[i].AppendDebugRow(builder, ArchetypeId, archetypeInfo);
+        }
+    }
+
     public IEnumerable<IActor> EnumerateActors()
     {
         for (int i = 0; i < _storages.Length; i++)
@@ -137,12 +233,48 @@ internal sealed class BehaviourArchetype
             }
         }
     }
-    
-   public void PostToAliveActors<TEvent>(
-    in TEvent value,
-    ActorPostPolicy? postPolicy,
-    ActorMailFullPolicy? fullPolicy)
-    where TEvent : struct
+
+    internal void ForEachActor<TActor>(Action<TActor> action)
+        where TActor : class, IActor
+    {
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            if (_storages[i] is TypedActorStorage<TActor> storage)
+            {
+                storage.ForEachActor(action);
+            }
+        }
+    }
+
+    internal void ForEachActor<TActor, TState>(ref TState state, ActorForEachAction<TActor, TState> action)
+        where TActor : class, IActor
+    {
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            if (_storages[i] is TypedActorStorage<TActor> storage)
+            {
+                storage.ForEachActor(ref state, action);
+            }
+        }
+    }
+
+    internal void ForEachStorage<TActor, TState>(ref TState state, ActorStorageForEachAction<TActor, TState> action)
+        where TActor : class, IActor
+    {
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            if (_storages[i] is TypedActorStorage<TActor> storage)
+            {
+                storage.ForEachStorage(ref state, action);
+            }
+        }
+    }
+
+    public void PostToAliveActors<TEvent>(
+        in TEvent value,
+        ActorPostPolicy? postPolicy,
+        ActorMailFullPolicy? fullPolicy)
+        where TEvent : struct
     {
         for (int i = 0; i < _storages.Length; i++)
         {
@@ -160,10 +292,7 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(in value1, in value2, postPolicy, fullPolicy);
         }
     }
 
@@ -179,11 +308,7 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value3, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(in value1, in value2, in value3, postPolicy, fullPolicy);
         }
     }
 
@@ -201,12 +326,7 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value3, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value4, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(in value1, in value2, in value3, in value4, postPolicy, fullPolicy);
         }
     }
 
@@ -226,13 +346,7 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value3, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value4, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value5, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(in value1, in value2, in value3, in value4, in value5, postPolicy, fullPolicy);
         }
     }
 
@@ -254,14 +368,7 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value3, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value4, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value5, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value6, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, postPolicy, fullPolicy);
         }
     }
 
@@ -285,15 +392,7 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value3, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value4, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value5, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value6, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value7, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, in value7, postPolicy, fullPolicy);
         }
     }
 
@@ -319,16 +418,7 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value3, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value4, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value5, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value6, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value7, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value8, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, in value7, in value8, postPolicy, fullPolicy);
         }
     }
 
@@ -356,17 +446,7 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value3, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value4, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value5, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value6, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value7, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value8, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value9, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, in value7, in value8, in value9, postPolicy, fullPolicy);
         }
     }
 
@@ -396,18 +476,7 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value3, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value4, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value5, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value6, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value7, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value8, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value9, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value10, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, in value7, in value8, in value9, in value10, postPolicy, fullPolicy);
         }
     }
 
@@ -439,19 +508,7 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value3, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value4, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value5, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value6, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value7, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value8, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value9, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value10, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value11, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, in value7, in value8, in value9, in value10, in value11, postPolicy, fullPolicy);
         }
     }
 
@@ -485,20 +542,21 @@ internal sealed class BehaviourArchetype
     {
         for (int i = 0; i < _storages.Length; i++)
         {
-            TypedStorageRuntime storage = _storages[i];
-
-            storage.PostToAliveActors(in value1, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value2, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value3, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value4, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value5, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value6, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value7, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value8, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value9, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value10, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value11, postPolicy, fullPolicy);
-            storage.PostToAliveActors(in value12, postPolicy, fullPolicy);
+            _storages[i].PostManyToAliveActors(
+                in value1,
+                in value2,
+                in value3,
+                in value4,
+                in value5,
+                in value6,
+                in value7,
+                in value8,
+                in value9,
+                in value10,
+                in value11,
+                in value12,
+                postPolicy,
+                fullPolicy);
         }
     }
 }

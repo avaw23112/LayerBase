@@ -82,6 +82,9 @@ public class ActorLifecycleTests
         var world = new ActorWorld();
         LifecycleProbeActor actor = world.CreateActor<LifecycleProbeActor>();
 
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "start" }));
+        ActorLifecycleTrace.Entries.Clear();
+
         actor.Post(new ActorLifecycleEvent(1));
 
         var budget = new RuntimeFrameBudget(32, 0, 0);
@@ -93,7 +96,7 @@ public class ActorLifecycleTests
 
         Assert.That(
             ActorLifecycleTrace.Entries,
-            Is.EqualTo(new[] { "behaviour:1", "start", "fixed:0.25", "update:0.5", "late:0.5" }));
+            Is.EqualTo(new[] { "behaviour:1", "fixed:0.25", "update:0.5", "late:0.5" }));
 
         ActorLifecycleTrace.Entries.Clear();
         budget = new RuntimeFrameBudget(32, 0, 0);
@@ -114,6 +117,9 @@ public class ActorLifecycleTests
         var world = new ActorWorld();
         LifecycleProbeActor actor = world.CreateActor<LifecycleProbeActor>();
 
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "start" }));
+        ActorLifecycleTrace.Entries.Clear();
+
         Assert.That(actor.GetEnable(), Is.True);
         Assert.That(actor.SetEnable(false), Is.True);
         Assert.That(actor.GetEnable(), Is.False);
@@ -127,7 +133,7 @@ public class ActorLifecycleTests
             pumpFixedUpdate: true,
             budget: ref budget);
 
-        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "behaviour:3", "start" }));
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "behaviour:3" }));
 
         Assert.That(actor.SetEnable(true), Is.True);
         Assert.That(actor.GetEnable(), Is.True);
@@ -148,6 +154,9 @@ public class ActorLifecycleTests
     {
         var world = new ActorWorld();
         LifecycleProbeActor actor = world.CreateActor<LifecycleProbeActor>();
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "start" }));
+        ActorLifecycleTrace.Entries.Clear();
+
         ActorId oldId = actor.GetActorId();
 
         Assert.That(world.DestroyActor(oldId), Is.True);
@@ -180,6 +189,8 @@ public class ActorLifecycleTests
     {
         var world = new ActorWorld();
         LifecycleProbeActor actor = world.CreateActor<LifecycleProbeActor>();
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "start" }));
+        ActorLifecycleTrace.Entries.Clear();
 
         actor.Post(new ActorLifecycleEvent(5));
         Assert.That(world.DestroyActor(actor.GetActorId()), Is.True);
@@ -200,6 +211,9 @@ public class ActorLifecycleTests
     {
         var world = new ActorWorld();
         LifecycleProbeActor actor = world.CreateActor<LifecycleProbeActor>();
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "start" }));
+        ActorLifecycleTrace.Entries.Clear();
+
         ActorId actorId = actor.GetActorId();
         LifecycleProbeActor.BehaviourHook = _ => world.DestroyActor(actorId);
 
@@ -220,6 +234,9 @@ public class ActorLifecycleTests
     {
         var world = new ActorWorld();
         LifecycleProbeActor actor = world.CreateActor<LifecycleProbeActor>();
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "start" }));
+        ActorLifecycleTrace.Entries.Clear();
+
         ActorId actorId = actor.GetActorId();
 
         var budget = new RuntimeFrameBudget(32, 0, 0);
@@ -229,6 +246,7 @@ public class ActorLifecycleTests
             pumpFixedUpdate: false,
             budget: ref budget);
 
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "update:0.1", "late:0.1" }));
         ActorLifecycleTrace.Entries.Clear();
         LifecycleProbeActor.UpdateHook = _ => world.DestroyActor(actorId);
 

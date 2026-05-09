@@ -64,6 +64,23 @@ internal readonly struct BehaviourMask : IEquatable<BehaviourMask>
         return true;
     }
 
+    public bool ContainsAny(BehaviourMask query)
+    {
+        ReadOnlySpan<ulong> selfWords = _words;
+        ReadOnlySpan<ulong> queryWords = query._words;
+        int length = Math.Min(selfWords.Length, queryWords.Length);
+
+        for (int i = 0; i < length; i++)
+        {
+            if ((selfWords[i] & queryWords[i]) != 0UL)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public bool Equals(BehaviourMask other)
     {
         return _words.AsSpan().SequenceEqual(other._words);
@@ -114,6 +131,7 @@ internal readonly struct BehaviourSignature : IEquatable<BehaviourSignature>
     private readonly int[] _eventTypeIds;
 
     public BehaviourMask Mask { get; }
+    public static BehaviourSignature Empty => new(Array.Empty<int>());
 
     public BehaviourSignature(int[] eventTypeIds)
     {
@@ -142,6 +160,11 @@ internal readonly struct BehaviourSignature : IEquatable<BehaviourSignature>
     public bool ContainsAll(BehaviourSignature query)
     {
         return Mask.ContainsAll(query.Mask);
+    }
+
+    public bool ContainsAny(BehaviourSignature query)
+    {
+        return Mask.ContainsAny(query.Mask);
     }
 
     public bool Equals(BehaviourSignature other)

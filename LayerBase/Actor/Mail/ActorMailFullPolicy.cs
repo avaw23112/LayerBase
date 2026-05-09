@@ -5,5 +5,6 @@ public enum ActorMailFullPolicy
     Grow,
     RejectNew,
     DropOldest,
-    DropNewest
+    DropNewest,
+    OverwriteLatest
 }

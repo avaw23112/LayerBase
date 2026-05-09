@@ -70,7 +70,8 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         }
 
         bool manuallyImplementsGeneratedMeta = ImplementsInterface(classSymbol, "LayerBase.Actor.IGeneratedActorMeta");
-        if (methods.Count == 0 && !manuallyImplementsGeneratedMeta)
+        bool hasTagOrGroupMetadata = HasTagOrGroupMetadata(classSymbol);
+        if (methods.Count == 0 && !manuallyImplementsGeneratedMeta && !hasTagOrGroupMetadata)
         {
             return null;
         }
@@ -79,7 +80,8 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             ClassSymbol: classSymbol,
             Declaration: declaration,
             Methods: methods.ToImmutableArray(),
-            ManuallyImplementsGeneratedMeta: manuallyImplementsGeneratedMeta);
+            ManuallyImplementsGeneratedMeta: manuallyImplementsGeneratedMeta,
+            HasTagOrGroupMetadata: hasTagOrGroupMetadata);
     }
 
     private static void Generate(SourceProductionContext context, ImmutableArray<ClassCandidate?> candidates)
@@ -102,7 +104,8 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             .Select(static group => group.First())
             .ToImmutableArray();
 
-        if (methods.Length == 0)
+        bool hasTagOrGroupMetadata = candidates.Any(static candidate => candidate.HasTagOrGroupMetadata);
+        if (methods.Length == 0 && !hasTagOrGroupMetadata)
         {
             return;
         }
@@ -349,6 +352,22 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             builder.AppendLine("        });");
         }
 
+        foreach (INamedTypeSymbol tagType in GetTagTypes(classSymbol))
+        {
+            builder.Append(memberIndent);
+            builder.Append("    builder.AddTag<");
+            builder.Append(tagType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+            builder.AppendLine(">();");
+        }
+
+        foreach (INamedTypeSymbol groupType in GetGroupTypes(classSymbol))
+        {
+            builder.Append(memberIndent);
+            builder.Append("    builder.AddGroup<");
+            builder.Append(groupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+            builder.AppendLine(">();");
+        }
+
         builder.Append(memberIndent);
         builder.AppendLine("}");
         builder.Append(indent);
@@ -503,6 +522,47 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         return false;
     }
 
+    private static bool HasTagOrGroupMetadata(INamedTypeSymbol classSymbol)
+    {
+        return GetTagTypes(classSymbol).Length > 0
+               || GetGroupTypes(classSymbol).Length > 0;
+    }
+
+    private static ImmutableArray<INamedTypeSymbol> GetTagTypes(INamedTypeSymbol classSymbol)
+    {
+        return GetGenericAttributeTypeArguments(classSymbol, "TagAttribute");
+    }
+
+    private static ImmutableArray<INamedTypeSymbol> GetGroupTypes(INamedTypeSymbol classSymbol)
+    {
+        return GetGenericAttributeTypeArguments(classSymbol, "GroupAttribute");
+    }
+
+    private static ImmutableArray<INamedTypeSymbol> GetGenericAttributeTypeArguments(
+        INamedTypeSymbol classSymbol,
+        string attributeName)
+    {
+        return classSymbol.GetAttributes()
+            .Where(attribute => IsLayerBaseActorGenericAttribute(attribute, attributeName))
+            .Select(attribute => attribute.AttributeClass!.TypeArguments[0])
+            .OfType<INamedTypeSymbol>()
+            .Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default)
+            .OrderBy(static symbol => symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
+            .ToImmutableArray();
+    }
+
+    private static bool IsLayerBaseActorGenericAttribute(AttributeData attribute, string attributeName)
+    {
+        if (attribute.AttributeClass is not INamedTypeSymbol attributeClass)
+        {
+            return false;
+        }
+
+        return attributeClass.Name == attributeName
+               && attributeClass.TypeArguments.Length == 1
+               && attributeClass.ContainingNamespace.ToDisplayString() == "LayerBase.Actor";
+    }
+
     private static bool ImplementsInterface(INamedTypeSymbol symbol, string interfaceName)
     {
         return symbol.AllInterfaces.Any(interfaceSymbol => interfaceSymbol.ToDisplayString() == interfaceName);
@@ -524,7 +584,8 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         INamedTypeSymbol ClassSymbol,
         ClassDeclarationSyntax Declaration,
         ImmutableArray<MethodCandidate> Methods,
-        bool ManuallyImplementsGeneratedMeta);
+        bool ManuallyImplementsGeneratedMeta,
+        bool HasTagOrGroupMetadata);
 
     private sealed record MethodCandidate(
         string MethodName,

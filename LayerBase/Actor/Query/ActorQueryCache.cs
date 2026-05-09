@@ -2,12 +2,12 @@ namespace LayerBase.Actor;
 
 internal sealed class ActorQueryCache
 {
-    public BehaviourSignature QuerySignature { get; }
+    public ActorQueryDescriptor Descriptor { get; }
     public BehaviourArchetype[] Archetypes { get; }
 
-    public ActorQueryCache(BehaviourSignature querySignature, BehaviourArchetype[] archetypes)
+    public ActorQueryCache(ActorQueryDescriptor descriptor, BehaviourArchetype[] archetypes)
     {
-        QuerySignature = querySignature;
+        Descriptor = descriptor;
         Archetypes = archetypes ?? throw new ArgumentNullException(nameof(archetypes));
     }
 }

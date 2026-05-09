@@ -2,17 +2,25 @@ namespace LayerBase.Actor;
 
 public sealed partial class ActorWorld
 {
-    public TActor CreateActor<TActor>()
+    public TActor CreateActor<TActor>(bool usePool = false)
         where TActor : class, IActor, new()
     {
-        TActor actor = new TActor();
+        TActor actor = usePool
+            ? RentActorFromPool<TActor>()
+            : new TActor();
+
         IGeneratedActorMeta generated = ActorGeneratedAccess.RequireGenerated(actor);
         ActorTypeMeta<TActor> meta = ActorTypeMetaCache.GetOrBuild<TActor>(generated);
 
-        BehaviourArchetype archetype = GetOrCreateArchetype(meta.Signature);
+        var key = new ActorArchetypeKey(
+            meta.Signature,
+            new ActorTagSignature(meta.TagIds),
+            new ActorGroupSignature(meta.GroupIds));
+
+        BehaviourArchetype archetype = GetOrCreateArchetype(key);
         TypedActorStorage<TActor> storage = archetype.GetOrCreateStorage(meta, this);
 
-        int slotIndex = storage.AllocateSlot(actor);
+        int slotIndex = storage.AllocateSlot(actor, usePool);
         ActorId actorId = new(
             archetypeId: archetype.ArchetypeId,
             typeStorageIndex: storage.TypeStorageIndex,
@@ -22,5 +30,17 @@ public sealed partial class ActorWorld
         generated.ActorInit(new ActorContext(this, actorId));
         storage.RegisterLifecycleInterfaces(actor, actorId, slotIndex, this);
         return actor;
+    }
+
+    private static TActor RentActorFromPool<TActor>()
+        where TActor : class, IActor, new()
+    {
+        if (!typeof(IPooledActor).IsAssignableFrom(typeof(TActor)))
+        {
+            throw new InvalidOperationException(
+                $"Actor type {typeof(TActor).Name} must implement IPooledActor when usePool is true.");
+        }
+
+        return ActorPoolCache<TActor>.Pool.Rent();
     }
 }

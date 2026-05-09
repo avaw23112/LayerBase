@@ -16,7 +16,7 @@ public sealed partial class ActorWorld
         // budget 参数表示当前帧剩余调度预算。
         // 当前 RuntimeFrameBudget 名字里叫 Event，但这里可以临时把一次生命周期调用也视为一个调度工作单元。
 
-        PumpActorBehaviours(ref budget);
+        LastMailPumpStats = PumpActorBehaviours(ref budget, MailPumpOptions);
         // ActorBehaviour 阶段里 DestroyActor 的对象，本帧不再进入生命周期。
         SweepPendingDestroy();
         if (!CanContinue(ref budget))
@@ -61,31 +61,65 @@ public sealed partial class ActorWorld
         return budget.HasRemainingEventBudget()
                && budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp());
     }
-    private void PumpActorBehaviours(ref RuntimeFrameBudget budget)
+    private ActorMailPumpStats PumpActorBehaviours(
+        ref RuntimeFrameBudget budget,
+        in ActorMailPumpOptions options)
     {
-        while (budget.HasRemainingEventBudget())
+        var stats = new ActorMailPumpStatsBuilder();
+        while (budget.HasRemainingEventBudget()
+               && (options.MaxTotalMailsPerPump <= 0 || stats.ProcessedTotal < options.MaxTotalMailsPerPump))
         {
             if (!budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp()))
             {
-                return;
+                break;
             }
 
-            if (!TryPumpOne(ref budget))
+            PumpOneResult result = TryPumpOne(ref budget, options, stats);
+            if (result == PumpOneResult.Processed)
             {
-                return;
+                continue;
+            }
+
+            if (result == PumpOneResult.EmptyBucket)
+            {
+                stats.EmptyBucketChecks++;
+                if (options.MaxEmptyBucketChecksPerPump > 0
+                    && stats.EmptyBucketChecks >= options.MaxEmptyBucketChecksPerPump)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            if (result == PumpOneResult.BucketLimited || result == PumpOneResult.ActorLimited)
+            {
+                break;
+            }
+
+            if (result == PumpOneResult.NoWork)
+            {
+                break;
             }
         }
+
+        return stats.Build(CountRemainingDirtyBuckets());
     }
 
-    private bool TryPumpOne(ref RuntimeFrameBudget budget)
+    private PumpOneResult TryPumpOne(
+        ref RuntimeFrameBudget budget,
+        in ActorMailPumpOptions options,
+        ActorMailPumpStatsBuilder stats)
     {
         IActorEventBucket[] buckets = _eventBucketsByEventId;
         if (buckets.Length == 0)
         {
-            return false;
+            return PumpOneResult.NoWork;
         }
 
         int checkedCount = 0;
+        bool sawBucketLimit = false;
+        bool sawActorLimit = false;
         while (checkedCount < buckets.Length)
         {
             int index = _bucketCursor;
@@ -93,12 +127,51 @@ public sealed partial class ActorWorld
             checkedCount++;
 
             IActorEventBucket? current = buckets[index];
-            if (current != null && current.PumpOne(ref budget))
+            if (current == null)
             {
-                return true;
+                continue;
+            }
+
+            PumpOneResult result = current.PumpOne(ref budget, options, stats, index);
+            if (result == PumpOneResult.Processed)
+            {
+                return PumpOneResult.Processed;
+            }
+
+            if (result == PumpOneResult.BucketLimited)
+            {
+                sawBucketLimit = true;
+            }
+            else if (result == PumpOneResult.ActorLimited)
+            {
+                sawActorLimit = true;
             }
         }
 
-        return false;
+        if (sawBucketLimit)
+        {
+            return PumpOneResult.BucketLimited;
+        }
+
+        if (sawActorLimit)
+        {
+            return PumpOneResult.ActorLimited;
+        }
+
+        return PumpOneResult.EmptyBucket;
+    }
+
+    private int CountRemainingDirtyBuckets()
+    {
+        int count = 0;
+        for (int i = 0; i < _eventBucketsByEventId.Length; i++)
+        {
+            if (_eventBucketsByEventId[i]?.HasPendingWork() == true)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 }
