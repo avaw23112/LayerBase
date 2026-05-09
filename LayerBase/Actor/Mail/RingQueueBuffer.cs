@@ -4,16 +4,25 @@ internal sealed class RingQueueBuffer<TEvent>
     where TEvent : struct
 {
     private TEvent[]?[] _buffers = new TEvent[4][];
+    private bool[] _inUse = new bool[4];
     private readonly Stack<int> _freeIds = new();
 
     public int Rent(int initialCapacity)
     {
-        TEvent[] buffer = new TEvent[Math.Max(initialCapacity, 1)];
+        int capacity = Math.Max(initialCapacity, 1);
 
         if (_freeIds.Count > 0)
         {
             int reusedId = _freeIds.Pop();
-            _buffers[reusedId - 1] = buffer;
+            int index = reusedId - 1;
+            TEvent[]? buffer = _buffers[index];
+            if (buffer == null || buffer.Length < capacity)
+            {
+                buffer = new TEvent[capacity];
+                _buffers[index] = buffer;
+            }
+
+            _inUse[index] = true;
             return reusedId;
         }
 
@@ -25,10 +34,13 @@ internal sealed class RingQueueBuffer<TEvent>
 
         if (id > _buffers.Length)
         {
-            Array.Resize(ref _buffers, _buffers.Length * 2);
+            int newLength = _buffers.Length * 2;
+            Array.Resize(ref _buffers, newLength);
+            Array.Resize(ref _inUse, newLength);
         }
 
-        _buffers[id - 1] = buffer;
+        _buffers[id - 1] = new TEvent[capacity];
+        _inUse[id - 1] = true;
         return id;
     }
 
@@ -49,12 +61,18 @@ internal sealed class RingQueueBuffer<TEvent>
 
     public void Release(int bufferId)
     {
-        if (bufferId <= 0 || bufferId > _buffers.Length || _buffers[bufferId - 1] == null)
+        if (bufferId <= 0 || bufferId > _buffers.Length)
         {
             return;
         }
 
-        _buffers[bufferId - 1] = null;
+        int index = bufferId - 1;
+        if (!_inUse[index])
+        {
+            return;
+        }
+
+        _inUse[index] = false;
         _freeIds.Push(bufferId);
     }
 

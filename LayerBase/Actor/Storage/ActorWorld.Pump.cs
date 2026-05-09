@@ -63,7 +63,8 @@ public sealed partial class ActorWorld
         ref RuntimeFrameBudget budget,
         in ActorMailPumpOptions options)
     {
-        var stats = new ActorMailPumpStatsBuilder();
+        ActorMailPumpStatsBuilder stats = _mailPumpStatsBuilder;
+        stats.Reset();
         while (budget.HasRemainingEventBudget()
                && (options.MaxTotalMailsPerPump <= 0 || stats.ProcessedTotal < options.MaxTotalMailsPerPump))
         {

@@ -10,6 +10,16 @@ internal sealed class ActorMailPumpStatsBuilder
     public int ActorLimitHits;
     public int EmptyBucketChecks;
 
+    public void Reset()
+    {
+        _actorProcessedCounts.Clear();
+        _bucketProcessedCounts.Clear();
+        ProcessedTotal = 0;
+        BucketLimitHits = 0;
+        ActorLimitHits = 0;
+        EmptyBucketChecks = 0;
+    }
+
     public bool CanProcessBucket(int bucketIndex, in ActorMailPumpOptions options)
     {
         if (options.MaxMailsPerBucketPerPump <= 0)

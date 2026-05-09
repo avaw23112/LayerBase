@@ -786,7 +786,7 @@ public sealed class EventCenter
         {
             try
             {
-                return _singleSyncHandler!(in value);
+                return _singleSyncHandler(in value);
             }
             catch (Exception ex)
             {
@@ -798,7 +798,7 @@ public sealed class EventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private EventHandledState DispatchSingleNotify(in T value)
         {
-            _singleNotifyHandler!(in value);
+            _singleNotifyHandler(in value);
             return EventHandledState.Continue;
         }
 
@@ -807,7 +807,7 @@ public sealed class EventCenter
         {
             try
             {
-                _singleSubscribeHandler!(in value);
+                _singleSubscribeHandler(in value);
             }
             catch (Exception ex)
             {

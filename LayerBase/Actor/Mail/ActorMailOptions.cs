@@ -9,6 +9,17 @@ public readonly struct ActorMailOptions
         initialCapacity: 4,
         maxCapacity: 64,
         growFactor: 2,
+        releaseWhenEmpty: false,
+        disabledPolicy: ActorMailDisabledPolicy.Accept,
+        pendingDestroyPolicy: ActorMailPendingDestroyPolicy.Reject);
+
+    public static ActorMailOptions MemorySaving => new(
+        postPolicy: ActorPostPolicy.Queued,
+        fullPolicy: ActorMailFullPolicy.Grow,
+        growFailurePolicy: ActorMailFullPolicy.RejectNew,
+        initialCapacity: 4,
+        maxCapacity: 64,
+        growFactor: 2,
         releaseWhenEmpty: true,
         disabledPolicy: ActorMailDisabledPolicy.Accept,
         pendingDestroyPolicy: ActorMailPendingDestroyPolicy.Reject);

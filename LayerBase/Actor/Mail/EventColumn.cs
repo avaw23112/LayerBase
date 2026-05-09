@@ -26,7 +26,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         _options = options;
         _mails = new EventMail<TEvent>[Math.Max(initialSlotCapacity, 1)];
         _bufferPool = new RingQueueBuffer<TEvent>();
-        _dirtySlots = new DirtySlotList();
+        _dirtySlots = new DirtySlotList(initialSlotCapacity);
     }
 
     public PostResult Post(

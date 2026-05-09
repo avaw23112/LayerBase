@@ -28,7 +28,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         _options = options;
         _mails = new EventMail<ActorCallMail<TRequest, TResponse>>[Math.Max(initialSlotCapacity, 1)];
         _bufferPool = new RingQueueBuffer<ActorCallMail<TRequest, TResponse>>();
-        _dirtySlots = new DirtySlotList();
+        _dirtySlots = new DirtySlotList(initialSlotCapacity);
     }
 
     public PostResult Post(

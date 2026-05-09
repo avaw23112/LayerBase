@@ -2,21 +2,30 @@ namespace LayerBase.Actor;
 
 internal sealed class DirtySlotList
 {
-    private int[] _items = new int[4];
+    private int[] _items;
+    private bool[] _contains;
     private int _head;
     private int _count;
-    private readonly HashSet<int> _contains = new();
 
     public int Count => _count;
 
+    public DirtySlotList(int initialCapacity = 4)
+    {
+        int capacity = Math.Max(initialCapacity, 4);
+        _items = new int[capacity];
+        _contains = new bool[capacity];
+    }
+
     public void AddIfNotExists(int slotIndex)
     {
-        if (!_contains.Add(slotIndex))
+        EnsureContainsCapacity(slotIndex + 1);
+        if (_contains[slotIndex])
         {
             return;
         }
 
-        EnsureCapacity(_count + 1);
+        _contains[slotIndex] = true;
+        EnsureItemCapacity(_count + 1);
         int tail = (_head + _count) % _items.Length;
         _items[tail] = slotIndex;
         _count++;
@@ -41,7 +50,12 @@ internal sealed class DirtySlotList
             return;
         }
 
-        _contains.Remove(_items[_head]);
+        int slotIndex = _items[_head];
+        if ((uint)slotIndex < (uint)_contains.Length)
+        {
+            _contains[slotIndex] = false;
+        }
+
         _head = (_head + 1) % _items.Length;
         _count--;
 
@@ -64,14 +78,20 @@ internal sealed class DirtySlotList
         _items[tail] = headValue;
     }
 
-    private void EnsureCapacity(int required)
+    private void EnsureItemCapacity(int required)
     {
         if (required <= _items.Length)
         {
             return;
         }
 
-        int[] newItems = new int[_items.Length * 2];
+        int newCapacity = _items.Length;
+        while (newCapacity < required)
+        {
+            newCapacity *= 2;
+        }
+
+        int[] newItems = new int[newCapacity];
         for (int i = 0; i < _count; i++)
         {
             newItems[i] = _items[(_head + i) % _items.Length];
@@ -79,5 +99,21 @@ internal sealed class DirtySlotList
 
         _items = newItems;
         _head = 0;
+    }
+
+    private void EnsureContainsCapacity(int required)
+    {
+        if (required <= _contains.Length)
+        {
+            return;
+        }
+
+        int newCapacity = _contains.Length;
+        while (newCapacity < required)
+        {
+            newCapacity *= 2;
+        }
+
+        Array.Resize(ref _contains, newCapacity);
     }
 }

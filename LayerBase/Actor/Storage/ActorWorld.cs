@@ -9,6 +9,7 @@ public sealed partial class ActorWorld : IDisposable
     private IActorEventBucket[] _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
     private int _bucketCursor;
     private int _callBucketCursor;
+    private readonly ActorMailPumpStatsBuilder _mailPumpStatsBuilder = new();
     internal int QueryVersion { get; private set; }
     public ActorMailPumpOptions MailPumpOptions { get; set; }
     public ActorMailPumpStats LastMailPumpStats { get; private set; }
