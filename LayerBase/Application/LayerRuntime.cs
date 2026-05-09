@@ -12,7 +12,7 @@ using LayerBase.Layers;
 
 namespace LayerBase;
 
-public sealed class LayerRuntime : IDisposable
+public sealed partial class LayerRuntime : IDisposable
 {
     private LayerChain? _chain;
     internal LayerBaseSynchronizationContext? _context;

@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using LayerBase.Actor;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Layers;
@@ -744,7 +745,44 @@ public static class ServiceExtensions
             .SubscribeDelay<TValue>()
             .Publish(value, ttl, contractId);
     }
+    public static PostResult PostTo<TEvent>(
+        this IService service,
+        ActorId              actorId,
+        in TEvent            value,
+        ActorPostPolicy?     postPolicy = null,
+        ActorMailFullPolicy? fullPolicy = null)
+        where TEvent : struct
+    {
+        return service
+               .GetBinding()
+               .Runtime.Post(actorId,in value, postPolicy, fullPolicy);
+    }
 
+    public static PostResult TryPostTo<TEvent>(
+        this IService service,
+        ActorId              actorId,
+        in TEvent            value,
+        ActorPostPolicy?     postPolicy = null,
+        ActorMailFullPolicy? fullPolicy = null)
+        where TEvent : struct
+    {
+        return service
+               .GetBinding()
+               .Runtime.TryPost(actorId,in value, postPolicy, fullPolicy);
+    }
+
+    public static void PostToMany<TEvent>(
+        this IService service,
+        ReadOnlySpan<ActorId> actorIds,
+        in TEvent             value,
+        ActorPostPolicy?      postPolicy = null,
+        ActorMailFullPolicy?  fullPolicy = null)
+        where TEvent : struct
+    {
+        service
+            .GetBinding()
+            .Runtime.PostMany(actorIds,in value, postPolicy, fullPolicy);
+    }
     public static void SubscribeFlow<TValue>(
         this IService service,
         EventHandleDelegate<TValue> handler)
@@ -1018,6 +1056,45 @@ public static class LayerContextExtensions
             .RequireLayer(context.GetBinding())
             .SubscribeDelay<TValue>()
             .Publish(value, ttl, contractId);
+    }
+    
+    public static PostResult PostTo<TEvent>(
+        this ILayerContext   context,
+        ActorId              actorId,
+        in TEvent            value,
+        ActorPostPolicy?     postPolicy = null,
+        ActorMailFullPolicy? fullPolicy = null)
+        where TEvent : struct
+    {
+        return context
+               .GetBinding()
+               .Runtime.Post(actorId,in value, postPolicy, fullPolicy);
+    }
+
+    public static PostResult TryPostTo<TEvent>(
+        this ILayerContext   context,
+        ActorId              actorId,
+        in TEvent            value,
+        ActorPostPolicy?     postPolicy = null,
+        ActorMailFullPolicy? fullPolicy = null)
+        where TEvent : struct
+    {
+        return context
+               .GetBinding()
+               .Runtime.TryPost(actorId,in value, postPolicy, fullPolicy);
+    }
+
+    public static void PostToMany<TEvent>(
+        this ILayerContext   context,
+        ReadOnlySpan<ActorId> actorIds,
+        in TEvent             value,
+        ActorPostPolicy?      postPolicy = null,
+        ActorMailFullPolicy?  fullPolicy = null)
+        where TEvent : struct
+    {
+        context
+            .GetBinding()
+            .Runtime.PostMany(actorIds,in value, postPolicy, fullPolicy);
     }
 
     public static void SubscribeFlow<TValue>(
