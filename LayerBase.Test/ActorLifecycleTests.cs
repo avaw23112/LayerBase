@@ -161,7 +161,7 @@ public class ActorLifecycleTests
 
         Assert.That(world.DestroyActor(oldId), Is.True);
         Assert.That(world.IsAlive(oldId), Is.False);
-        Assert.That(world.PostTo(oldId, new ActorLifecycleEvent(8)).IsSuccess, Is.True);
+        Assert.That(world.PostTo(oldId, new ActorLifecycleEvent(8)).IsSuccess, Is.False);
 
         ActorQueryResult query = world.QueryActor<ActorLifecycleEvent>();
         Assert.That(query.DebugActors, Is.Empty);
