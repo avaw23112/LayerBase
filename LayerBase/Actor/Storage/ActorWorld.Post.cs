@@ -29,28 +29,12 @@ public sealed partial class ActorWorld
             return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
         }
 
-        int fastIndex = actorId.FastIndex;
-        if ((uint)fastIndex >= (uint)_fastStates.Length)
+        if (PostFast(actorId, in value))
         {
-            return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
+            return PostResult.Success;
         }
 
-        ref ActorFastState state = ref _fastStates[fastIndex];
-        ActorEventFastCache<TEvent> cache = GetOrCreateFastCache<TEvent>();
-        if (cache.TryGet(
-                fastIndex,
-                state.Version,
-                actorId.Generation,
-                out int slotIndex,
-                out EventMail<TEvent>[] mails,
-                out DirtySlotList dirtySlots,
-                out int bucketIndex,
-                out ActorMailOptions options))
-        {
-            return PostQueuedGrowDirect(slotIndex, in value, mails, dirtySlots, bucketIndex, options);
-        }
-
-        return TryBindHotOrFallbackSafe(actorId, in value, postPolicy, fullPolicy, state.Version);
+        return TryBindHotOrFallbackSafe(actorId, in value, postPolicy, fullPolicy);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -71,18 +55,44 @@ public sealed partial class ActorWorld
         ActorId actorId,
         in TEvent value,
         ActorPostPolicy? postPolicy,
-        ActorMailFullPolicy? fullPolicy,
-        int version)
+        ActorMailFullPolicy? fullPolicy)
         where TEvent : struct
     {
         int fastIndex = actorId.FastIndex;
-        if (!TryBindHotFastCache<TEvent>(fastIndex, version, actorId.Generation))
+        if ((uint)fastIndex >= (uint)_fastStates.Length)
         {
             return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
         }
 
+        int version = _fastStates[fastIndex].Version;
+        if (TryBindHotFastCache<TEvent>(fastIndex, version, actorId.Generation)
+            && PostFast(actorId, in value))
+        {
+            return PostResult.Success;
+        }
+
+        return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool PostFast<TEvent>(
+        ActorId actorId,
+        in TEvent value)
+        where TEvent : struct
+    {
+        int fastIndex = actorId.FastIndex;
+        if ((uint)fastIndex >= (uint)_fastStates.Length)
+        {
+            return false;
+        }
+
+        if (!ActorEventRuntime<TEvent>.TryGetFastCache(this, out ActorEventFastCache<TEvent>? cache)
+            || cache == null)
+        {
+            return false;
+        }
+
         ref ActorFastState state = ref _fastStates[fastIndex];
-        ActorEventFastCache<TEvent> cache = GetOrCreateFastCache<TEvent>();
         if (!cache.TryGet(
                 fastIndex,
                 state.Version,
@@ -90,13 +100,18 @@ public sealed partial class ActorWorld
                 out int slotIndex,
                 out EventMail<TEvent>[] mails,
                 out DirtySlotList dirtySlots,
-                out int bucketIndex,
-                out ActorMailOptions options))
+                out int bucketIndex))
         {
-            return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
+            return false;
         }
 
-        return PostQueuedGrowDirect(slotIndex, in value, mails, dirtySlots, bucketIndex, options);
+        return PostQueuedGrowFastNoResult(
+            slotIndex,
+            in value,
+            mails,
+            dirtySlots,
+            bucketIndex,
+            cache.Pool);
     }
 
     private PostResult TryPostToSafe<TEvent>(

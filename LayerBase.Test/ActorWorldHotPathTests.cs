@@ -86,6 +86,15 @@ public sealed partial class ActorWorldHotPathTests
     }
 
     [Test]
+    public void Prewarm_hot_actor_can_use_internal_post_fast_entry()
+    {
+        var world = new ActorWorld();
+        PrewarmHotProbeActor actor = world.CreateActor<PrewarmHotProbeActor>();
+
+        Assert.That(actor.PostFastInside(new PrewarmHotEvent(7)), Is.True);
+    }
+
+    [Test]
     public void Same_event_columns_share_world_level_mail_pool()
     {
         var world = new ActorWorld();
@@ -124,22 +133,13 @@ public sealed partial class ActorWorldHotPathTests
     private static bool IsFastCacheBound<TEvent>(ActorWorld world, int fastIndex)
         where TEvent : struct
     {
-        FieldInfo fastCachesField = typeof(ActorWorld).GetField("_fastCachesByEventId", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        Array caches = (Array)fastCachesField.GetValue(world)!;
-        int eventId = EventTypeId<TEvent>.Id;
-        if ((uint)eventId >= (uint)caches.Length)
+        if (!ActorEventRuntime<TEvent>.TryGetFastCache(world, out ActorEventFastCache<TEvent>? cache)
+            || cache == null)
         {
             return false;
         }
 
-        object? cache = caches.GetValue(eventId);
-        if (cache == null)
-        {
-            return false;
-        }
-
-        byte[] states = (byte[])cache.GetType().GetField("_states", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(cache)!;
-        return (uint)fastIndex < (uint)states.Length && states[fastIndex] == 1;
+        return cache.IsBound(fastIndex);
     }
 
     private static object GetEventColumn(ActorWorld world, ActorId actorId, int eventTypeId)

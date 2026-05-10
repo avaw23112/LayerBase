@@ -2,14 +2,13 @@ namespace LayerBase.Actor;
 
 public sealed partial class ActorWorld : IDisposable
 {
+    internal readonly int RuntimeIndex;
     private BehaviourArchetype[] _archetypes = Array.Empty<BehaviourArchetype>();
     private readonly Dictionary<ActorArchetypeKey, BehaviourArchetype> _archetypeMap = new();
     private readonly Dictionary<ActorQueryDescriptor, ActorQueryCache> _queryCacheByDescriptor = new();
     private TypedStorageRuntime[] _storagesByRouteId = Array.Empty<TypedStorageRuntime>();
     private IActorEventBucket[] _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
     private IActorEventBucket[] _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
-    private object?[] _eventMailPoolsByEventId = Array.Empty<object?>();
-    private object?[] _fastCachesByEventId = Array.Empty<object?>();
     private ActorFastState[] _fastStates = Array.Empty<ActorFastState>();
     private ActorFastIndexFreeList _fastIndexFreeList;
     private readonly DirtyBucketList _dirtyEventBuckets = new();
@@ -29,6 +28,7 @@ public sealed partial class ActorWorld : IDisposable
 
     internal ActorWorld()
     {
+        RuntimeIndex = ActorWorldRuntimeIndexAllocator.Rent();
         DefaultMailOptions = ActorMailOptions.Default;
         MailPumpOptions = ActorMailPumpOptions.Default;
         LastMailPumpStats = default;
@@ -51,6 +51,7 @@ public sealed partial class ActorWorld : IDisposable
     }
     internal ActorWorld(ActorMailOptions defaultMailOptions)
     {
+        RuntimeIndex = ActorWorldRuntimeIndexAllocator.Rent();
         DefaultMailOptions = defaultMailOptions;
         MailPumpOptions = ActorMailPumpOptions.Default;
         LastMailPumpStats = default;
@@ -62,6 +63,7 @@ public sealed partial class ActorWorld : IDisposable
 
     internal ActorWorld(LayerRuntime runtime)
     {
+        RuntimeIndex = ActorWorldRuntimeIndexAllocator.Rent();
         Runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         DefaultMailOptions = ActorMailOptions.Default;
         MailPumpOptions = ActorMailPumpOptions.Default;

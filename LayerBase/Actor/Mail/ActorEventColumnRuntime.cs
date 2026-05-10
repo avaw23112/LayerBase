@@ -13,7 +13,7 @@ internal abstract class ActorEventColumnRuntime
 
     protected void NotifyBucketDirty()
     {
-        _dirtyBuckets?.AddIfNotExists(_bucketIndex);
+        _dirtyBuckets?.Mark(_bucketIndex);
     }
 
     public abstract ActorColumnPumpResult PumpOne(
@@ -45,7 +45,7 @@ internal abstract class ActorCallColumnRuntime
 
     protected void NotifyBucketDirty()
     {
-        _dirtyBuckets?.AddIfNotExists(_bucketIndex);
+        _dirtyBuckets?.Mark(_bucketIndex);
     }
 
     public abstract ActorColumnPumpResult PumpOne(

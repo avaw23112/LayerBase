@@ -375,8 +375,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
             }
             return;
         }
@@ -427,9 +427,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
-                _ = column3.PostQueuedFast(slotIndex, in value3);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
+                _ = column3.PostQueuedFastNoResult(slotIndex, in value3);
             }
             return;
         }
@@ -488,10 +488,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
-                _ = column3.PostQueuedFast(slotIndex, in value3);
-                _ = column4.PostQueuedFast(slotIndex, in value4);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
+                _ = column3.PostQueuedFastNoResult(slotIndex, in value3);
+                _ = column4.PostQueuedFastNoResult(slotIndex, in value4);
             }
             return;
         }
@@ -558,11 +558,11 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
-                _ = column3.PostQueuedFast(slotIndex, in value3);
-                _ = column4.PostQueuedFast(slotIndex, in value4);
-                _ = column5.PostQueuedFast(slotIndex, in value5);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
+                _ = column3.PostQueuedFastNoResult(slotIndex, in value3);
+                _ = column4.PostQueuedFastNoResult(slotIndex, in value4);
+                _ = column5.PostQueuedFastNoResult(slotIndex, in value5);
             }
             return;
         }
@@ -637,12 +637,12 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
-                _ = column3.PostQueuedFast(slotIndex, in value3);
-                _ = column4.PostQueuedFast(slotIndex, in value4);
-                _ = column5.PostQueuedFast(slotIndex, in value5);
-                _ = column6.PostQueuedFast(slotIndex, in value6);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
+                _ = column3.PostQueuedFastNoResult(slotIndex, in value3);
+                _ = column4.PostQueuedFastNoResult(slotIndex, in value4);
+                _ = column5.PostQueuedFastNoResult(slotIndex, in value5);
+                _ = column6.PostQueuedFastNoResult(slotIndex, in value6);
             }
             return;
         }
@@ -725,13 +725,13 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
-                _ = column3.PostQueuedFast(slotIndex, in value3);
-                _ = column4.PostQueuedFast(slotIndex, in value4);
-                _ = column5.PostQueuedFast(slotIndex, in value5);
-                _ = column6.PostQueuedFast(slotIndex, in value6);
-                _ = column7.PostQueuedFast(slotIndex, in value7);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
+                _ = column3.PostQueuedFastNoResult(slotIndex, in value3);
+                _ = column4.PostQueuedFastNoResult(slotIndex, in value4);
+                _ = column5.PostQueuedFastNoResult(slotIndex, in value5);
+                _ = column6.PostQueuedFastNoResult(slotIndex, in value6);
+                _ = column7.PostQueuedFastNoResult(slotIndex, in value7);
             }
             return;
         }
@@ -822,14 +822,14 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
-                _ = column3.PostQueuedFast(slotIndex, in value3);
-                _ = column4.PostQueuedFast(slotIndex, in value4);
-                _ = column5.PostQueuedFast(slotIndex, in value5);
-                _ = column6.PostQueuedFast(slotIndex, in value6);
-                _ = column7.PostQueuedFast(slotIndex, in value7);
-                _ = column8.PostQueuedFast(slotIndex, in value8);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
+                _ = column3.PostQueuedFastNoResult(slotIndex, in value3);
+                _ = column4.PostQueuedFastNoResult(slotIndex, in value4);
+                _ = column5.PostQueuedFastNoResult(slotIndex, in value5);
+                _ = column6.PostQueuedFastNoResult(slotIndex, in value6);
+                _ = column7.PostQueuedFastNoResult(slotIndex, in value7);
+                _ = column8.PostQueuedFastNoResult(slotIndex, in value8);
             }
             return;
         }
@@ -928,15 +928,15 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
-                _ = column3.PostQueuedFast(slotIndex, in value3);
-                _ = column4.PostQueuedFast(slotIndex, in value4);
-                _ = column5.PostQueuedFast(slotIndex, in value5);
-                _ = column6.PostQueuedFast(slotIndex, in value6);
-                _ = column7.PostQueuedFast(slotIndex, in value7);
-                _ = column8.PostQueuedFast(slotIndex, in value8);
-                _ = column9.PostQueuedFast(slotIndex, in value9);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
+                _ = column3.PostQueuedFastNoResult(slotIndex, in value3);
+                _ = column4.PostQueuedFastNoResult(slotIndex, in value4);
+                _ = column5.PostQueuedFastNoResult(slotIndex, in value5);
+                _ = column6.PostQueuedFastNoResult(slotIndex, in value6);
+                _ = column7.PostQueuedFastNoResult(slotIndex, in value7);
+                _ = column8.PostQueuedFastNoResult(slotIndex, in value8);
+                _ = column9.PostQueuedFastNoResult(slotIndex, in value9);
             }
             return;
         }
@@ -1043,16 +1043,16 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
-                _ = column3.PostQueuedFast(slotIndex, in value3);
-                _ = column4.PostQueuedFast(slotIndex, in value4);
-                _ = column5.PostQueuedFast(slotIndex, in value5);
-                _ = column6.PostQueuedFast(slotIndex, in value6);
-                _ = column7.PostQueuedFast(slotIndex, in value7);
-                _ = column8.PostQueuedFast(slotIndex, in value8);
-                _ = column9.PostQueuedFast(slotIndex, in value9);
-                _ = column10.PostQueuedFast(slotIndex, in value10);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
+                _ = column3.PostQueuedFastNoResult(slotIndex, in value3);
+                _ = column4.PostQueuedFastNoResult(slotIndex, in value4);
+                _ = column5.PostQueuedFastNoResult(slotIndex, in value5);
+                _ = column6.PostQueuedFastNoResult(slotIndex, in value6);
+                _ = column7.PostQueuedFastNoResult(slotIndex, in value7);
+                _ = column8.PostQueuedFastNoResult(slotIndex, in value8);
+                _ = column9.PostQueuedFastNoResult(slotIndex, in value9);
+                _ = column10.PostQueuedFastNoResult(slotIndex, in value10);
             }
             return;
         }
@@ -1167,17 +1167,17 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
-                _ = column3.PostQueuedFast(slotIndex, in value3);
-                _ = column4.PostQueuedFast(slotIndex, in value4);
-                _ = column5.PostQueuedFast(slotIndex, in value5);
-                _ = column6.PostQueuedFast(slotIndex, in value6);
-                _ = column7.PostQueuedFast(slotIndex, in value7);
-                _ = column8.PostQueuedFast(slotIndex, in value8);
-                _ = column9.PostQueuedFast(slotIndex, in value9);
-                _ = column10.PostQueuedFast(slotIndex, in value10);
-                _ = column11.PostQueuedFast(slotIndex, in value11);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
+                _ = column3.PostQueuedFastNoResult(slotIndex, in value3);
+                _ = column4.PostQueuedFastNoResult(slotIndex, in value4);
+                _ = column5.PostQueuedFastNoResult(slotIndex, in value5);
+                _ = column6.PostQueuedFastNoResult(slotIndex, in value6);
+                _ = column7.PostQueuedFastNoResult(slotIndex, in value7);
+                _ = column8.PostQueuedFastNoResult(slotIndex, in value8);
+                _ = column9.PostQueuedFastNoResult(slotIndex, in value9);
+                _ = column10.PostQueuedFastNoResult(slotIndex, in value10);
+                _ = column11.PostQueuedFastNoResult(slotIndex, in value11);
             }
             return;
         }
@@ -1300,18 +1300,18 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                     continue;
                 }
 
-                _ = column1.PostQueuedFast(slotIndex, in value1);
-                _ = column2.PostQueuedFast(slotIndex, in value2);
-                _ = column3.PostQueuedFast(slotIndex, in value3);
-                _ = column4.PostQueuedFast(slotIndex, in value4);
-                _ = column5.PostQueuedFast(slotIndex, in value5);
-                _ = column6.PostQueuedFast(slotIndex, in value6);
-                _ = column7.PostQueuedFast(slotIndex, in value7);
-                _ = column8.PostQueuedFast(slotIndex, in value8);
-                _ = column9.PostQueuedFast(slotIndex, in value9);
-                _ = column10.PostQueuedFast(slotIndex, in value10);
-                _ = column11.PostQueuedFast(slotIndex, in value11);
-                _ = column12.PostQueuedFast(slotIndex, in value12);
+                _ = column1.PostQueuedFastNoResult(slotIndex, in value1);
+                _ = column2.PostQueuedFastNoResult(slotIndex, in value2);
+                _ = column3.PostQueuedFastNoResult(slotIndex, in value3);
+                _ = column4.PostQueuedFastNoResult(slotIndex, in value4);
+                _ = column5.PostQueuedFastNoResult(slotIndex, in value5);
+                _ = column6.PostQueuedFastNoResult(slotIndex, in value6);
+                _ = column7.PostQueuedFastNoResult(slotIndex, in value7);
+                _ = column8.PostQueuedFastNoResult(slotIndex, in value8);
+                _ = column9.PostQueuedFastNoResult(slotIndex, in value9);
+                _ = column10.PostQueuedFastNoResult(slotIndex, in value10);
+                _ = column11.PostQueuedFastNoResult(slotIndex, in value11);
+                _ = column12.PostQueuedFastNoResult(slotIndex, in value12);
             }
             return;
         }
@@ -1412,10 +1412,12 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     {
         int eventTypeId = EventTypeId<TEvent>.Id;
         ActorMailOptions options = world.ResolveMailOptions(eventTypeId);
+        ActorEventFastCache<TEvent> fastCache = world.GetOrCreateFastCacheCold<TEvent>();
         var column = new EventColumn<TActor, TEvent>(
             world: world,
             owner: this,
             invoker: invoker,
+            mailPool: fastCache.Pool,
             options: options,
             behaviourType: behaviourType,
             bucketIndex: eventTypeId,
@@ -1426,15 +1428,14 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             AddPrewarmHotBinder((bindWorld, fastIndex, version, slotIndex, generation) =>
             {
-                bindWorld.GetOrCreateFastCache<TEvent>().Bind(
+                ActorEventRuntime<TEvent>.GetFastCache(bindWorld).Bind(
                     fastIndex,
                     version,
                     slotIndex,
                     generation,
                     column.Mails,
                     column.DirtySlots,
-                    column.BucketIndex,
-                    column.Options);
+                    column.BucketIndex);
             });
         }
 
@@ -1552,15 +1553,14 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             return false;
         }
 
-        world.GetOrCreateFastCache<TEvent>().Bind(
+        ActorEventRuntime<TEvent>.GetFastCache(world).Bind(
             fastIndex,
             version,
             slotIndex,
             generation,
             column.Mails,
             column.DirtySlots,
-            column.BucketIndex,
-            column.Options);
+            column.BucketIndex);
         return true;
     }
 
@@ -1988,3 +1988,4 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             .ToArray();
     }
 }
+

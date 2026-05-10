@@ -6,12 +6,12 @@ namespace LayerBase.Test;
 public sealed class DirtySlotListTests
 {
     [Test]
-    public void AddIfNotExists_should_not_add_duplicate_slot()
+    public void Mark_should_not_add_duplicate_slot()
     {
         var list = new DirtySlotList(initialCapacity: 4);
 
-        list.AddIfNotExists(2);
-        list.AddIfNotExists(2);
+        list.Mark(2);
+        list.Mark(2);
 
         Assert.That(list.Count, Is.EqualTo(1));
         Assert.That(list.TryPeek(out int slotIndex), Is.True);
@@ -23,9 +23,9 @@ public sealed class DirtySlotListTests
     {
         var list = new DirtySlotList(initialCapacity: 4);
 
-        list.AddIfNotExists(2);
+        list.Mark(2);
         list.Pop();
-        list.AddIfNotExists(2);
+        list.Mark(2);
 
         Assert.That(list.Count, Is.EqualTo(1));
     }
@@ -35,10 +35,10 @@ public sealed class DirtySlotListTests
     {
         var list = new DirtySlotList(initialCapacity: 4);
 
-        list.AddIfNotExists(1);
-        list.AddIfNotExists(2);
+        list.Mark(1);
+        list.Mark(2);
         list.MoveHeadToTail();
-        list.AddIfNotExists(1);
+        list.Mark(1);
 
         Assert.That(list.Count, Is.EqualTo(2));
         Assert.That(list.TryPeek(out int slotIndex), Is.True);

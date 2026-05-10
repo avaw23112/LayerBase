@@ -6,12 +6,12 @@ namespace LayerBase.Test;
 public sealed class DirtyBucketListTests
 {
     [Test]
-    public void AddIfNotExists_should_not_add_duplicate_bucket()
+    public void Mark_should_not_add_duplicate_bucket()
     {
         var list = new DirtyBucketList(initialCapacity: 4);
 
-        list.AddIfNotExists(3);
-        list.AddIfNotExists(3);
+        list.Mark(3);
+        list.Mark(3);
 
         Assert.That(list.Count, Is.EqualTo(1));
         Assert.That(list.TryPeek(out int bucketIndex), Is.True);
@@ -23,9 +23,9 @@ public sealed class DirtyBucketListTests
     {
         var list = new DirtyBucketList(initialCapacity: 4);
 
-        list.AddIfNotExists(3);
+        list.Mark(3);
         list.Pop();
-        list.AddIfNotExists(3);
+        list.Mark(3);
 
         Assert.That(list.Count, Is.EqualTo(1));
     }
@@ -35,10 +35,10 @@ public sealed class DirtyBucketListTests
     {
         var list = new DirtyBucketList(initialCapacity: 4);
 
-        list.AddIfNotExists(1);
-        list.AddIfNotExists(2);
+        list.Mark(1);
+        list.Mark(2);
         list.MoveHeadToTail();
-        list.AddIfNotExists(1);
+        list.Mark(1);
 
         Assert.That(list.Count, Is.EqualTo(2));
         Assert.That(list.TryPeek(out int bucketIndex), Is.True);

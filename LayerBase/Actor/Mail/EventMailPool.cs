@@ -4,10 +4,26 @@ internal sealed class EventMailPool<TEvent>
     where TEvent : struct
 {
     private readonly RingQueueBuffer<TEvent> _buffer = new();
+    private readonly ActorMailOptions _options;
+
+    public EventMailPool()
+    {
+        _options = default;
+    }
+
+    public EventMailPool(ActorMailOptions options)
+    {
+        _options = options;
+    }
 
     public int Rent(int capacity)
     {
         return _buffer.Rent(capacity);
+    }
+
+    public int RentInitial()
+    {
+        return _buffer.Rent(_options.InitialCapacity);
     }
 
     public int GetCapacity(int bufferId)
@@ -28,6 +44,33 @@ internal sealed class EventMailPool<TEvent>
     public void Resize(int bufferId, int head, int count, int newCapacity)
     {
         _buffer.Resize(bufferId, head, count, newCapacity);
+    }
+
+    public bool TryGrow(ref EventMail<TEvent> mail)
+    {
+        if (mail.Capacity >= _options.MaxCapacity)
+        {
+            return false;
+        }
+
+        int growFactor = Math.Max(_options.GrowFactor, 2);
+        int nextCapacity = mail.Capacity * growFactor;
+        if (nextCapacity <= mail.Capacity)
+        {
+            nextCapacity = mail.Capacity + 1;
+        }
+
+        nextCapacity = Math.Min(nextCapacity, _options.MaxCapacity);
+        if (nextCapacity <= mail.Capacity)
+        {
+            return false;
+        }
+
+        _buffer.Resize(mail.BufferId, mail.Head, mail.Count, nextCapacity);
+        mail.Head = 0;
+        mail.Tail = mail.Count;
+        mail.Capacity = nextCapacity;
+        return true;
     }
 
     public void Release(int bufferId)

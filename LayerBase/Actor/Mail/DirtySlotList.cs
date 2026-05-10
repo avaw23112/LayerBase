@@ -3,9 +3,10 @@ namespace LayerBase.Actor;
 internal sealed class DirtySlotList
 {
     private int[] _items;
-    private bool[] _contains;
+    private int[] _marks;
     private int _head;
     private int _count;
+    private int _stamp = 1;
 
     public int Count => _count;
 
@@ -13,18 +14,18 @@ internal sealed class DirtySlotList
     {
         int capacity = Math.Max(initialCapacity, 4);
         _items = new int[capacity];
-        _contains = new bool[capacity];
+        _marks = new int[capacity];
     }
 
-    public void AddIfNotExists(int slotIndex)
+    public void Mark(int slotIndex)
     {
-        EnsureContainsCapacity(slotIndex + 1);
-        if (_contains[slotIndex])
+        EnsureMarkCapacity(slotIndex + 1);
+        if (_marks[slotIndex] == _stamp)
         {
             return;
         }
 
-        _contains[slotIndex] = true;
+        _marks[slotIndex] = _stamp;
         EnsureItemCapacity(_count + 1);
         int tail = (_head + _count) % _items.Length;
         _items[tail] = slotIndex;
@@ -51,9 +52,9 @@ internal sealed class DirtySlotList
         }
 
         int slotIndex = _items[_head];
-        if ((uint)slotIndex < (uint)_contains.Length)
+        if ((uint)slotIndex < (uint)_marks.Length)
         {
-            _contains[slotIndex] = false;
+            _marks[slotIndex] = 0;
         }
 
         _head = (_head + 1) % _items.Length;
@@ -76,6 +77,18 @@ internal sealed class DirtySlotList
         _head = (_head + 1) % _items.Length;
         int tail = (_head + _count - 1) % _items.Length;
         _items[tail] = headValue;
+    }
+
+    public void Clear()
+    {
+        _head = 0;
+        _count = 0;
+        _stamp++;
+        if (_stamp == int.MaxValue)
+        {
+            Array.Clear(_marks, 0, _marks.Length);
+            _stamp = 1;
+        }
     }
 
     private void EnsureItemCapacity(int required)
@@ -101,19 +114,19 @@ internal sealed class DirtySlotList
         _head = 0;
     }
 
-    private void EnsureContainsCapacity(int required)
+    private void EnsureMarkCapacity(int required)
     {
-        if (required <= _contains.Length)
+        if (required <= _marks.Length)
         {
             return;
         }
 
-        int newCapacity = _contains.Length;
+        int newCapacity = _marks.Length;
         while (newCapacity < required)
         {
             newCapacity *= 2;
         }
 
-        Array.Resize(ref _contains, newCapacity);
+        Array.Resize(ref _marks, newCapacity);
     }
 }

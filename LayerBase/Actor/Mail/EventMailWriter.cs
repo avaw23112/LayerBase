@@ -51,7 +51,7 @@ internal static class EventMailWriter
                 mail.Tail = 0;
                 mail.Count = 1;
                 mail.Capacity = 0;
-                dirtySlots.AddIfNotExists(slotIndex);
+                dirtySlots.Mark(slotIndex);
                 return PostResult.Success;
             }
 
@@ -89,7 +89,7 @@ internal static class EventMailWriter
 
         if (wasEmpty)
         {
-            dirtySlots.AddIfNotExists(slotIndex);
+            dirtySlots.Mark(slotIndex);
             return PostResult.Success;
         }
 
@@ -115,7 +115,7 @@ internal static class EventMailWriter
                 mail.Tail = 0;
                 mail.Count = 1;
                 mail.Capacity = 0;
-                dirtySlots.AddIfNotExists(slotIndex);
+                dirtySlots.Mark(slotIndex);
                 return PostResult.Success;
             }
 
@@ -125,7 +125,7 @@ internal static class EventMailWriter
             mail.Capacity = bufferPool.GetCapacity(mail.BufferId);
             bufferPool.Write(mail.BufferId, 0, in value);
             mail.Count = 1;
-            dirtySlots.AddIfNotExists(slotIndex);
+            dirtySlots.Mark(slotIndex);
             return PostResult.Success;
         }
 
@@ -174,7 +174,7 @@ internal static class EventMailWriter
 
             if (wasEmpty)
             {
-                dirtySlots.AddIfNotExists(slotIndex);
+                dirtySlots.Mark(slotIndex);
                 return PostResult.Success;
             }
 
@@ -188,7 +188,7 @@ internal static class EventMailWriter
 
         if (wasEmpty)
         {
-            dirtySlots.AddIfNotExists(slotIndex);
+            dirtySlots.Mark(slotIndex);
             return PostResult.Success;
         }
 
@@ -216,7 +216,7 @@ internal static class EventMailWriter
             mail.Tail = 0;
             mail.Count = 1;
             mail.Capacity = 0;
-            dirtySlots.AddIfNotExists(slotIndex);
+            dirtySlots.Mark(slotIndex);
             return PostResult.Success;
         }
 
@@ -224,7 +224,7 @@ internal static class EventMailWriter
         mail.Head = 0;
         mail.Tail = 0;
         mail.Count = 1;
-        dirtySlots.AddIfNotExists(slotIndex);
+        dirtySlots.Mark(slotIndex);
         return PostResult.Success;
     }
 

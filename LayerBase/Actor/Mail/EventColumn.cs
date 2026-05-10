@@ -31,6 +31,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         ActorWorld world,
         TypedActorStorage<TActor> owner,
         ActorBehaviourInvoker<TActor, TEvent> invoker,
+        EventMailPool<TEvent> mailPool,
         ActorMailOptions options,
         BehaviourType behaviourType,
         int bucketIndex,
@@ -43,7 +44,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         _behaviourType = behaviourType;
         _bucketIndex = bucketIndex;
         _mails = new EventMail<TEvent>[Math.Max(initialSlotCapacity, 1)];
-        _mailPool = world.GetOrCreateEventMailPool<TEvent>();
+        _mailPool = mailPool;
         _dirtySlots = new DirtySlotList(initialSlotCapacity);
         _writeMode = ResolveWriteMode(options);
         _postRejectMask = ActorSlotFlags.PendingDestroy | ActorSlotFlags.Destroying;
@@ -262,7 +263,13 @@ internal sealed class EventColumn<TActor, TEvent> :
                 continue;
             }
 
-            _ = PostQueuedGrowFast(slotIndex, in value);
+            _ = _world.PostQueuedGrowFastNoResult(
+                slotIndex,
+                in value,
+                _mails,
+                _dirtySlots,
+                _bucketIndex,
+                _mailPool);
         }
     }
 
@@ -280,6 +287,17 @@ internal sealed class EventColumn<TActor, TEvent> :
     internal PostResult PostQueuedFast(int slotIndex, in TEvent value)
     {
         return PostQueuedGrowFast(slotIndex, in value);
+    }
+
+    internal bool PostQueuedFastNoResult(int slotIndex, in TEvent value)
+    {
+        return _world.PostQueuedGrowFastNoResult(
+            slotIndex,
+            in value,
+            _mails,
+            _dirtySlots,
+            _bucketIndex,
+            _mailPool);
     }
 
     private bool CanUsePumpFastPath(in ActorMailPumpOptions options)
@@ -399,7 +417,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         mail.Count++;
         if (mail.Count == 1)
         {
-            _dirtySlots.AddIfNotExists(slotIndex);
+            _dirtySlots.Mark(slotIndex);
             NotifyBucketDirty();
         }
     }

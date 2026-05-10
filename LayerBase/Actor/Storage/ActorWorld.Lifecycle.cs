@@ -45,6 +45,7 @@ public sealed partial class ActorWorld
         _queryCacheByDescriptor.Clear();
         _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
         _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
+        ActorWorldRuntimeIndexAllocator.Return(RuntimeIndex);
     }
 
     public bool IsEnable(ActorId actorId)

@@ -3,14 +3,21 @@ namespace LayerBase.Actor;
 internal sealed class ActorEventFastCache<TEvent>
     where TEvent : struct
 {
+    private readonly EventMailPool<TEvent> _pool;
     private int[] _versions = Array.Empty<int>();
     private int[] _slotIndices = Array.Empty<int>();
     private int[] _generations = Array.Empty<int>();
     private EventMail<TEvent>[][] _mailArrays = Array.Empty<EventMail<TEvent>[]>();
     private DirtySlotList?[] _dirtySlotLists = Array.Empty<DirtySlotList?>();
     private int[] _bucketIndices = Array.Empty<int>();
-    private ActorMailOptions[] _options = Array.Empty<ActorMailOptions>();
     private byte[] _states = Array.Empty<byte>();
+
+    public ActorEventFastCache(EventMailPool<TEvent> pool)
+    {
+        _pool = pool;
+    }
+
+    public EventMailPool<TEvent> Pool => _pool;
 
     public void EnsureCapacity(int fastIndex)
     {
@@ -31,7 +38,6 @@ internal sealed class ActorEventFastCache<TEvent>
         Array.Resize(ref _mailArrays, newSize);
         Array.Resize(ref _dirtySlotLists, newSize);
         Array.Resize(ref _bucketIndices, newSize);
-        Array.Resize(ref _options, newSize);
         Array.Resize(ref _states, newSize);
     }
 
@@ -42,8 +48,7 @@ internal sealed class ActorEventFastCache<TEvent>
         int generation,
         EventMail<TEvent>[] mailArray,
         DirtySlotList dirtySlots,
-        int bucketIndex,
-        ActorMailOptions options)
+        int bucketIndex)
     {
         EnsureCapacity(fastIndex);
 
@@ -53,7 +58,6 @@ internal sealed class ActorEventFastCache<TEvent>
         _mailArrays[fastIndex] = mailArray;
         _dirtySlotLists[fastIndex] = dirtySlots;
         _bucketIndices[fastIndex] = bucketIndex;
-        _options[fastIndex] = options;
         _states[fastIndex] = 1;
     }
 
@@ -64,8 +68,7 @@ internal sealed class ActorEventFastCache<TEvent>
         out int slotIndex,
         out EventMail<TEvent>[] mailArray,
         out DirtySlotList dirtySlots,
-        out int bucketIndex,
-        out ActorMailOptions options)
+        out int bucketIndex)
     {
         if ((uint)fastIndex >= (uint)_states.Length
             || _states[fastIndex] == 0
@@ -76,7 +79,6 @@ internal sealed class ActorEventFastCache<TEvent>
             mailArray = null!;
             dirtySlots = null!;
             bucketIndex = -1;
-            options = default;
             return false;
         }
 
@@ -84,7 +86,6 @@ internal sealed class ActorEventFastCache<TEvent>
         mailArray = _mailArrays[fastIndex];
         dirtySlots = _dirtySlotLists[fastIndex]!;
         bucketIndex = _bucketIndices[fastIndex];
-        options = _options[fastIndex];
         return true;
     }
 
@@ -99,7 +100,6 @@ internal sealed class ActorEventFastCache<TEvent>
         _mailArrays[fastIndex] = null!;
         _dirtySlotLists[fastIndex] = null;
         _bucketIndices[fastIndex] = -1;
-        _options[fastIndex] = default;
     }
 
     public void InvalidateAll()
@@ -108,6 +108,10 @@ internal sealed class ActorEventFastCache<TEvent>
         Array.Clear(_mailArrays, 0, _mailArrays.Length);
         Array.Clear(_dirtySlotLists, 0, _dirtySlotLists.Length);
         Array.Fill(_bucketIndices, -1);
-        Array.Clear(_options, 0, _options.Length);
+    }
+
+    public bool IsBound(int fastIndex)
+    {
+        return (uint)fastIndex < (uint)_states.Length && _states[fastIndex] == 1;
     }
 }

@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using LayerBase.Core.Event;
 
 namespace LayerBase.Actor;
 
@@ -73,31 +72,16 @@ public sealed partial class ActorWorld
         _fastIndexFreeList.Push(fastIndex);
     }
 
-    internal EventMailPool<TEvent> GetOrCreateEventMailPool<TEvent>()
+    internal ActorEventFastCache<TEvent> GetOrCreateFastCacheCold<TEvent>()
         where TEvent : struct
     {
-        int eventTypeId = EventTypeId<TEvent>.Id;
-        EnsureEventMailPoolCapacity(eventTypeId);
-
-        if (_eventMailPoolsByEventId[eventTypeId] is not EventMailPool<TEvent> pool)
+        if (!ActorEventRuntime<TEvent>.TryGetFastCache(this, out ActorEventFastCache<TEvent>? cache)
+            || cache == null)
         {
-            pool = new EventMailPool<TEvent>();
-            _eventMailPoolsByEventId[eventTypeId] = pool;
-        }
-
-        return pool;
-    }
-
-    internal ActorEventFastCache<TEvent> GetOrCreateFastCache<TEvent>()
-        where TEvent : struct
-    {
-        int eventTypeId = EventTypeId<TEvent>.Id;
-        EnsureFastCacheCapacity(eventTypeId);
-
-        if (_fastCachesByEventId[eventTypeId] is not ActorEventFastCache<TEvent> cache)
-        {
-            cache = new ActorEventFastCache<TEvent>();
-            _fastCachesByEventId[eventTypeId] = cache;
+            ActorMailOptions options = ResolveMailOptions(LayerBase.Core.Event.EventTypeId<TEvent>.Id);
+            EventMailPool<TEvent> pool = new(options);
+            cache = new ActorEventFastCache<TEvent>(pool);
+            ActorEventRuntime<TEvent>.BindWorld(this, cache, pool);
         }
 
         return cache;
@@ -106,33 +90,27 @@ public sealed partial class ActorWorld
     internal void InvalidateAllFastCaches<TEvent>()
         where TEvent : struct
     {
-        int eventTypeId = EventTypeId<TEvent>.Id;
-        if ((uint)eventTypeId >= (uint)_fastCachesByEventId.Length)
-        {
-            return;
-        }
-
-        if (_fastCachesByEventId[eventTypeId] is ActorEventFastCache<TEvent> cache)
+        if (ActorEventRuntime<TEvent>.TryGetFastCache(this, out ActorEventFastCache<TEvent>? cache)
+            && cache != null)
         {
             cache.InvalidateAll();
         }
     }
 
-    internal PostResult PostQueuedGrowDirect<TEvent>(
+    internal bool PostQueuedGrowFastNoResult<TEvent>(
         int slotIndex,
         in TEvent value,
         EventMail<TEvent>[] mails,
         DirtySlotList dirtySlots,
         int bucketIndex,
-        ActorMailOptions options)
+        EventMailPool<TEvent> pool)
         where TEvent : struct
     {
         ref EventMail<TEvent> mail = ref mails[slotIndex];
-        EventMailPool<TEvent> pool = GetOrCreateEventMailPool<TEvent>();
 
         if (mail.BufferId == 0)
         {
-            mail.BufferId = pool.Rent(options.InitialCapacity);
+            mail.BufferId = pool.RentInitial();
             mail.Head = 0;
             mail.Tail = 0;
             mail.Count = 0;
@@ -141,21 +119,10 @@ public sealed partial class ActorWorld
 
         if (mail.Count >= mail.Capacity)
         {
-            int nextCapacity = Math.Min(
-                Math.Max(mail.Capacity * Math.Max(options.GrowFactor, 2), mail.Capacity + 1),
-                options.MaxCapacity);
-            if (nextCapacity <= mail.Capacity)
+            if (!pool.TryGrow(ref mail))
             {
-                return PostResult.Failure(
-                    ActorPostStatus.MailFullRejected,
-                    "Actor mail reached max capacity.",
-                    PostFailureKind.MailboxFull);
+                return false;
             }
-
-            pool.Resize(mail.BufferId, mail.Head, mail.Count, nextCapacity);
-            mail.Head = 0;
-            mail.Tail = mail.Count;
-            mail.Capacity = nextCapacity;
         }
 
         pool.Write(mail.BufferId, mail.Tail, in value);
@@ -168,11 +135,11 @@ public sealed partial class ActorWorld
         mail.Count++;
         if (mail.Count == 1)
         {
-            dirtySlots.AddIfNotExists(slotIndex);
-            _dirtyEventBuckets.AddIfNotExists(bucketIndex);
+            dirtySlots.Mark(slotIndex);
+            _dirtyEventBuckets.Mark(bucketIndex);
         }
 
-        return PostResult.Success;
+        return true;
     }
 
     internal bool TryBindHotFastCache<TEvent>(
@@ -218,37 +185,5 @@ public sealed partial class ActorWorld
         }
 
         Array.Resize(ref _fastStates, newSize);
-    }
-
-    private void EnsureEventMailPoolCapacity(int eventTypeId)
-    {
-        if ((uint)eventTypeId < (uint)_eventMailPoolsByEventId.Length)
-        {
-            return;
-        }
-
-        int newSize = _eventMailPoolsByEventId.Length == 0 ? 4 : _eventMailPoolsByEventId.Length;
-        while (newSize <= eventTypeId)
-        {
-            newSize <<= 1;
-        }
-
-        Array.Resize(ref _eventMailPoolsByEventId, newSize);
-    }
-
-    private void EnsureFastCacheCapacity(int eventTypeId)
-    {
-        if ((uint)eventTypeId < (uint)_fastCachesByEventId.Length)
-        {
-            return;
-        }
-
-        int newSize = _fastCachesByEventId.Length == 0 ? 4 : _fastCachesByEventId.Length;
-        while (newSize <= eventTypeId)
-        {
-            newSize <<= 1;
-        }
-
-        Array.Resize(ref _fastCachesByEventId, newSize);
     }
 }

@@ -88,6 +88,13 @@ public static class ActorExtensions
     {
         return ActorGeneratedAccess.RequireGenerated(actor).Context.TryPostInside(in value);
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool PostFastInside<TEvent>(this IActor actor, in TEvent value)
+        where TEvent : struct
+    {
+        return ActorGeneratedAccess.RequireGenerated(actor).Context.PostFastInside(in value);
+    }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool GetEnable(this IActor actor)
