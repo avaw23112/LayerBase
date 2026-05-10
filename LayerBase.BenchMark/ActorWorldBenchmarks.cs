@@ -20,10 +20,6 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
     private BenchmarkActor _postOnlyActor = null!;
     private ActorWorld _pumpOnlyWorld = null!;
     private BenchmarkActor _pumpOnlyActor = null!;
-    private ActorWorld _actorRefWorld = null!;
-    private BenchmarkActor _actorRefActor = null!;
-    private ActorRef<BenchmarkActor> _actorRef = default;
-    private ActorEventRef<BenchmarkActor, ActorBenchEvent> _actorEventRef = default;
     private ActorWorld _queryWorld = null!;
     private ActorQueryResult _query = default;
     private ActorId _dictionaryActorId;
@@ -38,7 +34,7 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
 
         _direct = new DirectActorDispatchBaseline();
         _dictionaryReceiver = new DictionaryActorDispatchReceiver();
-        _dictionaryActorId = new ActorId(0, 0, 0, 1);
+        _dictionaryActorId = new ActorId(0, 0, 1);
         _dictionaryDispatch = new Dictionary<ActorId, IActorDispatchReceiver>
         {
             [_dictionaryActorId] = _dictionaryReceiver
@@ -72,12 +68,6 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
         _pumpOnlyWorld = CreateBenchmarkWorld(OneMillion);
         _pumpOnlyActor = _pumpOnlyWorld.CreateActor<BenchmarkActor>();
         WarmupActorWorld(_pumpOnlyWorld, _pumpOnlyActor, OneMillion);
-
-        _actorRefWorld = CreateBenchmarkWorld(OneMillion);
-        _actorRefActor = _actorRefWorld.CreateActor<BenchmarkActor>();
-        WarmupActorWorld(_actorRefWorld, _actorRefActor, OneMillion);
-        _actorRef = _actorRefWorld.GetActorRef<BenchmarkActor>(_actorRefActor.GetActorId());
-        _actorEventRef = _actorRefWorld.GetActorEventRef<BenchmarkActor, ActorBenchEvent>(_actorRefActor.GetActorId());
 
         _queryWorld = CreateBenchmarkWorld(2048);
         for (int i = 0; i < 1000; i++)
@@ -158,40 +148,6 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
         for (int i = 0; i < OneMillion; i++)
         {
             _postOnlyActor.PostInside(ActorBenchEvent.Instance);
-        }
-    }
-
-    [IterationCleanup(Target = nameof(ActorRefPostOnly))]
-    public void CleanupActorRefPostOnly()
-    {
-        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
-        _actorRefWorld.Pump(0f, 0f, false, ref budget);
-    }
-
-    [Benchmark(Description = "ActorRef Post only - 200k")]
-    [BenchmarkCategory("08.Actor", "ActorRuntime", "Compare.ActorRef")]
-    public void ActorRefPostOnly()
-    {
-        for (int i = 0; i < OneMillion; i++)
-        {
-            _actorRef.Post(ActorBenchEvent.Instance);
-        }
-    }
-
-    [IterationCleanup(Target = nameof(ActorEventRefPostOnly))]
-    public void CleanupActorEventRefPostOnly()
-    {
-        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
-        _actorRefWorld.Pump(0f, 0f, false, ref budget);
-    }
-
-    [Benchmark(Description = "ActorEventRef Post only - 200k")]
-    [BenchmarkCategory("08.Actor", "ActorRuntime", "Compare.ActorEventRef")]
-    public void ActorEventRefPostOnly()
-    {
-        for (int i = 0; i < OneMillion; i++)
-        {
-            _actorEventRef.Post(ActorBenchEvent.Instance);
         }
     }
 

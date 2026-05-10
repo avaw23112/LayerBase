@@ -300,7 +300,7 @@ public class ActorMailPolicyTests
 
         FieldInfo storagesField = archetype.GetType().GetField("_storages", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array storages = (Array)storagesField.GetValue(archetype)!;
-        object storage = storages.GetValue(actorId.TypeStorageIndex)!;
+        object storage = storages.GetValue(0)!;
 
         int eventId = EventTypeId<ActorMailPolicyEvent>.Id;
         FieldInfo columnsField = storage.GetType().GetField("_columnsByEventId", BindingFlags.Instance | BindingFlags.NonPublic)!;

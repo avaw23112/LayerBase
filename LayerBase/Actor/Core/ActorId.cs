@@ -3,32 +3,21 @@ namespace LayerBase.Actor;
 public readonly struct ActorId : IEquatable<ActorId>
 {
     public readonly int ArchetypeId;
-    public readonly ushort TypeStorageIndex;
     public readonly int SlotIndex;
     public readonly int Generation;
-    public readonly int FastIndex;
 
-    public ActorId(int archetypeId, ushort typeStorageIndex, int slotIndex, int generation)
-        : this(archetypeId, typeStorageIndex, slotIndex, generation, -1)
-    {
-    }
-
-    public ActorId(int archetypeId, ushort typeStorageIndex, int slotIndex, int generation, int fastIndex)
+    public ActorId(int archetypeId, int slotIndex, int generation)
     {
         ArchetypeId = archetypeId;
-        TypeStorageIndex = typeStorageIndex;
         SlotIndex = slotIndex;
         Generation = generation;
-        FastIndex = fastIndex;
     }
 
     public bool Equals(ActorId other)
     {
         return ArchetypeId == other.ArchetypeId
-            && TypeStorageIndex == other.TypeStorageIndex
             && SlotIndex == other.SlotIndex
-            && Generation == other.Generation
-            && FastIndex == other.FastIndex;
+            && Generation == other.Generation;
     }
 
     public override bool Equals(object? obj)
@@ -38,6 +27,6 @@ public readonly struct ActorId : IEquatable<ActorId>
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(ArchetypeId, TypeStorageIndex, SlotIndex, Generation, FastIndex);
+        return HashCode.Combine(ArchetypeId, SlotIndex, Generation);
     }
 }

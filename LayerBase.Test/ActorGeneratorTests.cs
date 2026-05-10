@@ -64,7 +64,7 @@ public class ActorGeneratorTests
     }
 
     [Test]
-    public void Actor_behaviour_attribute_can_emit_behaviour_type_metadata()
+    public void Actor_behaviour_attribute_emits_plain_registration_without_behaviour_type_metadata()
     {
         GeneratorRunResult result = RunGenerator("""
             using LayerBase.Actor;
@@ -75,7 +75,7 @@ public class ActorGeneratorTests
 
             public sealed partial class EnemyActor : IActor
             {
-                [ActorBehaviour(BehaviourType.Hot)]
+                [ActorBehaviour]
                 private void OnDamage(in DamageEvent e)
                 {
                 }
@@ -85,7 +85,9 @@ public class ActorGeneratorTests
         Assert.That(GetGeneratorDiagnostics(result), Is.Empty);
 
         string generated = result.GeneratedSources.Single().SourceText.ToString();
-        Assert.That(generated, Does.Contain("global::LayerBase.Actor.BehaviourType.Hot"));
+        string removedModeToken = "Behaviour" + "Type";
+        Assert.That(generated, Does.Contain("builder.AddBehaviour<global::Sample.EnemyActor, global::Sample.DamageEvent>("));
+        Assert.That(generated, Does.Not.Contain(removedModeToken));
     }
 
     [Test]

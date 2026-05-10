@@ -153,7 +153,7 @@ public class ActorMetaDataIntegrationTests
 
         FieldInfo storagesField = archetype.GetType().GetField("_storages", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array storages = (Array)storagesField.GetValue(archetype)!;
-        object storage = storages.GetValue(actorId.TypeStorageIndex)!;
+        object storage = storages.GetValue(0)!;
 
         FieldInfo columnsField = storage.GetType().GetField("_columnsByEventId", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array columns = (Array)columnsField.GetValue(storage)!;

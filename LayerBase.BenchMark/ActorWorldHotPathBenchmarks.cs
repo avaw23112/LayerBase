@@ -4,48 +4,41 @@ using LayerBase.Actor;
 namespace Benchmarks;
 
 [MemoryDiagnoser]
-public class ActorWorldHotPathBenchmarks : EventBenchmarkBase
+public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
 {
     private const int ActorCount = 1000;
+    private const int PostLoopCount = 1_000_000;
+    private const int QueryEventCount = ActorCount * 12;
 
-    private ActorWorld _prewarmWorld = null!;
-    private PrewarmHotBenchmarkActor _prewarmActor = null!;
-    private ActorId _prewarmActorId;
+    private ActorWorld _singleWorld = null!;
+    private ActorId _singleActorId;
 
-    private ActorWorld _hotWorld = null!;
-    private HotBenchmarkActor _hotActor = null!;
-    private ActorId _hotActorId;
-
-    private ActorWorld _prewarmBatchWorld = null!;
-    private ActorId[] _prewarmActorIds = null!;
+    private ActorWorld _batchWorld = null!;
+    private ActorId[] _batchActorIds = null!;
 
     private ActorWorld _queryWorld = null!;
-    private ActorQueryResult _query = default;
+    private ActorQueryResult _query;
+
+    private Dictionary<int, DictionaryReceiver> _dictionary = null!;
+    private int[] _dictionaryKeys = null!;
 
     [GlobalSetup]
     public void Setup()
     {
-        _prewarmWorld = CreateBenchmarkWorld(OneMillion);
-        _prewarmActor = _prewarmWorld.CreateActor<PrewarmHotBenchmarkActor>();
-        _prewarmActorId = _prewarmActor.GetActorId();
+        _singleWorld = CreateBenchmarkWorld(PostLoopCount);
+        _singleActorId = _singleWorld.CreateActor<ArchetypeRowBenchmarkActor>().GetActorId();
 
-        _hotWorld = CreateBenchmarkWorld(OneMillion);
-        _hotActor = _hotWorld.CreateActor<HotBenchmarkActor>();
-        _hotActorId = _hotActor.GetActorId();
-        _ = _hotWorld.PostTo(_hotActorId, ActorBenchEvent.Instance);
-        PumpAll(_hotWorld);
-
-        _prewarmBatchWorld = CreateBenchmarkWorld(OneMillion);
-        _prewarmActorIds = new ActorId[ActorCount];
+        _batchWorld = CreateBenchmarkWorld(PostLoopCount);
+        _batchActorIds = new ActorId[ActorCount];
         for (int i = 0; i < ActorCount; i++)
         {
-            _prewarmActorIds[i] = _prewarmBatchWorld.CreateActor<PrewarmHotBenchmarkActor>().GetActorId();
+            _batchActorIds[i] = _batchWorld.CreateActor<ArchetypeRowBenchmarkActor>().GetActorId();
         }
 
         _queryWorld = CreateBenchmarkWorld(32);
         for (int i = 0; i < ActorCount; i++)
         {
-            _queryWorld.CreateActor<QueryFastBenchmarkActor>();
+            _queryWorld.CreateActor<QueryBenchmarkActor>();
         }
 
         _query = _queryWorld.QueryActor<
@@ -61,66 +54,85 @@ public class ActorWorldHotPathBenchmarks : EventBenchmarkBase
             BenchEvent10,
             BenchEvent11,
             BenchEvent12>();
-    }
 
-    [IterationCleanup(Target = nameof(ActorPost_PrewarmHot_PostFast_OneActor_OneEvent))]
-    public void CleanupPrewarmFastSingle() => PumpAll(_prewarmWorld);
-
-    [IterationCleanup(Target = nameof(ActorPost_Hot_PostFast_OneActor_OneEvent))]
-    public void CleanupHotFastSingle() => PumpAll(_hotWorld);
-
-    [IterationCleanup(Target = nameof(ActorPost_PrewarmHot_PostTo_OneActor_OneEvent))]
-    public void CleanupPrewarmPostToSingle() => PumpAll(_prewarmWorld);
-
-    [IterationCleanup(Target = nameof(ActorPost_PrewarmHot_PostFast_1000Actors_OneEvent))]
-    public void CleanupPrewarmBatch() => PumpAll(_prewarmBatchWorld);
-
-    [IterationCleanup(Target = nameof(ActorPost_Query_PostAllFast_1000Actors_12Events))]
-    public void CleanupQueryFast() => PumpAll(_queryWorld);
-
-    [Benchmark(Description = "ActorPost_ArchetypeRow_PostFast_OneActor_OneEvent")]
-    [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
-    public void ActorPost_PrewarmHot_PostFast_OneActor_OneEvent()
-    {
-        for (int i = 0; i < OneMillion; i++)
+        _dictionary = new Dictionary<int, DictionaryReceiver>(ActorCount);
+        _dictionaryKeys = new int[ActorCount];
+        for (int i = 0; i < ActorCount; i++)
         {
-            _ = _prewarmWorld.PostFast(_prewarmActorId, ActorBenchEvent.Instance);
+            _dictionaryKeys[i] = i;
+            _dictionary[i] = new DictionaryReceiver();
         }
     }
 
-    [Benchmark(Description = "ActorPost_ArchetypeRow_PostFast_HotActor_OneActor_OneEvent")]
-    [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
-    public void ActorPost_Hot_PostFast_OneActor_OneEvent()
+    [IterationCleanup(Target = nameof(ActorPost_ArchetypeRow_PostFast_OneActor_OneEvent))]
+    public void CleanupSinglePostFast()
     {
-        for (int i = 0; i < OneMillion; i++)
+        PumpAll(_singleWorld);
+    }
+
+    [IterationCleanup(Target = nameof(ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent))]
+    public void CleanupSinglePostTo()
+    {
+        PumpAll(_singleWorld);
+    }
+
+    [IterationCleanup(Target = nameof(ActorPost_ArchetypeRow_1000Actors_OneEvent))]
+    public void CleanupBatch()
+    {
+        PumpAll(_batchWorld);
+    }
+
+    [IterationCleanup(Target = nameof(ActorPost_Query_PostAll_1000Actors_12Events))]
+    public void CleanupQuery()
+    {
+        PumpAll(_queryWorld);
+    }
+
+    [Benchmark(
+        Description = "ActorPost_ArchetypeRow_PostFast_OneActor_OneEvent",
+        OperationsPerInvoke = PostLoopCount)]
+    [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
+    [InvocationCount(1)]
+    public void ActorPost_ArchetypeRow_PostFast_OneActor_OneEvent()
+    {
+        for (int i = 0; i < PostLoopCount; i++)
         {
-            _ = _hotWorld.PostFast(_hotActorId, ActorBenchEvent.Instance);
+            _ = _singleWorld.PostFast(_singleActorId, ActorBenchEvent.Instance);
         }
     }
 
-    [Benchmark(Description = "ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent")]
+    [Benchmark(
+        Description = "ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent",
+        OperationsPerInvoke = PostLoopCount)]
     [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
-    public void ActorPost_PrewarmHot_PostTo_OneActor_OneEvent()
+    [InvocationCount(1)]
+    public void ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent()
     {
-        for (int i = 0; i < OneMillion; i++)
+        for (int i = 0; i < PostLoopCount; i++)
         {
-            _ = _prewarmWorld.PostTo(_prewarmActorId, ActorBenchEvent.Instance);
+            _ = _singleWorld.PostTo(_singleActorId, ActorBenchEvent.Instance);
         }
     }
 
-    [Benchmark(Description = "ActorPost_ArchetypeRow_1000Actors_OneEvent")]
+    [Benchmark(
+        Description = "ActorPost_ArchetypeRow_1000Actors_OneEvent",
+        OperationsPerInvoke = PostLoopCount)]
     [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
-    public void ActorPost_PrewarmHot_PostFast_1000Actors_OneEvent()
+    [InvocationCount(1)]
+    public void ActorPost_ArchetypeRow_1000Actors_OneEvent()
     {
-        for (int i = 0; i < OneMillion; i++)
+        for (int i = 0; i < PostLoopCount; i++)
         {
-            _ = _prewarmBatchWorld.PostFast(_prewarmActorIds[i % ActorCount], ActorBenchEvent.Instance);
+            _ = _batchWorld.PostFast(_batchActorIds[i % ActorCount], ActorBenchEvent.Instance);
         }
     }
 
-    [Benchmark(Description = "ActorPost_Query_PostAll_1000Actors_12Events")]
+    [Benchmark(
+        Description = "ActorPost_Query_PostAll_1000Actors_12Events",
+        OperationsPerInvoke = QueryEventCount)]
     [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
-    public void ActorPost_Query_PostAllFast_1000Actors_12Events()
+    [InvocationCount(1)]
+    public void ActorPost_Query_PostAll_1000Actors_12Events()
     {
         _query.PostAll(
             BenchEvent1.Instance,
@@ -137,6 +149,23 @@ public class ActorWorldHotPathBenchmarks : EventBenchmarkBase
             BenchEvent12.Instance);
     }
 
+    [Benchmark(
+        Description = "Dictionary_1000Actors_LookupAndHandle",
+        OperationsPerInvoke = PostLoopCount)]
+    [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
+    [InvocationCount(1)]
+    public void Dictionary_1000Actors_LookupAndHandle()
+    {
+        for (int i = 0; i < PostLoopCount; i++)
+        {
+            int key = _dictionaryKeys[i % ActorCount];
+            if (_dictionary.TryGetValue(key, out DictionaryReceiver? receiver))
+            {
+                receiver.Handle();
+            }
+        }
+    }
+
     private static ActorWorld CreateBenchmarkWorld(int maxCapacity)
     {
         return new ActorWorld(new ActorMailOptions(
@@ -151,8 +180,24 @@ public class ActorWorldHotPathBenchmarks : EventBenchmarkBase
 
     private static void PumpAll(ActorWorld world)
     {
-        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
-        world.Pump(0f, 0f, false, ref budget);
+        var budget = new RuntimeFrameBudget(
+            maxEvents: 0,
+            usedEvents: 0,
+            deadlineTicks: 0);
+
+        world.Pump(
+            deltaTime: 0f,
+            fixedDeltaTime: 0f,
+            pumpFixedUpdate: false,
+            budget: ref budget);
+    }
+
+    private sealed class DictionaryReceiver
+    {
+        public void Handle()
+        {
+            BenchmarkSink.IntValue++;
+        }
     }
 
     public readonly struct BenchEvent1 { public static readonly BenchEvent1 Instance = default; }
@@ -169,34 +214,26 @@ public class ActorWorldHotPathBenchmarks : EventBenchmarkBase
     public readonly struct BenchEvent12 { public static readonly BenchEvent12 Instance = default; }
 }
 
-public partial class PrewarmHotBenchmarkActor : IActor
+public partial class ArchetypeRowBenchmarkActor : IActor
 {
-    [ActorBehaviour(BehaviourType.PrewarmHot)]
+    [ActorBehaviour]
     private void OnActorBench(in ActorBenchEvent value)
     {
     }
 }
 
-public partial class HotBenchmarkActor : IActor
+public partial class QueryBenchmarkActor : IActor
 {
-    [ActorBehaviour(BehaviourType.Hot)]
-    private void OnActorBench(in ActorBenchEvent value)
-    {
-    }
-}
-
-public partial class QueryFastBenchmarkActor : IActor
-{
-    [ActorBehaviour] private void On1(in ActorWorldHotPathBenchmarks.BenchEvent1 value) { }
-    [ActorBehaviour] private void On2(in ActorWorldHotPathBenchmarks.BenchEvent2 value) { }
-    [ActorBehaviour] private void On3(in ActorWorldHotPathBenchmarks.BenchEvent3 value) { }
-    [ActorBehaviour] private void On4(in ActorWorldHotPathBenchmarks.BenchEvent4 value) { }
-    [ActorBehaviour] private void On5(in ActorWorldHotPathBenchmarks.BenchEvent5 value) { }
-    [ActorBehaviour] private void On6(in ActorWorldHotPathBenchmarks.BenchEvent6 value) { }
-    [ActorBehaviour] private void On7(in ActorWorldHotPathBenchmarks.BenchEvent7 value) { }
-    [ActorBehaviour] private void On8(in ActorWorldHotPathBenchmarks.BenchEvent8 value) { }
-    [ActorBehaviour] private void On9(in ActorWorldHotPathBenchmarks.BenchEvent9 value) { }
-    [ActorBehaviour] private void On10(in ActorWorldHotPathBenchmarks.BenchEvent10 value) { }
-    [ActorBehaviour] private void On11(in ActorWorldHotPathBenchmarks.BenchEvent11 value) { }
-    [ActorBehaviour] private void On12(in ActorWorldHotPathBenchmarks.BenchEvent12 value) { }
+    [ActorBehaviour] private void On1(in ActorWorldArchetypeRowBenchmarks.BenchEvent1 value) { }
+    [ActorBehaviour] private void On2(in ActorWorldArchetypeRowBenchmarks.BenchEvent2 value) { }
+    [ActorBehaviour] private void On3(in ActorWorldArchetypeRowBenchmarks.BenchEvent3 value) { }
+    [ActorBehaviour] private void On4(in ActorWorldArchetypeRowBenchmarks.BenchEvent4 value) { }
+    [ActorBehaviour] private void On5(in ActorWorldArchetypeRowBenchmarks.BenchEvent5 value) { }
+    [ActorBehaviour] private void On6(in ActorWorldArchetypeRowBenchmarks.BenchEvent6 value) { }
+    [ActorBehaviour] private void On7(in ActorWorldArchetypeRowBenchmarks.BenchEvent7 value) { }
+    [ActorBehaviour] private void On8(in ActorWorldArchetypeRowBenchmarks.BenchEvent8 value) { }
+    [ActorBehaviour] private void On9(in ActorWorldArchetypeRowBenchmarks.BenchEvent9 value) { }
+    [ActorBehaviour] private void On10(in ActorWorldArchetypeRowBenchmarks.BenchEvent10 value) { }
+    [ActorBehaviour] private void On11(in ActorWorldArchetypeRowBenchmarks.BenchEvent11 value) { }
+    [ActorBehaviour] private void On12(in ActorWorldArchetypeRowBenchmarks.BenchEvent12 value) { }
 }

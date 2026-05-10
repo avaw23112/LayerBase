@@ -9,31 +9,23 @@ namespace LayerBase.Actor;
 internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     where TActor : class, IActor
 {
-    private delegate void PrewarmHotBinder(ActorWorld world, int fastIndex, int version, int slotIndex, int generation);
-
     private ActorEventColumnRuntime[] _columnsByEventId;
     private TActor?[] _actors;
     private int[] _generations;
-    private int[] _fastIndices;
     private ActorSlotState[] _states;
     private ActorSlotFlags[] _slotFlags;
     private bool[] _enabled;
     private bool[] _createdFromPool;
     private ActorLifecycleHandles[] _lifecycleHandles;
     private ActorSlotFreeList _freeList;
-    private PrewarmHotBinder[] _prewarmHotBinders = Array.Empty<PrewarmHotBinder>();
-    private int _prewarmHotBinderCount;
     private int _nextSlotIndex;
     private readonly int _archetypeId;
-    private readonly int _storageRouteId;
     private ActorTypeMeta<TActor>? _meta;
     private object?[] _callInvokersByRouteId = Array.Empty<object?>();
     private ActorCallColumnRuntime?[] _callColumnsByRouteId = Array.Empty<ActorCallColumnRuntime?>();
     private Type?[] _callRequestTypesByRouteId = Array.Empty<Type?>();
     private Type?[] _callResponseTypesByRouteId = Array.Empty<Type?>();
 
-    public ushort TypeStorageIndex { get; }
-    internal int StorageRouteId => _storageRouteId;
     internal int ArchetypeId => _archetypeId;
     public override string ActorTypeName => typeof(TActor).Name;
     public TActor?[] Actors => _actors;
@@ -42,16 +34,13 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     public bool[] Enabled => _enabled;
     public int MaxSlot => Math.Min(_nextSlotIndex, _actors.Length);
 
-    public TypedActorStorage(ushort typeStorageIndex, int archetypeId, int storageRouteId, int maxEventTypeId, int initialCapacity)
+    public TypedActorStorage(int archetypeId, int maxEventTypeId, int initialCapacity)
     {
-        TypeStorageIndex = typeStorageIndex;
         _archetypeId = archetypeId;
-        _storageRouteId = storageRouteId;
         _columnsByEventId = new ActorEventColumnRuntime[Math.Max(maxEventTypeId + 1, 1)];
         int capacity = Math.Max(initialCapacity, 1);
         _actors = new TActor?[capacity];
         _generations = new int[_actors.Length];
-        _fastIndices = new int[_actors.Length];
         _states = new ActorSlotState[_actors.Length];
         _slotFlags = new ActorSlotFlags[_actors.Length];
         _enabled = new bool[_actors.Length];
@@ -61,7 +50,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             _lifecycleHandles[i] = ActorLifecycleHandles.Empty;
         }
-        Array.Fill(_fastIndices, -1);
 
         _freeList = new ActorSlotFreeList(_actors.Length);
         _nextSlotIndex = 0;
@@ -86,16 +74,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _states[slotIndex] = ActorSlotState.Alive;
         _enabled[slotIndex] = true;
         _slotFlags[slotIndex] = ActorSlotFlags.Alive | ActorSlotFlags.Enabled;
-        _fastIndices[slotIndex] = -1;
         _createdFromPool[slotIndex] = createdFromPool;
         _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
         EnsureColumnCapacity(slotIndex);
         return slotIndex;
-    }
-
-    internal void BindFastIndex(int slotIndex, int fastIndex)
-    {
-        _fastIndices[slotIndex] = fastIndex;
     }
 
     public override int GetGeneration(int slotIndex)
@@ -1365,7 +1347,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         foreach (ActorBehaviourEntry entry in meta.Behaviours)
         {
             EnsureEventColumnCapacity(entry.EventTypeId);
-            _columnsByEventId[entry.EventTypeId] = entry.Factory(this, entry.Invoker, world, entry.BehaviourType);
+            _columnsByEventId[entry.EventTypeId] = entry.Factory(this, entry.Invoker, world);
         }
     }
 
@@ -1408,8 +1390,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
     internal ActorEventColumnRuntime BuildColumnDirect<TEvent>(
         ActorWorld world,
-        ActorBehaviourInvoker<TActor, TEvent> invoker,
-        BehaviourType behaviourType)
+        ActorBehaviourInvoker<TActor, TEvent> invoker)
         where TEvent : struct
     {
         int eventTypeId = EventTypeId<TEvent>.Id;
@@ -1421,7 +1402,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             invoker: invoker,
             mailPool: pool,
             options: options,
-            behaviourType: behaviourType,
             bucketIndex: eventTypeId,
             initialSlotCapacity: _actors.Length);
 
@@ -1492,65 +1472,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _callColumnsByRouteId, newSize);
         Array.Resize(ref _callRequestTypesByRouteId, newSize);
         Array.Resize(ref _callResponseTypesByRouteId, newSize);
-    }
-
-    private void AddPrewarmHotBinder(PrewarmHotBinder binder)
-    {
-        if (_prewarmHotBinderCount == _prewarmHotBinders.Length)
-        {
-            int newSize = _prewarmHotBinders.Length == 0 ? 4 : _prewarmHotBinders.Length * 2;
-            Array.Resize(ref _prewarmHotBinders, newSize);
-        }
-
-        _prewarmHotBinders[_prewarmHotBinderCount] = binder;
-        _prewarmHotBinderCount++;
-    }
-
-    public override void BindPrewarmHotFastCaches(
-        ActorWorld world,
-        int fastIndex,
-        int slotIndex,
-        int generation,
-        int version)
-    {
-        for (int i = 0; i < _prewarmHotBinderCount; i++)
-        {
-            _prewarmHotBinders[i](world, fastIndex, version, slotIndex, generation);
-        }
-    }
-
-    public override bool TryBindHotFastCache<TEvent>(
-        ActorWorld world,
-        int fastIndex,
-        int version,
-        int slotIndex,
-        int generation)
-        where TEvent : struct
-    {
-        if (!TryGetColumn(out EventColumn<TActor, TEvent>? column)
-            || column == null
-            || !column.SupportsFastCacheBinding())
-        {
-            return false;
-        }
-
-        if ((uint)slotIndex >= (uint)_actors.Length
-            || _states[slotIndex] != ActorSlotState.Alive
-            || _actors[slotIndex] == null
-            || _generations[slotIndex] != generation)
-        {
-            return false;
-        }
-
-        ActorEventRuntime<TEvent>.GetFastCache(world).Bind(
-            fastIndex,
-            version,
-            slotIndex,
-            generation,
-            column.Mails,
-            column.DirtySlots,
-            column.BucketIndex);
-        return true;
     }
 
     internal void RegisterLifecycleInterfaces(
@@ -1770,7 +1691,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
         Array.Resize(ref _actors, newSize);
         Array.Resize(ref _generations, newSize);
-        Array.Resize(ref _fastIndices, newSize);
         Array.Resize(ref _states, newSize);
         Array.Resize(ref _slotFlags, newSize);
         Array.Resize(ref _enabled, newSize);
@@ -1778,7 +1698,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _lifecycleHandles, newSize);
         for (int i = oldSize; i < newSize; i++)
         {
-            _fastIndices[i] = -1;
             _lifecycleHandles[i] = ActorLifecycleHandles.Empty;
         }
 
@@ -1853,13 +1772,11 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         ClearAllMails(slotIndex);
 
         bool returnToPool = _createdFromPool[slotIndex];
-        int fastIndex = _fastIndices[slotIndex];
 
         _actors[slotIndex] = null;
         _enabled[slotIndex] = false;
         _states[slotIndex] = ActorSlotState.Empty;
         _slotFlags[slotIndex] = ActorSlotFlags.None;
-        _fastIndices[slotIndex] = -1;
         _createdFromPool[slotIndex] = false;
         _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
 
@@ -1869,10 +1786,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         _freeList.Push(slotIndex);
-        if (fastIndex >= 0)
-        {
-            world.ReleaseFastIndex(fastIndex);
-        }
 
         if (returnToPool)
         {

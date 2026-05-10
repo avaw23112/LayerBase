@@ -8,7 +8,6 @@ namespace LayerBase.Actor;
 internal sealed class BehaviourArchetype
 {
     private TypedStorageRuntime[] _storages = Array.Empty<TypedStorageRuntime>();
-    private readonly Dictionary<Type, ushort> _storageIndexByType = new();
 
     public int ArchetypeId { get; }
     public BehaviourSignature Signature { get; }
@@ -29,13 +28,13 @@ internal sealed class BehaviourArchetype
 
     internal bool IsLifecycleRunnable(ActorId actorId)
     {
-        ushort storageIndex = actorId.TypeStorageIndex;
-        if (storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
         {
             return false;
         }
 
-        return _storages[storageIndex].IsLifecycleRunnable(
+        return storage.IsLifecycleRunnable(
             actorId.SlotIndex,
             actorId.Generation);
     }
@@ -43,27 +42,20 @@ internal sealed class BehaviourArchetype
     public TypedActorStorage<TActor> GetOrCreateStorage<TActor>(ActorTypeMeta<TActor> meta, ActorWorld world)
         where TActor : class, IActor
     {
-        Type actorType = typeof(TActor);
-        if (_storageIndexByType.TryGetValue(actorType, out ushort existingIndex))
+        if (_storages.Length > 0)
         {
-            return (TypedActorStorage<TActor>)_storages[existingIndex];
+            return (TypedActorStorage<TActor>)_storages[0];
         }
 
-        ushort storageIndex = checked((ushort)_storages.Length);
-        int storageRouteId = world.AllocateStorageRouteId();
         var storage = new TypedActorStorage<TActor>(
-            storageIndex,
             ArchetypeId,
-            storageRouteId,
             Math.Max(EventTypeIdAllocator.MaxId, 1),
             4);
-        world.BindStorageRoute(storageRouteId, storage);
 
         storage.BuildColumns(meta, world);
 
-        Array.Resize(ref _storages, storageIndex + 1);
-        _storages[storageIndex] = storage;
-        _storageIndexByType.Add(actorType, storageIndex);
+        Array.Resize(ref _storages, 1);
+        _storages[0] = storage;
         return storage;
     }
 
@@ -74,16 +66,15 @@ internal sealed class BehaviourArchetype
         ActorMailFullPolicy? fullPolicy)
         where TEvent : struct
     {
-        ushort storageIndex = actorId.TypeStorageIndex;
-        if ((uint)storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
         {
             return PostResult.Failure(
                 ActorPostStatus.ActorNotFound,
-                "Invalid ActorId.TypeStorageIndex.",
+                "Actor archetype storage is missing.",
                 PostFailureKind.InvalidActorId);
         }
 
-        TypedStorageRuntime storage = _storages[storageIndex];
         if (!storage.IsAlive(actorId.SlotIndex, actorId.Generation))
         {
             ActorSlotState state = storage.GetSlotState(actorId.SlotIndex);
@@ -126,16 +117,15 @@ internal sealed class BehaviourArchetype
         where TRequest : struct
         where TResponse : struct
     {
-        ushort storageIndex = actorId.TypeStorageIndex;
-        if ((uint)storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
         {
             return PostResult.Failure(
                 ActorPostStatus.ActorNotFound,
-                "Invalid ActorId.TypeStorageIndex.",
+                "Actor archetype storage is missing.",
                 PostFailureKind.InvalidActorId);
         }
 
-        TypedStorageRuntime storage = _storages[storageIndex];
         if (!storage.IsAlive(actorId.SlotIndex, actorId.Generation))
         {
             ActorSlotState state = storage.GetSlotState(actorId.SlotIndex);
@@ -161,15 +151,14 @@ internal sealed class BehaviourArchetype
         in TEvent value)
         where TEvent : struct
     {
-        ushort storageIndex = actorId.TypeStorageIndex;
-        if ((uint)storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
         {
             return DispatchResult.Failure(
                 DispatchFailureKind.InvalidActorId,
-                "Invalid ActorId.TypeStorageIndex.");
+                "Actor archetype storage is missing.");
         }
 
-        TypedStorageRuntime storage = _storages[storageIndex];
         ActorSlotState state = storage.GetSlotState(actorId.SlotIndex);
         if (state == ActorSlotState.PendingDestroy)
         {
@@ -195,15 +184,14 @@ internal sealed class BehaviourArchetype
         where TRequest : struct
         where TResponse : struct
     {
-        ushort storageIndex = actorId.TypeStorageIndex;
-        if ((uint)storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
         {
             return ActorCallFailure.InvalidActor<TResponse>(
                 actorId,
                 ActorCallFailureKind.InvalidActorId);
         }
 
-        TypedStorageRuntime storage = _storages[storageIndex];
         ActorSlotState state = storage.GetSlotState(actorId.SlotIndex);
         if (state == ActorSlotState.PendingDestroy)
         {
@@ -221,59 +209,60 @@ internal sealed class BehaviourArchetype
 
     internal bool IsAlive(ActorId actorId)
     {
-        ushort storageIndex = actorId.TypeStorageIndex;
-        if ((uint)storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
         {
             return false;
         }
 
-        return _storages[storageIndex].IsAlive(actorId.SlotIndex, actorId.Generation);
+        return storage.IsAlive(actorId.SlotIndex, actorId.Generation);
     }
 
     internal bool IsEnable(ActorId actorId)
     {
-        ushort storageIndex = actorId.TypeStorageIndex;
-        if ((uint)storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
         {
             return false;
         }
 
-        return _storages[storageIndex].IsEnable(actorId.SlotIndex, actorId.Generation);
+        return storage.IsEnable(actorId.SlotIndex, actorId.Generation);
     }
 
-    internal bool TryGetStorage<TActor>(ushort storageIndex, out TypedActorStorage<TActor>? storage)
+    internal bool TryGetStorage<TActor>(out TypedActorStorage<TActor>? storage)
         where TActor : class, IActor
     {
-        if ((uint)storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? rawStorage)
+            || rawStorage is not TypedActorStorage<TActor> typedStorage)
         {
             storage = null;
             return false;
         }
 
-        storage = _storages[storageIndex] as TypedActorStorage<TActor>;
-        return storage != null;
+        storage = typedStorage;
+        return true;
     }
 
     internal bool SetEnable(ActorId actorId, bool enable)
     {
-        ushort storageIndex = actorId.TypeStorageIndex;
-        if ((uint)storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
         {
             return false;
         }
 
-        return _storages[storageIndex].SetEnable(actorId.SlotIndex, actorId.Generation, enable);
+        return storage.SetEnable(actorId.SlotIndex, actorId.Generation, enable);
     }
 
     internal bool MarkPendingDestroy(ActorId actorId)
     {
-        ushort storageIndex = actorId.TypeStorageIndex;
-        if ((uint)storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
         {
             return false;
         }
 
-        return _storages[storageIndex].MarkPendingDestroy(actorId.SlotIndex, actorId.Generation);
+        return storage.MarkPendingDestroy(actorId.SlotIndex, actorId.Generation);
     }
 
     internal void SweepPendingDestroy(ActorWorld world)
@@ -286,13 +275,25 @@ internal sealed class BehaviourArchetype
 
     internal ActorDebugInfo GetDebugInfo(ActorId actorId)
     {
-        ushort storageIndex = actorId.TypeStorageIndex;
-        if ((uint)storageIndex >= (uint)_storages.Length)
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
         {
-            return ActorDebugInfo.Invalid(actorId, "Invalid TypeStorageIndex.");
+            return ActorDebugInfo.Invalid(actorId, "Actor archetype storage is missing.");
         }
 
-        return _storages[storageIndex].GetDebugInfo(actorId, Describe());
+        return storage.GetDebugInfo(actorId, Describe());
+    }
+
+    private bool TryGetStorage(out TypedStorageRuntime? storage)
+    {
+        if (_storages.Length == 0)
+        {
+            storage = null;
+            return false;
+        }
+
+        storage = _storages[0];
+        return storage != null;
     }
 
     internal string Describe()

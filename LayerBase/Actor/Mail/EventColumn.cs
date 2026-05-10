@@ -18,14 +18,12 @@ internal sealed class EventColumn<TActor, TEvent> :
     private readonly ActorSlotFlags _postRejectMask;
     private readonly bool _rejectDisabled;
     private readonly int _bucketIndex;
-    private readonly BehaviourType _behaviourType;
     private EventMail<TEvent>[] _mails;
 
     internal EventMail<TEvent>[] Mails => _mails;
     internal EventMailPool<TEvent> Pool => _mailPool;
     internal DirtySlotList DirtySlots => _dirtySlots;
     internal int BucketIndex => _bucketIndex;
-    internal BehaviourType BehaviourType => _behaviourType;
     internal ActorMailOptions Options => _options;
 
     public EventColumn(
@@ -34,7 +32,6 @@ internal sealed class EventColumn<TActor, TEvent> :
         ActorBehaviourInvoker<TActor, TEvent> invoker,
         EventMailPool<TEvent> mailPool,
         ActorMailOptions options,
-        BehaviourType behaviourType,
         int bucketIndex,
         int initialSlotCapacity)
     {
@@ -42,7 +39,6 @@ internal sealed class EventColumn<TActor, TEvent> :
         _owner = owner;
         _invoker = invoker;
         _options = options;
-        _behaviourType = behaviourType;
         _bucketIndex = bucketIndex;
         _mails = new EventMail<TEvent>[Math.Max(initialSlotCapacity, 1)];
         _mailPool = mailPool;
@@ -210,13 +206,13 @@ internal sealed class EventColumn<TActor, TEvent> :
         }
 
         Array.Resize(ref _mails, newSize);
-        _world.InvalidateAllFastCaches<TEvent>();
         RefreshPostRowBinding();
     }
 
     public override void RefreshPostRowBinding()
     {
-        if (!CanUseArchetypeRowPostFast())
+        if (_writeMode != ActorMailWriteMode.QueuedGrow
+            || _rejectDisabled)
         {
             return;
         }
@@ -294,18 +290,6 @@ internal sealed class EventColumn<TActor, TEvent> :
     internal bool CanUseDefaultPostFastPath()
     {
         return _writeMode == ActorMailWriteMode.QueuedGrow;
-    }
-
-    private bool CanUseArchetypeRowPostFast()
-    {
-        return _writeMode == ActorMailWriteMode.QueuedGrow
-               && !_rejectDisabled;
-    }
-
-    internal bool SupportsFastCacheBinding()
-    {
-        return _behaviourType != BehaviourType.Cold
-               && _writeMode == ActorMailWriteMode.QueuedGrow;
     }
 
     internal PostResult PostQueuedFast(int slotIndex, in TEvent value)

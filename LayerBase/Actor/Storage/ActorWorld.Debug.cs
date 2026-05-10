@@ -21,7 +21,7 @@ public sealed partial class ActorWorld
 
         builder.AppendLine("Actor Debug Info");
         builder.AppendLine("----------------");
-        builder.AppendLine($"ActorId: Archetype={actorId.ArchetypeId}, Storage={actorId.TypeStorageIndex}, Slot={actorId.SlotIndex}, Generation={actorId.Generation}");
+        builder.AppendLine($"ActorId: Archetype={actorId.ArchetypeId}, Slot={actorId.SlotIndex}, Generation={actorId.Generation}");
         builder.AppendLine($"Valid: {info.IsValid}");
         builder.AppendLine($"Alive: {info.IsAlive}");
         builder.AppendLine($"Enabled: {info.IsEnabled}");

@@ -6,11 +6,8 @@ public sealed partial class ActorWorld : IDisposable
     private BehaviourArchetype[] _archetypes = Array.Empty<BehaviourArchetype>();
     private readonly Dictionary<ActorArchetypeKey, BehaviourArchetype> _archetypeMap = new();
     private readonly Dictionary<ActorQueryDescriptor, ActorQueryCache> _queryCacheByDescriptor = new();
-    private TypedStorageRuntime[] _storagesByRouteId = Array.Empty<TypedStorageRuntime>();
     private IActorEventBucket[] _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
     private IActorEventBucket[] _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
-    private ActorFastState[] _fastStates = Array.Empty<ActorFastState>();
-    private ActorFastIndexFreeList _fastIndexFreeList;
     private readonly DirtyBucketList _dirtyEventBuckets = new();
     private readonly DirtyBucketList _dirtyCallBuckets = new();
     private int _bucketCursor;
@@ -34,7 +31,6 @@ public sealed partial class ActorWorld : IDisposable
         LastMailPumpStats = default;
         Lifecycle = new ActorLifecycleScheduler(this);
         DelayScheduler = new ActorDelayScheduler(this, ActorTimeWheelOptions.Default);
-        _fastIndexFreeList = new ActorFastIndexFreeList(4);
         _state = ActorWorldState.Running;
     }
     internal bool IsLifecycleRunnable(ActorId actorId)
@@ -57,7 +53,6 @@ public sealed partial class ActorWorld : IDisposable
         LastMailPumpStats = default;
         Lifecycle = new ActorLifecycleScheduler(this);
         DelayScheduler = new ActorDelayScheduler(this, ActorTimeWheelOptions.Default);
-        _fastIndexFreeList = new ActorFastIndexFreeList(4);
         _state = ActorWorldState.Running;
     }
 
@@ -70,7 +65,6 @@ public sealed partial class ActorWorld : IDisposable
         LastMailPumpStats = default;
         Lifecycle = new ActorLifecycleScheduler(this);
         DelayScheduler = new ActorDelayScheduler(this, ActorTimeWheelOptions.Default);
-        _fastIndexFreeList = new ActorFastIndexFreeList(4);
         _state = ActorWorldState.Created;
     }
 

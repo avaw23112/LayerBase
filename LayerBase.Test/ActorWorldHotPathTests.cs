@@ -61,24 +61,24 @@ public sealed partial class ActorWorldHotPathTests
     }
 
     [Test]
-    public void Prewarm_hot_actor_registers_archetype_row_during_creation()
+    public void Actor_behaviour_registers_archetype_row_during_creation()
     {
         var world = new ActorWorld();
-        ActorId actorId = world.CreateActor<PrewarmHotProbeActor>().GetActorId();
+        ActorId actorId = world.CreateActor<RowBoundProbeActor>().GetActorId();
 
-        EventPostRow<PrewarmHotEvent> row = GetBoundRow<PrewarmHotEvent>(world, actorId.ArchetypeId);
+        EventPostRow<RowBoundEvent> row = GetBoundRow<RowBoundEvent>(world, actorId.ArchetypeId);
 
         Assert.That(row.IsValid, Is.True);
         Assert.That(row.Generations[actorId.SlotIndex], Is.EqualTo(actorId.Generation));
     }
 
     [Test]
-    public void Hot_actor_can_use_post_fast_without_first_bind_step()
+    public void Actor_behaviour_can_use_post_fast_without_extra_binding_step()
     {
         var world = new ActorWorld();
-        HotOnlyProbeActor actor = world.CreateActor<HotOnlyProbeActor>();
+        FastPostProbeActor actor = world.CreateActor<FastPostProbeActor>();
 
-        Assert.That(actor.PostFastInside(new HotOnlyEvent(3)), Is.True);
+        Assert.That(actor.PostFastInside(new FastPostEvent(3)), Is.True);
     }
 
     [Test]
@@ -99,40 +99,39 @@ public sealed partial class ActorWorldHotPathTests
     public void Destroy_and_recreate_reuses_slot_generation_guard_without_leaking_old_row_target()
     {
         var world = new ActorWorld();
-        PrewarmHotProbeActor actor = world.CreateActor<PrewarmHotProbeActor>();
+        RowBoundProbeActor actor = world.CreateActor<RowBoundProbeActor>();
         ActorId oldId = actor.GetActorId();
 
         Assert.That(world.DestroyActor(oldId), Is.True);
         var budget = new RuntimeFrameBudget(8, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
 
-        PrewarmHotProbeActor replacement = world.CreateActor<PrewarmHotProbeActor>();
+        RowBoundProbeActor replacement = world.CreateActor<RowBoundProbeActor>();
         ActorId newId = replacement.GetActorId();
-        EventPostRow<PrewarmHotEvent> row = GetBoundRow<PrewarmHotEvent>(world, newId.ArchetypeId);
+        EventPostRow<RowBoundEvent> row = GetBoundRow<RowBoundEvent>(world, newId.ArchetypeId);
 
-        Assert.That(newId.FastIndex, Is.EqualTo(oldId.FastIndex));
         Assert.That(newId.Generation, Is.GreaterThan(oldId.Generation));
-        Assert.That(world.TryPostTo(oldId, new PrewarmHotEvent(9)).IsSuccess, Is.False);
+        Assert.That(world.TryPostTo(oldId, new RowBoundEvent(9)).IsSuccess, Is.False);
         Assert.That(row.Generations[newId.SlotIndex], Is.EqualTo(newId.Generation));
-        Assert.That(world.PostFast(newId, new PrewarmHotEvent(10)), Is.True);
+        Assert.That(world.PostFast(newId, new RowBoundEvent(10)), Is.True);
     }
 
     [Test]
     public void Event_post_rows_refresh_after_storage_growth()
     {
         var world = new ActorWorld();
-        PrewarmHotProbeActor[] actors = new PrewarmHotProbeActor[8];
+        RowBoundProbeActor[] actors = new RowBoundProbeActor[8];
         for (int i = 0; i < actors.Length; i++)
         {
-            actors[i] = world.CreateActor<PrewarmHotProbeActor>();
+            actors[i] = world.CreateActor<RowBoundProbeActor>();
         }
 
         ActorId lastId = actors[^1].GetActorId();
-        EventPostRow<PrewarmHotEvent> row = GetBoundRow<PrewarmHotEvent>(world, lastId.ArchetypeId);
+        EventPostRow<RowBoundEvent> row = GetBoundRow<RowBoundEvent>(world, lastId.ArchetypeId);
 
         Assert.That(row.Mails.Length, Is.GreaterThanOrEqualTo(actors.Length));
         Assert.That(row.Generations.Length, Is.GreaterThanOrEqualTo(actors.Length));
-        Assert.That(world.PostFast(lastId, new PrewarmHotEvent(11)), Is.True);
+        Assert.That(world.PostFast(lastId, new RowBoundEvent(11)), Is.True);
     }
 
     private static EventPostRow<TEvent> GetBoundRow<TEvent>(ActorWorld world, int archetypeId)
@@ -168,9 +167,9 @@ public sealed partial class ActorWorldHotPathTests
         }
     }
 
-    private readonly struct PrewarmHotEvent
+    private readonly struct RowBoundEvent
     {
-        public PrewarmHotEvent(int value)
+        public RowBoundEvent(int value)
         {
             Value = value;
         }
@@ -178,9 +177,9 @@ public sealed partial class ActorWorldHotPathTests
         public int Value { get; }
     }
 
-    private readonly struct HotOnlyEvent
+    private readonly struct FastPostEvent
     {
-        public HotOnlyEvent(int value)
+        public FastPostEvent(int value)
         {
             Value = value;
         }
@@ -192,25 +191,25 @@ public sealed partial class ActorWorldHotPathTests
     {
     }
 
-    private sealed partial class PrewarmHotProbeActor : IActor
+    private sealed partial class RowBoundProbeActor : IActor
     {
-        [ActorBehaviour(BehaviourType.PrewarmHot)]
-        private void OnEvent(in PrewarmHotEvent value)
+        [ActorBehaviour]
+        private void OnEvent(in RowBoundEvent value)
         {
         }
     }
 
-    private sealed partial class HotOnlyProbeActor : IActor
+    private sealed partial class FastPostProbeActor : IActor
     {
-        [ActorBehaviour(BehaviourType.Hot)]
-        private void OnEvent(in HotOnlyEvent value)
+        [ActorBehaviour]
+        private void OnEvent(in FastPostEvent value)
         {
         }
     }
 
     private sealed partial class SharedPoolActorA : IActor
     {
-        [ActorBehaviour(BehaviourType.PrewarmHot)]
+        [ActorBehaviour]
         private void OnEvent(in SharedPoolEvent value)
         {
         }
@@ -218,7 +217,7 @@ public sealed partial class ActorWorldHotPathTests
 
     private sealed partial class SharedPoolActorB : IActor
     {
-        [ActorBehaviour(BehaviourType.PrewarmHot)]
+        [ActorBehaviour]
         private void OnEvent(in SharedPoolEvent value)
         {
         }
