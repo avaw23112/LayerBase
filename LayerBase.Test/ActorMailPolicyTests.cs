@@ -28,6 +28,15 @@ internal sealed partial class ActorMailPolicyActor : IActor
     }
 }
 
+internal sealed partial class ActorMailPolicyOtherActor : IActor
+{
+    [ActorBehaviour]
+    private void OnPolicy(in ActorMailPolicyEvent value)
+    {
+        ActorMailPolicyTrace.Values.Add(value.Value + 1000);
+    }
+}
+
 [TestFixture]
 public class ActorMailPolicyTests
 {
@@ -265,6 +274,49 @@ public class ActorMailPolicyTests
         Assert.That(ActorMailPolicyTrace.Values, Is.EqualTo(new[] { 1, 2 }));
     }
 
+    [Test]
+    public void World_reuses_single_event_pool_across_multiple_archetypes()
+    {
+        var world = CreateWorld(new ActorMailOptions(
+            postPolicy: ActorPostPolicy.Queued,
+            fullPolicy: ActorMailFullPolicy.Grow,
+            growFailurePolicy: ActorMailFullPolicy.RejectNew,
+            initialCapacity: 4,
+            maxCapacity: 16,
+            growFactor: 2,
+            releaseWhenEmpty: false));
+
+        ActorMailPolicyActor actorA = world.CreateActor<ActorMailPolicyActor>();
+        ActorMailPolicyOtherActor actorB = world.CreateActor<ActorMailPolicyOtherActor>();
+
+        object poolA = GetColumnField<ActorMailPolicyEvent>(world, actorA.GetActorId(), "_mailPool");
+        object poolB = GetColumnField<ActorMailPolicyEvent>(world, actorB.GetActorId(), "_mailPool");
+
+        Assert.That(ReferenceEquals(poolA, poolB), Is.True);
+    }
+
+    [Test]
+    public void Disabled_accept_policy_allows_posts_while_actor_is_disabled()
+    {
+        var world = CreateWorld(new ActorMailOptions(
+            postPolicy: ActorPostPolicy.Queued,
+            fullPolicy: ActorMailFullPolicy.Grow,
+            growFailurePolicy: ActorMailFullPolicy.RejectNew,
+            initialCapacity: 4,
+            maxCapacity: 16,
+            growFactor: 2,
+            releaseWhenEmpty: false,
+            disabledPolicy: ActorMailDisabledPolicy.Accept));
+
+        ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
+        Assert.That(actor.SetEnable(false), Is.True);
+        Assert.That(world.PostTo(actor.GetActorId(), new ActorMailPolicyEvent(9)).IsSuccess, Is.True);
+
+        Pump(world);
+
+        Assert.That(ActorMailPolicyTrace.Values, Is.EqualTo(new[] { 9 }));
+    }
+
     private static ActorWorld CreateWorld(ActorMailOptions options)
     {
         return new ActorWorld(options);
@@ -294,6 +346,15 @@ public class ActorMailPolicyTests
 
     private static object GetMailBoxed(ActorWorld world, ActorId actorId)
     {
+        object column = GetColumnField<ActorMailPolicyEvent>(world, actorId, fieldName: null);
+        FieldInfo mailsField = column.GetType().GetField("_mails", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Array mails = (Array)mailsField.GetValue(column)!;
+        return mails.GetValue(actorId.SlotIndex)!;
+    }
+
+    private static object GetColumnField<TEvent>(ActorWorld world, ActorId actorId, string? fieldName)
+        where TEvent : struct
+    {
         FieldInfo archetypesField = typeof(ActorWorld).GetField("_archetypes", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array archetypes = (Array)archetypesField.GetValue(world)!;
         object archetype = archetypes.GetValue(actorId.ArchetypeId)!;
@@ -302,13 +363,17 @@ public class ActorMailPolicyTests
         Array storages = (Array)storagesField.GetValue(archetype)!;
         object storage = storages.GetValue(0)!;
 
-        int eventId = EventTypeId<ActorMailPolicyEvent>.Id;
+        int eventId = EventTypeId<TEvent>.Id;
         FieldInfo columnsField = storage.GetType().GetField("_columnsByEventId", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array columns = (Array)columnsField.GetValue(storage)!;
         object column = columns.GetValue(eventId)!;
 
-        FieldInfo mailsField = column.GetType().GetField("_mails", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        Array mails = (Array)mailsField.GetValue(column)!;
-        return mails.GetValue(actorId.SlotIndex)!;
+        if (fieldName == null)
+        {
+            return column;
+        }
+
+        FieldInfo field = column.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)!;
+        return field.GetValue(column)!;
     }
 }

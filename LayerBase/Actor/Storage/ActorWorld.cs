@@ -9,6 +9,8 @@ public sealed partial class ActorWorld : IDisposable
     private IActorEventBucket[] _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
     private IActorEventBucket[] _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
     private readonly DirtyBucketList _dirtyEventBuckets = new();
+    internal GlobalEventMailPoolRegistry GlobalEventMailPools { get; } = new();
+    private readonly List<Action> _eventPostRuntimeUnbinders = new();
     private readonly DirtyBucketList _dirtyCallBuckets = new();
     private int _bucketCursor;
     private int _callBucketCursor;

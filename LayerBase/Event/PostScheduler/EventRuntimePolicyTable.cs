@@ -4,17 +4,17 @@ using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Core.Event;
 
-public sealed class EventRuntimePolicyTable
+public sealed class EventBuildPolicyTable
 {
     private EventPostPolicy[] _postPolicies = new EventPostPolicy[64];
     private EventTimerPolicy?[] _timerPolicies = new EventTimerPolicy?[64];
     private EventBufferPolicy?[] _bufferPolicies = new EventBufferPolicy?[64];
     private ActorMailOptions?[] _actorMailOptionsByEventId = new ActorMailOptions?[64];
     private IEventMetaData?[] _metaDatas = new IEventMetaData?[64];
-    private readonly object _lock = new();
     private readonly BackpressurePolicy _defaultBackpressure;
+    private bool _frozen;
 
-    public EventRuntimePolicyTable(BackpressurePolicy defaultBackpressure = BackpressurePolicy.RejectNew)
+    public EventBuildPolicyTable(BackpressurePolicy defaultBackpressure = BackpressurePolicy.RejectNew)
     {
         _defaultBackpressure = defaultBackpressure;
         for (int i = 0; i < _postPolicies.Length; i++)
@@ -23,8 +23,14 @@ public sealed class EventRuntimePolicyTable
         }
     }
 
+    public void Freeze()
+    {
+        _frozen = true;
+    }
+
     public void SetMetaData(int eventTypeId, IEventMetaData metaData)
     {
+        ThrowIfFrozen();
         EnsureMetaDataCapacity(eventTypeId);
         _metaDatas[eventTypeId] = metaData;
     }
@@ -38,6 +44,7 @@ public sealed class EventRuntimePolicyTable
 
     public void SetPostPolicy(int eventTypeId, EventPostPolicy policy)
     {
+        ThrowIfFrozen();
         if (eventTypeId >= _postPolicies.Length)
         {
             int oldSize = _postPolicies.Length;
@@ -53,6 +60,7 @@ public sealed class EventRuntimePolicyTable
 
     public void SetTimerPolicy(int eventTypeId, EventTimerPolicy policy)
     {
+        ThrowIfFrozen();
         if (eventTypeId >= _timerPolicies.Length)
         {
             int oldSize = _timerPolicies.Length;
@@ -64,6 +72,7 @@ public sealed class EventRuntimePolicyTable
 
     public void SetBufferPolicy(int eventTypeId, EventBufferPolicy policy)
     {
+        ThrowIfFrozen();
         if (eventTypeId >= _bufferPolicies.Length)
         {
             int oldSize = _bufferPolicies.Length;
@@ -75,6 +84,7 @@ public sealed class EventRuntimePolicyTable
 
     public void SetActorMailOptions(int eventTypeId, ActorMailOptions options)
     {
+        ThrowIfFrozen();
         EnsureActorMailCapacity(eventTypeId);
         _actorMailOptionsByEventId[eventTypeId] = options;
     }
@@ -167,5 +177,14 @@ public sealed class EventRuntimePolicyTable
         }
 
         Array.Resize(ref _actorMailOptionsByEventId, newSize);
+    }
+
+    private void ThrowIfFrozen()
+    {
+        if (_frozen)
+        {
+            throw new InvalidOperationException(
+                "Event policy table is frozen. Event policies can only be changed during build time.");
+        }
     }
 }

@@ -1,53 +1,43 @@
+using LayerBase.Core.Event;
+
 namespace LayerBase.Actor;
 
 public static class ActorQueryPostExtensions
 {
     public static void PostAll<TEvent>(
         this ActorQueryResult query,
-        in TEvent value,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent value)
         where TEvent : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value);
     }
 
     public static void PostAll<TEvent1, TEvent2>(
         this ActorQueryResult query,
         in TEvent1 value1,
-        in TEvent2 value2,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent2 value2)
         where TEvent1 : struct
         where TEvent2 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value1, in value2, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
     }
 
     public static void PostAll<TEvent1, TEvent2, TEvent3>(
         this ActorQueryResult query,
         in TEvent1 value1,
         in TEvent2 value2,
-        in TEvent3 value3,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent3 value3)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value1, in value2, in value3, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
+        PostAllSingle(query, in value3);
     }
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4>(
@@ -55,19 +45,17 @@ public static class ActorQueryPostExtensions
         in TEvent1 value1,
         in TEvent2 value2,
         in TEvent3 value3,
-        in TEvent4 value4,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent4 value4)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
         where TEvent4 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value1, in value2, in value3, in value4, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
+        PostAllSingle(query, in value3);
+        PostAllSingle(query, in value4);
     }
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>(
@@ -76,9 +64,7 @@ public static class ActorQueryPostExtensions
         in TEvent2 value2,
         in TEvent3 value3,
         in TEvent4 value4,
-        in TEvent5 value5,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent5 value5)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -86,10 +72,11 @@ public static class ActorQueryPostExtensions
         where TEvent5 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value1, in value2, in value3, in value4, in value5, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
+        PostAllSingle(query, in value3);
+        PostAllSingle(query, in value4);
+        PostAllSingle(query, in value5);
     }
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>(
@@ -99,9 +86,7 @@ public static class ActorQueryPostExtensions
         in TEvent3 value3,
         in TEvent4 value4,
         in TEvent5 value5,
-        in TEvent6 value6,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent6 value6)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -110,10 +95,12 @@ public static class ActorQueryPostExtensions
         where TEvent6 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
+        PostAllSingle(query, in value3);
+        PostAllSingle(query, in value4);
+        PostAllSingle(query, in value5);
+        PostAllSingle(query, in value6);
     }
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>(
@@ -124,9 +111,7 @@ public static class ActorQueryPostExtensions
         in TEvent4 value4,
         in TEvent5 value5,
         in TEvent6 value6,
-        in TEvent7 value7,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent7 value7)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -136,10 +121,13 @@ public static class ActorQueryPostExtensions
         where TEvent7 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, in value7, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
+        PostAllSingle(query, in value3);
+        PostAllSingle(query, in value4);
+        PostAllSingle(query, in value5);
+        PostAllSingle(query, in value6);
+        PostAllSingle(query, in value7);
     }
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>(
@@ -151,9 +139,7 @@ public static class ActorQueryPostExtensions
         in TEvent5 value5,
         in TEvent6 value6,
         in TEvent7 value7,
-        in TEvent8 value8,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent8 value8)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -164,10 +150,14 @@ public static class ActorQueryPostExtensions
         where TEvent8 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, in value7, in value8, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
+        PostAllSingle(query, in value3);
+        PostAllSingle(query, in value4);
+        PostAllSingle(query, in value5);
+        PostAllSingle(query, in value6);
+        PostAllSingle(query, in value7);
+        PostAllSingle(query, in value8);
     }
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>(
@@ -180,9 +170,7 @@ public static class ActorQueryPostExtensions
         in TEvent6 value6,
         in TEvent7 value7,
         in TEvent8 value8,
-        in TEvent9 value9,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent9 value9)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -194,10 +182,15 @@ public static class ActorQueryPostExtensions
         where TEvent9 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, in value7, in value8, in value9, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
+        PostAllSingle(query, in value3);
+        PostAllSingle(query, in value4);
+        PostAllSingle(query, in value5);
+        PostAllSingle(query, in value6);
+        PostAllSingle(query, in value7);
+        PostAllSingle(query, in value8);
+        PostAllSingle(query, in value9);
     }
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>(
@@ -211,9 +204,7 @@ public static class ActorQueryPostExtensions
         in TEvent7 value7,
         in TEvent8 value8,
         in TEvent9 value9,
-        in TEvent10 value10,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent10 value10)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -226,10 +217,16 @@ public static class ActorQueryPostExtensions
         where TEvent10 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, in value7, in value8, in value9, in value10, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
+        PostAllSingle(query, in value3);
+        PostAllSingle(query, in value4);
+        PostAllSingle(query, in value5);
+        PostAllSingle(query, in value6);
+        PostAllSingle(query, in value7);
+        PostAllSingle(query, in value8);
+        PostAllSingle(query, in value9);
+        PostAllSingle(query, in value10);
     }
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>(
@@ -244,9 +241,7 @@ public static class ActorQueryPostExtensions
         in TEvent8 value8,
         in TEvent9 value9,
         in TEvent10 value10,
-        in TEvent11 value11,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent11 value11)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -260,10 +255,17 @@ public static class ActorQueryPostExtensions
         where TEvent11 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
-        {
-            archetype.PostToAliveActors(in value1, in value2, in value3, in value4, in value5, in value6, in value7, in value8, in value9, in value10, in value11, postPolicy, fullPolicy);
-        }
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
+        PostAllSingle(query, in value3);
+        PostAllSingle(query, in value4);
+        PostAllSingle(query, in value5);
+        PostAllSingle(query, in value6);
+        PostAllSingle(query, in value7);
+        PostAllSingle(query, in value8);
+        PostAllSingle(query, in value9);
+        PostAllSingle(query, in value10);
+        PostAllSingle(query, in value11);
     }
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11, TEvent12>(
@@ -279,9 +281,7 @@ public static class ActorQueryPostExtensions
         in TEvent9 value9,
         in TEvent10 value10,
         in TEvent11 value11,
-        in TEvent12 value12,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent12 value12)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -296,23 +296,104 @@ public static class ActorQueryPostExtensions
         where TEvent12 : struct
     {
         query = query.RefreshIfNeeded();
-        foreach (var archetype in query.Cache.Archetypes)
+        PostAllSingle(query, in value1);
+        PostAllSingle(query, in value2);
+        PostAllSingle(query, in value3);
+        PostAllSingle(query, in value4);
+        PostAllSingle(query, in value5);
+        PostAllSingle(query, in value6);
+        PostAllSingle(query, in value7);
+        PostAllSingle(query, in value8);
+        PostAllSingle(query, in value9);
+        PostAllSingle(query, in value10);
+        PostAllSingle(query, in value11);
+        PostAllSingle(query, in value12);
+    }
+
+    private static void PostAllSingle<TEvent>(ActorQueryResult query, in TEvent value)
+        where TEvent : struct
+    {
+        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetState(query.World);
+        if (state == null)
         {
-            archetype.PostToAliveActors(
-                in value1,
-                in value2,
-                in value3,
-                in value4,
-                in value5,
-                in value6,
-                in value7,
-                in value8,
-                in value9,
-                in value10,
-                in value11,
-                in value12,
-                postPolicy,
-                fullPolicy);
+            return;
+        }
+
+        if (state.Route == ActorPostRouteKind.DiagnosticOnly)
+        {
+            foreach (BehaviourArchetype archetype in query.Cache.Archetypes)
+            {
+                archetype.PostToAliveActors(in value, postPolicy: null, fullPolicy: null);
+            }
+
+            return;
+        }
+
+        foreach (BehaviourArchetype archetype in query.Cache.Archetypes)
+        {
+            int archetypeId = archetype.ArchetypeId;
+            if ((uint)archetypeId >= (uint)state.RowsByArchetype.Length)
+            {
+                continue;
+            }
+
+            EventPostRow<TEvent> row = state.RowsByArchetype[archetypeId];
+            if (!row.IsValid)
+            {
+                continue;
+            }
+
+            int maxSlot = Math.Min(row.Mails.Length, row.SlotFlags.Length);
+            for (int slotIndex = 0; slotIndex < maxSlot; slotIndex++)
+            {
+                if (!query.World.CanPostSlot(row, state, slotIndex))
+                {
+                    continue;
+                }
+
+                _ = state.Route switch
+                {
+                    ActorPostRouteKind.QueuedGrow => query.World.PostQueuedGrowCore(
+                        slotIndex,
+                        in value,
+                        row.Mails,
+                        row.DirtySlots,
+                        row.BucketIndex,
+                        state.Pool,
+                        state.Options),
+                    ActorPostRouteKind.QueuedRejectNew => query.World.PostQueuedRejectNewCore(
+                        slotIndex,
+                        in value,
+                        row.Mails,
+                        row.DirtySlots,
+                        row.BucketIndex,
+                        state.Pool,
+                        state.Options),
+                    ActorPostRouteKind.QueuedDropOldest => query.World.PostQueuedDropOldestCore(
+                        slotIndex,
+                        in value,
+                        row.Mails,
+                        row.DirtySlots,
+                        row.BucketIndex,
+                        state.Pool,
+                        state.Options),
+                    ActorPostRouteKind.Latest => query.World.PostLatestCore(
+                        slotIndex,
+                        in value,
+                        row.Mails,
+                        row.DirtySlots,
+                        row.BucketIndex,
+                        state.Pool),
+                    ActorPostRouteKind.Dirty => query.World.PostDirtyCore(
+                        slotIndex,
+                        in value,
+                        row.Mails,
+                        row.DirtySlots,
+                        row.BucketIndex,
+                        state.Pool),
+                    _ => PostResult.Success
+                };
+            }
         }
     }
 }

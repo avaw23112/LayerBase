@@ -28,7 +28,7 @@ public partial struct ActorMetaDefaultEvent
 
 public sealed class ActorMetaConfiguredEventMetaData : EventMetaData<ActorMetaConfiguredEvent>
 {
-    public override ActorMailOptions? ActorMailOptions => new ActorMailOptions(
+    public ActorMailOptions Options { get; set; } = new(
         postPolicy: ActorPostPolicy.Latest,
         fullPolicy: ActorMailFullPolicy.DropNewest,
         growFailurePolicy: ActorMailFullPolicy.DropOldest,
@@ -36,6 +36,8 @@ public sealed class ActorMetaConfiguredEventMetaData : EventMetaData<ActorMetaCo
         maxCapacity: 8,
         growFactor: 2,
         releaseWhenEmpty: false);
+
+    public override ActorMailOptions? ActorMailOptions => Options;
 }
 
 internal static class ActorMetaDataTrace
@@ -72,7 +74,8 @@ public class ActorMetaDataIntegrationTests
     [Test]
     public void Event_meta_data_actor_mail_options_are_loaded_into_policy_table()
     {
-        EventMetaDataHandler.RegisterMetaData<ActorMetaConfiguredEvent>(new ActorMetaConfiguredEventMetaData());
+        var metaData = new ActorMetaConfiguredEventMetaData();
+        EventMetaDataHandler.RegisterMetaData<ActorMetaConfiguredEvent>(metaData);
 
         LayerRuntime runtime = BuildRuntime();
         ActorMailOptions options = runtime.PolicyTable.GetActorMailOptions(EventTypeId<ActorMetaConfiguredEvent>.Id);
@@ -88,7 +91,8 @@ public class ActorMetaDataIntegrationTests
     [Test]
     public void Actor_world_reads_mail_options_when_creating_event_column()
     {
-        EventMetaDataHandler.RegisterMetaData<ActorMetaConfiguredEvent>(new ActorMetaConfiguredEventMetaData());
+        var metaData = new ActorMetaConfiguredEventMetaData();
+        EventMetaDataHandler.RegisterMetaData<ActorMetaConfiguredEvent>(metaData);
 
         LayerRuntime runtime = BuildRuntime();
         ActorMetaDataActor actor = runtime.Actors.CreateActor<ActorMetaDataActor>();
@@ -104,21 +108,53 @@ public class ActorMetaDataIntegrationTests
     }
 
     [Test]
-    public void Post_and_pump_hot_path_do_not_requery_event_meta_data_after_column_creation()
+    public void Runtime_policy_table_rejects_policy_mutation_after_build()
     {
         EventMetaDataHandler.RegisterMetaData<ActorMetaConfiguredEvent>(new ActorMetaConfiguredEventMetaData());
 
         LayerRuntime runtime = BuildRuntime();
+        int eventId = EventTypeId<ActorMetaConfiguredEvent>.Id;
+
+        Assert.Throws<InvalidOperationException>(() => runtime.PolicyTable.SetActorMailOptions(
+            eventId,
+            new ActorMailOptions(
+                postPolicy: ActorPostPolicy.Queued,
+                fullPolicy: ActorMailFullPolicy.RejectNew,
+                growFailurePolicy: ActorMailFullPolicy.RejectNew,
+                initialCapacity: 4,
+                maxCapacity: 4,
+                growFactor: 2,
+                releaseWhenEmpty: true)));
+        Assert.Throws<InvalidOperationException>(() => runtime.PolicyTable.SetPostPolicy(
+            eventId,
+            new EventPostPolicy(PostDeliveryMode.Latest, BackpressurePolicy.RejectNew, 0)));
+        Assert.Throws<InvalidOperationException>(() => runtime.PolicyTable.SetBufferPolicy(
+            eventId,
+            new EventBufferPolicy(
+                BufferMode.Queue,
+                defaultTtlSeconds: 1f,
+                capacity: 1,
+                overflowPolicy: BufferOverflowPolicy.DropOldest,
+                useContractReplace: false)));
+    }
+
+    [Test]
+    public void Post_and_pump_hot_path_do_not_requery_event_meta_data_after_column_creation()
+    {
+        var metaData = new ActorMetaConfiguredEventMetaData();
+        EventMetaDataHandler.RegisterMetaData<ActorMetaConfiguredEvent>(metaData);
+
+        LayerRuntime runtime = BuildRuntime();
         ActorMetaDataActor actor = runtime.Actors.CreateActor<ActorMetaDataActor>();
 
-        runtime.PolicyTable.SetActorMailOptions(EventTypeId<ActorMetaConfiguredEvent>.Id, new ActorMailOptions(
+        metaData.Options = new ActorMailOptions(
             postPolicy: ActorPostPolicy.Queued,
             fullPolicy: ActorMailFullPolicy.RejectNew,
             growFailurePolicy: ActorMailFullPolicy.RejectNew,
             initialCapacity: 4,
             maxCapacity: 4,
             growFactor: 2,
-            releaseWhenEmpty: true));
+            releaseWhenEmpty: true);
 
         actor.PostInside(new ActorMetaConfiguredEvent(1));
         actor.PostInside(new ActorMetaConfiguredEvent(2));

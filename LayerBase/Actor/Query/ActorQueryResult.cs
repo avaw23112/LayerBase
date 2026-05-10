@@ -13,6 +13,8 @@ public readonly struct ActorQueryResult
         _version = version;
     }
 
+    internal ActorWorld World => _world;
+
     public bool IsValid => _world.QueryVersion == _version;
 
     public ActorQueryResult RefreshIfNeeded()

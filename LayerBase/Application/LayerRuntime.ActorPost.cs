@@ -9,22 +9,18 @@ public sealed partial class LayerRuntime
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult PostTo<TEvent>(
         ActorId actorId,
-        in TEvent value,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent value)
         where TEvent : struct
     {
-        return Actors.PostTo(actorId, in value, postPolicy, fullPolicy);
+        return Actors.PostTo(actorId, in value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostToMany<TEvent>(
         ReadOnlySpan<ActorId> actorIds,
-        in TEvent value,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        in TEvent value)
         where TEvent : struct
     {
-        Actors.PostToMany(actorIds, in value, postPolicy, fullPolicy);
+        Actors.PostToMany(actorIds, in value);
     }
 }

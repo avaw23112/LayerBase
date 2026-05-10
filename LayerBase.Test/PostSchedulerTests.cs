@@ -51,7 +51,7 @@ public class PostSchedulerTests
     public void Basic_Post_And_Pump()
     {
         var options = PostSchedulerOptions.Default;
-        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         int callCount = 0;
         
@@ -68,7 +68,7 @@ public class PostSchedulerTests
     public void Wave_Isolation_Post_During_Pump_Goes_To_Next_Wave()
     {
         var options = new PostSchedulerOptions(1024, 1024, 0, 0, 1, 64, BackpressurePolicy.RejectNew);
-        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         int callCount = 0;
         
@@ -96,7 +96,7 @@ public class PostSchedulerTests
     public void MaxWavesPerPump_Processes_Multiple_Waves()
     {
         var options = new PostSchedulerOptions(1024, 1024, 0, 0, 2, 64, BackpressurePolicy.RejectNew);
-        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         int callCount = 0;
         
@@ -118,7 +118,7 @@ public class PostSchedulerTests
     public void EventCount_Budget_Limits_Processing()
     {
         var options = new PostSchedulerOptions(1024, 1024, 5, 0, 1, 64, BackpressurePolicy.RejectNew);
-        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         int callCount = 0;
         
@@ -137,7 +137,7 @@ public class PostSchedulerTests
     public void Time_Budget_Limits_Processing()
     {
         var options = new PostSchedulerOptions(1024, 1024, 0, 1.0, 1, 1, BackpressurePolicy.RejectNew);
-        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         int callCount = 0;
         
@@ -158,7 +158,7 @@ public class PostSchedulerTests
     public void Backpressure_RejectNew()
     {
         var options = new PostSchedulerOptions(4, 4, 0, 0, 1, 64, BackpressurePolicy.RejectNew);
-        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         
         Assert.That(scheduler.TryPost(new TestPostEvent()).IsSuccess, Is.True);
@@ -172,7 +172,7 @@ public class PostSchedulerTests
     public void Backpressure_DropOldest()
     {
         var options = new PostSchedulerOptions(4, 4, 0, 0, 1, 64, BackpressurePolicy.DropOldest);
-        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<DropOldestTestEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         var received = new List<int>();
         
@@ -192,7 +192,7 @@ public class PostSchedulerTests
     public void Backpressure_DropNewest()
     {
         var options = new PostSchedulerOptions(4, 4, 0, 0, 1, 64, BackpressurePolicy.DropNewest);
-        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         scheduler.BuildPlans(new[] { new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0, options.DefaultBackpressure) });
         var received = new List<int>();
         
@@ -266,7 +266,7 @@ public class PostSchedulerTests
     public void PrewarmEvent_Ensures_Capacity_For_All_Modes()
     {
         var options = PostSchedulerOptions.Default;
-        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         
         // 初始状态没有注册事件
         
@@ -288,7 +288,7 @@ public class PostSchedulerTests
     public void AddSpecialPolicy_Ensures_Capacity()
     {
         var options = PostSchedulerOptions.Default;
-        var scheduler = new PostScheduler(0, _eventCenter, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, _eventCenter, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         
         var typeId = EventTypeId<TestPostEvent>.Id;
         scheduler.AddSpecialPolicy(typeId, new EventPostPolicy(PostDeliveryMode.Latest, BackpressurePolicy.RejectNew, 0));

@@ -105,6 +105,12 @@ internal static class EventMetaDataHandler
         }
     }
 
+    internal static EventMetaData<TEvent>? ResolveRegisteredMetaData<TEvent>()
+        where TEvent : struct
+    {
+        return ResolveMetaData<TEvent>() as EventMetaData<TEvent>;
+    }
+
     private static IEventMetaData? ResolveMetaData<EventType>() where EventType : struct
     {
         var version = Volatile.Read(ref s_registryVersion);

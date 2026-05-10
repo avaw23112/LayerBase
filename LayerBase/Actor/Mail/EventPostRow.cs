@@ -4,23 +4,23 @@ internal readonly struct EventPostRow<TEvent>
     where TEvent : struct
 {
     public readonly EventMail<TEvent>[] Mails;
-    public readonly EventMailPool<TEvent> Pool;
     public readonly DirtySlotList DirtySlots;
     public readonly int BucketIndex;
     public readonly int[] Generations;
+    public readonly ActorSlotFlags[] SlotFlags;
 
     public EventPostRow(
         EventMail<TEvent>[] mails,
-        EventMailPool<TEvent> pool,
         DirtySlotList dirtySlots,
         int bucketIndex,
-        int[] generations)
+        int[] generations,
+        ActorSlotFlags[] slotFlags)
     {
         Mails = mails;
-        Pool = pool;
         DirtySlots = dirtySlots;
         BucketIndex = bucketIndex;
         Generations = generations;
+        SlotFlags = slotFlags;
     }
 
     public bool IsValid => Mails != null;

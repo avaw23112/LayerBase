@@ -30,6 +30,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     public override string ActorTypeName => typeof(TActor).Name;
     public TActor?[] Actors => _actors;
     internal int[] Generations => _generations;
+    internal ActorSlotFlags[] SlotFlags => _slotFlags;
     public ActorSlotState[] States => _states;
     public bool[] Enabled => _enabled;
     public int MaxSlot => Math.Min(_nextSlotIndex, _actors.Length);
@@ -1393,19 +1394,19 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         ActorBehaviourInvoker<TActor, TEvent> invoker)
         where TEvent : struct
     {
-        int eventTypeId = EventTypeId<TEvent>.Id;
-        ActorMailOptions options = world.ResolveMailOptions(eventTypeId);
-        EventMailPool<TEvent> pool = world.GetOrCreateEventMailPoolCold<TEvent>();
+        ActorEventPostPlan<TEvent> plan = ActorEventPostPlanBuilder.Build<TEvent>(world.DefaultMailOptions);
+        EventPostState<TEvent> state = world.GetOrCreateEventPostState(plan);
         var column = new EventColumn<TActor, TEvent>(
             world: world,
             owner: this,
             invoker: invoker,
-            mailPool: pool,
-            options: options,
-            bucketIndex: eventTypeId,
-            initialSlotCapacity: _actors.Length);
+            mailPool: state.Pool,
+            options: plan.MailOptions,
+            bucketIndex: plan.EventId,
+            initialSlotCapacity: _actors.Length,
+            plan: plan);
 
-        world.RegisterColumn<TEvent>(eventTypeId, column);
+        world.RegisterColumn<TEvent>(plan.EventId, column);
         column.RefreshPostRowBinding();
 
         return column;

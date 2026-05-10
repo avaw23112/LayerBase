@@ -16,7 +16,7 @@ public sealed class PostScheduler : IDisposable
     private readonly EventPayloadStorage _payloadStorage;
     private readonly EventCenter _eventCenter;
     
-    private EventRuntimePolicyTable _policyTable;
+    private EventBuildPolicyTable _policyTable;
 
     // Optimized Buffers
     private ulong[] _dirtyPendingBits = Array.Empty<ulong>();
@@ -44,7 +44,7 @@ public sealed class PostScheduler : IDisposable
     private bool _disposed;
     private bool _isPumping;
     private readonly BackpressurePolicy _defaultBackpressure;
-    public PostScheduler(int runtimeId, EventCenter eventCenter, PostSchedulerOptions options, EventRuntimePolicyTable policyTable)
+    public PostScheduler(int runtimeId, EventCenter eventCenter, PostSchedulerOptions options, EventBuildPolicyTable policyTable)
     {
         _runtimeId = runtimeId;
         _eventCenter = eventCenter;
@@ -511,7 +511,7 @@ public sealed class PostScheduler : IDisposable
             if (typeId < _pendingCount.Length) FastArray.At(_pendingCount, typeId)--;
         }
     }
-    public void UpdatePolicyTable(EventRuntimePolicyTable policyTable)
+    public void UpdatePolicyTable(EventBuildPolicyTable policyTable)
     {
         _policyTable = policyTable ?? throw new ArgumentNullException(nameof(policyTable));
     }

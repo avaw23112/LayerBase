@@ -18,6 +18,7 @@ internal sealed class EventColumn<TActor, TEvent> :
     private readonly ActorSlotFlags _postRejectMask;
     private readonly bool _rejectDisabled;
     private readonly int _bucketIndex;
+    private readonly ActorEventPostPlan<TEvent> _plan;
     private EventMail<TEvent>[] _mails;
 
     internal EventMail<TEvent>[] Mails => _mails;
@@ -33,7 +34,8 @@ internal sealed class EventColumn<TActor, TEvent> :
         EventMailPool<TEvent> mailPool,
         ActorMailOptions options,
         int bucketIndex,
-        int initialSlotCapacity)
+        int initialSlotCapacity,
+        ActorEventPostPlan<TEvent> plan)
     {
         _world = world;
         _owner = owner;
@@ -41,6 +43,7 @@ internal sealed class EventColumn<TActor, TEvent> :
         _options = options;
         _bucketIndex = bucketIndex;
         _mails = new EventMail<TEvent>[Math.Max(initialSlotCapacity, 1)];
+        _plan = plan;
         _mailPool = mailPool;
         _dirtySlots = new DirtySlotList(initialSlotCapacity);
         _writeMode = ResolveWriteMode(options);
@@ -211,19 +214,19 @@ internal sealed class EventColumn<TActor, TEvent> :
 
     public override void RefreshPostRowBinding()
     {
-        if (_writeMode != ActorMailWriteMode.QueuedGrow
-            || _rejectDisabled)
+        if (_plan.Route is ActorPostRouteKind.DiagnosticOnly or ActorPostRouteKind.Disabled)
         {
             return;
         }
 
         _world.RegisterEventPostRow(
-            _owner.ArchetypeId,
-            _mails,
-            _mailPool,
-            _dirtySlots,
-            _bucketIndex,
-            _owner.Generations);
+            archetypeId: _owner.ArchetypeId,
+            mails: _mails,
+            dirtySlots: _dirtySlots,
+            bucketIndex: _bucketIndex,
+            generations: _owner.Generations,
+            slotFlags: _owner.SlotFlags,
+            plan: _plan);
     }
 
     public override void ClearMail(int slotIndex)
@@ -283,7 +286,8 @@ internal sealed class EventColumn<TActor, TEvent> :
                 _mails,
                 _dirtySlots,
                 _bucketIndex,
-                _mailPool);
+                _mailPool,
+                _options);
         }
     }
 
@@ -305,7 +309,8 @@ internal sealed class EventColumn<TActor, TEvent> :
             _mails,
             _dirtySlots,
             _bucketIndex,
-            _mailPool);
+            _mailPool,
+            _options);
     }
 
     private bool CanUsePumpFastPath(in ActorMailPumpOptions options)

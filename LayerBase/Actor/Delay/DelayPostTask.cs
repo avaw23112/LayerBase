@@ -6,26 +6,20 @@ internal sealed class DelayPostTask<TEvent> : IActorDelayTask
     private readonly ActorWorld _world;
     private readonly ActorId _actorId;
     private readonly TEvent _value;
-    private readonly ActorPostPolicy? _postPolicy;
-    private readonly ActorMailFullPolicy? _fullPolicy;
 
     public DelayPostTask(
         ActorWorld world,
         ActorId actorId,
-        in TEvent value,
-        ActorPostPolicy? postPolicy,
-        ActorMailFullPolicy? fullPolicy)
+        in TEvent value)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _actorId = actorId;
         _value = value;
-        _postPolicy = postPolicy;
-        _fullPolicy = fullPolicy;
     }
 
     public void Execute()
     {
-        _ = _world.PostTo(_actorId, in _value, _postPolicy, _fullPolicy);
+        _ = _world.PostTo(_actorId, in _value);
     }
 
     public void Cancel()

@@ -152,7 +152,7 @@ public class PostFromAnyThreadTests
     public void PostIngressQueue_DrainTo_Budget_And_Failure_Tracking()
     {
         var options = PostSchedulerOptions.Default;
-        var scheduler = new PostScheduler(0, new EventCenter(), options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(0, new EventCenter(), options, new EventBuildPolicyTable(options.DefaultBackpressure));
         
         // 故意不 BuildPlans，这样 TryPost 会失败
         

@@ -3,45 +3,47 @@ namespace LayerBase.Actor;
 internal static class EventPostRuntime<TEvent>
     where TEvent : struct
 {
-    private static ActorWorld?[] s_worlds = new ActorWorld?[4];
-    private static EventPostRow<TEvent>[]?[] s_rowsByWorld = new EventPostRow<TEvent>[4][];
+    private static EventPostState<TEvent>?[] s_statesByWorld = new EventPostState<TEvent>?[4];
 
-    public static void BindWorld(ActorWorld world, EventPostRow<TEvent>[] rows)
+    public static void BindWorld(ActorWorld world, EventPostState<TEvent> state)
     {
         int worldIndex = world.RuntimeIndex;
         EnsureWorldCapacity(worldIndex);
-        s_worlds[worldIndex] = world;
-        s_rowsByWorld[worldIndex] = rows;
+        s_statesByWorld[worldIndex] = state;
     }
 
-    public static bool TryGetRows(ActorWorld world, out EventPostRow<TEvent>[]? rows)
+    public static EventPostState<TEvent>? GetState(ActorWorld world)
     {
         int worldIndex = world.RuntimeIndex;
-        if ((uint)worldIndex < (uint)s_worlds.Length
-            && ReferenceEquals(s_worlds[worldIndex], world))
+        if ((uint)worldIndex >= (uint)s_statesByWorld.Length)
         {
-            rows = s_rowsByWorld[worldIndex];
-            return rows != null;
+            return null;
         }
 
-        rows = null;
-        return false;
+        return s_statesByWorld[worldIndex];
+    }
+
+    public static void UnbindWorld(int worldIndex)
+    {
+        if ((uint)worldIndex < (uint)s_statesByWorld.Length)
+        {
+            s_statesByWorld[worldIndex] = null;
+        }
     }
 
     private static void EnsureWorldCapacity(int worldIndex)
     {
-        if ((uint)worldIndex < (uint)s_worlds.Length)
+        if ((uint)worldIndex < (uint)s_statesByWorld.Length)
         {
             return;
         }
 
-        int newSize = s_worlds.Length;
+        int newSize = s_statesByWorld.Length;
         while (newSize <= worldIndex)
         {
             newSize <<= 1;
         }
 
-        Array.Resize(ref s_worlds, newSize);
-        Array.Resize(ref s_rowsByWorld, newSize);
+        Array.Resize(ref s_statesByWorld, newSize);
     }
 }

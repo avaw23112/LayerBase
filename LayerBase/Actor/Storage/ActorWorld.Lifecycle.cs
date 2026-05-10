@@ -45,6 +45,13 @@ public sealed partial class ActorWorld
         _queryCacheByDescriptor.Clear();
         _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
         _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
+        foreach (Action unbind in _eventPostRuntimeUnbinders)
+        {
+            unbind();
+        }
+
+        _eventPostRuntimeUnbinders.Clear();
+        GlobalEventMailPools.Clear();
         ActorWorldRuntimeIndexAllocator.Return(RuntimeIndex);
     }
 

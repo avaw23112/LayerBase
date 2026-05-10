@@ -85,7 +85,7 @@ public partial class RuntimeSafetyRegressionTests
             timeCheckInterval: 64,
             defaultBackpressure: BackpressurePolicy.RejectNew);
         var center = new EventCenter();
-        var scheduler = new PostScheduler(251, center, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(251, center, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         scheduler.BuildPlans(new[]
         {
             new PostTypePlan(EventTypeId<QueuedReferencePayloadEvent>.Id,
@@ -175,7 +175,7 @@ public partial class RuntimeSafetyRegressionTests
         center.SubscribeNotify<LatestThrowingPayloadEvent>(0, (in LatestThrowingPayloadEvent _) =>
             throw new InvalidOperationException("expected"));
 
-        var scheduler = new PostScheduler(252, center, options, new EventRuntimePolicyTable(options.DefaultBackpressure));
+        var scheduler = new PostScheduler(252, center, options, new EventBuildPolicyTable(options.DefaultBackpressure));
         scheduler.BuildPlans(new[]
         {
             new PostTypePlan(EventTypeId<LatestThrowingPayloadEvent>.Id,

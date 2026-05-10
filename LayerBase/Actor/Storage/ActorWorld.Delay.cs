@@ -7,14 +7,12 @@ public sealed partial class ActorWorld
     public DelayPostHandle DelayPost<TEvent>(
         ActorId actorId,
         in TEvent value,
-        float delaySeconds,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        float delaySeconds)
         where TEvent : struct
     {
         EnsureDelayAvailable();
         return DelayScheduler.Schedule(
-            new DelayPostTask<TEvent>(this, actorId, in value, postPolicy, fullPolicy),
+            new DelayPostTask<TEvent>(this, actorId, in value),
             delaySeconds);
     }
 

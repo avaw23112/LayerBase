@@ -747,28 +747,24 @@ public static class ServiceExtensions
     }
     public static PostResult PostTo<TEvent>(
         this IService service,
-        ActorId              actorId,
-        in TEvent            value,
-        ActorPostPolicy?     postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        ActorId actorId,
+        in TEvent value)
         where TEvent : struct
     {
         return service
                .GetBinding()
-               .Runtime.PostTo(actorId,in value, postPolicy, fullPolicy);
+               .Runtime.PostTo(actorId, in value);
     }
 
     public static void PostToMany<TEvent>(
         this IService service,
         ReadOnlySpan<ActorId> actorIds,
-        in TEvent             value,
-        ActorPostPolicy?      postPolicy = null,
-        ActorMailFullPolicy?  fullPolicy = null)
+        in TEvent value)
         where TEvent : struct
     {
         service
             .GetBinding()
-            .Runtime.PostToMany(actorIds,in value, postPolicy, fullPolicy);
+            .Runtime.PostToMany(actorIds, in value);
     }
     public static void SubscribeFlow<TValue>(
         this IService service,
@@ -1046,29 +1042,25 @@ public static class LayerContextExtensions
     }
     
     public static PostResult PostTo<TEvent>(
-        this ILayerContext   context,
-        ActorId              actorId,
-        in TEvent            value,
-        ActorPostPolicy?     postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
+        this ILayerContext context,
+        ActorId actorId,
+        in TEvent value)
         where TEvent : struct
     {
         return context
                .GetBinding()
-               .Runtime.PostTo(actorId,in value, postPolicy, fullPolicy);
+               .Runtime.PostTo(actorId, in value);
     }
 
     public static void PostToMany<TEvent>(
-        this ILayerContext   context,
+        this ILayerContext context,
         ReadOnlySpan<ActorId> actorIds,
-        in TEvent             value,
-        ActorPostPolicy?      postPolicy = null,
-        ActorMailFullPolicy?  fullPolicy = null)
+        in TEvent value)
         where TEvent : struct
     {
         context
             .GetBinding()
-            .Runtime.PostToMany(actorIds,in value, postPolicy, fullPolicy);
+            .Runtime.PostToMany(actorIds, in value);
     }
 
     public static void SubscribeFlow<TValue>(

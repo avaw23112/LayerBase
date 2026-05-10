@@ -13,15 +13,15 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
     private readonly object _wheelLock = new();
     private int _disposed;
 
-    public EventRuntimePolicyTable? PolicyTable { get; private set; }
+    public EventBuildPolicyTable? PolicyTable { get; private set; }
 
-    internal static DelayPublisherManager Create(DelayBufferOptions options, EventRuntimePolicyTable policyTable)
+    internal static DelayPublisherManager Create(DelayBufferOptions options, EventBuildPolicyTable policyTable)
     {
         return new DelayPublisherManager(options, policyTable);
     }
 
 
-    private DelayPublisherManager(DelayBufferOptions options, EventRuntimePolicyTable policyTable)
+    private DelayPublisherManager(DelayBufferOptions options, EventBuildPolicyTable policyTable)
     {
         _wheel = new DelayBufferWheel(options, this);
         PolicyTable = policyTable;

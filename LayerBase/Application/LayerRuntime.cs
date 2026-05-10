@@ -59,8 +59,8 @@ public sealed partial class LayerRuntime : IDisposable
         LayerHub.Internal_Register(this);
     }
 
-    private EventRuntimePolicyTable? _policyTable;
-    public EventRuntimePolicyTable PolicyTable => _policyTable ?? throw new InvalidOperationException("Runtime not built.");
+    private EventBuildPolicyTable? _policyTable;
+    public EventBuildPolicyTable PolicyTable => _policyTable ?? throw new InvalidOperationException("Runtime not built.");
 
     internal void InitializeScheduler(PostSchedulerOptions options)
     {
@@ -75,7 +75,7 @@ public sealed partial class LayerRuntime : IDisposable
 
     private void BuildEventPolicies(PostSchedulerOptions options)
     {
-        _policyTable = new EventRuntimePolicyTable(options.DefaultBackpressure);
+        _policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
         var metaData = LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData().ToList();
         var plans = new List<PostTypePlan>();
 
@@ -846,6 +846,7 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime.Actors.PrepareRuntimeBuild();
             _layerChain.Build(1024, true);
             _runtime.Actors.CompleteRuntimeBuild();
+            _runtime.PolicyTable.Freeze();
 
             if (_debugMode)
             {
@@ -915,8 +916,8 @@ public sealed partial class LayerRuntime : IDisposable
     private sealed class RuntimeTimerSink : IExpiredTimerSink<ITimerAction>
     {
         private readonly PostScheduler _scheduler;
-        private readonly EventRuntimePolicyTable _policyTable;
-        public RuntimeTimerSink(PostScheduler scheduler, EventRuntimePolicyTable policyTable)
+        private readonly EventBuildPolicyTable _policyTable;
+        public RuntimeTimerSink(PostScheduler scheduler, EventBuildPolicyTable policyTable)
         {
             _scheduler = scheduler;
             _policyTable = policyTable;

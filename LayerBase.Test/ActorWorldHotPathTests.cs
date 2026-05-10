@@ -90,9 +90,12 @@ public sealed partial class ActorWorldHotPathTests
 
         EventPostRow<SharedPoolEvent> rowA = GetBoundRow<SharedPoolEvent>(world, actorA.ArchetypeId);
         EventPostRow<SharedPoolEvent> rowB = GetBoundRow<SharedPoolEvent>(world, actorB.ArchetypeId);
+        EventPostState<SharedPoolEvent>? state = EventPostRuntime<SharedPoolEvent>.GetState(world);
 
         Assert.That(actorA.ArchetypeId, Is.Not.EqualTo(actorB.ArchetypeId));
-        Assert.That(rowA.Pool, Is.SameAs(rowB.Pool));
+        Assert.That(state, Is.Not.Null);
+        Assert.That(rowA.IsValid && rowB.IsValid, Is.True);
+        Assert.That(state!.Pool, Is.Not.Null);
     }
 
     [Test]
@@ -137,8 +140,9 @@ public sealed partial class ActorWorldHotPathTests
     private static EventPostRow<TEvent> GetBoundRow<TEvent>(ActorWorld world, int archetypeId)
         where TEvent : struct
     {
-        Assert.That(EventPostRuntime<TEvent>.TryGetRows(world, out EventPostRow<TEvent>[]? rows), Is.True);
-        Assert.That(rows, Is.Not.Null);
+        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetState(world);
+        Assert.That(state, Is.Not.Null);
+        EventPostRow<TEvent>[]? rows = state!.RowsByArchetype;
         Assert.That((uint)archetypeId, Is.LessThan((uint)rows!.Length));
         return rows[archetypeId];
     }

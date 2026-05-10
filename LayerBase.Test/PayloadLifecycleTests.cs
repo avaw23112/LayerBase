@@ -78,7 +78,7 @@ public class PayloadLifecycleTests
     public void PostScheduler_Dispose_Releases_Pending_Payloads()
     {
         var options = PostSchedulerOptions.Default;
-        var table = new EventRuntimePolicyTable(options.DefaultBackpressure);
+        var table = new EventBuildPolicyTable(options.DefaultBackpressure);
         var scheduler = new PostScheduler(0, _eventCenter, options, table);
         scheduler.PrewarmEvent<LifecycleTestEvent>();
         
@@ -97,7 +97,7 @@ public class PayloadLifecycleTests
     public void FlushBuffers_Exception_Does_Not_Leak_Snapshot_Payloads()
     {
         var options = PostSchedulerOptions.Default;
-        var table = new EventRuntimePolicyTable(options.DefaultBackpressure);
+        var table = new EventBuildPolicyTable(options.DefaultBackpressure);
         var scheduler = new PostScheduler(0, _eventCenter, options, table);
         
         // 配置 Coalesced 和 Latest 策略
