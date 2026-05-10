@@ -53,15 +53,9 @@ public sealed partial class ActorWorld
         in TEvent value)
         where TEvent : struct
     {
-        if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
-        {
-            return PostResult.Failure(
-                ActorPostStatus.ActorNotFound,
-                "Invalid ActorId.ArchetypeId.",
-                PostFailureKind.InvalidActorId);
-        }
-
-        BehaviourArchetype archetype = _archetypes[actorId.ArchetypeId];
-        return archetype.Post(actorId, in value, postPolicy: null, fullPolicy: null);
+        return PostResult.Failure(
+            ActorPostStatus.EventNotSupported,
+            "DiagnosticOnly route: post is not allowed through default path.",
+            PostFailureKind.UnsupportedEvent);
     }
 }

@@ -181,7 +181,7 @@ public class ActorMailPolicyTests
     }
 
     [Test]
-    public void Drop_newest_discards_new_items_and_keeps_existing_ones()
+    public void DropNewest_policy_maps_to_DiagnosticOnly_and_returns_EventNotSupported()
     {
         var world = CreateWorld(new ActorMailOptions(
             postPolicy: ActorPostPolicy.Queued,
@@ -195,13 +195,9 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        world.PostTo(actorId, new ActorMailPolicyEvent(1));
-        world.PostTo(actorId, new ActorMailPolicyEvent(2));
-        world.PostTo(actorId, new ActorMailPolicyEvent(3));
-
-        Pump(world);
-
-        Assert.That(ActorMailPolicyTrace.Values, Is.EqualTo(new[] { 1, 2 }));
+        PostResult result = world.PostTo(actorId, new ActorMailPolicyEvent(1));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.FailureKind, Is.EqualTo(PostFailureKind.UnsupportedEvent));
     }
 
     [Test]

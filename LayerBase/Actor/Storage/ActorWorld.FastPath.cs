@@ -354,27 +354,6 @@ public sealed partial class ActorWorld
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal bool PostQueuedGrowFastNoResult<TEvent>(
-        int slotIndex,
-        in TEvent value,
-        EventMail<TEvent>[] mails,
-        DirtySlotList dirtySlots,
-        int bucketIndex,
-        EventMailPool<TEvent> pool,
-        ActorMailOptions options)
-        where TEvent : struct
-    {
-        return PostQueuedGrowCore(
-            slotIndex,
-            in value,
-            mails,
-            dirtySlots,
-            bucketIndex,
-            pool,
-            options).IsSuccess;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal PostResult PostQueuedRejectNewCore<TEvent>(
         int slotIndex,
         in TEvent value,

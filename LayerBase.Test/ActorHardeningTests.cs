@@ -200,7 +200,7 @@ public class ActorHardeningTests
     }
 
     [Test]
-    public void Merge_policy_combines_values_into_single_delivery()
+    public void Coalesced_policy_maps_to_DiagnosticOnly_and_returns_EventNotSupported()
     {
         var world = new ActorWorld(new ActorMailOptions(
             postPolicy: ActorPostPolicy.Coalesced,
@@ -212,18 +212,15 @@ public class ActorHardeningTests
             releaseWhenEmpty: true));
 
         HardeningProbeActor actor = world.CreateActor<HardeningProbeActor>();
-        actor.PostInside(new ActorHardeningMergeEvent(1));
-        actor.PostInside(new ActorHardeningMergeEvent(2));
-        actor.PostInside(new ActorHardeningMergeEvent(3));
+        ActorId actorId = actor.GetActorId();
 
-        var budget = new RuntimeFrameBudget(16, 0, 0);
-        world.Pump(0f, 0f, false, ref budget);
-
-        Assert.That(ActorHardeningTrace.Entries, Is.EqualTo(new[] { "merge:6", "update:0" }));
+        PostResult result = world.PostTo(actorId, new ActorHardeningMergeEvent(1));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.FailureKind, Is.EqualTo(PostFailureKind.UnsupportedEvent));
     }
 
     [Test]
-    public void Merge_policy_returns_explicit_failure_when_event_metadata_cannot_merge()
+    public void Coalesced_policy_returns_EventNotSupported_for_unmergeable_events()
     {
         var world = new ActorWorld(new ActorMailOptions(
             postPolicy: ActorPostPolicy.Coalesced,
@@ -238,17 +235,13 @@ public class ActorHardeningTests
         ActorId actorId = actor.GetActorId();
 
         PostResult first = world.PostTo(actorId, new ActorHardeningUnmergeableEvent(4));
+        Assert.That(first.IsSuccess, Is.False);
+        Assert.That(first.FailureKind, Is.EqualTo(PostFailureKind.UnsupportedEvent));
+        Assert.That(first.ActorStatus, Is.EqualTo(ActorPostStatus.EventNotSupported));
+
         PostResult second = world.PostTo(actorId, new ActorHardeningUnmergeableEvent(5));
-
-        Assert.That(first.IsSuccess, Is.True);
         Assert.That(second.IsSuccess, Is.False);
-        Assert.That(second.ActorStatus, Is.EqualTo(ActorPostStatus.MergeFailed));
-        Assert.That(second.FailureKind, Is.EqualTo(PostFailureKind.MergeFailed));
-
-        var budget = new RuntimeFrameBudget(16, 0, 0);
-        world.Pump(0f, 0f, false, ref budget);
-
-        Assert.That(ActorHardeningTrace.Entries, Is.EqualTo(new[] { "unmergeable:4", "update:0" }));
+        Assert.That(second.FailureKind, Is.EqualTo(PostFailureKind.UnsupportedEvent));
     }
 
     [Test]

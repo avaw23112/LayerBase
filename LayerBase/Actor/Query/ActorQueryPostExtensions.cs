@@ -321,11 +321,6 @@ public static class ActorQueryPostExtensions
 
         if (state.Route == ActorPostRouteKind.DiagnosticOnly)
         {
-            foreach (BehaviourArchetype archetype in query.Cache.Archetypes)
-            {
-                archetype.PostToAliveActors(in value, postPolicy: null, fullPolicy: null);
-            }
-
             return;
         }
 
