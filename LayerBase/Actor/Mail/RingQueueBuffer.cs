@@ -51,6 +51,39 @@ internal sealed class RingQueueBuffer<TEvent>
     {
         return GetBufferUnchecked(bufferId).Length;
     }
+
+    public EventMailRentResult<TEvent> RentWithBuffer(int initialCapacity)
+    {
+        int bufferId = Rent(initialCapacity);
+        TEvent[] buffer = GetBufferUnchecked(bufferId);
+        return new EventMailRentResult<TEvent>(bufferId, buffer);
+    }
+
+    public TEvent[] ResizeWithBuffer(int bufferId, int head, int count, int newCapacity)
+    {
+        int capacity = ActorMailCapacity.NormalizePowerOfTwo(newCapacity);
+        if (capacity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(newCapacity));
+        }
+
+        TEvent[] oldBuffer = GetBuffer(bufferId);
+        var newBuffer = new TEvent[capacity];
+        int mask = oldBuffer.Length - 1;
+
+        for (int i = 0; i < count; i++)
+        {
+            newBuffer[i] = oldBuffer[(head + i) & mask];
+        }
+
+        _buffers[bufferId - 1] = newBuffer;
+        return newBuffer;
+    }
+
+    public void Resize(int bufferId, int head, int count, int newCapacity)
+    {
+        _ = ResizeWithBuffer(bufferId, head, count, newCapacity);
+    }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(int bufferId, int index, in TEvent value)
@@ -79,26 +112,6 @@ internal sealed class RingQueueBuffer<TEvent>
 
         _inUse[index] = false;
         _freeIds.Push(bufferId);
-    }
-
-    public void Resize(int bufferId, int head, int count, int newCapacity)
-    {
-        int capacity = ActorMailCapacity.NormalizePowerOfTwo(newCapacity);
-        if (capacity <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(newCapacity));
-        }
-
-        TEvent[] oldBuffer = GetBuffer(bufferId);
-        var newBuffer = new TEvent[capacity];
-        int mask = oldBuffer.Length - 1;
-
-        for (int i = 0; i < count; i++)
-        {
-            newBuffer[i] = oldBuffer[(head + i) & mask];
-        }
-
-        _buffers[bufferId - 1] = newBuffer;
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

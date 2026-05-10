@@ -28,15 +28,29 @@ internal sealed class EventMailPool<TEvent>
         return _buffer.Rent(_options.InitialCapacity);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EventMailRentResult<TEvent> RentWithBuffer(int capacity)
+    {
+        return _buffer.RentWithBuffer(capacity);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EventMailRentResult<TEvent> RentInitialWithBuffer()
+    {
+        return _buffer.RentWithBuffer(_options.InitialCapacity);
+    }
+
     public int GetCapacity(int bufferId)
     {
         return _buffer.GetCapacity(bufferId);
     }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(int bufferId, int index, in TEvent value)
     {
         _buffer.Write(bufferId, index, in value);
     }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TEvent Read(int bufferId, int index)
     {
@@ -68,10 +82,12 @@ internal sealed class EventMailPool<TEvent>
             return false;
         }
 
-        _buffer.Resize(mail.BufferId, mail.Head, mail.Count, nextCapacity);
+        TEvent[] newBuffer = _buffer.ResizeWithBuffer(mail.BufferId, mail.Head, mail.Count, nextCapacity);
+
+        mail.Buffer = newBuffer;
         mail.Head = 0;
         mail.Tail = mail.Count;
-        mail.Capacity = nextCapacity;
+        mail.Capacity = newBuffer.Length;
         return true;
     }
 

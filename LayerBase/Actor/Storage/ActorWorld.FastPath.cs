@@ -131,14 +131,14 @@ public sealed partial class ActorWorld
 
         if (mail.Count >= mail.Capacity)
         {
-            pool.Read(mail.BufferId, mail.Head);
+            TEvent[] buffer = mail.Buffer!;
             mail.Head++;
             if (mail.Head == mail.Capacity)
             {
                 mail.Head = 0;
             }
 
-            pool.Write(mail.BufferId, mail.Tail, in value);
+            buffer[mail.Tail] = value;
             mail.Tail++;
             if (mail.Tail == mail.Capacity)
             {
@@ -182,7 +182,7 @@ public sealed partial class ActorWorld
             return PostResult.Success;
         }
 
-        pool.Write(mail.BufferId, 0, in value);
+        mail.Buffer![0] = value;
         mail.Head = 0;
         mail.Tail = 0;
         mail.Count = 1;
@@ -224,7 +224,7 @@ public sealed partial class ActorWorld
             return PostResult.Success;
         }
 
-        pool.Write(mail.BufferId, 0, in value);
+        mail.Buffer![0] = value;
         mail.Head = 0;
         mail.Tail = 0;
         mail.Count = 1;
@@ -237,14 +237,18 @@ public sealed partial class ActorWorld
     private static void EnsureMailAllocated<TEvent>(ref EventMail<TEvent> mail, EventMailPool<TEvent> pool, int initialCapacity)
         where TEvent : struct
     {
-        if (mail.BufferId == 0)
+        if (mail.Buffer != null)
         {
-            mail.BufferId = pool.Rent(initialCapacity);
-            mail.Head = 0;
-            mail.Tail = 0;
-            mail.Count = 0;
-            mail.Capacity = pool.GetCapacity(mail.BufferId);
+            return;
         }
+
+        EventMailRentResult<TEvent> rent = pool.RentWithBuffer(initialCapacity);
+        mail.BufferId = rent.BufferId;
+        mail.Buffer = rent.Buffer;
+        mail.Head = 0;
+        mail.Tail = 0;
+        mail.Count = 0;
+        mail.Capacity = rent.Buffer.Length;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -257,13 +261,16 @@ public sealed partial class ActorWorld
         EventMailPool<TEvent> pool)
         where TEvent : struct
     {
-        pool.Write(mail.BufferId, mail.Tail, in value);
+        TEvent[] buffer = mail.Buffer!;
+        buffer[mail.Tail] = value;
         mail.Tail++;
         mail.Count++;
+
         if (mail.Tail == mail.Capacity)
         {
             mail.Tail = 0;
         }
+
         if (mail.Count == 1)
         {
             dirtySlots.Mark(slotIndex);
@@ -287,7 +294,6 @@ public sealed partial class ActorWorld
                     PostFailureKind.MailboxFull);
 
             case ActorMailFullPolicy.DropOldest:
-                pool.Read(mail.BufferId, mail.Head);
                 mail.Head++;
                 if (mail.Head == mail.Capacity)
                 {
@@ -305,7 +311,7 @@ public sealed partial class ActorWorld
                 }
 
                 mail.Count--;
-                pool.Write(mail.BufferId, mail.Tail, in value);
+                mail.Buffer![mail.Tail] = value;
                 mail.Count++;
                 return PostResult.Success;
 
@@ -313,7 +319,7 @@ public sealed partial class ActorWorld
                 if (mail.Count > 0)
                 {
                     int latestIndex = ActorMailCapacity.Wrap(mail.Head + mail.Count - 1, mail.Capacity);
-                    pool.Write(mail.BufferId, latestIndex, in value);
+                    mail.Buffer![latestIndex] = value;
                     return PostResult.Coalesced();
                 }
 

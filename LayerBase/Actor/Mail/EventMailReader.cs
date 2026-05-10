@@ -8,14 +8,14 @@ internal static class EventMailReader
         out TEvent value)
         where TEvent : struct
     {
-        if (mail.Count == 0 || mail.BufferId == 0)
+        if (mail.Count == 0)
         {
-            if (mail.Count == 0)
-            {
-                value = default;
-                return false;
-            }
+            value = default;
+            return false;
+        }
 
+        if (mail.Buffer == null)
+        {
             value = mail.SingleValue;
             mail.SingleValue = default;
             mail.Count = 0;
@@ -25,10 +25,15 @@ internal static class EventMailReader
             return true;
         }
 
-        value = bufferPool.Read(mail.BufferId, mail.Head);
-        mail.Head = ActorMailCapacity.Wrap(mail.Head + 1, mail.Capacity);
-        mail.Count--;
+        TEvent[] buffer = mail.Buffer;
+        value = buffer[mail.Head];
+        mail.Head++;
+        if (mail.Head == mail.Capacity)
+        {
+            mail.Head = 0;
+        }
 
+        mail.Count--;
         if (mail.Count == 0)
         {
             mail.Head = 0;
