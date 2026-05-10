@@ -23,8 +23,7 @@ public sealed partial class ActorWorld
         if (!postResult.IsSuccess)
         {
             source.SetException(new ActorCallException(
-                ToCallFailureKind(postResult),
-                postResult.ErrorMessage));
+                ToCallFailureKind(postResult)));
         }
 
         return source.Task;

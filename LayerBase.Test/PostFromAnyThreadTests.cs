@@ -104,10 +104,8 @@ public class PostFromAnyThreadTests
             Value = 20
         });
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorMessage);
-
+        Assert.That(result.IsSuccess, Is.True);
         LayerHub.Pump(0.016f);
-
         Assert.That(received, Is.EqualTo(20));
     }
 

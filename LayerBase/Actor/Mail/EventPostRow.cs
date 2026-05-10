@@ -6,18 +6,15 @@ internal readonly struct EventPostRow<TEvent>
     public readonly EventMail<TEvent>[] Mails;
     public readonly DirtySlotList DirtySlots;
     public readonly int BucketIndex;
-    public readonly int[]? PostableGenerations;
 
     public EventPostRow(
         EventMail<TEvent>[] mails,
         DirtySlotList dirtySlots,
-        int bucketIndex,
-        int[]? postableGenerations)
+        int bucketIndex)
     {
         Mails = mails;
         DirtySlots = dirtySlots;
         BucketIndex = bucketIndex;
-        PostableGenerations = postableGenerations;
     }
 
     public bool IsValid => Mails.Length > 0;

@@ -1,3 +1,6 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
 namespace LayerBase.Actor;
 
 internal sealed class RingQueueBuffer<TEvent>
@@ -46,17 +49,19 @@ internal sealed class RingQueueBuffer<TEvent>
 
     public int GetCapacity(int bufferId)
     {
-        return GetBuffer(bufferId).Length;
+        return GetBufferUnchecked(bufferId).Length;
     }
-
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(int bufferId, int index, in TEvent value)
     {
-        GetBuffer(bufferId)[index] = value;
+        GetBufferUnchecked(bufferId)[index] = value;
     }
-
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TEvent Read(int bufferId, int index)
     {
-        return GetBuffer(bufferId)[index];
+        return GetBufferUnchecked(bufferId)[index];
     }
 
     public void Release(int bufferId)
@@ -95,7 +100,8 @@ internal sealed class RingQueueBuffer<TEvent>
 
         _buffers[bufferId - 1] = newBuffer;
     }
-
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private TEvent[] GetBuffer(int bufferId)
     {
         if (bufferId <= 0 || bufferId > _buffers.Length)
@@ -104,5 +110,24 @@ internal sealed class RingQueueBuffer<TEvent>
         }
 
         return _buffers[bufferId - 1] ?? throw new InvalidOperationException("Buffer is not allocated.");
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private TEvent[] GetBufferUnchecked(int bufferId)
+    {
+        int index = bufferId - 1;
+        ref TEvent[]? first = ref GetArrayDataRef(_buffers);
+        TEvent[]? buffer = Unsafe.Add(ref first, index);
+        return buffer!;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static ref TElement GetArrayDataRef<TElement>(TElement[] array)
+    {
+#if NET5_0_OR_GREATER
+    return ref MemoryMarshal.GetArrayDataReference(array);
+#else 
+        return ref MemoryMarshal.GetReference(array.AsSpan());
+#endif 
     }
 }

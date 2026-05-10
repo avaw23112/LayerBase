@@ -116,10 +116,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     public override void PostAll<TEvent>(
-        ActorWorld world,
+        ActorWorld             world,
         EventPostState<TEvent> state,
-        byte routeCode,
-        in TEvent value)
+        ActorPostRouteCode     routeCode,
+        in TEvent              value)
         where TEvent : struct
     {
         EventPostRow<TEvent>[] rows = state.RowsByArchetype;
@@ -134,29 +134,26 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             return;
         }
 
-        byte validation = (byte)(routeCode & ActorPostRouteCode.ValidationMask);
-        byte writeMode = (byte)(routeCode & ActorPostRouteCode.WriteModeMask);
-
-        switch (writeMode)
+        switch (routeCode)
         {
-            case ActorPostRouteCode.WriteQueuedGrow:
-                PostAllQueuedGrow(world, row, state, validation, in value);
+            case ActorPostRouteCode.QueuedGrow:
+                PostAllQueuedGrow(world, row, state, in value);
                 break;
 
-            case ActorPostRouteCode.WriteQueuedRejectNew:
-                PostAllQueuedRejectNew(world, row, state, validation, in value);
+            case ActorPostRouteCode.QueuedRejectNew:
+                PostAllQueuedRejectNew(world, row, state, in value);
                 break;
 
-            case ActorPostRouteCode.WriteQueuedDropOldest:
-                PostAllQueuedDropOldest(world, row, state, validation, in value);
+            case ActorPostRouteCode.QueuedDropOldest:
+                PostAllQueuedDropOldest(world, row, state, in value);
                 break;
 
-            case ActorPostRouteCode.WriteLatest:
-                PostAllLatest(world, row, state, validation, in value);
+            case ActorPostRouteCode.Latest:
+                PostAllLatest(world, row, state, in value);
                 break;
 
-            case ActorPostRouteCode.WriteDirty:
-                PostAllDirty(world, row, state, validation, in value);
+            case ActorPostRouteCode.Dirty:
+                PostAllDirty(world, row, state, in value);
                 break;
         }
     }
@@ -895,13 +892,12 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         ActorWorld world,
         EventPostRow<TEvent> row,
         EventPostState<TEvent> state,
-        byte validation,
         in TEvent value)
         where TEvent : struct
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
         {
-            if (!CanPostAllSlot(row, validation, slotIndex))
+            if (!CanPostAllSlot(slotIndex))
             {
                 continue;
             }
@@ -921,13 +917,12 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         ActorWorld world,
         EventPostRow<TEvent> row,
         EventPostState<TEvent> state,
-        byte validation,
         in TEvent value)
         where TEvent : struct
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
         {
-            if (!CanPostAllSlot(row, validation, slotIndex))
+            if (!CanPostAllSlot(slotIndex))
             {
                 continue;
             }
@@ -947,13 +942,12 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         ActorWorld world,
         EventPostRow<TEvent> row,
         EventPostState<TEvent> state,
-        byte validation,
         in TEvent value)
         where TEvent : struct
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
         {
-            if (!CanPostAllSlot(row, validation, slotIndex))
+            if (!CanPostAllSlot(slotIndex))
             {
                 continue;
             }
@@ -973,13 +967,12 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         ActorWorld world,
         EventPostRow<TEvent> row,
         EventPostState<TEvent> state,
-        byte validation,
         in TEvent value)
         where TEvent : struct
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
         {
-            if (!CanPostAllSlot(row, validation, slotIndex))
+            if (!CanPostAllSlot(slotIndex))
             {
                 continue;
             }
@@ -998,13 +991,12 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         ActorWorld world,
         EventPostRow<TEvent> row,
         EventPostState<TEvent> state,
-        byte validation,
         in TEvent value)
         where TEvent : struct
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
         {
-            if (!CanPostAllSlot(row, validation, slotIndex))
+            if (!CanPostAllSlot(slotIndex))
             {
                 continue;
             }
@@ -1020,26 +1012,11 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool CanPostAllSlot<TEvent>(
-        EventPostRow<TEvent> row,
-        byte validation,
-        int slotIndex)
-        where TEvent : struct
+    private bool CanPostAllSlot(int slotIndex)
     {
-        if (_states[slotIndex] != ActorSlotState.Alive
-            || _actors[slotIndex] == null)
-        {
-            return false;
-        }
-
-        if (validation != ActorPostRouteCode.ValidationPostableStamp)
-        {
-            return true;
-        }
-
-        int[]? postableGenerations = row.PostableGenerations;
-        return postableGenerations != null
-               && postableGenerations[slotIndex] == _generations[slotIndex];
+        return (uint)slotIndex < (uint)_states.Length
+               && _states[slotIndex] == ActorSlotState.Alive
+               && _actors[slotIndex] != null;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

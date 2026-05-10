@@ -311,32 +311,36 @@ public static class ActorQueryPostExtensions
     private static void PostAllSingle<TEvent>(ActorQueryResult query, in TEvent value)
         where TEvent : struct
     {
-        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetStateUnchecked(query.World.RuntimeIndex);
+        EventPostState<TEvent>? state =
+            EventPostRuntime<TEvent>.GetStateUnchecked(query.World.RuntimeIndex);
+
         if (state == null)
         {
             return;
         }
 
-        byte routeCode = state.RouteCode;
+        ActorPostRouteCode routeCode = state.RouteCode;
+
         if (routeCode == ActorPostRouteCode.Disabled)
         {
             return;
         }
 
-        if (ActorPostRouteUtils.IsRouteInMask(routeCode, ActorPostRouteMasks.QueuedRoutes))
+        foreach (BehaviourArchetype archetype in query.Cache.Archetypes)
         {
-            PostAllQueuedByRouteCode(query, in value, state, routeCode);
-            return;
+            archetype.PostAll(
+                query.World,
+                state,
+                routeCode,
+                in value);
         }
-
-        PostAllNonQueuedByRouteCode(query, in value, state, routeCode);
     }
 
     private static void PostAllQueuedByRouteCode<TEvent>(
-        ActorQueryResult query,
-        in TEvent value,
+        ActorQueryResult       query,
+        in TEvent              value,
         EventPostState<TEvent> state,
-        byte routeCode)
+        ActorPostRouteCode     routeCode)
         where TEvent : struct
     {
         foreach (BehaviourArchetype archetype in query.Cache.Archetypes)
@@ -346,10 +350,10 @@ public static class ActorQueryPostExtensions
     }
 
     private static void PostAllNonQueuedByRouteCode<TEvent>(
-        ActorQueryResult query,
-        in TEvent value,
+        ActorQueryResult       query,
+        in TEvent              value,
         EventPostState<TEvent> state,
-        byte routeCode)
+        ActorPostRouteCode     routeCode)
         where TEvent : struct
     {
         foreach (BehaviourArchetype archetype in query.Cache.Archetypes)

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace LayerBase.Actor;
 
 internal sealed class EventMailPool<TEvent>
@@ -30,12 +32,12 @@ internal sealed class EventMailPool<TEvent>
     {
         return _buffer.GetCapacity(bufferId);
     }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(int bufferId, int index, in TEvent value)
     {
         _buffer.Write(bufferId, index, in value);
     }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TEvent Read(int bufferId, int index)
     {
         return _buffer.Read(bufferId, index);

@@ -204,20 +204,7 @@ internal sealed class EventColumn<TActor, TEvent> :
             mails: _mails,
             dirtySlots: _dirtySlots,
             bucketIndex: _bucketIndex,
-            postableGenerations: ResolvePostableGenerations(),
             plan: _plan);
-    }
-
-    private int[]? ResolvePostableGenerations()
-    {
-        if (!_plan.RequirePostableStamp)
-        {
-            return null;
-        }
-
-        return _plan.RejectDisabled
-            ? _owner.EnabledPostGenerations
-            : _owner.AlivePostGenerations;
     }
 
     public override void ClearMail(int slotIndex)

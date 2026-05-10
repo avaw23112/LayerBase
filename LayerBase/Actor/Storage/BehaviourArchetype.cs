@@ -214,10 +214,10 @@ internal sealed class BehaviourArchetype
     }
 
     internal void PostAll<TEvent>(
-        ActorWorld world,
+        ActorWorld             world,
         EventPostState<TEvent> state,
-        byte routeCode,
-        in TEvent value)
+        ActorPostRouteCode     routeCode,
+        in TEvent              value)
         where TEvent : struct
     {
         if (!TryGetStorage(out TypedStorageRuntime? storage)

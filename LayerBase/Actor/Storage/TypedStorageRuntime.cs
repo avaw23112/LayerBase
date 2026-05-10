@@ -23,10 +23,10 @@ internal abstract class TypedStorageRuntime
     public abstract bool IsLifecycleRunnable(int slotIndex, int generation);
 
     public abstract void PostAll<TEvent>(
-        ActorWorld world,
+        ActorWorld             world,
         EventPostState<TEvent> state,
-        byte routeCode,
-        in TEvent value)
+        ActorPostRouteCode     routeCode,
+        in TEvent              value)
         where TEvent : struct;
 
     // Post<TEvent>: removed. Use ActorWorld.PostTo through compiled route.

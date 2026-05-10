@@ -5,6 +5,7 @@ public ref struct RuntimeFrameBudget
     public int MaxEvents;
     public int UsedEvents;
     public long DeadlineTicks;
+    
 
     public RuntimeFrameBudget(int maxEvents, int usedEvents, long deadlineTicks)
     {

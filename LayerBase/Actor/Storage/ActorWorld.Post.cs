@@ -16,11 +16,25 @@ public sealed partial class ActorWorld
         {
             return BuildEventNotSupportedCold<TEvent>();
         }
-        if (state.RouteCode == ActorPostRouteCode.QueuedGrowPhysicalSafe)
+        if (!TryGetPhysicalRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
         {
-            return PostQueuedGrowPhysicalSafe(actorId, in value, state);
+            return BuildPostFailureCold(actorId);
         }
-        return PostToNonDefaultCold(actorId, in value, state, state.RouteCode);
+        switch (state.RouteCode) 
+        {
+            case ActorPostRouteCode.QueuedGrow:
+                return PostQueuedGrowCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
+            case ActorPostRouteCode.QueuedRejectNew:
+                return PostQueuedRejectNewCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
+            case ActorPostRouteCode.QueuedDropOldest:
+                return PostQueuedDropOldestCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
+            case ActorPostRouteCode.Latest:
+                return PostLatestCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool);
+            case ActorPostRouteCode.Dirty:
+                return PostDirtyCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool);
+            default:
+                return BuildRouteUnsupportedCold<TEvent>();
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -33,13 +47,5 @@ public sealed partial class ActorWorld
         {
             _ = PostTo(actorId, in value);
         }
-    }
-
-    private PostResult TryPostToDiagnostic<TEvent>(
-        ActorId actorId,
-        in TEvent value)
-        where TEvent : struct
-    {
-        return BuildEventNotSupportedCold<TEvent>();
     }
 }

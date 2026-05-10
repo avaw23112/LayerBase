@@ -40,8 +40,7 @@ internal sealed class DelayAskTask<TRequest, TResponse> : IActorDelayTask
         if (!postResult.IsSuccess)
         {
             _source.SetException(new ActorCallException(
-                ActorCallFailureKind.MailboxFull,
-                postResult.ErrorMessage));
+                ActorCallFailureKind.MailboxFull));
         }
     }
 

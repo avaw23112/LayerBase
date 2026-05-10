@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using LayerBase.Actor;
+using LayerBase.Event.EventMetaData;
 
 namespace Benchmarks;
 
@@ -12,6 +13,10 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
 
     private ActorWorld _singleWorld = null!;
     private ActorId _singleActorId;
+    
+    private ActorWorld _prewarmWorld = null!;
+    private ActorId _prewarmActorId;
+
 
     private ActorWorld _batchWorld = null!;
     private ActorId[] _batchActorIds = null!;
@@ -27,6 +32,9 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
     {
         _singleWorld = CreateBenchmarkWorld(PostLoopCount);
         _singleActorId = _singleWorld.CreateActor<ArchetypeRowBenchmarkActor>().GetActorId();
+        
+        _prewarmWorld = CreateBenchmarkWorld(PostLoopCount);
+        _prewarmActorId = _prewarmWorld.CreateActor<HotPostBenchmarkActor>().GetActorId();
 
         _batchWorld = CreateBenchmarkWorld(PostLoopCount);
         _batchActorIds = new ActorId[ActorCount];
@@ -54,6 +62,11 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
             BenchEvent10,
             BenchEvent11,
             BenchEvent12>();
+        
+        _ = _prewarmWorld.PostTo(
+            _prewarmActorId,
+            HotPostBenchmarkEvent.Instance);
+        PumpAll(_prewarmWorld);
 
         _dictionary = new Dictionary<int, DictionaryReceiver>(ActorCount);
         _dictionaryKeys = new int[ActorCount];
@@ -70,13 +83,18 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
     {
         PumpAll(_singleWorld);
     }
-
+    [IterationCleanup(Target = nameof(ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent_Prewarm))]
+    public void CleanupPrewarm()
+    {
+        PumpAll(_prewarmWorld);
+    }
+    
     [IterationCleanup(Target = nameof(ActorPost_ArchetypeRow_1000Actors_OneEvent))]
     public void CleanupBatch()
     {
         PumpAll(_batchWorld);
     }
-
+    
     [IterationCleanup(Target = nameof(ActorPost_Query_PostAll_1000Actors_12Events))]
     public void CleanupQuery()
     {
@@ -96,7 +114,20 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
             _ = _singleWorld.PostTo(_singleActorId, ActorBenchEvent.Instance);
         }
     }
-
+    
+    [Benchmark(
+        Description = "ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent_Prewarm",
+        OperationsPerInvoke = PostLoopCount)]
+    [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
+    [InvocationCount(1)]
+    public void ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent_Prewarm()
+    {
+        for (int i = 0; i < PostLoopCount; i++)
+        {
+            _ = _prewarmWorld.PostTo(_prewarmActorId, HotPostBenchmarkEvent.Instance);
+        }
+    }
+    
     [Benchmark(
         Description = "ActorPost_ArchetypeRow_1000Actors_OneEvent",
         OperationsPerInvoke = PostLoopCount)]
@@ -164,9 +195,9 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
     private static void PumpAll(ActorWorld world)
     {
         var budget = new RuntimeFrameBudget(
-            maxEvents: 0,
+            maxEvents: int.MaxValue,
             usedEvents: 0,
-            deadlineTicks: 0);
+            deadlineTicks: long.MaxValue);
 
         world.Pump(
             deltaTime: 0f,
@@ -182,7 +213,25 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
             BenchmarkSink.IntValue++;
         }
     }
-
+    public readonly partial struct HotPostBenchmarkEvent
+    {
+        public static readonly HotPostBenchmarkEvent Instance = default;
+    }
+    public sealed class HotPostBenchmarkEventMetaData
+        : EventMetaData<HotPostBenchmarkEvent>
+    {
+        public override ActorMailOptions? ActorMailOptions =>new(
+            postPolicy: ActorPostPolicy.Queued,
+            fullPolicy: ActorMailFullPolicy.Grow,
+            growFailurePolicy: ActorMailFullPolicy.RejectNew,
+            initialCapacity: 1_048_576,
+            maxCapacity: 1_048_576,
+            growFactor: 2,
+            releaseWhenEmpty: false,
+            disabledPolicy: ActorMailDisabledPolicy.Accept,
+            pendingDestroyPolicy: ActorMailPendingDestroyPolicy.Reject);
+    }
+    
     public readonly struct BenchEvent1 { public static readonly BenchEvent1 Instance = default; }
     public readonly struct BenchEvent2 { public static readonly BenchEvent2 Instance = default; }
     public readonly struct BenchEvent3 { public static readonly BenchEvent3 Instance = default; }
@@ -204,7 +253,17 @@ public partial class ArchetypeRowBenchmarkActor : IActor
     {
     }
 }
-
+public partial class HotPostBenchmarkActor : IActor
+{
+    [ActorBehaviour]
+    private void OnHotPostBenchmark(
+        in ActorWorldArchetypeRowBenchmarks.HotPostBenchmarkEvent value)
+    {
+        // value 参数作用：
+        // HotPostBenchmarkEvent 的事件值。
+        // 这里保持空处理，避免 handler 成本污染 Post benchmark。
+    }
+}
 public partial class QueryBenchmarkActor : IActor
 {
     [ActorBehaviour] private void On1(in ActorWorldArchetypeRowBenchmarks.BenchEvent1 value) { }

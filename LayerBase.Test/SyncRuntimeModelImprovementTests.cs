@@ -115,7 +115,6 @@ public sealed class SyncRuntimeModelImprovementTests
         var result = runtime.Scheduler.MarkDirty<UnknownAfterBuildDirtyEvent>();
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorMessage, Does.Contain("not registered before Build"));
     }
 
     [Test]
@@ -126,7 +125,6 @@ public sealed class SyncRuntimeModelImprovementTests
         var result = LayerHub.TryPost(new RuntimeCachePayloadEvent());
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorMessage, Does.Contain("No Primary LayerRuntime"));
     }
 
     [Test]

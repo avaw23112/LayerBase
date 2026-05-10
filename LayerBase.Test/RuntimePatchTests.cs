@@ -55,7 +55,6 @@ public class RuntimePatchTests
         var result = runtime.TryPost(new CoalescedTestEvent { Id = 1, Value = -1 });
         
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorMessage, Does.Contain("Merge failed"));
     }
 
     [Test]

@@ -10,51 +10,29 @@ internal static class ActorEventPostPlanBuilder
     {
         EventMetaData<TEvent>? metaData = EventMetaDataHandler.ResolveRegisteredMetaData<TEvent>();
         ActorMailOptions mailOptions = metaData?.GetActorMailOptions() ?? worldDefaultMailOptions;
-        bool rejectDisabled = mailOptions.DisabledPolicy == ActorMailDisabledPolicy.Reject;
-        bool requirePostableStamp = ResolveRequirePostableStamp(mailOptions);
-        byte routeCode = ResolveRouteCode(mailOptions, requirePostableStamp);
+        ActorPostRouteCode routeCode = ResolveRouteCode(mailOptions);
 
         return new ActorEventPostPlan<TEvent>(
             eventId: EventTypeId<TEvent>.Id,
             routeCode: routeCode,
-            mailOptions: mailOptions,
-            requirePostableStamp: requirePostableStamp,
-            rejectDisabled: rejectDisabled);
+            mailOptions: mailOptions);
     }
 
-    private static bool ResolveRequirePostableStamp(ActorMailOptions options)
+    private static ActorPostRouteCode ResolveRouteCode(ActorMailOptions options)
     {
-        return options.DisabledPolicy == ActorMailDisabledPolicy.Reject;
-    }
-
-    private static byte ResolveRouteCode(
-        ActorMailOptions options,
-        bool requirePostableStamp)
-    {
-        byte validation = requirePostableStamp
-            ? ActorPostRouteCode.ValidationPostableStamp
-            : ActorPostRouteCode.ValidationPhysicalSafe;
-
-        byte writeMode = options.PostPolicy switch
+        return options.PostPolicy switch
         {
             ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.Grow
-                => ActorPostRouteCode.WriteQueuedGrow,
+                => ActorPostRouteCode.QueuedGrow,
             ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.RejectNew
-                => ActorPostRouteCode.WriteQueuedRejectNew,
+                => ActorPostRouteCode.QueuedRejectNew,
             ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.DropOldest
-                => ActorPostRouteCode.WriteQueuedDropOldest,
+                => ActorPostRouteCode.QueuedDropOldest,
             ActorPostPolicy.Latest
-                => ActorPostRouteCode.WriteLatest,
+                => ActorPostRouteCode.Latest,
             ActorPostPolicy.Dirty
-                => ActorPostRouteCode.WriteDirty,
-            _ => ActorPostRouteCode.WriteDisabled
+                => ActorPostRouteCode.Dirty,
+            _ => ActorPostRouteCode.Disabled
         };
-
-        if (writeMode == ActorPostRouteCode.WriteDisabled)
-        {
-            return ActorPostRouteCode.Disabled;
-        }
-
-        return (byte)(writeMode | validation);
     }
 }
