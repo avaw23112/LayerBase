@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace LayerBase.Actor;
 
 public sealed partial class ActorWorld
@@ -15,7 +17,7 @@ public sealed partial class ActorWorld
 
         return pool;
     }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool PostQueuedGrowFastNoResult<TEvent>(
         int slotIndex,
         in TEvent value,

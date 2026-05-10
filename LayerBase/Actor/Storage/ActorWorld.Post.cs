@@ -25,6 +25,14 @@ public sealed partial class ActorWorld
 
         return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
     }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public PostResult PostTo<TEvent>(
+        ActorId   actorId,
+        in TEvent value)
+        where TEvent : struct
+    {
+        return PostFast(actorId, in value) ? PostResult.Success : PostResult.Failure(message:"Post failed",failureKind:PostFailureKind.Unknown);
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostToMany<TEvent>(
