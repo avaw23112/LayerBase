@@ -16,7 +16,6 @@ public sealed partial class ActorWorld
         {
             return BuildEventNotSupportedCold<TEvent>();
         }
-
         return PostCompiled(actorId, in value, state);
     }
 

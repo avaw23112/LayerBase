@@ -79,43 +79,7 @@ public sealed partial class ActorWorld
         return PostCompiled(actorId, in value, state).IsSuccess;
     }
 
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static PostResult BuildEventNotSupportedCold<TEvent>()
-        where TEvent : struct
-    {
-        return PostResult.Failure(
-            ActorPostStatus.EventNotSupported,
-            $"Event post state is not built for {typeof(TEvent).Name}.",
-            PostFailureKind.UnsupportedEvent);
-    }
 
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static PostResult BuildRouteUnsupportedCold<TEvent>()
-        where TEvent : struct
-    {
-        return PostResult.Failure(
-            ActorPostStatus.EventNotSupported,
-            $"RouteCode is not supported for {typeof(TEvent).Name}.",
-            PostFailureKind.UnsupportedEvent);
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static PostResult BuildPostFailureCold(ActorId actorId)
-    {
-        return PostResult.Failure(
-            ActorPostStatus.PhysicalTargetInvalid,
-            $"ActorId ({actorId.ArchetypeId}, {actorId.SlotIndex}, {actorId.Generation}) cannot locate a current physical mailbox.",
-            PostFailureKind.PhysicalTargetInvalid);
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static PostResult BuildPostableStampRejectedCold(ActorId actorId)
-    {
-        return PostResult.Failure(
-            ActorPostStatus.RejectedByPostableStamp,
-            $"ActorId ({actorId.ArchetypeId}, {actorId.SlotIndex}, {actorId.Generation}) failed the postable-generation check.",
-            PostFailureKind.RejectedByPostableStamp);
-    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private PostResult PostToNonDefaultCold<TEvent>(
@@ -132,7 +96,6 @@ public sealed partial class ActorWorld
         {
             return PostByWriteModePostableStampCold(actorId, in value, state, writeMode);
         }
-
         if (validation == ActorPostRouteCode.ValidationPhysicalSafe)
         {
             return PostByWriteModePhysicalSafeCold(actorId, in value, state, writeMode);
@@ -149,15 +112,27 @@ public sealed partial class ActorWorld
         byte writeMode)
         where TEvent : struct
     {
-        return writeMode switch
+        if (ActorPostRouteCode.WriteQueuedGrow == writeMode)
         {
-            ActorPostRouteCode.WriteQueuedGrow => PostQueuedGrowPhysicalSafe(actorId, in value, state),
-            ActorPostRouteCode.WriteQueuedRejectNew => PostQueuedRejectNewPhysicalSafe(actorId, in value, state),
-            ActorPostRouteCode.WriteQueuedDropOldest => PostQueuedDropOldestPhysicalSafe(actorId, in value, state),
-            ActorPostRouteCode.WriteLatest => PostLatestPhysicalSafe(actorId, in value, state),
-            ActorPostRouteCode.WriteDirty => PostDirtyPhysicalSafe(actorId, in value, state),
-            _ => BuildRouteUnsupportedCold<TEvent>()
-        };
+            return PostQueuedGrowPhysicalSafe(actorId, in value, state);
+        }
+        if (ActorPostRouteCode.WriteQueuedRejectNew == writeMode)
+        {
+            return PostQueuedRejectNewPhysicalSafe(actorId, in value, state);
+        }
+        if (ActorPostRouteCode.WriteQueuedDropOldest == writeMode)
+        {
+            return PostQueuedDropOldestPhysicalSafe(actorId, in value, state);
+        }
+        if (ActorPostRouteCode.WriteLatest == writeMode)
+        {
+            return PostLatestPhysicalSafe(actorId, in value, state);
+        }
+        if (ActorPostRouteCode.WriteDirty == writeMode)
+        {
+            return PostDirtyPhysicalSafe(actorId, in value, state);
+        }
+        return BuildRouteUnsupportedCold<TEvent>();
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -168,15 +143,27 @@ public sealed partial class ActorWorld
         byte writeMode)
         where TEvent : struct
     {
-        return writeMode switch
+        if (ActorPostRouteCode.WriteQueuedGrow == writeMode)
         {
-            ActorPostRouteCode.WriteQueuedGrow => PostQueuedGrowPostableStamp(actorId, in value, state),
-            ActorPostRouteCode.WriteQueuedRejectNew => PostQueuedRejectNewPostableStamp(actorId, in value, state),
-            ActorPostRouteCode.WriteQueuedDropOldest => PostQueuedDropOldestPostableStamp(actorId, in value, state),
-            ActorPostRouteCode.WriteLatest => PostLatestPostableStamp(actorId, in value, state),
-            ActorPostRouteCode.WriteDirty => PostDirtyPostableStamp(actorId, in value, state),
-            _ => BuildRouteUnsupportedCold<TEvent>()
-        };
+            return PostQueuedGrowPostableStamp(actorId, in value, state);
+        }
+        if (ActorPostRouteCode.WriteQueuedRejectNew == writeMode)
+        {
+            return PostQueuedRejectNewPostableStamp(actorId, in value, state);
+        }
+        if (ActorPostRouteCode.WriteQueuedDropOldest == writeMode)
+        {
+            return PostQueuedDropOldestPostableStamp(actorId, in value, state);
+        }
+        if (ActorPostRouteCode.WriteLatest == writeMode)
+        {
+            return PostLatestPostableStamp(actorId, in value, state);
+        }
+        if (ActorPostRouteCode.WriteDirty == writeMode)
+        {
+            return PostDirtyPostableStamp(actorId, in value, state);
+        }
+        return BuildRouteUnsupportedCold<TEvent>();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -190,7 +177,6 @@ public sealed partial class ActorWorld
         {
             return BuildPostFailureCold(actorId);
         }
-
         return PostQueuedGrowCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
     }
 
@@ -649,5 +635,43 @@ public sealed partial class ActorWorld
         {
             rows[i] = invalid;
         }
+    }
+    
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static PostResult BuildEventNotSupportedCold<TEvent>()
+        where TEvent : struct
+    {
+        return PostResult.Failure(
+            ActorPostStatus.EventNotSupported,
+            $"Event post state is not built for {typeof(TEvent).Name}.",
+            PostFailureKind.UnsupportedEvent);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static PostResult BuildRouteUnsupportedCold<TEvent>()
+        where TEvent : struct
+    {
+        return PostResult.Failure(
+            ActorPostStatus.EventNotSupported,
+            $"RouteCode is not supported for {typeof(TEvent).Name}.",
+            PostFailureKind.UnsupportedEvent);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static PostResult BuildPostFailureCold(ActorId actorId)
+    {
+        return PostResult.Failure(
+            ActorPostStatus.PhysicalTargetInvalid,
+            $"ActorId ({actorId.ArchetypeId}, {actorId.SlotIndex}, {actorId.Generation}) cannot locate a current physical mailbox.",
+            PostFailureKind.PhysicalTargetInvalid);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static PostResult BuildPostableStampRejectedCold(ActorId actorId)
+    {
+        return PostResult.Failure(
+            ActorPostStatus.RejectedByPostableStamp,
+            $"ActorId ({actorId.ArchetypeId}, {actorId.SlotIndex}, {actorId.Generation}) failed the postable-generation check.",
+            PostFailureKind.RejectedByPostableStamp);
     }
 }
