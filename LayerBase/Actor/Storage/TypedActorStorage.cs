@@ -115,6 +115,14 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                && _actors[slotIndex] != null;
     }
 
+    public override bool IsCurrentGeneration(ActorId actorId)
+    {
+        int slotIndex = actorId.SlotIndex;
+        return (uint)slotIndex < (uint)_generations.Length
+               && _generations[slotIndex] == actorId.Generation
+               && _actors[slotIndex] != null;
+    }
+
     public override void PostAll<TEvent>(
         ActorWorld             world,
         EventPostState<TEvent> state,

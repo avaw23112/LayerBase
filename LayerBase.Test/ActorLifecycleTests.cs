@@ -180,7 +180,7 @@ public class ActorLifecycleTests
 
         Assert.That(newId.SlotIndex, Is.EqualTo(oldId.SlotIndex));
         Assert.That(newId.Generation, Is.GreaterThan(oldId.Generation));
-        Assert.That(world.PostTo(oldId, new ActorLifecycleEvent(9)).IsSuccess, Is.True);
+        Assert.That(world.PostTo(oldId, new ActorLifecycleEvent(9)).IsSuccess, Is.False);
         Assert.That(world.IsAlive(newId), Is.True);
     }
 

@@ -16,7 +16,7 @@ public sealed partial class ActorWorld
         {
             return BuildEventNotSupportedCold<TEvent>();
         }
-        if (!TryGetPhysicalRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
+        if (!TryGetPhysicalRowWithGeneration(actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
         {
             return BuildPostFailureCold(actorId);
         }

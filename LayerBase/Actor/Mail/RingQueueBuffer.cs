@@ -110,6 +110,15 @@ internal sealed class RingQueueBuffer<TEvent>
             return;
         }
 
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<TEvent>())
+        {
+            TEvent[]? buffer = _buffers[index];
+            if (buffer != null)
+            {
+                Array.Clear(buffer, 0, buffer.Length);
+            }
+        }
+
         _inUse[index] = false;
         _freeIds.Push(bufferId);
     }

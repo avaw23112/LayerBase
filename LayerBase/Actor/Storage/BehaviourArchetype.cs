@@ -213,6 +213,18 @@ internal sealed class BehaviourArchetype
         return storage.MarkPendingDestroy(actorId.SlotIndex, actorId.Generation);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool IsCurrentGeneration(ActorId actorId)
+    {
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
+        {
+            return false;
+        }
+
+        return storage.IsCurrentGeneration(actorId);
+    }
+
     internal void PostAll<TEvent>(
         ActorWorld             world,
         EventPostState<TEvent> state,

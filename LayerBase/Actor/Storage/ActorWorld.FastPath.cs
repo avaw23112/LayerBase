@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Diagnostics;
 using LayerBase.Core.Event;
 
 namespace LayerBase.Actor;
@@ -63,6 +64,33 @@ public sealed partial class ActorWorld
         row = rows[archetypeId];
         slotIndex = actorId.SlotIndex;
         return (uint)slotIndex < (uint)row.Mails.Length;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool TryGetPhysicalRowWithGeneration<TEvent>(
+        ActorId actorId,
+        EventPostState<TEvent> state,
+        out EventPostRow<TEvent> row,
+        out int slotIndex)
+        where TEvent : struct
+    {
+        if (!TryGetPhysicalRow(actorId, state, out row, out slotIndex))
+        {
+            return false;
+        }
+
+        return IsActorGenerationAlive(actorId);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsActorGenerationAlive(ActorId actorId)
+    {
+        if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
+        {
+            return false;
+        }
+
+        return _archetypes[actorId.ArchetypeId].IsCurrentGeneration(actorId);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -249,6 +277,7 @@ public sealed partial class ActorWorld
         mail.Tail = 0;
         mail.Count = 0;
         mail.Capacity = rent.Buffer.Length;
+        AssertMailBufferInvariant(in mail);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -407,5 +436,20 @@ public sealed partial class ActorWorld
             ActorPostStatus.PhysicalTargetInvalid,
             $"ActorId ({actorId.ArchetypeId}, {actorId.SlotIndex}, {actorId.Generation}) cannot locate a current physical mailbox.",
             PostFailureKind.PhysicalTargetInvalid);
+    }
+
+    [Conditional("DEBUG")]
+    internal static void AssertMailBufferInvariant<TEvent>(in EventMail<TEvent> mail)
+        where TEvent : struct
+    {
+        if (mail.BufferId != 0 && mail.Buffer == null)
+        {
+            throw new InvalidOperationException("EventMail invariant broken: BufferId is set but Buffer is null.");
+        }
+
+        if (mail.Buffer != null && mail.Capacity != mail.Buffer.Length)
+        {
+            throw new InvalidOperationException("EventMail invariant broken: Capacity does not match Buffer.Length.");
+        }
     }
 }
