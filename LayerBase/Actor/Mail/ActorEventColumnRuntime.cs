@@ -25,6 +25,8 @@ internal abstract class ActorEventColumnRuntime
 
     public abstract void EnsureSlotCapacity(int slotIndex);
 
+    public abstract void RefreshPostRowBinding();
+
     public abstract void ClearMail(int slotIndex);
 
     public abstract int GetPendingCount(int slotIndex);

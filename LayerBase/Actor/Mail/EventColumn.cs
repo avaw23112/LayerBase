@@ -22,6 +22,7 @@ internal sealed class EventColumn<TActor, TEvent> :
     private EventMail<TEvent>[] _mails;
 
     internal EventMail<TEvent>[] Mails => _mails;
+    internal EventMailPool<TEvent> Pool => _mailPool;
     internal DirtySlotList DirtySlots => _dirtySlots;
     internal int BucketIndex => _bucketIndex;
     internal BehaviourType BehaviourType => _behaviourType;
@@ -210,6 +211,23 @@ internal sealed class EventColumn<TActor, TEvent> :
 
         Array.Resize(ref _mails, newSize);
         _world.InvalidateAllFastCaches<TEvent>();
+        RefreshPostRowBinding();
+    }
+
+    public override void RefreshPostRowBinding()
+    {
+        if (!CanUseArchetypeRowPostFast())
+        {
+            return;
+        }
+
+        _world.RegisterEventPostRow(
+            _owner.ArchetypeId,
+            _mails,
+            _mailPool,
+            _dirtySlots,
+            _bucketIndex,
+            _owner.Generations);
     }
 
     public override void ClearMail(int slotIndex)
@@ -276,6 +294,12 @@ internal sealed class EventColumn<TActor, TEvent> :
     internal bool CanUseDefaultPostFastPath()
     {
         return _writeMode == ActorMailWriteMode.QueuedGrow;
+    }
+
+    private bool CanUseArchetypeRowPostFast()
+    {
+        return _writeMode == ActorMailWriteMode.QueuedGrow
+               && !_rejectDisabled;
     }
 
     internal bool SupportsFastCacheBinding()

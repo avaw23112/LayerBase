@@ -2,15 +2,18 @@ namespace LayerBase.Actor;
 
 internal readonly struct ActorArchetypeKey : IEquatable<ActorArchetypeKey>
 {
+    public readonly Type ActorType;
     public readonly BehaviourSignature Behaviour;
     public readonly ActorTagSignature Tags;
     public readonly ActorGroupSignature Groups;
 
     public ActorArchetypeKey(
+        Type actorType,
         BehaviourSignature behaviour,
         ActorTagSignature tags,
         ActorGroupSignature groups)
     {
+        ActorType = actorType ?? throw new ArgumentNullException(nameof(actorType));
         Behaviour = behaviour;
         Tags = tags;
         Groups = groups;
@@ -18,7 +21,8 @@ internal readonly struct ActorArchetypeKey : IEquatable<ActorArchetypeKey>
 
     public bool Equals(ActorArchetypeKey other)
     {
-        return Behaviour.Equals(other.Behaviour)
+        return ActorType == other.ActorType
+               && Behaviour.Equals(other.Behaviour)
                && Tags.Equals(other.Tags)
                && Groups.Equals(other.Groups);
     }
@@ -30,6 +34,6 @@ internal readonly struct ActorArchetypeKey : IEquatable<ActorArchetypeKey>
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Behaviour, Tags, Groups);
+        return HashCode.Combine(ActorType, Behaviour, Tags, Groups);
     }
 }

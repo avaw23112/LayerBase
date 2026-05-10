@@ -13,6 +13,7 @@ public sealed partial class ActorWorld
         ActorTypeMeta<TActor> meta = ActorTypeMetaCache.GetOrBuild<TActor>(generated);
 
         var key = new ActorArchetypeKey(
+            typeof(TActor),
             meta.Signature,
             new ActorTagSignature(meta.TagIds),
             new ActorGroupSignature(meta.GroupIds));
@@ -30,8 +31,6 @@ public sealed partial class ActorWorld
             slotIndex: slotIndex,
             generation: storage.GetGeneration(slotIndex),
             fastIndex: fastIndex);
-
-        storage.BindPrewarmHotFastCaches(this, fastIndex, slotIndex, actorId.Generation, GetFastStateRef(fastIndex).Version);
 
         generated.ActorInit(new ActorContext(this, actorId));
         storage.RegisterLifecycleInterfaces(actor, actorId, slotIndex, this);

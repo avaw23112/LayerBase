@@ -24,7 +24,7 @@ public sealed partial class ActorWorld
         ActorMailFullPolicy? fullPolicy = null)
         where TEvent : struct
     {
-        if (postPolicy != null || fullPolicy != null || actorId.FastIndex < 0)
+        if (postPolicy != null || fullPolicy != null)
         {
             return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
         }
@@ -34,7 +34,7 @@ public sealed partial class ActorWorld
             return PostResult.Success;
         }
 
-        return TryBindHotOrFallbackSafe(actorId, in value, postPolicy, fullPolicy);
+        return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -51,56 +51,37 @@ public sealed partial class ActorWorld
         }
     }
 
-    private PostResult TryBindHotOrFallbackSafe<TEvent>(
-        ActorId actorId,
-        in TEvent value,
-        ActorPostPolicy? postPolicy,
-        ActorMailFullPolicy? fullPolicy)
-        where TEvent : struct
-    {
-        int fastIndex = actorId.FastIndex;
-        if ((uint)fastIndex >= (uint)_fastStates.Length)
-        {
-            return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
-        }
-
-        int version = _fastStates[fastIndex].Version;
-        if (TryBindHotFastCache<TEvent>(fastIndex, version, actorId.Generation)
-            && PostFast(actorId, in value))
-        {
-            return PostResult.Success;
-        }
-
-        return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool PostFast<TEvent>(
         ActorId actorId,
         in TEvent value)
         where TEvent : struct
     {
-        int fastIndex = actorId.FastIndex;
-        if ((uint)fastIndex >= (uint)_fastStates.Length)
+        if (!EventPostRuntime<TEvent>.TryGetRows(this, out EventPostRow<TEvent>[]? rows)
+            || rows == null)
         {
             return false;
         }
 
-        if (!ActorEventRuntime<TEvent>.TryGetFastCache(this, out ActorEventFastCache<TEvent>? cache)
-            || cache == null)
+        int archetypeId = actorId.ArchetypeId;
+        if ((uint)archetypeId >= (uint)rows.Length)
         {
             return false;
         }
 
-        ref ActorFastState state = ref _fastStates[fastIndex];
-        if (!cache.TryGet(
-                fastIndex,
-                state.Version,
-                actorId.Generation,
-                out int slotIndex,
-                out EventMail<TEvent>[] mails,
-                out DirtySlotList dirtySlots,
-                out int bucketIndex))
+        ref readonly EventPostRow<TEvent> row = ref rows[archetypeId];
+        if (!row.IsValid)
+        {
+            return false;
+        }
+
+        int slotIndex = actorId.SlotIndex;
+        if ((uint)slotIndex >= (uint)row.Generations.Length)
+        {
+            return false;
+        }
+
+        if (row.Generations[slotIndex] != actorId.Generation)
         {
             return false;
         }
@@ -108,10 +89,10 @@ public sealed partial class ActorWorld
         return PostQueuedGrowFastNoResult(
             slotIndex,
             in value,
-            mails,
-            dirtySlots,
-            bucketIndex,
-            cache.Pool);
+            row.Mails,
+            row.DirtySlots,
+            row.BucketIndex,
+            row.Pool);
     }
 
     private PostResult TryPostToSafe<TEvent>(

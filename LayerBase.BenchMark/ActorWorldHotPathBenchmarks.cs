@@ -4,7 +4,7 @@ using LayerBase.Actor;
 namespace Benchmarks;
 
 [MemoryDiagnoser]
-public sealed class ActorWorldHotPathBenchmarks : EventBenchmarkBase
+public class ActorWorldHotPathBenchmarks : EventBenchmarkBase
 {
     private const int ActorCount = 1000;
 
@@ -78,7 +78,7 @@ public sealed class ActorWorldHotPathBenchmarks : EventBenchmarkBase
     [IterationCleanup(Target = nameof(ActorPost_Query_PostAllFast_1000Actors_12Events))]
     public void CleanupQueryFast() => PumpAll(_queryWorld);
 
-    [Benchmark(Description = "ActorPost_PrewarmHot_PostFast_OneActor_OneEvent")]
+    [Benchmark(Description = "ActorPost_ArchetypeRow_PostFast_OneActor_OneEvent")]
     [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
     public void ActorPost_PrewarmHot_PostFast_OneActor_OneEvent()
     {
@@ -88,7 +88,7 @@ public sealed class ActorWorldHotPathBenchmarks : EventBenchmarkBase
         }
     }
 
-    [Benchmark(Description = "ActorPost_Hot_PostFast_OneActor_OneEvent")]
+    [Benchmark(Description = "ActorPost_ArchetypeRow_PostFast_HotActor_OneActor_OneEvent")]
     [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
     public void ActorPost_Hot_PostFast_OneActor_OneEvent()
     {
@@ -98,7 +98,7 @@ public sealed class ActorWorldHotPathBenchmarks : EventBenchmarkBase
         }
     }
 
-    [Benchmark(Description = "ActorPost_PrewarmHot_PostTo_OneActor_OneEvent")]
+    [Benchmark(Description = "ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent")]
     [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
     public void ActorPost_PrewarmHot_PostTo_OneActor_OneEvent()
     {
@@ -108,7 +108,7 @@ public sealed class ActorWorldHotPathBenchmarks : EventBenchmarkBase
         }
     }
 
-    [Benchmark(Description = "ActorPost_PrewarmHot_PostFast_1000Actors_OneEvent")]
+    [Benchmark(Description = "ActorPost_ArchetypeRow_1000Actors_OneEvent")]
     [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
     public void ActorPost_PrewarmHot_PostFast_1000Actors_OneEvent()
     {
@@ -118,7 +118,7 @@ public sealed class ActorWorldHotPathBenchmarks : EventBenchmarkBase
         }
     }
 
-    [Benchmark(Description = "ActorPost_Query_PostAllFast_1000Actors_12Events")]
+    [Benchmark(Description = "ActorPost_Query_PostAll_1000Actors_12Events")]
     [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
     public void ActorPost_Query_PostAllFast_1000Actors_12Events()
     {
@@ -169,7 +169,7 @@ public sealed class ActorWorldHotPathBenchmarks : EventBenchmarkBase
     public readonly struct BenchEvent12 { public static readonly BenchEvent12 Instance = default; }
 }
 
-public sealed partial class PrewarmHotBenchmarkActor : IActor
+public partial class PrewarmHotBenchmarkActor : IActor
 {
     [ActorBehaviour(BehaviourType.PrewarmHot)]
     private void OnActorBench(in ActorBenchEvent value)
@@ -177,7 +177,7 @@ public sealed partial class PrewarmHotBenchmarkActor : IActor
     }
 }
 
-public sealed partial class HotBenchmarkActor : IActor
+public partial class HotBenchmarkActor : IActor
 {
     [ActorBehaviour(BehaviourType.Hot)]
     private void OnActorBench(in ActorBenchEvent value)
@@ -185,7 +185,7 @@ public sealed partial class HotBenchmarkActor : IActor
     }
 }
 
-public sealed partial class QueryFastBenchmarkActor : IActor
+public partial class QueryFastBenchmarkActor : IActor
 {
     [ActorBehaviour] private void On1(in ActorWorldHotPathBenchmarks.BenchEvent1 value) { }
     [ActorBehaviour] private void On2(in ActorWorldHotPathBenchmarks.BenchEvent2 value) { }

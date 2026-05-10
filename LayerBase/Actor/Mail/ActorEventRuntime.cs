@@ -19,6 +19,16 @@ internal static class ActorEventRuntime<TEvent>
         s_mailPools[index] = mailPool;
     }
 
+    public static void BindWorld(
+        ActorWorld world,
+        EventMailPool<TEvent> mailPool)
+    {
+        int index = world.RuntimeIndex;
+        EnsureCapacity(index);
+        s_worlds[index] = world;
+        s_mailPools[index] = mailPool;
+    }
+
     public static bool TryGetFastCache(
         ActorWorld world,
         out ActorEventFastCache<TEvent>? fastCache)

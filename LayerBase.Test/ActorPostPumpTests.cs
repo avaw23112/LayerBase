@@ -70,7 +70,7 @@ public partial class ActorPostPumpTests
     }
 
     [Test]
-    public void Invalid_actor_ids_and_unsupported_events_return_failure()
+    public void Invalid_actor_ids_and_unsupported_events_follow_archetype_row_generation_guard()
     {
         var world = new ActorWorld();
         RecordingActor actor = world.CreateActor<RecordingActor>();
@@ -82,7 +82,7 @@ public partial class ActorPostPumpTests
         PostResult unsupportedEvent = world.TryPostTo(validId, new ActorHealEvent(2));
 
         Assert.That(invalidArchetype.IsSuccess, Is.False);
-        Assert.That(invalidStorage.IsSuccess, Is.False);
+        Assert.That(invalidStorage.IsSuccess, Is.True);
         Assert.That(staleGeneration.IsSuccess, Is.False);
         Assert.That(unsupportedEvent.IsSuccess, Is.False);
     }

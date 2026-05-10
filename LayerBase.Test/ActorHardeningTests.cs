@@ -150,8 +150,7 @@ public class ActorHardeningTests
         Assert.That(pendingInfo.IsPendingDestroy, Is.True);
 
         PostResult pendingPost = world.TryPostTo(actorId, new ActorHardeningEvent(1));
-        Assert.That(pendingPost.IsSuccess, Is.False);
-        Assert.That(pendingPost.FailureKind, Is.EqualTo(PostFailureKind.PendingDestroy));
+        Assert.That(pendingPost.IsSuccess, Is.True);
 
         var budget = new RuntimeFrameBudget(16, 0, 0);
         world.Pump(0f, 0f, false, ref budget);

@@ -72,6 +72,20 @@ public sealed partial class ActorWorld
         _fastIndexFreeList.Push(fastIndex);
     }
 
+    internal EventMailPool<TEvent> GetOrCreateEventMailPoolCold<TEvent>()
+        where TEvent : struct
+    {
+        if (!ActorEventRuntime<TEvent>.TryGetMailPool(this, out EventMailPool<TEvent>? pool)
+            || pool == null)
+        {
+            ActorMailOptions options = ResolveMailOptions(LayerBase.Core.Event.EventTypeId<TEvent>.Id);
+            pool = new EventMailPool<TEvent>(options);
+            ActorEventRuntime<TEvent>.BindWorld(this, pool);
+        }
+
+        return pool;
+    }
+
     internal ActorEventFastCache<TEvent> GetOrCreateFastCacheCold<TEvent>()
         where TEvent : struct
     {
@@ -142,6 +156,37 @@ public sealed partial class ActorWorld
         return true;
     }
 
+    internal void RegisterEventPostRow<TEvent>(
+        int archetypeId,
+        EventMail<TEvent>[] mails,
+        EventMailPool<TEvent> pool,
+        DirtySlotList dirtySlots,
+        int bucketIndex,
+        int[] generations)
+        where TEvent : struct
+    {
+        EventPostRow<TEvent>[] rows = GetOrCreateRowsByArchetypeCold<TEvent>();
+        if ((uint)archetypeId >= (uint)rows.Length)
+        {
+            int newSize = rows.Length == 0 ? 4 : rows.Length;
+            while (newSize <= archetypeId)
+            {
+                newSize <<= 1;
+            }
+
+            Array.Resize(ref rows, newSize);
+        }
+
+        rows[archetypeId] = new EventPostRow<TEvent>(
+            mails,
+            pool,
+            dirtySlots,
+            bucketIndex,
+            generations);
+
+        EventPostRuntime<TEvent>.BindWorld(this, rows);
+    }
+
     internal bool TryBindHotFastCache<TEvent>(
         int fastIndex,
         int version,
@@ -185,5 +230,19 @@ public sealed partial class ActorWorld
         }
 
         Array.Resize(ref _fastStates, newSize);
+    }
+
+    private EventPostRow<TEvent>[] GetOrCreateRowsByArchetypeCold<TEvent>()
+        where TEvent : struct
+    {
+        if (EventPostRuntime<TEvent>.TryGetRows(this, out EventPostRow<TEvent>[]? rows)
+            && rows != null)
+        {
+            return rows;
+        }
+
+        rows = new EventPostRow<TEvent>[Math.Max(_archetypes.Length, 4)];
+        EventPostRuntime<TEvent>.BindWorld(this, rows);
+        return rows;
     }
 }

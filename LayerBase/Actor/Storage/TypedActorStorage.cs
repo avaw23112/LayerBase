@@ -34,8 +34,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
     public ushort TypeStorageIndex { get; }
     internal int StorageRouteId => _storageRouteId;
+    internal int ArchetypeId => _archetypeId;
     public override string ActorTypeName => typeof(TActor).Name;
     public TActor?[] Actors => _actors;
+    internal int[] Generations => _generations;
     public ActorSlotState[] States => _states;
     public bool[] Enabled => _enabled;
     public int MaxSlot => Math.Min(_nextSlotIndex, _actors.Length);
@@ -1412,32 +1414,19 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     {
         int eventTypeId = EventTypeId<TEvent>.Id;
         ActorMailOptions options = world.ResolveMailOptions(eventTypeId);
-        ActorEventFastCache<TEvent> fastCache = world.GetOrCreateFastCacheCold<TEvent>();
+        EventMailPool<TEvent> pool = world.GetOrCreateEventMailPoolCold<TEvent>();
         var column = new EventColumn<TActor, TEvent>(
             world: world,
             owner: this,
             invoker: invoker,
-            mailPool: fastCache.Pool,
+            mailPool: pool,
             options: options,
             behaviourType: behaviourType,
             bucketIndex: eventTypeId,
             initialSlotCapacity: _actors.Length);
 
         world.RegisterColumn<TEvent>(eventTypeId, column);
-        if (behaviourType == BehaviourType.PrewarmHot && column.SupportsFastCacheBinding())
-        {
-            AddPrewarmHotBinder((bindWorld, fastIndex, version, slotIndex, generation) =>
-            {
-                ActorEventRuntime<TEvent>.GetFastCache(bindWorld).Bind(
-                    fastIndex,
-                    version,
-                    slotIndex,
-                    generation,
-                    column.Mails,
-                    column.DirtySlots,
-                    column.BucketIndex);
-            });
-        }
+        column.RefreshPostRowBinding();
 
         return column;
     }
@@ -1791,6 +1780,11 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             _fastIndices[i] = -1;
             _lifecycleHandles[i] = ActorLifecycleHandles.Empty;
+        }
+
+        foreach (ActorEventColumnRuntime? column in _columnsByEventId)
+        {
+            column?.RefreshPostRowBinding();
         }
     }
 

@@ -1,6 +1,4 @@
 using LayerBase.Actor;
-using LayerBase.Core.Event;
-using System.Reflection;
 
 namespace LayerBase.Test;
 
@@ -63,55 +61,42 @@ public sealed partial class ActorWorldHotPathTests
     }
 
     [Test]
-    public void Prewarm_hot_actor_binds_fast_cache_during_creation()
+    public void Prewarm_hot_actor_registers_archetype_row_during_creation()
     {
         var world = new ActorWorld();
-        PrewarmHotProbeActor actor = world.CreateActor<PrewarmHotProbeActor>();
+        ActorId actorId = world.CreateActor<PrewarmHotProbeActor>().GetActorId();
 
-        Assert.That(IsFastCacheBound<PrewarmHotEvent>(world, actor.GetActorId().FastIndex), Is.True);
+        EventPostRow<PrewarmHotEvent> row = GetBoundRow<PrewarmHotEvent>(world, actorId.ArchetypeId);
+
+        Assert.That(row.IsValid, Is.True);
+        Assert.That(row.Generations[actorId.SlotIndex], Is.EqualTo(actorId.Generation));
     }
 
     [Test]
-    public void Hot_actor_binds_fast_cache_on_first_post()
+    public void Hot_actor_can_use_post_fast_without_first_bind_step()
     {
         var world = new ActorWorld();
         HotOnlyProbeActor actor = world.CreateActor<HotOnlyProbeActor>();
-        int fastIndex = actor.GetActorId().FastIndex;
 
-        Assert.That(IsFastCacheBound<HotOnlyEvent>(world, fastIndex), Is.False);
-
-        Assert.That(actor.PostInside(new HotOnlyEvent(3)).IsSuccess, Is.True);
-
-        Assert.That(IsFastCacheBound<HotOnlyEvent>(world, fastIndex), Is.True);
+        Assert.That(actor.PostFastInside(new HotOnlyEvent(3)), Is.True);
     }
 
     [Test]
-    public void Prewarm_hot_actor_can_use_internal_post_fast_entry()
+    public void Same_signature_different_actor_types_use_distinct_archetype_rows_and_share_world_pool()
     {
         var world = new ActorWorld();
-        PrewarmHotProbeActor actor = world.CreateActor<PrewarmHotProbeActor>();
+        ActorId actorA = world.CreateActor<SharedPoolActorA>().GetActorId();
+        ActorId actorB = world.CreateActor<SharedPoolActorB>().GetActorId();
 
-        Assert.That(actor.PostFastInside(new PrewarmHotEvent(7)), Is.True);
+        EventPostRow<SharedPoolEvent> rowA = GetBoundRow<SharedPoolEvent>(world, actorA.ArchetypeId);
+        EventPostRow<SharedPoolEvent> rowB = GetBoundRow<SharedPoolEvent>(world, actorB.ArchetypeId);
+
+        Assert.That(actorA.ArchetypeId, Is.Not.EqualTo(actorB.ArchetypeId));
+        Assert.That(rowA.Pool, Is.SameAs(rowB.Pool));
     }
 
     [Test]
-    public void Same_event_columns_share_world_level_mail_pool()
-    {
-        var world = new ActorWorld();
-        SharedPoolActorA actorA = world.CreateActor<SharedPoolActorA>();
-        SharedPoolActorB actorB = world.CreateActor<SharedPoolActorB>();
-
-        object columnA = GetEventColumn(world, actorA.GetActorId(), EventTypeId<SharedPoolEvent>.Id);
-        object columnB = GetEventColumn(world, actorB.GetActorId(), EventTypeId<SharedPoolEvent>.Id);
-
-        object? poolA = columnA.GetType().GetField("_mailPool", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(columnA);
-        object? poolB = columnB.GetType().GetField("_mailPool", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(columnB);
-
-        Assert.That(poolA, Is.SameAs(poolB));
-    }
-
-    [Test]
-    public void Destroy_and_recreate_reuses_fast_index_without_leaking_old_cache()
+    public void Destroy_and_recreate_reuses_slot_generation_guard_without_leaking_old_row_target()
     {
         var world = new ActorWorld();
         PrewarmHotProbeActor actor = world.CreateActor<PrewarmHotProbeActor>();
@@ -123,38 +108,40 @@ public sealed partial class ActorWorldHotPathTests
 
         PrewarmHotProbeActor replacement = world.CreateActor<PrewarmHotProbeActor>();
         ActorId newId = replacement.GetActorId();
+        EventPostRow<PrewarmHotEvent> row = GetBoundRow<PrewarmHotEvent>(world, newId.ArchetypeId);
 
         Assert.That(newId.FastIndex, Is.EqualTo(oldId.FastIndex));
         Assert.That(newId.Generation, Is.GreaterThan(oldId.Generation));
         Assert.That(world.TryPostTo(oldId, new PrewarmHotEvent(9)).IsSuccess, Is.False);
-        Assert.That(IsFastCacheBound<PrewarmHotEvent>(world, newId.FastIndex), Is.True);
+        Assert.That(row.Generations[newId.SlotIndex], Is.EqualTo(newId.Generation));
+        Assert.That(world.PostFast(newId, new PrewarmHotEvent(10)), Is.True);
     }
 
-    private static bool IsFastCacheBound<TEvent>(ActorWorld world, int fastIndex)
-        where TEvent : struct
+    [Test]
+    public void Event_post_rows_refresh_after_storage_growth()
     {
-        if (!ActorEventRuntime<TEvent>.TryGetFastCache(world, out ActorEventFastCache<TEvent>? cache)
-            || cache == null)
+        var world = new ActorWorld();
+        PrewarmHotProbeActor[] actors = new PrewarmHotProbeActor[8];
+        for (int i = 0; i < actors.Length; i++)
         {
-            return false;
+            actors[i] = world.CreateActor<PrewarmHotProbeActor>();
         }
 
-        return cache.IsBound(fastIndex);
+        ActorId lastId = actors[^1].GetActorId();
+        EventPostRow<PrewarmHotEvent> row = GetBoundRow<PrewarmHotEvent>(world, lastId.ArchetypeId);
+
+        Assert.That(row.Mails.Length, Is.GreaterThanOrEqualTo(actors.Length));
+        Assert.That(row.Generations.Length, Is.GreaterThanOrEqualTo(actors.Length));
+        Assert.That(world.PostFast(lastId, new PrewarmHotEvent(11)), Is.True);
     }
 
-    private static object GetEventColumn(ActorWorld world, ActorId actorId, int eventTypeId)
+    private static EventPostRow<TEvent> GetBoundRow<TEvent>(ActorWorld world, int archetypeId)
+        where TEvent : struct
     {
-        FieldInfo archetypesField = typeof(ActorWorld).GetField("_archetypes", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        Array archetypes = (Array)archetypesField.GetValue(world)!;
-        object archetype = archetypes.GetValue(actorId.ArchetypeId)!;
-
-        FieldInfo storagesField = archetype.GetType().GetField("_storages", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        Array storages = (Array)storagesField.GetValue(archetype)!;
-        object storage = storages.GetValue(actorId.TypeStorageIndex)!;
-
-        FieldInfo columnsField = storage.GetType().GetField("_columnsByEventId", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        Array columns = (Array)columnsField.GetValue(storage)!;
-        return columns.GetValue(eventTypeId)!;
+        Assert.That(EventPostRuntime<TEvent>.TryGetRows(world, out EventPostRow<TEvent>[]? rows), Is.True);
+        Assert.That(rows, Is.Not.Null);
+        Assert.That((uint)archetypeId, Is.LessThan((uint)rows!.Length));
+        return rows[archetypeId];
     }
 
     private readonly struct HotPathEvent
