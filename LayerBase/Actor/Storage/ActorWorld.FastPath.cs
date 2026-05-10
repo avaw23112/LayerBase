@@ -44,43 +44,7 @@ public sealed partial class ActorWorld
             bucketIndex,
             postableGenerations);
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal PostResult PostCompiled<TEvent>(
-        ActorId actorId,
-        in TEvent value,
-        EventPostState<TEvent> state)
-        where TEvent : struct
-    {
-        byte routeCode = state.RouteCode;
-        if (routeCode == ActorPostRouteCode.QueuedGrowPhysicalSafe)
-        {
-            return PostQueuedGrowPhysicalSafe(actorId, in value, state);
-        }
-
-        if (routeCode == ActorPostRouteCode.Disabled)
-        {
-            return BuildEventNotSupportedCold<TEvent>();
-        }
-
-        return PostToNonDefaultCold(actorId, in value, state, routeCode);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal bool PostFast<TEvent>(ActorId actorId, in TEvent value)
-        where TEvent : struct
-    {
-        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetStateUnchecked(RuntimeIndex);
-        if (state == null || state.RouteCode == ActorPostRouteCode.Disabled)
-        {
-            return false;
-        }
-
-        return PostCompiled(actorId, in value, state).IsSuccess;
-    }
-
-
-
+    
     [MethodImpl(MethodImplOptions.NoInlining)]
     private PostResult PostToNonDefaultCold<TEvent>(
         ActorId actorId,

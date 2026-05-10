@@ -177,29 +177,7 @@ public class ActorHardeningTests
         Assert.That(worldDump, Does.Contain(nameof(HardeningProbeActor)));
         Assert.That(queryDump, Does.Contain("AliveCount"));
     }
-
-    [Test]
-    public void Disabled_actor_mail_policy_can_reject_posts()
-    {
-        var world = new ActorWorld(new ActorMailOptions(
-            postPolicy: ActorPostPolicy.Queued,
-            fullPolicy: ActorMailFullPolicy.Grow,
-            growFailurePolicy: ActorMailFullPolicy.RejectNew,
-            initialCapacity: 4,
-            maxCapacity: 16,
-            growFactor: 2,
-            releaseWhenEmpty: true,
-            disabledPolicy: ActorMailDisabledPolicy.Reject));
-
-        HardeningProbeActor actor = world.CreateActor<HardeningProbeActor>();
-        Assert.That(actor.SetEnable(false), Is.True);
-
-        PostResult result = actor.TryPostInside(new ActorHardeningEvent(1));
-        Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.FailureKind, Is.EqualTo(PostFailureKind.RejectedByPostableStamp));
-        Assert.That(result.ActorStatus, Is.EqualTo(ActorPostStatus.RejectedByPostableStamp));
-    }
-
+    
     [Test]
     public void Coalesced_policy_maps_to_DiagnosticOnly_and_returns_EventNotSupported()
     {

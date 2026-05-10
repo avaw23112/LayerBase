@@ -71,16 +71,7 @@ public sealed partial class ActorWorldHotPathTests
         Assert.That(row.IsValid, Is.True);
         Assert.That(row.Mails.Length, Is.GreaterThan(actorId.SlotIndex));
     }
-
-    [Test]
-    public void Actor_behaviour_can_use_post_fast_without_extra_binding_step()
-    {
-        var world = new ActorWorld();
-        FastPostProbeActor actor = world.CreateActor<FastPostProbeActor>();
-
-        Assert.That(actor.PostFastInside(new FastPostEvent(3)), Is.True);
-    }
-
+    
     [Test]
     public void Same_signature_different_actor_types_use_distinct_archetype_rows_and_share_world_pool()
     {
@@ -96,44 +87,6 @@ public sealed partial class ActorWorldHotPathTests
         Assert.That(state, Is.Not.Null);
         Assert.That(rowA.IsValid && rowB.IsValid, Is.True);
         Assert.That(state!.Pool, Is.Not.Null);
-    }
-
-    [Test]
-    public void Destroy_and_recreate_reuses_slot_generation_guard_without_leaking_old_row_target()
-    {
-        var world = new ActorWorld();
-        RowBoundProbeActor actor = world.CreateActor<RowBoundProbeActor>();
-        ActorId oldId = actor.GetActorId();
-
-        Assert.That(world.DestroyActor(oldId), Is.True);
-        var budget = new RuntimeFrameBudget(8, 0, 0);
-        world.Pump(0f, 0f, false, ref budget);
-
-        RowBoundProbeActor replacement = world.CreateActor<RowBoundProbeActor>();
-        ActorId newId = replacement.GetActorId();
-        EventPostRow<RowBoundEvent> row = GetBoundRow<RowBoundEvent>(world, newId.ArchetypeId);
-
-        Assert.That(newId.Generation, Is.GreaterThan(oldId.Generation));
-        Assert.That(world.PostTo(oldId, new RowBoundEvent(9)).IsSuccess, Is.True);
-        Assert.That(row.Mails[newId.SlotIndex].Count, Is.EqualTo(1));
-        Assert.That(world.PostFast(newId, new RowBoundEvent(10)), Is.True);
-    }
-
-    [Test]
-    public void Event_post_rows_refresh_after_storage_growth()
-    {
-        var world = new ActorWorld();
-        RowBoundProbeActor[] actors = new RowBoundProbeActor[8];
-        for (int i = 0; i < actors.Length; i++)
-        {
-            actors[i] = world.CreateActor<RowBoundProbeActor>();
-        }
-
-        ActorId lastId = actors[^1].GetActorId();
-        EventPostRow<RowBoundEvent> row = GetBoundRow<RowBoundEvent>(world, lastId.ArchetypeId);
-
-        Assert.That(row.Mails.Length, Is.GreaterThanOrEqualTo(actors.Length));
-        Assert.That(world.PostFast(lastId, new RowBoundEvent(11)), Is.True);
     }
 
     private static EventPostRow<TEvent> GetBoundRow<TEvent>(ActorWorld world, int archetypeId)

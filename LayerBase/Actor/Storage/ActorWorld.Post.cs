@@ -12,11 +12,15 @@ public sealed partial class ActorWorld
         where TEvent : struct
     {
         EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetStateUnchecked(RuntimeIndex);
-        if (state == null)
+        if (state == null || state.RouteCode == ActorPostRouteCode.Disabled)
         {
             return BuildEventNotSupportedCold<TEvent>();
         }
-        return PostCompiled(actorId, in value, state);
+        if (state.RouteCode == ActorPostRouteCode.QueuedGrowPhysicalSafe)
+        {
+            return PostQueuedGrowPhysicalSafe(actorId, in value, state);
+        }
+        return PostToNonDefaultCold(actorId, in value, state, state.RouteCode);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

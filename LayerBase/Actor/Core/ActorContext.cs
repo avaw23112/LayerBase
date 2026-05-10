@@ -32,13 +32,7 @@ public readonly struct ActorContext
     {
         return World.PostTo(ActorId, in value);
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool PostFastInside<TEvent>(in TEvent value)
-        where TEvent : struct
-    {
-        return World.PostFast(ActorId, in value);
-    }
+    
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
 
     public bool IsEnable()

@@ -64,11 +64,6 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
         }
     }
 
-    [IterationCleanup(Target = nameof(ActorPost_ArchetypeRow_PostFast_OneActor_OneEvent))]
-    public void CleanupSinglePostFast()
-    {
-        PumpAll(_singleWorld);
-    }
 
     [IterationCleanup(Target = nameof(ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent))]
     public void CleanupSinglePostTo()
@@ -87,19 +82,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
     {
         PumpAll(_queryWorld);
     }
-
-    [Benchmark(
-        Description = "ActorPost_ArchetypeRow_PostFast_OneActor_OneEvent",
-        OperationsPerInvoke = PostLoopCount)]
-    [BenchmarkCategory("08.Actor", "ActorRuntime", "HotPath.Final")]
-    [InvocationCount(1)]
-    public void ActorPost_ArchetypeRow_PostFast_OneActor_OneEvent()
-    {
-        for (int i = 0; i < PostLoopCount; i++)
-        {
-            _ = _singleWorld.PostFast(_singleActorId, ActorBenchEvent.Instance);
-        }
-    }
+    
 
     [Benchmark(
         Description = "ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent",
@@ -123,7 +106,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
     {
         for (int i = 0; i < PostLoopCount; i++)
         {
-            _ = _batchWorld.PostFast(_batchActorIds[i % ActorCount], ActorBenchEvent.Instance);
+            _ = _batchWorld.PostTo(_batchActorIds[i % ActorCount], ActorBenchEvent.Instance);
         }
     }
 
