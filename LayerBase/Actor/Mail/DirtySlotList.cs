@@ -2,6 +2,8 @@ namespace LayerBase.Actor;
 
 internal sealed class DirtySlotList
 {
+    public static readonly DirtySlotList Empty = new(0);
+
     private int[] _items;
     private int[] _marks;
     private int _head;

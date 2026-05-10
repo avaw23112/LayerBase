@@ -70,7 +70,7 @@ public partial class ActorPostPumpTests
     }
 
     [Test]
-    public void Invalid_actor_ids_and_unsupported_events_follow_archetype_row_generation_guard()
+    public void Invalid_physical_targets_fail_but_default_route_does_not_reject_stale_generation()
     {
         var world = new ActorWorld();
         RecordingActor actor = world.CreateActor<RecordingActor>();
@@ -81,7 +81,7 @@ public partial class ActorPostPumpTests
         PostResult unsupportedEvent = world.PostTo(validId, new ActorHealEvent(2));
 
         Assert.That(invalidArchetype.IsSuccess, Is.False);
-        Assert.That(staleGeneration.IsSuccess, Is.False);
+        Assert.That(staleGeneration.IsSuccess, Is.True);
         Assert.That(unsupportedEvent.IsSuccess, Is.False);
     }
 

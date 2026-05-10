@@ -1,5 +1,4 @@
 using LayerBase.Core.Event;
-using LayerBase.Core.EventCatalogue;
 using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Actor;
@@ -11,36 +10,51 @@ internal static class ActorEventPostPlanBuilder
     {
         EventMetaData<TEvent>? metaData = EventMetaDataHandler.ResolveRegisteredMetaData<TEvent>();
         ActorMailOptions mailOptions = metaData?.GetActorMailOptions() ?? worldDefaultMailOptions;
-        ActorPostRouteKind route = ResolveRoute(mailOptions);
-        ActorSlotFlags rejectMask = ActorSlotFlags.PendingDestroy | ActorSlotFlags.Destroying;
         bool rejectDisabled = mailOptions.DisabledPolicy == ActorMailDisabledPolicy.Reject;
+        bool requirePostableStamp = ResolveRequirePostableStamp(mailOptions);
+        byte routeCode = ResolveRouteCode(mailOptions, requirePostableStamp);
 
         return new ActorEventPostPlan<TEvent>(
             eventId: EventTypeId<TEvent>.Id,
-            identity: metaData?.GetIdentity() ?? EventIdentityRegistry.GetOrCreate<TEvent>(),
-            category: metaData?.GetEventCategoryToken() ?? EventCategoryToken.Empty,
-            route: route,
+            routeCode: routeCode,
             mailOptions: mailOptions,
-            rejectMask: rejectMask,
-            rejectDisabled: rejectDisabled,
-            metaData: metaData);
+            requirePostableStamp: requirePostableStamp,
+            rejectDisabled: rejectDisabled);
     }
 
-    private static ActorPostRouteKind ResolveRoute(ActorMailOptions options)
+    private static bool ResolveRequirePostableStamp(ActorMailOptions options)
     {
-        return options.PostPolicy switch
+        return options.DisabledPolicy == ActorMailDisabledPolicy.Reject;
+    }
+
+    private static byte ResolveRouteCode(
+        ActorMailOptions options,
+        bool requirePostableStamp)
+    {
+        byte validation = requirePostableStamp
+            ? ActorPostRouteCode.ValidationPostableStamp
+            : ActorPostRouteCode.ValidationPhysicalSafe;
+
+        byte writeMode = options.PostPolicy switch
         {
             ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.Grow
-                => ActorPostRouteKind.QueuedGrow,
+                => ActorPostRouteCode.WriteQueuedGrow,
             ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.RejectNew
-                => ActorPostRouteKind.QueuedRejectNew,
+                => ActorPostRouteCode.WriteQueuedRejectNew,
             ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.DropOldest
-                => ActorPostRouteKind.QueuedDropOldest,
+                => ActorPostRouteCode.WriteQueuedDropOldest,
             ActorPostPolicy.Latest
-                => ActorPostRouteKind.Latest,
+                => ActorPostRouteCode.WriteLatest,
             ActorPostPolicy.Dirty
-                => ActorPostRouteKind.Dirty,
-            _ => ActorPostRouteKind.DiagnosticOnly
+                => ActorPostRouteCode.WriteDirty,
+            _ => ActorPostRouteCode.WriteDisabled
         };
+
+        if (writeMode == ActorPostRouteCode.WriteDisabled)
+        {
+            return ActorPostRouteCode.Disabled;
+        }
+
+        return (byte)(writeMode | validation);
     }
 }

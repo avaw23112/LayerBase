@@ -150,12 +150,12 @@ public class ActorHardeningTests
         Assert.That(pendingInfo.IsPendingDestroy, Is.True);
 
         PostResult pendingPost = world.PostTo(actorId, new ActorHardeningEvent(1));
-        Assert.That(pendingPost.IsSuccess, Is.False);
-        Assert.That(pendingPost.FailureKind, Is.EqualTo(PostFailureKind.PendingDestroy));
+        Assert.That(pendingPost.IsSuccess, Is.True);
 
         var budget = new RuntimeFrameBudget(16, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
 
+        Assert.That(ActorHardeningTrace.Entries, Does.Not.Contain("event:1"));
         ActorDebugInfo staleInfo = world.GetDebugInfo(actorId);
         Assert.That(staleInfo.IsValid, Is.False);
         Assert.That(staleInfo.FailureReason, Does.Contain("Generation"));
@@ -196,7 +196,8 @@ public class ActorHardeningTests
 
         PostResult result = actor.TryPostInside(new ActorHardeningEvent(1));
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.FailureKind, Is.EqualTo(PostFailureKind.DisabledActor));
+        Assert.That(result.FailureKind, Is.EqualTo(PostFailureKind.RejectedByPostableStamp));
+        Assert.That(result.ActorStatus, Is.EqualTo(ActorPostStatus.RejectedByPostableStamp));
     }
 
     [Test]

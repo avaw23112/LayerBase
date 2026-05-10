@@ -21,8 +21,8 @@ public sealed partial class ActorWorld
             DelayScheduler.Tick(deltaTime);
         }
 
-        LastMailPumpStats = PumpActorBehaviours(ref budget, MailPumpOptions);
         SweepPendingDestroy();
+        LastMailPumpStats = PumpActorBehaviours(ref budget, MailPumpOptions);
         if (!CanContinue(ref budget))
         {
             return;

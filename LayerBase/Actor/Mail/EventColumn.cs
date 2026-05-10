@@ -68,7 +68,7 @@ internal sealed class EventColumn<TActor, TEvent> :
                 continue;
             }
 
-            if (!_owner.IsAliveSlot(slotIndex))
+            if (!_owner.CanPumpSlot(slotIndex))
             {
                 _dirtySlots.Pop();
                 EventMailReader.ReleaseIfEmpty(ref mail, _mailPool, _options);
@@ -125,7 +125,7 @@ internal sealed class EventColumn<TActor, TEvent> :
                 continue;
             }
 
-            if (!_owner.IsAliveSlot(slotIndex))
+            if (!_owner.CanPumpSlot(slotIndex))
             {
                 _dirtySlots.Pop();
                 continue;
@@ -194,7 +194,7 @@ internal sealed class EventColumn<TActor, TEvent> :
 
     public override void RefreshPostRowBinding()
     {
-        if (_plan.Route is ActorPostRouteKind.DiagnosticOnly or ActorPostRouteKind.Disabled)
+        if (_plan.RouteCode == ActorPostRouteCode.Disabled)
         {
             return;
         }
@@ -204,9 +204,20 @@ internal sealed class EventColumn<TActor, TEvent> :
             mails: _mails,
             dirtySlots: _dirtySlots,
             bucketIndex: _bucketIndex,
-            generations: _owner.Generations,
-            slotFlags: _owner.SlotFlags,
+            postableGenerations: ResolvePostableGenerations(),
             plan: _plan);
+    }
+
+    private int[]? ResolvePostableGenerations()
+    {
+        if (!_plan.RequirePostableStamp)
+        {
+            return null;
+        }
+
+        return _plan.RejectDisabled
+            ? _owner.EnabledPostGenerations
+            : _owner.AlivePostGenerations;
     }
 
     public override void ClearMail(int slotIndex)
@@ -246,52 +257,12 @@ internal sealed class EventColumn<TActor, TEvent> :
         return _dirtySlots.Count > 0;
     }
 
-
-
-
-
     private bool CanUsePumpFastPath(in ActorMailPumpOptions options)
     {
         return options.MaxMailsPerActorPerPump <= 0
                && !_options.ReleaseWhenEmpty;
     }
 
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void EnsureMailAllocatedFast(ref EventMail<TEvent> mail)
-    {
-        if (mail.BufferId != 0)
-        {
-            return;
-        }
-
-        mail.BufferId = _mailPool.Rent(_options.InitialCapacity);
-        mail.Head = 0;
-        mail.Tail = 0;
-        mail.Count = 0;
-        mail.Capacity = _mailPool.GetCapacity(mail.BufferId);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void EnqueueFast(
-        ref EventMail<TEvent> mail,
-        in TEvent value,
-        int slotIndex)
-    {
-        _mailPool.Write(mail.BufferId, mail.Tail, in value);
-        mail.Tail++;
-        if (mail.Tail == mail.Capacity)
-        {
-            mail.Tail = 0;
-        }
-
-        mail.Count++;
-        if (mail.Count == 1)
-        {
-            _dirtySlots.Mark(slotIndex);
-            NotifyBucketDirty();
-        }
-    }
 
     private bool TryGrowQueuedFast(ref EventMail<TEvent> mail)
     {

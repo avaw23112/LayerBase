@@ -1,5 +1,3 @@
-using LayerBase.Core.Event;
-
 namespace LayerBase.Actor;
 
 public static class ActorQueryPostExtensions
@@ -313,82 +311,50 @@ public static class ActorQueryPostExtensions
     private static void PostAllSingle<TEvent>(ActorQueryResult query, in TEvent value)
         where TEvent : struct
     {
-        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetState(query.World);
+        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetStateUnchecked(query.World.RuntimeIndex);
         if (state == null)
         {
             return;
         }
 
-        if (state.Route == ActorPostRouteKind.DiagnosticOnly)
+        byte routeCode = state.RouteCode;
+        if (routeCode == ActorPostRouteCode.Disabled)
         {
             return;
         }
 
+        if (ActorPostRouteUtils.IsRouteInMask(routeCode, ActorPostRouteMasks.QueuedRoutes))
+        {
+            PostAllQueuedByRouteCode(query, in value, state, routeCode);
+            return;
+        }
+
+        PostAllNonQueuedByRouteCode(query, in value, state, routeCode);
+    }
+
+    private static void PostAllQueuedByRouteCode<TEvent>(
+        ActorQueryResult query,
+        in TEvent value,
+        EventPostState<TEvent> state,
+        byte routeCode)
+        where TEvent : struct
+    {
         foreach (BehaviourArchetype archetype in query.Cache.Archetypes)
         {
-            int archetypeId = archetype.ArchetypeId;
-            if ((uint)archetypeId >= (uint)state.RowsByArchetype.Length)
-            {
-                continue;
-            }
+            archetype.PostAll(query.World, state, routeCode, in value);
+        }
+    }
 
-            EventPostRow<TEvent> row = state.RowsByArchetype[archetypeId];
-            if (!row.IsValid)
-            {
-                continue;
-            }
-
-            int maxSlot = Math.Min(row.Mails.Length, row.SlotFlags.Length);
-            for (int slotIndex = 0; slotIndex < maxSlot; slotIndex++)
-            {
-                if (!query.World.CanPostSlot(row, state, slotIndex))
-                {
-                    continue;
-                }
-
-                _ = state.Route switch
-                {
-                    ActorPostRouteKind.QueuedGrow => query.World.PostQueuedGrowCore(
-                        slotIndex,
-                        in value,
-                        row.Mails,
-                        row.DirtySlots,
-                        row.BucketIndex,
-                        state.Pool,
-                        state.Options),
-                    ActorPostRouteKind.QueuedRejectNew => query.World.PostQueuedRejectNewCore(
-                        slotIndex,
-                        in value,
-                        row.Mails,
-                        row.DirtySlots,
-                        row.BucketIndex,
-                        state.Pool,
-                        state.Options),
-                    ActorPostRouteKind.QueuedDropOldest => query.World.PostQueuedDropOldestCore(
-                        slotIndex,
-                        in value,
-                        row.Mails,
-                        row.DirtySlots,
-                        row.BucketIndex,
-                        state.Pool,
-                        state.Options),
-                    ActorPostRouteKind.Latest => query.World.PostLatestCore(
-                        slotIndex,
-                        in value,
-                        row.Mails,
-                        row.DirtySlots,
-                        row.BucketIndex,
-                        state.Pool),
-                    ActorPostRouteKind.Dirty => query.World.PostDirtyCore(
-                        slotIndex,
-                        in value,
-                        row.Mails,
-                        row.DirtySlots,
-                        row.BucketIndex,
-                        state.Pool),
-                    _ => PostResult.Success
-                };
-            }
+    private static void PostAllNonQueuedByRouteCode<TEvent>(
+        ActorQueryResult query,
+        in TEvent value,
+        EventPostState<TEvent> state,
+        byte routeCode)
+        where TEvent : struct
+    {
+        foreach (BehaviourArchetype archetype in query.Cache.Archetypes)
+        {
+            archetype.PostAll(query.World, state, routeCode, in value);
         }
     }
 }

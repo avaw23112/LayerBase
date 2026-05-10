@@ -14,6 +14,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private int[] _generations;
     private ActorSlotState[] _states;
     private ActorSlotFlags[] _slotFlags;
+    private ActorStructuralDirtyFlags[] _structuralDirtyFlags;
+    private int[] _alivePostGenerations;
+    private int[] _enabledPostGenerations;
     private bool[] _enabled;
     private bool[] _createdFromPool;
     private ActorLifecycleHandles[] _lifecycleHandles;
@@ -31,6 +34,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     public TActor?[] Actors => _actors;
     internal int[] Generations => _generations;
     internal ActorSlotFlags[] SlotFlags => _slotFlags;
+    internal int[] AlivePostGenerations => _alivePostGenerations;
+    internal int[] EnabledPostGenerations => _enabledPostGenerations;
     public ActorSlotState[] States => _states;
     public bool[] Enabled => _enabled;
     public int MaxSlot => Math.Min(_nextSlotIndex, _actors.Length);
@@ -44,6 +49,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _generations = new int[_actors.Length];
         _states = new ActorSlotState[_actors.Length];
         _slotFlags = new ActorSlotFlags[_actors.Length];
+        _structuralDirtyFlags = new ActorStructuralDirtyFlags[_actors.Length];
+        _alivePostGenerations = new int[_actors.Length];
+        _enabledPostGenerations = new int[_actors.Length];
         _enabled = new bool[_actors.Length];
         _createdFromPool = new bool[_actors.Length];
         _lifecycleHandles = new ActorLifecycleHandles[_actors.Length];
@@ -67,7 +75,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
     public int AllocateSlot(TActor actor, bool createdFromPool)
     {
-        int slotIndex = _freeList.TryPop(out int freeSlot)
+        bool reusedSlot = _freeList.TryPop(out int freeSlot);
+        int slotIndex = reusedSlot
             ? freeSlot
             : AllocateNewSlot();
 
@@ -75,9 +84,13 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _states[slotIndex] = ActorSlotState.Alive;
         _enabled[slotIndex] = true;
         _slotFlags[slotIndex] = ActorSlotFlags.Alive | ActorSlotFlags.Enabled;
+        _structuralDirtyFlags[slotIndex] = reusedSlot
+            ? ActorStructuralDirtyFlags.SlotRecycle
+            : ActorStructuralDirtyFlags.None;
         _createdFromPool[slotIndex] = createdFromPool;
         _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
         EnsureColumnCapacity(slotIndex);
+        RefreshPostGenerations(slotIndex);
         return slotIndex;
     }
 
@@ -99,6 +112,67 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     {
         return (uint)slotIndex < (uint)_actors.Length
                && _states[slotIndex] == ActorSlotState.Alive
+               && _actors[slotIndex] != null;
+    }
+
+    public override void PostAll<TEvent>(
+        ActorWorld world,
+        EventPostState<TEvent> state,
+        byte routeCode,
+        in TEvent value)
+        where TEvent : struct
+    {
+        EventPostRow<TEvent>[] rows = state.RowsByArchetype;
+        if ((uint)_archetypeId >= (uint)rows.Length)
+        {
+            return;
+        }
+
+        EventPostRow<TEvent> row = rows[_archetypeId];
+        if (!row.IsValid)
+        {
+            return;
+        }
+
+        byte validation = (byte)(routeCode & ActorPostRouteCode.ValidationMask);
+        byte writeMode = (byte)(routeCode & ActorPostRouteCode.WriteModeMask);
+
+        switch (writeMode)
+        {
+            case ActorPostRouteCode.WriteQueuedGrow:
+                PostAllQueuedGrow(world, row, state, validation, in value);
+                break;
+
+            case ActorPostRouteCode.WriteQueuedRejectNew:
+                PostAllQueuedRejectNew(world, row, state, validation, in value);
+                break;
+
+            case ActorPostRouteCode.WriteQueuedDropOldest:
+                PostAllQueuedDropOldest(world, row, state, validation, in value);
+                break;
+
+            case ActorPostRouteCode.WriteLatest:
+                PostAllLatest(world, row, state, validation, in value);
+                break;
+
+            case ActorPostRouteCode.WriteDirty:
+                PostAllDirty(world, row, state, validation, in value);
+                break;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool CanPumpSlot(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_slotFlags.Length)
+        {
+            return false;
+        }
+
+        ActorSlotFlags flags = _slotFlags[slotIndex];
+        return (flags & ActorSlotFlags.Alive) != 0
+               && (flags & ActorSlotFlags.PendingDestroy) == 0
+               && (flags & ActorSlotFlags.Destroying) == 0
                && _actors[slotIndex] != null;
     }
 
@@ -168,6 +242,11 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             return false;
         }
 
+        if (_enabled[slotIndex] == enable)
+        {
+            return true;
+        }
+
         _enabled[slotIndex] = enable;
         if (enable)
         {
@@ -177,6 +256,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             _slotFlags[slotIndex] &= ~ActorSlotFlags.Enabled;
         }
+        _structuralDirtyFlags[slotIndex] |= ActorStructuralDirtyFlags.EnableChanged;
+        RefreshPostGenerations(slotIndex);
         
         var onEnable = _actors[slotIndex] as IEnable;
         var onDisable = _actors[slotIndex] as IDisable;
@@ -482,6 +563,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _enabled[slotIndex] = false;
         _slotFlags[slotIndex] |= ActorSlotFlags.PendingDestroy;
         _slotFlags[slotIndex] &= ~ActorSlotFlags.Enabled;
+        _structuralDirtyFlags[slotIndex] |= ActorStructuralDirtyFlags.PendingDestroy;
+        RefreshPostGenerations(slotIndex);
         return true;
     }
 
@@ -624,12 +707,15 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
         {
-            if (_states[slotIndex] != ActorSlotState.PendingDestroy)
+            if ((_structuralDirtyFlags[slotIndex] & ActorStructuralDirtyFlags.PendingDestroy) == 0)
             {
                 continue;
             }
 
-            DestroyNow(slotIndex, _generations[slotIndex], world);
+            ClearAllMails(slotIndex);
+            FinalizeDestroySlot(slotIndex, world);
+            RefreshPostGenerations(slotIndex);
+            _structuralDirtyFlags[slotIndex] = ActorStructuralDirtyFlags.None;
         }
     }
 
@@ -659,6 +745,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _generations, newSize);
         Array.Resize(ref _states, newSize);
         Array.Resize(ref _slotFlags, newSize);
+        Array.Resize(ref _structuralDirtyFlags, newSize);
+        Array.Resize(ref _alivePostGenerations, newSize);
+        Array.Resize(ref _enabledPostGenerations, newSize);
         Array.Resize(ref _enabled, newSize);
         Array.Resize(ref _createdFromPool, newSize);
         Array.Resize(ref _lifecycleHandles, newSize);
@@ -702,32 +791,23 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _columnsByEventId, newSize);
     }
 
-    private bool DestroyNow(int slotIndex, int generation, ActorWorld world)
+    private void FinalizeDestroySlot(int slotIndex, ActorWorld world)
     {
-        if ((uint)slotIndex >= (uint)_actors.Length)
-        {
-            return false;
-        }
-
-        if (_generations[slotIndex] != generation)
-        {
-            return false;
-        }
-
         ActorSlotState state = _states[slotIndex];
         if (state == ActorSlotState.Destroying || state == ActorSlotState.Empty)
         {
-            return false;
+            return;
         }
 
         TActor? actor = _actors[slotIndex];
         if (actor == null)
         {
-            return false;
+            return;
         }
 
         _states[slotIndex] = ActorSlotState.Destroying;
         _slotFlags[slotIndex] |= ActorSlotFlags.Destroying;
+        RefreshPostGenerations(slotIndex);
 
         if (actor is IDestroy destroy)
         {
@@ -735,7 +815,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         UnregisterLifecycleInterfaces(slotIndex, world);
-        ClearAllMails(slotIndex);
 
         bool returnToPool = _createdFromPool[slotIndex];
 
@@ -745,6 +824,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _slotFlags[slotIndex] = ActorSlotFlags.None;
         _createdFromPool[slotIndex] = false;
         _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
+        _structuralDirtyFlags[slotIndex] |= ActorStructuralDirtyFlags.SlotRecycle;
 
         unchecked
         {
@@ -752,13 +832,12 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         _freeList.Push(slotIndex);
+        RefreshPostGenerations(slotIndex);
 
         if (returnToPool)
         {
             ActorPoolCache<TActor>.Pool.Return(actor);
         }
-
-        return true;
     }
 
     private void UnregisterLifecycleInterfaces(int slotIndex, ActorWorld world)
@@ -781,6 +860,186 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             column?.ClearMail(slotIndex);
         }
+    }
+
+    internal void RefreshPostGenerations(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_slotFlags.Length)
+        {
+            return;
+        }
+
+        ActorSlotFlags flags = _slotFlags[slotIndex];
+        int generation = _generations[slotIndex];
+
+        bool alivePostable =
+            (flags & ActorSlotFlags.Alive) != 0 &&
+            (flags & ActorSlotFlags.PendingDestroy) == 0 &&
+            (flags & ActorSlotFlags.Destroying) == 0 &&
+            _actors[slotIndex] != null;
+
+        _alivePostGenerations[slotIndex] = alivePostable
+            ? generation
+            : -1;
+
+        bool enabledPostable =
+            alivePostable &&
+            (flags & ActorSlotFlags.Enabled) != 0;
+
+        _enabledPostGenerations[slotIndex] = enabledPostable
+            ? generation
+            : -1;
+    }
+
+    private void PostAllQueuedGrow<TEvent>(
+        ActorWorld world,
+        EventPostRow<TEvent> row,
+        EventPostState<TEvent> state,
+        byte validation,
+        in TEvent value)
+        where TEvent : struct
+    {
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+        {
+            if (!CanPostAllSlot(row, validation, slotIndex))
+            {
+                continue;
+            }
+
+            _ = world.PostQueuedGrowCore(
+                slotIndex,
+                in value,
+                row.Mails,
+                row.DirtySlots,
+                row.BucketIndex,
+                state.Pool,
+                state.Options);
+        }
+    }
+
+    private void PostAllQueuedRejectNew<TEvent>(
+        ActorWorld world,
+        EventPostRow<TEvent> row,
+        EventPostState<TEvent> state,
+        byte validation,
+        in TEvent value)
+        where TEvent : struct
+    {
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+        {
+            if (!CanPostAllSlot(row, validation, slotIndex))
+            {
+                continue;
+            }
+
+            _ = world.PostQueuedRejectNewCore(
+                slotIndex,
+                in value,
+                row.Mails,
+                row.DirtySlots,
+                row.BucketIndex,
+                state.Pool,
+                state.Options);
+        }
+    }
+
+    private void PostAllQueuedDropOldest<TEvent>(
+        ActorWorld world,
+        EventPostRow<TEvent> row,
+        EventPostState<TEvent> state,
+        byte validation,
+        in TEvent value)
+        where TEvent : struct
+    {
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+        {
+            if (!CanPostAllSlot(row, validation, slotIndex))
+            {
+                continue;
+            }
+
+            _ = world.PostQueuedDropOldestCore(
+                slotIndex,
+                in value,
+                row.Mails,
+                row.DirtySlots,
+                row.BucketIndex,
+                state.Pool,
+                state.Options);
+        }
+    }
+
+    private void PostAllLatest<TEvent>(
+        ActorWorld world,
+        EventPostRow<TEvent> row,
+        EventPostState<TEvent> state,
+        byte validation,
+        in TEvent value)
+        where TEvent : struct
+    {
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+        {
+            if (!CanPostAllSlot(row, validation, slotIndex))
+            {
+                continue;
+            }
+
+            _ = world.PostLatestCore(
+                slotIndex,
+                in value,
+                row.Mails,
+                row.DirtySlots,
+                row.BucketIndex,
+                state.Pool);
+        }
+    }
+
+    private void PostAllDirty<TEvent>(
+        ActorWorld world,
+        EventPostRow<TEvent> row,
+        EventPostState<TEvent> state,
+        byte validation,
+        in TEvent value)
+        where TEvent : struct
+    {
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+        {
+            if (!CanPostAllSlot(row, validation, slotIndex))
+            {
+                continue;
+            }
+
+            _ = world.PostDirtyCore(
+                slotIndex,
+                in value,
+                row.Mails,
+                row.DirtySlots,
+                row.BucketIndex,
+                state.Pool);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool CanPostAllSlot<TEvent>(
+        EventPostRow<TEvent> row,
+        byte validation,
+        int slotIndex)
+        where TEvent : struct
+    {
+        if (_states[slotIndex] != ActorSlotState.Alive
+            || _actors[slotIndex] == null)
+        {
+            return false;
+        }
+
+        if (validation != ActorPostRouteCode.ValidationPostableStamp)
+        {
+            return true;
+        }
+
+        int[]? postableGenerations = row.PostableGenerations;
+        return postableGenerations != null
+               && postableGenerations[slotIndex] == _generations[slotIndex];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

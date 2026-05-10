@@ -10,5 +10,7 @@ public enum PostFailureKind
     DisabledActor = 5,
     PendingDestroy = 6,
     Destroying = 7,
-    MergeFailed = 8
+    MergeFailed = 8,
+    PhysicalTargetInvalid = 9,
+    RejectedByPostableStamp = 10
 }

@@ -8,20 +8,18 @@ public sealed partial class ActorWorld
     internal EventPostState<TEvent> GetOrCreateEventPostState<TEvent>(ActorEventPostPlan<TEvent> plan)
         where TEvent : struct
     {
-        EventPostState<TEvent>? existing = EventPostRuntime<TEvent>.GetState(this);
+        EventPostState<TEvent>? existing = EventPostRuntime<TEvent>.GetStateUnchecked(RuntimeIndex);
         if (existing != null)
         {
             return existing;
         }
 
         EventMailPool<TEvent> pool = GlobalEventMailPools.GetOrCreate<TEvent>(plan.MailOptions);
-        EventPostRow<TEvent>[] rows = new EventPostRow<TEvent>[Math.Max(_archetypes.Length, 1)];
+        EventPostRow<TEvent>[] rows = CreateRows<TEvent>(_archetypes.Length);
         var state = new EventPostState<TEvent>(
-            route: plan.Route,
+            routeCode: plan.RouteCode,
             pool: pool,
             options: plan.MailOptions,
-            rejectMask: plan.RejectMask,
-            rejectDisabled: plan.RejectDisabled,
             rowsByArchetype: rows);
 
         EventPostRuntime<TEvent>.BindWorld(this, state);
@@ -34,8 +32,7 @@ public sealed partial class ActorWorld
         EventMail<TEvent>[] mails,
         DirtySlotList dirtySlots,
         int bucketIndex,
-        int[] generations,
-        ActorSlotFlags[] slotFlags,
+        int[]? postableGenerations,
         ActorEventPostPlan<TEvent> plan)
         where TEvent : struct
     {
@@ -45,8 +42,7 @@ public sealed partial class ActorWorld
             mails,
             dirtySlots,
             bucketIndex,
-            generations,
-            slotFlags);
+            postableGenerations);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -56,35 +52,26 @@ public sealed partial class ActorWorld
         EventPostState<TEvent> state)
         where TEvent : struct
     {
-        return state.Route switch
+        byte routeCode = state.RouteCode;
+        if (routeCode == ActorPostRouteCode.QueuedGrowPhysicalSafe)
         {
-            ActorPostRouteKind.QueuedGrow => PostQueuedGrow(actorId, in value, state),
-            ActorPostRouteKind.QueuedRejectNew => PostQueuedRejectNew(actorId, in value, state),
-            ActorPostRouteKind.QueuedDropOldest => PostQueuedDropOldest(actorId, in value, state),
-            ActorPostRouteKind.Latest => PostLatest(actorId, in value, state),
-            ActorPostRouteKind.Dirty => PostDirty(actorId, in value, state),
-            ActorPostRouteKind.Disabled => PostResult.Failure(
-                ActorPostStatus.EventNotSupported,
-                "ActorPost is disabled for this event.",
-                PostFailureKind.UnsupportedEvent),
-            _ => PostResult.Failure(
-                ActorPostStatus.EventNotSupported,
-                "Unknown actor post route.",
-                PostFailureKind.UnsupportedEvent)
-        };
+            return PostQueuedGrowPhysicalSafe(actorId, in value, state);
+        }
+
+        if (routeCode == ActorPostRouteCode.Disabled)
+        {
+            return BuildEventNotSupportedCold<TEvent>();
+        }
+
+        return PostToNonDefaultCold(actorId, in value, state, routeCode);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool PostFast<TEvent>(ActorId actorId, in TEvent value)
         where TEvent : struct
     {
-        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetState(this);
-        if (state == null)
-        {
-            return false;
-        }
-
-        if (state.Route is ActorPostRouteKind.DiagnosticOnly or ActorPostRouteKind.Disabled)
+        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetStateUnchecked(RuntimeIndex);
+        if (state == null || state.RouteCode == ActorPostRouteCode.Disabled)
         {
             return false;
         }
@@ -92,120 +79,262 @@ public sealed partial class ActorWorld
         return PostCompiled(actorId, in value, state).IsSuccess;
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static PostResult BuildEventNotSupportedCold<TEvent>()
+        where TEvent : struct
+    {
+        return PostResult.Failure(
+            ActorPostStatus.EventNotSupported,
+            $"Event post state is not built for {typeof(TEvent).Name}.",
+            PostFailureKind.UnsupportedEvent);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static PostResult BuildRouteUnsupportedCold<TEvent>()
+        where TEvent : struct
+    {
+        return PostResult.Failure(
+            ActorPostStatus.EventNotSupported,
+            $"RouteCode is not supported for {typeof(TEvent).Name}.",
+            PostFailureKind.UnsupportedEvent);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static PostResult BuildPostFailureCold(ActorId actorId)
+    {
+        return PostResult.Failure(
+            ActorPostStatus.PhysicalTargetInvalid,
+            $"ActorId ({actorId.ArchetypeId}, {actorId.SlotIndex}, {actorId.Generation}) cannot locate a current physical mailbox.",
+            PostFailureKind.PhysicalTargetInvalid);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static PostResult BuildPostableStampRejectedCold(ActorId actorId)
+    {
+        return PostResult.Failure(
+            ActorPostStatus.RejectedByPostableStamp,
+            $"ActorId ({actorId.ArchetypeId}, {actorId.SlotIndex}, {actorId.Generation}) failed the postable-generation check.",
+            PostFailureKind.RejectedByPostableStamp);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private PostResult PostToNonDefaultCold<TEvent>(
+        ActorId actorId,
+        in TEvent value,
+        EventPostState<TEvent> state,
+        byte routeCode)
+        where TEvent : struct
+    {
+        byte validation = (byte)(routeCode & ActorPostRouteCode.ValidationMask);
+        byte writeMode = (byte)(routeCode & ActorPostRouteCode.WriteModeMask);
+
+        if (validation == ActorPostRouteCode.ValidationPostableStamp)
+        {
+            return PostByWriteModePostableStampCold(actorId, in value, state, writeMode);
+        }
+
+        if (validation == ActorPostRouteCode.ValidationPhysicalSafe)
+        {
+            return PostByWriteModePhysicalSafeCold(actorId, in value, state, writeMode);
+        }
+
+        return BuildRouteUnsupportedCold<TEvent>();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private PostResult PostByWriteModePhysicalSafeCold<TEvent>(
+        ActorId actorId,
+        in TEvent value,
+        EventPostState<TEvent> state,
+        byte writeMode)
+        where TEvent : struct
+    {
+        return writeMode switch
+        {
+            ActorPostRouteCode.WriteQueuedGrow => PostQueuedGrowPhysicalSafe(actorId, in value, state),
+            ActorPostRouteCode.WriteQueuedRejectNew => PostQueuedRejectNewPhysicalSafe(actorId, in value, state),
+            ActorPostRouteCode.WriteQueuedDropOldest => PostQueuedDropOldestPhysicalSafe(actorId, in value, state),
+            ActorPostRouteCode.WriteLatest => PostLatestPhysicalSafe(actorId, in value, state),
+            ActorPostRouteCode.WriteDirty => PostDirtyPhysicalSafe(actorId, in value, state),
+            _ => BuildRouteUnsupportedCold<TEvent>()
+        };
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private PostResult PostByWriteModePostableStampCold<TEvent>(
+        ActorId actorId,
+        in TEvent value,
+        EventPostState<TEvent> state,
+        byte writeMode)
+        where TEvent : struct
+    {
+        return writeMode switch
+        {
+            ActorPostRouteCode.WriteQueuedGrow => PostQueuedGrowPostableStamp(actorId, in value, state),
+            ActorPostRouteCode.WriteQueuedRejectNew => PostQueuedRejectNewPostableStamp(actorId, in value, state),
+            ActorPostRouteCode.WriteQueuedDropOldest => PostQueuedDropOldestPostableStamp(actorId, in value, state),
+            ActorPostRouteCode.WriteLatest => PostLatestPostableStamp(actorId, in value, state),
+            ActorPostRouteCode.WriteDirty => PostDirtyPostableStamp(actorId, in value, state),
+            _ => BuildRouteUnsupportedCold<TEvent>()
+        };
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private PostResult PostQueuedGrow<TEvent>(
+    private PostResult PostQueuedGrowPhysicalSafe<TEvent>(
         ActorId actorId,
         in TEvent value,
         EventPostState<TEvent> state)
         where TEvent : struct
     {
-        if (!TryGetValidRow(actorId, state, out EventPostRow<TEvent> row, out PostResult failure))
+        if (!TryGetPhysicalRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
         {
-            return failure;
+            return BuildPostFailureCold(actorId);
         }
 
-        return PostQueuedGrowCore(
-            actorId.SlotIndex,
-            in value,
-            row.Mails,
-            row.DirtySlots,
-            row.BucketIndex,
-            state.Pool,
-            state.Options);
+        return PostQueuedGrowCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private PostResult PostQueuedRejectNew<TEvent>(
+    private PostResult PostQueuedRejectNewPhysicalSafe<TEvent>(
         ActorId actorId,
         in TEvent value,
         EventPostState<TEvent> state)
         where TEvent : struct
     {
-        if (!TryGetValidRow(actorId, state, out EventPostRow<TEvent> row, out PostResult failure))
+        if (!TryGetPhysicalRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
         {
-            return failure;
+            return BuildPostFailureCold(actorId);
         }
 
-        return PostQueuedRejectNewCore(
-            actorId.SlotIndex,
-            in value,
-            row.Mails,
-            row.DirtySlots,
-            row.BucketIndex,
-            state.Pool,
-            state.Options);
+        return PostQueuedRejectNewCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private PostResult PostQueuedDropOldest<TEvent>(
+    private PostResult PostQueuedDropOldestPhysicalSafe<TEvent>(
         ActorId actorId,
         in TEvent value,
         EventPostState<TEvent> state)
         where TEvent : struct
     {
-        if (!TryGetValidRow(actorId, state, out EventPostRow<TEvent> row, out PostResult failure))
+        if (!TryGetPhysicalRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
         {
-            return failure;
+            return BuildPostFailureCold(actorId);
         }
 
-        return PostQueuedDropOldestCore(
-            actorId.SlotIndex,
-            in value,
-            row.Mails,
-            row.DirtySlots,
-            row.BucketIndex,
-            state.Pool,
-            state.Options);
+        return PostQueuedDropOldestCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private PostResult PostLatest<TEvent>(
+    private PostResult PostLatestPhysicalSafe<TEvent>(
         ActorId actorId,
         in TEvent value,
         EventPostState<TEvent> state)
         where TEvent : struct
     {
-        if (!TryGetValidRow(actorId, state, out EventPostRow<TEvent> row, out PostResult failure))
+        if (!TryGetPhysicalRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
         {
-            return failure;
+            return BuildPostFailureCold(actorId);
         }
 
-        return PostLatestCore(
-            actorId.SlotIndex,
-            in value,
-            row.Mails,
-            row.DirtySlots,
-            row.BucketIndex,
-            state.Pool);
+        return PostLatestCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private PostResult PostDirty<TEvent>(
+    private PostResult PostDirtyPhysicalSafe<TEvent>(
         ActorId actorId,
         in TEvent value,
         EventPostState<TEvent> state)
         where TEvent : struct
     {
-        if (!TryGetValidRow(actorId, state, out EventPostRow<TEvent> row, out PostResult failure))
+        if (!TryGetPhysicalRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
+        {
+            return BuildPostFailureCold(actorId);
+        }
+
+        return PostDirtyCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private PostResult PostQueuedGrowPostableStamp<TEvent>(
+        ActorId actorId,
+        in TEvent value,
+        EventPostState<TEvent> state)
+        where TEvent : struct
+    {
+        if (!TryGetPostableRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex, out PostResult failure))
         {
             return failure;
         }
 
-        return PostDirtyCore(
-            actorId.SlotIndex,
-            in value,
-            row.Mails,
-            row.DirtySlots,
-            row.BucketIndex,
-            state.Pool);
+        return PostQueuedGrowCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool TryGetValidRow<TEvent>(
+    private PostResult PostQueuedRejectNewPostableStamp<TEvent>(
+        ActorId actorId,
+        in TEvent value,
+        EventPostState<TEvent> state)
+        where TEvent : struct
+    {
+        if (!TryGetPostableRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex, out PostResult failure))
+        {
+            return failure;
+        }
+
+        return PostQueuedRejectNewCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private PostResult PostQueuedDropOldestPostableStamp<TEvent>(
+        ActorId actorId,
+        in TEvent value,
+        EventPostState<TEvent> state)
+        where TEvent : struct
+    {
+        if (!TryGetPostableRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex, out PostResult failure))
+        {
+            return failure;
+        }
+
+        return PostQueuedDropOldestCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private PostResult PostLatestPostableStamp<TEvent>(
+        ActorId actorId,
+        in TEvent value,
+        EventPostState<TEvent> state)
+        where TEvent : struct
+    {
+        if (!TryGetPostableRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex, out PostResult failure))
+        {
+            return failure;
+        }
+
+        return PostLatestCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private PostResult PostDirtyPostableStamp<TEvent>(
+        ActorId actorId,
+        in TEvent value,
+        EventPostState<TEvent> state)
+        where TEvent : struct
+    {
+        if (!TryGetPostableRow(actorId, state, out EventPostRow<TEvent> row, out int slotIndex, out PostResult failure))
+        {
+            return failure;
+        }
+
+        return PostDirtyCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool TryGetPhysicalRow<TEvent>(
         ActorId actorId,
         EventPostState<TEvent> state,
         out EventPostRow<TEvent> row,
-        out PostResult failure)
+        out int slotIndex)
         where TEvent : struct
     {
         EventPostRow<TEvent>[] rows = state.RowsByArchetype;
@@ -213,113 +342,39 @@ public sealed partial class ActorWorld
         if ((uint)archetypeId >= (uint)rows.Length)
         {
             row = default;
-            failure = PostResult.Failure(
-                ActorPostStatus.ActorNotFound,
-                "Invalid ActorId.ArchetypeId.",
-                PostFailureKind.InvalidActorId);
+            slotIndex = default;
             return false;
         }
 
         row = rows[archetypeId];
-        if (!row.IsValid)
+        slotIndex = actorId.SlotIndex;
+        return (uint)slotIndex < (uint)row.Mails.Length;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool TryGetPostableRow<TEvent>(
+        ActorId actorId,
+        EventPostState<TEvent> state,
+        out EventPostRow<TEvent> row,
+        out int slotIndex,
+        out PostResult failure)
+        where TEvent : struct
+    {
+        if (!TryGetPhysicalRow(actorId, state, out row, out slotIndex))
         {
-            failure = PostResult.Failure(
-                ActorPostStatus.EventNotSupported,
-                "Target archetype does not support this event.",
-                PostFailureKind.UnsupportedEvent);
+            failure = BuildPostFailureCold(actorId);
             return false;
         }
 
-        int slotIndex = actorId.SlotIndex;
-        if ((uint)slotIndex >= (uint)row.Generations.Length)
+        int[]? postableGenerations = row.PostableGenerations;
+        if (postableGenerations == null
+            || postableGenerations[slotIndex] != actorId.Generation)
         {
-            failure = PostResult.Failure(
-                ActorPostStatus.ActorNotFound,
-                "Invalid ActorId.SlotIndex.",
-                PostFailureKind.InvalidActorId);
-            return false;
-        }
-
-        if (row.Generations[slotIndex] != actorId.Generation)
-        {
-            failure = PostResult.Failure(
-                ActorPostStatus.ActorNotFound,
-                "ActorId generation mismatch.",
-                PostFailureKind.InvalidActorId);
-            return false;
-        }
-
-        ActorSlotFlags flags = row.SlotFlags[slotIndex];
-        if ((flags & ActorSlotFlags.Alive) == 0)
-        {
-            failure = PostResult.Failure(
-                ActorPostStatus.ActorNotAlive,
-                "Actor slot is not alive.",
-                PostFailureKind.InvalidActorId);
-            return false;
-        }
-
-        if ((flags & ActorSlotFlags.PendingDestroy) != 0)
-        {
-            failure = PostResult.Failure(
-                ActorPostStatus.ActorPendingDestroy,
-                "Actor is pending destroy.",
-                PostFailureKind.PendingDestroy);
-            return false;
-        }
-
-        if ((flags & ActorSlotFlags.Destroying) != 0)
-        {
-            failure = PostResult.Failure(
-                ActorPostStatus.ActorNotAlive,
-                "Actor is destroying.",
-                PostFailureKind.Destroying);
-            return false;
-        }
-
-        if (state.RejectDisabled
-            && (flags & ActorSlotFlags.Enabled) == 0)
-        {
-            failure = PostResult.Failure(
-                ActorPostStatus.ActorDisabledRejected,
-                "Actor is disabled.",
-                PostFailureKind.DisabledActor);
+            failure = BuildPostableStampRejectedCold(actorId);
             return false;
         }
 
         failure = PostResult.Success;
-        return true;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal bool CanPostSlot<TEvent>(
-        EventPostRow<TEvent> row,
-        EventPostState<TEvent> state,
-        int slotIndex)
-        where TEvent : struct
-    {
-        if ((uint)slotIndex >= (uint)row.SlotFlags.Length)
-        {
-            return false;
-        }
-
-        ActorSlotFlags flags = row.SlotFlags[slotIndex];
-        if ((flags & ActorSlotFlags.Alive) == 0)
-        {
-            return false;
-        }
-
-        if ((flags & state.RejectMask) != 0)
-        {
-            return false;
-        }
-
-        if (state.RejectDisabled
-            && (flags & ActorSlotFlags.Enabled) == 0)
-        {
-            return false;
-        }
-
         return true;
     }
 
@@ -544,8 +599,31 @@ public sealed partial class ActorWorld
                 return PostResult.Failure(
                     ActorPostStatus.MailFullRejected,
                     "Grow failure policy is not supported.",
-                PostFailureKind.MailboxFull);
+                    PostFailureKind.MailboxFull);
         }
+    }
+
+    private static EventPostRow<TEvent>[] CreateRows<TEvent>(int archetypeCapacity)
+        where TEvent : struct
+    {
+        EventPostRow<TEvent> invalid = CreateInvalidRow<TEvent>();
+        var rows = new EventPostRow<TEvent>[Math.Max(archetypeCapacity, 1)];
+        for (int i = 0; i < rows.Length; i++)
+        {
+            rows[i] = invalid;
+        }
+
+        return rows;
+    }
+
+    private static EventPostRow<TEvent> CreateInvalidRow<TEvent>()
+        where TEvent : struct
+    {
+        return new EventPostRow<TEvent>(
+            Array.Empty<EventMail<TEvent>>(),
+            DirtySlotList.Empty,
+            -1,
+            null);
     }
 
     private static void EnsureRowsCapacity<TEvent>(
@@ -558,6 +636,7 @@ public sealed partial class ActorWorld
             return;
         }
 
+        int oldSize = rows.Length;
         int newSize = rows.Length == 0 ? 4 : rows.Length;
         while (newSize <= archetypeId)
         {
@@ -565,5 +644,10 @@ public sealed partial class ActorWorld
         }
 
         Array.Resize(ref rows, newSize);
+        EventPostRow<TEvent> invalid = CreateInvalidRow<TEvent>();
+        for (int i = oldSize; i < newSize; i++)
+        {
+            rows[i] = invalid;
+        }
     }
 }

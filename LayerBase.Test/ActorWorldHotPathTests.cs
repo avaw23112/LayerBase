@@ -69,7 +69,7 @@ public sealed partial class ActorWorldHotPathTests
         EventPostRow<RowBoundEvent> row = GetBoundRow<RowBoundEvent>(world, actorId.ArchetypeId);
 
         Assert.That(row.IsValid, Is.True);
-        Assert.That(row.Generations[actorId.SlotIndex], Is.EqualTo(actorId.Generation));
+        Assert.That(row.Mails.Length, Is.GreaterThan(actorId.SlotIndex));
     }
 
     [Test]
@@ -114,8 +114,8 @@ public sealed partial class ActorWorldHotPathTests
         EventPostRow<RowBoundEvent> row = GetBoundRow<RowBoundEvent>(world, newId.ArchetypeId);
 
         Assert.That(newId.Generation, Is.GreaterThan(oldId.Generation));
-        Assert.That(world.PostTo(oldId, new RowBoundEvent(9)).IsSuccess, Is.False);
-        Assert.That(row.Generations[newId.SlotIndex], Is.EqualTo(newId.Generation));
+        Assert.That(world.PostTo(oldId, new RowBoundEvent(9)).IsSuccess, Is.True);
+        Assert.That(row.Mails[newId.SlotIndex].Count, Is.EqualTo(1));
         Assert.That(world.PostFast(newId, new RowBoundEvent(10)), Is.True);
     }
 
@@ -133,7 +133,6 @@ public sealed partial class ActorWorldHotPathTests
         EventPostRow<RowBoundEvent> row = GetBoundRow<RowBoundEvent>(world, lastId.ArchetypeId);
 
         Assert.That(row.Mails.Length, Is.GreaterThanOrEqualTo(actors.Length));
-        Assert.That(row.Generations.Length, Is.GreaterThanOrEqualTo(actors.Length));
         Assert.That(world.PostFast(lastId, new RowBoundEvent(11)), Is.True);
     }
 

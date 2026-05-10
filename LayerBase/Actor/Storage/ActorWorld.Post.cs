@@ -11,26 +11,10 @@ public sealed partial class ActorWorld
         in TEvent value)
         where TEvent : struct
     {
-        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetState(this);
+        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetStateUnchecked(RuntimeIndex);
         if (state == null)
         {
-            return PostResult.Failure(
-                ActorPostStatus.EventNotSupported,
-                "Event post state is not built.",
-                PostFailureKind.UnsupportedEvent);
-        }
-
-        if (state.Route == ActorPostRouteKind.DiagnosticOnly)
-        {
-            return TryPostToDiagnostic(actorId, in value);
-        }
-
-        if (state.Route == ActorPostRouteKind.Disabled)
-        {
-            return PostResult.Failure(
-                ActorPostStatus.EventNotSupported,
-                "ActorPost is disabled for this event.",
-                PostFailureKind.UnsupportedEvent);
+            return BuildEventNotSupportedCold<TEvent>();
         }
 
         return PostCompiled(actorId, in value, state);
@@ -53,9 +37,6 @@ public sealed partial class ActorWorld
         in TEvent value)
         where TEvent : struct
     {
-        return PostResult.Failure(
-            ActorPostStatus.EventNotSupported,
-            "DiagnosticOnly route: post is not allowed through default path.",
-            PostFailureKind.UnsupportedEvent);
+        return BuildEventNotSupportedCold<TEvent>();
     }
 }

@@ -9,5 +9,7 @@ public enum ActorPostStatus
     ActorPendingDestroy = 4,
     MailFullRejected = 5,
     EventNotSupported = 6,
-    MergeFailed = 7
+    MergeFailed = 7,
+    PhysicalTargetInvalid = 8,
+    RejectedByPostableStamp = 9
 }

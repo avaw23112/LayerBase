@@ -213,6 +213,22 @@ internal sealed class BehaviourArchetype
         return storage.MarkPendingDestroy(actorId.SlotIndex, actorId.Generation);
     }
 
+    internal void PostAll<TEvent>(
+        ActorWorld world,
+        EventPostState<TEvent> state,
+        byte routeCode,
+        in TEvent value)
+        where TEvent : struct
+    {
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
+        {
+            return;
+        }
+
+        storage.PostAll(world, state, routeCode, in value);
+    }
+
     internal void SweepPendingDestroy(ActorWorld world)
     {
         for (int i = 0; i < _storages.Length; i++)

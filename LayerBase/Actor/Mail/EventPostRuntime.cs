@@ -5,22 +5,26 @@ internal static class EventPostRuntime<TEvent>
 {
     private static EventPostState<TEvent>?[] s_statesByWorld = new EventPostState<TEvent>?[4];
 
-    public static void BindWorld(ActorWorld world, EventPostState<TEvent> state)
-    {
-        int worldIndex = world.RuntimeIndex;
-        EnsureWorldCapacity(worldIndex);
-        s_statesByWorld[worldIndex] = state;
-    }
-
     public static EventPostState<TEvent>? GetState(ActorWorld world)
     {
-        int worldIndex = world.RuntimeIndex;
+        return GetStateUnchecked(world.RuntimeIndex);
+    }
+
+    public static EventPostState<TEvent>? GetStateUnchecked(int worldIndex)
+    {
         if ((uint)worldIndex >= (uint)s_statesByWorld.Length)
         {
             return null;
         }
 
         return s_statesByWorld[worldIndex];
+    }
+
+    public static void BindWorld(ActorWorld world, EventPostState<TEvent> state)
+    {
+        int worldIndex = world.RuntimeIndex;
+        EnsureWorldCapacity(worldIndex);
+        s_statesByWorld[worldIndex] = state;
     }
 
     public static void UnbindWorld(int worldIndex)
