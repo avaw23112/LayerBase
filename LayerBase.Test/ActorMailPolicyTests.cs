@@ -118,9 +118,9 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        Assert.That(world.TryPostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
-        Assert.That(world.TryPostTo(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
-        Assert.That(world.TryPostTo(actorId, new ActorMailPolicyEvent(3)).IsSuccess, Is.True);
+        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
+        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
+        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(3)).IsSuccess, Is.True);
 
         Pump(world);
 
@@ -142,9 +142,9 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        Assert.That(world.TryPostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
-        Assert.That(world.TryPostTo(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
-        Assert.That(world.TryPostTo(actorId, new ActorMailPolicyEvent(3)).IsSuccess, Is.False);
+        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
+        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
+        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(3)).IsSuccess, Is.False);
     }
 
     [Test]
@@ -162,9 +162,9 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        world.TryPostTo(actorId, new ActorMailPolicyEvent(1));
-        world.TryPostTo(actorId, new ActorMailPolicyEvent(2));
-        world.TryPostTo(actorId, new ActorMailPolicyEvent(3));
+        world.PostTo(actorId, new ActorMailPolicyEvent(1));
+        world.PostTo(actorId, new ActorMailPolicyEvent(2));
+        world.PostTo(actorId, new ActorMailPolicyEvent(3));
 
         Pump(world);
 
@@ -186,9 +186,9 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        world.TryPostTo(actorId, new ActorMailPolicyEvent(1));
-        world.TryPostTo(actorId, new ActorMailPolicyEvent(2));
-        world.TryPostTo(actorId, new ActorMailPolicyEvent(3));
+        world.PostTo(actorId, new ActorMailPolicyEvent(1));
+        world.PostTo(actorId, new ActorMailPolicyEvent(2));
+        world.PostTo(actorId, new ActorMailPolicyEvent(3));
 
         Pump(world);
 
@@ -210,7 +210,7 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        world.TryPostTo(actorId, new ActorMailPolicyEvent(1));
+        world.PostTo(actorId, new ActorMailPolicyEvent(1));
         Pump(world);
 
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)), Is.EqualTo(0));
@@ -232,7 +232,7 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        Assert.That(world.TryPostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
+        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
 
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)), Is.GreaterThan(0));
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Count)), Is.EqualTo(1));
@@ -254,8 +254,8 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        Assert.That(world.TryPostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
-        Assert.That(world.TryPostTo(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
+        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
+        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
 
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)), Is.GreaterThan(0));
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Count)), Is.EqualTo(2));
@@ -274,7 +274,7 @@ public class ActorMailPolicyTests
     {
         for (int i = fromInclusive; i <= toInclusive; i++)
         {
-            PostResult result = world.TryPostTo(actorId, new ActorMailPolicyEvent(i));
+            PostResult result = world.PostTo(actorId, new ActorMailPolicyEvent(i));
             Assert.That(result.IsSuccess, Is.True, $"Failed to post value {i}.");
         }
     }

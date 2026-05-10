@@ -149,7 +149,7 @@ public class ActorHardeningTests
         Assert.That(pendingInfo.IsValid, Is.True);
         Assert.That(pendingInfo.IsPendingDestroy, Is.True);
 
-        PostResult pendingPost = world.TryPostTo(actorId, new ActorHardeningEvent(1));
+        PostResult pendingPost = world.PostTo(actorId, new ActorHardeningEvent(1));
         Assert.That(pendingPost.IsSuccess, Is.True);
 
         var budget = new RuntimeFrameBudget(16, 0, 0);
@@ -236,8 +236,8 @@ public class ActorHardeningTests
         HardeningProbeActor actor = world.CreateActor<HardeningProbeActor>();
         ActorId actorId = actor.GetActorId();
 
-        PostResult first = world.TryPostTo(actorId, new ActorHardeningUnmergeableEvent(4));
-        PostResult second = world.TryPostTo(actorId, new ActorHardeningUnmergeableEvent(5));
+        PostResult first = world.PostTo(actorId, new ActorHardeningUnmergeableEvent(4));
+        PostResult second = world.PostTo(actorId, new ActorHardeningUnmergeableEvent(5));
 
         Assert.That(first.IsSuccess, Is.True);
         Assert.That(second.IsSuccess, Is.False);
@@ -313,7 +313,7 @@ public class ActorHardeningTests
         HardeningProbeActor actorB = world.CreateActor<HardeningProbeActor>();
 
         actorA.PostInside(new ActorHardeningEvent(1));
-        actorA.PostInside(new ActorHardeningEvent(2));
+        world.PostTo(actorA.GetActorId(), new ActorHardeningEvent(2));
         actorB.PostInside(new ActorHardeningEvent(10));
         actorB.PostInside(new ActorHardeningEvent(11));
 

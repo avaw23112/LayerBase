@@ -30,7 +30,7 @@ public readonly struct ActorContext
     public PostResult TryPostInside<TEvent>(in TEvent value)
         where TEvent : struct
     {
-        return World.TryPostTo(ActorId, in value);
+        return World.PostTo(ActorId, in value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

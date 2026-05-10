@@ -758,19 +758,6 @@ public static class ServiceExtensions
                .Runtime.PostTo(actorId,in value, postPolicy, fullPolicy);
     }
 
-    public static PostResult TryPostTo<TEvent>(
-        this IService service,
-        ActorId              actorId,
-        in TEvent            value,
-        ActorPostPolicy?     postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
-        where TEvent : struct
-    {
-        return service
-               .GetBinding()
-               .Runtime.TryPostTo(actorId,in value, postPolicy, fullPolicy);
-    }
-
     public static void PostToMany<TEvent>(
         this IService service,
         ReadOnlySpan<ActorId> actorIds,
@@ -1069,19 +1056,6 @@ public static class LayerContextExtensions
         return context
                .GetBinding()
                .Runtime.PostTo(actorId,in value, postPolicy, fullPolicy);
-    }
-
-    public static PostResult TryPostTo<TEvent>(
-        this ILayerContext   context,
-        ActorId              actorId,
-        in TEvent            value,
-        ActorPostPolicy?     postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
-        where TEvent : struct
-    {
-        return context
-               .GetBinding()
-               .Runtime.TryPostTo(actorId,in value, postPolicy, fullPolicy);
     }
 
     public static void PostToMany<TEvent>(

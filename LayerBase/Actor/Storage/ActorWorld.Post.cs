@@ -13,17 +13,6 @@ public sealed partial class ActorWorld
         ActorMailFullPolicy? fullPolicy = null)
         where TEvent : struct
     {
-        return TryPostTo(actorId, in value, postPolicy, fullPolicy);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPostTo<TEvent>(
-        ActorId actorId,
-        in TEvent value,
-        ActorPostPolicy? postPolicy = null,
-        ActorMailFullPolicy? fullPolicy = null)
-        where TEvent : struct
-    {
         if (postPolicy != null || fullPolicy != null)
         {
             return TryPostToSafe(actorId, in value, postPolicy, fullPolicy);
@@ -47,7 +36,7 @@ public sealed partial class ActorWorld
     {
         foreach (ActorId actorId in actorIds)
         {
-            _ = TryPostTo(actorId, in value, postPolicy, fullPolicy);
+            _ = PostTo(actorId, in value, postPolicy, fullPolicy);
         }
     }
 
@@ -68,7 +57,7 @@ public sealed partial class ActorWorld
         {
             return false;
         }
-
+        
         ref readonly EventPostRow<TEvent> row = ref rows[archetypeId];
         if (!row.IsValid)
         {

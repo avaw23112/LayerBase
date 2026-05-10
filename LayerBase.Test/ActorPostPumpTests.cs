@@ -76,9 +76,9 @@ public partial class ActorPostPumpTests
         RecordingActor actor = world.CreateActor<RecordingActor>();
         ActorId validId = actor.GetActorId();
 
-        PostResult invalidArchetype = world.TryPostTo(new ActorId(validId.ArchetypeId + 99, validId.SlotIndex, validId.Generation), new ActorDamageEvent(1));
-        PostResult staleGeneration = world.TryPostTo(new ActorId(validId.ArchetypeId, validId.SlotIndex, validId.Generation + 1), new ActorDamageEvent(1));
-        PostResult unsupportedEvent = world.TryPostTo(validId, new ActorHealEvent(2));
+        PostResult invalidArchetype = world.PostTo(new ActorId(validId.ArchetypeId + 99, validId.SlotIndex, validId.Generation), new ActorDamageEvent(1));
+        PostResult staleGeneration = world.PostTo(new ActorId(validId.ArchetypeId, validId.SlotIndex, validId.Generation + 1), new ActorDamageEvent(1));
+        PostResult unsupportedEvent = world.PostTo(validId, new ActorHealEvent(2));
 
         Assert.That(invalidArchetype.IsSuccess, Is.False);
         Assert.That(staleGeneration.IsSuccess, Is.False);
