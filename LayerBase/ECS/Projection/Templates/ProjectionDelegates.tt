@@ -6,12 +6,17 @@ using Arch.Core;
 
 namespace LayerBase.ECS.Projection.Flow;
 
-<# for (var i = 1; i <= Amount; i++) { #>
-public delegate bool ProjectionPredicate<<#= AppendGenerics(i) #>>(
-        <#= PredicateParams(i) #>);
+<# for (var c = 0; c <= ComponentAmount; c++) { #>
+<# var compG = CG(c); #>
+<# if (c > 0) { #>
+public delegate bool ProjectionPredicate<<#= compG #>>(
+        <#= PredP(c) #>);
+<# } #>
+<# for (var e = 1; e <= EventAmount; e++) { #>
+<# var evtName = e == 1 ? "ProjectionForEach" : $"ProjectionForEach{e}"; #>
+public delegate void <#= evtName #><<#= AG(c, e) #>>(
+        <#= FEP(c, e) #>)
+    <#= FEC(e) #>;
 
-public delegate void ProjectionForEach<<#= AppendGenerics(i) #>, TEvent>(
-        <#= ForEachParams(i) #>)
-    where TEvent : struct;
-
+<# } #>
 <# } #>

@@ -1,0 +1,63 @@
+<#@ template language="C#" #>
+<#@ output extension=".cs" #>
+<#@ include file="Helpers.ttinclude" #>
+#nullable enable
+using Arch.Core;
+
+namespace LayerBase.ECS.Projection.Flow;
+
+<# for (var c = 1; c <= ComponentAmount; c++) { #>
+<# var compG = CG(c); #>
+<# var compGP = $"<{compG}>"; #>
+<# for (var e = 2; e <= EventAmount; e++) { #>
+<# var allG = AG(c, e); #>
+<# var cons = FEC(e); #>
+<# var dName = e == 1 ? "ProjectionForEach" : $"ProjectionForEach{e}"; #>
+<# var suffix = $"{e}e"; #>
+<# var execSuffix = $"{e}E"; #>
+public readonly struct ProjectionBringFlow<#= c #>_<#= suffix #><<#= allG #>>
+<#= cons #>
+{
+    private readonly World _world;
+    private readonly Query _query;
+    private readonly ProjectionPredicate<#= compGP #>? _predicate;
+
+    internal ProjectionBringFlow<#= c #>_<#= suffix #>(World world, Query query, ProjectionPredicate<#= compGP #>? predicate)
+    {
+        _world = world;
+        _query = query;
+        _predicate = predicate;
+    }
+
+    public ProjectionPostFlow<#= c #>_<#= suffix #><<#= allG #>> ForEach(<#= dName #><<#= allG #>> forEach)
+    {
+        return new ProjectionPostFlow<#= c #>_<#= suffix #><<#= allG #>>(_world, _query, _predicate, forEach);
+    }
+}
+
+public readonly struct ProjectionPostFlow<#= c #>_<#= suffix #><<#= allG #>>
+<#= cons #>
+{
+    private readonly World _world;
+    private readonly Query _query;
+    private readonly ProjectionPredicate<#= compGP #>? _predicate;
+    private readonly <#= dName #><<#= allG #>> _forEach;
+
+    internal ProjectionPostFlow<#= c #>_<#= suffix #>(World world, Query query, ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach)
+    {
+        _world = world;
+        _query = query;
+        _predicate = predicate;
+        _forEach = forEach;
+    }
+
+    public ProjectionPostFlow<#= c #>_<#= suffix #><<#= allG #>> Batch() => this;
+
+    public void Post()
+    {
+        ProjectionExecutor<#= c #>_<#= execSuffix #><<#= allG #>>.Post(_world, _query, _predicate, _forEach);
+    }
+}
+
+<# } #>
+<# } #>

@@ -2,25 +2,55 @@
     import namespace="System.Linq"
 #>
 <#+
-const int Amount = 8;
+const int ComponentAmount = 8;
+const int EventAmount = 10;
 
-string AppendGenerics(int count)
+string CG(int count)
 {
-    return string.Join(", ", Enumerable.Range(0, count).Select(i => $"T{i}"));
+    var items = new string[count];
+    for (int i = 0; i < count; i++) items[i] = $"T{i}";
+    return string.Join(", ", items);
 }
 
-string PredicateParams(int count)
+string EG(int count)
 {
-    return string.Join(",
-        ", new[] { "in Entity entity" }
-        .Concat(Enumerable.Range(0, count).Select(i => $"in T{i} c{i}")));
+    var items = new string[count];
+    for (int i = 0; i < count; i++) items[i] = $"TEvent{i}";
+    return string.Join(", ", items);
 }
 
-string ForEachParams(int count)
+string AG(int cc, int ec)
 {
-    return string.Join(",
-        ", new[] { "in Entity entity" }
-        .Concat(Enumerable.Range(0, count).Select(i => $"ref T{i} c{i}"))
-        .Concat(new[] { "ref TEvent output" }));
+    var total = cc + ec;
+    var items = new string[total];
+    for (int i = 0; i < cc; i++) items[i] = $"T{i}";
+    for (int i = 0; i < ec; i++) items[cc + i] = $"TEvent{i}";
+    return string.Join(", ", items);
+}
+
+string PredP(int cc)
+{
+    var items = new string[1 + cc];
+    items[0] = "in Entity entity";
+    for (int i = 0; i < cc; i++) items[1 + i] = $"in T{i} c{i}";
+    return string.Join(",\n        ", items);
+}
+
+string FEP(int cc, int ec)
+{
+    var total = 1 + cc + ec;
+    var items = new string[total];
+    int idx = 0;
+    items[idx++] = "in Entity entity";
+    for (int i = 0; i < cc; i++) items[idx++] = $"ref T{i} c{i}";
+    for (int i = 0; i < ec; i++) items[idx++] = $"ref TEvent{i} e{i}";
+    return string.Join(",\n        ", items);
+}
+
+string FEC(int ec)
+{
+    var items = new string[ec];
+    for (int i = 0; i < ec; i++) items[i] = $"where TEvent{i} : struct";
+    return string.Join("\n    ", items);
 }
 #>
