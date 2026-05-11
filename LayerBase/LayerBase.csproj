@@ -19,6 +19,7 @@
         <Version>1.4.8.2</Version>
         <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
         <PackageOutputPath>$(MSBuildProjectDirectory)/../nupkgs</PackageOutputPath>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>
@@ -28,6 +29,7 @@
 
     <!-- 保留工具目录结构 -->
     <ItemGroup>
+        <Folder Include="ECS\" />
         <Folder Include="Tools\"/>
     </ItemGroup>
 
@@ -49,9 +51,15 @@
         <ProjectReference Include="..\LayerBase.Generator\LayerBase.Generator\LayerBase.Generator.csproj"
                           OutputItemType="Analyzer"
                           ReferenceOutputAssembly="false"/>
+  
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0"/>
+        <PackageReference Include="Arch.LowLevel" Version="1.1.5" />
+        <PackageReference Include="Collections.Pooled" Version="2.0.0-preview.27" />
+        <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.2.2" />
+        <PackageReference Include="ZeroAllocJobScheduler" Version="1.1.2" />
+        <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="7.0.0" />
     </ItemGroup>
 
 </Project>
