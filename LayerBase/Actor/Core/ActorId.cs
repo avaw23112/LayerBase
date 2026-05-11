@@ -2,29 +2,24 @@ namespace LayerBase.Actor;
 
 public readonly struct ActorId : IEquatable<ActorId>
 {
-    public readonly int ArchetypeId;
-    public readonly int SlotIndex;
-    public readonly int Generation;
-    
     public static readonly ActorId Invalid = new(
         archetypeId: -1,
         slotIndex: -1,
         generation: -1);
-    
+
+    public readonly int ArchetypeId;
+    public readonly int SlotIndex;
+    public readonly int Generation;
+
     public bool IsValid
     {
         get
         {
-            // IsValid 属性作用：
-            // 判断当前 ActorId 是否可以作为 ActorWorld.PostTo 的目标。
-            // ActorId.Invalid 会返回 false。
-
             return ArchetypeId >= 0
-                   && SlotIndex >= 0
-                   && Generation >= 0;
+                   && SlotIndex >= 0;
         }
     }
-    
+
     public ActorId(int archetypeId, int slotIndex, int generation)
     {
         ArchetypeId = archetypeId;

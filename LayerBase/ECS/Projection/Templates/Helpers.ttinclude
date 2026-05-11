@@ -1,0 +1,26 @@
+<#@
+    import namespace="System.Linq"
+#>
+<#+
+const int Amount = 8;
+
+string AppendGenerics(int count)
+{
+    return string.Join(", ", Enumerable.Range(0, count).Select(i => $"T{i}"));
+}
+
+string PredicateParams(int count)
+{
+    return string.Join(",
+        ", new[] { "in Entity entity" }
+        .Concat(Enumerable.Range(0, count).Select(i => $"in T{i} c{i}")));
+}
+
+string ForEachParams(int count)
+{
+    return string.Join(",
+        ", new[] { "in Entity entity" }
+        .Concat(Enumerable.Range(0, count).Select(i => $"ref T{i} c{i}"))
+        .Concat(new[] { "ref TEvent output" }));
+}
+#>

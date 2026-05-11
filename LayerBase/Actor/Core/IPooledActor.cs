@@ -1,10 +1,12 @@
 namespace LayerBase.Actor;
 
 /// <summary>
-/// 显式允许对象池复用的 Actor。
+/// ?????????? Actor?
 /// </summary>
 public interface IPooledActor : IActor
 {
+    long RecycleDeadlineTicks { get; set; }
+
     void OnRent();
 
     void OnReturn();

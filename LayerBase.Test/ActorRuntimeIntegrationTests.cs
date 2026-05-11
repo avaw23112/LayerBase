@@ -134,7 +134,7 @@ public class ActorRuntimeIntegrationTests
     }
 
     [Test]
-    public void Actor_world_runs_after_post_scheduler_and_before_layer_update()
+    public void Actor_world_runs_after_post_scheduler_and_after_layer_update()
     {
         LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(), PostSchedulerOptions.Default);
         IntegrationActor actor = runtime.Actors.CreateActor<IntegrationActor>();
@@ -144,7 +144,7 @@ public class ActorRuntimeIntegrationTests
 
         runtime.Pump(0.016f);
 
-        Assert.That(ActorRuntimeIntegrationTrace.Entries, Is.EqualTo(new[] { "scheduler:1", "actor:2", "update" }));
+        Assert.That(ActorRuntimeIntegrationTrace.Entries, Is.EqualTo(new[] { "scheduler:1", "update", "actor:2" }));
     }
 
     [Test]
@@ -173,7 +173,7 @@ public class ActorRuntimeIntegrationTests
     }
 
     [Test]
-    public void Actor_lifecycle_runs_after_behaviour_and_before_layer_update()
+    public void Actor_lifecycle_runs_after_behaviour_and_after_layer_update()
     {
         LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(), PostSchedulerOptions.Default);
         RuntimeLifecycleActor actor = runtime.Actors.CreateActor<RuntimeLifecycleActor>();
@@ -188,7 +188,7 @@ public class ActorRuntimeIntegrationTests
 
         Assert.That(
             ActorRuntimeIntegrationTrace.Entries,
-            Is.EqualTo(new[] { "scheduler:1", "actor:2", "fixed:0.017", "actor-update:0.016", "late:0.016", "update" }));
+            Is.EqualTo(new[] { "scheduler:1", "update", "actor:2", "fixed:0.017", "actor-update:0.016", "late:0.016" }));
     }
 
     [Test]

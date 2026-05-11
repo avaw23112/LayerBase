@@ -1,0 +1,14 @@
+<#@ template language="C#" #>
+<#@ output extension=".cs" #>
+<#@ include file="Helpers.ttinclude" #>
+#nullable enable
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using Arch.Core;
+using CommunityToolkit.HighPerformance;
+using LayerBase.Actor;
+using LayerBase.ECS.Projection;
+
+namespace LayerBase.ECS.Projection.Flow;
+
+// See generated ProjectionExecutor.g.cs for the concrete emitted bodies.

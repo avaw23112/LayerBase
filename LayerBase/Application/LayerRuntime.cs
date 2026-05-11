@@ -56,6 +56,7 @@ public sealed partial class LayerRuntime : IDisposable
         EventCenter = new EventCenter();
         Actors = new ActorWorld(this);
         Services = new WorldServiceRoot(this);
+        InitializeEcsWorld();
         LayerHub.Internal_Register(this);
     }
 
@@ -210,6 +211,8 @@ public sealed partial class LayerRuntime : IDisposable
             PostPumpStats postStats = _scheduler?.Pump()
                 ?? new PostPumpStats(0, 0, 0, 0);
 
+            _chain?.Pump(deltaTime);
+
             if (_scheduler != null)
             {
                 RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
@@ -223,9 +226,9 @@ public sealed partial class LayerRuntime : IDisposable
                     fixedDeltaTime: actorFixedDeltaTime,
                     pumpFixedUpdate: pumpActorFixedUpdate,
                     budget: ref actorBudget);
-            }
 
-            _chain?.Pump(deltaTime);
+                EcsWorld.SweepProjectedActors();
+            }
         }
         else
         {
@@ -269,6 +272,8 @@ public sealed partial class LayerRuntime : IDisposable
             PostPumpStats postStats = _scheduler?.Pump()
                 ?? new PostPumpStats(0, 0, 0, 0);
 
+            _chain?.Pump(deltaTime);
+
             if (_scheduler != null)
             {
                 RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
@@ -282,9 +287,9 @@ public sealed partial class LayerRuntime : IDisposable
                     fixedDeltaTime: actorFixedDeltaTime,
                     pumpFixedUpdate: pumpActorFixedUpdate,
                     budget: ref actorBudget);
-            }
 
-            _chain?.Pump(deltaTime);
+                EcsWorld.SweepProjectedActors();
+            }
         }
     }
 
@@ -521,6 +526,7 @@ public sealed partial class LayerRuntime : IDisposable
         _chain = null;
         Actors.RuntimeStop();
         Actors.Dispose();
+        EcsWorld.Dispose();
 
         // 释放当前世界内的 Singleton 实例�?
         Services.Dispose();

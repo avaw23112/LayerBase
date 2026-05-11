@@ -1,11 +1,21 @@
 using LayerBase.Core.Event;
 using LayerBase.Async;
 using System.Text;
+using LayerBase.ECS.Projection;
 
 namespace LayerBase.Actor;
 
 internal abstract class TypedStorageRuntime
 {
+    internal abstract bool TryGetActor(
+        ActorId actorId,
+        out IActor? actor);
+
+    internal abstract bool ReleaseProjectedActor(
+        ActorId actorId,
+        ActorWorld world,
+        ProjectedActorReleasePolicy releasePolicy);
+
     public abstract bool IsAlive(int slotIndex, int generation);
 
     public abstract ActorSlotState GetSlotState(int slotIndex);

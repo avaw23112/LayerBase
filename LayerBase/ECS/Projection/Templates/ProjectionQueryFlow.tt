@@ -1,0 +1,9 @@
+<#@ template language="C#" #>
+<#@ output extension=".cs" #>
+<#@ include file="Helpers.ttinclude" #>
+#nullable enable
+using Arch.Core;
+
+namespace LayerBase.ECS.Projection.Flow;
+
+// See generated ProjectionQueryFlow.g.cs for the concrete emitted bodies.

@@ -102,6 +102,8 @@ internal sealed partial class HardeningPooledActor : IPooledActor
     public static int RentCount { get; set; }
     public static int ReturnCount { get; set; }
 
+    public long RecycleDeadlineTicks { get; set; }
+
     [ActorBehaviour]
     private void OnEvent(in ActorHardeningEvent value)
     {
@@ -110,11 +112,13 @@ internal sealed partial class HardeningPooledActor : IPooledActor
     public void OnRent()
     {
         RentCount++;
+        RecycleDeadlineTicks = 0;
     }
 
     public void OnReturn()
     {
         ReturnCount++;
+        RecycleDeadlineTicks = 0;
     }
 }
 

@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using LayerBase.Core.Event;
 using LayerBase.Async;
+using LayerBase.ECS.Projection;
 
 namespace LayerBase.Actor;
 
@@ -62,6 +63,59 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
         _freeList = new ActorSlotFreeList(_actors.Length);
         _nextSlotIndex = 0;
+    }
+
+    internal override bool TryGetActor(
+        ActorId actorId,
+        out IActor? actor)
+    {
+        int slotIndex = actorId.SlotIndex;
+        if ((uint)slotIndex >= (uint)_actors.Length)
+        {
+            actor = null;
+            return false;
+        }
+
+        if (_generations[slotIndex] != actorId.Generation)
+        {
+            actor = null;
+            return false;
+        }
+
+        TActor? typedActor = _actors[slotIndex];
+        if (typedActor == null)
+        {
+            actor = null;
+            return false;
+        }
+
+        actor = typedActor;
+        return true;
+    }
+
+    internal override bool ReleaseProjectedActor(
+        ActorId actorId,
+        ActorWorld world,
+        ProjectedActorReleasePolicy releasePolicy)
+    {
+        int slotIndex = actorId.SlotIndex;
+        if ((uint)slotIndex >= (uint)_actors.Length
+            || _generations[slotIndex] != actorId.Generation
+            || _actors[slotIndex] == null)
+        {
+            return false;
+        }
+
+        if (releasePolicy == ProjectedActorReleasePolicy.DetachAndLetActorFinish)
+        {
+            return true;
+        }
+
+        ClearAllMails(slotIndex);
+        FinalizeDestroySlot(slotIndex, world);
+        _structuralDirtyFlags[slotIndex] = ActorStructuralDirtyFlags.None;
+        RefreshPostGenerations(slotIndex);
+        return true;
     }
 
     public override bool IsLifecycleRunnable(int slotIndex, int generation)

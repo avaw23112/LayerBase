@@ -11,6 +11,7 @@ using Arch.Core.Utils;
 using Arch.LowLevel;
 using Collections.Pooled;
 using CommunityToolkit.HighPerformance;
+using LayerBase.ECS.Projection;
 using Array = System.Array;
 
 namespace Arch.Core;
@@ -178,6 +179,8 @@ public partial struct Chunk
             var type = types[index];
             Components[index] = ArrayRegistry.GetArray(type, Capacity);
         }
+
+        InitializeProjectionStorage(capacity);
     }
 
 
@@ -337,6 +340,9 @@ public partial struct Chunk
             var array = components[i];
             Array.Copy(array, lastIndex, array, index, 1);
         }
+
+        ProjectedActors[index] = ProjectedActors[lastIndex];
+        ProjectedActors[lastIndex] = ProjectedActorMeta.None;
 
         // Update the mapping.
         Count = lastIndex;
@@ -610,6 +616,7 @@ public partial struct Chunk
         // Copy entities array
         Array.Copy(entities, index, destination.Entities, destinationIndex, length);
         CopyComponents(ref source, index, ref sourceSignature, ref destination, destinationIndex, length);
+        Array.Copy(source.ProjectedActors, index, destination.ProjectedActors, destinationIndex, length);
     }
 
     /// <summary>
@@ -664,6 +671,9 @@ public partial struct Chunk
             var desArray = Components[i];
             Array.Copy(sourceArray, lastIndex, desArray, index, 1);
         }
+
+        ProjectedActors[index] = chunk.ProjectedActors[lastIndex];
+        chunk.ProjectedActors[lastIndex] = ProjectedActorMeta.None;
 
         chunk.Count--;
         return lastEntity.Id;

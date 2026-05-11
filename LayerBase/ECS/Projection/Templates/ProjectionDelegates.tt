@@ -1,0 +1,17 @@
+<#@ template language="C#" #>
+<#@ output extension=".cs" #>
+<#@ include file="Helpers.ttinclude" #>
+#nullable enable
+using Arch.Core;
+
+namespace LayerBase.ECS.Projection.Flow;
+
+<# for (var i = 1; i <= Amount; i++) { #>
+public delegate bool ProjectionPredicate<<#= AppendGenerics(i) #>>(
+        <#= PredicateParams(i) #>);
+
+public delegate void ProjectionForEach<<#= AppendGenerics(i) #>, TEvent>(
+        <#= ForEachParams(i) #>)
+    where TEvent : struct;
+
+<# } #>

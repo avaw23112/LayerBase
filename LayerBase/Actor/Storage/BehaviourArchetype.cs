@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Async;
 using System.Text;
+using LayerBase.ECS.Projection;
 
 namespace LayerBase.Actor;
 
@@ -37,6 +38,39 @@ internal sealed class BehaviourArchetype
         return storage.IsLifecycleRunnable(
             actorId.SlotIndex,
             actorId.Generation);
+    }
+
+    internal bool TryGetActor(
+        ActorId actorId,
+        out IActor? actor)
+    {
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
+        {
+            actor = null;
+            return false;
+        }
+
+        return storage.TryGetActor(
+            actorId,
+            out actor);
+    }
+
+    internal bool ReleaseProjectedActor(
+        ActorId actorId,
+        ActorWorld world,
+        ProjectedActorReleasePolicy releasePolicy)
+    {
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
+        {
+            return false;
+        }
+
+        return storage.ReleaseProjectedActor(
+            actorId,
+            world,
+            releasePolicy);
     }
 
     public TypedActorStorage<TActor> GetOrCreateStorage<TActor>(ActorTypeMeta<TActor> meta, ActorWorld world)

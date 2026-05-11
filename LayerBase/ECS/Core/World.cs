@@ -9,6 +9,7 @@ using Arch.Core.Extensions.Internal;
 using Arch.Core.Utils;
 using Collections.Pooled;
 using CommunityToolkit.HighPerformance;
+using LayerBase.ECS.Projection;
 using Schedulers;
 using Array = System.Array;
 
@@ -337,6 +338,11 @@ public partial class World : IDisposable
         var slot = data.Slot;
         var allocatedEntities = destination.Add(entity, out _, out destinationSlot);
         Archetype.CopyComponents(source, ref slot, destination, ref destinationSlot);
+
+        ref Chunk sourceChunk = ref source.GetChunk(slot.ChunkIndex);
+        ref Chunk destinationChunk = ref destination.GetChunk(destinationSlot.ChunkIndex);
+        destinationChunk.ProjectionAt(destinationSlot.Index) = sourceChunk.ProjectionAt(slot.Index);
+
         source.Remove(slot, out var movedEntity);
 
         // Update moved entity from the remove
@@ -374,6 +380,15 @@ public partial class World : IDisposable
 
         // Remove from archetype and move other entity to replace its slot
         ref var entityData = ref EntityInfo.GetEntityData(entity.Id);
+        ref ProjectedActorMeta projection = ref entityData.Chunk.ProjectionAt(entityData.Slot.Index);
+        if (projection.ActorId.IsValid)
+        {
+            Runtime.Actors.ReleaseProjectedActor(
+                projection.ActorId,
+                projection.ReleasePolicy);
+        }
+
+        projection = ProjectedActorMeta.None;
         entityData.Archetype.Remove(entityData.Slot, out var movedEntityId);
         EntityInfo.Move(movedEntityId, entityData.Slot);
 
