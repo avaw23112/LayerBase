@@ -11,4 +11,412 @@ using LayerBase.ECS.Projection;
 
 namespace LayerBase.ECS.Projection.Flow;
 
-// See generated ProjectionExecutor.g.cs for the concrete emitted bodies.
+internal static class ProjectionExecutor0
+{
+    public static void Post<TEvent>(
+        World world,
+        Query query,
+        ProjectionPredicate? predicate,
+        ProjectionForEach<TEvent> forEach)
+        where TEvent : struct
+    {
+        ActorWorld actorWorld = world.Runtime.Actors;
+        long nowTicks = Stopwatch.GetTimestamp();
+
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        try
+        {
+            foreach (ref Chunk chunk in query.GetChunkIterator())
+            {
+                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+            }
+
+            batch.PostTo(actorWorld);
+        }
+        finally
+        {
+            batch.Dispose();
+        }
+    }
+
+    public static void Touch(
+        World world,
+        Query query,
+        ProjectionPredicate? predicate)
+    {
+        ActorWorld actorWorld = world.Runtime.Actors;
+        long nowTicks = Stopwatch.GetTimestamp();
+
+        foreach (ref Chunk chunk in query.GetChunkIterator())
+        {
+            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CollectPostChunk<TEvent>(
+        World world,
+        ActorWorld actorWorld,
+        ref Chunk chunk,
+        ProjectionPredicate? predicate,
+        ProjectionForEach<TEvent> forEach,
+        long nowTicks,
+        ref ProjectionBatchBuffer<TEvent> batch)
+        where TEvent : struct
+    {
+        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
+        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        int count = chunk.Count;
+
+        for (int row = 0; row < count; row++)
+        {
+            Entity entity = Unsafe.Add(ref firstEntity, row);
+            if (predicate != null && !predicate(in entity))
+            {
+                continue;
+            }
+
+            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            TEvent output = default;
+            forEach(in entity, ref output);
+
+            ActorId actorId = meta.ActorId;
+            if (!actorId.IsValid)
+            {
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                if (!actorId.IsValid) continue;
+            }
+            else
+            {
+                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                actorId = meta.ActorId;
+                if (!actorId.IsValid) continue;
+            }
+
+            batch.Add(actorId, in output);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void TouchChunk(
+        World world,
+        ActorWorld actorWorld,
+        ref Chunk chunk,
+        ProjectionPredicate? predicate,
+        long nowTicks)
+    {
+        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
+        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        int count = chunk.Count;
+
+        for (int row = 0; row < count; row++)
+        {
+            Entity entity = Unsafe.Add(ref firstEntity, row);
+            if (predicate != null && !predicate(in entity))
+            {
+                continue;
+            }
+
+            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            if (!meta.ActorId.IsValid)
+            {
+                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+            }
+            else
+            {
+                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+            }
+        }
+    }
+}
+
+<# for (var e = 2; e <= EventAmount; e++) { #>
+<# var evtG = EG(e); #>
+<# var cons = FEC(e); #>
+<# var dName = EventName(e); #>
+internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
+<#= cons #>
+{
+    public static void Post(World world, Query query, ProjectionPredicate? predicate, <#= dName #><<#= evtG #>> forEach)
+    {
+        ActorWorld actorWorld = world.Runtime.Actors;
+        long nowTicks = Stopwatch.GetTimestamp();
+<# for (var i = 0; i < e; i++) { #>
+        ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> = ProjectionBatchBuffer<TEvent<#= i #>>.Rent();
+<# } #>
+
+        try
+        {
+            foreach (ref Chunk chunk in query.GetChunkIterator())
+            {
+                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks<# for (var i = 0; i < e; i++) { #>,
+                    ref batch<#= i #><# } #>);
+            }
+
+<# for (var i = 0; i < e; i++) { #>
+            batch<#= i #>.PostTo(actorWorld);
+<# } #>
+        }
+        finally
+        {
+<# for (var i = e - 1; i >= 0; i--) { #>
+            batch<#= i #>.Dispose();
+<# } #>
+        }
+    }
+
+    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+        ProjectionPredicate? predicate, <#= dName #><<#= evtG #>> forEach, long nowTicks<# for (var i = 0; i < e; i++) { #>,
+        ref ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #><# } #>)
+    {
+        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
+        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        int count = chunk.Count;
+
+        for (int row = 0; row < count; row++)
+        {
+            Entity entity = Unsafe.Add(ref firstEntity, row);
+
+            if (predicate != null && !predicate(in entity))
+                continue;
+
+            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+
+<# for (var i = 0; i < e; i++) { #>
+            TEvent<#= i #> e<#= i #> = default;
+<# } #>
+
+            forEach(in entity<# for (var i = 0; i < e; i++) { #>, ref e<#= i #><# } #>);
+
+            ActorId actorId = meta.ActorId;
+            if (!actorId.IsValid)
+            {
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                if (!actorId.IsValid) continue;
+            }
+            else
+            {
+                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                actorId = meta.ActorId;
+                if (!actorId.IsValid) continue;
+            }
+
+<# for (var i = 0; i < e; i++) { #>
+            batch<#= i #>.Add(actorId, in e<#= i #>);
+<# } #>
+        }
+    }
+}
+
+<# } #>
+<# for (var c = 1; c <= ComponentAmount; c++) { #>
+<# var compG = CG(c); #>
+<# var compGP = $"<{compG}>"; #>
+internal static class ProjectionExecutor<#= c #><<#= compG #>>
+{
+    public static void Post<TEvent>(
+        World world,
+        Query query,
+        ProjectionPredicate<#= compGP #>? predicate,
+        ProjectionForEach<<#= compG #>, TEvent> forEach)
+        where TEvent : struct
+    {
+        ActorWorld actorWorld = world.Runtime.Actors;
+        long nowTicks = Stopwatch.GetTimestamp();
+
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        try
+        {
+            foreach (ref Chunk chunk in query.GetChunkIterator())
+            {
+                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+            }
+
+            batch.PostTo(actorWorld);
+        }
+        finally
+        {
+            batch.Dispose();
+        }
+    }
+
+    public static void Touch(
+        World world,
+        Query query,
+        ProjectionPredicate<#= compGP #>? predicate)
+    {
+        ActorWorld actorWorld = world.Runtime.Actors;
+        long nowTicks = Stopwatch.GetTimestamp();
+
+        foreach (ref Chunk chunk in query.GetChunkIterator())
+        {
+            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CollectPostChunk<TEvent>(
+        World world,
+        ActorWorld actorWorld,
+        ref Chunk chunk,
+        ProjectionPredicate<#= compGP #>? predicate,
+        ProjectionForEach<<#= compG #>, TEvent> forEach,
+        long nowTicks,
+        ref ProjectionBatchBuffer<TEvent> batch)
+        where TEvent : struct
+    {
+<#= FirstComponentRefs(c) #>
+        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
+        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        int count = chunk.Count;
+
+        for (int row = 0; row < count; row++)
+        {
+<#= RowComponentRefs(c) #>
+            Entity entity = Unsafe.Add(ref firstEntity, row);
+
+            if (predicate != null && !predicate(<#= PredicateArgs(c) #>))
+            {
+                continue;
+            }
+
+            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            TEvent output = default;
+            forEach(in entity<# for (var i = 0; i < c; i++) { #>, ref c<#= i #><# } #>, ref output);
+
+            ActorId actorId = meta.ActorId;
+            if (!actorId.IsValid)
+            {
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                if (!actorId.IsValid) continue;
+            }
+            else
+            {
+                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                actorId = meta.ActorId;
+                if (!actorId.IsValid) continue;
+            }
+
+            batch.Add(actorId, in output);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void TouchChunk(
+        World world,
+        ActorWorld actorWorld,
+        ref Chunk chunk,
+        ProjectionPredicate<#= compGP #>? predicate,
+        long nowTicks)
+    {
+<#= FirstComponentRefs(c) #>
+        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
+        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        int count = chunk.Count;
+
+        for (int row = 0; row < count; row++)
+        {
+<#= RowComponentRefs(c) #>
+            Entity entity = Unsafe.Add(ref firstEntity, row);
+
+            if (predicate != null && !predicate(<#= PredicateArgs(c) #>))
+            {
+                continue;
+            }
+
+            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            if (!meta.ActorId.IsValid)
+            {
+                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+            }
+            else
+            {
+                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+            }
+        }
+    }
+}
+
+<# for (var e = 2; e <= EventAmount; e++) { #>
+<# var evtG = EG(e); #>
+<# var allG = AG(c, e); #>
+<# var cons = FEC(e); #>
+<# var dName = EventName(e); #>
+internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
+<#= cons #>
+{
+    public static void Post(World world, Query query, ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach)
+    {
+        ActorWorld actorWorld = world.Runtime.Actors;
+        long nowTicks = Stopwatch.GetTimestamp();
+<# for (var i = 0; i < e; i++) { #>
+        ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> = ProjectionBatchBuffer<TEvent<#= i #>>.Rent();
+<# } #>
+
+        try
+        {
+            foreach (ref Chunk chunk in query.GetChunkIterator())
+            {
+                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks<# for (var i = 0; i < e; i++) { #>,
+                    ref batch<#= i #><# } #>);
+            }
+
+<# for (var i = 0; i < e; i++) { #>
+            batch<#= i #>.PostTo(actorWorld);
+<# } #>
+        }
+        finally
+        {
+<# for (var i = e - 1; i >= 0; i--) { #>
+            batch<#= i #>.Dispose();
+<# } #>
+        }
+    }
+
+    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+        ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach, long nowTicks<# for (var i = 0; i < e; i++) { #>,
+        ref ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #><# } #>)
+    {
+<#= FirstComponentRefs(c) #>
+        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
+        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        int count = chunk.Count;
+
+        for (int row = 0; row < count; row++)
+        {
+<#= RowComponentRefs(c) #>
+            Entity entity = Unsafe.Add(ref firstEntity, row);
+
+            if (predicate != null && !predicate(<#= PredicateArgs(c) #>))
+                continue;
+
+            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+
+<# for (var i = 0; i < e; i++) { #>
+            TEvent<#= i #> e<#= i #> = default;
+<# } #>
+
+            forEach(<#= ForEachArgs(c, e) #>);
+
+            ActorId actorId = meta.ActorId;
+            if (!actorId.IsValid)
+            {
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                if (!actorId.IsValid) continue;
+            }
+            else
+            {
+                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                actorId = meta.ActorId;
+                if (!actorId.IsValid) continue;
+            }
+
+<# for (var i = 0; i < e; i++) { #>
+            batch<#= i #>.Add(actorId, in e<#= i #>);
+<# } #>
+        }
+    }
+}
+
+<# } #>
+<# } #>

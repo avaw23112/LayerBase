@@ -1,0 +1,31 @@
+<#@ template language="C#" #>
+<#@ output extension=".cs" #>
+<#@ include file="Helpers.ttinclude" #>
+#nullable enable
+using Arch.Core;
+
+namespace LayerBase.ECS.Projection.Create;
+
+public static class EntityCreateWorldExtensions
+{
+    public static EntityCreateFlow0 CreateEntity(
+        this World world)
+    {
+        Entity entity = world.Create();
+        return new EntityCreateFlow0(world, entity);
+    }
+
+<# for (var c = 1; c <= ComponentAmount; c++) { #>
+<# var compG = CG(c); #>
+<# var compParams = string.Join(", ", Enumerable.Range(0, c).Select(i => $"in T{i} c{i}")); #>
+<# var compArgs = string.Join(", ", Enumerable.Range(0, c).Select(i => $"c{i}")); #>
+    public static EntityCreateFlow<#= c #><<#= compG #>> CreateEntity<<#= compG #>>(
+        this World world,
+        <#= compParams #>)
+    {
+        Entity entity = world.Create(<#= compArgs #>);
+        return new EntityCreateFlow<#= c #><<#= compG #>>(world, entity);
+    }
+
+<# } #>
+}

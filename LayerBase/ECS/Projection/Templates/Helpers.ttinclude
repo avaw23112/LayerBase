@@ -53,4 +53,97 @@ string FEC(int ec)
     for (int i = 0; i < ec; i++) items[i] = $"where TEvent{i} : struct";
     return string.Join("\n    ", items);
 }
+
+string EventName(int ec)
+{
+    return ec == 1 ? "ProjectionForEach" : $"ProjectionForEach{ec}";
+}
+
+string FirstComponentRefs(int cc)
+{
+    var lines = new string[cc];
+    for (int i = 0; i < cc; i++)
+        lines[i] = $"        ref T{i} first{i} = ref chunk.GetFirst<T{i}>();";
+    return string.Join("\n", lines);
+}
+
+string RowComponentRefs(int cc)
+{
+    var lines = new string[cc];
+    for (int i = 0; i < cc; i++)
+        lines[i] = $"            ref T{i} c{i} = ref Unsafe.Add(ref first{i}, row);";
+    return string.Join("\n", lines);
+}
+
+string PredicateArgs(int cc)
+{
+    var items = new string[1 + cc];
+    items[0] = "in entity";
+    for (int i = 0; i < cc; i++) items[1 + i] = $"in c{i}";
+    return string.Join(", ", items);
+}
+
+string ForEachArgs(int cc, int ec)
+{
+    var items = new string[1 + cc + ec];
+    int idx = 0;
+    items[idx++] = "in entity";
+    for (int i = 0; i < cc; i++) items[idx++] = $"ref c{i}";
+    for (int i = 0; i < ec; i++) items[idx++] = $"ref e{i}";
+    return string.Join(", ", items);
+}
+
+string EventDefaults(int ec)
+{
+    var lines = new string[ec];
+    for (int i = 0; i < ec; i++)
+        lines[i] = $"            TEvent{i} e{i} = default;";
+    return string.Join("\n", lines);
+}
+
+string BatchDeclarations(int ec)
+{
+    var lines = new string[ec];
+    for (int i = 0; i < ec; i++)
+        lines[i] = $"        ProjectionBatchBuffer<TEvent{i}> batch{i} = ProjectionBatchBuffer<TEvent{i}>.Rent();";
+    return string.Join("\n", lines);
+}
+
+string BatchRefArgs(int ec)
+{
+    var items = new string[ec];
+    for (int i = 0; i < ec; i++) items[i] = $"ref batch{i}";
+    return string.Join(", ", items);
+}
+
+string BatchMethodParams(int ec)
+{
+    var items = new string[ec];
+    for (int i = 0; i < ec; i++) items[i] = $"ref ProjectionBatchBuffer<TEvent{i}> batch{i}";
+    return string.Join(", ", items);
+}
+
+string BatchPosts(int ec)
+{
+    var lines = new string[ec];
+    for (int i = 0; i < ec; i++)
+        lines[i] = $"            batch{i}.PostTo(actorWorld);";
+    return string.Join("\n", lines);
+}
+
+string BatchDisposes(int ec)
+{
+    var lines = new string[ec];
+    for (int i = ec - 1; i >= 0; i--)
+        lines[ec - 1 - i] = $"            batch{i}.Dispose();";
+    return string.Join("\n", lines);
+}
+
+string BatchAdds(int ec)
+{
+    var lines = new string[ec];
+    for (int i = 0; i < ec; i++)
+        lines[i] = $"            batch{i}.Add(actorId, in e{i});";
+    return string.Join("\n", lines);
+}
 #>

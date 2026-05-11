@@ -3,6 +3,8 @@ using Arch.Core;
 
 namespace LayerBase.ECS.Projection.Flow;
 
+public delegate bool ProjectionPredicate(
+        in Entity entity);
 public delegate void ProjectionForEach<TEvent0>(
         in Entity entity,
         ref TEvent0 e0)

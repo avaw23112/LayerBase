@@ -6,4 +6,24 @@ using Arch.Core;
 
 namespace LayerBase.ECS.Projection.Flow;
 
-// See generated ProjectionWorldExtensions.g.cs for the concrete emitted bodies.
+public static class ProjectionWorldExtensions
+{
+    public static ProjectionQueryFlow0 Query(
+        this World world)
+    {
+        QueryDescription description = new QueryDescription();
+        return new ProjectionQueryFlow0(world, world.Query(in description));
+    }
+
+<# for (var c = 1; c <= ComponentAmount; c++) { #>
+<# var compG = CG(c); #>
+    public static ProjectionQueryFlow<#= c #><<#= compG #>> Query<<#= compG #>>(
+        this World world)
+    {
+        QueryDescription description = new QueryDescription();
+        description.WithAll<<#= compG #>>();
+        return new ProjectionQueryFlow<#= c #><<#= compG #>>(world, world.Query(in description));
+    }
+
+<# } #>
+}
