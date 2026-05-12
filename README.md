@@ -36,6 +36,7 @@ LayerBase 的设计哲学是：**用强约束的框架收编混乱的注册，�
 1. **在宏观架构上**：摒弃随地订阅的模式，引入 `Layer -> Service -> Manager` 三层递进的架构。通过依赖注入（DI）和明确的拓扑层级，为团队的协作开发提供完整的心智模型。
 2. **在底层执行上**：汲取 ECS 框架的核心思想，在底层采用纯粹的 SOA 数组布局进行事件路由。使得这一架构不仅规范了代码，更在性能上达到了与顶级
    C++/C# ECS 框架同级别的缓存命中率。
+3. **在行为建模上**：引入 Actor 模型为每个实体提供独立的行为封装——邮箱、生命周期、事件处理器一应俱全，天然适合建模游戏角色、NPC、子弹等具有独立行为的对象。ECS 负责数据密集的批量处理，Actor 负责行为逻辑的封装，两者通过 Projection 机制无缝桥接。
 
 ---
 
@@ -69,6 +70,8 @@ LayerBase 专为高频事件交互设计，在 .NET 8/9 环境下表现卓越。
 1. **自愈熔断机制**：异常隔离与物理熔断，下一帧自动剔除故障节点。
 2. **零分配异步生态 (`LBTask`)**：专为游戏循环调优的结构体 Task。
 3. **静态拓扑审计**：Build 期静态扫描，提前发现同步死循环风险。
+4. **Actor 对象池**：高频创建/销毁的 Actor（如子弹、特效）可启用对象池，避免 GC 压力。
+5. **ECS 蓝图系统**：声明式实体结构定义，支持组件聚合和 Actor 投影绑定。
 
 * 注意：使用 **[SubscribeNotify]** 注册的处理器为了极致性能不捕获异常，需由用户自行保证安全。
 
@@ -98,7 +101,9 @@ LayerBase 专为高频事件交互设计，在 .NET 8/9 环境下表现卓越。
 
 ## 📖 最佳实践手册：构建清晰的架构
 
-在大型项目中，扁平架构容易导致模块依赖复杂化。LayerBase 的三层结构旨在通过空间隔离来管理这种复杂性：
+在大型项目中，扁平架构容易导致模块依赖复杂化。LayerBase 提供多层次的心智模型来管理这种复杂性：
+
+### 三层架构（Layer → Service → Manager）
 
 * 🌍 **Layer（宏观层级）**：**处理优先级与物理界限。**
     * **职责**：代表系统的不同层面（如 `RenderLayer`、`PhysicsLayer`、`CoreLogicLayer`）。它主要用于隔离不同优先级的业务逻辑。
@@ -107,6 +112,18 @@ LayerBase 专为高频事件交互设计，在 .NET 8/9 环境下表现卓越。
       Manager，实现高内聚。
 * ⚙️ **Manager（具体逻辑块）**：**具体业务的承载者。**
     * **职责**：遵循单一职责原则 (SRP)，实现具体的微观功能（如处理伤害计算）。Manager 之间尽量避免直接引用，而是通过事件总线进行通讯，实现低耦合。
+
+### ECS 实体组件系统（数据层）
+
+* 📦 **Component**：纯 `struct` 数据块，按 SOA 布局存储，CPU 缓存友好。
+* 🔍 **Query**：声明式组件过滤器，批量遍历满足条件的 Entity。
+* 🏗️ **Blueprint**：声明式实体结构定义，支持组件聚合（Bundle）和 Actor 投影。
+
+### Actor 行为模型（行为层）
+
+* 🎭 **Actor**：独立行为封装，拥有自己的邮箱和生命周期。
+* 📬 **Mailbox**：事件邮箱，支持队列、最新值、合并等多种投递策略。
+* 🔄 **Projection**：ECS ↔ Actor 桥梁，数据密集处理与行为逻辑封装的无缝结合。
 
 通过这种结构，项目的代码目录结构能够清晰地反映其系统架构。
 
@@ -490,6 +507,350 @@ LayerBase 的 Build 阶段大致分为：
 
 ---
 
+### 11. ECS 实体组件系统
+
+LayerBase 内建了一套高性能 ECS 实现（基于 Arch.Core），与事件总线深度集成。ECS 以 **World → Archetype → Chunk → Entity** 四层结构组织数据，采用纯 SOA 内存布局，天然对齐 CPU 缓存行。
+
+#### 核心概念
+
+| 概念 | 说明 |
+|------|------|
+| **World** | ECS 世界实例，每个 `LayerRuntime` 自动创建一个，通过 `runtime.EcsWorld` 访问 |
+| **Entity** | 轻量级 ID 句柄（`int Id` + `int Version`），代表一个游戏对象 |
+| **Component** | 纯 `struct` 数据块，附着在 Entity 上（如 `Position`、`Health`） |
+| **Archetype** | 具有相同组件组合的 Entity 集合，内部由连续 Chunk 数组构成 |
+| **Chunk** | 固定容量的数据块（默认 256），同一 Chunk 内组件数组内存连续 |
+| **Query** | 组件过滤器，用于批量遍历满足条件的 Entity |
+
+#### 快速上手
+
+```csharp
+using Arch.Core;
+
+// 1. 定义组件（纯 struct）
+public struct Position { public float X, Y, Z; }
+public struct Velocity { public float Dx, Dy, Dz; }
+
+// 2. 创建实体
+World world = _runtime.EcsWorld;
+Entity player = world.Create(new Position { X = 0, Y = 0, Z = 0 },
+                             new Velocity { Dx = 1, Dy = 0, Dz = 0 });
+
+// 3. 查询并遍历（SOA 连续内存，零 GC）
+var query = new QueryDescription().WithAll<Position, Velocity>();
+world.Query(in query, (ref Position pos, in Velocity vel) =>
+{
+    pos.X += vel.Dx;
+    pos.Y += vel.Dy;
+    pos.Z += vel.Dz;
+});
+```
+
+#### Blueprint 蓝图系统
+
+Blueprint 用于声明式定义实体结构，支持组件聚合（Bundle）和 Actor 投影绑定：
+
+```csharp
+// 定义 Bundle：一组相关组件的聚合切片
+[LayerBundle]
+public partial class TransformBundle : IBundle
+{
+    public void Config(ref EntityBlueprintBuilder builder)
+    {
+        builder.WithComponent<Position>()
+               .WithComponent<Rotation>()
+               .WithComponent<Scale>();
+    }
+}
+
+// 定义 Blueprint：完整的实体结构声明
+[LayerBlueprint]
+public partial class PlayerBlueprint : IEntityBlueprint
+{
+    public void Config(ref EntityBlueprintBuilder builder)
+    {
+        builder.WithBundle<TransformBundle>()      // 展开 Bundle
+               .WithComponent<Health>()             // 追加组件
+               .WithComponent<PlayerTag>()
+               .WithProjectedActor<PlayerActor>();   // 绑定 Actor 投影
+    }
+}
+```
+
+#### Projection 投影机制（ECS ↔ Actor 桥梁）
+
+Projection 是 LayerBase 的核心创新——它将 ECS 的数据密集优势与 Actor 的行为封装能力合二为一：
+
+- **延迟投影**：Entity 创建时仅标记投影元数据，Actor 实例在首次访问时惰性创建
+- **自动回收**：Entity 销毁时，关联的 Actor 自动归还对象池或销毁
+- **查询桥接**：通过 `[Query]` + `[Bring]` 特性，ECS 查询结果可直接投递为 Actor 事件
+
+```csharp
+// 在 Manager 中使用 ECS 查询
+public partial class MovementManager : ILayerContext
+{
+    // 声明式查询：源生成器自动生成批量遍历代码
+    [Query]
+    [Bring<PositionChangedEvent>]
+    private void OnMove(ref Position pos, in Velocity vel)
+    {
+        pos.X += vel.Dx;
+        // 查询结果可自动投影为 Actor 事件
+    }
+}
+
+// Fluent 查询 API（运行时动态构建）
+this.Query<Position, Velocity>()
+    .Where(entity => entity.Has<ActiveTag>())
+    .ForEach((ref Position pos, in Velocity vel) =>
+    {
+        pos.X += vel.Dx;
+    });
+```
+
+---
+
+### 12. Actor 行为模型
+
+Actor 模型为每个实体提供**独立的行为封装**——每个 Actor 拥有自己的邮箱（Mailbox）、生命周期和事件处理器，天然适合建模游戏角色、NPC、子弹等具有独立行为的对象。
+
+#### 核心概念
+
+| 概念 | 说明 |
+|------|------|
+| **IActor** | Actor 接口标记，所有 Actor 类型必须实现 |
+| **ActorId** | 唯一标识符（`ArchetypeId` + `SlotIndex` + `Generation`），带版本号防 ABA |
+| **ActorWorld** | Actor 运行时容器，管理创建、销毁、事件投递和生命周期调度 |
+| **Mailbox** | 每个 Actor 的事件邮箱，支持队列、最新值、合并等多种投递策略 |
+| **Behaviour** | Actor 的事件处理方法，通过 `[ActorBehaviour]` 特性标记 |
+
+#### 快速上手
+
+```csharp
+using LayerBase.Actor;
+
+// 1. 定义事件
+public struct DamageEvent
+{
+    public float Amount;
+}
+
+// 2. 定义 Actor
+public sealed partial class EnemyActor : IActor
+{
+    public float Health { get; private set; } = 100f;
+
+    [ActorBehaviour]
+    private void OnDamage(in DamageEvent e)
+    {
+        Health -= e.Amount;
+        if (Health <= 0)
+        {
+            // 销毁自身
+            this.Actors().DestroyActor(this.GetActorId());
+        }
+    }
+}
+
+// 3. 创建并使用
+var world = _runtime.Actors;
+EnemyActor enemy = world.CreateActor<EnemyActor>();
+
+// 向 Actor 投递事件（异步，进入邮箱）
+world.PostTo(enemy.GetActorId(), new DamageEvent { Amount = 25f });
+
+// 同步分发（立即执行，绕过邮箱）
+world.DispatchNow(enemy.GetActorId(), new DamageEvent { Amount = 10f });
+```
+
+#### Actor 生命周期
+
+Actor 实现对应接口即可接入引擎生命周期回调，由 `ActorLifecycleScheduler` 自动调度：
+
+```csharp
+public sealed partial class BulletActor : IActor, IStart, IUpdate, IDestroy
+{
+    private float _lifetime;
+
+    public void Start()
+    {
+        _lifetime = 0f;
+    }
+
+    public void Update(float deltaTime)
+    {
+        _lifetime += deltaTime;
+        if (_lifetime > 5f)
+            this.Actors().DestroyActor(this.GetActorId());
+    }
+
+    public void Destroy()
+    {
+        // 清理资源
+    }
+}
+```
+
+| 接口 | 触发时机 |
+|------|----------|
+| `IStart` | Actor 创建后首次 Pump |
+| `IUpdate` | 每帧 Update 阶段 |
+| `IFixedUpdate` | 固定步长物理帧 |
+| `ILateUpdate` | Update 之后 |
+| `IEnable` / `IDisable` | 启用/禁用状态切换 |
+| `IDestroy` | Actor 销毁前 |
+
+#### 邮箱投递策略
+
+```csharp
+// 队列模式（默认）：先进先出，逐帧处理
+world.PostTo(actorId, new DamageEvent { Amount = 10 });
+
+// 最新值模式：只保留最后一次投递
+world.PostTo(actorId, new HealthChangedEvent { Current = 75 });
+
+// 延迟投递：指定时间后生效
+world.DelayPost(actorId, new PoisonDamageEvent { Amount = 5 }, delaySeconds: 2.0f);
+
+// Ask/Call 模式：请求-响应
+LBTask<AttackResponse> response = world.Ask<AttackRequest, AttackResponse>(
+    actorId, new AttackRequest { TargetId = 42 });
+```
+
+#### Actor 池化
+
+高频创建/销毁的 Actor（如子弹、特效）可启用对象池避免 GC：
+
+```csharp
+public sealed partial class BulletActor : IActor, IPooledActor
+{
+    public long RecycleDeadlineTicks { get; set; }
+
+    public void OnRent()  { /* 从池中取出时重置状态 */ }
+    public void OnReturn(){ /* 归还池时清理 */ }
+}
+
+// 预热对象池
+world.PrewarmPool<BulletActor>(1000);
+
+// 创建池化 Actor
+BulletActor bullet = world.CreateActor<BulletActor>(usePool: true);
+
+// 设置池上限
+world.SetPoolLimit<BulletActor>(5000);
+
+// 查询池统计
+ActorPoolStats stats = world.GetPoolStats<BulletActor>();
+```
+
+#### Tag 与 Group 分类
+
+```csharp
+// 定义标签
+public struct EnemyTag : IActorTag { }
+public struct FriendlyTag : IActorTag { }
+
+// 定义分组
+public struct CombatGroup : IActorGroup { }
+public struct MovementGroup : IActorGroup { }
+
+// 应用标签和分组
+[Tag<EnemyTag>]
+[Group<CombatGroup>]
+public sealed partial class GoblinActor : IActor { }
+
+// 按标签/分组查询
+var enemies = world.Query()
+    .AllTags<EnemyTag>()
+    .AllGroups<CombatGroup>()
+    .Build();
+```
+
+---
+
+### 13. Call 请求-响应模式
+
+`Call` 提供类型安全的同步/异步请求-响应通道，适合需要返回值的场景（如场景切换确认、数据查询）：
+
+```csharp
+// 定义请求/响应
+public readonly struct QueryPlayerDataRequest
+{
+    public readonly int PlayerId;
+}
+
+public readonly struct QueryPlayerDataResponse
+{
+    public readonly string Name;
+    public readonly int Level;
+}
+
+// 在 Layer 或 Service 中注册处理器
+public partial class PlayerLayer : Layer
+{
+    [Call]
+    private LBTask<QueryPlayerDataResponse> HandleQuery(QueryPlayerDataRequest req)
+    {
+        var data = GetService<PlayerDatabase>().Get(req.PlayerId);
+        return LBTask.FromResult(new QueryPlayerDataResponse
+        {
+            Name = data.Name,
+            Level = data.Level
+        });
+    }
+}
+
+// 调用方
+var response = await runtime.CallAsync<QueryPlayerDataRequest, QueryPlayerDataResponse>(
+    new QueryPlayerDataRequest { PlayerId = 42 });
+```
+
+---
+
+### 14. Timer 定时调度器
+
+`TimerScheduler` 提供基于时间轴的事件调度能力，支持一次性定时和频率门控：
+
+```csharp
+// 获取 Timer 实例
+var timer = _runtime.Timer;
+
+// 注册一次性定时事件（3 秒后触发）
+timer.Schedule(TimeSpan.FromSeconds(3), () =>
+{
+    Console.WriteLine("3 秒已到！");
+});
+
+// 设置频率门控（每 0.5 秒最多触发一次）
+timer.SetFrequency(0.5);
+
+// 在 Tick 中驱动
+timer.Tick(deltaTime);
+```
+
+---
+
+### 15. Job 后台任务调度器
+
+`JobScheduler` 提供线程池级别的后台任务调度，适合 IO 密集或计算密集的异步工作：
+
+```csharp
+// 创建调度器（默认使用 CPU 核心数的线程）
+using var scheduler = new JobScheduler(workerCount: 4);
+
+// 提交后台任务
+scheduler.Schedule(() =>
+{
+    // 在后台线程执行耗时操作
+    var data = LoadAssetFromDisk("hero.png");
+
+    // 回到主线程投递结果
+    LayerHub.PostFromAnyThread(new AssetLoadedEvent { Data = data });
+});
+```
+
+---
+
 ## ⚠️ 核心设计边界与时序约束 (Core Design Boundaries)
 
 为了在 managed 环境下压榨出极致性能，LayerBase 在设计上做了一些权衡，开发者**必须**了解这些物理边界：
@@ -569,6 +930,10 @@ performance shackles with data-oriented reconstruction.**
 2. **On Micro Execution**: Draw inspiration from ECS frameworks. Adopt pure SOA array layouts for event routing at the
    lowest level. This ensures that the architecture not only standardizes the code but also achieves cache hit rates on
    par with top-tier C++/C# ECS frameworks.
+3. **On Behaviour Modelling**: Introduce the Actor model to provide independent behavioral encapsulation for each
+   entity—mailboxes, lifecycle, and event handlers all included, naturally suited for modeling game characters, NPCs,
+   bullets, and other objects with autonomous behaviour. ECS handles data-intensive bulk processing while Actors handle
+   behavioral logic encapsulation, seamlessly bridged through the Projection mechanism.
 
 ---
 
@@ -608,6 +973,10 @@ Beyond efficiency, LayerBase focuses on engineering robustness:
    the next frame.
 2. **Zero-Allocation Async Ecosystem (`LBTask`)**: A struct-based Task model specifically tuned for game loops.
 3. **Static Topology Audit**: Static scan during the Build phase to detect synchronous infinite loop risks early.
+4. **Actor Object Pooling**: High-frequency creation/destruction Actors (e.g., bullets, VFX) can enable object pooling
+   to avoid GC pressure.
+5. **ECS Blueprint System**: Declarative entity structure definitions supporting component aggregation and Actor
+   projection binding.
 
 * Note: Handlers registered with **[SubscribeNotify]** do not capture exceptions for maximum performance; users must
   guarantee safety.
@@ -641,8 +1010,10 @@ Beyond efficiency, LayerBase focuses on engineering robustness:
 
 ## 📖 Best Practices Manual: Building a Clear Architecture
 
-In large projects, flat architectures easily lead to convoluted module dependencies. LayerBase's three-tier structure
-manages this complexity through spatial isolation:
+In large projects, flat architectures easily lead to convoluted module dependencies. LayerBase provides multiple
+mental models to manage this complexity:
+
+### Three-Tier Architecture (Layer → Service → Manager)
 
 * 🌍 **Layer (Macro Level)**: **Handles processing priorities and physical boundaries.**
     * **Role**: Represents different tiers of the system (e.g., `RenderLayer`, `PhysicsLayer`, `CoreLogicLayer`). It is
@@ -655,6 +1026,18 @@ manages this complexity through spatial isolation:
     * **Role**: Adheres to the Single Responsibility Principle (SRP) to implement a specific micro-feature (like
       handling damage calculations). Managers generally avoid referencing each other directly, communicating entirely
       through the event bus to achieve low coupling.
+
+### ECS Entity Component System (Data Layer)
+
+* 📦 **Component**: Pure `struct` data blocks stored in SOA layout, CPU cache-friendly.
+* 🔍 **Query**: Declarative component filters for batch-iterating entities matching specific criteria.
+* 🏗️ **Blueprint**: Declarative entity structure definitions supporting component aggregation (Bundles) and Actor projection.
+
+### Actor Behaviour Model (Behaviour Layer)
+
+* 🎭 **Actor**: Independent behavioral encapsulation with its own mailbox and lifecycle.
+* 📬 **Mailbox**: Event mailbox supporting queue, latest-value, merge, and other delivery policies.
+* 🔄 **Projection**: ECS ↔ Actor bridge, seamlessly combining data-intensive processing with behavioral logic encapsulation.
 
 Through this structure, the project's directory layout transparently reflects its system architecture.
 
@@ -1051,10 +1434,353 @@ The Build phase of LayerBase is divided into:
 
 ---
 
+### 11. ECS Entity Component System
+
+LayerBase includes a high-performance ECS implementation (based on Arch.Core) deeply integrated with the event bus. ECS organizes data in a four-layer structure: **World → Archetype → Chunk → Entity**, using pure SOA memory layout that naturally aligns with CPU cache lines.
+
+#### Core Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **World** | ECS world instance; each `LayerRuntime` auto-creates one, accessible via `runtime.EcsWorld` |
+| **Entity** | Lightweight ID handle (`int Id` + `int Version`), representing a game object |
+| **Component** | Pure `struct` data blocks attached to entities (e.g., `Position`, `Health`) |
+| **Archetype** | Collection of entities sharing the same component composition, internally composed of contiguous Chunk arrays |
+| **Chunk** | Fixed-capacity data block (default 256); component arrays within the same chunk are memory-contiguous |
+| **Query** | Component filter for batch-iterating entities matching specific criteria |
+
+#### Quick Start
+
+```csharp
+using Arch.Core;
+
+// 1. Define components (pure struct)
+public struct Position { public float X, Y, Z; }
+public struct Velocity { public float Dx, Dy, Dz; }
+
+// 2. Create entities
+World world = _runtime.EcsWorld;
+Entity player = world.Create(new Position { X = 0, Y = 0, Z = 0 },
+                             new Velocity { Dx = 1, Dy = 0, Dz = 0 });
+
+// 3. Query and iterate (SOA contiguous memory, zero GC)
+var query = new QueryDescription().WithAll<Position, Velocity>();
+world.Query(in query, (ref Position pos, in Velocity vel) =>
+{
+    pos.X += vel.Dx;
+    pos.Y += vel.Dy;
+    pos.Z += vel.Dz;
+});
+```
+
+#### Blueprint System
+
+Blueprints declaratively define entity structures, supporting component aggregation (Bundles) and Actor projection binding:
+
+```csharp
+// Define Bundle: an aggregated slice of related components
+[LayerBundle]
+public partial class TransformBundle : IBundle
+{
+    public void Config(ref EntityBlueprintBuilder builder)
+    {
+        builder.WithComponent<Position>()
+               .WithComponent<Rotation>()
+               .WithComponent<Scale>();
+    }
+}
+
+// Define Blueprint: complete entity structure declaration
+[LayerBlueprint]
+public partial class PlayerBlueprint : IEntityBlueprint
+{
+    public void Config(ref EntityBlueprintBuilder builder)
+    {
+        builder.WithBundle<TransformBundle>()      // Expand Bundle
+               .WithComponent<Health>()             // Append component
+               .WithComponent<PlayerTag>()
+               .WithProjectedActor<PlayerActor>();   // Bind Actor projection
+    }
+}
+```
+
+#### Projection Mechanism (ECS ↔ Actor Bridge)
+
+Projection is LayerBase's core innovation—it combines ECS's data-intensive advantages with Actor's behavioral encapsulation:
+
+- **Lazy Projection**: Entity creation only marks projection metadata; Actor instances are lazily created on first access
+- **Auto-Reclamation**: When an entity is destroyed, its associated Actor is automatically returned to the object pool or destroyed
+- **Query Bridge**: Via `[Query]` + `[Bring]` attributes, ECS query results can be directly delivered as Actor events
+
+```csharp
+// Using ECS queries in Managers
+public partial class MovementManager : ILayerContext
+{
+    // Declarative query: source generator auto-generates batch iteration code
+    [Query]
+    [Bring<PositionChangedEvent>]
+    private void OnMove(ref Position pos, in Velocity vel)
+    {
+        pos.X += vel.Dx;
+        // Query results can be auto-projected as Actor events
+    }
+}
+
+// Fluent query API (runtime dynamic construction)
+this.Query<Position, Velocity>()
+    .Where(entity => entity.Has<ActiveTag>())
+    .ForEach((ref Position pos, in Velocity vel) =>
+    {
+        pos.X += vel.Dx;
+    });
+```
+
+---
+
+### 12. Actor Behaviour Model
+
+The Actor model provides **independent behavioral encapsulation** for each entity—each Actor has its own mailbox, lifecycle, and event handlers, naturally suited for modeling game characters, NPCs, bullets, and other objects with autonomous behavior.
+
+#### Core Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **IActor** | Actor interface marker; all Actor types must implement it |
+| **ActorId** | Unique identifier (`ArchetypeId` + `SlotIndex` + `Generation`), with version number to prevent ABA |
+| **ActorWorld** | Actor runtime container managing creation, destruction, event delivery, and lifecycle scheduling |
+| **Mailbox** | Per-actor event mailbox supporting queue, latest-value, merge, and other delivery policies |
+| **Behaviour** | Actor's event handler methods, marked with `[ActorBehaviour]` attribute |
+
+#### Quick Start
+
+```csharp
+using LayerBase.Actor;
+
+// 1. Define events
+public struct DamageEvent
+{
+    public float Amount;
+}
+
+// 2. Define Actor
+public sealed partial class EnemyActor : IActor
+{
+    public float Health { get; private set; } = 100f;
+
+    [ActorBehaviour]
+    private void OnDamage(in DamageEvent e)
+    {
+        Health -= e.Amount;
+        if (Health <= 0)
+        {
+            // Destroy self
+            this.Actors().DestroyActor(this.GetActorId());
+        }
+    }
+}
+
+// 3. Create and use
+var world = _runtime.Actors;
+EnemyActor enemy = world.CreateActor<EnemyActor>();
+
+// Post event to Actor (async, enters mailbox)
+world.PostTo(enemy.GetActorId(), new DamageEvent { Amount = 25f });
+
+// Synchronous dispatch (immediate execution, bypasses mailbox)
+world.DispatchNow(enemy.GetActorId(), new DamageEvent { Amount = 10f });
+```
+
+#### Actor Lifecycle
+
+Actors implement corresponding interfaces to hook into engine lifecycle callbacks, automatically scheduled by `ActorLifecycleScheduler`:
+
+```csharp
+public sealed partial class BulletActor : IActor, IStart, IUpdate, IDestroy
+{
+    private float _lifetime;
+
+    public void Start()
+    {
+        _lifetime = 0f;
+    }
+
+    public void Update(float deltaTime)
+    {
+        _lifetime += deltaTime;
+        if (_lifetime > 5f)
+            this.Actors().DestroyActor(this.GetActorId());
+    }
+
+    public void Destroy()
+    {
+        // Cleanup resources
+    }
+}
+```
+
+| Interface | Trigger Timing |
+|-----------|---------------|
+| `IStart` | First Pump after Actor creation |
+| `IUpdate` | Every frame during Update phase |
+| `IFixedUpdate` | Fixed-step physics frame |
+| `ILateUpdate` | After Update phase |
+| `IEnable` / `IDisable` | Enable/disable state transitions |
+| `IDestroy` | Before Actor destruction |
+
+#### Mailbox Delivery Policies
+
+```csharp
+// Queue mode (default): FIFO, processed per frame
+world.PostTo(actorId, new DamageEvent { Amount = 10 });
+
+// Latest mode: only keeps the last delivery
+world.PostTo(actorId, new HealthChangedEvent { Current = 75 });
+
+// Delayed delivery: takes effect after specified time
+world.DelayPost(actorId, new PoisonDamageEvent { Amount = 5 }, delaySeconds: 2.0f);
+
+// Ask/Call mode: request-response
+LBTask<AttackResponse> response = world.Ask<AttackRequest, AttackResponse>(
+    actorId, new AttackRequest { TargetId = 42 });
+```
+
+#### Actor Pooling
+
+High-frequency creation/destruction Actors (e.g., bullets, VFX) can enable object pooling to avoid GC:
+
+```csharp
+public sealed partial class BulletActor : IActor, IPooledActor
+{
+    public long RecycleDeadlineTicks { get; set; }
+
+    public void OnRent()  { /* Reset state when taken from pool */ }
+    public void OnReturn(){ /* Cleanup when returned to pool */ }
+}
+
+// Prewarm the object pool
+world.PrewarmPool<BulletActor>(1000);
+
+// Create pooled Actor
+BulletActor bullet = world.CreateActor<BulletActor>(usePool: true);
+
+// Set pool limit
+world.SetPoolLimit<BulletActor>(5000);
+
+// Query pool statistics
+ActorPoolStats stats = world.GetPoolStats<BulletActor>();
+```
+
+#### Tag and Group Classification
+
+```csharp
+// Define tags
+public struct EnemyTag : IActorTag { }
+public struct FriendlyTag : IActorTag { }
+
+// Define groups
+public struct CombatGroup : IActorGroup { }
+public struct MovementGroup : IActorGroup { }
+
+// Apply tags and groups
+[Tag<EnemyTag>]
+[Group<CombatGroup>]
+public sealed partial class GoblinActor : IActor { }
+
+// Query by tag/group
+var enemies = world.Query()
+    .AllTags<EnemyTag>()
+    .AllGroups<CombatGroup>()
+    .Build();
+```
+
+---
+
+### 13. Call Request-Response Pattern
+
+`Call` provides a type-safe synchronous/asynchronous request-response channel, suitable for scenarios requiring return values (e.g., scene transition confirmations, data queries):
+
+```csharp
+// Define request/response
+public readonly struct QueryPlayerDataRequest
+{
+    public readonly int PlayerId;
+}
+
+public readonly struct QueryPlayerDataResponse
+{
+    public readonly string Name;
+    public readonly int Level;
+}
+
+// Register handler in Layer or Service
+public partial class PlayerLayer : Layer
+{
+    [Call]
+    private LBTask<QueryPlayerDataResponse> HandleQuery(QueryPlayerDataRequest req)
+    {
+        var data = GetService<PlayerDatabase>().Get(req.PlayerId);
+        return LBTask.FromResult(new QueryPlayerDataResponse
+        {
+            Name = data.Name,
+            Level = data.Level
+        });
+    }
+}
+
+// Caller
+var response = await runtime.CallAsync<QueryPlayerDataRequest, QueryPlayerDataResponse>(
+    new QueryPlayerDataRequest { PlayerId = 42 });
+```
+
+---
+
+### 14. Timer Scheduler
+
+`TimerScheduler` provides timeline-based event scheduling capabilities, supporting one-time timers and frequency gating:
+
+```csharp
+// Get Timer instance
+var timer = _runtime.Timer;
+
+// Register one-time timer (triggers after 3 seconds)
+timer.Schedule(TimeSpan.FromSeconds(3), () =>
+{
+    Console.WriteLine("3 seconds elapsed!");
+});
+
+// Set frequency gate (at most once per 0.5 seconds)
+timer.SetFrequency(0.5);
+
+// Drive in Tick
+timer.Tick(deltaTime);
+```
+
+---
+
+### 15. Job Background Task Scheduler
+
+`JobScheduler` provides thread-pool-level background task scheduling, suitable for IO-intensive or compute-intensive async work:
+
+```csharp
+// Create scheduler (defaults to CPU core count threads)
+using var scheduler = new JobScheduler(workerCount: 4);
+
+// Submit background task
+scheduler.Schedule(() =>
+{
+    // Execute time-consuming work on background thread
+    var data = LoadAssetFromDisk("hero.png");
+
+    // Post result back to main thread
+    LayerHub.PostFromAnyThread(new AssetLoadedEvent { Data = data });
+});
+```
+
+---
+
 ## ⚠️ Core Design Boundaries and Timing Constraints
 
-To squeeze out extreme performance in a managed environment, LayerBase makes specific design trade-offs. Developers *
-*must** be aware of these physical boundaries:
+To squeeze out extreme performance in a managed environment, LayerBase makes specific design trade-offs. Developers **must** be aware of these physical boundaries:
 
 ### 1. Fault Isolation: Single-Frame Interruption, Next-Frame Self-Healing
 
