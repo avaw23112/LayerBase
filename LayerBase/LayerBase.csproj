@@ -29,7 +29,6 @@
 
     <!-- 保留工具目录结构 -->
     <ItemGroup>
-        <Folder Include="ECS\" />
         <Folder Include="Tools\"/>
     </ItemGroup>
 

@@ -3,6 +3,7 @@ using System.Threading;
 using Arch.Core;
 using LayerBase.Actor;
 using LayerBase.ECS.Projection;
+using LayerBase.ECS.Projection.Create;
 using LayerBase.ECS.Projection.Flow;
 using LayerBase.Generator;
 using LayerBase.Layers;
@@ -322,5 +323,84 @@ internal sealed partial class GeneratedProjectionActor : IPooledActor
         {
             yield return MetadataReference.CreateFromFile(path);
         }
+    }
+
+    [Test]
+    public void Query0_TouchProjectedActor_Should_Visit_Entity()
+    {
+        // 逻辑说明：
+        // 验证空组件 Query 能命中刚创建的 Entity。
+
+        LayerRuntime runtime = CreateRuntime();
+        RegisterProjectionProbe(runtime, actorTypeId: 10);
+
+        Entity entity = runtime.EcsWorld.Create();
+        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
+
+        runtime.EcsWorld
+            .Query()
+            .TouchProjectedActor();
+
+        ref ProjectedActorMeta meta =
+            ref runtime.EcsWorld.GetProjectionMeta(entity);
+
+        Assert.That(meta.ActorId.IsValid, Is.True);
+    }
+
+    [Test]
+    public void Query0_Where_False_Should_Not_Create_ProjectedActor()
+    {
+        // 逻辑说明：
+        // 验证 Query0 的 Where 可以阻止 Actor 创建。
+
+        LayerRuntime runtime = CreateRuntime();
+        RegisterProjectionProbe(runtime, actorTypeId: 10);
+
+        Entity entity = runtime.EcsWorld.Create();
+        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
+
+        runtime.EcsWorld
+            .Query()
+            .Where(static (in Entity entity) => false)
+            .TouchProjectedActor();
+
+        ref ProjectedActorMeta meta =
+            ref runtime.EcsWorld.GetProjectionMeta(entity);
+
+        Assert.That(meta.ActorId.IsValid, Is.False);
+    }
+
+    [Test]
+    public void CreateEntity0_WithProjectedActor_Should_Mark_Meta()
+    {
+        LayerRuntime runtime = CreateRuntime();
+        RegisterProjectionProbe(runtime, actorTypeId: 10);
+
+        Entity entity = runtime.EcsWorld.Create();
+        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
+
+        ref ProjectedActorMeta meta =
+            ref runtime.EcsWorld.GetProjectionMeta(entity);
+
+        Assert.That(meta.ActorTypeId, Is.GreaterThanOrEqualTo(0));
+        Assert.That(meta.ActorId.IsValid, Is.False);
+    }
+
+    [Test]
+    public void CreateEntity2_WithProjectedActor_Should_Mark_Meta()
+    {
+        LayerRuntime runtime = CreateRuntime();
+        RegisterProjectionProbe(runtime, actorTypeId: 10);
+
+        Entity entity = runtime.EcsWorld.Create(
+            new ProjectionPositionComponent(),
+            new ProjectionVelocityComponent());
+        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
+
+        ref ProjectedActorMeta meta =
+            ref runtime.EcsWorld.GetProjectionMeta(entity);
+
+        Assert.That(meta.ActorTypeId, Is.GreaterThanOrEqualTo(0));
+        Assert.That(meta.ActorId.IsValid, Is.False);
     }
 }
