@@ -208,7 +208,7 @@ public readonly struct ProjectionPostFlow<#= c #><#= suffix #><<#= allG #>>
     public void Post()
     {
 <# if (e == 1) { #>
-        ProjectionExecutor<#= c #><<#= compG #>>.Post(_world, _query, _predicate, _forEach);
+        ProjectionExecutor<#= c #><<#= compG #>>.Post<TEvent0>(_world, _query, _predicate, _forEach);
 <# } else { #>
         ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>.Post(_world, _query, _predicate, _forEach);
 <# } #>
@@ -260,13 +260,13 @@ public readonly struct ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, T
             _job;
 
 <# if (e == 1) { #>
-        ProjectionExecutor<#= c #><<#= compG #>>.Post(
+        ProjectionExecutor<#= c #><<#= compG #>>.Post<TEvent0, TJob>(
             _world,
             _query,
             _predicate,
             ref job);
 <# } else { #>
-        ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>.Post(
+        ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>.Post<TJob>(
             _world,
             _query,
             _predicate,

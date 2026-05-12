@@ -854,7 +854,7 @@ where TEvent0 : struct
 
     public void Post()
     {
-        ProjectionExecutor1<T0>.Post(_world, _query, _predicate, _forEach);
+        ProjectionExecutor1<T0>.Post<TEvent0>(_world, _query, _predicate, _forEach);
     }
 }
 
@@ -902,7 +902,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor1<T0>.Post(
+        ProjectionExecutor1<T0>.Post<TEvent0, TJob>(
             _world,
             _query,
             _predicate,
@@ -1012,7 +1012,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor1_2E<T0, TEvent0, TEvent1>.Post(
+        ProjectionExecutor1_2E<T0, TEvent0, TEvent1>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -1125,7 +1125,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor1_3E<T0, TEvent0, TEvent1, TEvent2>.Post(
+        ProjectionExecutor1_3E<T0, TEvent0, TEvent1, TEvent2>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -1241,7 +1241,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor1_4E<T0, TEvent0, TEvent1, TEvent2, TEvent3>.Post(
+        ProjectionExecutor1_4E<T0, TEvent0, TEvent1, TEvent2, TEvent3>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -1360,7 +1360,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor1_5E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post(
+        ProjectionExecutor1_5E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -1482,7 +1482,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor1_6E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post(
+        ProjectionExecutor1_6E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -1607,7 +1607,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor1_7E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post(
+        ProjectionExecutor1_7E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -1735,7 +1735,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor1_8E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post(
+        ProjectionExecutor1_8E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -1866,7 +1866,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor1_9E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post(
+        ProjectionExecutor1_9E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -2000,7 +2000,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor1_10E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post(
+        ProjectionExecutor1_10E<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -2199,7 +2199,7 @@ where TEvent0 : struct
 
     public void Post()
     {
-        ProjectionExecutor2<T0, T1>.Post(_world, _query, _predicate, _forEach);
+        ProjectionExecutor2<T0, T1>.Post<TEvent0>(_world, _query, _predicate, _forEach);
     }
 }
 
@@ -2247,7 +2247,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor2<T0, T1>.Post(
+        ProjectionExecutor2<T0, T1>.Post<TEvent0, TJob>(
             _world,
             _query,
             _predicate,
@@ -2357,7 +2357,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor2_2E<T0, T1, TEvent0, TEvent1>.Post(
+        ProjectionExecutor2_2E<T0, T1, TEvent0, TEvent1>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -2470,7 +2470,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor2_3E<T0, T1, TEvent0, TEvent1, TEvent2>.Post(
+        ProjectionExecutor2_3E<T0, T1, TEvent0, TEvent1, TEvent2>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -2586,7 +2586,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor2_4E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3>.Post(
+        ProjectionExecutor2_4E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -2705,7 +2705,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor2_5E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post(
+        ProjectionExecutor2_5E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -2827,7 +2827,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor2_6E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post(
+        ProjectionExecutor2_6E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -2952,7 +2952,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor2_7E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post(
+        ProjectionExecutor2_7E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -3080,7 +3080,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor2_8E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post(
+        ProjectionExecutor2_8E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -3211,7 +3211,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor2_9E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post(
+        ProjectionExecutor2_9E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -3345,7 +3345,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor2_10E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post(
+        ProjectionExecutor2_10E<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -3544,7 +3544,7 @@ where TEvent0 : struct
 
     public void Post()
     {
-        ProjectionExecutor3<T0, T1, T2>.Post(_world, _query, _predicate, _forEach);
+        ProjectionExecutor3<T0, T1, T2>.Post<TEvent0>(_world, _query, _predicate, _forEach);
     }
 }
 
@@ -3592,7 +3592,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor3<T0, T1, T2>.Post(
+        ProjectionExecutor3<T0, T1, T2>.Post<TEvent0, TJob>(
             _world,
             _query,
             _predicate,
@@ -3702,7 +3702,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor3_2E<T0, T1, T2, TEvent0, TEvent1>.Post(
+        ProjectionExecutor3_2E<T0, T1, T2, TEvent0, TEvent1>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -3815,7 +3815,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor3_3E<T0, T1, T2, TEvent0, TEvent1, TEvent2>.Post(
+        ProjectionExecutor3_3E<T0, T1, T2, TEvent0, TEvent1, TEvent2>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -3931,7 +3931,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor3_4E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3>.Post(
+        ProjectionExecutor3_4E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -4050,7 +4050,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor3_5E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post(
+        ProjectionExecutor3_5E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -4172,7 +4172,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor3_6E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post(
+        ProjectionExecutor3_6E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -4297,7 +4297,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor3_7E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post(
+        ProjectionExecutor3_7E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -4425,7 +4425,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor3_8E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post(
+        ProjectionExecutor3_8E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -4556,7 +4556,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor3_9E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post(
+        ProjectionExecutor3_9E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -4690,7 +4690,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor3_10E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post(
+        ProjectionExecutor3_10E<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -4889,7 +4889,7 @@ where TEvent0 : struct
 
     public void Post()
     {
-        ProjectionExecutor4<T0, T1, T2, T3>.Post(_world, _query, _predicate, _forEach);
+        ProjectionExecutor4<T0, T1, T2, T3>.Post<TEvent0>(_world, _query, _predicate, _forEach);
     }
 }
 
@@ -4937,7 +4937,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor4<T0, T1, T2, T3>.Post(
+        ProjectionExecutor4<T0, T1, T2, T3>.Post<TEvent0, TJob>(
             _world,
             _query,
             _predicate,
@@ -5047,7 +5047,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor4_2E<T0, T1, T2, T3, TEvent0, TEvent1>.Post(
+        ProjectionExecutor4_2E<T0, T1, T2, T3, TEvent0, TEvent1>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -5160,7 +5160,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor4_3E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2>.Post(
+        ProjectionExecutor4_3E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -5276,7 +5276,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor4_4E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3>.Post(
+        ProjectionExecutor4_4E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -5395,7 +5395,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor4_5E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post(
+        ProjectionExecutor4_5E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -5517,7 +5517,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor4_6E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post(
+        ProjectionExecutor4_6E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -5642,7 +5642,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor4_7E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post(
+        ProjectionExecutor4_7E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -5770,7 +5770,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor4_8E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post(
+        ProjectionExecutor4_8E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -5901,7 +5901,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor4_9E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post(
+        ProjectionExecutor4_9E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -6035,7 +6035,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor4_10E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post(
+        ProjectionExecutor4_10E<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -6234,7 +6234,7 @@ where TEvent0 : struct
 
     public void Post()
     {
-        ProjectionExecutor5<T0, T1, T2, T3, T4>.Post(_world, _query, _predicate, _forEach);
+        ProjectionExecutor5<T0, T1, T2, T3, T4>.Post<TEvent0>(_world, _query, _predicate, _forEach);
     }
 }
 
@@ -6282,7 +6282,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor5<T0, T1, T2, T3, T4>.Post(
+        ProjectionExecutor5<T0, T1, T2, T3, T4>.Post<TEvent0, TJob>(
             _world,
             _query,
             _predicate,
@@ -6392,7 +6392,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor5_2E<T0, T1, T2, T3, T4, TEvent0, TEvent1>.Post(
+        ProjectionExecutor5_2E<T0, T1, T2, T3, T4, TEvent0, TEvent1>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -6505,7 +6505,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor5_3E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2>.Post(
+        ProjectionExecutor5_3E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -6621,7 +6621,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor5_4E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3>.Post(
+        ProjectionExecutor5_4E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -6740,7 +6740,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor5_5E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post(
+        ProjectionExecutor5_5E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -6862,7 +6862,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor5_6E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post(
+        ProjectionExecutor5_6E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -6987,7 +6987,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor5_7E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post(
+        ProjectionExecutor5_7E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -7115,7 +7115,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor5_8E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post(
+        ProjectionExecutor5_8E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -7246,7 +7246,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor5_9E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post(
+        ProjectionExecutor5_9E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -7380,7 +7380,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor5_10E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post(
+        ProjectionExecutor5_10E<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -7579,7 +7579,7 @@ where TEvent0 : struct
 
     public void Post()
     {
-        ProjectionExecutor6<T0, T1, T2, T3, T4, T5>.Post(_world, _query, _predicate, _forEach);
+        ProjectionExecutor6<T0, T1, T2, T3, T4, T5>.Post<TEvent0>(_world, _query, _predicate, _forEach);
     }
 }
 
@@ -7627,7 +7627,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor6<T0, T1, T2, T3, T4, T5>.Post(
+        ProjectionExecutor6<T0, T1, T2, T3, T4, T5>.Post<TEvent0, TJob>(
             _world,
             _query,
             _predicate,
@@ -7737,7 +7737,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor6_2E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1>.Post(
+        ProjectionExecutor6_2E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -7850,7 +7850,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor6_3E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2>.Post(
+        ProjectionExecutor6_3E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -7966,7 +7966,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor6_4E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3>.Post(
+        ProjectionExecutor6_4E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -8085,7 +8085,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor6_5E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post(
+        ProjectionExecutor6_5E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -8207,7 +8207,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor6_6E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post(
+        ProjectionExecutor6_6E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -8332,7 +8332,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor6_7E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post(
+        ProjectionExecutor6_7E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -8460,7 +8460,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor6_8E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post(
+        ProjectionExecutor6_8E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -8591,7 +8591,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor6_9E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post(
+        ProjectionExecutor6_9E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -8725,7 +8725,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor6_10E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post(
+        ProjectionExecutor6_10E<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -8924,7 +8924,7 @@ where TEvent0 : struct
 
     public void Post()
     {
-        ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>.Post(_world, _query, _predicate, _forEach);
+        ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>.Post<TEvent0>(_world, _query, _predicate, _forEach);
     }
 }
 
@@ -8972,7 +8972,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>.Post(
+        ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>.Post<TEvent0, TJob>(
             _world,
             _query,
             _predicate,
@@ -9082,7 +9082,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor7_2E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1>.Post(
+        ProjectionExecutor7_2E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -9195,7 +9195,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor7_3E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2>.Post(
+        ProjectionExecutor7_3E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -9311,7 +9311,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor7_4E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3>.Post(
+        ProjectionExecutor7_4E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -9430,7 +9430,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor7_5E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post(
+        ProjectionExecutor7_5E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -9552,7 +9552,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor7_6E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post(
+        ProjectionExecutor7_6E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -9677,7 +9677,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor7_7E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post(
+        ProjectionExecutor7_7E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -9805,7 +9805,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor7_8E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post(
+        ProjectionExecutor7_8E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -9936,7 +9936,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor7_9E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post(
+        ProjectionExecutor7_9E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -10070,7 +10070,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor7_10E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post(
+        ProjectionExecutor7_10E<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -10269,7 +10269,7 @@ where TEvent0 : struct
 
     public void Post()
     {
-        ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>.Post(_world, _query, _predicate, _forEach);
+        ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>.Post<TEvent0>(_world, _query, _predicate, _forEach);
     }
 }
 
@@ -10317,7 +10317,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>.Post(
+        ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>.Post<TEvent0, TJob>(
             _world,
             _query,
             _predicate,
@@ -10427,7 +10427,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor8_2E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1>.Post(
+        ProjectionExecutor8_2E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -10540,7 +10540,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor8_3E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2>.Post(
+        ProjectionExecutor8_3E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -10656,7 +10656,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor8_4E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3>.Post(
+        ProjectionExecutor8_4E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -10775,7 +10775,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor8_5E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post(
+        ProjectionExecutor8_5E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -10897,7 +10897,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor8_6E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post(
+        ProjectionExecutor8_6E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -11022,7 +11022,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor8_7E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post(
+        ProjectionExecutor8_7E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -11150,7 +11150,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor8_8E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post(
+        ProjectionExecutor8_8E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -11281,7 +11281,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor8_9E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post(
+        ProjectionExecutor8_9E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>.Post<TJob>(
             _world,
             _query,
             _predicate,
@@ -11415,7 +11415,7 @@ where TEvent0 : struct
         TJob job =
             _job;
 
-        ProjectionExecutor8_10E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post(
+        ProjectionExecutor8_10E<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>.Post<TJob>(
             _world,
             _query,
             _predicate,
