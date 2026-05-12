@@ -14,7 +14,7 @@ internal static class ProjectedActorBinding
         ref ProjectedActorMeta meta,
         long nowTicks)
     {
-        ProjectedActorHandle handle = world.Runtime.ProjectedActorTypes.CreateActorByTypeId(actorWorld, meta.ActorTypeId);
+        ProjectedActorHandle handle = ProjectedActorTypeRegistry.CreateActorByTypeId(actorWorld, meta.ActorTypeId);
         if (!handle.IsValid)
         {
             return ActorId.Invalid;

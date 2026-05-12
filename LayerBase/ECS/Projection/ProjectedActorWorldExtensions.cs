@@ -16,12 +16,12 @@ public static class ProjectedActorWorldExtensions
         ProjectedActorReleasePolicy releasePolicy = ProjectedActorReleasePolicy.ReturnToPool)
         where TActor : class, IPooledActor, new()
     {
-        int actorTypeId = GeneratedProjectedActorTypes.GetId<TActor>();
+        int actorTypeId =  ActorType<TActor>.Id;
         if (actorTypeId < 0)
         {
             throw new InvalidOperationException($"ProjectedActor type {typeof(TActor).Name} was not generated. Make sure it implements IPooledActor and is visible to the generator.");
         }
-
+        ProjectedActorTypeRegistry.RegisterGenerated(actorTypeId,typeof(TActor),static actorWorld => actorWorld.CreateProjectedActor<TActor>());
         WithProjectedActor(world, entity, actorTypeId, keepAliveSeconds, releasePolicy);
     }
 

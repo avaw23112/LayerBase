@@ -134,19 +134,11 @@ public class QueryBringTests
     {
         LayerHub.Reset();
     }
-    private static void RegisterProbeActor(LayerRuntime runtime, int actorTypeId)
-    {
-        runtime.ProjectedActorTypes.RegisterGenerated(
-            actorTypeId,
-            typeof(ProbeActor),
-            static actorWorld => actorWorld.CreateProjectedActor<ProbeActor>());
-    }
 
     [Test]
     public void QueryWithBringInService()
     {
         LayerRuntime runtime = CreateRuntime();
-        RegisterProbeActor(runtime, actorTypeId: 3);
         Entity entity = runtime.EcsWorld.CreateEntity()
                                .WithComponent<PositionComponent>()
                                .WithComponent<VelocityComponent>()

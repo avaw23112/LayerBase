@@ -117,25 +117,6 @@ public class ProjectedActorProjectionTests
     }
 
     [Test]
-    public void Projected_actor_type_registry_is_runtime_local()
-    {
-        LayerRuntime runtimeA = CreateRuntime();
-        LayerRuntime runtimeB = CreateRuntime();
-
-        runtimeA.ProjectedActorTypes.RegisterGenerated(
-            7,
-            typeof(ProjectionProbeActor),
-            static actorWorld => actorWorld.CreateProjectedActor<ProjectionProbeActor>());
-        runtimeB.ProjectedActorTypes.RegisterGenerated(
-            7,
-            typeof(ProjectionAltActor),
-            static actorWorld => actorWorld.CreateProjectedActor<ProjectionAltActor>());
-
-        Assert.That(runtimeA.ProjectedActorTypes.GetActorType(7), Is.EqualTo(typeof(ProjectionProbeActor)));
-        Assert.That(runtimeB.ProjectedActorTypes.GetActorType(7), Is.EqualTo(typeof(ProjectionAltActor)));
-    }
-
-    [Test]
     public void Projection_post_creates_actor_updates_components_and_batches_mail()
     {
         LayerRuntime runtime = CreateRuntime();
@@ -237,61 +218,6 @@ public class ProjectedActorProjectionTests
         Assert.That(runtime.EcsWorld.GetProjectionMeta(second).ActorId, Is.EqualTo(beforeDestroy));
     }
 
-    [Test]
-    public void Projected_actor_type_generator_emits_registry_entries_for_layerbase_assembly()
-    {
-        const string source = """
-using LayerBase.Actor;
-using LayerBase.Test;
-
-namespace LayerBase;
-
-internal sealed partial class GeneratedProjectionActor : IPooledActor
-{
-    public long RecycleDeadlineTicks { get; set; }
-
-    [ActorBehaviour]
-    private void OnMove(in ProjectionMoveViewEvent value)
-    {
-    }
-
-    public void OnRent()
-    {
-    }
-
-    public void OnReturn()
-    {
-    }
-}
-""";
-
-        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
-        CSharpCompilation compilation = CSharpCompilation.Create(
-            assemblyName: "LayerBase",
-            syntaxTrees: new[] { syntaxTree },
-            references: ActorGeneratorTests_GetMetadataReferences(),
-            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(
-            new ISourceGenerator[]
-            {
-                new ActorBehaviourGenerator().AsSourceGenerator(),
-                new ProjectedActorTypeGenerator().AsSourceGenerator()
-            },
-            parseOptions: new CSharpParseOptions(LanguageVersion.Preview));
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
-
-        ImmutableArray<GeneratorRunResult> results = driver.GetRunResult().Results;
-        string generated = results
-            .SelectMany(static result => result.GeneratedSources)
-            .Select(static sourceResult => sourceResult.SourceText.ToString())
-            .First(static text => text.Contains("GeneratedProjectedActorTypes"));
-
-        Assert.That(generated, Does.Contain("RegisterGenerated"));
-        Assert.That(generated, Does.Contain("CreateProjectedActor<global::LayerBase.GeneratedProjectionActor>()"));
-        Assert.That(generated, Does.Contain("actorType: typeof(global::LayerBase.GeneratedProjectionActor)"));
-    }
-
     private static LayerRuntime CreateRuntime()
     {
         return LayerHub.CreateLayers()
@@ -301,7 +227,7 @@ internal sealed partial class GeneratedProjectionActor : IPooledActor
 
     private static void RegisterProjectionProbe(LayerRuntime runtime, int actorTypeId)
     {
-        runtime.ProjectedActorTypes.RegisterGenerated(
+        ProjectedActorTypeRegistry.RegisterGenerated(
             actorTypeId,
             typeof(ProjectionProbeActor),
             static actorWorld => actorWorld.CreateProjectedActor<ProjectionProbeActor>());

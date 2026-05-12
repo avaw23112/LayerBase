@@ -152,13 +152,12 @@ public class QueryBringJobTests
         // 4. Post ActorEvent
 
         LayerRuntime runtime = CreateRuntime();
-        RegisterProbeActor(runtime, actorTypeId: 1);
 
         Entity entity = runtime.EcsWorld.Create(
             new JobPositionComponent { X = 1f, Y = 2f },
             new JobVelocityComponent { X = 3f, Y = 4f },
             new JobAoiComponent { IsVisible = true });
-        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 1, keepAliveSeconds: 0.5f);
+        runtime.EcsWorld.WithProjectedActor<JobProbeActor>(entity, keepAliveSeconds: 0.5f);
 
         var job = new UpdateEnemyViewJob();
         runtime.EcsWorld
@@ -228,13 +227,12 @@ public class QueryBringJobTests
         // 3. 不 Post ActorEvent
 
         LayerRuntime runtime = CreateRuntime();
-        RegisterProbeActor(runtime, actorTypeId: 2);
 
         Entity entity = runtime.EcsWorld.Create(
             new JobPositionComponent { X = 10f, Y = 20f },
             new JobVelocityComponent { X = 0f, Y = 0f },  // 零速度 -> Touch
             new JobAoiComponent { IsVisible = true });
-        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 2, keepAliveSeconds: 0.5f);
+        runtime.EcsWorld.WithProjectedActor<JobProbeActor>(entity, keepAliveSeconds: 0.5f);
 
         var job = new UpdateEnemyViewJob();
         runtime.EcsWorld
@@ -273,13 +271,11 @@ public class QueryBringJobTests
         // 3. 不 Post ActorEvent
 
         LayerRuntime runtime = CreateRuntime();
-        RegisterProbeActor(runtime, actorTypeId: 3);
-
         Entity entity = runtime.EcsWorld.Create(
             new JobPositionComponent { X = 10f, Y = 20f },
             new JobVelocityComponent { X = 3f, Y = 4f },
             new JobAoiComponent { IsVisible = false });  // 不可见 -> Fail
-        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 3, keepAliveSeconds: 0.01f);
+        runtime.EcsWorld.WithProjectedActor<JobProbeActor>(entity, keepAliveSeconds: 0.5f);
 
         var job = new UpdateEnemyViewJob();
         runtime.EcsWorld
@@ -313,6 +309,8 @@ public class QueryBringJobTests
             .Push(new JobTestLayer())
             .Build();
     }
+    #endregion
+    
     #region Test Layer
 
     internal partial class JobTestLayer : Layer
@@ -321,17 +319,4 @@ public class QueryBringJobTests
 
     #endregion
 
-    private static void RegisterProbeActor(LayerRuntime runtime, int actorTypeId)
-    {
-        runtime.ProjectedActorTypes.RegisterGenerated(
-            actorTypeId,
-            typeof(JobProbeActor),
-            static actorWorld => actorWorld.CreateProjectedActor<JobProbeActor>());
-    }
-
-    #endregion
-
-    #region QueryService
-
-    #endregion
 }

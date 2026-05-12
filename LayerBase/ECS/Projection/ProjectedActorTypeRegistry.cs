@@ -6,11 +6,11 @@ namespace LayerBase.ECS.Projection;
 internal delegate ProjectedActorHandle ProjectedActorFactory(
     ActorWorld actorWorld);
 
-internal sealed class ProjectedActorTypeRegistry
+internal static class ProjectedActorTypeRegistry
 {
-    private Type?[] _typesById = new Type?[64];
-    private ProjectedActorFactory?[] _factoriesById = new ProjectedActorFactory?[64];
-    public void RegisterGenerated(
+    private static Type?[] _typesById = new Type?[64];
+    private static ProjectedActorFactory?[] _factoriesById = new ProjectedActorFactory?[64];
+    public static void RegisterGenerated(
         int actorTypeId,
         Type actorType,
         ProjectedActorFactory factory)
@@ -21,7 +21,7 @@ internal sealed class ProjectedActorTypeRegistry
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public ProjectedActorHandle CreateActorByTypeId(
+    public static ProjectedActorHandle CreateActorByTypeId(
         ActorWorld actorWorld,
         int actorTypeId)
     {
@@ -39,7 +39,7 @@ internal sealed class ProjectedActorTypeRegistry
         return factory(actorWorld);
     }
 
-    public Type? GetActorType(
+    public static Type? GetActorType(
         int actorTypeId)
     {
         if ((uint)actorTypeId >= (uint)_typesById.Length)
@@ -50,7 +50,7 @@ internal sealed class ProjectedActorTypeRegistry
         return _typesById[actorTypeId];
     }
 
-    private void EnsureCapacity(
+    private static void EnsureCapacity(
         int actorTypeId)
     {
         if ((uint)actorTypeId < (uint)_factoriesById.Length)
@@ -63,7 +63,6 @@ internal sealed class ProjectedActorTypeRegistry
         {
             newLength <<= 1;
         }
-
         Array.Resize(ref _typesById, newLength);
         Array.Resize(ref _factoriesById, newLength);
     }
