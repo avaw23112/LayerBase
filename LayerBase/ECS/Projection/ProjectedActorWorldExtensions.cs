@@ -8,7 +8,6 @@ namespace LayerBase.ECS.Projection;
 
 public static class ProjectedActorWorldExtensions
 {
-    
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WithProjectedActor<TActor>(
         this World world,

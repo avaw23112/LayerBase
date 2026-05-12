@@ -10,7 +10,6 @@ internal sealed class ProjectedActorTypeRegistry
 {
     private Type?[] _typesById = new Type?[64];
     private ProjectedActorFactory?[] _factoriesById = new ProjectedActorFactory?[64];
-
     public void RegisterGenerated(
         int actorTypeId,
         Type actorType,

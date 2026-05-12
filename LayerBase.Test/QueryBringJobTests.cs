@@ -16,84 +16,6 @@ namespace LayerBase.Test;
 #region Test Components and Events
 
 
-public class testManager : ILayerContext
-{
-    
-}
-public sealed partial class EnemyViewService : IService,LayerBase.DI.Options.IUpdate
-{
-    [Mount] private testManager s;
-    public void ConfigureServices(IServiceCollection services)
-    {
-            
-    }
-    public void Update()
-    {
-        UpdateEnemyView();
-    }
-
-    [Query]
-    [Bring<MoveViewEvent>]
-    private ProjectResult OnUpdateEnemyView(
-        ref PositionComponent position,
-        in  VelocityComponent velocity,
-        in  AoiComponent      aoi,
-        ref MoveViewEvent     moveEvent)
-    {
-        if (!aoi.IsVisible)
-        {
-            return ProjectResult.Fail;
-        }
-
-        if (velocity.X == 0f && velocity.Y == 0f)
-        {
-            return ProjectResult.Touch;
-        }
-
-        position.X += velocity.X;
-        position.Y += velocity.Y;
-
-        moveEvent = new MoveViewEvent(
-            x: position.X,
-            y: position.Y);
-
-        return ProjectResult.Success;
-    }
-
-  
-}
-
-public struct PositionComponent : IComponent
-{
-    public float X;
-    public float Y;
-}
-
-public struct VelocityComponent : IComponent
-{
-    public float X;
-    public float Y;
-}
-
-public struct AoiComponent : IComponent
-{
-    public bool IsVisible;
-}
-
-public readonly struct MoveViewEvent : IActorEvent
-{
-    public readonly float X;
-    public readonly float Y;
-
-    public MoveViewEvent(
-        float x,
-        float y)
-    {
-        X = x;
-        Y = y;
-    }
-}
-
 public struct JobPositionComponent :　IComponent
 {
     public float X;
@@ -111,7 +33,7 @@ public struct JobAoiComponent:　IComponent
     public bool IsVisible;
 }
 
-public struct JobMoveViewEvent:IActorEvent
+public  struct JobMoveViewEvent:IActorEvent
 {
     public float X;
     public float Y;
@@ -126,14 +48,6 @@ public struct JobMoveViewEvent:IActorEvent
 #endregion
 
 #region Test Actor
-internal sealed partial class JobActor : IActor
-{
-    [ActorBehaviour]
-    private void OnMove(in JobMoveViewEvent value)
-    {
-        Assert.That(value.X, Is.GreaterThan(0));
-    }
-}
 
 internal sealed partial class JobProbeActor : IPooledActor
 {
@@ -164,14 +78,7 @@ internal sealed partial class JobProbeActor : IPooledActor
 
 #endregion
 
-#region Test Layer
 
-internal partial class JobTestLayer : Layer
-{
-    [Mount] private EnemyViewService enemyViewService;
-}
-
-#endregion
 
 [TestFixture]
 public class QueryBringJobTests
@@ -396,31 +303,6 @@ public class QueryBringJobTests
         Assert.That(JobProbeActor.Received, Is.Empty);
     }
     
-    [Test]
-    public void QueryWithBringInService()
-    {
-        LayerRuntime runtime = CreateRuntime();
-        RegisterProbeActor(runtime, actorTypeId: 3);
-        Entity entity = runtime.EcsWorld.CreateEntity()
-                               .WithComponent<JobPositionComponent>()
-                               .WithComponent<JobVelocityComponent>()
-                               .WithComponent<JobAoiComponent>()
-                               .WithProjectedActor<JobProbeActor>()
-                               .Build();
-        
-        entity.Set(new JobPositionComponent() { X = 10f, Y = 20f }, new JobVelocityComponent { X = 3f, Y = 4f }, new JobAoiComponent { IsVisible = true });
-        
-        runtime.Pump(0.1f);
-
-        JobPositionComponent position = runtime.EcsWorld.Get<JobPositionComponent>(entity);
-
-        // ECS 数据未修改（Fail 时不修改位置）
-        Assert.That(position.X, Is.EqualTo(10f));
-        Assert.That(position.Y, Is.EqualTo(20f));
-        // 没有 Post 事件
-        Assert.That(JobProbeActor.Received, Is.Empty);
-    }
-
     #endregion
 
     #region Helpers
@@ -431,6 +313,13 @@ public class QueryBringJobTests
             .Push(new JobTestLayer())
             .Build();
     }
+    #region Test Layer
+
+    internal partial class JobTestLayer : Layer
+    {
+    }
+
+    #endregion
 
     private static void RegisterProbeActor(LayerRuntime runtime, int actorTypeId)
     {

@@ -13,8 +13,9 @@ namespace LayerBase.ECS;
 /// EntityCreateBuilder，支持 WithBlueprint&lt;TBlueprint&gt;()。
 /// </summary>
 /// 
-public ref struct EntityCreateBuilder 
+public ref struct EntityCreateBuilder
 {
+    private readonly LayerRuntime _runtime;
     private readonly World _world;
     private readonly Entity _entity;
     private readonly PooledList<ComponentType>  _componentTypes;
@@ -28,6 +29,7 @@ public ref struct EntityCreateBuilder
         _componentTypes = new PooledList<ComponentType>();
         _world = world;
     }
+    
 
     /// <summary>
     /// 应用 Blueprint 结构到当前 Entity。
