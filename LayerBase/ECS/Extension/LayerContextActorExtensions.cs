@@ -8,7 +8,7 @@ namespace LayerBase;
 
 public static class LayerContextECSExtensions
 {
-   /// <summary>
+    /// <summary>
     /// 查询同时拥有 T1 组件的实体。
     /// </summary>
     /// <typeparam name="T1">第 1 个参与查询的组件类型。</typeparam>
@@ -84,7 +84,8 @@ public static class LayerContextECSExtensions
     /// <typeparam name="T6">第 6 个参与查询的组件类型。</typeparam>
     /// <param name="ILayerContext">当前 ILayerContext，用于取得其内部绑定的 ECSWorld。</param>
     /// <returns>返回 6 组件查询流程对象，后续可继续 Where、ForEach、Post 等操作。</returns>
-    public static ProjectionQueryFlow6<T1, T2, T3, T4, T5, T6> Query<T1, T2, T3, T4, T5, T6>(this ILayerContext ILayerContext)
+    public static ProjectionQueryFlow6<T1, T2, T3, T4, T5, T6> Query<T1, T2, T3, T4, T5, T6>(
+        this ILayerContext ILayerContext)
     {
         return ECSWorld(ILayerContext).Query<T1, T2, T3, T4, T5, T6>();
     }
@@ -101,7 +102,8 @@ public static class LayerContextECSExtensions
     /// <typeparam name="T7">第 7 个参与查询的组件类型。</typeparam>
     /// <param name="ILayerContext">当前 ILayerContext，用于取得其内部绑定的 ECSWorld。</param>
     /// <returns>返回 7 组件查询流程对象，后续可继续 Where、ForEach、Post 等操作。</returns>
-    public static ProjectionQueryFlow7<T1, T2, T3, T4, T5, T6, T7> Query<T1, T2, T3, T4, T5, T6, T7>(this ILayerContext ILayerContext)
+    public static ProjectionQueryFlow7<T1, T2, T3, T4, T5, T6, T7> Query<T1, T2, T3, T4, T5, T6, T7>(
+        this ILayerContext ILayerContext)
     {
         return ECSWorld(ILayerContext).Query<T1, T2, T3, T4, T5, T6, T7>();
     }
@@ -119,7 +121,8 @@ public static class LayerContextECSExtensions
     /// <typeparam name="T8">第 8 个参与查询的组件类型。</typeparam>
     /// <param name="ILayerContext">当前 ILayerContext，用于取得其内部绑定的 ECSWorld。</param>
     /// <returns>返回 8 组件查询流程对象，后续可继续 Where、ForEach、Post 等操作。</returns>
-    public static ProjectionQueryFlow8<T1, T2, T3, T4, T5, T6, T7, T8> Query<T1, T2, T3, T4, T5, T6, T7, T8>(this ILayerContext ILayerContext)
+    public static ProjectionQueryFlow8<T1, T2, T3, T4, T5, T6, T7, T8> Query<T1, T2, T3, T4, T5, T6, T7, T8>(
+        this ILayerContext ILayerContext)
     {
         return ECSWorld(ILayerContext).Query<T1, T2, T3, T4, T5, T6, T7, T8>();
     }
@@ -135,7 +138,7 @@ public static class LayerContextECSExtensions
         {
             throw new ArgumentNullException(nameof(ILayerContext));
         }
+
         return ServiceLayerBinder.RequireBinding(ILayerContext).Runtime.EcsWorld;
     }
-
 }

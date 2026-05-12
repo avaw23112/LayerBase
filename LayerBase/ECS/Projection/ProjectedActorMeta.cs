@@ -37,8 +37,8 @@ internal struct ProjectedActorMeta
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void MarkProjected(
-        int actorTypeId,
-        long keepAliveTicks,
+        int                         actorTypeId,
+        long                        keepAliveTicks,
         ProjectedActorReleasePolicy releasePolicy)
     {
         ActorTypeId = actorTypeId;

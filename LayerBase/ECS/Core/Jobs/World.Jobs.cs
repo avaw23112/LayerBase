@@ -12,7 +12,6 @@ namespace Arch.Core;
 
 public partial class World
 {
-
     /// <summary>
     ///     A list of <see cref="JobHandle"/> which are pooled to avoid allocs.
     /// </summary>
@@ -32,7 +31,6 @@ public partial class World
     /// </remarks>
     /// <param name="queryDescription">The <see cref="QueryDescription"/> which specifies which <see cref="Entity"/>'s are searched for.</param>
     /// <param name="forEntity">The <see cref="ForEach"/> delegate.</param>
-
     public void ParallelQuery(in QueryDescription queryDescription, ForEach forEntity)
     {
         var foreachJob = new ForEachJob
@@ -52,7 +50,6 @@ public partial class World
     /// </remarks>
     /// <typeparam name="T">A struct implementation of the <see cref="IForEach"/> interface which is called on each <see cref="Entity"/> found.</typeparam>
     /// <param name="queryDescription">The <see cref="QueryDescription"/> which specifies which <see cref="Entity"/>'s are searched for.</param>
-
     public void InlineParallelQuery<T>(in QueryDescription queryDescription) where T : struct, IForEach
     {
         var iForEachJob = new IForEachJob<T>();
@@ -69,8 +66,8 @@ public partial class World
     /// <typeparam name="T">A struct implementation of the <see cref="IForEach"/> interface which is called on each <see cref="Entity"/> found.</typeparam>
     /// <param name="queryDescription">The <see cref="QueryDescription"/> which specifies which <see cref="Entity"/>'s are searched for.</param>
     /// <param name="iForEach">The struct instance of the generic type being invoked.</param>
-
-    public void InlineParallelQuery<T>(in QueryDescription queryDescription, in IForEachJob<T> iForEach) where T : struct, IForEach
+    public void InlineParallelQuery<T>(in QueryDescription queryDescription, in IForEachJob<T> iForEach)
+        where T : struct, IForEach
     {
         InlineParallelChunkQuery(in queryDescription, in iForEach);
     }
@@ -91,13 +88,14 @@ public partial class World
     /// <param name="queryDescription">The <see cref="QueryDescription"/> which specifies which <see cref="Chunk"/>'s are searched for.</param>
     /// <param name="innerJob">The struct instance of the generic type being invoked.</param>
     /// <exception cref="Exception">An <see cref="Exception"/> if the <see cref="JobScheduler"/> was not initialized before.</exception>
-
-    public void InlineParallelChunkQuery<T>(in QueryDescription queryDescription, in T innerJob) where T : struct, IChunkJob
+    public void InlineParallelChunkQuery<T>(in QueryDescription queryDescription, in T innerJob)
+        where T : struct, IChunkJob
     {
         // Job scheduler needs to be initialized.
         if (SharedJobScheduler is null)
         {
-            throw new Exception($"SharedJobScheduler is missing, assign an instance to {nameof(World)}.{nameof(SharedJobScheduler)}. This singleton used for parallel iterations.");
+            throw new Exception(
+                $"SharedJobScheduler is missing, assign an instance to {nameof(World)}.{nameof(SharedJobScheduler)}. This singleton used for parallel iterations.");
         }
 
         // Cast pool in an unsafe fast way and run the query.
@@ -146,13 +144,14 @@ public partial class World
     /// <param name="queryDescription">The <see cref="QueryDescription"/> which specifies which <see cref="Chunk"/>'s are searched for.</param>
     /// <param name="innerJob">The struct instance of the generic type being invoked.</param>
     /// <exception cref="Exception">An <see cref="Exception"/> if the <see cref="JobScheduler"/> was not initialized before.</exception>
-
-    public JobHandle ScheduleInlineParallelChunkQuery<T>(in QueryDescription queryDescription, in T innerJob) where T : struct, IChunkJob
+    public JobHandle ScheduleInlineParallelChunkQuery<T>(in QueryDescription queryDescription, in T innerJob)
+        where T : struct, IChunkJob
     {
         // Job scheduler needs to be initialized.
         if (SharedJobScheduler is null)
         {
-            throw new Exception("JobScheduler was not initialized, create one instance of JobScheduler. This creates a singleton used for parallel iterations.");
+            throw new Exception(
+                "JobScheduler was not initialized, create one instance of JobScheduler. This creates a singleton used for parallel iterations.");
         }
 
         // Cast pool in an unsafe fast way and run the query.

@@ -11,7 +11,6 @@ public partial struct HeavyComputeEvent
 
 public class HeavyComputeEventMetaData : EventMetaData<HeavyComputeEvent>
 {
-    
 }
 
 public partial class ComputeLayer : Layer
@@ -55,4 +54,3 @@ public static class ParallelUsage
         Thread.Sleep(200);
     }
 }
-

@@ -35,7 +35,9 @@ public partial class OrderService : IService
     }
 }
 
-public class MainLayer : Layer { }
+public class MainLayer : Layer
+{
+}
 
 public class SubscribeUsage
 {
@@ -43,14 +45,14 @@ public class SubscribeUsage
     {
         // 1. 初始化 Layer
         var layer = new MainLayer();
-        
+
         // 2. 註冊服務 (源生成器會自動掃描 [Subscribe] 並註冊)
         layer.RegisterService(new AuditService());
         layer.RegisterService(new OrderService());
 
         // 3. 構建 LayerHub (這會觸發 Build 過程，包含 AutoBind)
         LayerHub.CreateLayers().Push(layer).Build();
-        
+
         Console.WriteLine("Dispatching event...");
         // 4. 發送全局事件
         LayerHub.Send(new AuditLogEvent { Message = "User123 logged in" });

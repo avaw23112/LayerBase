@@ -17,9 +17,9 @@ public static class ServiceActorExtensions
     }
 
     public static LBTask<TResponse> AskActor<TRequest, TResponse>(
-        this IService service,
-        ActorId actorId,
-        in TRequest request,
+        this IService     service,
+        ActorId           actorId,
+        in TRequest       request,
         CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
@@ -27,8 +27,8 @@ public static class ServiceActorExtensions
         return service.Actors().Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
     }
 
-    public static TActor CreateActor<TActor>( this IService service,bool usePool = false)
-        where TActor: class,IActor,new()
+    public static TActor CreateActor<TActor>(this IService service, bool usePool = false)
+        where TActor : class, IActor, new()
     {
         return service.Actors().CreateActor<TActor>(usePool);
     }

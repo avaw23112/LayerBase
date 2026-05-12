@@ -33,7 +33,6 @@ public readonly struct StructuralEntity
 /// </summary>
 internal class StructuralSparseArray
 {
-
     /// <summary>
     ///     Initializes a new instance of the <see cref="StructuralSparseArray"/> class
     ///     with the specified <see cref="ComponentType"/> and an optional initial <paramref name="capacity"/> (default: 64).
@@ -68,7 +67,6 @@ internal class StructuralSparseArray
     ///     Adds an item to the array.
     /// </summary>
     /// <param name="index">Its index in the array.</param>
-
     public void Add(int index)
     {
         lock (this)
@@ -92,7 +90,6 @@ internal class StructuralSparseArray
     /// </summary>
     /// <param name="index">The index in the array.</param>
     /// <returns>True if an component exists there, otherwise false.</returns>
-
     public bool Contains(int index)
     {
         return index < Entities.Length && Entities[index] != -1;
@@ -160,7 +157,8 @@ internal class StructuralSparseSet
     /// <summary>
     ///     Gets or sets an array containing <see cref="StructuralSparseArray"/> instances.
     /// </summary>
-    public StructuralSparseArray[] Components; // The components as a `SparseSet` so we can easily access them via component IDs.
+    public StructuralSparseArray[]
+        Components; // The components as a `SparseSet` so we can easily access them via component IDs.
 
     /// <summary>
     ///     Ensures the capacity for registered components types.
@@ -168,7 +166,6 @@ internal class StructuralSparseSet
     ///     <remarks>Does not ensure the capacity in terms of how many operations or components are recorded.</remarks>
     /// </summary>
     /// <param name="capacity">The new capacity, the id of the component which will be ensured to fit into the arrays.</param>
-
     private void EnsureTypeCapacity(int capacity)
     {
         // Resize arrays
@@ -176,13 +173,14 @@ internal class StructuralSparseSet
         {
             return;
         }
+
         Array.Resize(ref Components, capacity + 1);
     }
+
     /// <summary>
     ///     Ensures the capacity for the <see cref="Used"/> array.
     /// </summary>
     /// <param name="capacity">The new capacity.</param>
-
     private void EnsureUsedCapacity(int capacity)
     {
         // Resize UsedSize array.
@@ -190,6 +188,7 @@ internal class StructuralSparseSet
         {
             return;
         }
+
         Array.Resize(ref Used, UsedSize + 1);
     }
 
@@ -197,7 +196,6 @@ internal class StructuralSparseSet
     ///     Adds an <see cref="StructuralSparseArray"/> to the <see cref="Components"/> list and updates the <see cref="Used"/> properly.
     /// </summary>
     /// <param name="type">The <see cref="ComponentType"/> of the <see cref="StructuralSparseArray"/>.</param>
-
     private void AddStructuralSparseArray(ComponentType type)
     {
         Components[type.Id] = new StructuralSparseArray(type, Capacity);
@@ -211,7 +209,6 @@ internal class StructuralSparseSet
     /// </summary>
     /// <param name="type">The <see cref="ComponentType"/> to check.</param>
     /// <returns>True if it does, false if not.</returns>
-
     private bool HasStructuralSparseArray(ComponentType type)
     {
         return Components[type.Id] != null;
@@ -222,7 +219,6 @@ internal class StructuralSparseSet
     /// </summary>
     /// <param name="type">The <see cref="ComponentType"/>.</param>
     /// <returns>The existing <see cref="StructuralSparseArray"/> instance.</returns>
-
     private StructuralSparseArray GetStructuralSparseArray(ComponentType type)
     {
         return Components[type.Id];
@@ -233,7 +229,6 @@ internal class StructuralSparseSet
     /// </summary>
     /// <param name="entity">The <see cref="Entity"/>.</param>
     /// <returns>Its index in this <see cref="StructuralSparseSet"/>.</returns>
-
     public int Create(in Entity entity)
     {
         lock (_createLock)
@@ -252,7 +247,6 @@ internal class StructuralSparseSet
     /// </summary>
     /// <typeparam name="T">The component type.</typeparam>
     /// <param name="index">The index.</param>
-
     public void Set<T>(int index)
     {
         var componentType = Component<T>.ComponentType;
@@ -262,7 +256,7 @@ internal class StructuralSparseSet
             EnsureTypeCapacity(componentType.Id);
             if (!HasStructuralSparseArray(componentType))
             {
-                EnsureUsedCapacity(UsedSize+1);
+                EnsureUsedCapacity(UsedSize + 1);
                 AddStructuralSparseArray(componentType);
             }
         }
@@ -284,7 +278,6 @@ internal class StructuralSparseSet
     /// </summary>
     /// <param name="index">The index in the array.</param>
     /// <returns>True if an component exists there, otherwise false.</returns>
-
     public bool Contains<T>(int index)
     {
         var id = Component<T>.ComponentType.Id;
@@ -296,7 +289,6 @@ internal class StructuralSparseSet
     /// <summary>
     ///     Clears the <see cref="StructuralSparseSet"/>.
     /// </summary>
-
     public void Clear()
     {
         Count = 0;

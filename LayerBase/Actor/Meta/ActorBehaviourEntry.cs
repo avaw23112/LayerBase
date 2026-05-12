@@ -8,9 +8,9 @@ internal readonly struct ActorBehaviourEntry
     public readonly ActorEventColumnFactory Factory;
 
     public ActorBehaviourEntry(
-        int eventTypeId,
-        Type eventType,
-        object invoker,
+        int                     eventTypeId,
+        Type                    eventType,
+        object                  invoker,
         ActorEventColumnFactory factory)
     {
         EventTypeId = eventTypeId;

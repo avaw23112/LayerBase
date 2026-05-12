@@ -22,7 +22,7 @@ public partial class World
             clearIds.AppendLine($"spanBitSet.ClearBit(Component<T{i}>.ComponentType.Id);");
             removeEvents.AppendLine($"OnComponentRemoved<T{i}>(archetype);");
         }
-    #>
+#>
 
     [SkipLocalsInit]
     [StructuralChange]
@@ -71,5 +71,5 @@ public partial class World
     }
     <#
     }
-    #>
+#>
 }

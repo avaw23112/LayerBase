@@ -116,7 +116,8 @@ public static class LayerQueryExtensions
     /// <typeparam name="T8">第 8 个参与查询的组件类型。</typeparam>
     /// <param name="layer">当前 Layer，用于取得其内部绑定的 ECSWorld。</param>
     /// <returns>返回 8 组件查询流程对象，后续可继续 Where、ForEach、Post 等操作。</returns>
-    public static ProjectionQueryFlow8<T1, T2, T3, T4, T5, T6, T7, T8> Query<T1, T2, T3, T4, T5, T6, T7, T8>(this Layer layer)
+    public static ProjectionQueryFlow8<T1, T2, T3, T4, T5, T6, T7, T8> Query<T1, T2, T3, T4, T5, T6, T7, T8>(
+        this Layer layer)
     {
         return ECSWorld(layer).Query<T1, T2, T3, T4, T5, T6, T7, T8>();
     }
@@ -132,6 +133,7 @@ public static class LayerQueryExtensions
         {
             throw new ArgumentNullException(nameof(layer));
         }
+
         return ServiceLayerBinder.RequireBinding(layer).Runtime.EcsWorld;
     }
 }

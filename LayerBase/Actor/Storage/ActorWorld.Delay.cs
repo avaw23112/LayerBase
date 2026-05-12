@@ -5,9 +5,9 @@ namespace LayerBase.Actor;
 public sealed partial class ActorWorld
 {
     public DelayPostHandle DelayPost<TEvent>(
-        ActorId actorId,
+        ActorId   actorId,
         in TEvent value,
-        float delaySeconds)
+        float     delaySeconds)
         where TEvent : struct
     {
         EnsureDelayAvailable();
@@ -17,9 +17,9 @@ public sealed partial class ActorWorld
     }
 
     public LBTask<TResponse> DelayAsk<TRequest, TResponse>(
-        ActorId actorId,
-        in TRequest request,
-        float delaySeconds,
+        ActorId           actorId,
+        in TRequest       request,
+        float             delaySeconds,
         CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct

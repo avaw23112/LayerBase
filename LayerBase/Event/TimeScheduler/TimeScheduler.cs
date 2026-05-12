@@ -11,12 +11,12 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     private readonly int[] _wheel;
     private readonly LongTimerHeap _longHeap;
     private readonly IntStack _freeList;
-    
+
     private int _poolSize;
     private long _currentTick;
     private double _accumulator;
     private bool _disposed;
-    
+
     private readonly int _wheelSize;
     private readonly int _wheelMask;
     private readonly float _tickDuration;
@@ -28,26 +28,27 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     public TimeScheduler(TimeSchedulerOptions options)
     {
         _options = options;
-        
+
         var plan = new TimerWheelPlan(options.WheelSize, options.TickDurationSeconds);
         _wheelSize = plan.WheelSize;
         _wheelMask = plan.WheelMask;
         _tickDuration = plan.TickDurationSeconds;
         _tickDurationReciprocal = plan.TickDurationReciprocal;
-        
+
         _maxPromotePerTick = options.MaxPromotePerTick;
         _maxExpiredPerTick = options.MaxExpiredPerTick;
-        
+
         _pool = new TimerEntry<TPayload>[options.InitialTimerCapacity];
         _wheel = new int[_wheelSize];
         Array.Fill(_wheel, -1);
-        
+
         _freeList = new IntStack(options.InitialTimerCapacity);
         for (int i = options.InitialTimerCapacity - 1; i >= 0; i--)
         {
             _pool[i].Version = 1;
             _freeList.Push(i);
         }
+
         _poolSize = options.InitialTimerCapacity;
         _longHeap = new LongTimerHeap(16);
 
@@ -62,16 +63,17 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public TimerHandle Schedule(in TPayload payload, float delaySeconds, int repeatCount = 0, float intervalSeconds = 0, TimerRepeatMode? repeatMode = null, TimerCatchUpPolicy? catchUpPolicy = null)
+    public TimerHandle Schedule(in TPayload payload, float delaySeconds, int repeatCount = 0, float intervalSeconds = 0,
+                                TimerRepeatMode? repeatMode = null, TimerCatchUpPolicy? catchUpPolicy = null)
     {
         if (_disposed) return TimerHandle.Invalid;
 
         if (_freeList.Count == 0) GrowPool();
         int index = _freeList.Pop();
-        
+
         ref var entry = ref FastArray.At(_pool, index);
         entry.Payload = payload;
-        
+
         var flags = TimerFlags.Active;
         if (repeatCount != 0)
         {
@@ -95,32 +97,33 @@ public sealed class TimeScheduler<TPayload> : IDisposable
                 flags |= (_defaultRepeatFlags & TimerFlags.CatchUp);
             }
         }
+
         entry.Flags = flags;
 
-        
+
         entry.RemainingRepeatCount = repeatCount;
         entry.ExpireTick = _currentTick + NormalizeDelayTicks(delaySeconds);
         entry.IntervalTicks = repeatCount == 0 ? 0 : NormalizeDelayTicks(intervalSeconds);
-        
+
         PlaceEntry(index);
-        
+
         return new TimerHandle(index, entry.Version);
     }
 
     public bool Cancel(TimerHandle handle)
     {
         if (handle.IsInvalid || handle.Index >= _poolSize) return false;
-        
+
         ref var entry = ref _pool[handle.Index];
         if ((entry.Flags & TimerFlags.Active) == 0 || entry.Version != handle.Version) return false;
-        
+
         RemoveFromStructure(handle.Index);
         entry.Flags = TimerFlags.None;
         entry.Payload = default!;
         entry.Version++;
         if (entry.Version == 0) entry.Version = 1;
         _freeList.Push(handle.Index);
-        
+
         return true;
     }
 
@@ -142,10 +145,10 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     private void TickOnce(IExpiredTimerSink<TPayload> sink)
     {
         _currentTick++;
-        
+
         if (_longHeap.Count > 0)
             PromoteLongTimers();
-            
+
         ProcessCurrentSlot(sink);
     }
 
@@ -163,7 +166,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     {
         int promoted = 0;
         long wheelEndTick = _currentTick + _wheelSize - 1;
-        
+
         while (promoted < _maxPromotePerTick && _longHeap.Count > 0)
         {
             if (_longHeap.TryPeek(out int index, out long expireTick, out int version))
@@ -204,13 +207,13 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         {
             ref var entry = ref FastArray.At(_pool, current);
             int next = entry.Next;
-            
+
             if ((entry.Flags & TimerFlags.Active) != 0)
             {
                 if (sink.TryAcceptExpired(in entry.Payload, new TimerHandle(current, entry.Version)))
                 {
                     processedInTick++;
-                    
+
                     if ((entry.Flags & TimerFlags.Repeat) != 0)
                     {
                         RescheduleRepeatSlow(current, ref entry);
@@ -225,10 +228,10 @@ public sealed class TimeScheduler<TPayload> : IDisposable
                     ReleaseTimer(current, ref entry);
                 }
             }
-            
+
             current = next;
         }
-        
+
         if (current != -1)
         {
             RequeueRemainingForNextTick(current);
@@ -263,8 +266,8 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     {
         if (entry.RemainingRepeatCount == 0)
         {
-             ReleaseTimer(index, ref entry);
-             return;
+            ReleaseTimer(index, ref entry);
+            return;
         }
 
         if (entry.RemainingRepeatCount > 0) entry.RemainingRepeatCount--;
@@ -274,9 +277,9 @@ public sealed class TimeScheduler<TPayload> : IDisposable
             nextExpire = entry.ExpireTick + entry.IntervalTicks;
         else
             nextExpire = _currentTick + entry.IntervalTicks;
-            
+
         if (nextExpire <= _currentTick) nextExpire = _currentTick + entry.IntervalTicks;
-        
+
         entry.ExpireTick = nextExpire;
         PlaceEntry(index);
     }
@@ -303,7 +306,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     {
         ref var entry = ref FastArray.At(_pool, index);
         long delayTicks = entry.ExpireTick - _currentTick;
-        
+
         if (delayTicks <= _wheelSize)
         {
             PlaceInWheel(index);
@@ -318,16 +321,17 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     {
         ref var entry = ref FastArray.At(_pool, index);
         int slot = (int)(entry.ExpireTick & _wheelMask);
-        
+
         entry.SlotIndex = slot;
         ref var wheelSlotRef = ref FastArray.At(_wheel, slot);
         entry.Next = wheelSlotRef;
         entry.Prev = -1;
-        
+
         if (wheelSlotRef != -1)
         {
             FastArray.At(_pool, wheelSlotRef).Prev = index;
         }
+
         wheelSlotRef = index;
     }
 
@@ -347,7 +351,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
                 FastArray.At(_pool, entry.Prev).Next = entry.Next;
             else
                 FastArray.At(_wheel, entry.SlotIndex) = entry.Next;
-                
+
             if (entry.Next != -1)
                 FastArray.At(_pool, entry.Next).Prev = entry.Prev;
         }
@@ -364,6 +368,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
             _pool[i].Version = 1;
             _freeList.Push(i);
         }
+
         _poolSize = newSize;
     }
 

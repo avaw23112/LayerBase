@@ -16,4 +16,3 @@ public class EventCatalogueTests
         Assert.That(EventCatalogue.IsBelongCategory(childA.GetToken(), childB.GetToken()), Is.False);
     }
 }
-

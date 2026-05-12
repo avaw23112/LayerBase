@@ -385,4 +385,3 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
         Service = 2
     }
 }
-

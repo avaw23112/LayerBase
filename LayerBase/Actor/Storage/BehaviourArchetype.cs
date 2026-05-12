@@ -16,9 +16,9 @@ internal sealed class BehaviourArchetype
     public ActorGroupSignature Groups { get; }
 
     public BehaviourArchetype(
-        int archetypeId,
-        BehaviourSignature signature,
-        ActorTagSignature tags,
+        int                 archetypeId,
+        BehaviourSignature  signature,
+        ActorTagSignature   tags,
         ActorGroupSignature groups)
     {
         ArchetypeId = archetypeId;
@@ -41,7 +41,7 @@ internal sealed class BehaviourArchetype
     }
 
     internal bool TryGetActor(
-        ActorId actorId,
+        ActorId     actorId,
         out IActor? actor)
     {
         if (!TryGetStorage(out TypedStorageRuntime? storage)
@@ -57,8 +57,8 @@ internal sealed class BehaviourArchetype
     }
 
     internal bool ReleaseProjectedActor(
-        ActorId actorId,
-        ActorWorld world,
+        ActorId                     actorId,
+        ActorWorld                  world,
         ProjectedActorReleasePolicy releasePolicy)
     {
         if (!TryGetStorage(out TypedStorageRuntime? storage)
@@ -94,7 +94,7 @@ internal sealed class BehaviourArchetype
     }
 
     public PostResult PostCall<TRequest, TResponse>(
-        ActorId actorId,
+        ActorId                               actorId,
         in ActorCallMail<TRequest, TResponse> mail)
         where TRequest : struct
         where TResponse : struct
@@ -129,7 +129,7 @@ internal sealed class BehaviourArchetype
     }
 
     public DispatchResult DispatchNow<TEvent>(
-        ActorId actorId,
+        ActorId   actorId,
         in TEvent value)
         where TEvent : struct
     {
@@ -160,8 +160,8 @@ internal sealed class BehaviourArchetype
     }
 
     public LBTask<TResponse> ImmediatelyAsk<TRequest, TResponse>(
-        ActorId actorId,
-        in TRequest request,
+        ActorId           actorId,
+        in TRequest       request,
         CancellationToken cancellationToken)
         where TRequest : struct
         where TResponse : struct
@@ -308,7 +308,8 @@ internal sealed class BehaviourArchetype
 
     internal string Describe()
     {
-        return $"Behaviours=[{string.Join(", ", Signature.EventTypeIds.ToArray())}], Tags=[{string.Join(", ", Tags.Ids.ToArray())}], Groups=[{string.Join(", ", Groups.Ids.ToArray())}]";
+        return
+            $"Behaviours=[{string.Join(", ", Signature.EventTypeIds.ToArray())}], Tags=[{string.Join(", ", Tags.Ids.ToArray())}], Groups=[{string.Join(", ", Groups.Ids.ToArray())}]";
     }
 
     internal int CountAlive()

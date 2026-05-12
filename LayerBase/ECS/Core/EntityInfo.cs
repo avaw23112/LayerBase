@@ -100,7 +100,8 @@ public struct EntityData : IEquatable<EntityData>
     /// <returns>True or false.</returns>
     public bool Equals(EntityData other)
     {
-        return Version == other.Version && Archetype != null && Archetype.Equals(other.Archetype) && Slot.Equals(other.Slot);
+        return Version == other.Version && Archetype != null && Archetype.Equals(other.Archetype) &&
+               Slot.Equals(other.Slot);
     }
 
     /// <summary>
@@ -139,7 +140,7 @@ internal class EntityInfoStorage
     ///     The <see cref="Entity"/> <see cref="Archetype"/> and <see cref="Slot"/>s in an jagged array.
     /// <remarks>Because usually both are needed and thus an array access can be saved.</remarks>
     /// </summary>
-    internal JaggedArray<EntityData> EntityData {  get; set; }
+    internal JaggedArray<EntityData> EntityData { get; set; }
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="EntityInfoStorage"/> class.
@@ -150,7 +151,7 @@ internal class EntityInfoStorage
     {
         EntityData = new JaggedArray<EntityData>(
             baseChunkSize / Unsafe.SizeOf<EntityData>(),
-            new EntityData(null!, new Slot(-1,-1), 0),
+            new EntityData(null!, new Slot(-1, -1), 0),
             capacity
         );
     }
@@ -164,7 +165,7 @@ internal class EntityInfoStorage
     /// <param name="version">Its version.</param>
     public void Add(int id, Archetype archetype, Slot slot, int version)
     {
-        EntityData.Add(id,new EntityData(archetype, slot, version));
+        EntityData.Add(id, new EntityData(archetype, slot, version));
     }
 
     /// <summary>
@@ -278,9 +279,9 @@ internal class EntityInfoStorage
 
             // Only move within the range, depening on which chunk we are at.
             var isStart = chunkIndex == archetypeSlot.ChunkIndex;
-            var upper = isStart ? archetypeSlot.Index : chunk.Count-1;
+            var upper = isStart ? archetypeSlot.Index : chunk.Count - 1;
 
-            for(var index = 0; index <= upper; index++)
+            for (var index = 0; index <= upper; index++)
             {
                 var entity = Unsafe.Add(ref entityFirstElement, index);
 
@@ -323,6 +324,3 @@ internal class EntityInfoStorage
         EntityData.Clear();
     }
 }
-
-
-

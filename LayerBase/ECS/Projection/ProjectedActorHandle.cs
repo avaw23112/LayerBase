@@ -8,7 +8,7 @@ internal readonly struct ProjectedActorHandle
     public readonly IPooledActor Actor;
 
     public ProjectedActorHandle(
-        ActorId actorId,
+        ActorId      actorId,
         IPooledActor actor)
     {
         ActorId = actorId;

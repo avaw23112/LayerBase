@@ -5,7 +5,7 @@ internal static class EventMailReader
     public static bool TryDequeue<TEvent>(
         ref EventMail<TEvent> mail,
         EventMailPool<TEvent> bufferPool,
-        out TEvent value)
+        out TEvent            value)
         where TEvent : struct
     {
         if (mail.Count == 0)
@@ -46,7 +46,7 @@ internal static class EventMailReader
     public static void ReleaseIfEmpty<TEvent>(
         ref EventMail<TEvent> mail,
         EventMailPool<TEvent> bufferPool,
-        ActorMailOptions options)
+        ActorMailOptions      options)
         where TEvent : struct
     {
         if (mail.Count != 0)

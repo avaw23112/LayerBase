@@ -17,10 +17,10 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
     private EventMail<ActorCallMail<TRequest, TResponse>>[] _mails;
 
     public ActorCallColumn(
-        TypedActorStorage<TActor> owner,
+        TypedActorStorage<TActor>                     owner,
         ActorCallInvoker<TActor, TRequest, TResponse> invoker,
-        ActorMailOptions options,
-        int initialSlotCapacity)
+        ActorMailOptions                              options,
+        int                                           initialSlotCapacity)
     {
         _owner = owner;
         _invoker = invoker;
@@ -31,7 +31,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
     }
 
     public PostResult Post(
-        int slotIndex,
+        int                                   slotIndex,
         in ActorCallMail<TRequest, TResponse> mail)
     {
         ActorSlotState slotState = _owner.GetSlotState(slotIndex);
@@ -82,8 +82,8 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
     }
 
     public override ActorColumnPumpResult PumpOne(
-        ref RuntimeFrameBudget budget,
-        in ActorMailPumpOptions options,
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
         ActorMailPumpStatsBuilder stats)
     {
         if (CanUsePumpFastPath(options))
@@ -199,7 +199,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
     }
 
     public void Dispatch(
-        TActor actor,
+        TActor                                actor,
         in ActorCallMail<TRequest, TResponse> mail)
     {
         if (mail.CancellationToken.IsCancellationRequested)

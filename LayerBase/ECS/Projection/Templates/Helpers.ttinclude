@@ -2,148 +2,148 @@
     import namespace="System.Linq"
 #>
 <#+
-const int ComponentAmount = 8;
-const int EventAmount = 10;
+    const int ComponentAmount = 8;
+    const int EventAmount = 10;
 
-string CG(int count)
-{
-    var items = new string[count];
-    for (int i = 0; i < count; i++) items[i] = $"T{i}";
-    return string.Join(", ", items);
-}
+    string CG(int count)
+    {
+        var items = new string[count];
+        for (int i = 0; i < count; i++) items[i] = $"T{i}";
+        return string.Join(", ", items);
+    }
 
-string EG(int count)
-{
-    var items = new string[count];
-    for (int i = 0; i < count; i++) items[i] = $"TEvent{i}";
-    return string.Join(", ", items);
-}
+    string EG(int count)
+    {
+        var items = new string[count];
+        for (int i = 0; i < count; i++) items[i] = $"TEvent{i}";
+        return string.Join(", ", items);
+    }
 
-string AG(int cc, int ec)
-{
-    var total = cc + ec;
-    var items = new string[total];
-    for (int i = 0; i < cc; i++) items[i] = $"T{i}";
-    for (int i = 0; i < ec; i++) items[cc + i] = $"TEvent{i}";
-    return string.Join(", ", items);
-}
+    string AG(int cc, int ec)
+    {
+        var total = cc + ec;
+        var items = new string[total];
+        for (int i = 0; i < cc; i++) items[i] = $"T{i}";
+        for (int i = 0; i < ec; i++) items[cc + i] = $"TEvent{i}";
+        return string.Join(", ", items);
+    }
 
-string PredP(int cc)
-{
-    var items = new string[1 + cc];
-    items[0] = "in Entity entity";
-    for (int i = 0; i < cc; i++) items[1 + i] = $"in T{i} c{i}";
-    return string.Join(",\n        ", items);
-}
+    string PredP(int cc)
+    {
+        var items = new string[1 + cc];
+        items[0] = "in Entity entity";
+        for (int i = 0; i < cc; i++) items[1 + i] = $"in T{i} c{i}";
+        return string.Join(",\n        ", items);
+    }
 
-string FEP(int cc, int ec)
-{
-    var total = 1 + cc + ec;
-    var items = new string[total];
-    int idx = 0;
-    items[idx++] = "in Entity entity";
-    for (int i = 0; i < cc; i++) items[idx++] = $"ref T{i} c{i}";
-    for (int i = 0; i < ec; i++) items[idx++] = $"ref TEvent{i} e{i}";
-    return string.Join(",\n        ", items);
-}
+    string FEP(int cc, int ec)
+    {
+        var total = 1 + cc + ec;
+        var items = new string[total];
+        int idx = 0;
+        items[idx++] = "in Entity entity";
+        for (int i = 0; i < cc; i++) items[idx++] = $"ref T{i} c{i}";
+        for (int i = 0; i < ec; i++) items[idx++] = $"ref TEvent{i} e{i}";
+        return string.Join(",\n        ", items);
+    }
 
-string FEC(int ec)
-{
-    var items = new string[ec];
-    for (int i = 0; i < ec; i++) items[i] = $"where TEvent{i} : struct";
-    return string.Join("\n    ", items);
-}
+    string FEC(int ec)
+    {
+        var items = new string[ec];
+        for (int i = 0; i < ec; i++) items[i] = $"where TEvent{i} : struct";
+        return string.Join("\n    ", items);
+    }
 
-string EventName(int ec)
-{
-    return ec == 1 ? "ProjectionForEach" : $"ProjectionForEach{ec}";
-}
+    string EventName(int ec)
+    {
+        return ec == 1 ? "ProjectionForEach" : $"ProjectionForEach{ec}";
+    }
 
-string FirstComponentRefs(int cc)
-{
-    var lines = new string[cc];
-    for (int i = 0; i < cc; i++)
-        lines[i] = $"        ref T{i} first{i} = ref chunk.GetFirst<T{i}>();";
-    return string.Join("\n", lines);
-}
+    string FirstComponentRefs(int cc)
+    {
+        var lines = new string[cc];
+        for (int i = 0; i < cc; i++)
+            lines[i] = $"        ref T{i} first{i} = ref chunk.GetFirst<T{i}>();";
+        return string.Join("\n", lines);
+    }
 
-string RowComponentRefs(int cc)
-{
-    var lines = new string[cc];
-    for (int i = 0; i < cc; i++)
-        lines[i] = $"            ref T{i} c{i} = ref Unsafe.Add(ref first{i}, row);";
-    return string.Join("\n", lines);
-}
+    string RowComponentRefs(int cc)
+    {
+        var lines = new string[cc];
+        for (int i = 0; i < cc; i++)
+            lines[i] = $"            ref T{i} c{i} = ref Unsafe.Add(ref first{i}, row);";
+        return string.Join("\n", lines);
+    }
 
-string PredicateArgs(int cc)
-{
-    var items = new string[1 + cc];
-    items[0] = "in entity";
-    for (int i = 0; i < cc; i++) items[1 + i] = $"in c{i}";
-    return string.Join(", ", items);
-}
+    string PredicateArgs(int cc)
+    {
+        var items = new string[1 + cc];
+        items[0] = "in entity";
+        for (int i = 0; i < cc; i++) items[1 + i] = $"in c{i}";
+        return string.Join(", ", items);
+    }
 
-string ForEachArgs(int cc, int ec)
-{
-    var items = new string[1 + cc + ec];
-    int idx = 0;
-    items[idx++] = "in entity";
-    for (int i = 0; i < cc; i++) items[idx++] = $"ref c{i}";
-    for (int i = 0; i < ec; i++) items[idx++] = $"ref e{i}";
-    return string.Join(", ", items);
-}
+    string ForEachArgs(int cc, int ec)
+    {
+        var items = new string[1 + cc + ec];
+        int idx = 0;
+        items[idx++] = "in entity";
+        for (int i = 0; i < cc; i++) items[idx++] = $"ref c{i}";
+        for (int i = 0; i < ec; i++) items[idx++] = $"ref e{i}";
+        return string.Join(", ", items);
+    }
 
-string EventDefaults(int ec)
-{
-    var lines = new string[ec];
-    for (int i = 0; i < ec; i++)
-        lines[i] = $"            TEvent{i} e{i} = default;";
-    return string.Join("\n", lines);
-}
+    string EventDefaults(int ec)
+    {
+        var lines = new string[ec];
+        for (int i = 0; i < ec; i++)
+            lines[i] = $"            TEvent{i} e{i} = default;";
+        return string.Join("\n", lines);
+    }
 
-string BatchDeclarations(int ec)
-{
-    var lines = new string[ec];
-    for (int i = 0; i < ec; i++)
-        lines[i] = $"        ProjectionBatchBuffer<TEvent{i}> batch{i} = ProjectionBatchBuffer<TEvent{i}>.Rent();";
-    return string.Join("\n", lines);
-}
+    string BatchDeclarations(int ec)
+    {
+        var lines = new string[ec];
+        for (int i = 0; i < ec; i++)
+            lines[i] = $"        ProjectionBatchBuffer<TEvent{i}> batch{i} = ProjectionBatchBuffer<TEvent{i}>.Rent();";
+        return string.Join("\n", lines);
+    }
 
-string BatchRefArgs(int ec)
-{
-    var items = new string[ec];
-    for (int i = 0; i < ec; i++) items[i] = $"ref batch{i}";
-    return string.Join(", ", items);
-}
+    string BatchRefArgs(int ec)
+    {
+        var items = new string[ec];
+        for (int i = 0; i < ec; i++) items[i] = $"ref batch{i}";
+        return string.Join(", ", items);
+    }
 
-string BatchMethodParams(int ec)
-{
-    var items = new string[ec];
-    for (int i = 0; i < ec; i++) items[i] = $"ref ProjectionBatchBuffer<TEvent{i}> batch{i}";
-    return string.Join(", ", items);
-}
+    string BatchMethodParams(int ec)
+    {
+        var items = new string[ec];
+        for (int i = 0; i < ec; i++) items[i] = $"ref ProjectionBatchBuffer<TEvent{i}> batch{i}";
+        return string.Join(", ", items);
+    }
 
-string BatchPosts(int ec)
-{
-    var lines = new string[ec];
-    for (int i = 0; i < ec; i++)
-        lines[i] = $"            batch{i}.PostTo(actorWorld);";
-    return string.Join("\n", lines);
-}
+    string BatchPosts(int ec)
+    {
+        var lines = new string[ec];
+        for (int i = 0; i < ec; i++)
+            lines[i] = $"            batch{i}.PostTo(actorWorld);";
+        return string.Join("\n", lines);
+    }
 
-string BatchDisposes(int ec)
-{
-    var lines = new string[ec];
-    for (int i = ec - 1; i >= 0; i--)
-        lines[ec - 1 - i] = $"            batch{i}.Dispose();";
-    return string.Join("\n", lines);
-}
+    string BatchDisposes(int ec)
+    {
+        var lines = new string[ec];
+        for (int i = ec - 1; i >= 0; i--)
+            lines[ec - 1 - i] = $"            batch{i}.Dispose();";
+        return string.Join("\n", lines);
+    }
 
-string BatchAdds(int ec)
-{
-    var lines = new string[ec];
-    for (int i = 0; i < ec; i++)
-        lines[i] = $"            batch{i}.Add(actorId, in e{i});";
-    return string.Join("\n", lines);
-}
+    string BatchAdds(int ec)
+    {
+        var lines = new string[ec];
+        for (int i = 0; i < ec; i++)
+            lines[i] = $"            batch{i}.Add(actorId, in e{i});";
+        return string.Join("\n", lines);
+    }
 #>

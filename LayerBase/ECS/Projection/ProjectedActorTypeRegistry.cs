@@ -10,9 +10,10 @@ internal static class ProjectedActorTypeRegistry
 {
     private static Type?[] _typesById = new Type?[64];
     private static ProjectedActorFactory?[] _factoriesById = new ProjectedActorFactory?[64];
+
     public static void RegisterGenerated(
-        int actorTypeId,
-        Type actorType,
+        int                   actorTypeId,
+        Type                  actorType,
         ProjectedActorFactory factory)
     {
         EnsureCapacity(actorTypeId);
@@ -23,7 +24,7 @@ internal static class ProjectedActorTypeRegistry
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static ProjectedActorHandle CreateActorByTypeId(
         ActorWorld actorWorld,
-        int actorTypeId)
+        int        actorTypeId)
     {
         if ((uint)actorTypeId >= (uint)_factoriesById.Length)
         {
@@ -63,6 +64,7 @@ internal static class ProjectedActorTypeRegistry
         {
             newLength <<= 1;
         }
+
         Array.Resize(ref _typesById, newLength);
         Array.Resize(ref _factoriesById, newLength);
     }

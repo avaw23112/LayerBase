@@ -181,7 +181,7 @@ public class ActorHardeningTests
         Assert.That(worldDump, Does.Contain(nameof(HardeningProbeActor)));
         Assert.That(queryDump, Does.Contain("AliveCount"));
     }
-    
+
     [Test]
     public void Coalesced_policy_maps_to_DiagnosticOnly_and_returns_EventNotSupported()
     {

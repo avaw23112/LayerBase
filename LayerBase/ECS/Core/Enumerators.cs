@@ -15,7 +15,6 @@ namespace Arch.Core;
 [SkipLocalsInit]
 public ref struct Enumerator<T>
 {
-
 #if NET7_0_OR_GREATER
     private readonly ref T _ptr;
 #else
@@ -31,7 +30,6 @@ public ref struct Enumerator<T>
     /// <param name="span">The <see cref="Span{T}"/> with items to iterate over.</param>
     public Enumerator(Span<T> span)
     {
-
 #if NET7_0_OR_GREATER
         _ptr = ref MemoryMarshal.GetReference(span);
 #else
@@ -46,7 +44,6 @@ public ref struct Enumerator<T>
     ///     Moves to the next item.
     /// </summary>
     /// <returns>True if there still items, otherwise false.</returns>
-
     public bool MoveNext()
     {
         return unchecked(--_index) >= 0;
@@ -55,7 +52,6 @@ public ref struct Enumerator<T>
     /// <summary>
     ///     Resets this instance.
     /// </summary>
-
     public void Reset()
     {
         _index = _length;
@@ -66,10 +62,8 @@ public ref struct Enumerator<T>
     /// </summary>
     public readonly ref T Current
     {
-
         get
         {
-
 #if NET7_0_OR_GREATER
             return ref Unsafe.Add(ref _ptr, _index);
 #else
@@ -134,8 +128,7 @@ public ref struct QueryArchetypeEnumerator
     /// </summary>
     public readonly Archetype Current
     {
-        [SkipLocalsInit]
-        get => _archetypes.Current;
+        [SkipLocalsInit] get => _archetypes.Current;
     }
 }
 
@@ -190,7 +183,7 @@ public ref struct QueryChunkEnumerator
         // Make it move once, otherwise we can not check directly for Current.Size which results in bad behaviour
         if (_archetypeEnumerator.MoveNext())
         {
-            _index = _archetypeEnumerator.Current.Count+1;
+            _index = _archetypeEnumerator.Current.Count + 1;
         }
     }
 
@@ -241,8 +234,7 @@ public ref struct QueryChunkEnumerator
     /// </summary>
     public readonly ref Chunk Current
     {
-        [SkipLocalsInit]
-        get => ref _archetypeEnumerator.Current.GetChunk(_index);
+        [SkipLocalsInit] get => ref _archetypeEnumerator.Current.GetChunk(_index);
     }
 }
 
@@ -330,9 +322,7 @@ public ref struct ChunkRangeEnumerator
     /// </summary>
     public readonly ref Chunk Current
     {
-        [SkipLocalsInit]
-
-        get => ref _archetype.GetChunk(_chunkIndex);
+        [SkipLocalsInit] get => ref _archetype.GetChunk(_chunkIndex);
     }
 }
 
@@ -534,10 +524,8 @@ public readonly ref struct RangePartitioner
     ///     Returns a new instance of a <see cref="RangeEnumerator"/>.
     /// </summary>
     /// <returns>A new <see cref="RangeEnumerator"/>.</returns>
-
     public RangeEnumerator GetEnumerator()
     {
         return new RangeEnumerator(_threads, _size);
     }
 }
-

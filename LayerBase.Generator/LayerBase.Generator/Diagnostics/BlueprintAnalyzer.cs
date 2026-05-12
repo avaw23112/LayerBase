@@ -42,7 +42,7 @@ public sealed class BlueprintAnalyzer : DiagnosticAnalyzer
 
         // 检查 [LayerBundle] 属性
         var bundleAttribute = namedType.GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.MetadataName == "LayerBundleAttribute");
+                                       .FirstOrDefault(a => a.AttributeClass?.MetadataName == "LayerBundleAttribute");
 
         if (bundleAttribute != null)
         {
@@ -51,7 +51,8 @@ public sealed class BlueprintAnalyzer : DiagnosticAnalyzer
 
         // 检查 [LayerBlueprint] 属性
         var blueprintAttribute = namedType.GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.MetadataName == "LayerBlueprintAttribute");
+                                          .FirstOrDefault(a =>
+                                              a.AttributeClass?.MetadataName == "LayerBlueprintAttribute");
 
         if (blueprintAttribute != null)
         {
@@ -61,8 +62,8 @@ public sealed class BlueprintAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeBundle(
         SymbolAnalysisContext context,
-        INamedTypeSymbol namedType,
-        AttributeData bundleAttribute)
+        INamedTypeSymbol      namedType,
+        AttributeData         bundleAttribute)
     {
         // LB-BP001: [LayerBundle] 类型必须是 class
         if (namedType.TypeKind != TypeKind.Class)
@@ -95,8 +96,8 @@ public sealed class BlueprintAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeBlueprint(
         SymbolAnalysisContext context,
-        INamedTypeSymbol namedType,
-        AttributeData blueprintAttribute)
+        INamedTypeSymbol      namedType,
+        AttributeData         blueprintAttribute)
     {
         // LB-BP004: [LayerBlueprint] 类型必须是 class
         if (namedType.TypeKind != TypeKind.Class)

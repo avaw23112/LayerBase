@@ -35,6 +35,7 @@ public sealed partial class ActorWorld : IDisposable
         DelayScheduler = new ActorDelayScheduler(this, ActorTimeWheelOptions.Default);
         _state = ActorWorldState.Running;
     }
+
     internal bool IsLifecycleRunnable(ActorId actorId)
     {
         // actorId 参数表示要检查的 Actor。
@@ -47,6 +48,7 @@ public sealed partial class ActorWorld : IDisposable
         return _archetypes[actorId.ArchetypeId]
             .IsLifecycleRunnable(actorId);
     }
+
     internal ActorWorld(ActorMailOptions defaultMailOptions)
     {
         RuntimeIndex = ActorWorldRuntimeIndexAllocator.Rent();

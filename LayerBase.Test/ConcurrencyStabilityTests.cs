@@ -32,6 +32,7 @@ public class ConcurrencyStabilityTests
                 }
             });
         }
+
         LayerHub.Pump(0.16f);
         Assert.DoesNotThrow(() => Task.WaitAll(tasks), "Stress test should not cause deadlocks or crashes");
     }
@@ -75,8 +76,12 @@ public class ConcurrencyStabilityTests
         Assert.DoesNotThrow(() => Task.WaitAll(tasks));
     }
 
-    private class TestLayer : Layer { }
-    private struct StressEvent { 
+    private class TestLayer : Layer
+    {
+    }
+
+    private struct StressEvent
+    {
         public int Id;
         public StressEvent(int id) => Id = id;
     }

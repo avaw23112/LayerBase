@@ -24,7 +24,7 @@ public partial struct Chunk
         {
             gets.AppendLine($"ref var t{i}Component = ref Unsafe.Add(ref t{i}FirstElement, index);");
         }
-    #>
+#>
 
     [Pure]
     public EntityComponents<<#= generics #>> GetRow<<#= generics #>>(int index)
@@ -36,6 +36,6 @@ public partial struct Chunk
     }
     <#
     }
-    #>
+#>
 }
 

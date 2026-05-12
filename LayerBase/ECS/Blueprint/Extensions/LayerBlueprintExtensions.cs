@@ -16,6 +16,6 @@ public static class LayerBlueprintExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EntityCreateBuilder CreateEntity(this Layer layer)
     {
-         return new EntityCreateBuilder(layer.ECSWorld());
+        return new EntityCreateBuilder(layer.ECSWorld());
     }
 }

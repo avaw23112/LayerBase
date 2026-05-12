@@ -7,43 +7,100 @@ using LayerBase.ECS;
 
 namespace LayerBase.ECS.Projection.Flow;
 
-<# for (var c = 0; c <= ComponentAmount; c++) { #>
-<# var compG = CG(c); #>
-<# if (c == 0) { #>
+<#
+    for (var c = 0; c <= ComponentAmount; c++)
+    {
+#>
+<#
+        var compG = CG(c);
+#>
+<#
+        if (c == 0)
+        {
+#>
 public delegate bool ProjectionPredicate(
         in Entity entity);
-<# } else { #>
+<#
+        }
+        else
+        {
+#>
 public delegate bool ProjectionPredicate<<#= compG #>>(
         <#= PredP(c) #>);
-<# } #>
-<# for (var e = 1; e <= EventAmount; e++) { #>
-<# var evtName = e == 1 ? "ProjectionForEach" : $"ProjectionForEach{e}"; #>
+<#
+        }
+#>
+<#
+        for (var e = 1; e <= EventAmount; e++)
+        {
+#>
+<#
+            var evtName = e == 1 ? "ProjectionForEach" : $"ProjectionForEach{e}";
+#>
 public delegate void <#= evtName #><<#= AG(c, e) #>>(
         <#= FEP(c, e) #>)
     <#= FEC(e) #>;
 
-<# } #>
-<# } #>
-<# for (var c = 1; c <= ComponentAmount; c++) { #>
-<# var compG = CG(c); #>
+<#
+        }
+#>
+<#
+    }
+#>
+<#
+    for (var c = 1; c <= ComponentAmount; c++)
+    {
+#>
+<#
+        var compG = CG(c);
+#>
 public interface IQueryJob<<#= compG #>>
 {
     void Execute(
-        Entity entity<# for (var i = 0; i < c; i++) { #>,
-        ref T<#= i #> c<#= i #><# } #>);
+        Entity entity<#
+        for (var i = 0; i < c; i++)
+        {
+#>,
+        ref T<#= i #> c<#= i #><#
+        }
+#>);
 }
 
-<# } #>
-<# for (var c = 1; c <= ComponentAmount; c++) { #>
-<# for (var e = 1; e <= EventAmount; e++) { #>
-<# var allG = AG(c, e); #>
+<#
+    }
+#>
+<#
+    for (var c = 1; c <= ComponentAmount; c++)
+    {
+#>
+<#
+        for (var e = 1; e <= EventAmount; e++)
+        {
+#>
+<#
+            var allG = AG(c, e);
+#>
 public interface IProjectionJob<#= c #>x<#= e #><<#= allG #>>
 {
     ProjectResult Execute(
-        Entity entity<# for (var i = 0; i < c; i++) { #>,
-        ref T<#= i #> c<#= i #><# } #><# for (var i = 0; i < e; i++) { #>,
-        ref TEvent<#= i #> e<#= i #><# } #>);
+        Entity entity<#
+            for (var i = 0; i < c; i++)
+            {
+#>,
+        ref T<#= i #> c<#= i #><#
+            }
+#><#
+            for (var i = 0; i < e; i++)
+            {
+#>,
+        ref TEvent<#= i #> e<#= i #><#
+            }
+#>);
 }
 
-<# } #>
-<# } #>
+<#
+        }
+#>
+<#
+    }
+#>

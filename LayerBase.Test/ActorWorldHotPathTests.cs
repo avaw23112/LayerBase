@@ -71,7 +71,7 @@ public sealed partial class ActorWorldHotPathTests
         Assert.That(row.IsValid, Is.True);
         Assert.That(row.Mails.Length, Is.GreaterThan(actorId.SlotIndex));
     }
-    
+
     [Test]
     public void Same_signature_different_actor_types_use_distinct_archetype_rows_and_share_world_pool()
     {

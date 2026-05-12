@@ -55,6 +55,7 @@ public sealed class EventBuildPolicyTable
                 _postPolicies[i] = new EventPostPolicy(PostDeliveryMode.Normal, _defaultBackpressure, 0);
             }
         }
+
         _postPolicies[eventTypeId] = policy;
     }
 
@@ -67,6 +68,7 @@ public sealed class EventBuildPolicyTable
             int newSize = Math.Max(eventTypeId + 1, oldSize * 2);
             Array.Resize(ref _timerPolicies, newSize);
         }
+
         _timerPolicies[eventTypeId] = policy;
     }
 
@@ -79,6 +81,7 @@ public sealed class EventBuildPolicyTable
             int newSize = Math.Max(eventTypeId + 1, oldSize * 2);
             Array.Resize(ref _bufferPolicies, newSize);
         }
+
         _bufferPolicies[eventTypeId] = policy;
     }
 
@@ -95,7 +98,7 @@ public sealed class EventBuildPolicyTable
         var policies = _postPolicies;
         if (eventTypeId < 0 || eventTypeId >= policies.Length)
             return new EventPostPolicy(PostDeliveryMode.Normal, _defaultBackpressure, 0);
-        
+
         return policies[eventTypeId];
     }
 
@@ -105,7 +108,7 @@ public sealed class EventBuildPolicyTable
         var policies = _timerPolicies;
         if (eventTypeId < 0 || eventTypeId >= policies.Length)
             return null;
-        
+
         return policies[eventTypeId];
     }
 
@@ -115,7 +118,7 @@ public sealed class EventBuildPolicyTable
         var policies = _bufferPolicies;
         if (eventTypeId < 0 || eventTypeId >= policies.Length)
             return null;
-        
+
         return policies[eventTypeId];
     }
 
@@ -133,9 +136,9 @@ public sealed class EventBuildPolicyTable
 
     public IEnumerable<EventPolicySnapshot> ExportSnapshots()
     {
-        IEventMetaData?[] metas= _metaDatas.ToArray();
-        EventPostPolicy[] postPolicies= _postPolicies.ToArray();
-        EventTimerPolicy?[] timerPolicies= _timerPolicies.ToArray();
+        IEventMetaData?[] metas = _metaDatas.ToArray();
+        EventPostPolicy[] postPolicies = _postPolicies.ToArray();
+        EventTimerPolicy?[] timerPolicies = _timerPolicies.ToArray();
         EventBufferPolicy?[] bufferPolicies = _bufferPolicies.ToArray();
 
         for (int i = 0; i < metas.Length; i++)

@@ -79,7 +79,8 @@ internal sealed partial class IntegrationActor : IActor
     }
 }
 
-internal sealed partial class RuntimeLifecycleActor : IActor, LayerBase.Actor.IStart, LayerBase.Actor.IFixedUpdate, LayerBase.Actor.IUpdate, LayerBase.Actor.ILateUpdate
+internal sealed partial class RuntimeLifecycleActor : IActor, LayerBase.Actor.IStart, LayerBase.Actor.IFixedUpdate,
+                                                      LayerBase.Actor.IUpdate, LayerBase.Actor.ILateUpdate
 {
     [ActorBehaviour]
     private void OnActor(in RuntimeActorEvent value)
@@ -121,7 +122,8 @@ public class ActorRuntimeIntegrationTests
     [Test]
     public void Runtime_exposes_actor_world_and_pump_advances_actor_processing()
     {
-        LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(), PostSchedulerOptions.Default);
+        LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(),
+            PostSchedulerOptions.Default);
 
         Assert.That(runtime.Actors, Is.Not.Null);
 
@@ -136,7 +138,8 @@ public class ActorRuntimeIntegrationTests
     [Test]
     public void Actor_world_runs_after_post_scheduler_and_after_layer_update()
     {
-        LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(), PostSchedulerOptions.Default);
+        LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(),
+            PostSchedulerOptions.Default);
         IntegrationActor actor = runtime.Actors.CreateActor<IntegrationActor>();
 
         runtime.Post(new RuntimeSchedulerEvent(1));
@@ -175,7 +178,8 @@ public class ActorRuntimeIntegrationTests
     [Test]
     public void Actor_lifecycle_runs_after_behaviour_and_after_layer_update()
     {
-        LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(), PostSchedulerOptions.Default);
+        LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(),
+            PostSchedulerOptions.Default);
         RuntimeLifecycleActor actor = runtime.Actors.CreateActor<RuntimeLifecycleActor>();
 
         Assert.That(ActorRuntimeIntegrationTrace.Entries, Is.EqualTo(new[] { "start" }));
@@ -188,7 +192,8 @@ public class ActorRuntimeIntegrationTests
 
         Assert.That(
             ActorRuntimeIntegrationTrace.Entries,
-            Is.EqualTo(new[] { "scheduler:1", "update", "actor:2", "fixed:0.017", "actor-update:0.016", "late:0.016" }));
+            Is.EqualTo(new[]
+                { "scheduler:1", "update", "actor:2", "fixed:0.017", "actor-update:0.016", "late:0.016" }));
     }
 
     [Test]

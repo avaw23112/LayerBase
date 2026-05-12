@@ -8,9 +8,9 @@ internal readonly struct ActorArchetypeKey : IEquatable<ActorArchetypeKey>
     public readonly ActorGroupSignature Groups;
 
     public ActorArchetypeKey(
-        Type actorType,
-        BehaviourSignature behaviour,
-        ActorTagSignature tags,
+        Type                actorType,
+        BehaviourSignature  behaviour,
+        ActorTagSignature   tags,
         ActorGroupSignature groups)
     {
         ActorType = actorType ?? throw new ArgumentNullException(nameof(actorType));

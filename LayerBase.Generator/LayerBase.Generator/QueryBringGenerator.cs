@@ -42,12 +42,12 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         // ForAttributeWithMetadataName 会先筛选带有指定 Attribute 的语法节点，
         // 再把命中的节点交给 ExtractQueryMethodInfo 做语义分析。
         var queryMethods = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                QueryAttributeName,
-                static (node, _) => node is MethodDeclarationSyntax,
-                static (ctx, _) => ExtractQueryMethodInfo(ctx))
-            .Where(static method => method is not null)
-            .Select(static (method, _) => method!);
+                                  .ForAttributeWithMetadataName(
+                                      QueryAttributeName,
+                                      static (node, _) => node is MethodDeclarationSyntax,
+                                      static (ctx,  _) => ExtractQueryMethodInfo(ctx))
+                                  .Where(static method => method is not null)
+                                  .Select(static (method, _) => method!);
 
         // RegisterSourceOutput：注册最终源码输出逻辑。
         // Collect 会把本轮编译收集到的所有 Query 方法合并成一个数组，
@@ -86,7 +86,8 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         }
 
         var bringAttribute = methodSymbol.GetAttributes()
-            .FirstOrDefault(static attr => IsAttributeOfMetadataName(attr, BringAttributeName));
+                                         .FirstOrDefault(static attr =>
+                                             IsAttributeOfMetadataName(attr, BringAttributeName));
 
         ImmutableArray<ITypeSymbol> bringEventTypes = ImmutableArray<ITypeSymbol>.Empty;
 
@@ -97,15 +98,15 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
                 && bringAttribute.ConstructorArguments[0].Values.Length > 0)
             {
                 bringEventTypes = bringAttribute.ConstructorArguments[0].Values
-                    .Where(static value => value.Value is ITypeSymbol)
-                    .Select(static value => (ITypeSymbol)value.Value!)
-                    .ToImmutableArray();
+                                                .Where(static value => value.Value is ITypeSymbol)
+                                                .Select(static value => (ITypeSymbol)value.Value!)
+                                                .ToImmutableArray();
             }
             // 支持形如 [Bring<A, B>] 这类泛型 Attribute。
             else if (bringAttribute.AttributeClass?.TypeArguments.Length > 0)
             {
                 bringEventTypes = bringAttribute.AttributeClass.TypeArguments
-                    .ToImmutableArray();
+                                                .ToImmutableArray();
             }
         }
 
@@ -259,7 +260,8 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
     private static string? ExtractEntryPointName(IMethodSymbol methodSymbol)
     {
         var entryPointAttribute = methodSymbol.GetAttributes()
-            .FirstOrDefault(static attr => IsAttributeOfMetadataName(attr, EntryPointAttributeName));
+                                              .FirstOrDefault(static attr =>
+                                                  IsAttributeOfMetadataName(attr, EntryPointAttributeName));
 
         if (entryPointAttribute != null)
         {
@@ -284,7 +286,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
     }
 
     private static void Execute(
-        SourceProductionContext context,
+        SourceProductionContext         context,
         ImmutableArray<QueryMethodInfo> methods)
     {
         if (methods.IsDefaultOrEmpty)
@@ -320,7 +322,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
     }
 
     private static string GenerateClassSource(
-        INamedTypeSymbol classSymbol,
+        INamedTypeSymbol      classSymbol,
         List<QueryMethodInfo> methods)
     {
         var sb = new StringBuilder();
@@ -563,8 +565,8 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         return string.Join(
             ", ",
             method.ComponentTypes
-                .Concat(method.BringEventTypes)
-                .Select(static type => GetTypeDisplayName(type)));
+                  .Concat(method.BringEventTypes)
+                  .Select(static type => GetTypeDisplayName(type)));
     }
 
     private static string BuildJobInterfaceName(QueryMethodInfo method)
@@ -589,15 +591,15 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         var parts = new List<string>();
 
         string accessibility = classSymbol.DeclaredAccessibility switch
-        {
-            Accessibility.Public => "public",
-            Accessibility.Internal => "internal",
-            Accessibility.Protected => "protected",
-            Accessibility.Private => "private",
-            Accessibility.ProtectedAndInternal => "private protected",
-            Accessibility.ProtectedOrInternal => "protected internal",
-            _ => "internal"
-        };
+                               {
+                                   Accessibility.Public               => "public",
+                                   Accessibility.Internal             => "internal",
+                                   Accessibility.Protected            => "protected",
+                                   Accessibility.Private              => "private",
+                                   Accessibility.ProtectedAndInternal => "private protected",
+                                   Accessibility.ProtectedOrInternal  => "protected internal",
+                                   _                                  => "internal"
+                               };
 
         parts.Add(accessibility);
 
@@ -632,7 +634,8 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
             return classSymbol.Name;
         }
 
-        string typeParameters = string.Join(", ", classSymbol.TypeParameters.Select(static parameter => parameter.Name));
+        string typeParameters =
+            string.Join(", ", classSymbol.TypeParameters.Select(static parameter => parameter.Name));
         return $"{classSymbol.Name}<{typeParameters}>";
     }
 

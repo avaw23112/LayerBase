@@ -8,11 +8,11 @@ internal static class ProjectedActorBinding
 {
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static ActorId EnsureProjectedActor(
-        World world,
-        ActorWorld actorWorld,
-        Entity entity,
+        World                  world,
+        ActorWorld             actorWorld,
+        Entity                 entity,
         ref ProjectedActorMeta meta,
-        long nowTicks)
+        long                   nowTicks)
     {
         ProjectedActorHandle handle = ProjectedActorTypeRegistry.CreateActorByTypeId(actorWorld, meta.ActorTypeId);
         if (!handle.IsValid)
@@ -28,9 +28,9 @@ internal static class ProjectedActorBinding
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void TouchProjectedActor(
-        ActorWorld actorWorld,
+        ActorWorld             actorWorld,
         ref ProjectedActorMeta meta,
-        long nowTicks)
+        long                   nowTicks)
     {
         if (!meta.ActorId.IsValid)
         {

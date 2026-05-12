@@ -13,15 +13,15 @@ public readonly struct PostSchedulerOptions
     public readonly BackpressurePolicy DefaultBackpressure;
 
     public PostSchedulerOptions(
-        int readyCapacity,
-        int nextCapacity,
-        int maxEventsPerPump,
-        double maxMillisecondsPerPump,
-        int maxWavesPerPump,
-        int timeCheckInterval,
+        int                readyCapacity,
+        int                nextCapacity,
+        int                maxEventsPerPump,
+        double             maxMillisecondsPerPump,
+        int                maxWavesPerPump,
+        int                timeCheckInterval,
         BackpressurePolicy defaultBackpressure,
-        int maxCompletionsPerPump = 0,
-        int maxIngressPostsPerPump = 4096)
+        int                maxCompletionsPerPump  = 0,
+        int                maxIngressPostsPerPump = 4096)
     {
         ReadyCapacity = readyCapacity;
         NextCapacity = nextCapacity;
@@ -33,7 +33,7 @@ public readonly struct PostSchedulerOptions
         MaxIngressPostsPerPump = maxIngressPostsPerPump;
         DefaultBackpressure = defaultBackpressure;
     }
-    
+
     public static PostSchedulerOptions Default => new(
         readyCapacity: 1024,
         nextCapacity: 1024,

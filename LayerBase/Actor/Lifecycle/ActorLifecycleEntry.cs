@@ -7,7 +7,7 @@ internal readonly struct ActorLifecycleEntry<TLifecycle>
     public readonly TLifecycle Instance;
 
     public ActorLifecycleEntry(
-        ActorId actorId,
+        ActorId    actorId,
         TLifecycle instance)
     {
         ActorId = actorId;

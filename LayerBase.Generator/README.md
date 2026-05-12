@@ -99,7 +99,8 @@ By attaching simple attributes, `LayerBase.Generator` silently generates all the
       instance creation, and layer mounting in the background.
 2. **Zero-Reflection Event Bus Binding (`[SubscribeFlow]`, `[SubscribeAsync]`)**
     - No more manual maintenance of tedious `EventBus.SubscribeFlow<T>(Method)` calls.
-    - Just attach `[SubscribeFlow]` or `[SubscribeAsync]` to the event handling methods in your `Manager` (inheriting from
+    - Just attach `[SubscribeFlow]` or `[SubscribeAsync]` to the event handling methods in your `Manager` (inheriting
+      from
       `ILayerContext`).
     - The Source Generator extracts the underlying delegates directly, generates high-density wrapper classes, and
       injects them into the global bus, **completely eliminating runtime reflection lookups.**

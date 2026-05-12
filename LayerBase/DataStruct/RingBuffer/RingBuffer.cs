@@ -15,7 +15,7 @@ internal sealed class RingBuffer<T>
     public RingBuffer(int capacity)
     {
         if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
-        
+
         _logicalCapacity = capacity;
         _physicalCapacity = capacity;
         // Force power of two for physical capacity
@@ -38,7 +38,7 @@ internal sealed class RingBuffer<T>
     public bool TryEnqueue(in T item)
     {
         if (_count >= _logicalCapacity) return false;
-        
+
         _buffer[_tail] = item;
         _tail = (_tail + 1) & _mask;
         _count++;
@@ -54,14 +54,14 @@ internal sealed class RingBuffer<T>
             return false;
         }
 
-        
+
         item = _buffer[_head];
         _buffer[_head] = default!;
         _head = (_head + 1) & _mask;
         _count--;
         return true;
     }
-    
+
     public void Clear()
     {
         Array.Clear(_buffer, 0, _buffer.Length);
@@ -78,10 +78,11 @@ internal sealed class RingBuffer<T>
             item = default!;
             return false;
         }
+
         item = _buffer[_head];
         return true;
     }
-    
+
     public void DropOldest()
     {
         if (_count == 0) return;
@@ -89,7 +90,7 @@ internal sealed class RingBuffer<T>
         _head = (_head + 1) & _mask;
         _count--;
     }
-    
+
     public void DropNewest()
     {
         if (_count == 0) return;
@@ -97,6 +98,4 @@ internal sealed class RingBuffer<T>
         _buffer[_tail] = default!;
         _count--;
     }
-
 }
-

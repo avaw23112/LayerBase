@@ -162,7 +162,8 @@ public class ActorMetaDataIntegrationTests
         runtime.Pump(0.016f);
 
         Assert.That(ActorMetaDataTrace.Values, Is.EqualTo(new[] { 2 }));
-        Assert.That(GetColumnOptions<ActorMetaConfiguredEvent>(runtime.Actors, actor.GetActorId()).PostPolicy, Is.EqualTo(ActorPostPolicy.Latest));
+        Assert.That(GetColumnOptions<ActorMetaConfiguredEvent>(runtime.Actors, actor.GetActorId()).PostPolicy,
+            Is.EqualTo(ActorPostPolicy.Latest));
     }
 
     private static LayerRuntime BuildRuntime()
@@ -183,15 +184,18 @@ public class ActorMetaDataIntegrationTests
 
     private static object GetColumn(ActorWorld world, ActorId actorId, int eventTypeId)
     {
-        FieldInfo archetypesField = typeof(ActorWorld).GetField("_archetypes", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        FieldInfo archetypesField =
+            typeof(ActorWorld).GetField("_archetypes", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array archetypes = (Array)archetypesField.GetValue(world)!;
         object archetype = archetypes.GetValue(actorId.ArchetypeId)!;
 
-        FieldInfo storagesField = archetype.GetType().GetField("_storages", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        FieldInfo storagesField =
+            archetype.GetType().GetField("_storages", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array storages = (Array)storagesField.GetValue(archetype)!;
         object storage = storages.GetValue(0)!;
 
-        FieldInfo columnsField = storage.GetType().GetField("_columnsByEventId", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        FieldInfo columnsField =
+            storage.GetType().GetField("_columnsByEventId", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array columns = (Array)columnsField.GetValue(storage)!;
         return columns.GetValue(eventTypeId)!;
     }

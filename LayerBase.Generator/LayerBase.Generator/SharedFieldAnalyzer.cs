@@ -28,7 +28,8 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         var allFields = provideFields.Collect().Combine(useFields.Collect());
         var compilationAndFields = context.CompilationProvider.Combine(allFields);
 
-        context.RegisterSourceOutput(compilationAndFields, static (spc, pair) => Analyze(spc, pair.Left, pair.Right.Left, pair.Right.Right));
+        context.RegisterSourceOutput(compilationAndFields,
+            static (spc, pair) => Analyze(spc, pair.Left, pair.Right.Left, pair.Right.Right));
     }
 
     private static FieldInfo? GetFieldInfo(GeneratorAttributeSyntaxContext ctx, bool isProvide)
@@ -58,7 +59,8 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             isLiteral);
     }
 
-    private static void Analyze(SourceProductionContext    spc, Compilation compilation, ImmutableArray<FieldInfo?> provides,
+    private static void Analyze(SourceProductionContext    spc, Compilation compilation,
+                                ImmutableArray<FieldInfo?> provides,
                                 ImmutableArray<FieldInfo?> uses)
     {
         var validProvides = provides.Where(p => p != null).Select(p => p!).ToImmutableArray();
@@ -80,11 +82,14 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             {
                 bool isValidOwner = SymbolEqualityComparer.Default.Equals(f.OwnerType, globalScopeSymbol) ||
                                     InheritsFrom(f.OwnerType, layerSymbol) ||
-                                    f.OwnerType.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, iServiceSymbol) || SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iServiceSymbol));
-                
+                                    f.OwnerType.AllInterfaces.Any(i =>
+                                        SymbolEqualityComparer.Default.Equals(i, iServiceSymbol) ||
+                                        SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iServiceSymbol));
+
                 if (!isValidOwner)
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidOwnerType, f.Location, f.OwnerType.ToDisplayString()));
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidOwnerType, f.Location,
+                        f.OwnerType.ToDisplayString()));
                 }
             }
         }
@@ -161,7 +166,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
     private sealed class FieldInfo
     {
         public FieldInfo(INamedTypeSymbol containingType, string name,      ITypeSymbol type, ITypeSymbol ownerType,
-                         string           localKey,       bool   isProvide, Location?   location, bool isLocalKeyLiteral)
+                         string           localKey,       bool   isProvide, Location? location, bool isLocalKeyLiteral)
         {
             ContainingType = containingType;
             Name = name;
@@ -226,4 +231,3 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             true);
     }
 }
-

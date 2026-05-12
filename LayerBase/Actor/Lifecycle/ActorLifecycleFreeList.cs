@@ -14,7 +14,7 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
     private int _cursor;
 
     public ActorLifecycleHandle Add(
-        ActorId actorId,
+        ActorId    actorId,
         TLifecycle instance)
     {
         int index;
@@ -38,7 +38,7 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
     }
 
     public bool Remove(ActorLifecycleHandle handle)
-    {  
+    {
         // handle 参数表示 Add 时返回的生命周期条目位置。
         // Version 不匹配时说明该位置已经被释放并复用，不能删除。
         if (!handle.IsValid)
@@ -81,7 +81,7 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
     }
 
     public void ForEach<TState>(
-        ref TState state,
+        ref TState                           state,
         LifecycleInvoker<TLifecycle, TState> invoker)
     {
         for (int i = 0; i < _count; i++)
@@ -152,8 +152,9 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
             budget.ConsumeEvent();
         }
     }
+
     public void ForEachRemoveIf<TState>(
-        ref TState state,
+        ref TState                                   state,
         LifecycleRemovePredicate<TLifecycle, TState> predicate)
     {
         for (int i = 0; i < _count; i++)
@@ -192,13 +193,13 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
 }
 
 internal delegate void LifecycleInvoker<TLifecycle, TState>(
-    in ActorLifecycleEntry<TLifecycle> entry,
-    ref TState state)
+    in  ActorLifecycleEntry<TLifecycle> entry,
+    ref TState                          state)
     where TLifecycle : class;
 
 internal delegate bool LifecycleRemovePredicate<TLifecycle, TState>(
-    in ActorLifecycleEntry<TLifecycle> entry,
-    ref TState state)
+    in  ActorLifecycleEntry<TLifecycle> entry,
+    ref TState                          state)
     where TLifecycle : class;
 
 internal delegate void LifecycleCall<TLifecycle>(

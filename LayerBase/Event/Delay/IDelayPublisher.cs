@@ -8,7 +8,7 @@ public interface IDelayPublisher
 public interface IDelayPublisher<T> : IDelayPublisher where T : struct
 {
     int ContractId { get; }
-    bool TryGet(out T value);
+    bool TryGet(out  T value);
     bool TryTake(out T value);
-    void Publish(in T value, float ttlSeconds, int contractId = 0);
+    void Publish(in  T value, float ttlSeconds, int contractId = 0);
 }

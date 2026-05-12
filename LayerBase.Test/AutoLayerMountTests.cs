@@ -53,7 +53,7 @@ public partial class AutoMountLayer : Layer
     public partial class OwnerAutoMountLayer : Layer
     {
     }
-    
+
     [OwnerLayer(typeof(AutoMountLayer))]
     public partial class AutoMountedService : IService
     {
@@ -74,6 +74,4 @@ public partial class AutoMountLayer : Layer
             return this.GetService<AutoMountedService>();
         }
     }
-
- 
 }

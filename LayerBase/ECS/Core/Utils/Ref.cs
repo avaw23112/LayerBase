@@ -21,7 +21,6 @@ public readonly ref struct Ref<T>
     /// Initializes a new instance of the <see cref="Ref{T}"/> struct.
     /// </summary>
     /// <param name="value">The reference to the target <typeparamref name="T"/> value.</param>
-
     public Ref(ref T value)
     {
         this.Span = MemoryMarshal.CreateSpan(ref value, 1);
@@ -31,7 +30,6 @@ public readonly ref struct Ref<T>
     /// Initializes a new instance of the <see cref="Ref{T}"/> struct.
     /// </summary>
     /// <param name="pointer">The pointer to the target value.</param>
-
     public unsafe Ref(void* pointer)
         : this(ref Unsafe.AsRef<T>(pointer))
     {
@@ -42,7 +40,6 @@ public readonly ref struct Ref<T>
     /// </summary>
     public ref T Value
     {
-
         get => ref MemoryMarshal.GetReference(this.Span);
     }
 
@@ -50,7 +47,6 @@ public readonly ref struct Ref<T>
     /// Implicitly gets the <typeparamref name="T"/> value from a given <see cref="Ref{T}"/> instance.
     /// </summary>
     /// <param name="reference">The input <see cref="Ref{T}"/> instance.</param>
-
     public static implicit operator T(Ref<T> reference)
     {
         return reference.Value;

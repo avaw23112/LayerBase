@@ -35,6 +35,7 @@ public sealed class EntityBlueprint
                     ctx[i] = _componentTypes[i];
                 }
             }
+
             return ctx;
         }
     }

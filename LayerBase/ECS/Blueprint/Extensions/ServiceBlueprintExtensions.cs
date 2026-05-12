@@ -16,6 +16,6 @@ public static class ServiceBlueprintExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EntityCreateBuilder CreateEntity(this IService service)
     {
-         return new EntityCreateBuilder(service.ECSWorld());
+        return new EntityCreateBuilder(service.ECSWorld());
     }
 }

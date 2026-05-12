@@ -41,6 +41,7 @@ internal sealed class LayerChain
                 _hasDelayMask |= 1UL << layer.RouteIndex;
             }
         }
+
         _delayDirty = false;
     }
 
@@ -82,10 +83,11 @@ internal sealed class LayerChain
             if (node is Layer layer)
             {
                 layer.PrepareBuild();
-                layer.BuildAutoBinding();   
+                layer.BuildAutoBinding();
             }
         }
     }
+
     internal void Build(int eventStateSlabSize, bool releaseMode)
     {
         var builtLayers = new List<Layer>();

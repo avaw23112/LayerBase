@@ -1025,4 +1025,3 @@ public partial class ParallelWorkloadManager : IService
         BenchmarkSink.IntValue = acc;
     }
 }
-

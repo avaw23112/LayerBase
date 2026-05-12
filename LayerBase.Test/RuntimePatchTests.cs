@@ -8,12 +8,21 @@ using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Test;
 
-public struct IdentityEvent { public int Value; }
+public struct IdentityEvent
+{
+    public int Value;
+}
 
 [EventIdentity(1001, "Test.IdentityEvent", 2)]
-public partial struct IdentityEventWithAttr { public int Value; }
+public partial struct IdentityEventWithAttr
+{
+    public int Value;
+}
 
-public partial struct NoIdentityEvent { public int Value; }
+public partial struct NoIdentityEvent
+{
+    public int Value;
+}
 
 [TestFixture]
 public class RuntimePatchTests
@@ -23,11 +32,11 @@ public class RuntimePatchTests
     {
         LayerHub.Reset();
         var identity = EventIdentityRegistry.GetOrCreate<IdentityEventWithAttr>();
-        
+
         Assert.That(identity.StableId, Is.EqualTo(1001));
         Assert.That(identity.StableKey, Is.EqualTo("Test.IdentityEvent"));
         Assert.That(identity.Version, Is.EqualTo(2));
-        
+
         var noIdentity = EventIdentityRegistry.GetOrCreate<NoIdentityEvent>();
         Assert.That(noIdentity.StableId, Is.EqualTo(0));
         Assert.That(noIdentity.StableKey, Does.Contain("NoIdentityEvent"));
@@ -40,20 +49,21 @@ public class RuntimePatchTests
         var runtime = new LayerRuntime(1);
         var builder = new LayerRuntime.LayersBuilder(runtime);
         builder.Push(new TestLayer());
-        
+
         var options = new PostSchedulerOptions(1024, 1024, 0, 0, 1, 64, BackpressurePolicy.RejectNew);
         builder.SetPostOptions(options);
-        
-        runtime.BuildServiceProvider(); 
+
+        runtime.BuildServiceProvider();
         runtime.InitializeScheduler(options);
-        
-        var policy = new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0, MergeFailurePolicy.Reject);
+
+        var policy = new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0,
+            MergeFailurePolicy.Reject);
         runtime.PolicyTable.SetMetaData(EventTypeId<CoalescedTestEvent>.Id, new CoalescedTestEventMetaData());
         runtime.Scheduler.AddSpecialPolicy(EventTypeId<CoalescedTestEvent>.Id, policy);
 
         runtime.TryPost(new CoalescedTestEvent { Id = 1, Value = 10 });
         var result = runtime.TryPost(new CoalescedTestEvent { Id = 1, Value = -1 });
-        
+
         Assert.That(result.IsSuccess, Is.False);
     }
 
@@ -63,17 +73,18 @@ public class RuntimePatchTests
         var runtime = new LayerRuntime(1);
         var builder = new LayerRuntime.LayersBuilder(runtime);
         builder.Push(new TestLayer());
-        
+
         var options = PostSchedulerOptions.Default;
         runtime.InitializeScheduler(options);
 
-        var policy = new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0, MergeFailurePolicy.FallbackToLatest);
+        var policy = new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0,
+            MergeFailurePolicy.FallbackToLatest);
         runtime.PolicyTable.SetMetaData(EventTypeId<CoalescedTestEvent>.Id, new CoalescedTestEventMetaData());
         runtime.Scheduler.AddSpecialPolicy(EventTypeId<CoalescedTestEvent>.Id, policy);
 
         runtime.TryPost(new CoalescedTestEvent { Id = 1, Value = 10 });
         var result = runtime.TryPost(new CoalescedTestEvent { Id = 1, Value = -1 });
-        
+
         Assert.That(result.IsSuccess, Is.True);
     }
 
@@ -82,7 +93,7 @@ public class RuntimePatchTests
     {
         var queue = new MainThreadCompletionQueue();
         int errorCount = 0;
-        
+
         queue.Enqueue(() => throw new Exception("Test Exception"));
         queue.Enqueue(() => { });
 
@@ -93,9 +104,9 @@ public class RuntimePatchTests
 
         queue.Enqueue(() => throw new Exception("Test Exception"));
         queue.Enqueue(() => { });
-        
+
         var stats = queue.Drain(0, CompletionExceptionPolicy.ReportAndContinue, ex => errorCount++);
-        
+
         Assert.That(stats.Errors, Is.EqualTo(1));
         Assert.That(stats.Processed, Is.EqualTo(1));
         Assert.That(errorCount, Is.EqualTo(1));
@@ -122,15 +133,15 @@ public class RuntimePatchTests
         var builder = new LayerRuntime.LayersBuilder(runtime);
         builder.Push(layer);
         builder.SetFixedUpdateOptions(new FixedUpdateOptions(true, 0.01f, 4));
-        
+
         var builtRuntime = builder.Build();
-        
+
         Assert.That(layer.PostBuildCalled, Is.True);
         Assert.That(layer.RuntimeStartCalled, Is.True);
-        
+
         builtRuntime.Pump(0.025f);
         Assert.That(layer.FixedUpdateCount, Is.EqualTo(2));
-        
+
         builtRuntime.Dispose();
         Assert.That(layer.RuntimeStopCalled, Is.True);
     }
@@ -142,11 +153,13 @@ public class RuntimePatchTests
         var builder = new LayerRuntime.LayersBuilder(runtime);
         builder.Push(new TestLayer());
         builder.Build();
-        
+
         var markdown = runtime.GetPolicyMarkdown();
         Assert.That(markdown, Is.Not.Null);
         Assert.That(markdown, Does.Contain("RuntimeId"));
     }
 
-    private class TestLayer : Layer {}
+    private class TestLayer : Layer
+    {
+    }
 }

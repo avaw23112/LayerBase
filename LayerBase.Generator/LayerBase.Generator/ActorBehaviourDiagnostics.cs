@@ -95,7 +95,8 @@ internal static class ActorBehaviourDiagnostics
     public static readonly DiagnosticDescriptor CallMethodMustHaveRequestAndCancellationToken = new(
         id: "LBACTOR203",
         title: "ActorCallBehaviour method signature is invalid",
-        messageFormat: "ActorCallBehaviour method '{0}' must have parameters '(in TRequest request, CancellationToken cancellationToken)'",
+        messageFormat:
+        "ActorCallBehaviour method '{0}' must have parameters '(in TRequest request, CancellationToken cancellationToken)'",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

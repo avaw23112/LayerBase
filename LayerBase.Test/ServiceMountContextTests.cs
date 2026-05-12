@@ -23,8 +23,8 @@ public partial class ServiceMountContextTests
         var layer = new ServiceMountTestLayer();
 
         LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                .Push(layer)
+                .Build();
 
         Assert.That(layer, Is.InstanceOf<IAutoLayerMount>(), "Layer should implement IAutoLayerMount");
         Assert.That(layer.Service, Is.Not.Null, "layer.Service should not be null after Build");
@@ -41,15 +41,15 @@ public partial class ServiceMountContextTests
         var layer = new LifecycleLayer(trace);
 
         LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                .Push(layer)
+                .Build();
 
         Assert.That(trace, Does.Contain("Init_Manager"));
 
         layer.Pump(0.016f);
 
         Assert.That(trace, Does.Contain("Update_Manager"));
-        
+
         LifecycleManager.SetTrace(null!);
     }
 
@@ -62,8 +62,8 @@ public partial class ServiceMountContextTests
         var layer = new DuplicateMountLayer(trace);
 
         LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                .Push(layer)
+                .Build();
 
         var initCount = trace.Count(x => x == "Init_DuplicateManager");
 
@@ -71,7 +71,7 @@ public partial class ServiceMountContextTests
         Assert.That(layer.Service!.A, Is.Not.Null);
         Assert.That(layer.Service!.B, Is.Not.Null);
         Assert.That(layer.Service!.A, Is.SameAs(layer.Service!.B));
-        
+
         DuplicateManager.SetTrace(null!);
     }
 }

@@ -22,7 +22,7 @@ public partial class World
             removes.AppendLine($"            spanBitSet.ClearBit(Component<T{i}>.ComponentType.Id);");
             events.AppendLine($"            OnComponentRemoved<T{i}>(entity);");
         }
-    #>
+#>
 
     [SkipLocalsInit]
     [StructuralChange]
@@ -48,5 +48,5 @@ public partial class World
     }
     <#
     }
-    #>
+#>
 }

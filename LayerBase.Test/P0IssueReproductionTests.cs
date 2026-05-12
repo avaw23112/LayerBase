@@ -16,12 +16,12 @@ public partial class P0IssueReproductionTests
     public void RingBuffer_ShouldRespectLogicalCapacity()
     {
         var buffer = new RingBuffer<int>(3);
-        Assert.That(buffer.Count, Is.EqualTo(0)); 
+        Assert.That(buffer.Count, Is.EqualTo(0));
         Assert.That(buffer.TryEnqueue(1), Is.True);
         Assert.That(buffer.TryEnqueue(2), Is.True);
         Assert.That(buffer.TryEnqueue(3), Is.True);
         // This should now fail if logical capacity is 3
-        Assert.That(buffer.TryEnqueue(4), Is.False); 
+        Assert.That(buffer.TryEnqueue(4), Is.False);
     }
 
     [Test]
@@ -29,16 +29,16 @@ public partial class P0IssueReproductionTests
     {
         LayerHub.Reset();
         var runtime = LayerHub.CreateLayers()
-            .Push(new CoalescedTestLayer())
-            .Build();
+                              .Push(new CoalescedTestLayer())
+                              .Build();
 
         // Metadata says DropOldest
         LayerHub.PostLatest(new P0TestEvent { Value = 1 });
-        
+
         // We can check the plan in scheduler
         var scheduler = runtime.Scheduler;
         var typeId = EventTypeId<P0TestEvent>.Id;
-        
+
         // Use reflection to get _postPlans if needed, but it's internal
         // Actually PostScheduler._postPlans is private.
         // But we can check behavior.
@@ -49,14 +49,14 @@ public partial class P0IssueReproductionTests
     {
         LayerHub.Reset();
         var runtime = LayerHub.CreateLayers()
-            .Push(new ReentrantLayer())
-            .Build();
+                              .Push(new ReentrantLayer())
+                              .Build();
 
         LayerHub.PostCoalesced(new P0TestEvent { Value = 1 });
-        
+
         // This will trigger FlushBuffers
         runtime.Pump(0.1f);
-        
+
         // If it didn't throw and we can pump again, it's a good sign.
         runtime.Pump(0.1f);
     }
@@ -67,10 +67,11 @@ public partial class P0IssueReproductionTests
         LayerHub.Reset();
         var layer = new DelayTestLayer();
         var runtime = LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                              .Push(layer)
+                              .Build();
 
-        var chain = typeof(LayerRuntime).GetField("_chain", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(runtime);
+        var chain = typeof(LayerRuntime).GetField("_chain", BindingFlags.NonPublic | BindingFlags.Instance)
+                                        ?.GetValue(runtime);
         var hasAnyDelayProp = chain?.GetType().GetProperty("HasAnyDelay", BindingFlags.Public | BindingFlags.Instance);
 
         Assert.That((bool)hasAnyDelayProp?.GetValue(chain)!, Is.False);

@@ -17,10 +17,7 @@ public class ConcurrencySimplifiedTests
         var mainThreadId = Thread.CurrentThread.ManagedThreadId;
         int backgroundThreadId = 0;
 
-        await LBTask.RunBackground(() =>
-        {
-            backgroundThreadId = Thread.CurrentThread.ManagedThreadId;
-        });
+        await LBTask.RunBackground(() => { backgroundThreadId = Thread.CurrentThread.ManagedThreadId; });
 
         Assert.That(backgroundThreadId, Is.Not.EqualTo(0));
         Assert.That(backgroundThreadId, Is.Not.EqualTo(mainThreadId));
@@ -29,10 +26,7 @@ public class ConcurrencySimplifiedTests
     [Test]
     public async Task RunBackground_WithResult_ShouldReturnResult()
     {
-        var result = await LBTask.RunBackground(() =>
-        {
-            return 42;
-        });
+        var result = await LBTask.RunBackground(() => { return 42; });
 
         Assert.That(result, Is.EqualTo(42));
     }
@@ -40,10 +34,7 @@ public class ConcurrencySimplifiedTests
     [Test]
     public void RunBackground_WithException_ShouldPropagateException()
     {
-        var task = LBTask.RunBackground(() =>
-        {
-            throw new InvalidOperationException("Test exception");
-        });
+        var task = LBTask.RunBackground(() => { throw new InvalidOperationException("Test exception"); });
 
         Assert.ThrowsAsync<InvalidOperationException>(async () => await task);
     }
@@ -53,7 +44,7 @@ public class ConcurrencySimplifiedTests
     {
         var runtime = new LayerRuntime(1);
         var builder = new LayerRuntime.LayersBuilder(runtime);
-        
+
         // Dummy layer to make builder happy
         builder.Push(new TestLayer());
         runtime = builder.Build();
@@ -114,8 +105,8 @@ public class ConcurrencySimplifiedTests
         // Attach a continuation that checks thread
         task.GetAwaiter().OnCompleted(() =>
         {
-             // This might run on main thread if SetResult happened on main thread
-             completionThreadId = Thread.CurrentThread.ManagedThreadId;
+            // This might run on main thread if SetResult happened on main thread
+            completionThreadId = Thread.CurrentThread.ManagedThreadId;
         });
 
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -135,15 +126,17 @@ public class ConcurrencySimplifiedTests
         var builder = new LayerRuntime.LayersBuilder(runtime);
         builder.Push(new TestLayer());
         builder.SetPostOptions(new PostSchedulerOptions(
-            1024, 1024, 0, 0, 1, 64, BackpressurePolicy.RejectNew, 
+            1024, 1024, 0, 0, 1, 64, BackpressurePolicy.RejectNew,
             maxCompletionsPerPump: 1)); // Limit to 1 completion per pump
         runtime = builder.Build();
 
         int completedCount = 0;
         using (runtime._context!.EnterScope())
         {
-            LBTask.RunBackground(() => { Thread.Sleep(10); }).GetAwaiter().OnCompleted(() => Interlocked.Increment(ref completedCount));
-            LBTask.RunBackground(() => { Thread.Sleep(10); }).GetAwaiter().OnCompleted(() => Interlocked.Increment(ref completedCount));
+            LBTask.RunBackground(() => { Thread.Sleep(10); }).GetAwaiter()
+                  .OnCompleted(() => Interlocked.Increment(ref completedCount));
+            LBTask.RunBackground(() => { Thread.Sleep(10); }).GetAwaiter()
+                  .OnCompleted(() => Interlocked.Increment(ref completedCount));
         }
 
         // Wait for background tasks to definitely finish and enqueue completions

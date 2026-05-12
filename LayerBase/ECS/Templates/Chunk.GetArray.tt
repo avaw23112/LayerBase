@@ -36,7 +36,6 @@ public partial struct Chunk
         var assignComponents = new StringBuilder();
         for (var i = 0; i < index; i++)
             assignComponents.AppendLine($"t{i}Array = Unsafe.As<T{i}[]>(Unsafe.Add(ref arrays, t{i}Index));");
-
 #>
     [Pure]
     public void GetArray<<#= generics #>>(<#= outs #>)

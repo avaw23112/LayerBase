@@ -42,5 +42,3 @@ public delegate void ComponentSetHandler(in Entity entity);
 ///     A delegate called once a component was set for a specific <see cref="Entity"/>.
 /// </summary>
 public delegate void ComponentRemovedHandler(in Entity entity);
-
-

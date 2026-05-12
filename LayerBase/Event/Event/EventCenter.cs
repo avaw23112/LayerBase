@@ -17,7 +17,7 @@ public sealed class EventCenter
     private readonly ConcurrentDictionary<int, object> _eventBuckets = new();
     private readonly object _lock = new();
     private int _isResetting;
-    
+
     internal PostScheduler? PostScheduler { get; set; }
 
     internal void SubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
@@ -823,12 +823,18 @@ public sealed class EventCenter
             ref var hBase = ref GetArrayDataRef(_notifyHandlers);
             Unsafe.Add(ref hBase, start)(in value);
             Unsafe.Add(ref hBase, start + 1)(in value);
-            if (count == 2) return; Unsafe.Add(ref hBase, start + 2)(in value);
-            if (count == 3) return; Unsafe.Add(ref hBase, start + 3)(in value);
-            if (count == 4) return; Unsafe.Add(ref hBase, start + 4)(in value);
-            if (count == 5) return; Unsafe.Add(ref hBase, start + 5)(in value);
-            if (count == 6) return; Unsafe.Add(ref hBase, start + 6)(in value);
-            if (count == 7) return; Unsafe.Add(ref hBase, start + 7)(in value);
+            if (count == 2) return;
+            Unsafe.Add(ref hBase, start + 2)(in value);
+            if (count == 3) return;
+            Unsafe.Add(ref hBase, start + 3)(in value);
+            if (count == 4) return;
+            Unsafe.Add(ref hBase, start + 4)(in value);
+            if (count == 5) return;
+            Unsafe.Add(ref hBase, start + 5)(in value);
+            if (count == 6) return;
+            Unsafe.Add(ref hBase, start + 6)(in value);
+            if (count == 7) return;
+            Unsafe.Add(ref hBase, start + 7)(in value);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -954,12 +960,12 @@ public sealed class EventCenter
             EventMetaDataHandler.OnEventExpectation(value, e);
 
             var slot = kind switch
-            {
-                FaultKind.Sync => faultTable.SyncFaults[index],
-                FaultKind.Async => faultTable.AsyncFaults[index],
-                FaultKind.Subscribe => faultTable.SubscribeFaults[index],
-                _ => default
-            };
+                       {
+                           FaultKind.Sync      => faultTable.SyncFaults[index],
+                           FaultKind.Async     => faultTable.AsyncFaults[index],
+                           FaultKind.Subscribe => faultTable.SubscribeFaults[index],
+                           _                   => default
+                       };
 
             if (slot.Circuit == null || !slot.Circuit.TryDisable()) return;
 
@@ -1012,8 +1018,8 @@ public sealed class EventCenter
             _continuation = Complete;
         }
 
-        public static void Observe(EventBucket<T> owner, FaultTable<T> faultTable, FaultKind kind, int faultIndex,
-                                   in T payload, LBTask task)
+        public static void Observe(EventBucket<T> owner,   FaultTable<T> faultTable, FaultKind kind, int faultIndex,
+                                   in T           payload, LBTask        task)
         {
             if (!s_pool.TryDequeue(out var context)) context = new AsyncFaultContext<T>();
             else Interlocked.Decrement(ref s_poolCount);

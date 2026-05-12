@@ -34,11 +34,11 @@ public readonly struct EventIdentity
     /// 这里保存 Type 只用于诊断，不用于热路径派发。
     /// </param>
     public EventIdentity(
-        int runtimeId,
-        int stableId,
+        int    runtimeId,
+        int    stableId,
         string stableKey,
-        int version,
-        Type eventType)
+        int    version,
+        Type   eventType)
     {
         RuntimeId = runtimeId;
         StableId = stableId;

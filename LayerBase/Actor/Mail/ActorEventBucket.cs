@@ -15,10 +15,10 @@ internal sealed class ActorEventBucket<TEvent> : IActorEventBucket
     }
 
     public PumpOneResult PumpOne(
-        ref RuntimeFrameBudget budget,
-        in ActorMailPumpOptions options,
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
         ActorMailPumpStatsBuilder stats,
-        int bucketIndex)
+        int                       bucketIndex)
     {
         if (_count == 0)
         {
@@ -47,6 +47,7 @@ internal sealed class ActorEventBucket<TEvent> : IActorEventBucket
                 {
                     stats.RecordBucketProcessed(bucketIndex);
                 }
+
                 return PumpOneResult.Processed;
             }
 

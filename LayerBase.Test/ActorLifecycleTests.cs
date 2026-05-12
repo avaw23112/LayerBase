@@ -26,7 +26,8 @@ internal static class ActorLifecycleTrace
     }
 }
 
-internal sealed partial class LifecycleProbeActor : IActor, IStart, LayerBase.Actor.IUpdate, ILateUpdate, LayerBase.Actor.IFixedUpdate, IDestroy
+internal sealed partial class LifecycleProbeActor : IActor, IStart, LayerBase.Actor.IUpdate, ILateUpdate,
+                                                    LayerBase.Actor.IFixedUpdate, IDestroy
 {
     public static Action<LifecycleProbeActor>? BehaviourHook { get; set; }
     public static Action<LifecycleProbeActor>? UpdateHook { get; set; }

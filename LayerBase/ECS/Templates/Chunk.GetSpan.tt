@@ -31,7 +31,6 @@ public partial struct Chunk
         var assignComponents = new StringBuilder();
         for (var i = 0; i < index; i++)
             assignComponents.AppendLine($"t{i}Span = new Span<T{i}>(t{i}Array);");
-
 #>
     [Pure]
     public void GetSpan<<#= generics #>>(<#= outs #>)

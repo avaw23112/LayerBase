@@ -14,16 +14,18 @@ namespace Arch.Core.Utils;
 /// </summary>
 public sealed class BitSet
 {
-    private const int BitSize = (sizeof(uint) * 8) - 1;           // 31
-    private const int IndexSize = 5;                              // log_2(BitSize + 1)
-    private static readonly int _padding = Vector<uint>.Count;    // The padding used for vectorisation, the amount of uints required for being vectorized basically
+    private const int BitSize = (sizeof(uint) * 8) - 1; // 31
+    private const int IndexSize = 5;                    // log_2(BitSize + 1)
+
+    private static readonly int
+        _padding = Vector<uint>
+            .Count; // The padding used for vectorisation, the amount of uints required for being vectorized basically
 
     /// <summary>
     ///     Determines the required length of an <see cref="BitSet"/> to hold the passed id or bit.
     /// </summary>
     /// <param name="id">The id or bit.</param>
     /// <returns>A size of required <see cref="uint"/>s for the bitset.</returns>
-
     public static int RequiredLength(int id)
     {
 #if NET7_0
@@ -116,12 +118,12 @@ public sealed class BitSet
         var b = index >> IndexSize;
         if (b >= _bits.Length)
         {
-            Array.Resize(ref _bits,  (b + _padding) / _padding * _padding);  // Round up to a multiply of Padding
+            Array.Resize(ref _bits, (b + _padding) / _padding * _padding); // Round up to a multiply of Padding
         }
 
         // Track highest set bit
         _highestBit = Math.Max(_highestBit, index);
-        _max = (_highestBit/(BitSize+1))+1;
+        _max = (_highestBit / (BitSize + 1)) + 1;
         _bits[b] |= 1u << (index & BitSize);
     }
 
@@ -152,7 +154,7 @@ public sealed class BitSet
         }
 
         _highestBit = (_bits.Length * (BitSize + 1)) - 1;
-        _max = (_highestBit/(BitSize+1))+1;
+        _max = (_highestBit / (BitSize + 1)) + 1;
     }
 
     /// <summary>
@@ -454,6 +456,7 @@ public sealed class BitSet
         {
             binaryBuilder.Append(Convert.ToString((uint)bit, 2).PadLeft(32, '0')).Append(',');
         }
+
         binaryBuilder.Length--;
 
         return $"{nameof(_bits)}: {binaryBuilder}, {nameof(Length)}: {Length}";
@@ -468,6 +471,7 @@ public sealed class BitSet
 public readonly ref struct SpanBitSet
 {
     private const int BitSize = (sizeof(uint) * 8) - 1; // 31
+
     // NOTE: Is a byte not 8 bits?
     private const int ByteSize = 5; // log_2(BitSize + 1)
 
@@ -489,7 +493,6 @@ public readonly ref struct SpanBitSet
     /// </summary>
     /// <param name="index">The index.</param>
     /// <returns>True if it is, otherwise false</returns>
-
     public bool IsSet(int index)
     {
         var b = index >> ByteSize;
@@ -506,7 +509,6 @@ public readonly ref struct SpanBitSet
     ///     Resizes its internal array if necessary.
     /// </summary>
     /// <param name="index">The index.</param>
-
     public void SetBit(int index)
     {
         var b = index >> ByteSize;
@@ -522,7 +524,6 @@ public readonly ref struct SpanBitSet
     ///     Clears the bit at the given index.
     /// </summary>
     /// <param name="index">The index.</param>
-
     public void ClearBit(int index)
     {
         var b = index >> ByteSize;
@@ -537,7 +538,6 @@ public readonly ref struct SpanBitSet
     /// <summary>
     ///
     /// </summary>
-
     public void SetAll()
     {
         var count = _bits.Length;
@@ -550,7 +550,6 @@ public readonly ref struct SpanBitSet
     /// <summary>
     ///     Clears all set bits.
     /// </summary>
-
     public void ClearAll()
     {
         _bits.Clear();
@@ -560,7 +559,6 @@ public readonly ref struct SpanBitSet
     ///     Creates a <see cref="Span{T}"/> to access the <see cref="_bits"/>.
     /// </summary>
     /// <returns>The hash.</returns>
-
     public Span<uint> AsSpan()
     {
         return _bits;
@@ -571,7 +569,6 @@ public readonly ref struct SpanBitSet
     /// </summary>
     /// <param name=""></param>
     /// <returns>The hash.</returns>
-
     public Span<uint> AsSpan(Span<uint> span, bool zero = true)
     {
         // Prevent exception because target array is to small for copy operation
@@ -594,7 +591,6 @@ public readonly ref struct SpanBitSet
     ///     Creates a new <see cref="Enumerator{T}"/> that enumerates over this instance.
     /// </summary>
     /// <returns>A new <see cref="Enumerator{T}"/>.</returns>
-
     public Enumerator<uint> GetEnumerator()
     {
         return new Enumerator<uint>(AsSpan());
@@ -604,7 +600,6 @@ public readonly ref struct SpanBitSet
     ///     Calculates the hash, this is unique for the set bits. Two <see cref="BitSet"/> with the same set bits, result in the same hash.
     /// </summary>
     /// <returns>The hash.</returns>
-
     public override int GetHashCode()
     {
         return Component.GetHashCode(AsSpan());
@@ -614,7 +609,6 @@ public readonly ref struct SpanBitSet
     ///     Prints the content of this instance.
     /// </summary>
     /// <returns>The string.</returns>
-
     public override string ToString()
     {
         // Convert uint to binary form for pretty printing
@@ -623,6 +617,7 @@ public readonly ref struct SpanBitSet
         {
             binaryBuilder.Append(Convert.ToString((uint)bit, 2).PadLeft(32, '0')).Append(',');
         }
+
         binaryBuilder.Length--;
 
         return $"{nameof(_bits)}: {string.Join(",", binaryBuilder)}";

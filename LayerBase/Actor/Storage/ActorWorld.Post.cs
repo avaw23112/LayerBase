@@ -7,7 +7,7 @@ public sealed partial class ActorWorld
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult PostTo<TEvent>(
-        ActorId actorId,
+        ActorId   actorId,
         in TEvent value)
         where TEvent : struct
     {
@@ -16,18 +16,23 @@ public sealed partial class ActorWorld
         {
             return BuildEventNotSupportedCold<TEvent>();
         }
+
         if (!TryGetPhysicalRowWithGeneration(actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
         {
             return BuildPostFailureCold(actorId);
         }
-        switch (state.RouteCode) 
+
+        switch (state.RouteCode)
         {
             case ActorPostRouteCode.QueuedGrow:
-                return PostQueuedGrowCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
+                return PostQueuedGrowCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool,
+                    state.Options);
             case ActorPostRouteCode.QueuedRejectNew:
-                return PostQueuedRejectNewCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
+                return PostQueuedRejectNewCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex,
+                    state.Pool, state.Options);
             case ActorPostRouteCode.QueuedDropOldest:
-                return PostQueuedDropOldestCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, state.Options);
+                return PostQueuedDropOldestCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex,
+                    state.Pool, state.Options);
             case ActorPostRouteCode.Latest:
                 return PostLatestCore(slotIndex, in value, row.Mails, row.DirtySlots, row.BucketIndex, state.Pool);
             case ActorPostRouteCode.Dirty:
@@ -40,7 +45,7 @@ public sealed partial class ActorWorld
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostToMany<TEvent>(
         ReadOnlySpan<ActorId> actorIds,
-        in TEvent value)
+        in TEvent             value)
         where TEvent : struct
     {
         foreach (ActorId actorId in actorIds)

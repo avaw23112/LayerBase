@@ -17,8 +17,8 @@ internal abstract class ActorEventColumnRuntime
     }
 
     public abstract ActorColumnPumpResult PumpOne(
-        ref RuntimeFrameBudget budget,
-        in ActorMailPumpOptions options,
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
         ActorMailPumpStatsBuilder stats);
 
     public abstract bool HasPendingWork();
@@ -51,8 +51,8 @@ internal abstract class ActorCallColumnRuntime
     }
 
     public abstract ActorColumnPumpResult PumpOne(
-        ref RuntimeFrameBudget budget,
-        in ActorMailPumpOptions options,
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
         ActorMailPumpStatsBuilder stats);
 
     public abstract bool HasPendingWork();

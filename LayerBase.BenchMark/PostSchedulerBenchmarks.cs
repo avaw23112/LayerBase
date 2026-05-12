@@ -11,17 +11,27 @@ namespace Benchmarks;
 public class PostSchedulerBenchmarks : EventBenchmarkBase
 {
     private LayerRuntime _runtime = null!;
-    
-    public partial struct CoalescedBenchEvent { public int Value; }
+
+    public partial struct CoalescedBenchEvent
+    {
+        public int Value;
+    }
+
     public class CoalescedBenchEventMetaData : EventMetaData<CoalescedBenchEvent>
     {
-        public override EventPostPolicy? PostPolicy => new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0);
+        public override EventPostPolicy? PostPolicy =>
+            new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0);
     }
-    
-    public partial struct LatestBenchEvent { public int Value; }
+
+    public partial struct LatestBenchEvent
+    {
+        public int Value;
+    }
+
     public class LatestBenchEventMetaData : EventMetaData<LatestBenchEvent>
     {
-        public override EventPostPolicy? PostPolicy => new EventPostPolicy(PostDeliveryMode.Latest, BackpressurePolicy.RejectNew, 0);
+        public override EventPostPolicy? PostPolicy =>
+            new EventPostPolicy(PostDeliveryMode.Latest, BackpressurePolicy.RejectNew, 0);
     }
 
     [GlobalSetup]
@@ -31,26 +41,26 @@ public class PostSchedulerBenchmarks : EventBenchmarkBase
         EventMetaDataHandler.Clear();
         EventMetaDataRegistry.RegisterMetaData<CoalescedBenchEvent>(new CoalescedBenchEventMetaData());
         EventMetaDataRegistry.RegisterMetaData<LatestBenchEvent>(new LatestBenchEventMetaData());
-        
+
         var layer = new BenchLayer();
         layer.RegisterService(new BenchManager());
-        
+
         var postOptions = new PostSchedulerOptions(
-            readyCapacity: OneMillion + 1024, 
-            nextCapacity: OneMillion + 1024, 
-            maxEventsPerPump: 0, 
-            maxMillisecondsPerPump: 0, 
-            maxWavesPerPump: 1, 
-            timeCheckInterval: 64, 
+            readyCapacity: OneMillion + 1024,
+            nextCapacity: OneMillion + 1024,
+            maxEventsPerPump: 0,
+            maxMillisecondsPerPump: 0,
+            maxWavesPerPump: 1,
+            timeCheckInterval: 64,
             defaultBackpressure: BackpressurePolicy.RejectNew);
-            
+
         var timerOptions = TimeSchedulerOptions.Default;
-            
+
         _runtime = LayerHub.CreateLayers()
-            .Push(layer)
-            .SetPostOptions(postOptions)
-            .SetTimerOptions(timerOptions)
-            .Build();
+                           .Push(layer)
+                           .SetPostOptions(postOptions)
+                           .SetTimerOptions(timerOptions)
+                           .Build();
     }
 
     [Benchmark(Description = "Send (同步分发) - 20万次")]
@@ -79,7 +89,7 @@ public class PostSchedulerBenchmarks : EventBenchmarkBase
         // Scheduling is more expensive, so we do fewer in benchmark
         for (var i = 0; i < 1000; i++)
             _runtime.SchedulePost(BenchEvent.Instance, 0.1f);
-            
+
         // Cleanup
         _runtime.Pump(0.2f);
     }

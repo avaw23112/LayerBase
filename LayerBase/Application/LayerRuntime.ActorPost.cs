@@ -8,7 +8,7 @@ public sealed partial class LayerRuntime
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult PostTo<TEvent>(
-        ActorId actorId,
+        ActorId   actorId,
         in TEvent value)
         where TEvent : struct
     {
@@ -18,7 +18,7 @@ public sealed partial class LayerRuntime
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostToMany<TEvent>(
         ReadOnlySpan<ActorId> actorIds,
-        in TEvent value)
+        in TEvent             value)
         where TEvent : struct
     {
         Actors.PostToMany(actorIds, in value);

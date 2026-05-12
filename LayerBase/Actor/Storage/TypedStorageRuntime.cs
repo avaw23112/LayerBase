@@ -8,12 +8,12 @@ namespace LayerBase.Actor;
 internal abstract class TypedStorageRuntime
 {
     internal abstract bool TryGetActor(
-        ActorId actorId,
+        ActorId     actorId,
         out IActor? actor);
 
     internal abstract bool ReleaseProjectedActor(
-        ActorId actorId,
-        ActorWorld world,
+        ActorId                     actorId,
+        ActorWorld                  world,
         ProjectedActorReleasePolicy releasePolicy);
 
     public abstract bool IsAlive(int slotIndex, int generation);
@@ -46,21 +46,21 @@ internal abstract class TypedStorageRuntime
     // PostManyToAliveActors: removed. Use PostAll through compiled route.
 
     public abstract DispatchResult DispatchNow<TEvent>(
-        int slotIndex,
-        int generation,
+        int       slotIndex,
+        int       generation,
         in TEvent value)
         where TEvent : struct;
 
     public abstract LBTask<TResponse> ImmediatelyAsk<TRequest, TResponse>(
-        int slotIndex,
-        int generation,
-        in TRequest request,
+        int               slotIndex,
+        int               generation,
+        in TRequest       request,
         CancellationToken cancellationToken)
         where TRequest : struct
         where TResponse : struct;
 
     public abstract PostResult PostCall<TRequest, TResponse>(
-        int slotIndex,
+        int                                   slotIndex,
         in ActorCallMail<TRequest, TResponse> mail)
         where TRequest : struct
         where TResponse : struct;

@@ -90,8 +90,8 @@ public class ActorPoolTests
     {
         var world = new ActorWorld();
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => world.CreateActor<ActorDamageOnly>(usePool: true))!;
+        InvalidOperationException exception =
+            Assert.Throws<InvalidOperationException>(() => world.CreateActor<ActorDamageOnly>(usePool: true))!;
 
         Assert.That(exception.Message, Does.Contain(nameof(IPooledActor)));
     }

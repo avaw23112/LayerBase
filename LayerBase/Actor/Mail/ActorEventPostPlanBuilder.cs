@@ -21,18 +21,18 @@ internal static class ActorEventPostPlanBuilder
     private static ActorPostRouteCode ResolveRouteCode(ActorMailOptions options)
     {
         return options.PostPolicy switch
-        {
-            ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.Grow
-                => ActorPostRouteCode.QueuedGrow,
-            ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.RejectNew
-                => ActorPostRouteCode.QueuedRejectNew,
-            ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.DropOldest
-                => ActorPostRouteCode.QueuedDropOldest,
-            ActorPostPolicy.Latest
-                => ActorPostRouteCode.Latest,
-            ActorPostPolicy.Dirty
-                => ActorPostRouteCode.Dirty,
-            _ => ActorPostRouteCode.Disabled
-        };
+               {
+                   ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.Grow
+                       => ActorPostRouteCode.QueuedGrow,
+                   ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.RejectNew
+                       => ActorPostRouteCode.QueuedRejectNew,
+                   ActorPostPolicy.Queued when options.FullPolicy == ActorMailFullPolicy.DropOldest
+                       => ActorPostRouteCode.QueuedDropOldest,
+                   ActorPostPolicy.Latest
+                       => ActorPostRouteCode.Latest,
+                   ActorPostPolicy.Dirty
+                       => ActorPostRouteCode.Dirty,
+                   _ => ActorPostRouteCode.Disabled
+               };
     }
 }

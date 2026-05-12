@@ -5,7 +5,6 @@ namespace LayerBase.Test;
 [TestFixture]
 public sealed partial class ActorWorldAllocationTests
 {
-
     [Test]
     public void Default_mail_options_should_keep_empty_mailbox_buffer()
     {

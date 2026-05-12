@@ -12,13 +12,13 @@ public readonly struct TimeSchedulerOptions
     public readonly TimerCatchUpPolicy DefaultCatchUpPolicy;
 
     public TimeSchedulerOptions(
-        float tickDurationSeconds,
-        int wheelSize,
-        int initialTimerCapacity,
-        float longTimerThresholdSeconds,
-        int maxExpiredPerTick,
-        int maxPromotePerTick,
-        TimerRepeatMode defaultRepeatMode,
+        float              tickDurationSeconds,
+        int                wheelSize,
+        int                initialTimerCapacity,
+        float              longTimerThresholdSeconds,
+        int                maxExpiredPerTick,
+        int                maxPromotePerTick,
+        TimerRepeatMode    defaultRepeatMode,
         TimerCatchUpPolicy defaultCatchUpPolicy)
     {
         TickDurationSeconds = tickDurationSeconds;
@@ -30,12 +30,12 @@ public readonly struct TimeSchedulerOptions
         DefaultRepeatMode = defaultRepeatMode;
         DefaultCatchUpPolicy = defaultCatchUpPolicy;
     }
-    
+
     public static TimeSchedulerOptions Default => new(
-        tickDurationSeconds: 1/60f,
+        tickDurationSeconds: 1 / 60f,
         wheelSize: 512,
         initialTimerCapacity: 256,
-        longTimerThresholdSeconds: 512 * (1/60f),
+        longTimerThresholdSeconds: 512 * (1 / 60f),
         maxExpiredPerTick: 1024,
         maxPromotePerTick: 64,
         defaultRepeatMode: TimerRepeatMode.Once,

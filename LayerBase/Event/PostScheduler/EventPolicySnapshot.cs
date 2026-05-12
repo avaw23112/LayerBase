@@ -24,10 +24,10 @@ public readonly struct EventPolicySnapshot
     /// Buffer 策略。
     /// </param>
     public EventPolicySnapshot(
-        int runtimeId,
-        EventIdentity identity,
-        EventPostPolicy? postPolicy,
-        EventTimerPolicy? timerPolicy,
+        int                runtimeId,
+        EventIdentity      identity,
+        EventPostPolicy?   postPolicy,
+        EventTimerPolicy?  timerPolicy,
         EventBufferPolicy? bufferPolicy)
     {
         RuntimeId = runtimeId;

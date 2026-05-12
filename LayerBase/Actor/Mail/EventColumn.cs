@@ -26,14 +26,14 @@ internal sealed class EventColumn<TActor, TEvent> :
     internal ActorMailOptions Options => _options;
 
     public EventColumn(
-        ActorWorld world,
-        TypedActorStorage<TActor> owner,
+        ActorWorld                            world,
+        TypedActorStorage<TActor>             owner,
         ActorBehaviourInvoker<TActor, TEvent> invoker,
-        EventMailPool<TEvent> mailPool,
-        ActorMailOptions options,
-        int bucketIndex,
-        int initialSlotCapacity,
-        ActorEventPostPlan<TEvent> plan)
+        EventMailPool<TEvent>                 mailPool,
+        ActorMailOptions                      options,
+        int                                   bucketIndex,
+        int                                   initialSlotCapacity,
+        ActorEventPostPlan<TEvent>            plan)
     {
         _world = world;
         _owner = owner;
@@ -49,8 +49,8 @@ internal sealed class EventColumn<TActor, TEvent> :
 
 
     public override ActorColumnPumpResult PumpOne(
-        ref RuntimeFrameBudget budget,
-        in ActorMailPumpOptions options,
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
         ActorMailPumpStatsBuilder stats)
     {
         if (CanUsePumpFastPath(options))
@@ -157,7 +157,7 @@ internal sealed class EventColumn<TActor, TEvent> :
     }
 
     public DispatchResult DispatchNow(
-        TActor actor,
+        TActor    actor,
         in TEvent value)
     {
         try

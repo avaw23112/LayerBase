@@ -72,4 +72,3 @@ public class SharedFieldFixer : CodeFixProvider
         return document.WithSyntaxRoot(newRoot);
     }
 }
-

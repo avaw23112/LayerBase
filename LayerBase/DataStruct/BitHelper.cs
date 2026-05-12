@@ -15,12 +15,41 @@ internal static class BitHelper
 #else
         if (mask == 0) return 64;
         int count = 0;
-        if ((mask & 0xFFFFFFFF) == 0) { mask >>= 32; count += 32; }
-        if ((mask & 0xFFFF) == 0) { mask >>= 16; count += 16; }
-        if ((mask & 0xFF) == 0) { mask >>= 8; count += 8; }
-        if ((mask & 0xF) == 0) { mask >>= 4; count += 4; }
-        if ((mask & 0x3) == 0) { mask >>= 2; count += 2; }
-        if ((mask & 0x1) == 0) { count += 1; }
+        if ((mask & 0xFFFFFFFF) == 0)
+        {
+            mask >>= 32;
+            count += 32;
+        }
+
+        if ((mask & 0xFFFF) == 0)
+        {
+            mask >>= 16;
+            count += 16;
+        }
+
+        if ((mask & 0xFF) == 0)
+        {
+            mask >>= 8;
+            count += 8;
+        }
+
+        if ((mask & 0xF) == 0)
+        {
+            mask >>= 4;
+            count += 4;
+        }
+
+        if ((mask & 0x3) == 0)
+        {
+            mask >>= 2;
+            count += 2;
+        }
+
+        if ((mask & 0x1) == 0)
+        {
+            count += 1;
+        }
+
         return count;
 #endif
     }

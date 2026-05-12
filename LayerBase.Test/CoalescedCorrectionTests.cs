@@ -17,9 +17,9 @@ public class CoalescedCorrectionTests
     public class DamageEventMeta : EventMetaData<DamageEvent>
     {
         public override EventPostPolicy? PostPolicy => new EventPostPolicy(
-            PostDeliveryMode.Coalesced, 
-            BackpressurePolicy.RejectNew, 
-            0, 
+            PostDeliveryMode.Coalesced,
+            BackpressurePolicy.RejectNew,
+            0,
             MergeFailurePolicy.Reject);
 
         public override int GetPostCoalesceKey(in DamageEvent value) => value.TargetId;
@@ -32,12 +32,15 @@ public class CoalescedCorrectionTests
         }
     }
 
-    public partial struct DirtyEvent { }
+    public partial struct DirtyEvent
+    {
+    }
+
     public class DirtyEventMeta : EventMetaData<DirtyEvent>
     {
         public override EventPostPolicy? PostPolicy => new EventPostPolicy(
-            PostDeliveryMode.DirtySignal, 
-            BackpressurePolicy.RejectNew, 
+            PostDeliveryMode.DirtySignal,
+            BackpressurePolicy.RejectNew,
             0);
     }
 
@@ -65,7 +68,7 @@ public class CoalescedCorrectionTests
         Assert.That(received.Count, Is.EqualTo(2));
         Assert.That(received.Any(e => e.TargetId == 1 && e.Amount == 25), Is.True);
         Assert.That(received.Any(e => e.TargetId == 2 && e.Amount == 20), Is.True);
-        
+
         // Ordering: target 1 was first, target 2 was second
         Assert.That(received[0].TargetId, Is.EqualTo(1));
         Assert.That(received[1].TargetId, Is.EqualTo(2));
@@ -87,5 +90,7 @@ public class CoalescedCorrectionTests
         Assert.That(callCount, Is.EqualTo(1));
     }
 
-    private class TestLayer : Layer { }
+    private class TestLayer : Layer
+    {
+    }
 }

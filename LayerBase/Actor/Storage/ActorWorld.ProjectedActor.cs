@@ -18,7 +18,7 @@ public sealed partial class ActorWorld
     }
 
     internal bool TryGetActor(
-        ActorId actorId,
+        ActorId     actorId,
         out IActor? actor)
     {
         actor = null;
@@ -41,7 +41,7 @@ public sealed partial class ActorWorld
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool TryGetPooledActor(
-        ActorId actorId,
+        ActorId          actorId,
         out IPooledActor pooledActor)
     {
         if (!TryGetActor(
@@ -57,7 +57,7 @@ public sealed partial class ActorWorld
     }
 
     internal bool ReleaseProjectedActor(
-        ActorId actorId,
+        ActorId                     actorId,
         ProjectedActorReleasePolicy releasePolicy)
     {
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)

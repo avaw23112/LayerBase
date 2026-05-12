@@ -9,8 +9,8 @@ internal sealed class DelayPostTask<TEvent> : IActorDelayTask
 
     public DelayPostTask(
         ActorWorld world,
-        ActorId actorId,
-        in TEvent value)
+        ActorId    actorId,
+        in TEvent  value)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _actorId = actorId;

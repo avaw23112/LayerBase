@@ -16,5 +16,6 @@ internal static class ProjectedActorAllocator
     {
         return Interlocked.Increment(ref s_nextId);
     }
+
     public static int MaxId => Volatile.Read(ref s_nextId);
 }

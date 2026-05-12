@@ -3,8 +3,8 @@ using LayerBase.Async;
 namespace LayerBase.Actor;
 
 public delegate LBTask<TResponse> ActorCallInvoker<TActor, TRequest, TResponse>(
-    TActor actor,
-    in TRequest request,
+    TActor            actor,
+    in TRequest       request,
     CancellationToken cancellationToken)
     where TActor : class, IActor
     where TRequest : struct

@@ -10,8 +10,8 @@ public sealed class ActorCallException : InvalidOperationException
 
     public ActorCallException(
         ActorCallFailureKind failureKind,
-        string? message = null,
-        Exception? innerException = null)
+        string?              message        = null,
+        Exception?           innerException = null)
         : base(message ?? GetDefaultMessage(failureKind, null, null, false), innerException)
     {
         FailureKind = failureKind;
@@ -19,9 +19,9 @@ public sealed class ActorCallException : InvalidOperationException
 
     public ActorCallException(
         ActorCallFailureKind failureKind,
-        ActorId actorId,
-        string? message = null,
-        Exception? innerException = null)
+        ActorId              actorId,
+        string?              message        = null,
+        Exception?           innerException = null)
         : base(message ?? GetDefaultMessage(failureKind, null, null, true), innerException)
     {
         FailureKind = failureKind;
@@ -31,10 +31,10 @@ public sealed class ActorCallException : InvalidOperationException
 
     public ActorCallException(
         ActorCallFailureKind failureKind,
-        Type requestType,
-        Type responseType,
-        string? message = null,
-        Exception? innerException = null)
+        Type                 requestType,
+        Type                 responseType,
+        string?              message        = null,
+        Exception?           innerException = null)
         : base(message ?? GetDefaultMessage(failureKind, requestType, responseType, false), innerException)
     {
         FailureKind = failureKind;
@@ -44,21 +44,23 @@ public sealed class ActorCallException : InvalidOperationException
 
     private static string GetDefaultMessage(
         ActorCallFailureKind failureKind,
-        Type? requestType,
-        Type? responseType,
-        bool hasActorId)
+        Type?                requestType,
+        Type?                responseType,
+        bool                 hasActorId)
     {
         return failureKind switch
-        {
-            ActorCallFailureKind.InvalidActorId => "Actor call failed because the ActorId is invalid.",
-            ActorCallFailureKind.ActorNotFound => hasActorId
-                ? "Actor call failed because the target actor no longer exists."
-                : "Actor call failed because the target actor was not found.",
-            ActorCallFailureKind.PendingDestroy => "Actor call failed because the target actor is pending destroy.",
-            ActorCallFailureKind.UnsupportedRequest => $"Actor call route is not supported for request '{requestType?.Name}' and response '{responseType?.Name}'.",
-            ActorCallFailureKind.MailboxFull => "Actor call failed because the actor mailbox is full.",
-            ActorCallFailureKind.Disposed => "Actor call failed because the ActorWorld is disposed.",
-            _ => "Actor call failed."
-        };
+               {
+                   ActorCallFailureKind.InvalidActorId => "Actor call failed because the ActorId is invalid.",
+                   ActorCallFailureKind.ActorNotFound => hasActorId
+                       ? "Actor call failed because the target actor no longer exists."
+                       : "Actor call failed because the target actor was not found.",
+                   ActorCallFailureKind.PendingDestroy =>
+                       "Actor call failed because the target actor is pending destroy.",
+                   ActorCallFailureKind.UnsupportedRequest =>
+                       $"Actor call route is not supported for request '{requestType?.Name}' and response '{responseType?.Name}'.",
+                   ActorCallFailureKind.MailboxFull => "Actor call failed because the actor mailbox is full.",
+                   ActorCallFailureKind.Disposed    => "Actor call failed because the ActorWorld is disposed.",
+                   _                                => "Actor call failed."
+               };
     }
 }

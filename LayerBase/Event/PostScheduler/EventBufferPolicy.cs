@@ -22,11 +22,11 @@ public readonly struct EventBufferPolicy
     public readonly bool UseContractReplace;
 
     public EventBufferPolicy(
-        BufferMode mode,
-        float defaultTtlSeconds,
-        int capacity,
+        BufferMode           mode,
+        float                defaultTtlSeconds,
+        int                  capacity,
         BufferOverflowPolicy overflowPolicy,
-        bool useContractReplace)
+        bool                 useContractReplace)
     {
         Mode = mode;
         DefaultTtlSeconds = defaultTtlSeconds;

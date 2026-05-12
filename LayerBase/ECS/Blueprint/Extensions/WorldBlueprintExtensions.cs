@@ -19,4 +19,3 @@ public static class WorldBlueprintExtensions
         return new EntityCreateBuilder(world);
     }
 }
-

@@ -225,7 +225,8 @@ public readonly struct LBTask
         return new LBTask<TResult>(src);
     }
 
-    public static LBTask<TResult> RunBackground<TResult>(Func<CancellationToken, TResult> func, CancellationToken cancellationToken)
+    public static LBTask<TResult> RunBackground<TResult>(Func<CancellationToken, TResult> func,
+                                                         CancellationToken                cancellationToken)
     {
         if (func == null) throw new ArgumentNullException(nameof(func));
         var ctx = SynchronizationContext.Current as LayerBaseSynchronizationContext;
@@ -777,4 +778,3 @@ public readonly struct LBTask<T>
         }
     }
 }
-

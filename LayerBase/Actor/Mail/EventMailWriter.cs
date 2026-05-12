@@ -7,13 +7,13 @@ internal static class EventMailWriter
 {
     public static PostResult Enqueue<TEvent>(
         ref EventMail<TEvent> mail,
-        in TEvent value,
+        in  TEvent            value,
         EventMailPool<TEvent> bufferPool,
-        DirtySlotList dirtySlots,
-        int slotIndex,
-        ActorMailOptions options,
-        ActorPostPolicy? postPolicy,
-        ActorMailFullPolicy? fullPolicy)
+        DirtySlotList         dirtySlots,
+        int                   slotIndex,
+        ActorMailOptions      options,
+        ActorPostPolicy?      postPolicy,
+        ActorMailFullPolicy?  fullPolicy)
         where TEvent : struct
     {
         ActorPostPolicy effectivePostPolicy = postPolicy ?? options.PostPolicy;
@@ -34,11 +34,11 @@ internal static class EventMailWriter
 
     private static PostResult EnqueueMerge<TEvent>(
         ref EventMail<TEvent> mail,
-        in TEvent value,
+        in  TEvent            value,
         EventMailPool<TEvent> bufferPool,
-        DirtySlotList dirtySlots,
-        int slotIndex,
-        ActorMailOptions options)
+        DirtySlotList         dirtySlots,
+        int                   slotIndex,
+        ActorMailOptions      options)
         where TEvent : struct
     {
         bool wasEmpty = mail.Count == 0;
@@ -98,12 +98,12 @@ internal static class EventMailWriter
 
     private static PostResult EnqueueQueued<TEvent>(
         ref EventMail<TEvent> mail,
-        in TEvent value,
+        in  TEvent            value,
         EventMailPool<TEvent> bufferPool,
-        DirtySlotList dirtySlots,
-        int slotIndex,
-        ActorMailOptions options,
-        ActorMailFullPolicy? fullPolicy)
+        DirtySlotList         dirtySlots,
+        int                   slotIndex,
+        ActorMailOptions      options,
+        ActorMailFullPolicy?  fullPolicy)
         where TEvent : struct
     {
         if (mail.Count == 0)
@@ -136,7 +136,8 @@ internal static class EventMailWriter
 
         if (mail.Count >= mail.Capacity)
         {
-            PostResult fullResult = HandleFull(ref mail, in value, bufferPool, dirtySlots, slotIndex, options, fullPolicy);
+            PostResult fullResult =
+                HandleFull(ref mail, in value, bufferPool, dirtySlots, slotIndex, options, fullPolicy);
             if (!fullResult.IsSuccess || !fullResult.CountsAsPending)
             {
                 return fullResult;
@@ -149,6 +150,7 @@ internal static class EventMailWriter
         {
             mail.Tail = 0;
         }
+
         mail.Count++;
 
         return PostResult.Success;
@@ -156,11 +158,11 @@ internal static class EventMailWriter
 
     private static PostResult EnqueueLatest<TEvent>(
         ref EventMail<TEvent> mail,
-        in TEvent value,
+        in  TEvent            value,
         EventMailPool<TEvent> bufferPool,
-        DirtySlotList dirtySlots,
-        int slotIndex,
-        ActorMailOptions options)
+        DirtySlotList         dirtySlots,
+        int                   slotIndex,
+        ActorMailOptions      options)
         where TEvent : struct
     {
         bool wasEmpty = mail.Count == 0;
@@ -197,11 +199,11 @@ internal static class EventMailWriter
 
     private static PostResult EnqueueDirty<TEvent>(
         ref EventMail<TEvent> mail,
-        in TEvent value,
+        in  TEvent            value,
         EventMailPool<TEvent> bufferPool,
-        DirtySlotList dirtySlots,
-        int slotIndex,
-        ActorMailOptions options)
+        DirtySlotList         dirtySlots,
+        int                   slotIndex,
+        ActorMailOptions      options)
         where TEvent : struct
     {
         if (mail.Count > 0)
@@ -230,12 +232,12 @@ internal static class EventMailWriter
 
     private static PostResult HandleFull<TEvent>(
         ref EventMail<TEvent> mail,
-        in TEvent value,
+        in  TEvent            value,
         EventMailPool<TEvent> bufferPool,
-        DirtySlotList dirtySlots,
-        int slotIndex,
-        ActorMailOptions options,
-        ActorMailFullPolicy? fullPolicy)
+        DirtySlotList         dirtySlots,
+        int                   slotIndex,
+        ActorMailOptions      options,
+        ActorMailFullPolicy?  fullPolicy)
         where TEvent : struct
     {
         ActorMailFullPolicy effectiveFullPolicy = fullPolicy ?? options.FullPolicy;
@@ -288,9 +290,9 @@ internal static class EventMailWriter
 
     private static PostResult HandleGrowFailure<TEvent>(
         ref EventMail<TEvent> mail,
-        in TEvent value,
+        in  TEvent            value,
         EventMailPool<TEvent> bufferPool,
-        ActorMailOptions options)
+        ActorMailOptions      options)
         where TEvent : struct
     {
         switch (options.GrowFailurePolicy)
@@ -325,7 +327,7 @@ internal static class EventMailWriter
     private static bool TryGrow<TEvent>(
         ref EventMail<TEvent> mail,
         EventMailPool<TEvent> bufferPool,
-        ActorMailOptions options)
+        ActorMailOptions      options)
         where TEvent : struct
     {
         if (mail.Capacity >= options.MaxCapacity)
@@ -358,7 +360,7 @@ internal static class EventMailWriter
     private static void EnsureMailAllocated<TEvent>(
         ref EventMail<TEvent> mail,
         EventMailPool<TEvent> bufferPool,
-        ActorMailOptions options)
+        ActorMailOptions      options)
         where TEvent : struct
     {
         if (mail.BufferId != 0)
@@ -376,7 +378,7 @@ internal static class EventMailWriter
     private static void PromoteSingleToBuffer<TEvent>(
         ref EventMail<TEvent> mail,
         EventMailPool<TEvent> bufferPool,
-        ActorMailOptions options)
+        ActorMailOptions      options)
         where TEvent : struct
     {
         TEvent existingValue = mail.SingleValue;

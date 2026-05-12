@@ -25,31 +25,59 @@ public readonly struct ProjectionQueryFlow0
         return new ProjectionQueryFlow0(_world, _query, predicate);
     }
 
-<# for (var e = 1; e <= EventAmount; e++) { #>
-<# var evtG = EG(e); #>
-<# var allG = evtG; #>
-<# var cons = FEC(e); #>
-<# var suffix = e == 1 ? "" : $"_{e}e"; #>
-<# var dName = EventName(e); #>
+<#
+    for (var e = 1; e <= EventAmount; e++)
+    {
+#>
+<#
+        var evtG = EG(e);
+#>
+<#
+        var allG = evtG;
+#>
+<#
+        var cons = FEC(e);
+#>
+<#
+        var suffix = e == 1 ? "" : $"_{e}e";
+#>
+<#
+        var dName = EventName(e);
+#>
     public ProjectionBringFlow0<#= suffix #><<#= allG #>> Bring<<#= evtG #>>()
 <#= cons #>
     {
         return new ProjectionBringFlow0<#= suffix #><<#= allG #>>(_world, _query, _predicate);
     }
 
-<# } #>
+<#
+    }
+#>
     public void TouchProjectedActor()
     {
         ProjectionExecutor0.Touch(_world, _query, _predicate);
     }
 }
 
-<# for (var e = 1; e <= EventAmount; e++) { #>
-<# var evtG = EG(e); #>
-<# var allG = evtG; #>
-<# var cons = FEC(e); #>
-<# var suffix = e == 1 ? "" : $"_{e}e"; #>
-<# var dName = EventName(e); #>
+<#
+    for (var e = 1; e <= EventAmount; e++)
+    {
+#>
+<#
+        var evtG = EG(e);
+#>
+<#
+        var allG = evtG;
+#>
+<#
+        var cons = FEC(e);
+#>
+<#
+        var suffix = e == 1 ? "" : $"_{e}e";
+#>
+<#
+        var dName = EventName(e);
+#>
 public readonly struct ProjectionBringFlow0<#= suffix #><<#= allG #>>
 <#= cons #>
 {
@@ -90,18 +118,36 @@ public readonly struct ProjectionPostFlow0<#= suffix #><<#= allG #>>
 
     public void Post()
     {
-<# if (e == 1) { #>
+<#
+        if (e == 1)
+        {
+#>
         ProjectionExecutor0.Post(_world, _query, _predicate, _forEach);
-<# } else { #>
+<#
+        }
+        else
+        {
+#>
         ProjectionExecutor0_<#= e #>E<<#= evtG #>>.Post(_world, _query, _predicate, _forEach);
-<# } #>
+<#
+        }
+#>
     }
 }
 
-<# } #>
-<# for (var c = 1; c <= ComponentAmount; c++) { #>
-<# var compG = CG(c); #>
-<# var compGP = $"<{compG}>"; #>
+<#
+    }
+#>
+<#
+    for (var c = 1; c <= ComponentAmount; c++)
+    {
+#>
+<#
+        var compG = CG(c);
+#>
+<#
+        var compGP = $"<{compG}>";
+#>
 public readonly struct ProjectionQueryFlow<#= c #><<#= compG #>>
 {
     private readonly World _world;
@@ -120,19 +166,34 @@ public readonly struct ProjectionQueryFlow<#= c #><<#= compG #>>
         return new ProjectionQueryFlow<#= c #><<#= compG #>>(_world, _query, predicate);
     }
 
-<# for (var e = 1; e <= EventAmount; e++) { #>
-<# var evtG = EG(e); #>
-<# var allG = AG(c, e); #>
-<# var cons = FEC(e); #>
-<# var suffix = e == 1 ? "" : $"_{e}e"; #>
-<# var dName = EventName(e); #>
+<#
+        for (var e = 1; e <= EventAmount; e++)
+        {
+#>
+<#
+            var evtG = EG(e);
+#>
+<#
+            var allG = AG(c, e);
+#>
+<#
+            var cons = FEC(e);
+#>
+<#
+            var suffix = e == 1 ? "" : $"_{e}e";
+#>
+<#
+            var dName = EventName(e);
+#>
     public ProjectionBringFlow<#= c #><#= suffix #><<#= allG #>> Bring<<#= evtG #>>()
 <#= cons #>
     {
         return new ProjectionBringFlow<#= c #><#= suffix #><<#= allG #>>(_world, _query, _predicate);
     }
 
-<# } #>
+<#
+        }
+#>
     public void TouchProjectedActor()
     {
         ProjectionExecutor<#= c #><<#= compG #>>.Touch(_world, _query, _predicate);
@@ -150,12 +211,25 @@ public readonly struct ProjectionQueryFlow<#= c #><<#= compG #>>
     }
 }
 
-<# for (var e = 1; e <= EventAmount; e++) { #>
-<# var evtG = EG(e); #>
-<# var allG = AG(c, e); #>
-<# var cons = FEC(e); #>
-<# var suffix = e == 1 ? "" : $"_{e}e"; #>
-<# var dName = EventName(e); #>
+<#
+        for (var e = 1; e <= EventAmount; e++)
+        {
+#>
+<#
+            var evtG = EG(e);
+#>
+<#
+            var allG = AG(c, e);
+#>
+<#
+            var cons = FEC(e);
+#>
+<#
+            var suffix = e == 1 ? "" : $"_{e}e";
+#>
+<#
+            var dName = EventName(e);
+#>
 public readonly struct ProjectionBringFlow<#= c #><#= suffix #><<#= allG #>>
 <#= cons #>
 {
@@ -207,11 +281,20 @@ public readonly struct ProjectionPostFlow<#= c #><#= suffix #><<#= allG #>>
 
     public void Post()
     {
-<# if (e == 1) { #>
+<#
+            if (e == 1)
+            {
+#>
         ProjectionExecutor<#= c #><<#= compG #>>.Post<TEvent0>(_world, _query, _predicate, _forEach);
-<# } else { #>
+<#
+            }
+            else
+            {
+#>
         ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>.Post(_world, _query, _predicate, _forEach);
-<# } #>
+<#
+            }
+#>
     }
 }
 
@@ -259,21 +342,34 @@ public readonly struct ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, T
         TJob job =
             _job;
 
-<# if (e == 1) { #>
+<#
+            if (e == 1)
+            {
+#>
         ProjectionExecutor<#= c #><<#= compG #>>.Post<TEvent0, TJob>(
             _world,
             _query,
             _predicate,
             ref job);
-<# } else { #>
+<#
+            }
+            else
+            {
+#>
         ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>.Post<TJob>(
             _world,
             _query,
             _predicate,
             ref job);
-<# } #>
+<#
+            }
+#>
     }
 }
 
-<# } #>
-<# } #>
+<#
+        }
+#>
+<#
+    }
+#>

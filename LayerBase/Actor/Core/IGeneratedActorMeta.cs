@@ -8,7 +8,7 @@ public interface IGeneratedActorMeta
     /// Actor 运行时上下文。
     /// </summary>
     ActorContext Context { get; }
-    
+
     void __BuildActorMeta(ActorTypeMetaBuilder builder);
 
     ActorId GetId();

@@ -9,13 +9,11 @@ namespace Arch.Core.Extensions.Internal;
 /// </summary>
 internal static class ComponentTypeExtensions
 {
-
     /// <summary>
     ///     Calculates the byte size of all components inside the <see cref="ComponentType"/> array.
     /// </summary>
     /// <param name="types">The <see cref="ComponentType"/> array.</param>
     /// <returns>Their combined byte size.</returns>
-
     internal static int ToByteSize(this Span<ComponentType> types)
     {
         var size = 0;
@@ -34,7 +32,6 @@ internal static class ComponentTypeExtensions
     /// </summary>
     /// <param name="types">The <see cref="ComponentType"/> array.</param>
     /// <returns>The lookup array.</returns>
-
     internal static int[] ToLookupArray(this Span<ComponentType> types)
     {
         // Get maximum component ID.

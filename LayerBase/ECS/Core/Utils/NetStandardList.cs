@@ -38,6 +38,7 @@ public class NetStandardList<T>
         {
             EnsureCapacity(_count + 1);
         }
+
         _items[_count++] = item;
     }
 
@@ -88,6 +89,7 @@ public class NetStandardList<T>
                 return true;
             }
         }
+
         return false;
     }
 
@@ -110,9 +112,9 @@ public class NetStandardList<T>
         }
 
         // Place default item
-        #pragma warning disable CS8601 // Possible null reference assignment.
+#pragma warning disable CS8601 // Possible null reference assignment.
         _items[--_count] = default;
-        #pragma warning restore CS8601 // Possible null reference assignment.
+#pragma warning restore CS8601 // Possible null reference assignment.
     }
 
     /// <summary>
@@ -128,6 +130,7 @@ public class NetStandardList<T>
             {
                 newCapacity = min;
             }
+
             T[] newArray = new T[newCapacity];
             Array.Copy(_items, newArray, _count);
             _items = newArray;
@@ -165,6 +168,7 @@ public class NetStandardList<T>
             {
                 throw new ArgumentOutOfRangeException(nameof(index));
             }
+
             return ref _items[index];
         }
     }

@@ -22,9 +22,9 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
     /// <summary>Run queued work and frame-delayed work; call once per frame on the main thread.</summary>
     public void Update(
-        int maxItems = 0,
+        int                       maxItems        = 0,
         CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
-        Action<Exception>? reportException = null)
+        Action<Exception>?        reportException = null)
     {
         if (_disposed) return;
 
@@ -222,8 +222,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 public interface IArchMainThreadPump
 {
     void Update(
-        int maxItems = 0,
+        int                       maxItems        = 0,
         CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
-        Action<Exception>? reportException = null);
+        Action<Exception>?        reportException = null);
 }
-

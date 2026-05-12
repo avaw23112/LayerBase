@@ -134,7 +134,6 @@ public sealed partial class CommandBuffer : IDisposable
     /// </summary>
     /// <param name="entity">The <see cref="Entity"/> to register.</param>
     /// <param name="info">Its <see cref="BufferedEntityInfo"/> which stores indexes used for <see cref="CommandBuffer"/> operations.</param>
-
     internal void Register(in Entity entity, out BufferedEntityInfo info)
     {
         var setIndex = Sets.Create(in entity);
@@ -156,7 +155,6 @@ public sealed partial class CommandBuffer : IDisposable
     /// </summary>
     /// <param name="entity">The <see cref="Entity"/> with a negative or positive id to resolve.</param>
     /// <returns>Its real <see cref="Entity"/>.</returns>
-
     internal Entity Resolve(Entity entity)
     {
         var entityIndex = BufferedEntityInfo[entity.Id].Index;
@@ -169,7 +167,6 @@ public sealed partial class CommandBuffer : IDisposable
     /// </summary>
     /// <param name="types">The <see cref="Entity"/>'s component structure/<see cref="Archetype"/>.</param>
     /// <returns>The buffered <see cref="Entity"/> with an index of <c>-1</c>.</returns>
-
     public Entity Create(ComponentType[] types)
     {
         lock (this)
@@ -189,7 +186,6 @@ public sealed partial class CommandBuffer : IDisposable
     ///     Will be destroyed during <see cref="Playback"/>.
     /// </summary>
     /// <param name="entity">The <see cref="Entity"/> to destroy.</param>
-
     public void Destroy(in Entity entity)
     {
         lock (this)
@@ -211,7 +207,6 @@ public sealed partial class CommandBuffer : IDisposable
     /// <typeparam name="T">The component type.</typeparam>
     /// <param name="entity">The <see cref="Entity"/>.</param>
     /// <param name="component">The component value.</param>
-
     public void Set<T>(in Entity entity, in T? component = default)
     {
         BufferedEntityInfo info;
@@ -234,7 +229,6 @@ public sealed partial class CommandBuffer : IDisposable
     /// <typeparam name="T">The component type.</typeparam>
     /// <param name="entity">The <see cref="Entity"/>.</param>
     /// <param name="component">The component value.</param>
-
     public void Add<T>(in Entity entity, in T? component = default)
     {
         BufferedEntityInfo info;
@@ -256,7 +250,6 @@ public sealed partial class CommandBuffer : IDisposable
     /// </summary>
     /// <typeparam name="T">The component type.</typeparam>
     /// <param name="entity">The <see cref="Entity"/>.</param>
-
     public void Remove<T>(in Entity entity)
     {
         BufferedEntityInfo info;
@@ -279,7 +272,6 @@ public sealed partial class CommandBuffer : IDisposable
     /// </remarks>
     /// <param name="world">The <see cref="World"/> where the commands will be playbacked too.</param>
     /// <param name="dispose">If true it will clear the recorded operations after they were playbacked, if not they will stay.</param>
-
     public void Playback(World world, bool dispose = true)
     {
         // Create recorded entities.
@@ -315,7 +307,8 @@ public sealed partial class CommandBuffer : IDisposable
 
             // Resolves the entity to get the real one (e.g. for newly created negative entities and stuff).
             var entity = Resolve(wrappedEntity.Entity);
-            Debug.Assert(world.IsAlive(entity), $"CommandBuffer can not to add components to the dead {wrappedEntity.Entity}");
+            Debug.Assert(world.IsAlive(entity),
+                $"CommandBuffer can not to add components to the dead {wrappedEntity.Entity}");
 
             AddRange(world, entity, _addTypes.Span);
             _addTypes.Clear();
@@ -330,7 +323,8 @@ public sealed partial class CommandBuffer : IDisposable
             var entity = Resolve(wrappedEntity.Entity);
             var id = wrappedEntity.Index;
 
-            Debug.Assert(world.IsAlive(entity), $"CommandBuffer can not to set components to the dead {wrappedEntity.Entity}");
+            Debug.Assert(world.IsAlive(entity),
+                $"CommandBuffer can not to set components to the dead {wrappedEntity.Entity}");
 
             // Get entity chunk
             var entityInfo = world.EntityInfo.GetEntityData(entity.Id);
@@ -389,7 +383,8 @@ public sealed partial class CommandBuffer : IDisposable
             }
 
             var entity = Resolve(wrappedEntity.Entity);
-            Debug.Assert(world.IsAlive(entity), $"CommandBuffer can not to remove components from the dead {wrappedEntity.Entity}");
+            Debug.Assert(world.IsAlive(entity),
+                $"CommandBuffer can not to remove components from the dead {wrappedEntity.Entity}");
 
             world.RemoveRange(entity, _removeTypes.Span);
             _removeTypes.Clear();
@@ -415,22 +410,27 @@ public sealed partial class CommandBuffer : IDisposable
         {
             Creates.Clear();
         }
+
         if (setCount > 0)
         {
             Sets.Clear();
         }
+
         if (addCount > 0)
         {
             Adds.Clear();
         }
+
         if (removeCount > 0)
         {
             Removes.Clear();
         }
+
         if (destroyCount > 0)
         {
             Destroys.Clear();
         }
+
         _addTypes.Clear();
         _removeTypes.Clear();
     }

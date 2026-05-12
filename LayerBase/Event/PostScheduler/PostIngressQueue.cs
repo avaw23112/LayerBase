@@ -106,6 +106,7 @@ internal sealed class PostIngressQueue
             {
                 failed++;
             }
+
             drained++;
         }
 

@@ -15,9 +15,10 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var classProvider = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax classDeclaration && MightContainActorBehaviour(classDeclaration),
-                static (ctx, _) => GetClassCandidate(ctx))
-            .Where(static candidate => candidate is not null)!;
+                                       static (node, _) => node is ClassDeclarationSyntax classDeclaration &&
+                                                           MightContainActorBehaviour(classDeclaration),
+                                       static (ctx, _) => GetClassCandidate(ctx))
+                                   .Where(static candidate => candidate is not null)!;
 
         context.RegisterSourceOutput(classProvider.Collect(), static (spc, candidates) => Generate(spc, candidates));
     }
@@ -99,9 +100,11 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
     private static void Generate(SourceProductionContext context, ImmutableArray<ClassCandidate?> candidates)
     {
         foreach (IGrouping<string, ClassCandidate> group in candidates
-                     .Where(static candidate => candidate is not null)
-                     .Select(static candidate => candidate!)
-                     .GroupBy(static candidate => candidate.ClassSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))
+                                                            .Where(static candidate => candidate is not null)
+                                                            .Select(static candidate => candidate!)
+                                                            .GroupBy(static candidate =>
+                                                                candidate.ClassSymbol.ToDisplayString(
+                                                                    SymbolDisplayFormat.FullyQualifiedFormat)))
         {
             GenerateClass(context, group.ToImmutableArray());
         }
@@ -111,16 +114,16 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
     {
         INamedTypeSymbol classSymbol = candidates[0].ClassSymbol;
         ImmutableArray<MethodCandidate> methods = candidates
-            .SelectMany(static candidate => candidate.Methods)
-            .GroupBy(static method => method.MethodDisplay)
-            .Select(static group => group.First())
-            .ToImmutableArray();
+                                                  .SelectMany(static candidate => candidate.Methods)
+                                                  .GroupBy(static method => method.MethodDisplay)
+                                                  .Select(static group => group.First())
+                                                  .ToImmutableArray();
 
         ImmutableArray<CallMethodCandidate> callMethods = candidates
-            .SelectMany(static candidate => candidate.CallMethods)
-            .GroupBy(static method => method.MethodDisplay)
-            .Select(static group => group.First())
-            .ToImmutableArray();
+                                                          .SelectMany(static candidate => candidate.CallMethods)
+                                                          .GroupBy(static method => method.MethodDisplay)
+                                                          .Select(static group => group.First())
+                                                          .ToImmutableArray();
 
         bool hasTagOrGroupMetadata = candidates.Any(static candidate => candidate.HasTagOrGroupMetadata);
         if (methods.Length == 0 && callMethods.Length == 0 && !hasTagOrGroupMetadata)
@@ -144,16 +147,17 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
     }
 
     private static List<Diagnostic> CollectDiagnostics(
-        INamedTypeSymbol classSymbol,
-        ImmutableArray<ClassCandidate> candidates,
-        ImmutableArray<MethodCandidate> methods,
+        INamedTypeSymbol                    classSymbol,
+        ImmutableArray<ClassCandidate>      candidates,
+        ImmutableArray<MethodCandidate>     methods,
         ImmutableArray<CallMethodCandidate> callMethods)
     {
         var diagnostics = new List<Diagnostic>();
 
         foreach (ClassCandidate candidate in candidates)
         {
-            if (!candidate.Declaration.Modifiers.Any(static modifier => modifier.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PartialKeyword)))
+            if (!candidate.Declaration.Modifiers.Any(static modifier =>
+                    modifier.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PartialKeyword)))
             {
                 diagnostics.Add(Diagnostic.Create(
                     ActorBehaviourDiagnostics.ClassMustBePartial,
@@ -346,8 +350,8 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
     }
 
     private static string GenerateSource(
-        INamedTypeSymbol classSymbol,
-        ImmutableArray<MethodCandidate> methods,
+        INamedTypeSymbol                    classSymbol,
+        ImmutableArray<MethodCandidate>     methods,
         ImmutableArray<CallMethodCandidate> callMethods)
     {
         var builder = new StringBuilder();
@@ -389,7 +393,8 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         builder.AppendLine();
 
         builder.Append(memberIndent);
-        builder.AppendLine("void global::LayerBase.Actor.IGeneratedActorMeta.ActorInit(global::LayerBase.Actor.ActorContext context)");
+        builder.AppendLine(
+            "void global::LayerBase.Actor.IGeneratedActorMeta.ActorInit(global::LayerBase.Actor.ActorContext context)");
         builder.Append(memberIndent);
         builder.AppendLine("{");
         builder.Append(memberIndent);
@@ -399,7 +404,8 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         builder.AppendLine();
 
         builder.Append(memberIndent);
-        builder.AppendLine("void global::LayerBase.Actor.IGeneratedActorMeta.__BuildActorMeta(global::LayerBase.Actor.ActorTypeMetaBuilder builder)");
+        builder.AppendLine(
+            "void global::LayerBase.Actor.IGeneratedActorMeta.__BuildActorMeta(global::LayerBase.Actor.ActorTypeMetaBuilder builder)");
         builder.Append(memberIndent);
         builder.AppendLine("{");
 
@@ -429,7 +435,8 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             builder.AppendLine("        });");
         }
 
-        foreach (CallMethodCandidate method in callMethods.OrderBy(static method => method.MethodName, StringComparer.Ordinal))
+        foreach (CallMethodCandidate method in callMethods.OrderBy(static method => method.MethodName,
+                     StringComparer.Ordinal))
         {
             IMethodSymbol methodSymbol = method.MethodSymbol;
             ITypeSymbol requestType = methodSymbol.Parameters[0].Type;
@@ -609,15 +616,15 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
     private static string GetAccessibility(Accessibility accessibility)
     {
         return accessibility switch
-        {
-            Accessibility.Public => "public",
-            Accessibility.Internal => "internal",
-            Accessibility.Private => "private",
-            Accessibility.Protected => "protected",
-            Accessibility.ProtectedAndInternal => "private protected",
-            Accessibility.ProtectedOrInternal => "protected internal",
-            _ => "internal"
-        };
+               {
+                   Accessibility.Public               => "public",
+                   Accessibility.Internal             => "internal",
+                   Accessibility.Private              => "private",
+                   Accessibility.Protected            => "protected",
+                   Accessibility.ProtectedAndInternal => "private protected",
+                   Accessibility.ProtectedOrInternal  => "protected internal",
+                   _                                  => "internal"
+               };
     }
 
     private static bool HasActorBehaviourAttribute(IMethodSymbol methodSymbol)
@@ -681,15 +688,16 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
     private static ImmutableArray<INamedTypeSymbol> GetGenericAttributeTypeArguments(
         INamedTypeSymbol classSymbol,
-        string attributeName)
+        string           attributeName)
     {
         return classSymbol.GetAttributes()
-            .Where(attribute => IsLayerBaseActorGenericAttribute(attribute, attributeName))
-            .Select(attribute => attribute.AttributeClass!.TypeArguments[0])
-            .OfType<INamedTypeSymbol>()
-            .Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default)
-            .OrderBy(static symbol => symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
-            .ToImmutableArray();
+                          .Where(attribute => IsLayerBaseActorGenericAttribute(attribute, attributeName))
+                          .Select(attribute => attribute.AttributeClass!.TypeArguments[0])
+                          .OfType<INamedTypeSymbol>()
+                          .Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default)
+                          .OrderBy(static symbol => symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                              StringComparer.Ordinal)
+                          .ToImmutableArray();
     }
 
     private static bool IsLayerBaseActorGenericAttribute(AttributeData attribute, string attributeName)
@@ -712,33 +720,33 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
     private static string GetHintName(INamedTypeSymbol symbol)
     {
         string name = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-            .Replace("global::", string.Empty)
-            .Replace('<', '_')
-            .Replace('>', '_')
-            .Replace('.', '_')
-            .Replace(':', '_');
+                            .Replace("global::", string.Empty)
+                            .Replace('<', '_')
+                            .Replace('>', '_')
+                            .Replace('.', '_')
+                            .Replace(':', '_');
 
         return $"{name}.ActorBehaviour.g.cs";
     }
 
     private sealed record ClassCandidate(
-        INamedTypeSymbol ClassSymbol,
-        ClassDeclarationSyntax Declaration,
-        ImmutableArray<MethodCandidate> Methods,
+        INamedTypeSymbol                    ClassSymbol,
+        ClassDeclarationSyntax              Declaration,
+        ImmutableArray<MethodCandidate>     Methods,
         ImmutableArray<CallMethodCandidate> CallMethods,
-        bool ManuallyImplementsGeneratedMeta,
-        bool HasTagOrGroupMetadata);
+        bool                                ManuallyImplementsGeneratedMeta,
+        bool                                HasTagOrGroupMetadata);
 
     private sealed record MethodCandidate(
-        string MethodName,
-        string MethodDisplay,
-        ITypeSymbol? EventType,
+        string        MethodName,
+        string        MethodDisplay,
+        ITypeSymbol?  EventType,
         IMethodSymbol MethodSymbol,
-        Location? Location);
+        Location?     Location);
 
     private sealed record CallMethodCandidate(
-        string MethodName,
-        string MethodDisplay,
+        string        MethodName,
+        string        MethodDisplay,
         IMethodSymbol MethodSymbol,
-        Location? Location);
+        Location?     Location);
 }

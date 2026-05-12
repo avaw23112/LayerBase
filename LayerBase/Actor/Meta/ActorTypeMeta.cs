@@ -13,11 +13,11 @@ internal sealed class ActorTypeMeta<TActor>
     public int[] GroupIds { get; }
 
     public ActorTypeMeta(
-        BehaviourSignature signature,
+        BehaviourSignature    signature,
         ActorBehaviourEntry[] behaviours,
-        ActorCallEntry[] callBehaviours,
-        int[] tagIds,
-        int[] groupIds)
+        ActorCallEntry[]      callBehaviours,
+        int[]                 tagIds,
+        int[]                 groupIds)
     {
         Signature = signature;
         Behaviours = behaviours ?? throw new ArgumentNullException(nameof(behaviours));

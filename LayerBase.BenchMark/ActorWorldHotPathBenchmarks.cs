@@ -13,7 +13,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
 
     private ActorWorld _singleWorld = null!;
     private ActorId _singleActorId;
-    
+
     private ActorWorld _prewarmWorld = null!;
     private ActorId _prewarmActorId;
 
@@ -32,7 +32,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
     {
         _singleWorld = CreateBenchmarkWorld(PostLoopCount);
         _singleActorId = _singleWorld.CreateActor<ArchetypeRowBenchmarkActor>().GetActorId();
-        
+
         _prewarmWorld = CreateBenchmarkWorld(PostLoopCount);
         _prewarmActorId = _prewarmWorld.CreateActor<HotPostBenchmarkActor>().GetActorId();
 
@@ -62,7 +62,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
             BenchEvent10,
             BenchEvent11,
             BenchEvent12>();
-        
+
         _ = _prewarmWorld.PostTo(
             _prewarmActorId,
             HotPostBenchmarkEvent.Instance);
@@ -83,24 +83,25 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
     {
         PumpAll(_singleWorld);
     }
+
     [IterationCleanup(Target = nameof(ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent_Prewarm))]
     public void CleanupPrewarm()
     {
         PumpAll(_prewarmWorld);
     }
-    
+
     [IterationCleanup(Target = nameof(ActorPost_ArchetypeRow_1000Actors_OneEvent))]
     public void CleanupBatch()
     {
         PumpAll(_batchWorld);
     }
-    
+
     [IterationCleanup(Target = nameof(ActorPost_Query_PostAll_1000Actors_12Events))]
     public void CleanupQuery()
     {
         PumpAll(_queryWorld);
     }
-    
+
 
     [Benchmark(
         Description = "ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent",
@@ -114,7 +115,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
             _ = _singleWorld.PostTo(_singleActorId, ActorBenchEvent.Instance);
         }
     }
-    
+
     [Benchmark(
         Description = "ActorPost_ArchetypeRow_PostTo_OneActor_OneEvent_Prewarm",
         OperationsPerInvoke = PostLoopCount)]
@@ -127,7 +128,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
             _ = _prewarmWorld.PostTo(_prewarmActorId, HotPostBenchmarkEvent.Instance);
         }
     }
-    
+
     [Benchmark(
         Description = "ActorPost_ArchetypeRow_1000Actors_OneEvent",
         OperationsPerInvoke = PostLoopCount)]
@@ -213,14 +214,16 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
             BenchmarkSink.IntValue++;
         }
     }
+
     public readonly partial struct HotPostBenchmarkEvent
     {
         public static readonly HotPostBenchmarkEvent Instance = default;
     }
+
     public sealed class HotPostBenchmarkEventMetaData
         : EventMetaData<HotPostBenchmarkEvent>
     {
-        public override ActorMailOptions? ActorMailOptions =>new(
+        public override ActorMailOptions? ActorMailOptions => new(
             postPolicy: ActorPostPolicy.Queued,
             fullPolicy: ActorMailFullPolicy.Grow,
             growFailurePolicy: ActorMailFullPolicy.RejectNew,
@@ -231,19 +234,66 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
             disabledPolicy: ActorMailDisabledPolicy.Accept,
             pendingDestroyPolicy: ActorMailPendingDestroyPolicy.Reject);
     }
-    
-    public readonly struct BenchEvent1 { public static readonly BenchEvent1 Instance = default; }
-    public readonly struct BenchEvent2 { public static readonly BenchEvent2 Instance = default; }
-    public readonly struct BenchEvent3 { public static readonly BenchEvent3 Instance = default; }
-    public readonly struct BenchEvent4 { public static readonly BenchEvent4 Instance = default; }
-    public readonly struct BenchEvent5 { public static readonly BenchEvent5 Instance = default; }
-    public readonly struct BenchEvent6 { public static readonly BenchEvent6 Instance = default; }
-    public readonly struct BenchEvent7 { public static readonly BenchEvent7 Instance = default; }
-    public readonly struct BenchEvent8 { public static readonly BenchEvent8 Instance = default; }
-    public readonly struct BenchEvent9 { public static readonly BenchEvent9 Instance = default; }
-    public readonly struct BenchEvent10 { public static readonly BenchEvent10 Instance = default; }
-    public readonly struct BenchEvent11 { public static readonly BenchEvent11 Instance = default; }
-    public readonly struct BenchEvent12 { public static readonly BenchEvent12 Instance = default; }
+
+    public readonly struct BenchEvent1
+    {
+        public static readonly BenchEvent1 Instance = default;
+    }
+
+    public readonly struct BenchEvent2
+    {
+        public static readonly BenchEvent2 Instance = default;
+    }
+
+    public readonly struct BenchEvent3
+    {
+        public static readonly BenchEvent3 Instance = default;
+    }
+
+    public readonly struct BenchEvent4
+    {
+        public static readonly BenchEvent4 Instance = default;
+    }
+
+    public readonly struct BenchEvent5
+    {
+        public static readonly BenchEvent5 Instance = default;
+    }
+
+    public readonly struct BenchEvent6
+    {
+        public static readonly BenchEvent6 Instance = default;
+    }
+
+    public readonly struct BenchEvent7
+    {
+        public static readonly BenchEvent7 Instance = default;
+    }
+
+    public readonly struct BenchEvent8
+    {
+        public static readonly BenchEvent8 Instance = default;
+    }
+
+    public readonly struct BenchEvent9
+    {
+        public static readonly BenchEvent9 Instance = default;
+    }
+
+    public readonly struct BenchEvent10
+    {
+        public static readonly BenchEvent10 Instance = default;
+    }
+
+    public readonly struct BenchEvent11
+    {
+        public static readonly BenchEvent11 Instance = default;
+    }
+
+    public readonly struct BenchEvent12
+    {
+        public static readonly BenchEvent12 Instance = default;
+    }
 }
 
 public partial class ArchetypeRowBenchmarkActor : IActor
@@ -253,6 +303,7 @@ public partial class ArchetypeRowBenchmarkActor : IActor
     {
     }
 }
+
 public partial class HotPostBenchmarkActor : IActor
 {
     [ActorBehaviour]
@@ -264,18 +315,66 @@ public partial class HotPostBenchmarkActor : IActor
         // 这里保持空处理，避免 handler 成本污染 Post benchmark。
     }
 }
+
 public partial class QueryBenchmarkActor : IActor
 {
-    [ActorBehaviour] private void On1(in ActorWorldArchetypeRowBenchmarks.BenchEvent1 value) { }
-    [ActorBehaviour] private void On2(in ActorWorldArchetypeRowBenchmarks.BenchEvent2 value) { }
-    [ActorBehaviour] private void On3(in ActorWorldArchetypeRowBenchmarks.BenchEvent3 value) { }
-    [ActorBehaviour] private void On4(in ActorWorldArchetypeRowBenchmarks.BenchEvent4 value) { }
-    [ActorBehaviour] private void On5(in ActorWorldArchetypeRowBenchmarks.BenchEvent5 value) { }
-    [ActorBehaviour] private void On6(in ActorWorldArchetypeRowBenchmarks.BenchEvent6 value) { }
-    [ActorBehaviour] private void On7(in ActorWorldArchetypeRowBenchmarks.BenchEvent7 value) { }
-    [ActorBehaviour] private void On8(in ActorWorldArchetypeRowBenchmarks.BenchEvent8 value) { }
-    [ActorBehaviour] private void On9(in ActorWorldArchetypeRowBenchmarks.BenchEvent9 value) { }
-    [ActorBehaviour] private void On10(in ActorWorldArchetypeRowBenchmarks.BenchEvent10 value) { }
-    [ActorBehaviour] private void On11(in ActorWorldArchetypeRowBenchmarks.BenchEvent11 value) { }
-    [ActorBehaviour] private void On12(in ActorWorldArchetypeRowBenchmarks.BenchEvent12 value) { }
+    [ActorBehaviour]
+    private void On1(in ActorWorldArchetypeRowBenchmarks.BenchEvent1 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On2(in ActorWorldArchetypeRowBenchmarks.BenchEvent2 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On3(in ActorWorldArchetypeRowBenchmarks.BenchEvent3 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On4(in ActorWorldArchetypeRowBenchmarks.BenchEvent4 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On5(in ActorWorldArchetypeRowBenchmarks.BenchEvent5 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On6(in ActorWorldArchetypeRowBenchmarks.BenchEvent6 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On7(in ActorWorldArchetypeRowBenchmarks.BenchEvent7 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On8(in ActorWorldArchetypeRowBenchmarks.BenchEvent8 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On9(in ActorWorldArchetypeRowBenchmarks.BenchEvent9 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On10(in ActorWorldArchetypeRowBenchmarks.BenchEvent10 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On11(in ActorWorldArchetypeRowBenchmarks.BenchEvent11 value)
+    {
+    }
+
+    [ActorBehaviour]
+    private void On12(in ActorWorldArchetypeRowBenchmarks.BenchEvent12 value)
+    {
+    }
 }

@@ -8,10 +8,10 @@ public readonly struct DispatchResult
     public readonly Exception? Exception;
 
     private DispatchResult(
-        bool isSuccess,
+        bool                isSuccess,
         DispatchFailureKind failureKind,
-        string? message,
-        Exception? exception)
+        string?             message,
+        Exception?          exception)
     {
         IsSuccess = isSuccess;
         FailureKind = failureKind;
@@ -26,8 +26,8 @@ public readonly struct DispatchResult
 
     public static DispatchResult Failure(
         DispatchFailureKind failureKind,
-        string message,
-        Exception? exception = null)
+        string              message,
+        Exception?          exception = null)
     {
         return new(false, failureKind, message, exception);
     }

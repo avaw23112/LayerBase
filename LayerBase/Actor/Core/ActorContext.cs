@@ -18,29 +18,28 @@ public readonly struct ActorContext
         Runtime = world.Runtime;
         ActorId = actorId;
     }
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult PostInside<TEvent>(in TEvent value)
         where TEvent : struct
     {
         return World.PostTo(ActorId, in value);
     }
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult TryPostInside<TEvent>(in TEvent value)
         where TEvent : struct
     {
         return World.PostTo(ActorId, in value);
     }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsEnable()
     {
         return World.IsEnable(ActorId);
     }
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool SetEnable(bool enable)
     {
         return World.SetEnable(ActorId, enable);

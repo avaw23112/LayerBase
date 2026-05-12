@@ -30,8 +30,8 @@ public readonly struct ActorId : IEquatable<ActorId>
     public bool Equals(ActorId other)
     {
         return ArchetypeId == other.ArchetypeId
-            && SlotIndex == other.SlotIndex
-            && Generation == other.Generation;
+               && SlotIndex == other.SlotIndex
+               && Generation == other.Generation;
     }
 
     public override bool Equals(object? obj)

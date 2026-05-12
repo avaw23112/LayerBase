@@ -5,7 +5,7 @@ namespace LayerBase.Actor;
 internal static class ActorCallTaskBridge
 {
     public static void Forward<TResponse>(
-        LBTask<TResponse> task,
+        LBTask<TResponse>                 task,
         LBTaskCompletionSource<TResponse> target)
         where TResponse : struct
     {
@@ -16,14 +16,11 @@ internal static class ActorCallTaskBridge
             return;
         }
 
-        awaiter.OnCompleted(() =>
-        {
-            CompleteImmediately(task.GetAwaiter(), target);
-        });
+        awaiter.OnCompleted(() => { CompleteImmediately(task.GetAwaiter(), target); });
     }
 
     private static void CompleteImmediately<TResponse>(
-        LBTask<TResponse>.Awaiter awaiter,
+        LBTask<TResponse>.Awaiter         awaiter,
         LBTaskCompletionSource<TResponse> target)
         where TResponse : struct
     {

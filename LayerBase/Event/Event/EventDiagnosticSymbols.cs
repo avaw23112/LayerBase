@@ -246,9 +246,9 @@ internal static class LayerErrorReporter
     /// handler 抛出的异常。
     /// </param>
     public static void ReportBySymbolId(
-        int layerIndex,
-        int handlerNameId,
-        int eventNameId,
+        int       layerIndex,
+        int       handlerNameId,
+        int       eventNameId,
         Exception exception)
     {
         var handlerName = EventDiagnosticSymbols.Resolve(handlerNameId);

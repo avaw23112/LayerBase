@@ -15,8 +15,13 @@ public static class ProjectionWorldExtensions
         return new ProjectionQueryFlow0(world, world.Query(in description));
     }
 
-<# for (var c = 1; c <= ComponentAmount; c++) { #>
-<# var compG = CG(c); #>
+<#
+    for (var c = 1; c <= ComponentAmount; c++)
+    {
+#>
+<#
+        var compG = CG(c);
+#>
     public static ProjectionQueryFlow<#= c #><<#= compG #>> Query<<#= compG #>>(
         this World world)
     {
@@ -25,5 +30,7 @@ public static class ProjectionWorldExtensions
         return new ProjectionQueryFlow<#= c #><<#= compG #>>(world, world.Query(in description));
     }
 
-<# } #>
+<#
+    }
+#>
 }

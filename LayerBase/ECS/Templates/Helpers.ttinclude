@@ -1,7 +1,6 @@
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
 <#+
-
     public int Amount = 25;
 
 
@@ -178,7 +177,8 @@
         var sb = new StringBuilder();
         for (var localIndex = 0; localIndex < amount; localIndex++)
         {
-            sb.AppendLine($"ref var t{localIndex}Component = ref Unsafe.Add(ref t{localIndex}FirstElement, entityIndex);");
+            sb.AppendLine(
+                $"ref var t{localIndex}Component = ref Unsafe.Add(ref t{localIndex}FirstElement, entityIndex);");
         }
 
         return sb;

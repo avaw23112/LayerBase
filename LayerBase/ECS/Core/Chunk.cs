@@ -16,7 +16,6 @@ using Array = System.Array;
 
 namespace Arch.Core;
 
-
 /// <summary>
 ///     The <see cref="Chunks"/> class
 ///     represents an array of <see cref="Chunk"/>s and manages them, including being able to create and add new space for them.
@@ -72,7 +71,7 @@ public class Chunks
 
         var sourceArray = Items;
         var destinationArray = (Array<Chunk>)ArrayPool<Chunk>.Shared.Rent(newCapacity);
-        Arch.LowLevel.Array.Copy(ref sourceArray, 0, ref destinationArray, 0, Capacity );
+        Arch.LowLevel.Array.Copy(ref sourceArray, 0, ref destinationArray, 0, Capacity);
         ArrayPool<Chunk>.Shared.Return(sourceArray, true);
 
         Items = destinationArray;
@@ -145,17 +144,18 @@ public class Chunks
 ///     Chunks are internally allocated and filled by <see cref="Archetype"/>'s.
 ///     Through them it is possible to efficiently provide or trim memory for additional entities.
 /// </summary>
-[SkipLocalsInit]  // Really a speed improvements? The benchmark only showed a slight improvement
+[SkipLocalsInit] // Really a speed improvements? The benchmark only showed a slight improvement
 public partial struct Chunk
 {
-
     /// <summary>
     ///     Initializes a new instance of the <see cref="Chunk"/> struct.
     ///     Automatically creates a lookup array for quick access to internal components.
     /// </summary>
     /// <param name="capacity">How many entities of the respective component structure fit into this <see cref="Chunk"/>.</param>
     /// <param name="types">The respective component structure of all entities in this <see cref="Chunk"/>.</param>
-    internal Chunk(int capacity, Span<ComponentType> types) : this(capacity, types.ToLookupArray(), types) { }
+    internal Chunk(int capacity, Span<ComponentType> types) : this(capacity, types.ToLookupArray(), types)
+    {
+    }
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="Chunk"/> struct
@@ -188,44 +188,53 @@ public partial struct Chunk
     ///     The <see cref="Arch.Core.Entity"/>'s that are stored in this chunk.
     ///     Can be accessed during the iteration.
     /// </summary>
-    public readonly Entity[] Entities { [Pure] get; }  // 8 Byte
+    public readonly Entity[] Entities { [Pure] get; } // 8 Byte
 
     /// <summary>
     ///     The component arrays in which the components of the <see cref="Arch.Core.Entity"/>'s are stored.
     ///     Represent the component structure.
     ///     They can be accessed quickly using the <see cref="ComponentIdToArrayIndex"/> or one of the chunk methods.
     /// </summary>
-    public readonly Array[] Components { [Pure] get; }  // 8 Byte
+    public readonly Array[] Components { [Pure] get; } // 8 Byte
 
     /// <summary>
     ///     The lookup array that maps component ids to component array indexes to quickly access them.
     /// </summary>
-    public readonly int[] ComponentIdToArrayIndex { [Pure] get; }  // 8 Byte
+    public readonly int[] ComponentIdToArrayIndex { [Pure] get; } // 8 Byte
 
     /// <summary>
     ///     The number of occupied <see cref="Arch.Core.Entity"/> slots in this <see cref="Chunk"/>.
     /// </summary>
-    public int Count { [Pure] get;  internal set; }  // 4 Byte
+    public int Count { [Pure] get; internal set; } // 4 Byte
 
     /// <summary>
     ///     The number of possible <see cref="Arch.Core.Entity"/>'s in this <see cref="Chunk"/>.
     /// </summary>
-    public int Capacity { [Pure] get; }   // 4 Byte
+    public int Capacity { [Pure] get; } // 4 Byte
 
     /// <summary>
     ///     The space that is left in this instance.
     /// </summary>
-    public readonly int Buffer { [Pure] get => Capacity - Count; }
+    public readonly int Buffer
+    {
+        [Pure] get => Capacity - Count;
+    }
 
     /// <summary>
     ///     Checks whether this instance is full or not.
     /// </summary>
-    public readonly bool IsFull { [Pure] get => Count >= Capacity; }
+    public readonly bool IsFull
+    {
+        [Pure] get => Count >= Capacity;
+    }
 
     /// <summary>
     ///     Checks whether this instance is full or not.
     /// </summary>
-    public readonly bool IsEmpty { [Pure] get => Count < Capacity; }
+    public readonly bool IsEmpty
+    {
+        [Pure] get => Count < Capacity;
+    }
 
     /// <summary>
     ///     Inserts an entity into the <see cref="Chunk"/>.
@@ -331,7 +340,8 @@ public partial struct Chunk
 
         // Copy last entity to replace the removed one.
         ref var entities = ref Entities.DangerousGetReference();
-        Unsafe.Add(ref entities, index) = Unsafe.Add(ref entities, lastIndex);  // entities[index] = entities[lastIndex]; but without bound checks
+        Unsafe.Add(ref entities, index) =
+            Unsafe.Add(ref entities, lastIndex); // entities[index] = entities[lastIndex]; but without bound checks
 
         // Copy components of last entity to replace the removed one
         var components = Components;
@@ -378,7 +388,6 @@ public partial struct Chunk
 
 public partial struct Chunk
 {
-
     /// <summary>
     ///     Try get the index of a component within this <see cref="Chunk"/>. Returns false if the <see cref="Chunk"/> does not have this
     ///     component.
@@ -403,7 +412,8 @@ public partial struct Chunk
     private int Index<T>()
     {
         var id = Component<T>.ComponentType.Id;
-        Debug.Assert(id != -1 && id < ComponentIdToArrayIndex.Length, $"Index is out of bounds, component {typeof(T)} with id {id} does not exist in this chunk.");
+        Debug.Assert(id != -1 && id < ComponentIdToArrayIndex.Length,
+            $"Index is out of bounds, component {typeof(T)} with id {id} does not exist in this chunk.");
         return ComponentIdToArrayIndex.DangerousGetReferenceAt(id);
     }
 
@@ -417,7 +427,8 @@ public partial struct Chunk
     public T[] GetArray<T>()
     {
         var index = Index<T>();
-        Debug.Assert(index != -1 && index < Components.Length, $"Index is out of bounds, component {typeof(T)} with id {index} does not exist in this chunk.");
+        Debug.Assert(index != -1 && index < Components.Length,
+            $"Index is out of bounds, component {typeof(T)} with id {index} does not exist in this chunk.");
 
         var array = Components.DangerousGetReferenceAt(index);
         return Unsafe.As<T[]>(array);
@@ -555,7 +566,6 @@ public partial struct Chunk
 
 public partial struct Chunk
 {
-
     /// <summary>
     /// Copies the entities from the source array into the instance at a specific index.
     /// </summary>
@@ -567,7 +577,7 @@ public partial struct Chunk
     internal static void Copy(ref Span<Entity> source, int index, ref Chunk chunk, int destinationIndex, int length)
     {
         var entities = chunk.Entities.AsSpan().Slice(destinationIndex, length);
-        source.Slice(index,length).CopyTo(entities);
+        source.Slice(index, length).CopyTo(entities);
     }
 
     /// <summary>
@@ -581,7 +591,7 @@ public partial struct Chunk
     internal static void Copy<T>(ref Span<T> source, int index, ref Chunk chunk, int destinationIndex, int length)
     {
         var components = chunk.GetSpan<T>().Slice(destinationIndex, length);
-        source.Slice(index,length).CopyTo(components);
+        source.Slice(index, length).CopyTo(components);
     }
 
     /// <summary>
@@ -606,9 +616,9 @@ public partial struct Chunk
     /// <param name="destinationIndex">The start index in the destination <see cref="Chunk"/>.</param>
     /// <param name="length">The length indicating the amount of <see cref="Entity"/>s being copied.</param>
     internal static void Copy(
-        ref Chunk source, int index, ref Signature sourceSignature,
+        ref Chunk source,      int index, ref Signature sourceSignature,
         ref Chunk destination, int destinationIndex,
-        int length)
+        int       length)
     {
         // Arrays
         var entities = source.Entities;
@@ -628,8 +638,9 @@ public partial struct Chunk
     /// <param name="destination">The destination <see cref="Chunk"/>.</param>
     /// <param name="destinationIndex">The start index in the destination <see cref="Chunk"/>.</param>
     /// <param name="length">The length indicating the amount of <see cref="Entity"/>s being copied.</param>
-    internal static void CopyComponents(ref Chunk source, int index, ref Signature sourceSignature, ref Chunk destination, int destinationIndex, int length) {
-
+    internal static void CopyComponents(ref Chunk source,      int index,            ref Signature sourceSignature,
+                                        ref Chunk destination, int destinationIndex, int           length)
+    {
         // Arrays
         var sourceComponents = source.Components;
 

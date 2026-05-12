@@ -28,15 +28,13 @@ internal sealed partial class ActorCallIntegrationActor : IActor
     [ActorCallBehaviour]
     private LBTask<ActorBridgeResponse> OnAsk(
         in ActorBridgeRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken     cancellationToken)
     {
         return LBTask<ActorBridgeResponse>.FromResult(new ActorBridgeResponse
         {
             Value = request.Value + 1
         });
     }
-
-   
 }
 
 public sealed partial class ActorCallIntegrationLayer : Layer
@@ -44,7 +42,6 @@ public sealed partial class ActorCallIntegrationLayer : Layer
     [Mount] private ActorCallIntegrationService _service = null!;
 
     public ActorCallIntegrationService Service => _service;
-
 }
 
 public sealed partial class ActorCallIntegrationService : IService, ILayerContext
@@ -54,8 +51,8 @@ public sealed partial class ActorCallIntegrationService : IService, ILayerContex
     }
 
     public LBTask<ActorBridgeResponse> AskActorBridge(
-        ActorId actorId,
-        int value,
+        ActorId           actorId,
+        int               value,
         CancellationToken cancellationToken = default)
     {
         return ServiceActorExtensions.AskActor<ActorBridgeRequest, ActorBridgeResponse>(
@@ -87,8 +84,14 @@ public class ActorCallIntegrationTests
         ActorCallIntegrationActor actor = runtime.CreateActor<ActorCallIntegrationActor>();
         ActorId actorId = actor.GetActorId();
 
-        Assert.That(AskAndPump(runtime, runtime.AskActor<ActorBridgeRequest, ActorBridgeResponse>(actorId, new ActorBridgeRequest(2))).Value, Is.EqualTo(3));
-        Assert.That(AskAndPump(runtime, layer.AskActor<ActorBridgeRequest, ActorBridgeResponse>(actorId, new ActorBridgeRequest(3))).Value, Is.EqualTo(4));
+        Assert.That(
+            AskAndPump(runtime,
+                runtime.AskActor<ActorBridgeRequest, ActorBridgeResponse>(actorId, new ActorBridgeRequest(2))).Value,
+            Is.EqualTo(3));
+        Assert.That(
+            AskAndPump(runtime,
+                layer.AskActor<ActorBridgeRequest, ActorBridgeResponse>(actorId, new ActorBridgeRequest(3))).Value,
+            Is.EqualTo(4));
         Assert.That(AskAndPump(runtime, layer.Service.AskActorBridge(actorId, 4)).Value, Is.EqualTo(5));
         Assert.That(
             AskAndPump(

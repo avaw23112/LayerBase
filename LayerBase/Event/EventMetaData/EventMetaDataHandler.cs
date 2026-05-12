@@ -78,8 +78,8 @@ internal static class EventMetaDataHandler
     }
 
     internal static bool TryMergePostEvent<TEvent>(
-        in TEvent oldValue,
-        in TEvent newValue,
+        in  TEvent oldValue,
+        in  TEvent newValue,
         out TEvent mergedValue)
         where TEvent : struct
     {

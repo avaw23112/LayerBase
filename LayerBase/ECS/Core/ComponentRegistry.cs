@@ -14,7 +14,6 @@ namespace Arch.Core;
 /// </summary>
 public readonly record struct ComponentType
 {
-
     /// <summary>
     ///     Represents a unique Id for this component.
     /// </summary>
@@ -42,7 +41,6 @@ public readonly record struct ComponentType
     /// </summary>
     public Type Type
     {
-
         get => ComponentRegistry.Types[Id]!;
     }
 
@@ -50,7 +48,6 @@ public readonly record struct ComponentType
     ///     Converts a <see cref="Type"/> to its <see cref="ComponentType"/>.
     /// </summary>
     /// <param name="value">The type that is being converted.</param>
-
     public static implicit operator ComponentType(Type value)
     {
         return Component.GetComponentType(value);
@@ -60,7 +57,6 @@ public readonly record struct ComponentType
     ///     Converts the <see cref="ComponentType"/> to its original <see cref="Type"/>.
     /// </summary>
     /// <param name="value">The type that is being converted.</param>
-
     public static implicit operator Type(ComponentType value)
     {
         return value.Type;
@@ -87,7 +83,6 @@ public static class ComponentRegistry
     /// </summary>
     public static IReadOnlyDictionary<Type, ComponentType> TypeToComponentType
     {
-
         get => _typeToComponentType;
     }
 
@@ -96,20 +91,13 @@ public static class ComponentRegistry
     /// </summary>
     public static ReadOnlySpan<Type?> Types
     {
-
         get => _types;
     }
 
     /// <summary>
     ///     Gets or sets the total number of registered components in the project.
     /// </summary>
-    public static int Size
-    {
-
-        get;
-
-        private set;
-    }
+    public static int Size { get; private set; }
 
     /// <summary>
     ///     Adds a new <see cref="ComponentType"/> manually and registers it.
@@ -118,7 +106,6 @@ public static class ComponentRegistry
     /// <param name="type">Its <see cref="Type"/>.</param>
     /// <param name="typeSize">The size in bytes of <see cref="type"/>.</param>
     /// <returns>Its <see cref="ComponentType"/>.</returns>
-
     private static ComponentType Add(Type type, int typeSize)
     {
         if (TryGet(type, out var meta))
@@ -142,7 +129,6 @@ public static class ComponentRegistry
     /// <param name="type">Its <see cref="Type"/>.</param>
     /// <param name="componentType">The <see cref="ComponentType"/>.</param>
     /// <returns>Its <see cref="ComponentType"/>.</returns>
-
     public static ComponentType Add(Type type, ComponentType componentType)
     {
         // Register and assign component id
@@ -158,7 +144,6 @@ public static class ComponentRegistry
     /// </summary>
     /// <typeparam name="T">The generic type.</typeparam>
     /// <returns>Its <see cref="ComponentType"/>.</returns>
-
     public static ComponentType Add<T>()
     {
         return Add(typeof(T), SizeOf<T>());
@@ -169,7 +154,6 @@ public static class ComponentRegistry
     /// </summary>
     /// <param name="type">Its <see cref="Type"/>.</param>
     /// <returns>Its <see cref="ComponentType"/>.</returns>
-
     public static ComponentType Add(Type type)
     {
         return Add(type, SizeOf(type));
@@ -181,7 +165,6 @@ public static class ComponentRegistry
     /// </summary>
     /// <typeparam name="T">Its generic type.</typeparam>
     /// <returns>True if it is, otherwise false.</returns>
-
     public static bool Has<T>()
     {
         return Has(typeof(T));
@@ -193,7 +176,6 @@ public static class ComponentRegistry
     /// </summary>
     /// <param name="type">Its <see cref="Type"/>.</param>
     /// <returns>True if it is, otherwise false.</returns>
-
     public static bool Has(Type type)
     {
         return TypeToComponentType.ContainsKey(type);
@@ -204,7 +186,6 @@ public static class ComponentRegistry
     /// </summary>
     /// <typeparam name="T">The component to remove.</typeparam>
     /// <returns>True if it was successful, false if not.</returns>
-
     public static bool Remove<T>()
     {
         var componentType = Component<T>.ComponentType;
@@ -217,7 +198,6 @@ public static class ComponentRegistry
     /// </summary>
     /// <param name="type">The component <see cref="Type"/> to remove.</param>
     /// <returns>True if it was successful, false if not.</returns>
-
     public static bool Remove(Type type)
     {
         ComponentType componentType = type;
@@ -231,7 +211,6 @@ public static class ComponentRegistry
     /// <param name="type">The component <see cref="Type"/> to remove.</param>
     /// <param name="compType">The removed <see cref="ComponentType"/>, if it existed.</param>
     /// <returns>True if it was successful, false if not.</returns>
-
     public static bool Remove(Type type, out ComponentType compType)
     {
         var removed = _typeToComponentType.Remove(type, out compType);
@@ -247,7 +226,6 @@ public static class ComponentRegistry
     /// <param name="oldType">The old component <see cref="Type"/> to be replaced.</param>
     /// <param name="newType">The new component <see cref="Type"/> that replaced the old one.</param>
     /// <param name="newTypeSize">The size in bytes of <see cref="newType"/>.</param>
-
     public static void Replace(Type oldType, Type newType, int newTypeSize)
     {
         var id = Remove(oldType, out var oldComponentType) ? oldComponentType.Id : ++Size;
@@ -263,7 +241,6 @@ public static class ComponentRegistry
     /// </summary>
     /// <typeparam name="T0">The old component to be replaced.</typeparam>
     /// <typeparam name="T1">The new component that replaced the old one.</typeparam>
-
     public static void Replace<T0, T1>()
     {
         Replace(typeof(T0), typeof(T1), SizeOf<T1>());
@@ -276,7 +253,6 @@ public static class ComponentRegistry
     /// </summary>
     /// <param name="oldType">The old component <see cref="Type"/> to be replaced.</param>
     /// <param name="newType">The new component <see cref="Type"/> that replaced the old one.</param>
-
     public static void Replace(Type oldType, Type newType)
     {
         Replace(oldType, newType, SizeOf(newType));
@@ -288,7 +264,6 @@ public static class ComponentRegistry
     /// <typeparam name="T">Its generic type.</typeparam>
     /// <param name="componentType">Its <see cref="ComponentType"/>, if it is registered.</param>
     /// <returns>True if it registered, otherwise false.</returns>
-
     public static bool TryGet<T>(out ComponentType componentType)
     {
         return TryGet(typeof(T), out componentType);
@@ -300,7 +275,6 @@ public static class ComponentRegistry
     /// <param name="type">Its <see cref="Type"/>.</param>
     /// <param name="componentType">Its <see cref="ComponentType"/>, if it is registered.</param>
     /// <returns>True if it registered, otherwise false.</returns>
-
     public static bool TryGet(Type type, out ComponentType componentType)
     {
         return TypeToComponentType.TryGetValue(type, out componentType);
@@ -311,7 +285,6 @@ public static class ComponentRegistry
     /// </summary>
     /// <typeparam name="T">The generic.</typeparam>
     /// <returns>Its size.</returns>
-
     private static int SizeOf<T>()
     {
         return typeof(T).IsValueType ? Unsafe.SizeOf<T>() : IntPtr.Size;
@@ -323,15 +296,14 @@ public static class ComponentRegistry
     /// </summary>
     /// <param name="type">The type.</param>
     /// <returns>Its size in bytes.</returns>
-
     private static int SizeOf(Type type)
     {
         if (type.IsValueType)
         {
             return (int)typeof(Unsafe)
-                .GetMethod(nameof(Unsafe.SizeOf))!
-                .MakeGenericMethod(type)
-                .Invoke(null, null)!;
+                        .GetMethod(nameof(Unsafe.SizeOf))!
+                        .MakeGenericMethod(type)
+                        .Invoke(null, null)!;
         }
 
         return IntPtr.Size;
@@ -362,7 +334,9 @@ public static class ArrayRegistry
     /// <returns>The created array.</returns>
     public static Array GetArray(ComponentType type, int capacity)
     {
-        return _createFactories.TryGetValue(type.Id, out Func<int, Array> func) ? func(capacity) : Array.CreateInstance(type.Type, capacity);
+        return _createFactories.TryGetValue(type.Id, out Func<int, Array> func)
+            ? func(capacity)
+            : Array.CreateInstance(type.Type, capacity);
     }
 
     /// <summary>
@@ -374,7 +348,6 @@ public static class ArrayRegistry
         public static readonly Func<int, Array> Create = capacity => capacity == 0 ? Array.Empty<T>() : new T[capacity];
     }
 }
-
 
 /// <summary>
 ///     The <see cref="Component"/> class provides information about a component during runtime.
@@ -395,7 +368,6 @@ public static class Component
     /// </remarks>
     /// <param name="type">The <see cref="Type"/>.</param>
     /// <returns>The <see cref="ComponentType"/>.</returns>
-
     public static ComponentType GetComponentType(Type type)
     {
         return !ComponentRegistry.TryGet(type, out var index) ? ComponentRegistry.Add(type) : index;
@@ -410,28 +382,28 @@ public static class Component
     /// <returns>A unique hashcode for the contained elements, regardless of their order.</returns>
     public static int GetHashCode(Span<ComponentType> obj)
     {
-          // Search for the highest id to determine how much uints we need for the stack.
-          var highestId = 0;
-          foreach (ref var cmp in obj)
-          {
-              if (cmp.Id > highestId)
-              {
-                  highestId = cmp.Id;
-              }
-          }
+        // Search for the highest id to determine how much uints we need for the stack.
+        var highestId = 0;
+        foreach (ref var cmp in obj)
+        {
+            if (cmp.Id > highestId)
+            {
+                highestId = cmp.Id;
+            }
+        }
 
-          // Allocate the stack and set bits to replicate a bitset
-          var length = BitSet.RequiredLength(highestId + 1);
-          Span<uint> stack = stackalloc uint[length];
-          var spanBitSet = new SpanBitSet(stack);
+        // Allocate the stack and set bits to replicate a bitset
+        var length = BitSet.RequiredLength(highestId + 1);
+        Span<uint> stack = stackalloc uint[length];
+        var spanBitSet = new SpanBitSet(stack);
 
-          foreach (ref var type in obj)
-          {
-              var x = type.Id;
-              spanBitSet.SetBit(x);
-          }
+        foreach (ref var type in obj)
+        {
+            var x = type.Id;
+            spanBitSet.SetBit(x);
+        }
 
-          return GetHashCode(stack);
+        return GetHashCode(stack);
     }
 
     /// <summary>
@@ -457,7 +429,6 @@ public static class Component
 /// </remarks>
 public static class Component<T>
 {
-
     /// <summary>
     ///     A static reference to information about the compile time static registered class.
     /// </summary>
@@ -487,4 +458,3 @@ public static class JobMeta
 {
     internal static int Id;
 }
-

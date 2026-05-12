@@ -218,6 +218,7 @@ Service 负责将相关的 Manager 注册到 DI 容器中。
 此外，您可以使用 `[Mount]` 特性实现**声明式依赖注入**。`[Mount]` 在不同位置有不同语义：
 
 #### 1. Layer 字段 / 属性
+
 ```csharp
 public partial class GameLogicLayer : Layer
 {
@@ -227,6 +228,7 @@ public partial class GameLogicLayer : Layer
 ```
 
 #### 2. IService 字段 / 属性
+
 ```csharp
 public partial class CombatService : IService 
 {
@@ -238,6 +240,7 @@ public partial class CombatService : IService
 ```
 
 #### 3. 构造函数
+
 ```csharp
 public class DamageManager : ILayerContext
 {
@@ -314,7 +317,8 @@ public class GameRoot : MonoBehaviour
 }
 ```
 
-> **Prewarm 说明**：`Prewarm()` 是可选的预热步骤，建议在 Loading 或初始化完成时调用。它能有效避免首次运行时的 JIT 抖动。不调用 `Prewarm()` 也不影响基础功能的正确性。
+> **Prewarm 说明**：`Prewarm()` 是可选的预热步骤，建议在 Loading 或初始化完成时调用。它能有效避免首次运行时的 JIT 抖动。不调用
+`Prewarm()` 也不影响基础功能的正确性。
 
 ---
 
@@ -374,7 +378,8 @@ _runtime = LayerHub.CreateLayers()
 
 ### 4. 默认事件注册语义
 
-在 `Build` 前已经分配过 `EventTypeId<T>.Id` 的事件，即使没有显式 `MetaData`，也会在 `PostScheduler` 中获得默认的 `Normal` 策略。这意味着任何结构体事件都可以直接作为普通事件被 `Post`。
+在 `Build` 前已经分配过 `EventTypeId<T>.Id` 的事件，即使没有显式 `MetaData`，也会在 `PostScheduler` 中获得默认的 `Normal`
+策略。这意味着任何结构体事件都可以直接作为普通事件被 `Post`。
 
 ### 5. Runtime Policy Dump & Event Identity
 
@@ -430,7 +435,8 @@ private void OnHeavyComputeTask(in ComputeEvent e)
 
 ### 8. 拓扑结构可视化 (Topology Snapshot)
 
-调用 `LayerHub.GetTopologyMarkdown()` 即可获得一份详细的 Markdown 表格，展示整个系统内各个 Layer 挂载了哪些 Manager，以及它们具体订阅/派发了什么事件。
+调用 `LayerHub.GetTopologyMarkdown()` 即可获得一份详细的 Markdown 表格，展示整个系统内各个 Layer 挂载了哪些
+Manager，以及它们具体订阅/派发了什么事件。
 
 ### 9. 线程模型 (Threading Model)
 
@@ -439,17 +445,21 @@ LayerBase 当前采用**单线程 Runtime 模型**。
 除带 `AnyThread` 后缀的 API 外，其余 Runtime API 默认只能在 Runtime 所在线程调用。
 
 **Owner-thread only (仅限所有者线程):**
+
 - `Send` / `Post` / `TryPost` / `PostLatest` / `PostCoalesced`
 - `MarkDirty` / `CallAsync`
 - `Pump` / `Build` / `Dispose` / `Reset`
 
 **AnyThread (允许跨线程):**
+
 - `PostFromAnyThread`
 - `TryPostFromAnyThread`
 
-`PostFromAnyThread` 不会立即派发事件。它会先进入跨线程入口队列，并在下一次 `Runtime.Pump` 中搬运到 `PostScheduler`，再参与正常的策略处理。
+`PostFromAnyThread` 不会立即派发事件。它会先进入跨线程入口队列，并在下一次 `Runtime.Pump` 中搬运到 `PostScheduler`
+，再参与正常的策略处理。
 
-> **注意**：当前版本不在热路径 API 中做线程动态检查。在错误线程调用普通 API 属于未定义行为。`Dispose` / `Reset` 不建议与 `PostFromAnyThread` 并发执行。
+> **注意**：当前版本不在热路径 API 中做线程动态检查。在错误线程调用普通 API 属于未定义行为。`Dispose` / `Reset` 不建议与
+`PostFromAnyThread` 并发执行。
 
 ---
 
@@ -458,25 +468,25 @@ LayerBase 当前采用**单线程 Runtime 模型**。
 LayerBase 的 Build 阶段大致分为：
 
 1. **Prebuild (预构建)**
-   - 分配 Layer RouteIndex
-   - 绑定 Runtime / EventCenter
-   - 执行 `PrepareBuild`
-   - 执行源生成器生成的 AutoBinding
+    - 分配 Layer RouteIndex
+    - 绑定 Runtime / EventCenter
+    - 执行 `PrepareBuild`
+    - 执行源生成器生成的 AutoBinding
 
 2. **基础设施初始化**
-   - 初始化 PostScheduler、Timer、DelayManager
-   - 构建 ServiceProvider 容器
+    - 初始化 PostScheduler、Timer、DelayManager
+    - 构建 ServiceProvider 容器
 
 3. **Layer Build (层级构建)**
-   - `SharedFieldBinder` 绑定共享字段
-   - 执行 `LifecycleBuild` / `AutoBind` / `Initialize`
-   - 执行 `PostBuild` 与 `RuntimeStart`
-   - `EventGraphValidator` 校验事件图拓扑
+    - `SharedFieldBinder` 绑定共享字段
+    - 执行 `LifecycleBuild` / `AutoBind` / `Initialize`
+    - 执行 `PostBuild` 与 `RuntimeStart`
+    - `EventGraphValidator` 校验事件图拓扑
 
 4. **Runtime Dispose (销毁)**
-   - 执行 `RuntimeStop`
-   - `DisposeLayers` 释放层级资源
-   - 清理 Scheduler / Timer / Delay 队列与缓存
+    - 执行 `RuntimeStop`
+    - `DisposeLayers` 释放层级资源
+    - 清理 Scheduler / Timer / Delay 队列与缓存
 
 ---
 
@@ -566,9 +576,11 @@ performance shackles with data-oriented reconstruction.**
 
 LayerBase is designed for high-frequency event interactions, excelling in .NET 8/9 environments.
 
-- **Extreme Low Latency**: Single event dispatch overhead as low as **1.6 ns**, Request/Response (Call) overhead approx **1.08 ns**.
+- **Extreme Low Latency**: Single event dispatch overhead as low as **1.6 ns**, Request/Response (Call) overhead approx
+  **1.08 ns**.
 - **Perfect Cache Affinity**: Underlying SOA layout and bitmask skipping algorithm minimize CPU Cache Misses.
-- **Zero-Allocation**: Core dispatch paths and `LBTask` async paths achieve **0 GC Heap Allocation** when completed synchronously.
+- **Zero-Allocation**: Core dispatch paths and `LBTask` async paths achieve **0 GC Heap Allocation** when completed
+  synchronously.
 
 > For detailed benchmark data and comparisons, please refer to [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
@@ -578,10 +590,13 @@ LayerBase is designed for high-frequency event interactions, excelling in .NET 8
 
 To break through performance ceilings, LayerBase implements several physical-level optimizations:
 
-1. **SOA Data-Oriented Layout (Structure of Arrays)**: Dehydrates handlers of the same event type into contiguous native arrays, leveraging CPU sequential prefetching.
+1. **SOA Data-Oriented Layout (Structure of Arrays)**: Dehydrates handlers of the same event type into contiguous native
+   arrays, leveraging CPU sequential prefetching.
 2. **Hardware-Level Bitmask Skipping**: Uses the `TrailingZeroCount` instruction for O(1) inter-layer addressing.
-3. **Branchless and Unsafe Bounds Check Elimination**: Combines states via bitwise OR and uses `Unsafe` stepping to reduce branch prediction failures and eliminate array bounds checks.
-4. **Async Path Short-circuit**: `LBTask`, optimized for games, completely eliminates state machine leasing overhead when completed synchronously.
+3. **Branchless and Unsafe Bounds Check Elimination**: Combines states via bitwise OR and uses `Unsafe` stepping to
+   reduce branch prediction failures and eliminate array bounds checks.
+4. **Async Path Short-circuit**: `LBTask`, optimized for games, completely eliminates state machine leasing overhead
+   when completed synchronously.
 
 ---
 
@@ -589,11 +604,13 @@ To break through performance ceilings, LayerBase implements several physical-lev
 
 Beyond efficiency, LayerBase focuses on engineering robustness:
 
-1. **Self-Healing Circuit Breaker**: Exception isolation and physical tripping; faulty nodes are automatically purged in the next frame.
+1. **Self-Healing Circuit Breaker**: Exception isolation and physical tripping; faulty nodes are automatically purged in
+   the next frame.
 2. **Zero-Allocation Async Ecosystem (`LBTask`)**: A struct-based Task model specifically tuned for game loops.
 3. **Static Topology Audit**: Static scan during the Build phase to detect synchronous infinite loop risks early.
 
-* Note: Handlers registered with **[SubscribeNotify]** do not capture exceptions for maximum performance; users must guarantee safety.
+* Note: Handlers registered with **[SubscribeNotify]** do not capture exceptions for maximum performance; users must
+  guarantee safety.
 
 ---
 
@@ -751,9 +768,11 @@ public partial class PlayerInputManager : ILayerContext, IUpdate
 Services are responsible for registering related Managers into the DI container.
 By using the `[OwnerLayer]` attribute, a Service can be statically bound to a specific Layer.
 
-Additionally, you can use the `[Mount]` attribute for **declarative dependency injection**. The `[Mount]` attribute has different semantics depending on its location:
+Additionally, you can use the `[Mount]` attribute for **declarative dependency injection**. The `[Mount]` attribute has
+different semantics depending on its location:
 
 #### 1. Layer Fields / Properties
+
 ```csharp
 public partial class GameLogicLayer : Layer
 {
@@ -764,6 +783,7 @@ public partial class GameLogicLayer : Layer
 ```
 
 #### 2. IService Fields / Properties
+
 ```csharp
 public partial class CombatService : IService 
 {
@@ -775,6 +795,7 @@ public partial class CombatService : IService
 ```
 
 #### 3. Constructors
+
 ```csharp
 public class DamageManager : ILayerContext
 {
@@ -860,7 +881,8 @@ public class GameRoot : MonoBehaviour
 
 ### 1. PostFromAnyThread (Cross-thread Event Ingress)
 
-`PostFromAnyThread` allows background threads to safely submit events, which will be processed during the next `Pump` on the main thread.
+`PostFromAnyThread` allows background threads to safely submit events, which will be processed during the next `Pump` on
+the main thread.
 
 ```csharp
 // Submit a calculation completion notification from a background thread
@@ -897,7 +919,8 @@ var options = new PostSchedulerOptions(
 
 ### 3. FixedUpdate Support
 
-Enable fixed-step updates via `SetFixedUpdateOptions`. `Runtime.Pump(deltaTime)` will automatically handle time accumulation.
+Enable fixed-step updates via `SetFixedUpdateOptions`. `Runtime.Pump(deltaTime)` will automatically handle time
+accumulation.
 
 ```csharp
 _runtime = LayerHub.CreateLayers()
@@ -912,7 +935,9 @@ _runtime = LayerHub.CreateLayers()
 
 ### 4. Default Event Registration Semantics
 
-Events that have been assigned an `EventTypeId<T>.Id` before `Build` will receive a default `Normal` policy in the `PostScheduler`, even without explicit `MetaData`. This means any struct event can be directly `Post`ed as a normal event.
+Events that have been assigned an `EventTypeId<T>.Id` before `Build` will receive a default `Normal` policy in the
+`PostScheduler`, even without explicit `MetaData`. This means any struct event can be directly `Post`ed as a normal
+event.
 
 ### 5. Runtime Policy Dump & Event Identity
 
@@ -923,7 +948,8 @@ Export the current Runtime's event policy table and identity information for dia
 var markdown = _runtime.GetPolicyMarkdown();
 ```
 
-LayerBase uses `EventTypeId<T>.Id` for hot-path indexing at runtime, while retaining `StableId` and `StableKey` for cross-version recording and diagnostics.
+LayerBase uses `EventTypeId<T>.Id` for hot-path indexing at runtime, while retaining `StableId` and `StableKey` for
+cross-version recording and diagnostics.
 
 ### 6. Fluent Filtering and Interception (Fluent API)
 
@@ -953,9 +979,11 @@ public partial class PlayerManager : ILayerContext
 
 ### 7. Background Parallel Processing (Parallel Handlers)
 
-When dealing with pure computation that consumes high CPU and **does not depend on or modify main-thread state**, parallel subscriptions can be used.
+When dealing with pure computation that consumes high CPU and **does not depend on or modify main-thread state**,
+parallel subscriptions can be used.
 
-> **Note**: Parallel handlers run in a separate thread pool; thread safety is not guaranteed and must be managed by the user.
+> **Note**: Parallel handlers run in a separate thread pool; thread safety is not guaranteed and must be managed by the
+> user.
 
 ```csharp
 // Quickly bind parallel methods via attribute
@@ -968,51 +996,58 @@ private void OnHeavyComputeTask(in ComputeEvent e)
 
 ### 8. Topology Snapshot
 
-Call `LayerHub.GetTopologyMarkdown()` to get a detailed Markdown report covering all Layers, Event subscriptions, Call routes, and Shared Fields across the system.
+Call `LayerHub.GetTopologyMarkdown()` to get a detailed Markdown report covering all Layers, Event subscriptions, Call
+routes, and Shared Fields across the system.
 
 ### 9. Threading Model
 
 LayerBase currently adopts a **single-threaded Runtime model**.
 
-Except for APIs with the `AnyThread` suffix, other Runtime APIs must default to being called from the Runtime thread (usually the main thread).
+Except for APIs with the `AnyThread` suffix, other Runtime APIs must default to being called from the Runtime thread (
+usually the main thread).
 
 **Owner-thread only:**
+
 - `Send` / `Post` / `TryPost` / `PostLatest` / `PostCoalesced`
 - `MarkDirty` / `CallAsync`
 - `Pump` / `Build` / `Dispose` / `Reset`
 
 **AnyThread:**
+
 - `PostFromAnyThread`
 - `TryPostFromAnyThread`
 
-`PostFromAnyThread` does not dispatch events immediately. It enters a cross-thread ingress queue and is moved to the `PostScheduler` during the next `Runtime.Pump`.
+`PostFromAnyThread` does not dispatch events immediately. It enters a cross-thread ingress queue and is moved to the
+`PostScheduler` during the next `Runtime.Pump`.
 
-> **Note**: The current version does not perform dynamic thread checks in hot-path APIs. Calling normal APIs from the wrong thread is undefined behavior. Concurrent calls to `Dispose` / `Reset` with `PostFromAnyThread` are not recommended.
+> **Note**: The current version does not perform dynamic thread checks in hot-path APIs. Calling normal APIs from the
+> wrong thread is undefined behavior. Concurrent calls to `Dispose` / `Reset` with `PostFromAnyThread` are not
+> recommended.
 
 ### 10. Runtime Build Lifecycle
 
 The Build phase of LayerBase is divided into:
 
 1. **Prebuild**
-   - Assign Layer RouteIndex
-   - Bind Runtime / EventCenter
-   - Execute `PrepareBuild`
-   - Execute Source Generator generated AutoBinding
+    - Assign Layer RouteIndex
+    - Bind Runtime / EventCenter
+    - Execute `PrepareBuild`
+    - Execute Source Generator generated AutoBinding
 
 2. **Infrastructure Initialization**
-   - Initialize PostScheduler, Timer, and DelayManager
-   - Construct the ServiceProvider container
+    - Initialize PostScheduler, Timer, and DelayManager
+    - Construct the ServiceProvider container
 
 3. **Layer Build**
-   - `SharedFieldBinder` binding for shared fields
-   - Execute `LifecycleBuild` / `AutoBind` / `Initialize`
-   - Execute `PostBuild` and `RuntimeStart`
-   - `EventGraphValidator` topology validation
+    - `SharedFieldBinder` binding for shared fields
+    - Execute `LifecycleBuild` / `AutoBind` / `Initialize`
+    - Execute `PostBuild` and `RuntimeStart`
+    - `EventGraphValidator` topology validation
 
 4. **Runtime Dispose**
-   - Execute `RuntimeStop`
-   - `DisposeLayers` to release resources
-   - Clear Scheduler / Timer / Delay queues and caches
+    - Execute `RuntimeStop`
+    - `DisposeLayers` to release resources
+    - Clear Scheduler / Timer / Delay queues and caches
 
 ---
 

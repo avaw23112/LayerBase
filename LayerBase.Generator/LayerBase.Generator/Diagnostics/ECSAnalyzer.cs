@@ -51,7 +51,7 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
 
         // 检查是否有 [Query] 属性
         var queryAttribute = methodSymbol.GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.MetadataName == "QueryAttribute");
+                                         .FirstOrDefault(a => a.AttributeClass?.MetadataName == "QueryAttribute");
 
         if (queryAttribute == null)
         {
@@ -62,7 +62,7 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
         if (methodSymbol.ContainingType is INamedTypeSymbol containingType)
         {
             var classDecl = methodSymbol.DeclaringSyntaxReferences
-                .FirstOrDefault()?.GetSyntax() as ClassDeclarationSyntax;
+                                        .FirstOrDefault()?.GetSyntax() as ClassDeclarationSyntax;
 
             if (classDecl != null && !classDecl.Modifiers.Any(SyntaxKind.PartialKeyword))
             {
@@ -84,8 +84,9 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
 
         // 检查 [Bring] 属性
         var bringAttribute = methodSymbol.GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.MetadataName == "BringAttribute"
-                || a.AttributeClass?.MetadataName.StartsWith("BringAttribute`") == true);
+                                         .FirstOrDefault(a => a.AttributeClass?.MetadataName == "BringAttribute"
+                                                              || a.AttributeClass?.MetadataName.StartsWith(
+                                                                  "BringAttribute`") == true);
 
         bool hasBring = bringAttribute != null;
 
@@ -102,7 +103,8 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
         if (hasBring)
         {
             bool returnsProjectResult = methodSymbol.ReturnType?.MetadataName == "ProjectResult"
-                && methodSymbol.ReturnType?.ContainingNamespace?.ToDisplayString() == "LayerBase.ECS";
+                                        && methodSymbol.ReturnType?.ContainingNamespace?.ToDisplayString() ==
+                                        "LayerBase.ECS";
 
             if (!returnsProjectResult)
             {
@@ -127,7 +129,8 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
 
         // LB-ECS020: [Query] 方法必须以 On 开头或指定 [EntryPoint]
         var entryPointAttribute = methodSymbol.GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.MetadataName == "EntryPointAttribute");
+                                              .FirstOrDefault(a =>
+                                                  a.AttributeClass?.MetadataName == "EntryPointAttribute");
 
         if (entryPointAttribute == null && !methodSymbol.Name.StartsWith("On"))
         {
@@ -153,8 +156,8 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeParameters(
         SymbolAnalysisContext context,
-        IMethodSymbol methodSymbol,
-        bool hasBring)
+        IMethodSymbol         methodSymbol,
+        bool                  hasBring)
     {
         var parameters = methodSymbol.Parameters;
         int entityCount = 0;
@@ -165,7 +168,7 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
         {
             var param = parameters[i];
             bool isEntity = param.Type.MetadataName == "Entity"
-                && param.Type.ContainingNamespace?.ToDisplayString() == "Arch.Core";
+                            && param.Type.ContainingNamespace?.ToDisplayString() == "Arch.Core";
 
             if (isEntity)
             {
@@ -177,6 +180,7 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
                         DiagnosticDescriptors.ECS011_EntityParamAtMostOnce,
                         param.Locations.FirstOrDefault()));
                 }
+
                 continue;
             }
 

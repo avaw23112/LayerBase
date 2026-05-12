@@ -36,18 +36,19 @@ public readonly struct ActorMailOptions
     public readonly bool ReleaseWhenEmpty;
 
     public ActorMailOptions(
-        ActorPostPolicy postPolicy,
-        ActorMailFullPolicy fullPolicy,
-        ActorMailFullPolicy growFailurePolicy,
-        int initialCapacity,
-        int maxCapacity,
-        int growFactor,
-        bool releaseWhenEmpty,
-        ActorMailDisabledPolicy disabledPolicy = ActorMailDisabledPolicy.Accept,
+        ActorPostPolicy               postPolicy,
+        ActorMailFullPolicy           fullPolicy,
+        ActorMailFullPolicy           growFailurePolicy,
+        int                           initialCapacity,
+        int                           maxCapacity,
+        int                           growFactor,
+        bool                          releaseWhenEmpty,
+        ActorMailDisabledPolicy       disabledPolicy       = ActorMailDisabledPolicy.Accept,
         ActorMailPendingDestroyPolicy pendingDestroyPolicy = ActorMailPendingDestroyPolicy.Reject)
     {
         int normalizedInitialCapacity = ActorMailCapacity.NormalizePowerOfTwo(Math.Max(initialCapacity, 1));
-        int normalizedMaxCapacity = ActorMailCapacity.NormalizePowerOfTwo(Math.Max(maxCapacity, normalizedInitialCapacity));
+        int normalizedMaxCapacity =
+            ActorMailCapacity.NormalizePowerOfTwo(Math.Max(maxCapacity, normalizedInitialCapacity));
 
         PostPolicy = postPolicy;
         DeliveryMode = ToDeliveryMode(postPolicy);
@@ -64,10 +65,10 @@ public readonly struct ActorMailOptions
     private static ActorMailDeliveryMode ToDeliveryMode(ActorPostPolicy postPolicy)
     {
         return postPolicy switch
-        {
-            ActorPostPolicy.Latest => ActorMailDeliveryMode.LatestOnly,
-            ActorPostPolicy.Coalesced => ActorMailDeliveryMode.Merge,
-            _ => ActorMailDeliveryMode.Queue
-        };
+               {
+                   ActorPostPolicy.Latest    => ActorMailDeliveryMode.LatestOnly,
+                   ActorPostPolicy.Coalesced => ActorMailDeliveryMode.Merge,
+                   _                         => ActorMailDeliveryMode.Queue
+               };
     }
 }

@@ -28,7 +28,6 @@ internal sealed class ActorLifecycleScheduler
     }
 
 
-
     public void RemoveUpdate(ActorLifecycleHandle handle)
     {
         _updates.Remove(handle);
@@ -44,7 +43,7 @@ internal sealed class ActorLifecycleScheduler
         _fixedUpdates.Remove(handle);
     }
 
-  
+
     public void PumpFixedUpdate(
         float                  fixedDeltaTime,
         ref RuntimeFrameBudget budget)

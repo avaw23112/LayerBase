@@ -9,10 +9,10 @@ internal readonly struct ActorCallEntry
     public readonly ActorCallColumnFactory Factory;
 
     public ActorCallEntry(
-        int routeId,
-        Type requestType,
-        Type responseType,
-        object invoker,
+        int                    routeId,
+        Type                   requestType,
+        Type                   responseType,
+        object                 invoker,
         ActorCallColumnFactory factory)
     {
         RouteId = routeId;

@@ -28,9 +28,10 @@ public partial struct Chunk
         var assignIds = new StringBuilder();
         for (var i = 0; i < index; i++)
         {
-            assignIds.AppendLine($"t{i}Index = Unsafe.Add(ref componentIdToArrayFirstElement, Component<T{i}>.ComponentType.Id);");
+            assignIds.AppendLine(
+                $"t{i}Index = Unsafe.Add(ref componentIdToArrayFirstElement, Component<T{i}>.ComponentType.Id);");
         }
-    #>
+#>
 
     [Pure]
     private void Index<<#= generics #>>(<#= outs #>)
@@ -40,6 +41,6 @@ public partial struct Chunk
     }
     <#
     }
-    #>
+#>
 }
 

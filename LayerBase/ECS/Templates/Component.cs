@@ -1,11 +1,8 @@
-﻿
-
-using Arch.Core;
+﻿using Arch.Core;
 using System;
 using System.Threading;
 
 namespace Arch.Core.Utils;
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1>
@@ -25,11 +22,10 @@ public static class Component<T0, T1>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType, });
+        Signature = new Signature(new[] { Component<T0>.ComponentType, Component<T1>.ComponentType, });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2>
@@ -49,11 +45,11 @@ public static class Component<T0, T1, T2>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType, });
+        Signature = new Signature(new[]
+            { Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType, });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3>
@@ -73,11 +69,14 @@ public static class Component<T0, T1, T2, T3>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4>
@@ -97,11 +96,14 @@ public static class Component<T0, T1, T2, T3, T4>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5>
@@ -121,11 +123,14 @@ public static class Component<T0, T1, T2, T3, T4, T5>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6>
@@ -145,11 +150,15 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7>
@@ -169,11 +178,15 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8>
@@ -193,11 +206,15 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
@@ -217,11 +234,16 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
@@ -241,11 +263,16 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
@@ -265,11 +292,16 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>
@@ -289,11 +321,17 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>
@@ -313,11 +351,17 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>
@@ -337,11 +381,17 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>
@@ -361,11 +411,18 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType,Component<T15>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+            Component<T15>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>
@@ -385,11 +442,18 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType,Component<T15>.ComponentType,Component<T16>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+            Component<T15>.ComponentType, Component<T16>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>
@@ -409,11 +473,18 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType,Component<T15>.ComponentType,Component<T16>.ComponentType,Component<T17>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+            Component<T15>.ComponentType, Component<T16>.ComponentType, Component<T17>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>
@@ -433,11 +504,19 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType,Component<T15>.ComponentType,Component<T16>.ComponentType,Component<T17>.ComponentType,Component<T18>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+            Component<T15>.ComponentType, Component<T16>.ComponentType, Component<T17>.ComponentType,
+            Component<T18>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
 
 /// <inheritdoc cref="Component"/>
 public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>
@@ -457,14 +536,23 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType,Component<T15>.ComponentType,Component<T16>.ComponentType,Component<T17>.ComponentType,Component<T18>.ComponentType,Component<T19>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+            Component<T15>.ComponentType, Component<T16>.ComponentType, Component<T17>.ComponentType,
+            Component<T18>.ComponentType, Component<T19>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
 
-
 /// <inheritdoc cref="Component"/>
-public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>
+public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+    T20>
 {
     internal static readonly int Id;
 
@@ -481,14 +569,23 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType,Component<T15>.ComponentType,Component<T16>.ComponentType,Component<T17>.ComponentType,Component<T18>.ComponentType,Component<T19>.ComponentType,Component<T20>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+            Component<T15>.ComponentType, Component<T16>.ComponentType, Component<T17>.ComponentType,
+            Component<T18>.ComponentType, Component<T19>.ComponentType, Component<T20>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
 
-
 /// <inheritdoc cref="Component"/>
-public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>
+public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+    T20, T21>
 {
     internal static readonly int Id;
 
@@ -505,14 +602,24 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType,Component<T15>.ComponentType,Component<T16>.ComponentType,Component<T17>.ComponentType,Component<T18>.ComponentType,Component<T19>.ComponentType,Component<T20>.ComponentType,Component<T21>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+            Component<T15>.ComponentType, Component<T16>.ComponentType, Component<T17>.ComponentType,
+            Component<T18>.ComponentType, Component<T19>.ComponentType, Component<T20>.ComponentType,
+            Component<T21>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
 
-
 /// <inheritdoc cref="Component"/>
-public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>
+public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+    T20, T21, T22>
 {
     internal static readonly int Id;
 
@@ -529,14 +636,24 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType,Component<T15>.ComponentType,Component<T16>.ComponentType,Component<T17>.ComponentType,Component<T18>.ComponentType,Component<T19>.ComponentType,Component<T20>.ComponentType,Component<T21>.ComponentType,Component<T22>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+            Component<T15>.ComponentType, Component<T16>.ComponentType, Component<T17>.ComponentType,
+            Component<T18>.ComponentType, Component<T19>.ComponentType, Component<T20>.ComponentType,
+            Component<T21>.ComponentType, Component<T22>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
 
-
 /// <inheritdoc cref="Component"/>
-public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>
+public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+    T20, T21, T22, T23>
 {
     internal static readonly int Id;
 
@@ -553,14 +670,24 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType,Component<T15>.ComponentType,Component<T16>.ComponentType,Component<T17>.ComponentType,Component<T18>.ComponentType,Component<T19>.ComponentType,Component<T20>.ComponentType,Component<T21>.ComponentType,Component<T22>.ComponentType,Component<T23>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+            Component<T15>.ComponentType, Component<T16>.ComponentType, Component<T17>.ComponentType,
+            Component<T18>.ComponentType, Component<T19>.ComponentType, Component<T20>.ComponentType,
+            Component<T21>.ComponentType, Component<T22>.ComponentType, Component<T23>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
 
-
 /// <inheritdoc cref="Component"/>
-public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>
+public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+    T20, T21, T22, T23, T24>
 {
     internal static readonly int Id;
 
@@ -577,10 +704,18 @@ public static class Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, 
     static Component()
     {
         Id = Interlocked.Increment(ref Component.Id);
-        Signature = new Signature(new [] { Component<T0>.ComponentType,Component<T1>.ComponentType,Component<T2>.ComponentType,Component<T3>.ComponentType,Component<T4>.ComponentType,Component<T5>.ComponentType,Component<T6>.ComponentType,Component<T7>.ComponentType,Component<T8>.ComponentType,Component<T9>.ComponentType,Component<T10>.ComponentType,Component<T11>.ComponentType,Component<T12>.ComponentType,Component<T13>.ComponentType,Component<T14>.ComponentType,Component<T15>.ComponentType,Component<T16>.ComponentType,Component<T17>.ComponentType,Component<T18>.ComponentType,Component<T19>.ComponentType,Component<T20>.ComponentType,Component<T21>.ComponentType,Component<T22>.ComponentType,Component<T23>.ComponentType,Component<T24>.ComponentType, });
+        Signature = new Signature(new[]
+        {
+            Component<T0>.ComponentType, Component<T1>.ComponentType, Component<T2>.ComponentType,
+            Component<T3>.ComponentType, Component<T4>.ComponentType, Component<T5>.ComponentType,
+            Component<T6>.ComponentType, Component<T7>.ComponentType, Component<T8>.ComponentType,
+            Component<T9>.ComponentType, Component<T10>.ComponentType, Component<T11>.ComponentType,
+            Component<T12>.ComponentType, Component<T13>.ComponentType, Component<T14>.ComponentType,
+            Component<T15>.ComponentType, Component<T16>.ComponentType, Component<T17>.ComponentType,
+            Component<T18>.ComponentType, Component<T19>.ComponentType, Component<T20>.ComponentType,
+            Component<T21>.ComponentType, Component<T22>.ComponentType, Component<T23>.ComponentType,
+            Component<T24>.ComponentType,
+        });
         Hash = Signature.GetHashCode();
     }
 }
-
-
-

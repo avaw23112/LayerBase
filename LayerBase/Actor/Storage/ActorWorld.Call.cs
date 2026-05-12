@@ -5,8 +5,8 @@ namespace LayerBase.Actor;
 public sealed partial class ActorWorld
 {
     public LBTask<TResponse> ImmediatelyAsk<TRequest, TResponse>(
-        ActorId actorId,
-        in TRequest request,
+        ActorId           actorId,
+        in TRequest       request,
         CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
@@ -30,8 +30,8 @@ public sealed partial class ActorWorld
     }
 
     public LBTask<TResponse> Call<TActor, TRequest, TResponse>(
-        ActorId actorId,
-        in TRequest request,
+        ActorId           actorId,
+        in TRequest       request,
         CancellationToken cancellationToken = default)
         where TActor : class, IActor
         where TRequest : struct

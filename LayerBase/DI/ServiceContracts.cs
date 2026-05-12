@@ -44,7 +44,7 @@ public interface IAutoLayerMount
 /// <summary>
 /// 服务接口，用于配置分层 DI 容器。
 /// </summary>
-public interface IService 
+public interface IService
 {
     /// <summary>
     /// 配置服务集合。
@@ -95,7 +95,7 @@ public interface IServiceProvider
     /// 获取指定类型的服务实例。
     /// </summary>
     object? GetService(Type serviceType);
-    
+
     /// <summary>
     /// 获取指定类型的服务实例。
     /// </summary>
@@ -194,10 +194,10 @@ internal sealed class ServiceLayerBinding
     /// 当前对象所属 Runtime。
     /// </param>
     public ServiceLayerBinding(
-        int version,
-        int runtimeId,
-        int layerIndex,
-        Layer? layer,
+        int          version,
+        int          runtimeId,
+        int          layerIndex,
+        Layer?       layer,
         LayerRuntime runtime)
     {
         Version = version;
@@ -493,13 +493,13 @@ public static class ServiceExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EventHandledState Send<TValue>(
         this IService service,
-        in TValue value)
+        in   TValue   value)
         where TValue : struct
     {
         return service
-            .GetBinding()
-            .EventCenter
-            .Send(value);
+               .GetBinding()
+               .EventCenter
+               .Send(value);
     }
 
     /// <summary>
@@ -524,8 +524,8 @@ public static class ServiceExtensions
     /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult Post<TValue>(
-        this IService service,
-        in TValue value,
+        this IService    service,
+        in   TValue      value,
         EventPostPolicy? policy = default)
         where TValue : struct
     {
@@ -555,10 +555,10 @@ public static class ServiceExtensions
         where TValue : struct
     {
         return service
-            .GetBinding()
-            .Runtime
-            .Scheduler
-            .MarkDirty<TValue>();
+               .GetBinding()
+               .Runtime
+               .Scheduler
+               .MarkDirty<TValue>();
     }
 
     /// <summary>
@@ -587,22 +587,22 @@ public static class ServiceExtensions
     /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult PostLatest<TValue>(
-        this IService service,
-        in TValue value,
+        this IService      service,
+        in   TValue        value,
         BackpressurePolicy backpressure = BackpressurePolicy.RejectNew,
-        int capacity = 0)
+        int                capacity     = 0)
         where TValue : struct
     {
         return service
-            .GetBinding()
-            .Runtime
-            .Scheduler
-            .TryPost(
-                value,
-                new EventPostPolicy(
-                    PostDeliveryMode.Latest,
-                    backpressure,
-                    capacity));
+               .GetBinding()
+               .Runtime
+               .Scheduler
+               .TryPost(
+                   value,
+                   new EventPostPolicy(
+                       PostDeliveryMode.Latest,
+                       backpressure,
+                       capacity));
     }
 
     /// <summary>
@@ -631,22 +631,22 @@ public static class ServiceExtensions
     /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult PostCoalesced<TValue>(
-        this IService service,
-        in TValue value,
+        this IService      service,
+        in   TValue        value,
         BackpressurePolicy backpressure = BackpressurePolicy.RejectNew,
-        int capacity = 0)
+        int                capacity     = 0)
         where TValue : struct
     {
         return service
-            .GetBinding()
-            .Runtime
-            .Scheduler
-            .TryPost(
-                value,
-                new EventPostPolicy(
-                    PostDeliveryMode.Coalesced,
-                    backpressure,
-                    capacity));
+               .GetBinding()
+               .Runtime
+               .Scheduler
+               .TryPost(
+                   value,
+                   new EventPostPolicy(
+                       PostDeliveryMode.Coalesced,
+                       backpressure,
+                       capacity));
     }
 
     /// <summary>
@@ -688,14 +688,14 @@ public static class ServiceExtensions
     /// 定时任务句柄。
     /// </returns>
     public static TimerHandle SchedulePost<TValue>(
-        this IService service,
-        in TValue value,
-        float delaySeconds,
-        EventPostPolicy? expiredPostPolicy = default,
-        int repeatCount = 0,
-        float intervalSeconds = 0,
-        TimerRepeatMode? repeatMode = default,
-        TimerCatchUpPolicy? catchUpPolicy = default)
+        this IService       service,
+        in   TValue         value,
+        float               delaySeconds,
+        EventPostPolicy?    expiredPostPolicy = default,
+        int                 repeatCount       = 0,
+        float               intervalSeconds   = 0,
+        TimerRepeatMode?    repeatMode        = default,
+        TimerCatchUpPolicy? catchUpPolicy     = default)
         where TValue : struct
     {
         var binding = service.GetBinding();
@@ -735,9 +735,9 @@ public static class ServiceExtensions
     /// </param>
     public static void Delay<TValue>(
         this IService service,
-        in TValue value,
-        float ttl,
-        int contractId = 0)
+        in   TValue   value,
+        float         ttl,
+        int           contractId = 0)
         where TValue : struct
     {
         ServiceLayerBinder
@@ -745,10 +745,11 @@ public static class ServiceExtensions
             .SubscribeDelay<TValue>()
             .Publish(value, ttl, contractId);
     }
+
     public static PostResult PostTo<TEvent>(
         this IService service,
-        ActorId actorId,
-        in TEvent value)
+        ActorId       actorId,
+        in TEvent     value)
         where TEvent : struct
     {
         return service
@@ -757,17 +758,18 @@ public static class ServiceExtensions
     }
 
     public static void PostToMany<TEvent>(
-        this IService service,
+        this IService         service,
         ReadOnlySpan<ActorId> actorIds,
-        in TEvent value)
+        in TEvent             value)
         where TEvent : struct
     {
         service
             .GetBinding()
             .Runtime.PostToMany(actorIds, in value);
     }
+
     public static void SubscribeFlow<TValue>(
-        this IService service,
+        this IService               service,
         EventHandleDelegate<TValue> handler)
         where TValue : struct
     {
@@ -775,7 +777,7 @@ public static class ServiceExtensions
     }
 
     public static void SubscribeAsync<TValue>(
-        this IService service,
+        this IService                    service,
         EventHandleDelegateAsync<TValue> handler)
         where TValue : struct
     {
@@ -783,7 +785,7 @@ public static class ServiceExtensions
     }
 
     public static void Subscribe<TValue>(
-        this IService service,
+        this IService               service,
         EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
@@ -791,8 +793,8 @@ public static class ServiceExtensions
     }
 
     public static void SubscribeParallel<TValue>(
-        this IService                     service,
-        EventNotifyDelegate<TValue>       handler)
+        this IService               service,
+        EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
         var binding = service.GetBinding();
@@ -848,13 +850,13 @@ public static class LayerContextExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EventHandledState Send<TValue>(
         this ILayerContext context,
-        in TValue value)
+        in   TValue        value)
         where TValue : struct
     {
         return context
-            .GetBinding()
-            .EventCenter
-            .Send(value);
+               .GetBinding()
+               .EventCenter
+               .Send(value);
     }
 
     /// <summary>
@@ -879,8 +881,8 @@ public static class LayerContextExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult Post<TValue>(
         this ILayerContext context,
-        in TValue value,
-        EventPostPolicy? policy = default)
+        in   TValue        value,
+        EventPostPolicy?   policy = default)
         where TValue : struct
     {
         var scheduler = context.GetBinding().Runtime.Scheduler;
@@ -907,10 +909,10 @@ public static class LayerContextExtensions
         where TValue : struct
     {
         return context
-            .GetBinding()
-            .Runtime
-            .Scheduler
-            .MarkDirty<TValue>();
+               .GetBinding()
+               .Runtime
+               .Scheduler
+               .MarkDirty<TValue>();
     }
 
     /// <summary>
@@ -937,21 +939,21 @@ public static class LayerContextExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult PostLatest<TValue>(
         this ILayerContext context,
-        in TValue value,
+        in   TValue        value,
         BackpressurePolicy backpressure = BackpressurePolicy.RejectNew,
-        int capacity = 0)
+        int                capacity     = 0)
         where TValue : struct
     {
         return context
-            .GetBinding()
-            .Runtime
-            .Scheduler
-            .TryPost(
-                value,
-                new EventPostPolicy(
-                    PostDeliveryMode.Latest,
-                    backpressure,
-                    capacity));
+               .GetBinding()
+               .Runtime
+               .Scheduler
+               .TryPost(
+                   value,
+                   new EventPostPolicy(
+                       PostDeliveryMode.Latest,
+                       backpressure,
+                       capacity));
     }
 
     /// <summary>
@@ -978,35 +980,35 @@ public static class LayerContextExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult PostCoalesced<TValue>(
         this ILayerContext context,
-        in TValue value,
+        in   TValue        value,
         BackpressurePolicy backpressure = BackpressurePolicy.RejectNew,
-        int capacity = 0)
+        int                capacity     = 0)
         where TValue : struct
     {
         return context
-            .GetBinding()
-            .Runtime
-            .Scheduler
-            .TryPost(
-                value,
-                new EventPostPolicy(
-                    PostDeliveryMode.Coalesced,
-                    backpressure,
-                    capacity));
+               .GetBinding()
+               .Runtime
+               .Scheduler
+               .TryPost(
+                   value,
+                   new EventPostPolicy(
+                       PostDeliveryMode.Coalesced,
+                       backpressure,
+                       capacity));
     }
 
     /// <summary>
     /// 延迟指定时间后投递事件。
     /// </summary>
     public static TimerHandle SchedulePost<TValue>(
-        this ILayerContext context,
-        in TValue value,
-        float delaySeconds,
-        EventPostPolicy? expiredPostPolicy = default,
-        int repeatCount = 0,
-        float intervalSeconds = 0,
-        TimerRepeatMode? repeatMode = default,
-        TimerCatchUpPolicy? catchUpPolicy = default)
+        this ILayerContext  context,
+        in   TValue         value,
+        float               delaySeconds,
+        EventPostPolicy?    expiredPostPolicy = default,
+        int                 repeatCount       = 0,
+        float               intervalSeconds   = 0,
+        TimerRepeatMode?    repeatMode        = default,
+        TimerCatchUpPolicy? catchUpPolicy     = default)
         where TValue : struct
     {
         var binding = context.GetBinding();
@@ -1030,9 +1032,9 @@ public static class LayerContextExtensions
     /// </summary>
     public static void Delay<TValue>(
         this ILayerContext context,
-        in TValue value,
-        float ttl,
-        int contractId = 0)
+        in   TValue        value,
+        float              ttl,
+        int                contractId = 0)
         where TValue : struct
     {
         ServiceLayerBinder
@@ -1040,11 +1042,11 @@ public static class LayerContextExtensions
             .SubscribeDelay<TValue>()
             .Publish(value, ttl, contractId);
     }
-    
+
     public static PostResult PostTo<TEvent>(
         this ILayerContext context,
-        ActorId actorId,
-        in TEvent value)
+        ActorId            actorId,
+        in TEvent          value)
         where TEvent : struct
     {
         return context
@@ -1053,9 +1055,9 @@ public static class LayerContextExtensions
     }
 
     public static void PostToMany<TEvent>(
-        this ILayerContext context,
+        this ILayerContext    context,
         ReadOnlySpan<ActorId> actorIds,
-        in TEvent value)
+        in TEvent             value)
         where TEvent : struct
     {
         context
@@ -1064,7 +1066,7 @@ public static class LayerContextExtensions
     }
 
     public static void SubscribeFlow<TValue>(
-        this ILayerContext context,
+        this ILayerContext          context,
         EventHandleDelegate<TValue> handler)
         where TValue : struct
     {
@@ -1072,7 +1074,7 @@ public static class LayerContextExtensions
     }
 
     public static void SubscribeAsync<TValue>(
-        this ILayerContext context,
+        this ILayerContext               context,
         EventHandleDelegateAsync<TValue> handler)
         where TValue : struct
     {
@@ -1080,7 +1082,7 @@ public static class LayerContextExtensions
     }
 
     public static void Subscribe<TValue>(
-        this ILayerContext context,
+        this ILayerContext          context,
         EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
@@ -1088,8 +1090,8 @@ public static class LayerContextExtensions
     }
 
     public static void SubscribeParallel<TValue>(
-        this ILayerContext                context,
-        EventNotifyDelegate<TValue>       handler)
+        this ILayerContext          context,
+        EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
         var binding = context.GetBinding();
@@ -1105,7 +1107,7 @@ public static class LayerContextExtensions
     {
         return ServiceLayerBinder.RequireLayer(context.GetBinding()).OnEvent<TValue>();
     }
-    
+
     public static T GetService<T>(this ILayerContext context)
         where T : class
     {

@@ -3,7 +3,7 @@ namespace LayerBase.Actor;
 public sealed partial class ActorWorld
 {
     public DispatchResult DispatchNow<TEvent>(
-        ActorId actorId,
+        ActorId   actorId,
         in TEvent value)
         where TEvent : struct
     {

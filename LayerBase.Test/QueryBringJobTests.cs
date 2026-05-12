@@ -15,25 +15,24 @@ namespace LayerBase.Test;
 
 #region Test Components and Events
 
-
 public struct JobPositionComponent :　IComponent
 {
     public float X;
     public float Y;
 }
 
-public struct JobVelocityComponent:　IComponent
+public struct JobVelocityComponent :　IComponent
 {
     public float X;
     public float Y;
 }
 
-public struct JobAoiComponent:　IComponent
+public struct JobAoiComponent :　IComponent
 {
     public bool IsVisible;
 }
 
-public  struct JobMoveViewEvent:IActorEvent
+public struct JobMoveViewEvent : IActorEvent
 {
     public float X;
     public float Y;
@@ -78,8 +77,6 @@ internal sealed partial class JobProbeActor : IPooledActor
 
 #endregion
 
-
-
 [TestFixture]
 public class QueryBringJobTests
 {
@@ -115,8 +112,8 @@ public class QueryBringJobTests
 
         var job = new UpdatePositionJob();
         runtime.EcsWorld
-            .Query<JobPositionComponent, JobVelocityComponent>()
-            .ForEach(ref job);
+               .Query<JobPositionComponent, JobVelocityComponent>()
+               .ForEach(ref job);
 
         JobPositionComponent position = runtime.EcsWorld.Get<JobPositionComponent>(entity);
 
@@ -128,7 +125,7 @@ public class QueryBringJobTests
         IQueryJob<JobPositionComponent, JobVelocityComponent>
     {
         public void Execute(
-            Entity entity,
+            Entity                   entity,
             ref JobPositionComponent position,
             ref JobVelocityComponent velocity)
         {
@@ -161,11 +158,11 @@ public class QueryBringJobTests
 
         var job = new UpdateEnemyViewJob();
         runtime.EcsWorld
-            .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
-            .Bring<JobMoveViewEvent>()
-            .ForEach(ref job)
-            .Batch()
-            .Post();
+               .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
+               .Bring<JobMoveViewEvent>()
+               .ForEach(ref job)
+               .Batch()
+               .Post();
 
         runtime.Pump(0.016f);
 
@@ -186,11 +183,11 @@ public class QueryBringJobTests
         IProjectionJob3x1<JobPositionComponent, JobVelocityComponent, JobAoiComponent, JobMoveViewEvent>
     {
         public ProjectResult Execute(
-            Entity entity,
+            Entity                   entity,
             ref JobPositionComponent position,
             ref JobVelocityComponent velocity,
-            ref JobAoiComponent aoi,
-            ref JobMoveViewEvent moveEvent)
+            ref JobAoiComponent      aoi,
+            ref JobMoveViewEvent     moveEvent)
         {
             if (!aoi.IsVisible)
             {
@@ -230,17 +227,17 @@ public class QueryBringJobTests
 
         Entity entity = runtime.EcsWorld.Create(
             new JobPositionComponent { X = 10f, Y = 20f },
-            new JobVelocityComponent { X = 0f, Y = 0f },  // 零速度 -> Touch
+            new JobVelocityComponent { X = 0f, Y = 0f }, // 零速度 -> Touch
             new JobAoiComponent { IsVisible = true });
         runtime.EcsWorld.WithProjectedActor<JobProbeActor>(entity, keepAliveSeconds: 0.5f);
 
         var job = new UpdateEnemyViewJob();
         runtime.EcsWorld
-            .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
-            .Bring<JobMoveViewEvent>()
-            .ForEach(ref job)
-            .Batch()
-            .Post();
+               .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
+               .Bring<JobMoveViewEvent>()
+               .ForEach(ref job)
+               .Batch()
+               .Post();
 
         runtime.Pump(0.016f);
 
@@ -274,16 +271,16 @@ public class QueryBringJobTests
         Entity entity = runtime.EcsWorld.Create(
             new JobPositionComponent { X = 10f, Y = 20f },
             new JobVelocityComponent { X = 3f, Y = 4f },
-            new JobAoiComponent { IsVisible = false });  // 不可见 -> Fail
+            new JobAoiComponent { IsVisible = false }); // 不可见 -> Fail
         runtime.EcsWorld.WithProjectedActor<JobProbeActor>(entity, keepAliveSeconds: 0.5f);
 
         var job = new UpdateEnemyViewJob();
         runtime.EcsWorld
-            .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
-            .Bring<JobMoveViewEvent>()
-            .ForEach(ref job)
-            .Batch()
-            .Post();
+               .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
+               .Bring<JobMoveViewEvent>()
+               .ForEach(ref job)
+               .Batch()
+               .Post();
 
         runtime.Pump(0.016f);
 
@@ -298,7 +295,7 @@ public class QueryBringJobTests
         // 没有 Post 事件
         Assert.That(JobProbeActor.Received, Is.Empty);
     }
-    
+
     #endregion
 
     #region Helpers
@@ -306,11 +303,12 @@ public class QueryBringJobTests
     private static LayerRuntime CreateRuntime()
     {
         return LayerHub.CreateLayers()
-            .Push(new JobTestLayer())
-            .Build();
+                       .Push(new JobTestLayer())
+                       .Build();
     }
+
     #endregion
-    
+
     #region Test Layer
 
     internal partial class JobTestLayer : Layer
@@ -318,5 +316,4 @@ public class QueryBringJobTests
     }
 
     #endregion
-
 }

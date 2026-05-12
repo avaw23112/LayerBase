@@ -74,6 +74,7 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
                 if (argType != null) eventType = argType;
             }
         }
+
         if (eventType == null) return;
 
         var subscribers = FindSubscribers(context.Compilation, eventType);
@@ -115,7 +116,7 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
                 if (m.AttributeLists.Count == 0) continue;
                 var methodSymbol = semanticModel.GetDeclaredSymbol(m);
                 if (methodSymbol == null) continue;
-                
+
                 var attributes = methodSymbol.GetAttributes();
                 var subAttr = attributes.FirstOrDefault(a => a.AttributeClass?.Name.Contains("Subscribe") == true);
                 if (subAttr != null)
@@ -125,15 +126,16 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
                     {
                         var attrName = subAttr.AttributeClass!.Name;
                         var tag = attrName.Contains("Flow") ? "[Flow] " :
-                                  attrName.Contains("Async") ? "[Async] " :
-                                  attrName.Contains("Parallel") ? "[Parallel] " : "[Safe] ";
-                        
+                            attrName.Contains("Async")      ? "[Async] " :
+                            attrName.Contains("Parallel")   ? "[Parallel] " : "[Safe] ";
+
                         result.Add(new SubscriberInfo(
                             $"{tag}{methodSymbol.ContainingType.Name}.{methodSymbol.Name}",
                             methodSymbol.Locations.FirstOrDefault()!));
                     }
                 }
             }
+
             var fields = root.DescendantNodes().OfType<FieldDeclarationSyntax>();
             foreach (var f in fields)
             {
@@ -142,12 +144,13 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
                 {
                     var fieldSymbol = semanticModel.GetDeclaredSymbol(variable) as IFieldSymbol;
                     if (fieldSymbol == null) continue;
-                    
-                    var subAttr = fieldSymbol.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name.Contains("Subscribe") == true);
+
+                    var subAttr = fieldSymbol.GetAttributes()
+                                             .FirstOrDefault(a => a.AttributeClass?.Name.Contains("Subscribe") == true);
                     if (subAttr != null)
                     {
                         var handlerInterface = fieldSymbol.Type.AllInterfaces.FirstOrDefault(i =>
-                                i.Name == "IStructHandler" && i.IsGenericType);
+                            i.Name == "IStructHandler" && i.IsGenericType);
                         if (handlerInterface != null &&
                             SymbolEqualityComparer.Default.Equals(handlerInterface.TypeArguments[0], eventType))
                         {
@@ -161,6 +164,7 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
                 }
             }
         }
+
         return result;
     }
 
@@ -168,6 +172,7 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
     {
         public readonly string DisplayName;
         public readonly Location Location;
+
         public SubscriberInfo(string name, Location loc)
         {
             DisplayName = name;
@@ -175,4 +180,3 @@ public sealed class EventFlowAnalyzer : DiagnosticAnalyzer
         }
     }
 }
-

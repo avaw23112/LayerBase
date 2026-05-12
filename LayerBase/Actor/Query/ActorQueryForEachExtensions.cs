@@ -1,23 +1,23 @@
 namespace LayerBase.Actor;
 
 public delegate void ActorForEachAction<TActor, TState>(
-    TActor actor,
+    TActor     actor,
     ref TState state)
     where TActor : class, IActor;
 
 public delegate void ActorStorageForEachAction<TActor, TState>(
-    TActor?[] actors,
+    TActor?[]        actors,
     ActorSlotState[] states,
-    bool[] enabled,
-    int maxSlot,
-    ref TState state)
+    bool[]           enabled,
+    int              maxSlot,
+    ref TState       state)
     where TActor : class, IActor;
 
 public static class ActorQueryForEachExtensions
 {
     public static void ForEachActor<TActor>(
         this ActorQueryResult query,
-        Action<TActor> action)
+        Action<TActor>        action)
         where TActor : class, IActor
     {
         if (action == null)
@@ -33,8 +33,8 @@ public static class ActorQueryForEachExtensions
     }
 
     public static void ForEachActor<TActor, TState>(
-        this ActorQueryResult query,
-        ref TState state,
+        this ActorQueryResult              query,
+        ref  TState                        state,
         ActorForEachAction<TActor, TState> action)
         where TActor : class, IActor
     {
@@ -51,8 +51,8 @@ public static class ActorQueryForEachExtensions
     }
 
     public static void ForEachStorage<TActor, TState>(
-        this ActorQueryResult query,
-        ref TState state,
+        this ActorQueryResult                     query,
+        ref  TState                               state,
         ActorStorageForEachAction<TActor, TState> action)
         where TActor : class, IActor
     {

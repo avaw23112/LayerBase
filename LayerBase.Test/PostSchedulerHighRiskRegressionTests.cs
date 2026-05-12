@@ -70,7 +70,7 @@ public class RebuildEventPoliciesRegressionTests
 
         public override bool TryMergePostEvent(
             ref RebuildCoalescedEvent current,
-            in RebuildCoalescedEvent next)
+            in  RebuildCoalescedEvent next)
         {
             // current：
             //   当前 slot 中已有事件。
@@ -122,8 +122,8 @@ public class RebuildEventPoliciesRegressionTests
         var layer = new CaptureLayer();
 
         var runtime = LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                              .Push(layer)
+                              .Build();
 
         // Build 后才注册 metadata。
         // 这不是“两个 metadata 同时存在”，而是从无 metadata -> 有 metadata。

@@ -128,22 +128,23 @@ public class ProjectedActorProjectionTests
         runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 1, keepAliveSeconds: 0.5f);
 
         runtime.EcsWorld
-            .Query<ProjectionPositionComponent, ProjectionVelocityComponent>()
-            .Where(static (in Entity _, in ProjectionPositionComponent __, in ProjectionVelocityComponent velocity) =>
-                velocity.X != 0f || velocity.Y != 0f)
-            .Bring<ProjectionMoveViewEvent>()
-            .ForEach(static (
-                in Entity _,
-                ref ProjectionPositionComponent position,
-                ref ProjectionVelocityComponent velocity,
-                ref ProjectionMoveViewEvent output) =>
-            {
-                position.X += velocity.X;
-                position.Y += velocity.Y;
-                output = new ProjectionMoveViewEvent(position.X, position.Y);
-            })
-            .Batch()
-            .Post();
+               .Query<ProjectionPositionComponent, ProjectionVelocityComponent>()
+               .Where(static (in Entity                      _, in ProjectionPositionComponent __,
+                              in ProjectionVelocityComponent velocity) =>
+                   velocity.X != 0f || velocity.Y != 0f)
+               .Bring<ProjectionMoveViewEvent>()
+               .ForEach(static (
+                   in  Entity                      _,
+                   ref ProjectionPositionComponent position,
+                   ref ProjectionVelocityComponent velocity,
+                   ref ProjectionMoveViewEvent     output) =>
+               {
+                   position.X += velocity.X;
+                   position.Y += velocity.Y;
+                   output = new ProjectionMoveViewEvent(position.X, position.Y);
+               })
+               .Batch()
+               .Post();
 
         runtime.Pump(0.016f);
 
@@ -172,9 +173,10 @@ public class ProjectedActorProjectionTests
         runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 2, keepAliveSeconds: 0.01f);
 
         runtime.EcsWorld
-            .Query<ProjectionPositionComponent, ProjectionAoiComponent>()
-            .Where(static (in Entity _, in ProjectionPositionComponent __, in ProjectionAoiComponent aoi) => aoi.IsVisible)
-            .TouchProjectedActor();
+               .Query<ProjectionPositionComponent, ProjectionAoiComponent>()
+               .Where(static (in Entity _, in ProjectionPositionComponent __, in ProjectionAoiComponent aoi) =>
+                   aoi.IsVisible)
+               .TouchProjectedActor();
 
         ActorId actorId = runtime.EcsWorld.GetProjectionMeta(entity).ActorId;
         Assert.That(actorId.IsValid, Is.True);
@@ -198,17 +200,17 @@ public class ProjectedActorProjectionTests
         runtime.EcsWorld.WithProjectedActor(second, actorTypeId: 3, keepAliveSeconds: 0.5f);
 
         runtime.EcsWorld
-            .Query<ProjectionPositionComponent>()
-            .Bring<ProjectionMoveViewEvent>()
-            .ForEach(static (
-                in Entity _,
-                ref ProjectionPositionComponent position,
-                ref ProjectionMoveViewEvent output) =>
-            {
-                output = new ProjectionMoveViewEvent(position.X, position.Y);
-            })
-            .Batch()
-            .Post();
+               .Query<ProjectionPositionComponent>()
+               .Bring<ProjectionMoveViewEvent>()
+               .ForEach(static (
+                   in  Entity                      _,
+                   ref ProjectionPositionComponent position,
+                   ref ProjectionMoveViewEvent     output) =>
+               {
+                   output = new ProjectionMoveViewEvent(position.X, position.Y);
+               })
+               .Batch()
+               .Post();
 
         ActorId beforeDestroy = runtime.EcsWorld.GetProjectionMeta(second).ActorId;
         runtime.EcsWorld.Destroy(first);
@@ -221,8 +223,8 @@ public class ProjectedActorProjectionTests
     private static LayerRuntime CreateRuntime()
     {
         return LayerHub.CreateLayers()
-            .Push(new ProjectionLayer())
-            .Build();
+                       .Push(new ProjectionLayer())
+                       .Build();
     }
 
     private static void RegisterProjectionProbe(LayerRuntime runtime, int actorTypeId)
@@ -237,8 +239,8 @@ public class ProjectedActorProjectionTests
     {
         string trustedPlatformAssemblies = (string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!;
         HashSet<string> paths = trustedPlatformAssemblies
-            .Split(Path.PathSeparator)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                                .Split(Path.PathSeparator)
+                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         paths.Add(typeof(object).Assembly.Location);
         paths.Add(typeof(Enumerable).Assembly.Location);
@@ -264,8 +266,8 @@ public class ProjectedActorProjectionTests
         runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
 
         runtime.EcsWorld
-            .Query()
-            .TouchProjectedActor();
+               .Query()
+               .TouchProjectedActor();
 
         ref ProjectedActorMeta meta =
             ref runtime.EcsWorld.GetProjectionMeta(entity);
@@ -286,9 +288,9 @@ public class ProjectedActorProjectionTests
         runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
 
         runtime.EcsWorld
-            .Query()
-            .Where(static (in Entity entity) => false)
-            .TouchProjectedActor();
+               .Query()
+               .Where(static (in Entity entity) => false)
+               .TouchProjectedActor();
 
         ref ProjectedActorMeta meta =
             ref runtime.EcsWorld.GetProjectionMeta(entity);

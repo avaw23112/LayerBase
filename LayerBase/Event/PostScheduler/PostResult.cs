@@ -8,10 +8,10 @@ public readonly struct PostResult
     internal readonly bool CountsAsPending;
 
     public PostResult(
-        bool isSuccess,
-        bool countsAsPending = true,
-        PostFailureKind failureKind = PostFailureKind.None,
-        Actor.ActorPostStatus actorStatus = Actor.ActorPostStatus.Success)
+        bool                  isSuccess,
+        bool                  countsAsPending = true,
+        PostFailureKind       failureKind     = PostFailureKind.None,
+        Actor.ActorPostStatus actorStatus     = Actor.ActorPostStatus.Success)
     {
         IsSuccess = isSuccess;
         FailureKind = isSuccess ? PostFailureKind.None : failureKind;
@@ -20,12 +20,14 @@ public readonly struct PostResult
     }
 
     public static PostResult Success => new(true);
+
     public static PostResult Failure(string message, PostFailureKind failureKind = PostFailureKind.Unknown)
         => new(false, countsAsPending: true, failureKind: failureKind);
+
     public static PostResult Failure(
         Actor.ActorPostStatus actorStatus,
-        string message,
-        PostFailureKind failureKind = PostFailureKind.Unknown)
+        string                message,
+        PostFailureKind       failureKind = PostFailureKind.Unknown)
         => new(false, countsAsPending: true, failureKind: failureKind, actorStatus: actorStatus);
 
     public static PostResult Enqueued() => new(true, countsAsPending: true);

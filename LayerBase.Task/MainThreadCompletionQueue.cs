@@ -33,9 +33,9 @@ public sealed class MainThreadCompletionQueue
     }
 
     public CompletionDrainStats Drain(
-        int maxCount,
+        int                       maxCount,
         CompletionExceptionPolicy exceptionPolicy,
-        Action<Exception>? reportException)
+        Action<Exception>?        reportException)
     {
         var processed = 0;
         var errors = 0;
@@ -55,6 +55,7 @@ public sealed class MainThreadCompletionQueue
                 {
                     throw;
                 }
+
                 reportException?.Invoke(ex);
                 processed++; // Count as processed even if it failed
             }

@@ -9,8 +9,8 @@ internal readonly struct EventPostRow<TEvent>
 
     public EventPostRow(
         EventMail<TEvent>[] mails,
-        DirtySlotList dirtySlots,
-        int bucketIndex)
+        DirtySlotList       dirtySlots,
+        int                 bucketIndex)
     {
         Mails = mails;
         DirtySlots = dirtySlots;

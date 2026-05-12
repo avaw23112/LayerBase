@@ -66,7 +66,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     internal override bool TryGetActor(
-        ActorId actorId,
+        ActorId     actorId,
         out IActor? actor)
     {
         int slotIndex = actorId.SlotIndex;
@@ -94,8 +94,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     internal override bool ReleaseProjectedActor(
-        ActorId actorId,
-        ActorWorld world,
+        ActorId                     actorId,
+        ActorWorld                  world,
         ProjectedActorReleasePolicy releasePolicy)
     {
         int slotIndex = actorId.SlotIndex;
@@ -254,9 +254,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool CanPostFast(
-        int slotIndex,
+        int            slotIndex,
         ActorSlotFlags rejectMask,
-        bool rejectDisabled)
+        bool           rejectDisabled)
     {
         if ((uint)slotIndex >= (uint)_slotFlags.Length)
         {
@@ -315,25 +315,27 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             _slotFlags[slotIndex] &= ~ActorSlotFlags.Enabled;
         }
+
         _structuralDirtyFlags[slotIndex] |= ActorStructuralDirtyFlags.EnableChanged;
         RefreshPostGenerations(slotIndex);
-        
+
         var onEnable = _actors[slotIndex] as IEnable;
         var onDisable = _actors[slotIndex] as IDisable;
         if (onEnable != null && enable)
         {
             onEnable.OnEnable();
         }
-        else if(onDisable != null && !enable)
+        else if (onDisable != null && !enable)
         {
             onDisable.OnDisable();
         }
+
         return true;
     }
 
     public override DispatchResult DispatchNow<TEvent>(
-        int slotIndex,
-        int generation,
+        int       slotIndex,
+        int       generation,
         in TEvent value)
     {
         if (!IsAlive(slotIndex, generation))
@@ -362,9 +364,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     public override LBTask<TResponse> ImmediatelyAsk<TRequest, TResponse>(
-        int slotIndex,
-        int generation,
-        in TRequest request,
+        int               slotIndex,
+        int               generation,
+        in TRequest       request,
         CancellationToken cancellationToken)
     {
         if (!IsAlive(slotIndex, generation))
@@ -405,7 +407,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     public override PostResult PostCall<TRequest, TResponse>(
-        int slotIndex,
+        int                                   slotIndex,
         in ActorCallMail<TRequest, TResponse> mail)
     {
         int routeId = ActorCallRouteId<TRequest, TResponse>.Id;
@@ -495,7 +497,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     internal ActorEventColumnRuntime BuildColumnDirect<TEvent>(
-        ActorWorld world,
+        ActorWorld                            world,
         ActorBehaviourInvoker<TActor, TEvent> invoker)
         where TEvent : struct
     {
@@ -527,7 +529,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     internal ActorCallColumnRuntime BuildCallColumnDirect<TRequest, TResponse>(
-        ActorWorld world,
+        ActorWorld                                    world,
         ActorCallInvoker<TActor, TRequest, TResponse> invoker)
         where TRequest : struct
         where TResponse : struct
@@ -581,9 +583,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     internal void RegisterLifecycleInterfaces(
-        TActor actor,
-        ActorId actorId,
-        int slotIndex,
+        TActor     actor,
+        ActorId    actorId,
+        int        slotIndex,
         ActorWorld world)
     {
         ActorLifecycleHandles handles = ActorLifecycleHandles.Empty;
@@ -951,10 +953,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     private void PostAllQueuedGrow<TEvent>(
-        ActorWorld world,
-        EventPostRow<TEvent> row,
+        ActorWorld             world,
+        EventPostRow<TEvent>   row,
         EventPostState<TEvent> state,
-        in TEvent value)
+        in TEvent              value)
         where TEvent : struct
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
@@ -976,10 +978,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     private void PostAllQueuedRejectNew<TEvent>(
-        ActorWorld world,
-        EventPostRow<TEvent> row,
+        ActorWorld             world,
+        EventPostRow<TEvent>   row,
         EventPostState<TEvent> state,
-        in TEvent value)
+        in TEvent              value)
         where TEvent : struct
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
@@ -1001,10 +1003,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     private void PostAllQueuedDropOldest<TEvent>(
-        ActorWorld world,
-        EventPostRow<TEvent> row,
+        ActorWorld             world,
+        EventPostRow<TEvent>   row,
         EventPostState<TEvent> state,
-        in TEvent value)
+        in TEvent              value)
         where TEvent : struct
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
@@ -1026,10 +1028,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     private void PostAllLatest<TEvent>(
-        ActorWorld world,
-        EventPostRow<TEvent> row,
+        ActorWorld             world,
+        EventPostRow<TEvent>   row,
         EventPostState<TEvent> state,
-        in TEvent value)
+        in TEvent              value)
         where TEvent : struct
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
@@ -1050,10 +1052,10 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     private void PostAllDirty<TEvent>(
-        ActorWorld world,
-        EventPostRow<TEvent> row,
+        ActorWorld             world,
+        EventPostRow<TEvent>   row,
         EventPostState<TEvent> state,
-        in TEvent value)
+        in TEvent              value)
         where TEvent : struct
     {
         for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
@@ -1107,23 +1109,23 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private string[] GetTagNames()
     {
         return typeof(TActor)
-            .GetCustomAttributes(inherit: false)
-            .Where(static attribute => attribute.GetType().IsGenericType
-                                       && attribute.GetType().GetGenericTypeDefinition() == typeof(TagAttribute<>))
-            .Select(static attribute => attribute.GetType().GetGenericArguments()[0].Name)
-            .OrderBy(static name => name, StringComparer.Ordinal)
-            .ToArray();
+               .GetCustomAttributes(inherit: false)
+               .Where(static attribute => attribute.GetType().IsGenericType
+                                          && attribute.GetType().GetGenericTypeDefinition() == typeof(TagAttribute<>))
+               .Select(static attribute => attribute.GetType().GetGenericArguments()[0].Name)
+               .OrderBy(static name => name, StringComparer.Ordinal)
+               .ToArray();
     }
 
     private string[] GetGroupNames()
     {
         return typeof(TActor)
-            .GetCustomAttributes(inherit: false)
-            .Where(static attribute => attribute.GetType().IsGenericType
-                                       && attribute.GetType().GetGenericTypeDefinition() == typeof(GroupAttribute<>))
-            .Select(static attribute => attribute.GetType().GetGenericArguments()[0].Name)
-            .OrderBy(static name => name, StringComparer.Ordinal)
-            .ToArray();
+               .GetCustomAttributes(inherit: false)
+               .Where(static attribute => attribute.GetType().IsGenericType
+                                          && attribute.GetType().GetGenericTypeDefinition() == typeof(GroupAttribute<>))
+               .Select(static attribute => attribute.GetType().GetGenericArguments()[0].Name)
+               .OrderBy(static name => name, StringComparer.Ordinal)
+               .ToArray();
     }
 
     internal bool TryGetColumn<TEvent>(out EventColumn<TActor, TEvent>? column)
@@ -1140,4 +1142,3 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         return column != null;
     }
 }
-

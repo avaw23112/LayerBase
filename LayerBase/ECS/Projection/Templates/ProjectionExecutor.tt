@@ -131,10 +131,19 @@ internal static class ProjectionExecutor0
     }
 }
 
-<# for (var e = 2; e <= EventAmount; e++) { #>
-<# var evtG = EG(e); #>
-<# var cons = FEC(e); #>
-<# var dName = EventName(e); #>
+<#
+    for (var e = 2; e <= EventAmount; e++)
+    {
+#>
+<#
+        var evtG = EG(e);
+#>
+<#
+        var cons = FEC(e);
+#>
+<#
+        var dName = EventName(e);
+#>
 internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
 <#= cons #>
 {
@@ -142,33 +151,58 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
     {
         ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
-<# for (var i = 0; i < e; i++) { #>
+<#
+        for (var i = 0; i < e; i++)
+        {
+#>
         ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> = ProjectionBatchBuffer<TEvent<#= i #>>.Rent();
-<# } #>
+<#
+        }
+#>
 
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks<# for (var i = 0; i < e; i++) { #>,
-                    ref batch<#= i #><# } #>);
+                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks<#
+        for (var i = 0; i < e; i++)
+        {
+#>,
+                    ref batch<#= i #><#
+        }
+#>);
             }
 
-<# for (var i = 0; i < e; i++) { #>
+<#
+        for (var i = 0; i < e; i++)
+        {
+#>
             batch<#= i #>.PostTo(actorWorld);
-<# } #>
+<#
+        }
+#>
         }
         finally
         {
-<# for (var i = e - 1; i >= 0; i--) { #>
+<#
+        for (var i = e - 1; i >= 0; i--)
+        {
+#>
             batch<#= i #>.Dispose();
-<# } #>
+<#
+        }
+#>
         }
     }
 
     private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
-        ProjectionPredicate? predicate, <#= dName #><<#= evtG #>> forEach, long nowTicks<# for (var i = 0; i < e; i++) { #>,
-        ref ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #><# } #>)
+        ProjectionPredicate? predicate, <#= dName #><<#= evtG #>> forEach, long nowTicks<#
+        for (var i = 0; i < e; i++)
+        {
+#>,
+        ref ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #><#
+        }
+#>)
     {
         ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
         ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
@@ -183,11 +217,21 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
 
             ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
 
-<# for (var i = 0; i < e; i++) { #>
+<#
+        for (var i = 0; i < e; i++)
+        {
+#>
             TEvent<#= i #> e<#= i #> = default;
-<# } #>
+<#
+        }
+#>
 
-            forEach(in entity<# for (var i = 0; i < e; i++) { #>, ref e<#= i #><# } #>);
+            forEach(in entity<#
+        for (var i = 0; i < e; i++)
+        {
+#>, ref e<#= i #><#
+        }
+#>);
 
             ActorId actorId = meta.ActorId;
             if (!actorId.IsValid)
@@ -202,17 +246,31 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
                 if (!actorId.IsValid) continue;
             }
 
-<# for (var i = 0; i < e; i++) { #>
+<#
+        for (var i = 0; i < e; i++)
+        {
+#>
             batch<#= i #>.Add(actorId, in e<#= i #>);
-<# } #>
+<#
+        }
+#>
         }
     }
 }
 
-<# } #>
-<# for (var c = 1; c <= ComponentAmount; c++) { #>
-<# var compG = CG(c); #>
-<# var compGP = $"<{compG}>"; #>
+<#
+    }
+#>
+<#
+    for (var c = 1; c <= ComponentAmount; c++)
+    {
+#>
+<#
+        var compG = CG(c);
+#>
+<#
+        var compGP = $"<{compG}>";
+#>
 internal static class ProjectionExecutor<#= c #><<#= compG #>>
 {
     public static void Post<TEvent>(
@@ -299,8 +357,13 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
             }
 
             job.Execute(
-                entity<# for (var i = 0; i < c; i++) { #>,
-                ref c<#= i #><# } #>);
+                entity<#
+        for (var i = 0; i < c; i++)
+        {
+#>,
+                ref c<#= i #><#
+        }
+#>);
         }
     }
 
@@ -384,8 +447,13 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
 
             ProjectResult result =
                 job.Execute(
-                    entity<# for (var i = 0; i < c; i++) { #>,
-                    ref c<#= i #><# } #>,
+                    entity<#
+        for (var i = 0; i < c; i++)
+        {
+#>,
+                    ref c<#= i #><#
+        }
+#>,
                     ref e0);
 
             if (result == ProjectResult.Fail)
@@ -471,7 +539,12 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
 
             ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
             TEvent output = default;
-            forEach(in entity<# for (var i = 0; i < c; i++) { #>, ref c<#= i #><# } #>, ref output);
+            forEach(in entity<#
+        for (var i = 0; i < c; i++)
+        {
+#>, ref c<#= i #><#
+        }
+#>, ref output);
 
             ActorId actorId = meta.ActorId;
             if (!actorId.IsValid)
@@ -526,11 +599,22 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
     }
 }
 
-<# for (var e = 2; e <= EventAmount; e++) { #>
-<# var evtG = EG(e); #>
-<# var allG = AG(c, e); #>
-<# var cons = FEC(e); #>
-<# var dName = EventName(e); #>
+<#
+        for (var e = 2; e <= EventAmount; e++)
+        {
+#>
+<#
+            var evtG = EG(e);
+#>
+<#
+            var allG = AG(c, e);
+#>
+<#
+            var cons = FEC(e);
+#>
+<#
+            var dName = EventName(e);
+#>
 internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
 <#= cons #>
 {
@@ -538,27 +622,47 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
     {
         ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
-<# for (var i = 0; i < e; i++) { #>
+<#
+            for (var i = 0; i < e; i++)
+            {
+#>
         ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> = ProjectionBatchBuffer<TEvent<#= i #>>.Rent();
-<# } #>
+<#
+            }
+#>
 
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks<# for (var i = 0; i < e; i++) { #>,
-                    ref batch<#= i #><# } #>);
+                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks<#
+            for (var i = 0; i < e; i++)
+            {
+#>,
+                    ref batch<#= i #><#
+            }
+#>);
             }
 
-<# for (var i = 0; i < e; i++) { #>
+<#
+            for (var i = 0; i < e; i++)
+            {
+#>
             batch<#= i #>.PostTo(actorWorld);
-<# } #>
+<#
+            }
+#>
         }
         finally
         {
-<# for (var i = e - 1; i >= 0; i--) { #>
+<#
+            for (var i = e - 1; i >= 0; i--)
+            {
+#>
             batch<#= i #>.Dispose();
-<# } #>
+<#
+            }
+#>
         }
     }
 
@@ -575,10 +679,15 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
         long nowTicks =
             Stopwatch.GetTimestamp();
 
-<# for (var i = 0; i < e; i++) { #>
+<#
+            for (var i = 0; i < e; i++)
+            {
+#>
         ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> =
             ProjectionBatchBuffer<TEvent<#= i #>>.Rent();
-<# } #>
+<#
+            }
+#>
 
         try
         {
@@ -590,20 +699,35 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
                     ref chunk,
                     predicate,
                     ref job,
-                    nowTicks<# for (var i = 0; i < e; i++) { #>,
-                    ref batch<#= i #><# } #>);
+                    nowTicks<#
+            for (var i = 0; i < e; i++)
+            {
+#>,
+                    ref batch<#= i #><#
+            }
+#>);
             }
 
-<# for (var i = 0; i < e; i++) { #>
+<#
+            for (var i = 0; i < e; i++)
+            {
+#>
             batch<#= i #>.PostTo(
                 actorWorld);
-<# } #>
+<#
+            }
+#>
         }
         finally
         {
-<# for (var i = e - 1; i >= 0; i--) { #>
+<#
+            for (var i = e - 1; i >= 0; i--)
+            {
+#>
             batch<#= i #>.Dispose();
-<# } #>
+<#
+            }
+#>
         }
     }
 
@@ -614,8 +738,13 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
         ref Chunk chunk,
         ProjectionPredicate<#= compGP #>? predicate,
         ref TJob job,
-        long nowTicks<# for (var i = 0; i < e; i++) { #>,
-        ref ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #><# } #>)
+        long nowTicks<#
+            for (var i = 0; i < e; i++)
+            {
+#>,
+        ref ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #><#
+            }
+#>)
         where TJob : struct, IProjectionJob<#= c #>x<#= e #><<#= allG #>>
     {
 <#= FirstComponentRefs(c) #>
@@ -641,16 +770,31 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
                 continue;
             }
 
-<# for (var i = 0; i < e; i++) { #>
+<#
+            for (var i = 0; i < e; i++)
+            {
+#>
             TEvent<#= i #> e<#= i #> =
                 default;
-<# } #>
+<#
+            }
+#>
 
             ProjectResult result =
                 job.Execute(
-                    entity<# for (var i = 0; i < c; i++) { #>,
-                    ref c<#= i #><# } #><# for (var i = 0; i < e; i++) { #>,
-                    ref e<#= i #><# } #>);
+                    entity<#
+            for (var i = 0; i < c; i++)
+            {
+#>,
+                    ref c<#= i #><#
+            }
+#><#
+            for (var i = 0; i < e; i++)
+            {
+#>,
+                    ref e<#= i #><#
+            }
+#>);
 
             if (result == ProjectResult.Fail)
             {
@@ -701,17 +845,27 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
                 continue;
             }
 
-<# for (var i = 0; i < e; i++) { #>
+<#
+            for (var i = 0; i < e; i++)
+            {
+#>
             batch<#= i #>.Add(
                 actorId,
                 in e<#= i #>);
-<# } #>
+<#
+            }
+#>
         }
     }
 
     private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
-        ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach, long nowTicks<# for (var i = 0; i < e; i++) { #>,
-        ref ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #><# } #>)
+        ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach, long nowTicks<#
+            for (var i = 0; i < e; i++)
+            {
+#>,
+        ref ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #><#
+            }
+#>)
     {
 <#= FirstComponentRefs(c) #>
         ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
@@ -728,9 +882,14 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
 
             ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
 
-<# for (var i = 0; i < e; i++) { #>
+<#
+            for (var i = 0; i < e; i++)
+            {
+#>
             TEvent<#= i #> e<#= i #> = default;
-<# } #>
+<#
+            }
+#>
 
             forEach(<#= ForEachArgs(c, e) #>);
 
@@ -747,12 +906,21 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
                 if (!actorId.IsValid) continue;
             }
 
-<# for (var i = 0; i < e; i++) { #>
+<#
+            for (var i = 0; i < e; i++)
+            {
+#>
             batch<#= i #>.Add(actorId, in e<#= i #>);
-<# } #>
+<#
+            }
+#>
         }
     }
 }
 
-<# } #>
-<# } #>
+<#
+        }
+#>
+<#
+    }
+#>

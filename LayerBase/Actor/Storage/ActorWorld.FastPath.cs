@@ -29,10 +29,10 @@ public sealed partial class ActorWorld
     }
 
     internal void RegisterEventPostRow<TEvent>(
-        int archetypeId,
-        EventMail<TEvent>[] mails,
-        DirtySlotList dirtySlots,
-        int bucketIndex,
+        int                        archetypeId,
+        EventMail<TEvent>[]        mails,
+        DirtySlotList              dirtySlots,
+        int                        bucketIndex,
         ActorEventPostPlan<TEvent> plan)
         where TEvent : struct
     {
@@ -46,10 +46,10 @@ public sealed partial class ActorWorld
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool TryGetPhysicalRow<TEvent>(
-        ActorId actorId,
-        EventPostState<TEvent> state,
+        ActorId                  actorId,
+        EventPostState<TEvent>   state,
         out EventPostRow<TEvent> row,
-        out int slotIndex)
+        out int                  slotIndex)
         where TEvent : struct
     {
         EventPostRow<TEvent>[] rows = state.RowsByArchetype;
@@ -68,10 +68,10 @@ public sealed partial class ActorWorld
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool TryGetPhysicalRowWithGeneration<TEvent>(
-        ActorId actorId,
-        EventPostState<TEvent> state,
+        ActorId                  actorId,
+        EventPostState<TEvent>   state,
         out EventPostRow<TEvent> row,
-        out int slotIndex)
+        out int                  slotIndex)
         where TEvent : struct
     {
         if (!TryGetPhysicalRow(actorId, state, out row, out slotIndex))
@@ -95,13 +95,13 @@ public sealed partial class ActorWorld
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal PostResult PostQueuedGrowCore<TEvent>(
-        int slotIndex,
-        in TEvent value,
-        EventMail<TEvent>[] mails,
-        DirtySlotList dirtySlots,
-        int bucketIndex,
+        int                   slotIndex,
+        in TEvent             value,
+        EventMail<TEvent>[]   mails,
+        DirtySlotList         dirtySlots,
+        int                   bucketIndex,
         EventMailPool<TEvent> pool,
-        ActorMailOptions options)
+        ActorMailOptions      options)
         where TEvent : struct
     {
         ref EventMail<TEvent> mail = ref mails[slotIndex];
@@ -114,19 +114,20 @@ public sealed partial class ActorWorld
                 return growFailure;
             }
         }
+
         WriteQueued(ref mail, in value, dirtySlots, slotIndex, bucketIndex, pool);
         return PostResult.Success;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal PostResult PostQueuedRejectNewCore<TEvent>(
-        int slotIndex,
-        in TEvent value,
-        EventMail<TEvent>[] mails,
-        DirtySlotList dirtySlots,
-        int bucketIndex,
+        int                   slotIndex,
+        in TEvent             value,
+        EventMail<TEvent>[]   mails,
+        DirtySlotList         dirtySlots,
+        int                   bucketIndex,
         EventMailPool<TEvent> pool,
-        ActorMailOptions options)
+        ActorMailOptions      options)
         where TEvent : struct
     {
         ref EventMail<TEvent> mail = ref mails[slotIndex];
@@ -145,13 +146,13 @@ public sealed partial class ActorWorld
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal PostResult PostQueuedDropOldestCore<TEvent>(
-        int slotIndex,
-        in TEvent value,
-        EventMail<TEvent>[] mails,
-        DirtySlotList dirtySlots,
-        int bucketIndex,
+        int                   slotIndex,
+        in TEvent             value,
+        EventMail<TEvent>[]   mails,
+        DirtySlotList         dirtySlots,
+        int                   bucketIndex,
         EventMailPool<TEvent> pool,
-        ActorMailOptions options)
+        ActorMailOptions      options)
         where TEvent : struct
     {
         ref EventMail<TEvent> mail = ref mails[slotIndex];
@@ -183,11 +184,11 @@ public sealed partial class ActorWorld
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal PostResult PostLatestCore<TEvent>(
-        int slotIndex,
-        in TEvent value,
-        EventMail<TEvent>[] mails,
-        DirtySlotList dirtySlots,
-        int bucketIndex,
+        int                   slotIndex,
+        in TEvent             value,
+        EventMail<TEvent>[]   mails,
+        DirtySlotList         dirtySlots,
+        int                   bucketIndex,
         EventMailPool<TEvent> pool)
         where TEvent : struct
     {
@@ -226,11 +227,11 @@ public sealed partial class ActorWorld
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal PostResult PostDirtyCore<TEvent>(
-        int slotIndex,
-        in TEvent value,
-        EventMail<TEvent>[] mails,
-        DirtySlotList dirtySlots,
-        int bucketIndex,
+        int                   slotIndex,
+        in TEvent             value,
+        EventMail<TEvent>[]   mails,
+        DirtySlotList         dirtySlots,
+        int                   bucketIndex,
         EventMailPool<TEvent> pool)
         where TEvent : struct
     {
@@ -262,7 +263,8 @@ public sealed partial class ActorWorld
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void EnsureMailAllocated<TEvent>(ref EventMail<TEvent> mail, EventMailPool<TEvent> pool, int initialCapacity)
+    private static void EnsureMailAllocated<TEvent>(ref EventMail<TEvent> mail, EventMailPool<TEvent> pool,
+                                                    int                   initialCapacity)
         where TEvent : struct
     {
         if (mail.Buffer != null)
@@ -283,10 +285,10 @@ public sealed partial class ActorWorld
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void WriteQueued<TEvent>(
         ref EventMail<TEvent> mail,
-        in TEvent value,
-        DirtySlotList dirtySlots,
-        int slotIndex,
-        int bucketIndex,
+        in  TEvent            value,
+        DirtySlotList         dirtySlots,
+        int                   slotIndex,
+        int                   bucketIndex,
         EventMailPool<TEvent> pool)
         where TEvent : struct
     {
@@ -309,9 +311,9 @@ public sealed partial class ActorWorld
 
     private static PostResult HandleGrowFailure<TEvent>(
         ref EventMail<TEvent> mail,
-        in TEvent value,
+        in  TEvent            value,
         EventMailPool<TEvent> pool,
-        ActorMailOptions options)
+        ActorMailOptions      options)
         where TEvent : struct
     {
         switch (options.GrowFailurePolicy)
@@ -386,7 +388,7 @@ public sealed partial class ActorWorld
 
     private static void EnsureRowsCapacity<TEvent>(
         ref EventPostRow<TEvent>[] rows,
-        int archetypeId)
+        int                        archetypeId)
         where TEvent : struct
     {
         if ((uint)archetypeId < (uint)rows.Length)

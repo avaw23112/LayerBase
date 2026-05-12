@@ -17,11 +17,11 @@ public class ResetAndLimitTests
     {
         var layer = new TestLayer();
         var runtime = LayerHub.CreateLayers().Push(layer).Build();
-        
+
         LayerHub.Pump(0.1f);
-        
+
         LayerHub.Reset();
-        
+
         var topology = runtime.GetTopologyMarkdown();
         Assert.That(topology, Does.Contain("No layers built."), "Topology should be cleared after Reset");
     }
@@ -37,19 +37,19 @@ public class ResetAndLimitTests
             layers.Add(layer);
             builder.Push(layer);
         }
-        
+
         Assert.DoesNotThrow(() => builder.Build());
         Assert.That(layers.Select(layer => layer.RouteIndex), Is.EqualTo(Enumerable.Range(0, 64)),
             "The 64-layer bitmap route space must be assigned exactly once during Build.");
-        
+
         LayerHub.Reset();
         var builder2 = LayerHub.CreateLayers();
         for (int i = 0; i < 64; i++)
         {
             builder2.Push(new TestLayer());
         }
-        
-        Assert.Throws<InvalidOperationException>(() => builder2.Push(new TestLayer()), 
+
+        Assert.Throws<InvalidOperationException>(() => builder2.Push(new TestLayer()),
             "Should throw exception when exceeding 64 layers");
     }
 

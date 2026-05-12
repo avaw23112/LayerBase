@@ -21,7 +21,7 @@ public partial struct Chunk
         {
             sets.AppendLine($"Unsafe.Add(ref t{i}FirstElement, index) = t{i}Component;");
         }
-    #>
+#>
 
     public void Set<<#= generics #>>(int index, <#= parameters #>)
     {
@@ -30,5 +30,5 @@ public partial struct Chunk
     }
     <#
     }
-    #>
+#>
 }

@@ -1,15 +1,13 @@
-﻿
-
-using System;
+﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
 using Arch.Core;
 using Arch.Core.Utils;
 
 namespace Arch.Core;
+
 public partial struct QueryDescription
 {
-    
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1>()
     {
@@ -17,7 +15,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2>()
     {
@@ -25,7 +23,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3>()
     {
@@ -33,7 +31,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4>()
     {
@@ -41,7 +39,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5>()
     {
@@ -49,7 +47,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6>()
     {
@@ -57,7 +55,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7>()
     {
@@ -65,7 +63,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8>()
     {
@@ -73,7 +71,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>()
     {
@@ -81,7 +79,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>()
     {
@@ -89,7 +87,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>()
     {
@@ -97,7 +95,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>()
     {
@@ -105,7 +103,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>()
     {
@@ -113,7 +111,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>()
     {
@@ -121,7 +119,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>()
     {
@@ -129,7 +127,7 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
     public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>()
     {
@@ -137,69 +135,86 @@ public partial struct QueryDescription
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
-    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>()
+    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16,
+        T17>()
     {
         None = Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>.Signature;
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
-    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>()
+    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17,
+        T18>()
     {
         None = Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>.Signature;
         Build();
         return ref this;
     }
-    
+
     [UnscopedRef]
-    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>()
+    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17,
+        T18, T19>()
     {
-        None = Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>.Signature;
+        None = Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>
+            .Signature;
         Build();
         return ref this;
-    }
-    
-    [UnscopedRef]
-    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>()
-    {
-        None = Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>.Signature;
-        Build();
-        return ref this;
-    }
-    
-    [UnscopedRef]
-    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>()
-    {
-        None = Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>.Signature;
-        Build();
-        return ref this;
-    }
-    
-    [UnscopedRef]
-    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>()
-    {
-        None = Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>.Signature;
-        Build();
-        return ref this;
-    }
-    
-    [UnscopedRef]
-    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>()
-    {
-        None = Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>.Signature;
-        Build();
-        return ref this;
-    }
-    
-    [UnscopedRef]
-    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>()
-    {
-        None = Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>.Signature;
-        Build();
-        return ref this;
-    }
     }
 
+    [UnscopedRef]
+    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17,
+        T18, T19, T20>()
+    {
+        None = Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>
+            .Signature;
+        Build();
+        return ref this;
+    }
+
+    [UnscopedRef]
+    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17,
+        T18, T19, T20, T21>()
+    {
+        None =
+            Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20,
+                T21>.Signature;
+        Build();
+        return ref this;
+    }
+
+    [UnscopedRef]
+    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17,
+        T18, T19, T20, T21, T22>()
+    {
+        None =
+            Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21
+                , T22>.Signature;
+        Build();
+        return ref this;
+    }
+
+    [UnscopedRef]
+    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17,
+        T18, T19, T20, T21, T22, T23>()
+    {
+        None =
+            Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21
+                , T22, T23>.Signature;
+        Build();
+        return ref this;
+    }
+
+    [UnscopedRef]
+    public ref QueryDescription WithNone<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17,
+        T18, T19, T20, T21, T22, T23, T24>()
+    {
+        None =
+            Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21
+                , T22, T23, T24>.Signature;
+        Build();
+        return ref this;
+    }
+}

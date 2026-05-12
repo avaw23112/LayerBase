@@ -160,4 +160,3 @@ public class EventPipelineTests
         public int Value;
     }
 }
-

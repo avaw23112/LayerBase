@@ -13,10 +13,10 @@ public readonly struct PostTypePlan
     public readonly bool IsRegistered;
 
     public PostTypePlan(
-        int eventTypeId,
-        PostDeliveryMode mode,
+        int                eventTypeId,
+        PostDeliveryMode   mode,
         BackpressurePolicy backpressure,
-        int maxPending,
+        int                maxPending,
         BackpressurePolicy defaultBackpressure,
         MergeFailurePolicy mergeFailure = MergeFailurePolicy.Reject)
     {
@@ -51,7 +51,6 @@ public readonly struct PostTypePlan
 
 public sealed class PostBitmap
 {
-
     private ulong[] _specialMask = Array.Empty<ulong>();
     private ulong[] _dirtyMask = Array.Empty<ulong>();
     private ulong[] _latestMask = Array.Empty<ulong>();

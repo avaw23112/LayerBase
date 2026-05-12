@@ -35,4 +35,3 @@ public sealed class FromAttribute : Attribute
     public Type OwnerType { get; }
     public string LocalKey { get; }
 }
-

@@ -15,7 +15,7 @@ public partial struct QueryDescription
     for (var index = 2; index <= Amount; index++)
     {
         var generics = AppendGenerics(index);
-    #>
+#>
 
     [UnscopedRef]
     public ref QueryDescription WithAny<<#= generics #>>()
@@ -26,6 +26,6 @@ public partial struct QueryDescription
     }
     <#
     }
-    #>
+#>
 }
 

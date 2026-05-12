@@ -1,17 +1,16 @@
-
-
 using System;
 using System.Runtime.CompilerServices;
 using CommunityToolkit.HighPerformance;
 using Arch.Core.Utils;
 
 namespace Arch.Core;
+
 public partial class World
 {
-    
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default)
+    public void Add<T0, T1>(in QueryDescription queryDescription, in T0? t0Component = default,
+                            in T1?              t1Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 3)];
@@ -20,7 +19,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1>())
             {
                 continue;
             }
@@ -49,21 +48,21 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
             OnComponentAdded<T0>(archetype);
             OnComponentAdded<T1>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default)
+    public void Add<T0, T1, T2>(in QueryDescription queryDescription,      in T0? t0Component = default,
+                                in T1?              t1Component = default, in T2? t2Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 4)];
@@ -72,7 +71,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2>())
             {
                 continue;
             }
@@ -102,22 +101,23 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
             OnComponentAdded<T0>(archetype);
             OnComponentAdded<T1>(archetype);
             OnComponentAdded<T2>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default)
+    public void Add<T0, T1, T2, T3>(in QueryDescription queryDescription,      in T0? t0Component = default,
+                                    in T1?              t1Component = default, in T2? t2Component = default,
+                                    in T3?              t3Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 5)];
@@ -126,7 +126,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3>())
             {
                 continue;
             }
@@ -157,7 +157,8 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -165,15 +166,16 @@ public partial class World
             OnComponentAdded<T1>(archetype);
             OnComponentAdded<T2>(archetype);
             OnComponentAdded<T3>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default)
+    public void Add<T0, T1, T2, T3, T4>(in QueryDescription queryDescription,      in T0? t0Component = default,
+                                        in T1?              t1Component = default, in T2? t2Component = default,
+                                        in T3?              t3Component = default, in T4? t4Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 6)];
@@ -182,7 +184,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4>())
             {
                 continue;
             }
@@ -214,7 +216,8 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -223,15 +226,17 @@ public partial class World
             OnComponentAdded<T2>(archetype);
             OnComponentAdded<T3>(archetype);
             OnComponentAdded<T4>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5>(in QueryDescription queryDescription,      in T0? t0Component = default,
+                                            in T1?              t1Component = default, in T2? t2Component = default,
+                                            in T3?              t3Component = default, in T4? t4Component = default,
+                                            in T5?              t5Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 7)];
@@ -240,7 +245,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5>())
             {
                 continue;
             }
@@ -273,7 +278,8 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -283,15 +289,17 @@ public partial class World
             OnComponentAdded<T3>(archetype);
             OnComponentAdded<T4>(archetype);
             OnComponentAdded<T5>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6>(in QueryDescription queryDescription,      in T0? t0Component = default,
+                                                in T1?              t1Component = default, in T2? t2Component = default,
+                                                in T3?              t3Component = default, in T4? t4Component = default,
+                                                in T5?              t5Component = default, in T6? t6Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 8)];
@@ -300,7 +308,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6>())
             {
                 continue;
             }
@@ -334,7 +342,8 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -345,15 +354,18 @@ public partial class World
             OnComponentAdded<T4>(archetype);
             OnComponentAdded<T5>(archetype);
             OnComponentAdded<T6>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7>(in QueryDescription queryDescription, in T0? t0Component = default,
+                                                    in T1? t1Component = default, in T2? t2Component = default,
+                                                    in T3? t3Component = default, in T4? t4Component = default,
+                                                    in T5? t5Component = default, in T6? t6Component = default,
+                                                    in T7? t7Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 9)];
@@ -362,7 +374,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7>())
             {
                 continue;
             }
@@ -383,7 +395,8 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7>.Signature);
+                var newSignature =
+                    Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -397,7 +410,8 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -409,15 +423,19 @@ public partial class World
             OnComponentAdded<T5>(archetype);
             OnComponentAdded<T6>(archetype);
             OnComponentAdded<T7>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8>(in QueryDescription queryDescription,
+                                                        in T0? t0Component = default, in T1? t1Component = default,
+                                                        in T2? t2Component = default, in T3? t3Component = default,
+                                                        in T4? t4Component = default, in T5? t5Component = default,
+                                                        in T6? t6Component = default, in T7? t7Component = default,
+                                                        in T8? t8Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 10)];
@@ -426,7 +444,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8>())
             {
                 continue;
             }
@@ -448,7 +466,8 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -462,7 +481,8 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -475,15 +495,19 @@ public partial class World
             OnComponentAdded<T6>(archetype);
             OnComponentAdded<T7>(archetype);
             OnComponentAdded<T8>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(in QueryDescription queryDescription,
+                                                            in T0? t0Component = default, in T1? t1Component = default,
+                                                            in T2? t2Component = default, in T3? t3Component = default,
+                                                            in T4? t4Component = default, in T5? t5Component = default,
+                                                            in T6? t6Component = default, in T7? t7Component = default,
+                                                            in T8? t8Component = default, in T9? t9Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 11)];
@@ -492,7 +516,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>())
             {
                 continue;
             }
@@ -515,7 +539,8 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -529,7 +554,9 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -543,15 +570,25 @@ public partial class World
             OnComponentAdded<T7>(archetype);
             OnComponentAdded<T8>(archetype);
             OnComponentAdded<T9>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(in QueryDescription queryDescription,
+                                                                 in T0?              t0Component  = default,
+                                                                 in T1?              t1Component  = default,
+                                                                 in T2?              t2Component  = default,
+                                                                 in T3?              t3Component  = default,
+                                                                 in T4?              t4Component  = default,
+                                                                 in T5?              t5Component  = default,
+                                                                 in T6?              t6Component  = default,
+                                                                 in T7?              t7Component  = default,
+                                                                 in T8?              t8Component  = default,
+                                                                 in T9?              t9Component  = default,
+                                                                 in T10?             t10Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 12)];
@@ -560,7 +597,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>())
             {
                 continue;
             }
@@ -584,7 +621,8 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -598,7 +636,9 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -613,15 +653,26 @@ public partial class World
             OnComponentAdded<T8>(archetype);
             OnComponentAdded<T9>(archetype);
             OnComponentAdded<T10>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(in QueryDescription queryDescription,
+                                                                      in T0?              t0Component  = default,
+                                                                      in T1?              t1Component  = default,
+                                                                      in T2?              t2Component  = default,
+                                                                      in T3?              t3Component  = default,
+                                                                      in T4?              t4Component  = default,
+                                                                      in T5?              t5Component  = default,
+                                                                      in T6?              t6Component  = default,
+                                                                      in T7?              t7Component  = default,
+                                                                      in T8?              t8Component  = default,
+                                                                      in T9?              t9Component  = default,
+                                                                      in T10?             t10Component = default,
+                                                                      in T11?             t11Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 13)];
@@ -630,7 +681,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>())
             {
                 continue;
             }
@@ -655,7 +706,8 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -669,7 +721,9 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -685,15 +739,19 @@ public partial class World
             OnComponentAdded<T9>(archetype);
             OnComponentAdded<T10>(archetype);
             OnComponentAdded<T11>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(
+        in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+        in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+        in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+        in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+        in T11?             t11Component = default, in T12? t12Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 14)];
@@ -702,7 +760,7 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>())
+            if (archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>())
             {
                 continue;
             }
@@ -728,7 +786,8 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -742,7 +801,9 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -759,15 +820,19 @@ public partial class World
             OnComponentAdded<T10>(archetype);
             OnComponentAdded<T11>(archetype);
             OnComponentAdded<T12>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(
+        in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+        in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+        in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+        in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+        in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 15)];
@@ -776,7 +841,8 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>())
+            if (archetype.EntityCount == 0 ||
+                archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>())
             {
                 continue;
             }
@@ -803,7 +869,8 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -817,7 +884,9 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -835,15 +904,20 @@ public partial class World
             OnComponentAdded<T11>(archetype);
             OnComponentAdded<T12>(archetype);
             OnComponentAdded<T13>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(
+        in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+        in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+        in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+        in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+        in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default,
+        in T14?             t14Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 16)];
@@ -852,7 +926,8 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>())
+            if (archetype.EntityCount == 0 ||
+                archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>())
             {
                 continue;
             }
@@ -880,7 +955,8 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -894,7 +970,9 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -913,15 +991,20 @@ public partial class World
             OnComponentAdded<T12>(archetype);
             OnComponentAdded<T13>(archetype);
             OnComponentAdded<T14>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default,in T15? t15Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(
+        in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+        in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+        in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+        in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+        in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default,
+        in T14?             t14Component = default, in T15? t15Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 17)];
@@ -930,7 +1013,8 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>())
+            if (archetype.EntityCount == 0 ||
+                archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>())
             {
                 continue;
             }
@@ -959,7 +1043,8 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -973,7 +1058,10 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component,in t15Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component,
+                in t15Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -993,15 +1081,20 @@ public partial class World
             OnComponentAdded<T13>(archetype);
             OnComponentAdded<T14>(archetype);
             OnComponentAdded<T15>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default,in T15? t15Component = default,in T16? t16Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(
+        in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+        in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+        in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+        in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+        in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default,
+        in T14?             t14Component = default, in T15? t15Component = default, in T16? t16Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 18)];
@@ -1010,7 +1103,8 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>())
+            if (archetype.EntityCount == 0 ||
+                archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>())
             {
                 continue;
             }
@@ -1040,7 +1134,8 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -1054,7 +1149,10 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component,in t15Component,in t16Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component,
+                in t15Component, in t16Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -1075,15 +1173,21 @@ public partial class World
             OnComponentAdded<T14>(archetype);
             OnComponentAdded<T15>(archetype);
             OnComponentAdded<T16>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default,in T15? t15Component = default,in T16? t16Component = default,in T17? t17Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>(
+        in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+        in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+        in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+        in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+        in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default,
+        in T14?             t14Component = default, in T15? t15Component = default, in T16? t16Component = default,
+        in T17?             t17Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 19)];
@@ -1092,7 +1196,8 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>())
+            if (archetype.EntityCount == 0 ||
+                archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>())
             {
                 continue;
             }
@@ -1123,7 +1228,9 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>
+                        .Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -1137,7 +1244,10 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component,in t15Component,in t16Component,in t17Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component,
+                in t15Component, in t16Component, in t17Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -1159,15 +1269,21 @@ public partial class World
             OnComponentAdded<T15>(archetype);
             OnComponentAdded<T16>(archetype);
             OnComponentAdded<T17>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default,in T15? t15Component = default,in T16? t16Component = default,in T17? t17Component = default,in T18? t18Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>(
+        in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+        in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+        in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+        in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+        in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default,
+        in T14?             t14Component = default, in T15? t15Component = default, in T16? t16Component = default,
+        in T17?             t17Component = default, in T18? t18Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 20)];
@@ -1176,7 +1292,8 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>())
+            if (archetype.EntityCount == 0 || archetype
+                    .Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>())
             {
                 continue;
             }
@@ -1208,7 +1325,9 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>
+                        .Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -1222,7 +1341,10 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component,in t15Component,in t16Component,in t17Component,in t18Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component,
+                in t15Component, in t16Component, in t17Component, in t18Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -1245,15 +1367,21 @@ public partial class World
             OnComponentAdded<T16>(archetype);
             OnComponentAdded<T17>(archetype);
             OnComponentAdded<T18>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default,in T15? t15Component = default,in T16? t16Component = default,in T17? t17Component = default,in T18? t18Component = default,in T19? t19Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>(
+        in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+        in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+        in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+        in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+        in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default,
+        in T14?             t14Component = default, in T15? t15Component = default, in T16? t16Component = default,
+        in T17?             t17Component = default, in T18? t18Component = default, in T19? t19Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 21)];
@@ -1262,7 +1390,8 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>())
+            if (archetype.EntityCount == 0 || archetype
+                    .Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>())
             {
                 continue;
             }
@@ -1295,7 +1424,9 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>
+                        .Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -1309,7 +1440,10 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component,in t15Component,in t16Component,in t17Component,in t18Component,in t19Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component,
+                in t15Component, in t16Component, in t17Component, in t18Component, in t19Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -1333,15 +1467,22 @@ public partial class World
             OnComponentAdded<T17>(archetype);
             OnComponentAdded<T18>(archetype);
             OnComponentAdded<T19>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default,in T15? t15Component = default,in T16? t16Component = default,in T17? t17Component = default,in T18? t18Component = default,in T19? t19Component = default,in T20? t20Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>(
+        in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+        in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+        in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+        in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+        in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default,
+        in T14?             t14Component = default, in T15? t15Component = default, in T16? t16Component = default,
+        in T17?             t17Component = default, in T18? t18Component = default, in T19? t19Component = default,
+        in T20?             t20Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 22)];
@@ -1350,7 +1491,9 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>())
+            if (archetype.EntityCount == 0 || archetype
+                    .Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+                        T20>())
             {
                 continue;
             }
@@ -1384,7 +1527,9 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+                        T20>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -1398,7 +1543,10 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component,in t15Component,in t16Component,in t17Component,in t18Component,in t19Component,in t20Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component,
+                in t15Component, in t16Component, in t17Component, in t18Component, in t19Component, in t20Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -1423,15 +1571,22 @@ public partial class World
             OnComponentAdded<T18>(archetype);
             OnComponentAdded<T19>(archetype);
             OnComponentAdded<T20>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default,in T15? t15Component = default,in T16? t16Component = default,in T17? t17Component = default,in T18? t18Component = default,in T19? t19Component = default,in T20? t20Component = default,in T21? t21Component = default)
+    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>(
+        in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+        in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+        in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+        in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+        in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default,
+        in T14?             t14Component = default, in T15? t15Component = default, in T16? t16Component = default,
+        in T17?             t17Component = default, in T18? t18Component = default, in T19? t19Component = default,
+        in T20?             t20Component = default, in T21? t21Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 23)];
@@ -1440,7 +1595,9 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>())
+            if (archetype.EntityCount == 0 || archetype
+                    .Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20,
+                        T21>())
             {
                 continue;
             }
@@ -1475,7 +1632,9 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+                        T20, T21>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -1489,7 +1648,11 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component,in t15Component,in t16Component,in t17Component,in t18Component,in t19Component,in t20Component,in t21Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component,
+                in t15Component, in t16Component, in t17Component, in t18Component, in t19Component, in t20Component,
+                in t21Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -1515,15 +1678,23 @@ public partial class World
             OnComponentAdded<T19>(archetype);
             OnComponentAdded<T20>(archetype);
             OnComponentAdded<T21>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default,in T15? t15Component = default,in T16? t16Component = default,in T17? t17Component = default,in T18? t18Component = default,in T19? t19Component = default,in T20? t20Component = default,in T21? t21Component = default,in T22? t22Component = default)
+    public void
+        Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>(
+            in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+            in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+            in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+            in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+            in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default,
+            in T14?             t14Component = default, in T15? t15Component = default, in T16? t16Component = default,
+            in T17?             t17Component = default, in T18? t18Component = default, in T19? t19Component = default,
+            in T20?             t20Component = default, in T21? t21Component = default, in T22? t22Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 24)];
@@ -1532,7 +1703,9 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>())
+            if (archetype.EntityCount == 0 || archetype
+                    .Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20,
+                        T21, T22>())
             {
                 continue;
             }
@@ -1568,7 +1741,9 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+                        T20, T21, T22>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -1582,7 +1757,11 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component,in t15Component,in t16Component,in t17Component,in t18Component,in t19Component,in t20Component,in t21Component,in t22Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component,
+                in t15Component, in t16Component, in t17Component, in t18Component, in t19Component, in t20Component,
+                in t21Component, in t22Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -1609,15 +1788,25 @@ public partial class World
             OnComponentAdded<T20>(archetype);
             OnComponentAdded<T21>(archetype);
             OnComponentAdded<T22>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default,in T15? t15Component = default,in T16? t16Component = default,in T17? t17Component = default,in T18? t18Component = default,in T19? t19Component = default,in T20? t20Component = default,in T21? t21Component = default,in T22? t22Component = default,in T23? t23Component = default)
+    public void
+        Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22,
+            T23>(
+            in QueryDescription queryDescription,       in T0?  t0Component  = default, in T1?  t1Component  = default,
+            in T2?              t2Component  = default, in T3?  t3Component  = default, in T4?  t4Component  = default,
+            in T5?              t5Component  = default, in T6?  t6Component  = default, in T7?  t7Component  = default,
+            in T8?              t8Component  = default, in T9?  t9Component  = default, in T10? t10Component = default,
+            in T11?             t11Component = default, in T12? t12Component = default, in T13? t13Component = default,
+            in T14?             t14Component = default, in T15? t15Component = default, in T16? t16Component = default,
+            in T17?             t17Component = default, in T18? t18Component = default, in T19? t19Component = default,
+            in T20?             t20Component = default, in T21? t21Component = default, in T22? t22Component = default,
+            in T23?             t23Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 25)];
@@ -1626,7 +1815,9 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>())
+            if (archetype.EntityCount == 0 || archetype
+                    .Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20,
+                        T21, T22, T23>())
             {
                 continue;
             }
@@ -1663,7 +1854,9 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+                        T20, T21, T22, T23>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -1677,7 +1870,11 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component,in t15Component,in t16Component,in t17Component,in t18Component,in t19Component,in t20Component,in t21Component,in t22Component,in t23Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component,
+                in t15Component, in t16Component, in t17Component, in t18Component, in t19Component, in t20Component,
+                in t21Component, in t22Component, in t23Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -1705,15 +1902,33 @@ public partial class World
             OnComponentAdded<T21>(archetype);
             OnComponentAdded<T22>(archetype);
             OnComponentAdded<T23>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    
+
     [SkipLocalsInit]
     [StructuralChange]
-    public void Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>(in QueryDescription queryDescription, in T0? t0Component = default,in T1? t1Component = default,in T2? t2Component = default,in T3? t3Component = default,in T4? t4Component = default,in T5? t5Component = default,in T6? t6Component = default,in T7? t7Component = default,in T8? t8Component = default,in T9? t9Component = default,in T10? t10Component = default,in T11? t11Component = default,in T12? t12Component = default,in T13? t13Component = default,in T14? t14Component = default,in T15? t15Component = default,in T16? t16Component = default,in T17? t17Component = default,in T18? t18Component = default,in T19? t19Component = default,in T20? t20Component = default,in T21? t21Component = default,in T22? t22Component = default,in T23? t23Component = default,in T24? t24Component = default)
+    public void
+        Add<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22,
+            T23,
+            T24>(in QueryDescription queryDescription, in T0? t0Component = default,
+                 in T1?              t1Component  = default,
+                 in T2?              t2Component  = default, in T3? t3Component = default,
+                 in T4?              t4Component  = default,
+                 in T5?              t5Component  = default, in T6? t6Component = default,
+                 in T7?              t7Component  = default,
+                 in T8?              t8Component  = default, in T9? t9Component = default,
+                 in T10?             t10Component = default,
+                 in T11?             t11Component = default, in T12? t12Component = default,
+                 in T13?             t13Component = default,
+                 in T14?             t14Component = default, in T15? t15Component = default,
+                 in T16?             t16Component = default,
+                 in T17?             t17Component = default, in T18? t18Component = default,
+                 in T19?             t19Component = default,
+                 in T20?             t20Component = default, in T21? t21Component = default,
+                 in T22?             t22Component = default,
+                 in T23?             t23Component = default, in T24? t24Component = default)
     {
         // BitSet to stack/span bitset, size big enough to contain ALL registered components.
         Span<uint> stack = stackalloc uint[BitSet.RequiredLength(ComponentRegistry.Size + 26)];
@@ -1722,7 +1937,9 @@ public partial class World
         foreach (var archetype in query.GetArchetypeIterator())
         {
             // Archetype with T shouldnt be skipped to prevent undefined behaviour.
-            if(archetype.EntityCount == 0 || archetype.Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>())
+            if (archetype.EntityCount == 0 || archetype
+                    .Has<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20,
+                        T21, T22, T23, T24>())
             {
                 continue;
             }
@@ -1760,7 +1977,9 @@ public partial class World
             // Get or create new archetype.
             if (!TryGetArchetype(spanBitSet.GetHashCode(), out var newArchetype))
             {
-                var newSignature = Signature.Add(archetype.Signature, Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>.Signature);
+                var newSignature = Signature.Add(archetype.Signature,
+                    Component<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
+                        T20, T21, T22, T23, T24>.Signature);
                 newArchetype = GetOrCreate(newSignature);
             }
 
@@ -1774,7 +1993,11 @@ public partial class World
             var oldCapacity = newArchetype.EntityCapacity;
             Archetype.Copy(archetype, newArchetype);
             var lastSlot = newArchetype.CurrentSlot;
-            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component,in t1Component,in t2Component,in t3Component,in t4Component,in t5Component,in t6Component,in t7Component,in t8Component,in t9Component,in t10Component,in t11Component,in t12Component,in t13Component,in t14Component,in t15Component,in t16Component,in t17Component,in t18Component,in t19Component,in t20Component,in t21Component,in t22Component,in t23Component,in t24Component);
+            newArchetype.SetRange(in lastSlot, in newArchetypeLastSlot, in t0Component, in t1Component, in t2Component,
+                in t3Component, in t4Component, in t5Component, in t6Component, in t7Component, in t8Component,
+                in t9Component, in t10Component, in t11Component, in t12Component, in t13Component, in t14Component,
+                in t15Component, in t16Component, in t17Component, in t18Component, in t19Component, in t20Component,
+                in t21Component, in t22Component, in t23Component, in t24Component);
             archetype.Clear();
 
             Capacity += newArchetype.EntityCapacity - oldCapacity;
@@ -1803,9 +2026,8 @@ public partial class World
             OnComponentAdded<T22>(archetype);
             OnComponentAdded<T23>(archetype);
             OnComponentAdded<T24>(archetype);
-
         }
 
         EntityInfo.EnsureCapacity(Capacity);
     }
-    }
+}

@@ -1,6 +1,5 @@
 namespace LayerBase.Actor;
 
-
 internal enum ActorPostRouteCode
 {
     QueuedGrow,

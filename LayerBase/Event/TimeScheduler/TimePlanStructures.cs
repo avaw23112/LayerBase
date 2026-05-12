@@ -37,7 +37,6 @@ public enum TimerFlags : byte
     CatchUp = 1 << 4
 }
 
-
 internal sealed class LongTimerHeap
 {
     private int[] _indices;

@@ -37,9 +37,9 @@ public sealed class DTOAnalyzer : DiagnosticAnalyzer
 
         // LB-DTO006: 类型不能同时实现 IComponent 和 IActorEvent
         bool implementsIComponent = typeSymbol.AllInterfaces
-            .Any(i => i.MetadataName == "IComponent");
+                                              .Any(i => i.MetadataName == "IComponent");
         bool implementsIActorEvent = typeSymbol.AllInterfaces
-            .Any(i => i.MetadataName == "IActorEvent");
+                                               .Any(i => i.MetadataName == "IActorEvent");
 
         if (implementsIComponent && implementsIActorEvent)
         {

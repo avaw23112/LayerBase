@@ -16,7 +16,7 @@ namespace LayerBase.Generator;
 [Shared]
 public class MountPartialFixer : CodeFixProvider
 {
-    public sealed override ImmutableArray<string> FixableDiagnosticIds => 
+    public sealed override ImmutableArray<string> FixableDiagnosticIds =>
         ImmutableArray.Create("LBMOUNT001", "LBMOUNT006");
 
     public sealed override FixAllProvider GetFixAllProvider()
@@ -44,7 +44,8 @@ public class MountPartialFixer : CodeFixProvider
             diagnostic);
     }
 
-    private async Task<Document> MakePartialAsync(Document document, ClassDeclarationSyntax classDeclaration, CancellationToken cancellationToken)
+    private async Task<Document> MakePartialAsync(Document          document, ClassDeclarationSyntax classDeclaration,
+                                                  CancellationToken cancellationToken)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
         if (root == null) return document;
@@ -53,7 +54,8 @@ public class MountPartialFixer : CodeFixProvider
         var newModifiers = classDeclaration.Modifiers.Add(partialKeyword);
         var newClassDeclaration = classDeclaration.WithModifiers(newModifiers);
 
-        var newRoot = root.ReplaceNode(classDeclaration, newClassDeclaration.WithAdditionalAnnotations(Formatter.Annotation));
+        var newRoot = root.ReplaceNode(classDeclaration,
+            newClassDeclaration.WithAdditionalAnnotations(Formatter.Annotation));
         return document.WithSyntaxRoot(newRoot);
     }
 }

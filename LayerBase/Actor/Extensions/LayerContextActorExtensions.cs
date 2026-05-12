@@ -18,17 +18,17 @@ public static class LayerContextActorExtensions
 
     public static LBTask<TResponse> AskActor<TRequest, TResponse>(
         this ILayerContext context,
-        ActorId actorId,
-        in TRequest request,
-        CancellationToken cancellationToken = default)
+        ActorId            actorId,
+        in TRequest        request,
+        CancellationToken  cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
     {
         return context.Actors().Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
     }
-    
-    public static TActor CreateActor<TActor>( this ILayerContext context,bool usePool = false)
-        where TActor: class,IActor,new()
+
+    public static TActor CreateActor<TActor>(this ILayerContext context, bool usePool = false)
+        where TActor : class, IActor, new()
     {
         return context.Actors().CreateActor<TActor>(usePool);
     }

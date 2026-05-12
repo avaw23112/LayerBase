@@ -10,7 +10,6 @@ using CommunityToolkit.HighPerformance;
 
 namespace Arch.Core;
 
-
 /// <summary>
 ///     The <see cref="SignatureBuilder"/> class
 ///     is used to make automatically conversion of collection expressions to <see cref="Signature"/> possible.
@@ -81,11 +80,7 @@ public struct Signature : IEquatable<Signature>
     /// <summary>
     ///     An array of <see cref="ComponentType"/>s.
     /// </summary>
-    internal ComponentType[] ComponentsArray
-    {
-        get;
-        set;
-    } = [];
+    internal ComponentType[] ComponentsArray { get; set; } = [];
 
     /// <summary>
     ///     An array of <see cref="ComponentType"/>s.
@@ -131,7 +126,7 @@ public struct Signature : IEquatable<Signature>
     public override int GetHashCode()
     {
         // Cache hashcode since the calculation is expensive.
-        var hash = _hashCode;  // Local copy for improved speed by reducing property access.
+        var hash = _hashCode; // Local copy for improved speed by reducing property access.
         if (hash != -1)
         {
             return hash;
@@ -305,8 +300,9 @@ public struct Signature : IEquatable<Signature>
 
     public override string ToString()
     {
-        var types =  string.Join(",", ComponentsArray.Select(p => p.Type.Name).ToArray());
-        return $"Signature {{ {nameof(ComponentsArray)} = {{ {types} }}, {nameof(Count)} = {Count}, {nameof(_hashCode)} = {_hashCode} }}";
+        var types = string.Join(",", ComponentsArray.Select(p => p.Type.Name).ToArray());
+        return
+            $"Signature {{ {nameof(ComponentsArray)} = {{ {types} }}, {nameof(Count)} = {Count}, {nameof(_hashCode)} = {_hashCode} }}";
     }
 }
 
@@ -367,7 +363,8 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     /// <param name="any">An array of all components of which an <see cref="Entity"/> should have at least one.</param>
     /// <param name="none">An array of all components of which an <see cref="Entity"/> should not have any.</param>
     /// <param name="exclusive">All components that an <see cref="Entity"/> should have mandatory.</param>
-    public QueryDescription(Signature? all = null, Signature? any = null, Signature? none = null, Signature? exclusive = null)
+    public QueryDescription(Signature? all       = null, Signature? any = null, Signature? none = null,
+                            Signature? exclusive = null)
     {
         All = all ?? All;
         Any = any ?? Any;
@@ -382,7 +379,6 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     ///     Builds this instance by calculating a new <see cref="_hashCode"/>.
     ///     Is actually only needed if the passed arrays are changed afterwards.
     /// </summary>
-
     public void Build()
     {
         _hashCode = -1;
@@ -395,7 +391,6 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     /// <typeparam name="T">The generic type.</typeparam>
     /// <returns>The same <see cref="QueryDescription"/> instance for chained operations.</returns>
     [UnscopedRef]
-
     public ref QueryDescription WithAll<T>()
     {
         All = Component<T>.Signature;
@@ -409,7 +404,6 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     /// <typeparam name="T">The generic type.</typeparam>
     /// <returns>The same <see cref="QueryDescription"/> instance for chained operations.</returns>
     [UnscopedRef]
-
     public ref QueryDescription WithAny<T>()
     {
         Any = Component<T>.Signature;
@@ -423,7 +417,6 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     /// <typeparam name="T">The generic type.</typeparam>
     /// <returns>The same <see cref="QueryDescription"/> instance for chained operations.</returns>
     [UnscopedRef]
-
     public ref QueryDescription WithNone<T>()
     {
         None = Component<T>.Signature;
@@ -438,7 +431,6 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     /// <typeparam name="T">The generic type.</typeparam>
     /// <returns>The same <see cref="QueryDescription"/> instance for chained operations.</returns>
     [UnscopedRef]
-
     public ref QueryDescription WithExclusive<T>()
     {
         Exclusive = Component<T>.Signature;
@@ -451,7 +443,6 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     /// </summary>
     /// <param name="other">The other <see cref="QueryDescription"/> to compare with.</param>
     /// <returns>True if elements of the arrays are equal, otherwise false.</returns>
-
     public bool Equals(QueryDescription other)
     {
         return GetHashCode() == other.GetHashCode();
@@ -462,7 +453,6 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     /// </summary>
     /// <param name="obj">The other <see cref="object"/> to compare with.</param>
     /// <returns>True if elements of the arrays are equal, otherwise false.</returns>
-
     public override bool Equals(object? obj)
     {
         return obj is QueryDescription other && Equals(other);
@@ -473,7 +463,6 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     ///     Calculates the hash.
     /// </summary>
     /// <returns>The hash.</returns>
-
     public override int GetHashCode()
     {
         // Cache hashcode since the calculation is expensive.
@@ -502,7 +491,6 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     /// <param name="left">The left <see cref="QueryDescription"/>.</param>
     /// <param name="right">The right <see cref="QueryDescription"/>.</param>
     /// <returns>True if their internal arrays are equal, otherwise false.</returns>
-
     public static bool operator ==(QueryDescription left, QueryDescription right)
     {
         return left.Equals(right);
@@ -514,7 +502,6 @@ public partial struct QueryDescription : IEquatable<QueryDescription>
     /// <param name="left">The left <see cref="QueryDescription"/>.</param>
     /// <param name="right">The right <see cref="QueryDescription"/>.</param>
     /// <returns>True if their internal arrays are unequal, otherwise false.</returns>
-
     public static bool operator !=(QueryDescription left, QueryDescription right)
     {
         return !left.Equals(right);
@@ -554,9 +541,9 @@ public partial class Query : IEquatable<Query>
 
         Debug.Assert(
             !((description.Any.Count != 0 ||
-            description.All.Count != 0 ||
-            description.None.Count != 0) &&
-            description.Exclusive.Count != 0),
+               description.All.Count != 0 ||
+               description.None.Count != 0) &&
+              description.Exclusive.Count != 0),
             "If Any, All or None have items then Exclusive may not have any items"
         );
 
@@ -650,7 +637,8 @@ public partial class Query : IEquatable<Query>
     /// <returns>True if they are equal, false if not.</returns>
     public bool Equals(Query other)
     {
-        return Equals(_any, other._any) && Equals(_all, other._all) && Equals(_none, other._none) && Equals(_exclusive, other._exclusive) && _queryDescription.Equals(other._queryDescription);
+        return Equals(_any, other._any) && Equals(_all, other._all) && Equals(_none, other._none) &&
+               Equals(_exclusive, other._exclusive) && _queryDescription.Equals(other._queryDescription);
     }
 
     /// <summary>

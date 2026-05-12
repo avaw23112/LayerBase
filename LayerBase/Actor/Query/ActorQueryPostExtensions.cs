@@ -4,7 +4,7 @@ public static class ActorQueryPostExtensions
 {
     public static void PostAll<TEvent>(
         this ActorQueryResult query,
-        in TEvent value)
+        in   TEvent           value)
         where TEvent : struct
     {
         query = query.RefreshIfNeeded();
@@ -13,8 +13,8 @@ public static class ActorQueryPostExtensions
 
     public static void PostAll<TEvent1, TEvent2>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2)
+        in   TEvent1          value1,
+        in   TEvent2          value2)
         where TEvent1 : struct
         where TEvent2 : struct
     {
@@ -25,9 +25,9 @@ public static class ActorQueryPostExtensions
 
     public static void PostAll<TEvent1, TEvent2, TEvent3>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2,
-        in TEvent3 value3)
+        in   TEvent1          value1,
+        in   TEvent2          value2,
+        in   TEvent3          value3)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -40,10 +40,10 @@ public static class ActorQueryPostExtensions
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2,
-        in TEvent3 value3,
-        in TEvent4 value4)
+        in   TEvent1          value1,
+        in   TEvent2          value2,
+        in   TEvent3          value3,
+        in   TEvent4          value4)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -58,11 +58,11 @@ public static class ActorQueryPostExtensions
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2,
-        in TEvent3 value3,
-        in TEvent4 value4,
-        in TEvent5 value5)
+        in   TEvent1          value1,
+        in   TEvent2          value2,
+        in   TEvent3          value3,
+        in   TEvent4          value4,
+        in   TEvent5          value5)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -79,12 +79,12 @@ public static class ActorQueryPostExtensions
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2,
-        in TEvent3 value3,
-        in TEvent4 value4,
-        in TEvent5 value5,
-        in TEvent6 value6)
+        in   TEvent1          value1,
+        in   TEvent2          value2,
+        in   TEvent3          value3,
+        in   TEvent4          value4,
+        in   TEvent5          value5,
+        in   TEvent6          value6)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -103,13 +103,13 @@ public static class ActorQueryPostExtensions
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2,
-        in TEvent3 value3,
-        in TEvent4 value4,
-        in TEvent5 value5,
-        in TEvent6 value6,
-        in TEvent7 value7)
+        in   TEvent1          value1,
+        in   TEvent2          value2,
+        in   TEvent3          value3,
+        in   TEvent4          value4,
+        in   TEvent5          value5,
+        in   TEvent6          value6,
+        in   TEvent7          value7)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -130,14 +130,14 @@ public static class ActorQueryPostExtensions
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2,
-        in TEvent3 value3,
-        in TEvent4 value4,
-        in TEvent5 value5,
-        in TEvent6 value6,
-        in TEvent7 value7,
-        in TEvent8 value8)
+        in   TEvent1          value1,
+        in   TEvent2          value2,
+        in   TEvent3          value3,
+        in   TEvent4          value4,
+        in   TEvent5          value5,
+        in   TEvent6          value6,
+        in   TEvent7          value7,
+        in   TEvent8          value8)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -160,15 +160,15 @@ public static class ActorQueryPostExtensions
 
     public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2,
-        in TEvent3 value3,
-        in TEvent4 value4,
-        in TEvent5 value5,
-        in TEvent6 value6,
-        in TEvent7 value7,
-        in TEvent8 value8,
-        in TEvent9 value9)
+        in   TEvent1          value1,
+        in   TEvent2          value2,
+        in   TEvent3          value3,
+        in   TEvent4          value4,
+        in   TEvent5          value5,
+        in   TEvent6          value6,
+        in   TEvent7          value7,
+        in   TEvent8          value8,
+        in   TEvent9          value9)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -191,18 +191,19 @@ public static class ActorQueryPostExtensions
         PostAllSingle(query, in value9);
     }
 
-    public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>(
+    public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9,
+        TEvent10>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2,
-        in TEvent3 value3,
-        in TEvent4 value4,
-        in TEvent5 value5,
-        in TEvent6 value6,
-        in TEvent7 value7,
-        in TEvent8 value8,
-        in TEvent9 value9,
-        in TEvent10 value10)
+        in   TEvent1          value1,
+        in   TEvent2          value2,
+        in   TEvent3          value3,
+        in   TEvent4          value4,
+        in   TEvent5          value5,
+        in   TEvent6          value6,
+        in   TEvent7          value7,
+        in   TEvent8          value8,
+        in   TEvent9          value9,
+        in   TEvent10         value10)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -227,19 +228,20 @@ public static class ActorQueryPostExtensions
         PostAllSingle(query, in value10);
     }
 
-    public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>(
+    public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9,
+        TEvent10, TEvent11>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2,
-        in TEvent3 value3,
-        in TEvent4 value4,
-        in TEvent5 value5,
-        in TEvent6 value6,
-        in TEvent7 value7,
-        in TEvent8 value8,
-        in TEvent9 value9,
-        in TEvent10 value10,
-        in TEvent11 value11)
+        in   TEvent1          value1,
+        in   TEvent2          value2,
+        in   TEvent3          value3,
+        in   TEvent4          value4,
+        in   TEvent5          value5,
+        in   TEvent6          value6,
+        in   TEvent7          value7,
+        in   TEvent8          value8,
+        in   TEvent9          value9,
+        in   TEvent10         value10,
+        in   TEvent11         value11)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -266,20 +268,21 @@ public static class ActorQueryPostExtensions
         PostAllSingle(query, in value11);
     }
 
-    public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11, TEvent12>(
+    public static void PostAll<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9,
+        TEvent10, TEvent11, TEvent12>(
         this ActorQueryResult query,
-        in TEvent1 value1,
-        in TEvent2 value2,
-        in TEvent3 value3,
-        in TEvent4 value4,
-        in TEvent5 value5,
-        in TEvent6 value6,
-        in TEvent7 value7,
-        in TEvent8 value8,
-        in TEvent9 value9,
-        in TEvent10 value10,
-        in TEvent11 value11,
-        in TEvent12 value12)
+        in   TEvent1          value1,
+        in   TEvent2          value2,
+        in   TEvent3          value3,
+        in   TEvent4          value4,
+        in   TEvent5          value5,
+        in   TEvent6          value6,
+        in   TEvent7          value7,
+        in   TEvent8          value8,
+        in   TEvent9          value9,
+        in   TEvent10         value10,
+        in   TEvent11         value11,
+        in   TEvent12         value12)
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct

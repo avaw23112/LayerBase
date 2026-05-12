@@ -60,7 +60,7 @@ internal sealed partial class ActorCallRuntimeActor : IActor
     [ActorCallBehaviour]
     private LBTask<ActorCallRuntimeResponse> OnAsk(
         in ActorCallRuntimeRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken          cancellationToken)
     {
         ActorCallRuntimeTrace.Entries.Add($"ask:{request.Value}");
         return LBTask<ActorCallRuntimeResponse>.FromResult(new ActorCallRuntimeResponse
@@ -144,9 +144,10 @@ public class ActorCallRuntimeTests
         var world = new ActorWorld();
         ActorCallRuntimeActor actor = world.CreateActor<ActorCallRuntimeActor>();
 
-        LBTask<ActorCallRuntimeUnsupportedResponse> task = world.ImmediatelyAsk<ActorCallRuntimeUnsupportedRequest, ActorCallRuntimeUnsupportedResponse>(
-            actor.GetActorId(),
-            new ActorCallRuntimeUnsupportedRequest { Value = 1 });
+        LBTask<ActorCallRuntimeUnsupportedResponse> task =
+            world.ImmediatelyAsk<ActorCallRuntimeUnsupportedRequest, ActorCallRuntimeUnsupportedResponse>(
+                actor.GetActorId(),
+                new ActorCallRuntimeUnsupportedRequest { Value = 1 });
 
         ActorCallException exception = Assert.Throws<ActorCallException>(() => task.GetAwaiter().GetResult())!;
         Assert.That(exception.FailureKind, Is.EqualTo(ActorCallFailureKind.UnsupportedRequest));

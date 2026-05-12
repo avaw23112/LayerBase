@@ -21,7 +21,8 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         _ownerLayer = null;
     }
 
-    public ServiceProvider(WorldServiceRoot worldRoot, IEnumerable<ServiceDescriptor> descriptors, Layer? ownerLayer = null)
+    public ServiceProvider(WorldServiceRoot worldRoot, IEnumerable<ServiceDescriptor> descriptors,
+                           Layer?           ownerLayer = null)
     {
         _worldRoot = worldRoot ?? throw new ArgumentNullException(nameof(worldRoot));
         if (descriptors == null) throw new ArgumentNullException(nameof(descriptors));
@@ -116,7 +117,8 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         var instance = desc.Lifetime switch
                        {
                            ServiceLifetime.Instance => _worldRoot.GetOrCreate(desc, _ownerLayer, () => desc.Instance!),
-                           ServiceLifetime.Singleton => _worldRoot.GetOrCreate(desc, _ownerLayer, () => CreateInstance(desc, context)),
+                           ServiceLifetime.Singleton => _worldRoot.GetOrCreate(desc, _ownerLayer,
+                               () => CreateInstance(desc, context)),
                            ServiceLifetime.Scoped => GetOrCreateCached(desc, context),
                            ServiceLifetime.Transient => CreateInstance(desc, context),
                            _ => throw new NotSupportedException($"Unsupported lifetime {desc.Lifetime}")
@@ -159,10 +161,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         var lazy = _instances.GetOrAdd(desc.ServiceType, _ =>
         {
             return new Lazy<object>(
-                () =>
-                {
-                    return CreateInstance(desc, context);
-                },
+                () => { return CreateInstance(desc, context); },
                 LazyThreadSafetyMode.ExecutionAndPublication);
         });
 
@@ -229,8 +228,8 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
             BindingFlags.NonPublic);
 
         var markedConstructors = allConstructors
-            .Where(static ctor => ctor.GetCustomAttribute<MountAttribute>() != null)
-            .ToArray();
+                                 .Where(static ctor => ctor.GetCustomAttribute<MountAttribute>() != null)
+                                 .ToArray();
 
         if (markedConstructors.Length > 1)
         {
@@ -256,8 +255,8 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         var maxParameterCount = publicConstructors.Max(static ctor => ctor.GetParameters().Length);
 
         var candidates = publicConstructors
-            .Where(ctor => ctor.GetParameters().Length == maxParameterCount)
-            .ToArray();
+                         .Where(ctor => ctor.GetParameters().Length == maxParameterCount)
+                         .ToArray();
 
         if (candidates.Length > 1)
         {

@@ -11,7 +11,13 @@ using LayerBase.Tools.Job;
 
 namespace LayerBase;
 
-public enum LayerEventInfoType { Debug, Info, Warning, Error }
+public enum LayerEventInfoType
+{
+    Debug,
+    Info,
+    Warning,
+    Error
+}
 
 public readonly struct LayerEventInfo
 {
@@ -47,7 +53,7 @@ public static class LayerHub
     private static int s_runtimeIdCounter;
     private static readonly ConcurrentBag<Action> s_cacheResetters = new();
     private static readonly ConcurrentBag<Action<int>> s_runtimeCacheResetters = new();
-    
+
     // Primary runtime for static convenience APIs
     private static LayerRuntime? s_primaryRuntime;
 
@@ -66,7 +72,8 @@ public static class LayerHub
         else
         {
             id = s_runtimeIdCounter++;
-            if (id >= 256) throw new InvalidOperationException("Max 256 concurrent LayerRuntimes supported by static caches.");
+            if (id >= 256)
+                throw new InvalidOperationException("Max 256 concurrent LayerRuntimes supported by static caches.");
         }
 
         var runtime = new LayerRuntime(id);
@@ -186,7 +193,7 @@ public static class LayerHub
     /// null 表示使用事件默认策略。
     /// </param>
     public static void PostFromAnyThread<T>(
-        in T value,
+        in T             value,
         EventPostPolicy? policy = default)
         where T : struct
     {
@@ -212,7 +219,7 @@ public static class LayerHub
     /// false 表示当前没有 Primary Runtime，或 Runtime 已释放。
     /// </returns>
     public static bool TryPostFromAnyThread<T>(
-        in T value,
+        in T             value,
         EventPostPolicy? policy = default)
         where T : struct
     {
@@ -234,7 +241,8 @@ public static class LayerHub
     /// </summary>
     public static LayerRuntime.LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer
     {
-        if (s_primaryRuntime == null) throw new InvalidOperationException("No Primary LayerRuntime created. Call CreateLayers().Build() first.");
+        if (s_primaryRuntime == null)
+            throw new InvalidOperationException("No Primary LayerRuntime created. Call CreateLayers().Build() first.");
         return s_primaryRuntime.For<TLayer>();
     }
 
@@ -249,7 +257,8 @@ public static class LayerHub
         where TRequest : struct
         where TResponse : struct
     {
-        if (s_primaryRuntime == null) throw new InvalidOperationException("No Primary LayerRuntime created. Call CreateLayers().Build() first.");
+        if (s_primaryRuntime == null)
+            throw new InvalidOperationException("No Primary LayerRuntime created. Call CreateLayers().Build() first.");
         return s_primaryRuntime.CallAsync<TLayer, TRequest, TResponse>(request, cancellationToken);
     }
 
@@ -298,7 +307,8 @@ public static class LayerHub
         }
         else
         {
-            Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
+            Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error,
+                ex));
         }
     }
 
@@ -313,7 +323,8 @@ public static class LayerHub
         {
             var source = EventDiagnosticSymbols.Resolve(sourceId);
             var eventName = EventDiagnosticSymbols.Resolve(eventNameId);
-            Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
+            Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error,
+                ex));
         }
     }
 
@@ -322,7 +333,7 @@ public static class LayerHub
     {
         Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, message, LayerEventInfoType.Warning));
     }
-    
+
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool TryGetCachedTarget<TLayer>(int runtimeId, int version, out TLayer? layer, out Exception? error)
@@ -330,9 +341,9 @@ public static class LayerHub
     {
         if (runtimeId >= 256)
         {
-             layer = null;
-             error = null;
-             return false;
+            layer = null;
+            error = null;
+            return false;
         }
 
         if (Volatile.Read(ref LayerTargetCache<TLayer>.Versions[runtimeId]) != version)
@@ -363,7 +374,8 @@ public static class LayerHub
         }
     }
 
-    internal static void UpdateLayerTargetCache<TLayer>(int runtimeId, int version, TLayer? layer, LayerTargetState state)
+    internal static void UpdateLayerTargetCache<TLayer>(int              runtimeId, int version, TLayer? layer,
+                                                        LayerTargetState state)
         where TLayer : Layer
     {
         if (runtimeId >= 256) return;
@@ -402,7 +414,8 @@ public static class LayerHub
         return LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId];
     }
 
-    internal static void UpdateLayerCallCache<TLayer, TRequest, TResponse>(int runtimeId, int version, LayerCallInvoker<TRequest, TResponse>? invoker, Exception? error)
+    internal static void UpdateLayerCallCache<TLayer, TRequest, TResponse>(
+        int runtimeId, int version, LayerCallInvoker<TRequest, TResponse>? invoker, Exception? error)
         where TLayer : Layer
         where TRequest : struct
         where TResponse : struct
@@ -440,7 +453,10 @@ public static class LayerHub
         where TResponse : struct
     {
         public static readonly int[] Versions = new int[256];
-        public static readonly LayerCallInvoker<TRequest, TResponse>?[] Invokers = new LayerCallInvoker<TRequest, TResponse>[256];
+
+        public static readonly LayerCallInvoker<TRequest, TResponse>?[] Invokers =
+            new LayerCallInvoker<TRequest, TResponse>[256];
+
         public static readonly Exception?[] Errors = new Exception?[256];
 
         static LayerCallCache()

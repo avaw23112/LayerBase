@@ -300,4 +300,3 @@ internal sealed class ObjectPool<T> where T : class
         _bag.Add(item);
     }
 }
-

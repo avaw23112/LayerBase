@@ -24,7 +24,7 @@ public struct ForEachJob<<#= generics #>> : IChunkJob
         <#= Indent(getFirstElement, 8) #>
         foreach(var entityIndex in chunk)
         {
-            <#= Indent(getComponents,12) #>
+            <#= Indent(getComponents, 12) #>
             ForEach(<#= insertParams #>);
         }
     }

@@ -28,7 +28,6 @@ public partial struct Chunk
         for (var i = 0; i < index; i++)
             insertParams.Append($"ref t{i}Array.DangerousGetReference(),");
         insertParams.Length--;
-
 #>
     [Pure]
     public Components<<#= generics #>> GetFirst<<#= generics #>>()

@@ -61,15 +61,15 @@ public partial class DiMultiWorldTests
         var layerA = new TestLayer();
         layerA.RegisterService(new CounterModule(ServiceLifetime.Singleton));
         var worldA = LayerHub.CreateLayers()
-            .Push(layerA)
-            .Build();
+                             .Push(layerA)
+                             .Build();
 
         // World B
         var layerB = new TestLayer();
         layerB.RegisterService(new CounterModule(ServiceLifetime.Singleton));
         var worldB = LayerHub.CreateLayers()
-            .Push(layerB)
-            .Build();
+                             .Push(layerB)
+                             .Build();
 
         var counterA = layerA.GetService<ICounter>();
         var counterB = layerB.GetService<ICounter>();
@@ -80,8 +80,13 @@ public partial class DiMultiWorldTests
         Assert.That(ReferenceEquals(counterA, counterB), Is.False);
     }
 
-    public class LayerA : Layer { }
-    public class LayerB : Layer { }
+    public class LayerA : Layer
+    {
+    }
+
+    public class LayerB : Layer
+    {
+    }
 
     [Test]
     public void Singleton_IsShared_Between_Layers_In_Same_Runtime()
@@ -93,9 +98,9 @@ public partial class DiMultiWorldTests
         layerB.RegisterService(module);
 
         var runtime = LayerHub.CreateLayers()
-            .Push(layerA)
-            .Push(layerB)
-            .Build();
+                              .Push(layerA)
+                              .Push(layerB)
+                              .Build();
 
         var counterA = layerA.GetService<ICounter>();
         var counterB = layerB.GetService<ICounter>();
@@ -113,9 +118,9 @@ public partial class DiMultiWorldTests
         layerB.RegisterService(module);
 
         var runtime = LayerHub.CreateLayers()
-            .Push(layerA)
-            .Push(layerB)
-            .Build();
+                              .Push(layerA)
+                              .Push(layerB)
+                              .Build();
 
         var counterA = layerA.GetService<ICounter>();
         var counterB = layerB.GetService<ICounter>();
@@ -129,8 +134,8 @@ public partial class DiMultiWorldTests
         var layer = new LayerA();
         layer.RegisterService(new CounterModule(ServiceLifetime.Transient));
         var runtime = LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                              .Push(layer)
+                              .Build();
 
         var counter1 = layer.GetService<ICounter>();
         var counter2 = layer.GetService<ICounter>();
@@ -141,7 +146,7 @@ public partial class DiMultiWorldTests
     public partial class ManualInstanceModule : IService
     {
         private readonly ICounter _instance;
-        public ManualInstanceModule(ICounter instance) => _instance = instance;
+        public ManualInstanceModule(ICounter             instance) => _instance = instance;
         public void ConfigureServices(IServiceCollection services) => services.AddSingleton(_instance);
     }
 
@@ -153,8 +158,8 @@ public partial class DiMultiWorldTests
         var layerA = new TestLayer();
         layerA.RegisterService(new ManualInstanceModule(sharedCounter));
         var worldA = LayerHub.CreateLayers()
-            .Push(layerA)
-            .Build();
+                             .Push(layerA)
+                             .Build();
 
         var layerB = new TestLayer();
         layerB.RegisterService(new ManualInstanceModule(sharedCounter));
@@ -169,11 +174,11 @@ public partial class DiMultiWorldTests
     {
         var layer = new TestLayer();
         LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                .Push(layer)
+                .Build();
 
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => layer.RegisterService(new CounterModule(ServiceLifetime.Singleton)));
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            layer.RegisterService(new CounterModule(ServiceLifetime.Singleton)));
 
         Assert.That(ex!.Message, Does.Contain("before the layer is built"));
     }

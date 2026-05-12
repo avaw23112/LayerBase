@@ -18,6 +18,7 @@ internal sealed class WorldServiceRoot : IDisposable
     /// 不会把 Runtime 注入到每个服务对象中。
     /// </summary>
     private readonly LayerRuntime _runtime;
+
     public LayerRuntime Runtime => _runtime;
 
     /// <summary>
@@ -95,7 +96,7 @@ internal sealed class WorldServiceRoot : IDisposable
     /// false 表示没有注册。
     /// </returns>
     public bool TryGetDescriptor(
-        Type serviceType,
+        Type                   serviceType,
         out ServiceDescriptor? descriptor)
     {
         return _descriptors.TryGetValue(serviceType, out descriptor);
@@ -124,8 +125,8 @@ internal sealed class WorldServiceRoot : IDisposable
     /// </returns>
     public object GetOrCreate(
         ServiceDescriptor descriptor,
-        Layers.Layer? ownerLayer,
-        Func<object> factory)
+        Layers.Layer?     ownerLayer,
+        Func<object>      factory)
     {
         if (descriptor == null)
         {

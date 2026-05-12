@@ -53,20 +53,28 @@ public sealed class EventPrewarmGenerator : IIncrementalGenerator
         ).SelectMany(static (items, _) => items);
 
         var allCollected = prewarmEventTypes.Collect()
-            .Combine(subscribeEventTypes.Collect())
-            .Combine(handlerEventTypes.Collect())
-            .Combine(metaDataEventTypes.Collect());
+                                            .Combine(subscribeEventTypes.Collect())
+                                            .Combine(handlerEventTypes.Collect())
+                                            .Combine(metaDataEventTypes.Collect());
 
         context.RegisterSourceOutput(allCollected.Combine(context.CompilationProvider), static (spc, source) =>
         {
             var ((((prewarm, subscribe), handler), metadata), compilation) = source;
 
             var allTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-            
-            foreach (var s in prewarm) if (s != null) allTypes.Add(s);
-            foreach (var s in subscribe) if (s != null) allTypes.Add(s);
-            foreach (var s in handler) if (s != null) allTypes.Add(s);
-            foreach (var s in metadata) if (s != null) allTypes.Add(s);
+
+            foreach (var s in prewarm)
+                if (s != null)
+                    allTypes.Add(s);
+            foreach (var s in subscribe)
+                if (s != null)
+                    allTypes.Add(s);
+            foreach (var s in handler)
+                if (s != null)
+                    allTypes.Add(s);
+            foreach (var s in metadata)
+                if (s != null)
+                    allTypes.Add(s);
 
             if (allTypes.Count == 0) return;
 
@@ -76,7 +84,8 @@ public sealed class EventPrewarmGenerator : IIncrementalGenerator
         });
     }
 
-    private static ImmutableArray<ITypeSymbol> GetEventTypesFromMethodAttributes(GeneratorSyntaxContext context, CancellationToken ct)
+    private static ImmutableArray<ITypeSymbol> GetEventTypesFromMethodAttributes(
+        GeneratorSyntaxContext context, CancellationToken ct)
     {
         var method = (MethodDeclarationSyntax)context.Node;
         var symbol = context.SemanticModel.GetDeclaredSymbol(method, ct);
@@ -86,7 +95,7 @@ public sealed class EventPrewarmGenerator : IIncrementalGenerator
         foreach (var attr in symbol.GetAttributes())
         {
             var name = attr.AttributeClass?.ToDisplayString();
-            if (name == SubscribeAttributeName || 
+            if (name == SubscribeAttributeName ||
                 name == SubscribeNotifyAttributeName ||
                 name == SubscribeFlowAttributeName ||
                 name == SubscribeAsyncAttributeName ||
@@ -98,10 +107,12 @@ public sealed class EventPrewarmGenerator : IIncrementalGenerator
                 }
             }
         }
+
         return builder.ToImmutable();
     }
 
-    private static ImmutableArray<ITypeSymbol> GetEventTypesFromHandlerInterfaces(GeneratorSyntaxContext context, CancellationToken ct)
+    private static ImmutableArray<ITypeSymbol> GetEventTypesFromHandlerInterfaces(
+        GeneratorSyntaxContext context, CancellationToken ct)
     {
         var classDecl = (ClassDeclarationSyntax)context.Node;
         var symbol = context.SemanticModel.GetDeclaredSymbol(classDecl, ct);
@@ -119,10 +130,12 @@ public sealed class EventPrewarmGenerator : IIncrementalGenerator
                 }
             }
         }
+
         return builder.ToImmutable();
     }
 
-    private static ImmutableArray<ITypeSymbol> GetEventTypesFromMetaDataBases(GeneratorSyntaxContext context, CancellationToken ct)
+    private static ImmutableArray<ITypeSymbol> GetEventTypesFromMetaDataBases(
+        GeneratorSyntaxContext context, CancellationToken ct)
     {
         var classDecl = (ClassDeclarationSyntax)context.Node;
         var symbol = context.SemanticModel.GetDeclaredSymbol(classDecl, ct);
@@ -136,6 +149,7 @@ public sealed class EventPrewarmGenerator : IIncrementalGenerator
                 builder.Add(current.TypeArguments[0]);
             }
         }
+
         return builder.ToImmutable();
     }
 

@@ -14,8 +14,8 @@ public partial class PrewarmTests
     public void Setup()
     {
         _runtime = LayerHub.CreateLayers()
-            .Push(new TestLayer())
-            .Build();
+                           .Push(new TestLayer())
+                           .Build();
     }
 
     [TearDown]

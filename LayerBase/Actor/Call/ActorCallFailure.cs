@@ -12,7 +12,7 @@ internal static class ActorCallFailure
     }
 
     public static LBTask<TResponse> InvalidActor<TResponse>(
-        ActorId actorId,
+        ActorId              actorId,
         ActorCallFailureKind kind)
         where TResponse : struct
     {

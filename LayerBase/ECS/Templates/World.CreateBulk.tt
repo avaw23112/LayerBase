@@ -12,15 +12,15 @@ namespace Arch.Core;
 public partial class World
 {
     <#
-for (var index = 2; index < Amount; index++)
-{
-    var generics = AppendGenerics(index);
-    var parameters = AppendGenericInDefaultParams(index);
-    var inParameters = InsertGenericInParams(index);
+    for (var index = 2; index < Amount; index++)
+    {
+        var generics = AppendGenerics(index);
+        var parameters = AppendGenericInDefaultParams(index);
+        var inParameters = InsertGenericInParams(index);
 
-    var addEvents = new StringBuilder();
-    for (var i = 0; i < index; i++)
-        addEvents.AppendLine($"OnComponentAdded<T{i}>(entity);");
+        var addEvents = new StringBuilder();
+        for (var i = 0; i < index; i++)
+            addEvents.AppendLine($"OnComponentAdded<T{i}>(entity);");
 #>
 
 
@@ -48,6 +48,6 @@ for (var index = 2; index < Amount; index++)
         AddEntityData(entities, entityData, amount);
     }
 <#
-}
+    }
 #>
 }

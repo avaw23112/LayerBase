@@ -15,7 +15,7 @@ public sealed class PostScheduler : IDisposable
     private readonly RingBuffer<PostItem> _nextQueue;
     private readonly EventPayloadStorage _payloadStorage;
     private readonly EventCenter _eventCenter;
-    
+
     private EventBuildPolicyTable _policyTable;
 
     // Optimized Buffers
@@ -44,7 +44,9 @@ public sealed class PostScheduler : IDisposable
     private bool _disposed;
     private bool _isPumping;
     private readonly BackpressurePolicy _defaultBackpressure;
-    public PostScheduler(int runtimeId, EventCenter eventCenter, PostSchedulerOptions options, EventBuildPolicyTable policyTable)
+
+    public PostScheduler(int                   runtimeId, EventCenter eventCenter, PostSchedulerOptions options,
+                         EventBuildPolicyTable policyTable)
     {
         _runtimeId = runtimeId;
         _eventCenter = eventCenter;
@@ -117,6 +119,7 @@ public sealed class PostScheduler : IDisposable
             {
                 newLatest[i] = PayloadHandle.Invalid;
             }
+
             _latestBuffer = newLatest;
 
             var newLatestSnapshot = new PayloadHandle[newLength];
@@ -125,6 +128,7 @@ public sealed class PostScheduler : IDisposable
             {
                 newLatestSnapshot[i] = PayloadHandle.Invalid;
             }
+
             _latestSnapshotBuffer = newLatestSnapshot;
         }
 
@@ -206,7 +210,8 @@ public sealed class PostScheduler : IDisposable
         switch (policy.Mode)
         {
             case PostDeliveryMode.Normal:
-                var plan = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending, _defaultBackpressure, policy.MergeFailure);
+                var plan = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending,
+                    _defaultBackpressure, policy.MergeFailure);
                 return EnqueueNormalWithPlan(typeId, in value, in plan);
             case PostDeliveryMode.DirtySignal:
                 if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
@@ -244,7 +249,8 @@ public sealed class PostScheduler : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private PostResult HandleQueueFullSlow<T>(in PostItem item, EventStore<T> store, RingBuffer<PostItem> targetQueue) where T : struct
+    private PostResult HandleQueueFullSlow<T>(in PostItem item, EventStore<T> store, RingBuffer<PostItem> targetQueue)
+        where T : struct
     {
         return HandleQueueFullInternal(in item, targetQueue);
     }
@@ -297,6 +303,7 @@ public sealed class PostScheduler : IDisposable
         {
             DecrementPendingCount(typeId);
         }
+
         return result;
     }
 
@@ -324,6 +331,7 @@ public sealed class PostScheduler : IDisposable
             FastArray.At(_dirtyPendingBits, segment) |= bit;
             _payloadStorage.EnsureStore<T>(_runtimeId);
         }
+
         return PostResult.Coalesced();
     }
 
@@ -336,8 +344,9 @@ public sealed class PostScheduler : IDisposable
     public void AddSpecialPolicy(int typeId, EventPostPolicy policy)
     {
         EnsureEventCapacity(typeId, rebuildBitmap: false);
-        
-        _postPlans[typeId] = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending, _defaultBackpressure, policy.MergeFailure);
+
+        _postPlans[typeId] = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending,
+            _defaultBackpressure, policy.MergeFailure);
         RebuildPostBitmap();
     }
 
@@ -351,7 +360,7 @@ public sealed class PostScheduler : IDisposable
     {
         var segment = typeId >> 6;
         var bit = 1UL << (typeId & 63);
- 
+
         if (typeId < _latestBuffer.Length)
         {
             ref var handleRef = ref FastArray.At(_latestBuffer, typeId);
@@ -365,8 +374,10 @@ public sealed class PostScheduler : IDisposable
             {
                 FastArray.At(_latestPendingBits, segment) |= bit;
             }
+
             return PostResult.Success;
         }
+
         return PostResult.Failure("Event type not registered during build.");
     }
 
@@ -375,7 +386,7 @@ public sealed class PostScheduler : IDisposable
         var meta = _policyTable.GetMetaData<T>(typeId);
         int coalesceKey = meta?.GetPostCoalesceKey(value) ?? 0;
         var slotKey = new CoalescedSlotKey(typeId, coalesceKey);
-        
+
         bool fallbackToNormal = false;
         PostTypePlan fallbackPlan = default;
 
@@ -424,7 +435,7 @@ public sealed class PostScheduler : IDisposable
             _pendingCoalesced.Add(slotKey);
             return PostResult.Enqueued();
         }
-        
+
         if (fallbackToNormal)
         {
             return EnqueueNormalWithPlan(typeId, in value, in fallbackPlan);
@@ -435,10 +446,10 @@ public sealed class PostScheduler : IDisposable
 
     private PostResult HandleMergeFailureInternalLocked<T>(
         CoalescedSlotKey slotKey,
-        CoalescedSlot slot,
-        in T value,
-        in PostTypePlan plan,
-        out bool fallbackToNormal)
+        CoalescedSlot    slot,
+        in  T            value,
+        in  PostTypePlan plan,
+        out bool         fallbackToNormal)
         where T : struct
     {
         fallbackToNormal = false;
@@ -493,6 +504,7 @@ public sealed class PostScheduler : IDisposable
                     if (targetQueue.TryEnqueue(item))
                         return PostResult.Success;
                 }
+
                 _payloadStorage.Release(item.PayloadHandle);
                 return PostResult.Failure("Queue full (even after drop oldest)");
             default:
@@ -511,16 +523,18 @@ public sealed class PostScheduler : IDisposable
             if (typeId < _pendingCount.Length) FastArray.At(_pendingCount, typeId)--;
         }
     }
+
     public void UpdatePolicyTable(EventBuildPolicyTable policyTable)
     {
         _policyTable = policyTable ?? throw new ArgumentNullException(nameof(policyTable));
     }
+
     private int FlushBuffers()
     {
         int count = 0;
-        
+
         // 1. Take Snapshots
-        
+
         // Dirty Signals Snapshot
         Array.Copy(_dirtyPendingBits, _dirtySnapshotBits, _dirtyPendingBits.Length);
         Array.Clear(_dirtyPendingBits, 0, _dirtyPendingBits.Length);
@@ -528,19 +542,21 @@ public sealed class PostScheduler : IDisposable
         // Coalesced Snapshot
         if (_pendingCoalesced.Count > 0)
         {
-            _pendingCoalesced.Sort((a, b) => _coalescedBuffer[a].FirstSequenceId.CompareTo(_coalescedBuffer[b].FirstSequenceId));
+            _pendingCoalesced.Sort((a, b) =>
+                _coalescedBuffer[a].FirstSequenceId.CompareTo(_coalescedBuffer[b].FirstSequenceId));
             foreach (var key in _pendingCoalesced)
             {
                 _snapshotCoalesced.Add(_coalescedBuffer[key]);
                 _coalescedBuffer.Remove(key);
             }
+
             _pendingCoalesced.Clear();
         }
 
         // Latest Snapshot
         Array.Copy(_latestPendingBits, _latestSnapshotBits, _latestPendingBits.Length);
         Array.Clear(_latestPendingBits, 0, _latestPendingBits.Length);
-        
+
         for (int i = 0; i < _latestSnapshotBits.Length; i++)
         {
             var bits = _latestSnapshotBits[i];
@@ -595,6 +611,7 @@ public sealed class PostScheduler : IDisposable
         {
             Array.Clear(_dirtySnapshotBits, 0, _dirtySnapshotBits.Length);
         }
+
         return processed;
     }
 
@@ -616,7 +633,7 @@ public sealed class PostScheduler : IDisposable
                 finally
                 {
                     _payloadStorage.Release(slot.PayloadHandle);
-                    
+
                     // Mark as invalid to prevent double release in outer finally
                     slot.PayloadHandle = PayloadHandle.Invalid;
                     _snapshotCoalesced[i] = slot;
@@ -628,6 +645,7 @@ public sealed class PostScheduler : IDisposable
             ReleaseRemainingCoalescedSnapshot();
             _snapshotCoalesced.Clear();
         }
+
         return processed;
     }
 
@@ -670,6 +688,7 @@ public sealed class PostScheduler : IDisposable
                         _latestSnapshotBuffer[typeId] = PayloadHandle.Invalid;
                     }
                 }
+
                 _latestSnapshotBits[i] = 0;
             }
         }
@@ -677,6 +696,7 @@ public sealed class PostScheduler : IDisposable
         {
             ReleaseRemainingLatestSnapshot();
         }
+
         return processed;
     }
 
@@ -695,8 +715,10 @@ public sealed class PostScheduler : IDisposable
                     _payloadStorage.Release(handle);
                     _latestSnapshotBuffer[typeId] = PayloadHandle.Invalid;
                 }
+
                 bits &= bits - 1;
             }
+
             _latestSnapshotBits[i] = 0;
         }
     }
@@ -713,8 +735,8 @@ public sealed class PostScheduler : IDisposable
 
         processed += FlushBuffers();
 
- 
-            _isPumping = true;
+
+        _isPumping = true;
         try
         {
             if (_readyQueue.IsEmpty && !_nextQueue.IsEmpty) PromoteNextToReady();
@@ -728,7 +750,7 @@ public sealed class PostScheduler : IDisposable
                 for (int i = 0; i < currentWaveCount; i++)
                 {
                     PostItem item;
-       
+
                     if (!_readyQueue.TryDequeue(out item)) break;
 
                     DispatchItem(in item);
@@ -745,7 +767,7 @@ public sealed class PostScheduler : IDisposable
                     }
                 }
 
-          
+
                 if (wavesProcessed < _options.MaxWavesPerPump && !_nextQueue.IsEmpty)
                     PromoteNextToReady();
                 else
@@ -757,9 +779,10 @@ public sealed class PostScheduler : IDisposable
             _isPumping = false;
         }
 
-    EndPump:
+        EndPump:
         var totalElapsedMs = 0.0;
-        if (startTimestamp != 0) totalElapsedMs = (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
+        if (startTimestamp != 0)
+            totalElapsedMs = (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
 
         int pendingQueueCount = _readyQueue.Count + _nextQueue.Count;
         return new PostPumpStats(processed, totalElapsedMs, pendingQueueCount, wavesProcessed);
@@ -788,7 +811,7 @@ public sealed class PostScheduler : IDisposable
         }
     }
 
-  
+
     public void PrewarmEvent<T>() where T : struct
     {
         if (_disposed) return;
@@ -809,12 +832,12 @@ public sealed class PostScheduler : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        
+
         // 先释放 snapshot 残留，不能先 Clear。
         ReleaseRemainingCoalescedSnapshot();
         _snapshotCoalesced.Clear();
         ReleaseRemainingLatestSnapshot();
-  
+
         for (int i = 0; i < _latestPendingBits.Length; i++)
         {
             var bits = FastArray.At(_latestPendingBits, i);
@@ -831,9 +854,10 @@ public sealed class PostScheduler : IDisposable
         {
             _payloadStorage.Release(_coalescedBuffer[key].PayloadHandle);
         }
+
         _pendingCoalesced.Clear();
         _coalescedBuffer.Clear();
-                
+
         ReleaseQueuedPayloads(_readyQueue);
         ReleaseQueuedPayloads(_nextQueue);
 

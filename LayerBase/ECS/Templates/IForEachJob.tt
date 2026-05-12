@@ -25,7 +25,7 @@ public struct IForEachJob<T, <#= generics #>> : IChunkJob where T : struct, IFor
 
         foreach(var entityIndex in chunk)
         {
-            <#= Indent(getComponents,12) #>
+            <#= Indent(getComponents, 12) #>
             ForEach.Update(<#= insertParams #>);
         }
     }

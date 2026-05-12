@@ -33,8 +33,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         var mountMembers = context.SyntaxProvider
                                   .ForAttributeWithMetadataName(
                                       MountAttributeName,
-                                      static (node, _) => node is VariableDeclaratorSyntax or FieldDeclarationSyntax or PropertyDeclarationSyntax,
-                                      static (ctx,  _) => ctx.TargetSymbol);
+                                      static (node, _) => node is VariableDeclaratorSyntax or FieldDeclarationSyntax
+                                          or PropertyDeclarationSyntax,
+                                      static (ctx, _) => ctx.TargetSymbol);
 
         var combined = ownerLayerRegistrations.Collect()
                                               .Combine(mountMembers.Collect());
@@ -52,9 +53,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         });
     }
 
-    private static void Execute(SourceProductionContext spc, Compilation compilation,
+    private static void Execute(SourceProductionContext             spc, Compilation compilation,
                                 ImmutableArray<ServiceRegistration> ownerLayers,
-                                ImmutableArray<ISymbol> mountMembers)
+                                ImmutableArray<ISymbol>             mountMembers)
     {
         var iServiceSymbol = compilation.GetTypeByMetadataName(IServiceMetadataName);
         var iLayerContextSymbol = compilation.GetTypeByMetadataName(ILayerContextMetadataName);
@@ -65,13 +66,18 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
         if (iServiceSymbol == null || layerSymbol == null)
         {
-            spc.ReportDiagnostic(Diagnostic.Create(new DiagnosticDescriptor("DBGLBG001", "Debug", "iServiceSymbol: {0}, layerSymbol: {1}", "Debug", DiagnosticSeverity.Warning, true), null, iServiceSymbol?.ToDisplayString() ?? "null", layerSymbol?.ToDisplayString() ?? "null"));
+            spc.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor("DBGLBG001", "Debug", "iServiceSymbol: {0}, layerSymbol: {1}", "Debug",
+                    DiagnosticSeverity.Warning, true), null, iServiceSymbol?.ToDisplayString() ?? "null",
+                layerSymbol?.ToDisplayString() ?? "null"));
             return;
         }
 
         if (mountMembers.Length > 0)
         {
-            spc.ReportDiagnostic(Diagnostic.Create(new DiagnosticDescriptor("DBGLBG002", "Debug", "mountMembers count: {0}", "Debug", DiagnosticSeverity.Warning, true), null, mountMembers.Length));
+            spc.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor("DBGLBG002", "Debug", "mountMembers count: {0}", "Debug",
+                    DiagnosticSeverity.Warning, true), null, mountMembers.Length));
         }
 
         var classMap = new Dictionary<INamedTypeSymbol, ClassInfo>(SymbolEqualityComparer.Default);
@@ -94,14 +100,20 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         {
             if (member.ContainingType == null)
             {
-                spc.ReportDiagnostic(Diagnostic.Create(new DiagnosticDescriptor("DBGLBG004", "Debug", "Member {0} has null ContainingType", "Debug", DiagnosticSeverity.Warning, true), member.Locations.FirstOrDefault(), member.Name));
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    new DiagnosticDescriptor("DBGLBG004", "Debug", "Member {0} has null ContainingType", "Debug",
+                        DiagnosticSeverity.Warning, true), member.Locations.FirstOrDefault(), member.Name));
                 continue;
             }
+
             var info = GetOrAddClass(member.ContainingType);
             info.MountMembers.Add(member);
-            
+
             var isLayer = InheritsFromLayer(info.Symbol, layerSymbol);
-            spc.ReportDiagnostic(Diagnostic.Create(new DiagnosticDescriptor("DBGLBG003", "Debug", "Type: {0}, Base: {1}, isLayer: {2}", "Debug", DiagnosticSeverity.Warning, true), member.Locations.FirstOrDefault(), info.Symbol.ToDisplayString(), info.Symbol.BaseType?.ToDisplayString() ?? "none", isLayer));
+            spc.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor("DBGLBG003", "Debug", "Type: {0}, Base: {1}, isLayer: {2}", "Debug",
+                    DiagnosticSeverity.Warning, true), member.Locations.FirstOrDefault(), info.Symbol.ToDisplayString(),
+                info.Symbol.BaseType?.ToDisplayString() ?? "none", isLayer));
         }
 
         var callHandlerRegistrations = new List<CallHandlerRegistration>();
@@ -109,14 +121,16 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         foreach (var info in classMap.Values)
         {
             var isLayer = InheritsFromLayer(info.Symbol, layerSymbol);
-            var isService = ImplementsInterface(info.Symbol, iServiceSymbol) || ImplementsInterfaceByMetadataName(info.Symbol, IServiceMetadataName);
+            var isService = ImplementsInterface(info.Symbol, iServiceSymbol) ||
+                            ImplementsInterfaceByMetadataName(info.Symbol, IServiceMetadataName);
 
             // Validation for [Mount]
             if (info.MountMembers.Count > 0)
             {
                 if (!IsPartial(info.Symbol))
                 {
-                    var diagnostic = isLayer ? Diagnostics.MountLayerMustBePartial : Diagnostics.MountServiceMustBePartial;
+                    var diagnostic =
+                        isLayer ? Diagnostics.MountLayerMustBePartial : Diagnostics.MountServiceMustBePartial;
                     spc.ReportDiagnostic(Diagnostic.Create(diagnostic,
                         info.Symbol.Locations.FirstOrDefault(),
                         info.Symbol.ToDisplayString()));
@@ -131,7 +145,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 {
                     ProcessServiceMounts(spc, info, iLayerContextSymbol);
                 }
-                else if (ImplementsInterface(info.Symbol, iLayerContextSymbol) || ImplementsInterfaceByMetadataName(info.Symbol, ILayerContextMetadataName))
+                else if (ImplementsInterface(info.Symbol, iLayerContextSymbol) ||
+                         ImplementsInterfaceByMetadataName(info.Symbol, ILayerContextMetadataName))
                 {
                     // Allow [Mount] on ILayerContext classes for member injection.
                     // No auto-registration is performed for these.
@@ -275,8 +290,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         foreach (var kvp in layerGroups)
         {
             var layerType = kvp.Key;
-            var ownerLayerServices = kvp.Value.Distinct(SymbolEqualityComparer.Default).Cast<INamedTypeSymbol>().ToList();
-            
+            var ownerLayerServices =
+                kvp.Value.Distinct(SymbolEqualityComparer.Default).Cast<INamedTypeSymbol>().ToList();
+
             var injectServices = new List<MountedContext>();
             if (classMap.TryGetValue(layerType, out var layerInfo))
             {
@@ -285,14 +301,18 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             if (injectServices.Count > 0 || ownerLayerServices.Count > 0)
             {
-                var ownerOnlyServices = ownerLayerServices.Where(s => !injectServices.Any(m => SymbolEqualityComparer.Default.Equals(m.ImplementationType, s))).ToList();
+                var ownerOnlyServices = ownerLayerServices.Where(s =>
+                    !injectServices.Any(m => SymbolEqualityComparer.Default.Equals(m.ImplementationType, s))).ToList();
                 if (injectServices.Count > 0 && ownerOnlyServices.Count > 0)
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OwnerOnlyUnorderedTail, layerType.Locations.FirstOrDefault(),
-                        layerType.ToDisplayString(), string.Join(", ", ownerOnlyServices.Select(s => s.ToDisplayString()))));
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OwnerOnlyUnorderedTail,
+                        layerType.Locations.FirstOrDefault(),
+                        layerType.ToDisplayString(),
+                        string.Join(", ", ownerOnlyServices.Select(s => s.ToDisplayString()))));
                 }
 
-                var sourceText = GenerateLayerPartial(layerType, injectServices, ownerLayerServices, iServiceSymbol, callHandlerSymbol);
+                var sourceText = GenerateLayerPartial(layerType, injectServices, ownerLayerServices, iServiceSymbol,
+                    callHandlerSymbol);
                 if (!string.IsNullOrEmpty(sourceText))
                 {
                     spc.AddSource(CreateHintName(layerType), SourceText.From(sourceText, Encoding.UTF8));
@@ -319,7 +339,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         }
     }
 
-    private static void ProcessLayerMounts(SourceProductionContext spc, ClassInfo info, INamedTypeSymbol iServiceSymbol, Dictionary<INamedTypeSymbol, ClassInfo> classMap)
+    private static void ProcessLayerMounts(SourceProductionContext spc, ClassInfo info, INamedTypeSymbol iServiceSymbol,
+                                           Dictionary<INamedTypeSymbol, ClassInfo> classMap)
     {
         // Deterministic ordering and partial check
         var declarations = info.MountMembers
@@ -348,7 +369,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             // Extract ImplementationType from [Mount(typeof(TImpl))]
             INamedTypeSymbol? implType = null;
-            var attribute = member.GetAttributes().FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == MountAttributeName);
+            var attribute = member.GetAttributes()
+                                  .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == MountAttributeName);
             if (attribute != null && attribute.ConstructorArguments.Length > 0)
             {
                 implType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
@@ -366,20 +388,23 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             // Diagnostics LBMOUNT002: Implementation type must be concrete class
             if (actualImplType.IsAbstract || actualImplType.TypeKind != TypeKind.Class)
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplMustBeConcrete, member.Locations[0], actualImplType.ToDisplayString()));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplMustBeConcrete, member.Locations[0],
+                    actualImplType.ToDisplayString()));
                 continue;
             }
 
             // Diagnostics LBMOUNT003: Implementation type not assignable
             if (!IsAssignableFrom(serviceType, actualImplType))
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplNotAssignable, member.Locations[0], actualImplType.ToDisplayString(), serviceType.ToDisplayString()));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplNotAssignable, member.Locations[0],
+                    actualImplType.ToDisplayString(), serviceType.ToDisplayString()));
                 continue;
             }
 
             if (classMap.TryGetValue(actualImplType, out var targetInfo))
             {
-                var hasMismatch = targetInfo.OwnerLayerRegistrations.Any(r => !SymbolEqualityComparer.Default.Equals(r.LayerType, info.Symbol));
+                var hasMismatch = targetInfo.OwnerLayerRegistrations.Any(r =>
+                    !SymbolEqualityComparer.Default.Equals(r.LayerType, info.Symbol));
                 if (hasMismatch)
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountOwnerConflict, member.Locations[0],
@@ -398,7 +423,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         }
     }
 
-    private static List<MountedContext> ProcessServiceMounts(SourceProductionContext spc, ClassInfo info, INamedTypeSymbol? iLayerContextSymbol)
+    private static List<MountedContext> ProcessServiceMounts(SourceProductionContext spc, ClassInfo info,
+                                                             INamedTypeSymbol?       iLayerContextSymbol)
     {
         // Sort for deterministic generation (though not strictly required for correctness here)
         info.MountMembers.Sort((a, b) =>
@@ -414,7 +440,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             // Extract ImplementationType from [Mount(typeof(TImpl))]
             INamedTypeSymbol? implType = null;
-            var attribute = member.GetAttributes().FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == MountAttributeName);
+            var attribute = member.GetAttributes()
+                                  .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == MountAttributeName);
             if (attribute != null && attribute.ConstructorArguments.Length > 0)
             {
                 implType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
@@ -425,28 +452,32 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             // Diagnostics LBMOUNT002: Implementation type must be concrete class
             if (actualImplType.IsAbstract || actualImplType.TypeKind != TypeKind.Class)
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplMustBeConcrete, member.Locations[0], actualImplType.ToDisplayString()));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplMustBeConcrete, member.Locations[0],
+                    actualImplType.ToDisplayString()));
                 continue;
             }
 
             // Diagnostics LBMOUNT003: Implementation type not assignable
             if (!IsAssignableFrom(serviceType, actualImplType))
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplNotAssignable, member.Locations[0], actualImplType.ToDisplayString(), serviceType.ToDisplayString()));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplNotAssignable, member.Locations[0],
+                    actualImplType.ToDisplayString(), serviceType.ToDisplayString()));
                 continue;
             }
 
             // Diagnostics LBMOUNT004: Implementation type must implement ILayerContext
             if (iLayerContextSymbol != null && !ImplementsInterface(actualImplType, iLayerContextSymbol))
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplMustImplementILayerContext, member.Locations[0], actualImplType.ToDisplayString()));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplMustImplementILayerContext,
+                    member.Locations[0], actualImplType.ToDisplayString()));
                 continue;
             }
 
             // Diagnostics LBMOUNT005: Field type is interface/abstract but no implementation type specified
             if (implType == null && (serviceType.IsAbstract || serviceType.TypeKind == TypeKind.Interface))
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountFieldTypeInvalid, member.Locations[0], serviceType.ToDisplayString()));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountFieldTypeInvalid, member.Locations[0],
+                    serviceType.ToDisplayString()));
                 continue;
             }
 
@@ -465,12 +496,15 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
         if (target is INamedTypeSymbol namedTarget && namedTarget.TypeKind == TypeKind.Interface)
         {
-            return source.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, target) || SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, target));
+            return source.AllInterfaces.Any(i =>
+                SymbolEqualityComparer.Default.Equals(i, target) ||
+                SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, target));
         }
 
         for (var current = source.BaseType; current != null; current = current.BaseType)
         {
-            if (SymbolEqualityComparer.Default.Equals(current, target) || SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, target))
+            if (SymbolEqualityComparer.Default.Equals(current, target) ||
+                SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, target))
                 return true;
         }
 
@@ -480,14 +514,16 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private static ITypeSymbol? GetSymbolType(ISymbol symbol)
     {
         return symbol switch
-        {
-            IFieldSymbol field => field.Type,
-            IPropertySymbol property => property.Type,
-            _ => null
-        };
+               {
+                   IFieldSymbol field       => field.Type,
+                   IPropertySymbol property => property.Type,
+                   _                        => null
+               };
     }
 
-    private static string GenerateLayerPartial(INamedTypeSymbol layerType, List<MountedContext> injectServices, List<INamedTypeSymbol> ownerLayerServices, INamedTypeSymbol iServiceSymbol, INamedTypeSymbol? callHandlerSymbol)
+    private static string GenerateLayerPartial(INamedTypeSymbol layerType, List<MountedContext> injectServices,
+                                               List<INamedTypeSymbol> ownerLayerServices,
+                                               INamedTypeSymbol iServiceSymbol, INamedTypeSymbol? callHandlerSymbol)
     {
         var layerDisplayName = layerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var layerIdentifier = layerType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
@@ -510,8 +546,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         builder.Append("partial class ").Append(layerIdentifier)
                .AppendLine(" : global::LayerBase.DI.IAutoLayerMount");
         builder.AppendLine("{");
-        
-        builder.AppendLine("    void global::LayerBase.DI.IAutoLayerMount.__AutoMountServices(global::LayerBase.Layers.Layer layerInstance)");
+
+        builder.AppendLine(
+            "    void global::LayerBase.DI.IAutoLayerMount.__AutoMountServices(global::LayerBase.Layers.Layer layerInstance)");
         builder.AppendLine("    {");
         builder.Append("        var typedLayer = (").Append(layerDisplayName).AppendLine(")layerInstance;");
 
@@ -586,15 +623,17 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         builder.Append("partial class ").Append(serviceIdentifier)
                .AppendLine(" : global::LayerBase.DI.IAutoServiceMount");
         builder.AppendLine("{");
-        
-        builder.AppendLine("    void global::LayerBase.DI.IAutoServiceMount.__AutoMountContexts(global::LayerBase.DI.IServiceCollection services)");
+
+        builder.AppendLine(
+            "    void global::LayerBase.DI.IAutoServiceMount.__AutoMountContexts(global::LayerBase.DI.IServiceCollection services)");
         builder.AppendLine("    {");
 
         foreach (var context in mountedContexts)
         {
             var serviceName = context.ServiceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var implName = context.ImplementationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            builder.Append("        services.TryAddScoped<").Append(serviceName).Append(", ").Append(implName).AppendLine(">();");
+            builder.Append("        services.TryAddScoped<").Append(serviceName).Append(", ").Append(implName)
+                   .AppendLine(">();");
         }
 
         builder.AppendLine("    }");
@@ -889,6 +928,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             LayerType = layerType;
             Location = location;
         }
+
         public INamedTypeSymbol ServiceType { get; }
         public INamedTypeSymbol LayerType { get; }
         public Location? Location { get; }
@@ -906,6 +946,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             ResponseType = responseType;
             Location = location;
         }
+
         public INamedTypeSymbol ServiceType { get; }
         public INamedTypeSymbol LayerType { get; }
         public ITypeSymbol RequestType { get; }
@@ -914,6 +955,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     }
 
     private readonly record struct CallHandlerImplementation(ITypeSymbol RequestType, ITypeSymbol ResponseType);
+
     private readonly record struct CallBindingSignature(INamedTypeSymbol LayerType, ITypeSymbol ResponseType);
 
     private readonly record struct MountedContext(INamedTypeSymbol ServiceType, INamedTypeSymbol ImplementationType);
@@ -921,9 +963,13 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private sealed class CallBindingSignatureComparer : IEqualityComparer<CallBindingSignature>
     {
         public static readonly CallBindingSignatureComparer Instance = new();
+
         public bool Equals(CallBindingSignature x, CallBindingSignature y) =>
-            SymbolEqualityComparer.Default.Equals(x.LayerType, y.LayerType) && SymbolEqualityComparer.Default.Equals(x.ResponseType, y.ResponseType);
+            SymbolEqualityComparer.Default.Equals(x.LayerType, y.LayerType) &&
+            SymbolEqualityComparer.Default.Equals(x.ResponseType, y.ResponseType);
+
         public int GetHashCode(CallBindingSignature obj) =>
-            (SymbolEqualityComparer.Default.GetHashCode(obj.LayerType) * 397) ^ SymbolEqualityComparer.Default.GetHashCode(obj.ResponseType);
+            (SymbolEqualityComparer.Default.GetHashCode(obj.LayerType) * 397) ^
+            SymbolEqualityComparer.Default.GetHashCode(obj.ResponseType);
     }
 }

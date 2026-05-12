@@ -11,7 +11,7 @@ public partial struct CoalescedTestEvent
 public class CoalescedTestEventMetaData : EventMetaData<CoalescedTestEvent>
 {
     public override int GetPostCoalesceKey(in CoalescedTestEvent value) => value.Id;
-    
+
     public override bool TryMergePostEvent(ref CoalescedTestEvent current, in CoalescedTestEvent next)
     {
         if (next.Value == -1) return false;

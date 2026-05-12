@@ -6,8 +6,8 @@ namespace LayerBase.Core.Event;
 
 internal interface IEventStore : IDisposable
 {
-    void Release(int index, int version);
-    void Dispatch(int index, int version, EventCenter center);
+    void Release(int                 index, int version);
+    void Dispatch(int                index, int version, EventCenter center);
     void DispatchDefault(EventCenter center);
 }
 
@@ -55,12 +55,13 @@ internal sealed class EventStore<T> : IEventStore where T : struct
         _buffer = new T[initialCapacity];
         _versions = new int[initialCapacity];
         _nextFree = new int[initialCapacity];
-        
+
         for (int i = 0; i < initialCapacity; i++)
         {
             _versions[i] = 1;
             _nextFree[i] = i + 1;
         }
+
         _nextFree[initialCapacity - 1] = -1;
         _freeHead = 0;
     }
@@ -69,13 +70,13 @@ internal sealed class EventStore<T> : IEventStore where T : struct
     {
         if (_disposed) throw new ObjectDisposedException(nameof(EventStore<T>));
         if (_freeHead == -1) Grow();
-        
+
         int index = _freeHead;
         _freeHead = _nextFree[index];
-        
+
         _buffer[index] = value;
         int version = _versions[index];
-        
+
         return new PayloadHandle(EventTypeId<T>.Id, index, version);
     }
 
@@ -86,7 +87,7 @@ internal sealed class EventStore<T> : IEventStore where T : struct
             value = default;
             return false;
         }
-        
+
         value = _buffer[handle.Index];
         return true;
     }
@@ -103,11 +104,11 @@ internal sealed class EventStore<T> : IEventStore where T : struct
     public void Release(int index, int version)
     {
         if (_disposed || index < 0 || index >= _capacity || _versions[index] != version) return;
-        
+
         _buffer[index] = default;
         _versions[index]++;
         if (_versions[index] == 0) _versions[index] = 1;
-        
+
         _nextFree[index] = _freeHead;
         _freeHead = index;
     }
@@ -130,16 +131,17 @@ internal sealed class EventStore<T> : IEventStore where T : struct
     {
         int oldCapacity = _capacity;
         int newCapacity = oldCapacity * 2;
-        
+
         Array.Resize(ref _buffer, newCapacity);
         Array.Resize(ref _versions, newCapacity);
         Array.Resize(ref _nextFree, newCapacity);
-        
+
         for (int i = oldCapacity; i < newCapacity; i++)
         {
             _versions[i] = 1;
             _nextFree[i] = i + 1;
         }
+
         _nextFree[newCapacity - 1] = -1;
         _freeHead = oldCapacity;
         _capacity = newCapacity;
@@ -182,7 +184,7 @@ internal sealed class EventPayloadStorage : IDisposable
             var s = _typeIdStores[typeId];
             if (s != null) return (EventStore<T>)s;
         }
-        
+
         return GetStoreFastSlow<T>(runtimeId, typeId);
     }
 
@@ -210,6 +212,7 @@ internal sealed class EventPayloadStorage : IDisposable
         {
             Array.Resize(ref _typeIdStores, Math.Max(typeId + 1, _typeIdStores.Length * 2));
         }
+
         _typeIdStores[typeId] = store;
     }
 
@@ -229,6 +232,7 @@ internal sealed class EventPayloadStorage : IDisposable
         {
             store = new EventStore<T>();
         }
+
         return store;
     }
 
@@ -242,7 +246,7 @@ internal sealed class EventPayloadStorage : IDisposable
     {
         GetStoreFast<T>(runtimeId);
     }
-    
+
     public void Release(PayloadHandle handle)
     {
         if (handle.IsInvalid) return;
@@ -256,9 +260,10 @@ internal sealed class EventPayloadStorage : IDisposable
         var store = GetStoreByTypeId(handle.EventTypeId);
         if (store == null)
         {
-            LayerHub.ReportWarning(0,"DEBUG","POST",$"Store not found for typeId {handle.EventTypeId}");
+            LayerHub.ReportWarning(0, "DEBUG", "POST", $"Store not found for typeId {handle.EventTypeId}");
             return;
         }
+
         store.Dispatch(handle.Index, handle.Version, center);
     }
 
@@ -267,9 +272,10 @@ internal sealed class EventPayloadStorage : IDisposable
         var store = GetStoreByTypeId(eventTypeId);
         if (store == null)
         {
-            LayerHub.ReportWarning(0,"DEBUG","",$"Store not found for typeId {eventTypeId}");
+            LayerHub.ReportWarning(0, "DEBUG", "", $"Store not found for typeId {eventTypeId}");
             return;
         }
+
         store.DispatchDefault(center);
     }
 
@@ -281,6 +287,7 @@ internal sealed class EventPayloadStorage : IDisposable
         {
             return _typeIdStores[typeId];
         }
+
         return null;
     }
 

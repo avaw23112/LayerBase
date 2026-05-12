@@ -13,7 +13,6 @@ internal static class ArrayExtensions
     /// <param name="index">The index.</param>
     /// <param name="item">The item.</param>
     /// <typeparam name="T">The type.</typeparam>
-
     internal static T[] Add<T>(this T[] target, int index, T item)
     {
         if (index < 0)
@@ -41,9 +40,8 @@ internal static class ArrayExtensions
     /// <param name="target">The target array.</param>
     /// <param name="items">The array of items which will be added.</param>
     /// <returns>The new array.</returns>
-
-    internal static T[] Add<T>(this T[] target, params T[] items) {
-
+    internal static T[] Add<T>(this T[] target, params T[] items)
+    {
         var result = new T[target.Length + items.Length];
         target.CopyTo(result, 0);
 
@@ -62,7 +60,6 @@ internal static class ArrayExtensions
     /// <param name="target">The target array.</param>
     /// <param name="items">The <see cref="IList"/> of items which will be added.</param>
     /// <returns>The new array.</returns>
-
     internal static T[] Add<T>(this T[] target, IList<T> items)
     {
         var result = new T[target.Length + items.Count];
@@ -84,7 +81,6 @@ internal static class ArrayExtensions
     /// <param name="array">The target array.</param>
     /// <param name="toRemove">The <see cref="IList"/> of items which will be removed.</param>
     /// <returns>The new array.</returns>
-
     internal static T[] Remove<T>(this T[] array, params T[] toRemove)
     {
         // Count how many items exist in target array to remove
@@ -126,7 +122,6 @@ internal static class ArrayExtensions
     /// <param name="array">The target array.</param>
     /// <param name="toRemove">The <see cref="IList"/> of items which will be removed.</param>
     /// <returns>The new array.</returns>
-
     internal static T[] Remove<T>(this T[] array, IList<T> toRemove)
     {
         // Count how many items exist in target array to remove

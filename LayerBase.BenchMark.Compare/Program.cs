@@ -83,7 +83,6 @@ public class PublishSingleSubscriberCompareBench : CompareBenchmarkBase
         var layer = new CompareLayer();
         layer.RegisterService(new CompareNotifyManager());
         _center = LayerHub.CreateLayers().Push(layer).Build().Prewarm().EventCenter;
-        
     }
 
     [GlobalCleanup]
@@ -136,7 +135,7 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
     private IServiceProvider _provider = null!;
     private LayerRuntime _layerRuntime = null!;
     private EventCenter _center = null;
-    [Params(1,4,8,16)] public int SubscriberCount { get; set; }
+    [Params(1, 4, 8, 16)] public int SubscriberCount { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -170,6 +169,7 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
                     auto.AutoBind(layer);
             }
         }
+
         _layerRuntime = LayerHub.CreateLayers().Push(layer).Build().Prewarm();
         _center = _layerRuntime.EventCenter;
     }
@@ -189,6 +189,7 @@ public class PublishFanoutCompareBench : CompareBenchmarkBase
         for (var i = 0; i < OneMillion; i++)
             _publisher.Publish(in NotifyPayload.Instance);
     }
+
     [Benchmark(Description = "MessagePipe Notify扇出 (N订阅者) - 100万次")]
     [BenchmarkCategory("Compare.Notify", "MessagePipe")]
     public void MessagePipe()

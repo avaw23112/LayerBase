@@ -159,4 +159,3 @@ public sealed class LBTaskCompletionSource<T> : IDisposable
                 _source.SetCanceled(default);
     }
 }
-

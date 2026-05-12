@@ -8,9 +8,9 @@ public readonly struct PostItem
     public readonly BackpressurePolicy Policy;
 
     public PostItem(
-        int eventTypeId,
-        PayloadHandle payloadHandle,
-        long sequenceId,
+        int                eventTypeId,
+        PayloadHandle      payloadHandle,
+        long               sequenceId,
         BackpressurePolicy policy)
     {
         EventTypeId = eventTypeId;

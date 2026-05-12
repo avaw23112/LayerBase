@@ -84,13 +84,13 @@ internal sealed class RingQueueBuffer<TEvent>
     {
         _ = ResizeWithBuffer(bufferId, head, count, newCapacity);
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(int bufferId, int index, in TEvent value)
     {
         GetBufferUnchecked(bufferId)[index] = value;
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TEvent Read(int bufferId, int index)
     {
@@ -122,7 +122,7 @@ internal sealed class RingQueueBuffer<TEvent>
         _inUse[index] = false;
         _freeIds.Push(bufferId);
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private TEvent[] GetBuffer(int bufferId)
     {
@@ -133,7 +133,7 @@ internal sealed class RingQueueBuffer<TEvent>
 
         return _buffers[bufferId - 1] ?? throw new InvalidOperationException("Buffer is not allocated.");
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private TEvent[] GetBufferUnchecked(int bufferId)
     {
@@ -148,8 +148,8 @@ internal sealed class RingQueueBuffer<TEvent>
     {
 #if NET5_0_OR_GREATER
     return ref MemoryMarshal.GetArrayDataReference(array);
-#else 
+#else
         return ref MemoryMarshal.GetReference(array.AsSpan());
-#endif 
+#endif
     }
 }

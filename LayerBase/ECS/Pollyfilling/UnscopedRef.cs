@@ -16,12 +16,15 @@ namespace System.Diagnostics.CodeAnalysis;
 ///     </list>
 ///     This attribute is used in those instances where the <see langword="ref"/> should be allowed to escape.
 /// </remarks>
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Parameter | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Parameter | AttributeTargets.Property, AllowMultiple = false,
+    Inherited = false)]
 public sealed class UnscopedRefAttribute : Attribute
 {
     /// <summary>
     ///     Initializes a new instance of the <see cref="UnscopedRefAttribute"/> class.
     /// </summary>
-    public UnscopedRefAttribute() { }
+    public UnscopedRefAttribute()
+    {
+    }
 }
 #endif

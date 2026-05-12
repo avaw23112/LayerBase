@@ -6,7 +6,6 @@ namespace LayerBase.Core.Event;
 
 public partial struct EventPrewarmBootstrapper
 {
-    
 }
 
 /// <summary>
@@ -39,7 +38,7 @@ public static class LayerBasePrewarmRegistry
     public static void Prewarm(EventCenter center, in LayerPrewarmOptions options)
     {
         if (center == null) throw new ArgumentNullException(nameof(center));
-        
+
         Action<EventCenter, LayerPrewarmOptions>[] snapshots;
         lock (s_lock)
         {

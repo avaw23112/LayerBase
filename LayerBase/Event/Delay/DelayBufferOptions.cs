@@ -9,15 +9,15 @@ public readonly struct DelayBufferOptions
 
     public DelayBufferOptions(
         float tickDurationSeconds,
-        int wheelSize,
-        int initialCapacity,
-        int maxExpiredPerTick)
+        int   wheelSize,
+        int   initialCapacity,
+        int   maxExpiredPerTick)
     {
         TickDurationSeconds = tickDurationSeconds;
         WheelSize = wheelSize;
         InitialCapacity = initialCapacity;
         MaxExpiredPerTick = maxExpiredPerTick;
     }
-    
-    public static DelayBufferOptions Default => new(1/60f, 64, 256, 1024);
+
+    public static DelayBufferOptions Default => new(1 / 60f, 64, 256, 1024);
 }

@@ -29,9 +29,11 @@ public sealed partial class LayerRuntime : IDisposable
     internal WorldServiceRoot Services { get; }
     public EventCenter EventCenter { get; internal set; }
     public ActorWorld Actors { get; }
-    
+
     private ServiceProvider? _worldProvider;
-    public LayerBase.DI.IServiceProvider ServiceProvider => _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
+
+    public LayerBase.DI.IServiceProvider ServiceProvider =>
+        _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
 
     public T GetService<T>() where T : class => ServiceProvider.Get<T>();
 
@@ -61,7 +63,9 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     private EventBuildPolicyTable? _policyTable;
-    public EventBuildPolicyTable PolicyTable => _policyTable ?? throw new InvalidOperationException("Runtime not built.");
+
+    public EventBuildPolicyTable PolicyTable =>
+        _policyTable ?? throw new InvalidOperationException("Runtime not built.");
 
     internal void InitializeScheduler(PostSchedulerOptions options)
     {
@@ -110,8 +114,10 @@ public sealed partial class LayerRuntime : IDisposable
                 _policyTable.SetActorMailOptions(eventId, actorMailOptions.Value);
             }
 
-            var effectivePolicy = postPolicy ?? new EventPostPolicy(PostDeliveryMode.Normal, options.DefaultBackpressure, 0);
-            plans.Add(new PostTypePlan(eventId, effectivePolicy.Mode, effectivePolicy.Backpressure, effectivePolicy.MaxPending, options.DefaultBackpressure, effectivePolicy.MergeFailure));
+            var effectivePolicy =
+                postPolicy ?? new EventPostPolicy(PostDeliveryMode.Normal, options.DefaultBackpressure, 0);
+            plans.Add(new PostTypePlan(eventId, effectivePolicy.Mode, effectivePolicy.Backpressure,
+                effectivePolicy.MaxPending, options.DefaultBackpressure, effectivePolicy.MergeFailure));
         }
 
         if (_scheduler == null)
@@ -123,7 +129,7 @@ public sealed partial class LayerRuntime : IDisposable
         {
             _scheduler.UpdatePolicyTable(_policyTable);
         }
-        
+
         _scheduler.BuildPlans(plans.ToArray());
     }
 
@@ -172,14 +178,16 @@ public sealed partial class LayerRuntime : IDisposable
 
             // 3. Completion drain (Stage 5 Concurrency Simplified)
             var policy = IsDebugMode ? CompletionExceptionPolicy.Throw : CompletionExceptionPolicy.ReportAndContinue;
-            _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0, policy, ex => ReportLayerEventError(-1, "System", "Completion", ex));
+            _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0, policy,
+                ex => ReportLayerEventError(-1, "System", "Completion", ex));
 
             // 4. FixedUpdate accumulator
             if (_fixedUpdateOptions.Enabled)
             {
                 _fixedUpdateAccumulator += deltaTime;
                 int steps = 0;
-                while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime && steps < _fixedUpdateOptions.MaxStepsPerPump)
+                while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime &&
+                       steps < _fixedUpdateOptions.MaxStepsPerPump)
                 {
                     _chain?.PumpFixed(_fixedUpdateOptions.FixedDeltaTime);
                     _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
@@ -195,7 +203,7 @@ public sealed partial class LayerRuntime : IDisposable
                 var ingressResult = _postIngress.DrainTo(
                     _scheduler,
                     _scheduler.Options.MaxIngressPostsPerPump);
-                
+
                 //�����Debugģʽ���Զ��ϱ�ʧ�ܽ��
                 if (IsDebugMode && ingressResult.Failed > 0)
                 {
@@ -209,7 +217,7 @@ public sealed partial class LayerRuntime : IDisposable
 
             // 5. Post pump
             PostPumpStats postStats = _scheduler?.Pump()
-                ?? new PostPumpStats(0, 0, 0, 0);
+                                      ?? new PostPumpStats(0, 0, 0, 0);
 
             _chain?.Pump(deltaTime);
 
@@ -244,7 +252,8 @@ public sealed partial class LayerRuntime : IDisposable
             {
                 _fixedUpdateAccumulator += deltaTime;
                 int steps = 0;
-                while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime && steps < _fixedUpdateOptions.MaxStepsPerPump)
+                while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime &&
+                       steps < _fixedUpdateOptions.MaxStepsPerPump)
                 {
                     _chain?.PumpFixed(_fixedUpdateOptions.FixedDeltaTime);
                     _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
@@ -270,7 +279,7 @@ public sealed partial class LayerRuntime : IDisposable
 
             // 4. Post pump
             PostPumpStats postStats = _scheduler?.Pump()
-                ?? new PostPumpStats(0, 0, 0, 0);
+                                      ?? new PostPumpStats(0, 0, 0, 0);
 
             _chain?.Pump(deltaTime);
 
@@ -387,7 +396,7 @@ public sealed partial class LayerRuntime : IDisposable
     /// null ��ʾʹ���¼�Ĭ�ϲ��ԡ�
     /// </param>
     public void PostFromAnyThread<T>(
-        in T value,
+        in T             value,
         EventPostPolicy? policy = default)
         where T : struct
     {
@@ -418,7 +427,7 @@ public sealed partial class LayerRuntime : IDisposable
     /// false ��ʾ Runtime �Ѿ��ͷš�
     /// </returns>
     public bool TryPostFromAnyThread<T>(
-        in T value,
+        in T             value,
         EventPostPolicy? policy = default)
         where T : struct
     {
@@ -460,8 +469,8 @@ public sealed partial class LayerRuntime : IDisposable
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(TRequest request,
-                                                                           CancellationToken cancellationToken =
-                                                                               default)
+                                                                    CancellationToken cancellationToken =
+                                                                        default)
         where TLayer : Layer
         where TRequest : struct
         where TResponse : struct
@@ -478,8 +487,8 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(int version, TRequest request,
-        CancellationToken cancellationToken)
+    private LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(int               version, TRequest request,
+                                                                         CancellationToken cancellationToken)
         where TLayer : Layer
         where TRequest : struct
         where TResponse : struct
@@ -612,7 +621,8 @@ public sealed partial class LayerRuntime : IDisposable
         sb.AppendLine("# LayerBase Runtime Policy Dump");
         sb.AppendLine();
         sb.AppendLine("## Event Policies");
-        sb.AppendLine("| RuntimeId | StableId | StableKey | Version | Event Type | Post Mode | Backpressure | MaxPending | MergeFailure | Timer | Buffer |");
+        sb.AppendLine(
+            "| RuntimeId | StableId | StableKey | Version | Event Type | Post Mode | Backpressure | MaxPending | MergeFailure | Timer | Buffer |");
         sb.AppendLine("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |");
 
         foreach (var snapshot in _policyTable.ExportSnapshots())
@@ -856,10 +866,14 @@ public sealed partial class LayerRuntime : IDisposable
 
             if (_debugMode)
             {
-                _runtime.ReportInfo(new LayerEventInfo(-1, "System", "Topology", _runtime.GetTopologySummary(), LayerEventInfoType.Info));
-                _runtime.ReportInfo(new LayerEventInfo(-1, "System", "TopologySnapshot", _runtime.GetTopologyMarkdown(), LayerEventInfoType.Info));
-                _runtime.ReportInfo(new LayerEventInfo(-1, "System", "PolicyDump", _runtime.GetPolicyMarkdown(), LayerEventInfoType.Info));
+                _runtime.ReportInfo(new LayerEventInfo(-1, "System", "Topology", _runtime.GetTopologySummary(),
+                    LayerEventInfoType.Info));
+                _runtime.ReportInfo(new LayerEventInfo(-1, "System", "TopologySnapshot", _runtime.GetTopologyMarkdown(),
+                    LayerEventInfoType.Info));
+                _runtime.ReportInfo(new LayerEventInfo(-1, "System", "PolicyDump", _runtime.GetPolicyMarkdown(),
+                    LayerEventInfoType.Info));
             }
+
             return _runtime;
         }
     }
@@ -923,12 +937,13 @@ public sealed partial class LayerRuntime : IDisposable
     {
         private readonly PostScheduler _scheduler;
         private readonly EventBuildPolicyTable _policyTable;
+
         public RuntimeTimerSink(PostScheduler scheduler, EventBuildPolicyTable policyTable)
         {
             _scheduler = scheduler;
             _policyTable = policyTable;
         }
+
         public bool TryAcceptExpired(in ITimerAction payload, TimerHandle handle) => payload.Execute(_scheduler);
     }
 }
-

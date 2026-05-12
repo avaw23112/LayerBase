@@ -37,8 +37,13 @@ public readonly struct EntityCreateFlow0
     }
 }
 
-<# for (var c = 1; c <= ComponentAmount; c++) { #>
-<# var compG = CG(c); #>
+<#
+    for (var c = 1; c <= ComponentAmount; c++)
+    {
+#>
+<#
+        var compG = CG(c);
+#>
 public readonly struct EntityCreateFlow<#= c #><<#= compG #>>
 {
     private readonly World _world;
@@ -67,4 +72,6 @@ public readonly struct EntityCreateFlow<#= c #><<#= compG #>>
     }
 }
 
-<# } #>
+<#
+    }
+#>

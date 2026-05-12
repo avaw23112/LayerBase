@@ -13,7 +13,7 @@ public interface IEventMetaData
     EventTimerPolicy? GetTimerPolicy();
     EventBufferPolicy? GetBufferPolicy();
     ActorMailOptions? GetActorMailOptions();
-    
+
     int GetPostCoalesceKey(object value);
     EventIdentity GetIdentity();
 }
@@ -21,8 +21,8 @@ public interface IEventMetaData
 public static class EventMetaData
 {
     public static bool TryMergePostEvent<TEvent>(
-        in TEvent oldValue,
-        in TEvent newValue,
+        in  TEvent oldValue,
+        in  TEvent newValue,
         out TEvent mergedValue)
         where TEvent : struct
     {

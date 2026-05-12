@@ -105,7 +105,8 @@ public class ActorQueryTests
         world.CreateActor<ActorDeadOnly>();
 
         ActorQueryResult query = world.QueryActor<ActorQueryDamageEvent>();
-        Type[] actorTypes = query.DebugActors.Select(static actor => actor.GetType()).OrderBy(static t => t.Name).ToArray();
+        Type[] actorTypes = query.DebugActors.Select(static actor => actor.GetType()).OrderBy(static t => t.Name)
+                                 .ToArray();
 
         Assert.That(actorTypes, Is.EqualTo(new[] { typeof(ActorDamageAndDead), typeof(ActorDamageOnly) }));
     }
@@ -133,10 +134,10 @@ public class ActorQueryTests
         world.CreateActor<ActorDeadOnly>();
 
         ActorQueryResult enemyBattleActors = world.Query()
-            .AllBehaviours<ActorQueryDamageEvent>()
-            .AllTags<ActorEnemyTag>()
-            .AllGroups<ActorBattleGroup>()
-            .Build();
+                                                  .AllBehaviours<ActorQueryDamageEvent>()
+                                                  .AllTags<ActorEnemyTag>()
+                                                  .AllGroups<ActorBattleGroup>()
+                                                  .Build();
 
         Type[] actorTypes = enemyBattleActors.DebugActors.Select(static actor => actor.GetType()).ToArray();
         Assert.That(actorTypes, Is.EqualTo(new[] { typeof(ActorDamageOnly) }));
@@ -151,10 +152,10 @@ public class ActorQueryTests
         world.CreateActor<ActorDeadOnly>();
 
         ActorQueryResult query = world.Query()
-            .AllBehaviours<ActorQueryDamageEvent>()
-            .NoneTags<ActorFriendlyTag>()
-            .NoneGroups<ActorUiGroup>()
-            .Build();
+                                      .AllBehaviours<ActorQueryDamageEvent>()
+                                      .NoneTags<ActorFriendlyTag>()
+                                      .NoneGroups<ActorUiGroup>()
+                                      .Build();
 
         Type[] actorTypes = query.DebugActors.Select(static actor => actor.GetType()).ToArray();
         Assert.That(actorTypes, Is.EqualTo(new[] { typeof(ActorDamageOnly) }));

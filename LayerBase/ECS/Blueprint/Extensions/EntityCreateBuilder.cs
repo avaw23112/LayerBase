@@ -18,7 +18,7 @@ public ref struct EntityCreateBuilder
     private readonly LayerRuntime _runtime;
     private readonly World _world;
     private readonly Entity _entity;
-    private readonly PooledList<ComponentType>  _componentTypes;
+    private readonly PooledList<ComponentType> _componentTypes;
     private int _actorTypeId = -1;
     private float _keepAliveSeconds;
     private bool _isCreatedActor = false;
@@ -30,7 +30,7 @@ public ref struct EntityCreateBuilder
         _componentTypes = new PooledList<ComponentType>();
         _world = world;
     }
-    
+
 
     /// <summary>
     /// 应用 Blueprint 结构到当前 Entity。
@@ -45,7 +45,7 @@ public ref struct EntityCreateBuilder
         _componentTypes.AddRange(blueprint.ComponentTypes);
         return this;
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EntityCreateBuilder WithComponent<TComponent>()
         where TComponent : IComponent
@@ -54,16 +54,19 @@ public ref struct EntityCreateBuilder
         return this;
     }
 
-    public EntityCreateBuilder WithProjectedActor<TActor>(  float keepAliveSeconds = 0.2f,
-                                                            ProjectedActorReleasePolicy releasePolicy = ProjectedActorReleasePolicy.ReturnToPool)
+    public EntityCreateBuilder WithProjectedActor<TActor>(float keepAliveSeconds = 0.2f,
+                                                          ProjectedActorReleasePolicy releasePolicy =
+                                                              ProjectedActorReleasePolicy.ReturnToPool)
         where TActor : class, IPooledActor, new()
     {
         if (_isCreatedActor)
         {
             return this;
         }
-        _actorTypeId =  ActorType<TActor>.Id;
-        ProjectedActorTypeRegistry.RegisterGenerated(_actorTypeId,typeof(TActor),static actorWorld => actorWorld.CreateProjectedActor<TActor>());
+
+        _actorTypeId = ActorType<TActor>.Id;
+        ProjectedActorTypeRegistry.RegisterGenerated(_actorTypeId, typeof(TActor),
+            static actorWorld => actorWorld.CreateProjectedActor<TActor>());
         this._keepAliveSeconds = keepAliveSeconds;
         this._releasePolicy = releasePolicy;
         this._isCreatedActor = true;
@@ -75,10 +78,11 @@ public ref struct EntityCreateBuilder
         ComponentType[] componentTypes = ArrayPool<ComponentType>.Shared.Rent(_componentTypes.Count);
         _componentTypes.CopyTo(componentTypes);
         Entity entity = _world.Create(componentTypes);
-        if(_actorTypeId>=0 && _keepAliveSeconds > 0)
+        if (_actorTypeId >= 0 && _keepAliveSeconds > 0)
         {
             _world.WithProjectedActor(entity, _actorTypeId, _keepAliveSeconds, _releasePolicy);
         }
+
         ArrayPool<ComponentType>.Shared.Return(componentTypes);
         _componentTypes.Dispose();
         return entity;

@@ -74,6 +74,7 @@ public abstract class Layer : Node, IDisposable
     /// 获取 Layer 的路由索引。
     /// </summary>
     public int RouteIndex { get; private set; } = -1;
+
     public IReadOnlyList<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = Array.Empty<IAutoSubscribe>();
     public IReadOnlyList<(Type Req, Type Resp, Type Handler)> CallHandlers => m_callHandlers;
     public IReadOnlyList<Type> ProducedEvents => m_producedEvents;
@@ -93,6 +94,7 @@ public abstract class Layer : Node, IDisposable
             {
                 if (kvp.Value.HasActiveDelays) return true;
             }
+
             return false;
         }
     }
@@ -143,7 +145,7 @@ public abstract class Layer : Node, IDisposable
                 // manager.UnregisterPublisher will call publisher.Deactivate()
                 manager.UnregisterPublisher(publisher.PublisherId);
             }
-            
+
             // Safety fallback: ensure publisher is deactivated even if manager is gone 
             // or if it was registered in a different manager (e.g. during a context switch)
             publisher.Deactivate();
@@ -334,6 +336,7 @@ public abstract class Layer : Node, IDisposable
             foreach (var op in ops)
                 op(this);
     }
+
     internal void LifecycleBuild()
     {
         foreach (var resolved in m_resolvedServices)
@@ -534,13 +537,14 @@ public abstract class Layer : Node, IDisposable
         return new LayerEventStream<T>(this);
     }
 
-    public void SubscribeParallel<T>(EventNotifyDelegate<T>               handler,
+    public void SubscribeParallel<T>(EventNotifyDelegate<T>            handler,
                                      Action<int, int, int, Exception>? reportError = null) where T : struct
     {
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            OwnerContext.EventCenter.SubscribeParallel(RouteIndex, handler, reportError ?? OwnerContext.ReportLayerEventError);
+            OwnerContext.EventCenter.SubscribeParallel(RouteIndex, handler,
+                reportError ?? OwnerContext.ReportLayerEventError);
             m_subscriptions.Add(UnsubscribeParallelToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
@@ -566,6 +570,7 @@ public abstract class Layer : Node, IDisposable
         {
             OwnerContext?.MarkDelayDirty();
         }
+
         return (IDelayPublisher<T>)actual;
     }
 

@@ -46,7 +46,6 @@ internal static class EventTypeIdAllocator
     public static int MaxId => Volatile.Read(ref s_nextId);
 }
 
-
 /// <summary>
 /// 每一种事件类型对应的静态 ID 容器。
 ///

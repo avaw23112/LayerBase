@@ -53,9 +53,9 @@ public class ActorWorldBenchmarks : EventBenchmarkBase
             defaultBackpressure: BackpressurePolicy.RejectNew);
 
         _runtime = LayerHub.CreateLayers()
-            .Push(layer)
-            .SetPostOptions(postOptions)
-            .Build();
+                           .Push(layer)
+                           .SetPostOptions(postOptions)
+                           .Build();
 
         _actorWorld = CreateBenchmarkWorld(BatchSize);
         _actor = _actorWorld.CreateActor<BenchmarkActor>();
@@ -266,5 +266,3 @@ public partial class ActorBenchManager : IService
         BenchmarkSink.IntValue++;
     }
 }
-
-

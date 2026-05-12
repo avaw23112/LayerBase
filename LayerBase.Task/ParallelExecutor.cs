@@ -8,7 +8,7 @@ internal sealed class ParallelExecutor
     public static readonly ParallelExecutor Instance = new();
 
     private int _activeTaskCount;
-    
+
     /// <summary>
     /// Max background tasks allowed to be scheduled at the same time.
     /// </summary>

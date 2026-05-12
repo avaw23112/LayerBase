@@ -40,7 +40,9 @@ public class ActorCoreTests
     [Test]
     public void IActor_is_a_marker_interface()
     {
-        MemberInfo[] declaredMembers = typeof(IActor).GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        MemberInfo[] declaredMembers = typeof(IActor).GetMembers(BindingFlags.Public | BindingFlags.NonPublic |
+                                                                 BindingFlags.Instance | BindingFlags.Static |
+                                                                 BindingFlags.DeclaredOnly);
 
         Assert.That(declaredMembers, Is.Empty);
     }
@@ -69,8 +71,8 @@ public class ActorCoreTests
     {
         var actor = new PlainActor();
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => ActorGeneratedAccess.RequireGenerated(actor))!;
+        InvalidOperationException exception =
+            Assert.Throws<InvalidOperationException>(() => ActorGeneratedAccess.RequireGenerated(actor))!;
 
         Assert.That(exception.Message, Does.Contain(nameof(PlainActor)));
     }
@@ -80,16 +82,15 @@ public class ActorCoreTests
     {
         var builder = new ActorTypeMetaBuilder();
 
-        builder.AddBehaviour<BuilderActor, ActorCoreEventB>(
-            static (BuilderActor _, in ActorCoreEventB _) => { });
-        builder.AddBehaviour<BuilderActor, ActorCoreEventA>(
-            static (BuilderActor _, in ActorCoreEventA _) => { });
+        builder.AddBehaviour<BuilderActor, ActorCoreEventB>(static (BuilderActor _, in ActorCoreEventB _) => { });
+        builder.AddBehaviour<BuilderActor, ActorCoreEventA>(static (BuilderActor _, in ActorCoreEventA _) => { });
 
         ActorTypeMeta<BuilderActor> meta = builder.Build<BuilderActor>();
 
         Assert.That(meta.Behaviours, Has.Length.EqualTo(2));
         Assert.That(meta.Signature.EventTypeIds.ToArray(), Is.Ordered.Ascending);
-        Assert.That(meta.Behaviours.Select(static entry => entry.EventTypeId).ToArray(), Is.EqualTo(meta.Signature.EventTypeIds.ToArray()));
+        Assert.That(meta.Behaviours.Select(static entry => entry.EventTypeId).ToArray(),
+            Is.EqualTo(meta.Signature.EventTypeIds.ToArray()));
     }
 
     [Test]
@@ -97,8 +98,9 @@ public class ActorCoreTests
     {
         var builder = new ActorTypeMetaBuilder();
 
-        builder.AddCallBehaviour<BuilderActor, ActorCoreCallRequest, ActorCoreCallResponse>(
-            static (BuilderActor _, in ActorCoreCallRequest _, CancellationToken _) => LBTask<ActorCoreCallResponse>.FromResult(default));
+        builder.AddCallBehaviour<BuilderActor, ActorCoreCallRequest, ActorCoreCallResponse>(static (
+                BuilderActor _, in ActorCoreCallRequest _, CancellationToken _) =>
+            LBTask<ActorCoreCallResponse>.FromResult(default));
 
         ActorTypeMeta<BuilderActor> meta = builder.Build<BuilderActor>();
 
@@ -152,7 +154,8 @@ public class ActorCoreTests
 
         Assert.That(tags.ContainsAll(new ActorTagSignature(new[] { ActorTagId<ActorCoreEnemyTag>.Id })), Is.True);
         Assert.That(tags.ContainsAny(new ActorTagSignature(new[] { ActorTagId<ActorCoreDamageableTag>.Id })), Is.True);
-        Assert.That(groups.ContainsAll(new ActorGroupSignature(new[] { ActorGroupId<ActorCoreBattleGroup>.Id })), Is.True);
+        Assert.That(groups.ContainsAll(new ActorGroupSignature(new[] { ActorGroupId<ActorCoreBattleGroup>.Id })),
+            Is.True);
     }
 
     [Test]

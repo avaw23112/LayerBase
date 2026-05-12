@@ -70,7 +70,7 @@ public sealed class SyncRuntimeModelImprovementTests
         Assert.That(
             () => LayerHub.CreateLayers().Push(layerA).Push(layerB).Build(),
             Throws.TypeOf<InvalidOperationException>()
-                .With.Message.Contains("Duplicate singleton registration"));
+                  .With.Message.Contains("Duplicate singleton registration"));
     }
 
     [Test]
@@ -85,7 +85,7 @@ public sealed class SyncRuntimeModelImprovementTests
         var fromB = layerB.GetService<RuntimeBoundSingletonService>();
 
         Assert.That(fromB, Is.SameAs(fromA));
-        
+
         // GetService should now work because it falls back to world provider
         Assert.That(fromA.GetService<RuntimeBoundSingletonService>(), Is.SameAs(fromA));
 
@@ -93,7 +93,7 @@ public sealed class SyncRuntimeModelImprovementTests
         Assert.That(
             () => fromA.Delay(new RuntimeCachePayloadEvent(), 1.0f),
             Throws.TypeOf<InvalidOperationException>()
-                .With.Message.Contains("bound to Runtime"));
+                  .With.Message.Contains("bound to Runtime"));
     }
 
     [Test]
@@ -104,7 +104,7 @@ public sealed class SyncRuntimeModelImprovementTests
         Assert.That(
             () => LayerHub.CreateLayers().Push(layer).Build(),
             Throws.TypeOf<InvalidOperationException>()
-                .With.Message.Contains("Circular dependency detected"));
+                  .With.Message.Contains("Circular dependency detected"));
     }
 
     [Test]

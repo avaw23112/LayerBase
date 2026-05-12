@@ -111,8 +111,8 @@ public partial class RuntimeSafetyRegressionTests
         var layer = new DisposableProbeLayer();
         layer.RegisterService(new DisposableProbeRegistrar());
         LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                .Push(layer)
+                .Build();
 
         Assert.That(DisposableProbeService.DisposeCount, Is.EqualTo(0));
 
@@ -201,18 +201,19 @@ public partial class RuntimeSafetyRegressionTests
         EventMetaDataRegistry.RegisterMetaData<DropNewestMaxPendingEvent>(new DropNewestMaxPendingEventMetaData());
 
         var runtime = LayerHub.CreateLayers()
-            .Push(new EmptyRegressionLayer())
-            .SetPostOptions(new PostSchedulerOptions(readyCapacity: 1,
-                nextCapacity: 1,
-                maxEventsPerPump: 0,
-                maxMillisecondsPerPump: 0,
-                maxWavesPerPump: 1,
-                timeCheckInterval: 64,
-                defaultBackpressure: BackpressurePolicy.RejectNew))
-            .Build();
+                              .Push(new EmptyRegressionLayer())
+                              .SetPostOptions(new PostSchedulerOptions(readyCapacity: 1,
+                                  nextCapacity: 1,
+                                  maxEventsPerPump: 0,
+                                  maxMillisecondsPerPump: 0,
+                                  maxWavesPerPump: 1,
+                                  timeCheckInterval: 64,
+                                  defaultBackpressure: BackpressurePolicy.RejectNew))
+                              .Build();
 
         var received = new List<int>();
-        runtime.EventCenter.SubscribeNotify<DropNewestMaxPendingEvent>(0, (in DropNewestMaxPendingEvent e) => received.Add(e.Value));
+        runtime.EventCenter.SubscribeNotify<DropNewestMaxPendingEvent>(0,
+            (in DropNewestMaxPendingEvent e) => received.Add(e.Value));
 
         Assert.That(runtime.Scheduler.TryPost(new DropNewestMaxPendingEvent { Value = 1 }).IsSuccess, Is.True);
         Assert.That(runtime.Scheduler.TryPost(new DropNewestMaxPendingEvent { Value = 2 }).IsSuccess, Is.True);
@@ -315,13 +316,13 @@ public partial class RuntimeSafetyRegressionTests
         var first = new EmptyRegressionLayer();
         var second = new EmptyRegressionLayer();
         LayerHub.CreateLayers()
-            .Push(first)
-            .Push(second)
-            .SetDelayOptions(new DelayBufferOptions(tickDurationSeconds: 0.1f,
-                wheelSize: 4,
-                initialCapacity: 4,
-                maxExpiredPerTick: 1))
-            .Build();
+                .Push(first)
+                .Push(second)
+                .SetDelayOptions(new DelayBufferOptions(tickDurationSeconds: 0.1f,
+                    wheelSize: 4,
+                    initialCapacity: 4,
+                    maxExpiredPerTick: 1))
+                .Build();
 
         var firstPublisher = first.SubscribeDelay<DelayOverflowRegressionEvent>();
         var secondPublisher = second.SubscribeDelay<DelayOverflowRegressionEvent>();
@@ -428,7 +429,7 @@ public partial class RuntimeSafetyRegressionTests
         public void Initialize()
         {
             _layer.SubscribeDelay<InitDelayRegressionEvent>()
-                .Publish(new InitDelayRegressionEvent { Value = 42 }, 10);
+                  .Publish(new InitDelayRegressionEvent { Value = 42 }, 10);
         }
     }
 
@@ -442,5 +443,4 @@ public partial class RuntimeSafetyRegressionTests
             return true;
         }
     }
-
 }

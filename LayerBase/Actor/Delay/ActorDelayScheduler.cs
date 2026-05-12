@@ -7,7 +7,7 @@ internal sealed class ActorDelayScheduler
     public bool HasPending => _timeWheel.HasPending;
 
     public ActorDelayScheduler(
-        ActorWorld world,
+        ActorWorld            world,
         ActorTimeWheelOptions options)
     {
         if (world == null) throw new ArgumentNullException(nameof(world));

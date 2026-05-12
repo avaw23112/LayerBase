@@ -10,12 +10,12 @@ public class MultiWorldTaskTests
     public async Task MultiWorld_NextFrame_Isolation()
     {
         var worldA = LayerBase.LayerHub.CreateLayers()
-            .Push(new TestLayer())
-            .Build();
-        
+                              .Push(new TestLayer())
+                              .Build();
+
         var worldB = LayerBase.LayerHub.CreateLayers()
-            .Push(new TestLayer())
-            .Build();
+                              .Push(new TestLayer())
+                              .Build();
 
         bool taskACompleted = false;
         bool taskBCompleted = false;
@@ -46,7 +46,7 @@ public class MultiWorldTaskTests
         // Pump World B
         worldB.Pump(0.1f);
         Assert.That(taskBCompleted, Is.True);
-        
+
         await Task.CompletedTask; // Silence async warning
     }
 
@@ -54,8 +54,8 @@ public class MultiWorldTaskTests
     public async Task MultiWorld_Delay_ContextCapture()
     {
         var worldA = LayerBase.LayerHub.CreateLayers()
-            .Push(new TestLayer())
-            .Build();
+                              .Push(new TestLayer())
+                              .Build();
 
         bool taskCompleted = false;
         SynchronizationContext? capturedContext = null;
@@ -79,13 +79,14 @@ public class MultiWorldTaskTests
 
         // Pump World A
         worldA.Pump(0.1f);
-        
+
         Assert.That(taskCompleted, Is.True);
-        
-        var contextField = worldA.Tasks!.GetType().GetField("_context", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        var contextField = worldA.Tasks!.GetType().GetField("_context",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.That(contextField, Is.Not.Null);
         Assert.That(contextField!.GetValue(worldA.Tasks), Is.SameAs(capturedContext));
-        
+
         worldA.Dispose();
     }
 
@@ -93,7 +94,7 @@ public class MultiWorldTaskTests
     public async Task MultiWorld_RunOnMainThread_Consistency()
     {
         var worldA = LayerBase.LayerHub.CreateLayers().Push(new TestLayer()).Build();
-        
+
         bool actionExecuted = false;
         bool continuationExecuted = false;
         SynchronizationContext? actionContext = null;
@@ -109,7 +110,7 @@ public class MultiWorldTaskTests
                 actionExecuted = true;
                 actionContext = SynchronizationContext.Current;
             });
-            
+
             continuationExecuted = true;
             continuationContext = SynchronizationContext.Current;
             await Task.CompletedTask;
@@ -124,11 +125,11 @@ public class MultiWorldTaskTests
 
         Assert.That(actionExecuted, Is.True);
         Assert.That(continuationExecuted, Is.True);
-        
+
         var expectedContext = GetWorldContext(worldA);
         Assert.That(actionContext, Is.SameAs(expectedContext));
         Assert.That(continuationContext, Is.SameAs(expectedContext));
-        
+
         worldA.Dispose();
     }
 
@@ -136,7 +137,7 @@ public class MultiWorldTaskTests
     public async Task MultiWorld_AsyncMethod_WorldCapture()
     {
         var worldA = LayerBase.LayerHub.CreateLayers().Push(new TestLayer()).Build();
-        
+
         bool innerCompleted = false;
         SynchronizationContext? innerContext = null;
 
@@ -149,8 +150,8 @@ public class MultiWorldTaskTests
         async LBTask AsyncMethod()
         {
             // Suspends here. Should capture World A context because we are in scope.
-            await LBTask.NextFrame(); 
-            
+            await LBTask.NextFrame();
+
             innerContext = SynchronizationContext.Current;
             innerCompleted = true;
             await Task.CompletedTask;
@@ -161,16 +162,20 @@ public class MultiWorldTaskTests
 
         Assert.That(innerCompleted, Is.True);
         Assert.That(innerContext, Is.SameAs(GetWorldContext(worldA)));
-        
+
         worldA.Dispose();
     }
 
     private static LayerBaseSynchronizationContext GetWorldContext(LayerBase.LayerRuntime world)
     {
         return (LayerBaseSynchronizationContext)world.Tasks!.GetType()
-            .GetField("_context", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .GetValue(world.Tasks)!;
+                                                     .GetField("_context",
+                                                         System.Reflection.BindingFlags.NonPublic |
+                                                         System.Reflection.BindingFlags.Instance)!
+                                                     .GetValue(world.Tasks)!;
     }
 
-    private class TestLayer : LayerBase.Layers.Layer { }
+    private class TestLayer : LayerBase.Layers.Layer
+    {
+    }
 }

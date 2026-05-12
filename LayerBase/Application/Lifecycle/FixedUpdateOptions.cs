@@ -21,9 +21,9 @@ public readonly struct FixedUpdateOptions
     /// 它用于避免 deltaTime 很大时一次补太多帧导致卡死。
     /// </param>
     public FixedUpdateOptions(
-        bool enabled,
+        bool  enabled,
         float fixedDeltaTime,
-        int maxStepsPerPump)
+        int   maxStepsPerPump)
     {
         Enabled = enabled;
         FixedDeltaTime = fixedDeltaTime <= 0 ? 1f / 60f : fixedDeltaTime;

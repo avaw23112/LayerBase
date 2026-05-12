@@ -29,7 +29,10 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
 
     public bool HasValue
     {
-        get { lock (_lock) return _hasValue; }
+        get
+        {
+            lock (_lock) return _hasValue;
+        }
     }
 
     public bool HasActiveDelays => HasValue;
@@ -45,6 +48,7 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
                 value = default;
                 return false;
             }
+
             value = _value;
             return true;
         }
@@ -59,6 +63,7 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
                 value = default;
                 return false;
             }
+
             value = _value;
             ClearInternal();
             return true;
@@ -141,6 +146,7 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
             ClearInternal();
             _publisherId = -1;
         }
+
         _manager.CancelExpire(oldHandle);
     }
 

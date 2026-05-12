@@ -20,21 +20,20 @@ public sealed class BundleBlueprintTests
 
         EntityBlueprint blueprint = builder.Build();
 
-        Assert.Multiple(
-             () =>
-            {
-                Assert.That(
-                    blueprint.ComponentTypes,
-                    Does.Contain(Component<TestPositionComponent>.ComponentType));
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                blueprint.ComponentTypes,
+                Does.Contain(Component<TestPositionComponent>.ComponentType));
 
-                Assert.That(
-                    blueprint.ComponentTypes,
-                    Does.Contain(Component<TestVelocityComponent>.ComponentType));
+            Assert.That(
+                blueprint.ComponentTypes,
+                Does.Contain(Component<TestVelocityComponent>.ComponentType));
 
-                Assert.That(
-                    blueprint.ComponentTypes,
-                    Does.Contain(Component<TestMoveStateComponent>.ComponentType));
-            });
+            Assert.That(
+                blueprint.ComponentTypes,
+                Does.Contain(Component<TestMoveStateComponent>.ComponentType));
+        });
     }
 
     [Test]
@@ -43,29 +42,28 @@ public sealed class BundleBlueprintTests
         EntityBlueprint blueprint =
             EntityBlueprintCache<TestEnemyBlueprint>.GetOrBuild();
 
-        Assert.Multiple(
-             () =>
-            {
-                Assert.That(
-                    blueprint.ComponentTypes,
-                    Does.Contain(Component<TestPositionComponent>.ComponentType));
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                blueprint.ComponentTypes,
+                Does.Contain(Component<TestPositionComponent>.ComponentType));
 
-                Assert.That(
-                    blueprint.ComponentTypes,
-                    Does.Contain(Component<TestVelocityComponent>.ComponentType));
+            Assert.That(
+                blueprint.ComponentTypes,
+                Does.Contain(Component<TestVelocityComponent>.ComponentType));
 
-                Assert.That(
-                      blueprint.ComponentTypes,
-                    Does.Contain(Component<TestMoveStateComponent>.ComponentType));
+            Assert.That(
+                blueprint.ComponentTypes,
+                Does.Contain(Component<TestMoveStateComponent>.ComponentType));
 
-                Assert.That(
-                      blueprint.ComponentTypes,
-                    Does.Contain(Component<TestHealthComponent>.ComponentType));
+            Assert.That(
+                blueprint.ComponentTypes,
+                Does.Contain(Component<TestHealthComponent>.ComponentType));
 
-                Assert.That(
-                      blueprint.ComponentTypes,
-                    Does.Contain(Component<TestAoiComponent>.ComponentType));
-            });
+            Assert.That(
+                blueprint.ComponentTypes,
+                Does.Contain(Component<TestAoiComponent>.ComponentType));
+        });
     }
 
     [Test]
@@ -79,17 +77,16 @@ public sealed class BundleBlueprintTests
         EntityBlueprint second =
             EntityBlueprintCache<TestCachedBlueprint>.GetOrBuild();
 
-        Assert.Multiple(
-            () =>
-            {
-                Assert.That(
-                    second.ComponentTypes,
-                    Is.EqualTo(first.ComponentTypes));
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                second.ComponentTypes,
+                Is.EqualTo(first.ComponentTypes));
 
-                Assert.That(
-                    TestCachedBlueprint.ConfigCallCount,
-                    Is.EqualTo(1));
-            });
+            Assert.That(
+                TestCachedBlueprint.ConfigCallCount,
+                Is.EqualTo(1));
+        });
     }
 
     [Test]
@@ -99,29 +96,28 @@ public sealed class BundleBlueprintTests
             World.Create();
 
         Entity entity = world.CreateEntity().WithBlueprint<TestEnemyBlueprint>().Build();
-        Assert.Multiple(
-            () =>
-            {
-                Assert.That(
-                    entity.Has<TestPositionComponent>(),
-                    Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                entity.Has<TestPositionComponent>(),
+                Is.True);
 
-                Assert.That(
-                    entity.Has<TestVelocityComponent>(),
-                    Is.True);
+            Assert.That(
+                entity.Has<TestVelocityComponent>(),
+                Is.True);
 
-                Assert.That(
-                    entity.Has<TestMoveStateComponent>(),
-                    Is.True);
+            Assert.That(
+                entity.Has<TestMoveStateComponent>(),
+                Is.True);
 
-                Assert.That(
-                    entity.Has<TestHealthComponent>(),
-                    Is.True);
+            Assert.That(
+                entity.Has<TestHealthComponent>(),
+                Is.True);
 
-                Assert.That(
-                    entity.Has<TestAoiComponent>(),
-                    Is.True);
-            });
+            Assert.That(
+                entity.Has<TestAoiComponent>(),
+                Is.True);
+        });
     }
 
     [Test]
@@ -285,6 +281,7 @@ public sealed class BundleBlueprintTests
         public void OnRent()
         {
         }
+
         public void OnReturn()
         {
         }

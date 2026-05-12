@@ -34,7 +34,7 @@ public partial struct Chunk
         {
             ifs.AppendLine($"if (ComponentIdToArrayIndex[t{i}ComponentId] == -1) return false;");
         }
-    #>
+#>
 
     [Pure]
     public bool Has<<#= generics #>>()
@@ -48,5 +48,5 @@ public partial struct Chunk
 
     <#
     }
-    #>
+#>
 }

@@ -14,7 +14,7 @@ public partial class World
     for (var index = 2; index <= Amount; index++)
     {
         var generics = AppendGenerics(index);
-    #>
+#>
 
     [Pure]
     public bool Has<<#= generics #>>(Entity entity)
@@ -24,5 +24,5 @@ public partial class World
     }
     <#
     }
-    #>
+#>
 }

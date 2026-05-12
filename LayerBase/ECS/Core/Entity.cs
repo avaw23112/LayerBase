@@ -1,4 +1,3 @@
-
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 #if !PURE_ECS
@@ -9,7 +8,6 @@ using Arch.Core.Utils;
 namespace Arch.Core;
 
 #if PURE_ECS
-
 /// <summary>
 ///     The <see cref="Entity"/> struct
 ///     represents a general-purpose object and can be assigned a set of components that act as data.
@@ -231,7 +229,8 @@ public readonly struct Entity : IEquatable<Entity>, IComparable<Entity>
     /// <returns>A int indicating their order.</returns>
     public int CompareTo(Entity other)
     {
-        return (WorldId.CompareTo(other.WorldId) << 16) | (Version.CompareTo(other.Version) << 8) | Id.CompareTo(other.Id);
+        return (WorldId.CompareTo(other.WorldId) << 16) | (Version.CompareTo(other.Version) << 8) |
+               Id.CompareTo(other.Id);
     }
 
     /// <summary>

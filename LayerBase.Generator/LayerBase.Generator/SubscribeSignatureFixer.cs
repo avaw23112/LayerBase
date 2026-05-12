@@ -52,9 +52,9 @@ public class SubscribeSignatureFixer : CodeFixProvider
 
         var attrName = attr.Name.ToString();
         var isAsync = attrName.Contains("Async");
-        
+
         // Subscribe (原 Subscribe), SubscribeNotify, SubscribeParallel 返回 void
-        var isVoidReturn = attrName == "Subscribe" || attrName == "SubscribeAttribute" || 
+        var isVoidReturn = attrName == "Subscribe" || attrName == "SubscribeAttribute" ||
                            attrName.Contains("Notify") || attrName.Contains("Parallel");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
@@ -106,4 +106,3 @@ public class SubscribeSignatureFixer : CodeFixProvider
         return document.WithSyntaxRoot(newRoot);
     }
 }
-

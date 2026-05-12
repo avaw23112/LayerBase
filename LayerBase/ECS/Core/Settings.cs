@@ -6,8 +6,8 @@ namespace Arch.Core;
 /// </summary>
 public enum ChunkLayoutMode
 {
-    FixedChunkSize,     // e.g. ChunkSizeBytes = 16 * 1024
-    FixedEntityCount,   // e.g. TargetEntitiesPerChunk = 256
+    FixedChunkSize,            // e.g. ChunkSizeBytes = 16 * 1024
+    FixedEntityCount,          // e.g. TargetEntitiesPerChunk = 256
     MinChunkSizeAndMinEntities // Soft Ziele – z.B. min. 8kB, min. 64 Entities
 }
 

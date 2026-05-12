@@ -25,8 +25,8 @@ public partial class ServiceMountImplementationTypeTests
         var layer = new TestLayerImplType();
 
         LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                .Push(layer)
+                .Build();
 
         Assert.That(layer.Service, Is.Not.Null);
         Assert.That(layer.Service!.DamageManager, Is.Not.Null);
@@ -39,8 +39,8 @@ public partial class ServiceMountImplementationTypeTests
         var layer = new AbstractMountLayerImplType();
 
         LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                .Push(layer)
+                .Build();
 
         Assert.That(layer.Service, Is.Not.Null);
         Assert.That(layer.Service!.Manager, Is.Not.Null);
@@ -54,8 +54,8 @@ public partial class ServiceMountImplementationTypeTests
         var layer = new LifecycleMountLayerImplType();
 
         LayerHub.CreateLayers()
-            .Push(layer)
-            .Build();
+                .Push(layer)
+                .Build();
 
         Assert.That(s_lifecycleTrace, Does.Contain("Init_DamageManager"));
 
@@ -68,7 +68,8 @@ public partial class ServiceMountImplementationTypeTests
     public void MountAttribute_Should_Be_Visible_Via_Reflection()
     {
         var type = typeof(ConcreteMountLayerImplType);
-        var field = type.GetField("_service", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        var field = type.GetField("_service",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
         Assert.That(field, Is.Not.Null);
         var attr = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<MountAttribute>(field!);
         Assert.That(attr, Is.Not.Null, "MountAttribute should be present on the field");
@@ -98,8 +99,7 @@ public partial class TestLayerImplType : Layer
 
 public partial class CombatServiceImplType : IService
 {
-    [Mount(typeof(DamageManagerImplType))]
-    public IDamageManagerImplType _damageManager = null!;
+    [Mount(typeof(DamageManagerImplType))] public IDamageManagerImplType _damageManager = null!;
 
     public IDamageManagerImplType? DamageManager => _damageManager;
 

@@ -48,4 +48,3 @@ public static class ServiceUsage
         LayerHub.Send(new DataRequestEvent { Query = "Get My Data" });
     }
 }
-

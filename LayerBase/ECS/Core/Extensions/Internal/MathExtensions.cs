@@ -12,7 +12,6 @@ internal static class MathExtensions
     /// <param name="a">The first int.</param>
     /// <param name="b">The second int.</param>
     /// <returns>The highest of both ints.</returns>
-
     public static int Max(int a, int b)
     {
         return a - ((a - b) & ((a - b) >> 31));

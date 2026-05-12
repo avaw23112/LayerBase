@@ -11,7 +11,7 @@ internal sealed class ActiveProjectedActorList
     private int _count;
 
     public void Add(
-        Entity entity,
+        Entity                 entity,
         ref ProjectedActorMeta meta)
     {
         if (meta.ActiveListIndex >= 0)
@@ -31,7 +31,7 @@ internal sealed class ActiveProjectedActorList
     }
 
     public void Sweep(
-        World world,
+        World      world,
         ActorWorld actorWorld)
     {
         long nowTicks = Stopwatch.GetTimestamp();
@@ -78,8 +78,8 @@ internal sealed class ActiveProjectedActorList
     }
 
     private void RemoveAt(
-        World world,
-        int index,
+        World                  world,
+        int                    index,
         ref ProjectedActorMeta meta)
     {
         int lastIndex = _count - 1;
@@ -100,7 +100,7 @@ internal sealed class ActiveProjectedActorList
 
     private void RemoveDeadAt(
         World world,
-        int index)
+        int   index)
     {
         int lastIndex = _count - 1;
         ProjectedEntityRef moved = _items[lastIndex];

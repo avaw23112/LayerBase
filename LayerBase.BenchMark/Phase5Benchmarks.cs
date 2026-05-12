@@ -13,13 +13,21 @@ public class Phase5Benchmarks
     private IDelayPublisher<BenchEvent> _publisher = null!;
     private PostScheduler _scheduler = null!;
 
-    public partial struct BenchEvent { public int Value; }
+    public partial struct BenchEvent
+    {
+        public int Value;
+    }
+
     public class BenchEventMeta : EventMetaData<BenchEvent>
     {
-        public override EventPostPolicy? PostPolicy => new EventPostPolicy(PostDeliveryMode.Normal, BackpressurePolicy.RejectNew, 0);
-        public override EventBufferPolicy? BufferPolicy => new EventBufferPolicy(BufferMode.Latest, 0.5f, 1, BufferOverflowPolicy.ReplaceLatest, false);
+        public override EventPostPolicy? PostPolicy =>
+            new EventPostPolicy(PostDeliveryMode.Normal, BackpressurePolicy.RejectNew, 0);
+
+        public override EventBufferPolicy? BufferPolicy => new EventBufferPolicy(BufferMode.Latest, 0.5f, 1,
+            BufferOverflowPolicy.ReplaceLatest, false);
 
         public override int GetPostCoalesceKey(in BenchEvent value) => value.Value % 10;
+
         public override bool TryMergePostEvent(ref BenchEvent current, in BenchEvent next)
         {
             current.Value += next.Value;
@@ -35,9 +43,9 @@ public class Phase5Benchmarks
 
         var layer = new TestLayer();
         _runtime = new LayerRuntime.LayersBuilder(new LayerRuntime(601))
-            .Push(layer)
-            .Build();
-        
+                   .Push(layer)
+                   .Build();
+
         _publisher = layer.SubscribeDelay<BenchEvent>();
         _scheduler = _runtime.Scheduler;
     }
@@ -49,6 +57,7 @@ public class Phase5Benchmarks
         {
             _scheduler.TryPost(new BenchEvent { Value = i });
         }
+
         _scheduler.Pump();
     }
 
@@ -58,8 +67,10 @@ public class Phase5Benchmarks
         for (int i = 0; i < 100000; i++)
         {
             // Merging into 10 different slots
-            _scheduler.TryPost(new BenchEvent { Value = i }, new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0));
+            _scheduler.TryPost(new BenchEvent { Value = i },
+                new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0));
         }
+
         _scheduler.Pump();
     }
 

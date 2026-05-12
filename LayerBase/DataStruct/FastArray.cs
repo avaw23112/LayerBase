@@ -18,5 +18,4 @@ internal static class FastArray
         return ref array[index];
 #endif
     }
-
 }

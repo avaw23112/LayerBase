@@ -87,24 +87,24 @@ public sealed class ActorTypeMetaBuilder
         where TActor : class, IActor
     {
         ActorBehaviourEntry[] entries = _entries
-            .OrderBy(static entry => entry.EventTypeId)
-            .ToArray();
+                                        .OrderBy(static entry => entry.EventTypeId)
+                                        .ToArray();
 
         ActorCallEntry[] callEntries = _callEntries
-            .OrderBy(static entry => entry.RouteId)
-            .ToArray();
+                                       .OrderBy(static entry => entry.RouteId)
+                                       .ToArray();
 
         int[] eventTypeIds = entries
-            .Select(static entry => entry.EventTypeId)
-            .ToArray();
+                             .Select(static entry => entry.EventTypeId)
+                             .ToArray();
 
         int[] tagIds = _tagIds
-            .OrderBy(static id => id)
-            .ToArray();
+                       .OrderBy(static id => id)
+                       .ToArray();
 
         int[] groupIds = _groupIds
-            .OrderBy(static id => id)
-            .ToArray();
+                         .OrderBy(static id => id)
+                         .ToArray();
 
         return new ActorTypeMeta<TActor>(
             new BehaviourSignature(eventTypeIds),

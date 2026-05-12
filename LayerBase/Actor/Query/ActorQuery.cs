@@ -118,7 +118,8 @@ public sealed partial class ActorWorld
             EventTypeId<TEvent8>.Id);
     }
 
-    public ActorQueryResult QueryActor<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>()
+    public ActorQueryResult QueryActor<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8,
+        TEvent9>()
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -141,7 +142,8 @@ public sealed partial class ActorWorld
             EventTypeId<TEvent9>.Id);
     }
 
-    public ActorQueryResult QueryActor<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>()
+    public ActorQueryResult QueryActor<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9,
+        TEvent10>()
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -166,7 +168,8 @@ public sealed partial class ActorWorld
             EventTypeId<TEvent10>.Id);
     }
 
-    public ActorQueryResult QueryActor<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>()
+    public ActorQueryResult QueryActor<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9,
+        TEvent10, TEvent11>()
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct
@@ -193,7 +196,8 @@ public sealed partial class ActorWorld
             EventTypeId<TEvent11>.Id);
     }
 
-    public ActorQueryResult QueryActor<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11, TEvent12>()
+    public ActorQueryResult QueryActor<TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9,
+        TEvent10, TEvent11, TEvent12>()
         where TEvent1 : struct
         where TEvent2 : struct
         where TEvent3 : struct

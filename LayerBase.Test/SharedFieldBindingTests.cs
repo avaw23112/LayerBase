@@ -99,8 +99,13 @@ public partial class SharedFieldBindingTests
     }
 }
 
-public class Layer_A : Layer { }
-public class Layer_B : Layer { }
+public class Layer_A : Layer
+{
+}
+
+public class Layer_B : Layer
+{
+}
 
 public class SharedFieldLayer : Layer
 {

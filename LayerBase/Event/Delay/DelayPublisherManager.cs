@@ -102,7 +102,8 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
         }
     }
 
-    public DelayTimerHandle ScheduleExpire(int publisherId, int valueVersion, float ttlSeconds, DelayTimerHandle oldHandle)
+    public DelayTimerHandle ScheduleExpire(int              publisherId, int valueVersion, float ttlSeconds,
+                                           DelayTimerHandle oldHandle)
     {
         ThrowIfDisposed();
         lock (_wheelLock)
@@ -133,6 +134,7 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
                 pub = _publishers[publisherId];
             }
         }
+
         pub?.TryExpire(valueVersion);
     }
 
@@ -152,6 +154,7 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
                     publisherToClear = _publishers[activeId];
                 }
             }
+
             _contractToActivePublisher[key] = publisherId;
         }
 

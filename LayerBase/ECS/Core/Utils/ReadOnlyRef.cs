@@ -22,7 +22,6 @@ public readonly ref struct ReadOnlyRef<T>
     /// Initializes a new instance of the <see cref="ReadOnlyRef{T}"/> struct.
     /// </summary>
     /// <param name="value">The readonly reference to the target <typeparamref name="T"/> value.</param>
-
     public ReadOnlyRef(in T value)
     {
         ref T r0 = ref Unsafe.AsRef(value);
@@ -34,7 +33,6 @@ public readonly ref struct ReadOnlyRef<T>
     /// Initializes a new instance of the <see cref="ReadOnlyRef{T}"/> struct.
     /// </summary>
     /// <param name="pointer">The pointer to the target value.</param>
-
     public unsafe ReadOnlyRef(void* pointer)
         : this(in Unsafe.AsRef<T>(pointer))
     {
@@ -45,7 +43,6 @@ public readonly ref struct ReadOnlyRef<T>
     /// </summary>
     public ref readonly T Value
     {
-
         get => ref MemoryMarshal.GetReference(this.Span);
     }
 
@@ -53,7 +50,6 @@ public readonly ref struct ReadOnlyRef<T>
     /// Implicitly converts a <see cref="Ref{T}"/> instance into a <see cref="ReadOnlyRef{T}"/> one.
     /// </summary>
     /// <param name="reference">The input <see cref="Ref{T}"/> instance.</param>
-
     public static implicit operator ReadOnlyRef<T>(Ref<T> reference)
     {
         return new(in reference.Value);
@@ -63,7 +59,6 @@ public readonly ref struct ReadOnlyRef<T>
     /// Implicitly gets the <typeparamref name="T"/> value from a given <see cref="ReadOnlyRef{T}"/> instance.
     /// </summary>
     /// <param name="reference">The input <see cref="ReadOnlyRef{T}"/> instance.</param>
-
     public static implicit operator T(ReadOnlyRef<T> reference)
     {
         return reference.Value;

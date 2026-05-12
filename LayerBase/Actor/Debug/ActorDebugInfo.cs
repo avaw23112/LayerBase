@@ -18,20 +18,20 @@ public readonly struct ActorDebugInfo
     public readonly string FailureReason;
 
     public ActorDebugInfo(
-        ActorId actorId,
-        bool isValid,
-        bool isAlive,
-        bool isEnabled,
-        bool isPendingDestroy,
-        string actorTypeName,
-        string archetypeInfo,
+        ActorId  actorId,
+        bool     isValid,
+        bool     isAlive,
+        bool     isEnabled,
+        bool     isPendingDestroy,
+        string   actorTypeName,
+        string   archetypeInfo,
         string[] tags,
         string[] groups,
-        int pendingMailCount,
-        bool hasUpdate,
-        bool hasLateUpdate,
-        bool hasFixedUpdate,
-        string failureReason)
+        int      pendingMailCount,
+        bool     hasUpdate,
+        bool     hasLateUpdate,
+        bool     hasFixedUpdate,
+        string   failureReason)
     {
         ActorId = actorId;
         IsValid = isValid;

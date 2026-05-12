@@ -7,53 +7,57 @@ using LayerBase.Layers;
 
 namespace LayerBase.Usage;
 
-public partial class VerifyManager : ILayerContext                 
+public partial class VerifyManager : ILayerContext
 {
     [Subscribe]
     public void OnVerify(in ChangeSceneRequest value)
     {
-        
     }
-}   
+}
+
 [OwnerLayer(typeof(VerifyLayer))]
 public partial class VerifyService1 : IService
 {
     public bool IsInitialized = false;
-    public void ConfigureServices(IServiceCollection services) 
+
+    public void ConfigureServices(IServiceCollection services)
     {
         IsInitialized = true;
     }
 }
+
 [OwnerLayer(typeof(VerifyLayer))]
 public partial class VerifyService2 : IService
 {
     public bool IsInitialized = false;
-    public void ConfigureServices(IServiceCollection services) 
+
+    public void ConfigureServices(IServiceCollection services)
     {
         IsInitialized = true;
     }
 }
+
 [OwnerLayer(typeof(VerifyLayer))]
 public partial class VerifyService3 : IService
 {
     public bool IsInitialized = false;
-    public void ConfigureServices(IServiceCollection services) 
+
+    public void ConfigureServices(IServiceCollection services)
     {
         IsInitialized = true;
     }
-    
+
     [Subscribe]
     public void OnVerify(in ChangeSceneRequest @event)
     {
-        
     }
 }
-
 
 [OwnerLayer(typeof(VerifyLayer))]
 public partial class VerifyCallHandler : ILayerCallHandler<ChangeSceneRequest, ChangeSceneResponse>
 {
-    public LBTask<ChangeSceneResponse> HandleAsync(ChangeSceneRequest request, CancellationToken cancellationToken = default)
+    public LBTask<ChangeSceneResponse> HandleAsync(ChangeSceneRequest request,
+                                                   CancellationToken  cancellationToken = default)
     {
         return LBTask<ChangeSceneResponse>.FromResult(new ChangeSceneResponse(request.SceneName));
     }

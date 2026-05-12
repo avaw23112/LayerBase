@@ -9,11 +9,11 @@ public readonly struct EventTimerPolicy
     public readonly EventPostPolicy? ExpiredPostPolicy;
 
     public EventTimerPolicy(
-        TimerRepeatMode repeatMode,
+        TimerRepeatMode    repeatMode,
         TimerCatchUpPolicy catchUpPolicy,
-        int maxCatchUpPerTick,
-        bool preferLongTimerHeap,
-        EventPostPolicy? expiredPostPolicy)
+        int                maxCatchUpPerTick,
+        bool               preferLongTimerHeap,
+        EventPostPolicy?   expiredPostPolicy)
     {
         RepeatMode = repeatMode;
         CatchUpPolicy = catchUpPolicy;

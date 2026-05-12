@@ -11,8 +11,8 @@ internal readonly struct ActorCallMail<TRequest, TResponse>
     public readonly LBTaskCompletionSource<TResponse> Source;
 
     public ActorCallMail(
-        in TRequest request,
-        CancellationToken cancellationToken,
+        in TRequest                       request,
+        CancellationToken                 cancellationToken,
         LBTaskCompletionSource<TResponse> source)
     {
         Request = request;

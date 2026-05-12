@@ -23,7 +23,7 @@ public partial class World
         {
             events.AppendLine($"OnComponentSet<T{i}>(entity);");
         }
-    #>
+#>
 
     public void Set<<#= generics #>>(Entity entity, <#= parameters #>)
     {
@@ -36,6 +36,6 @@ public partial class World
     }
     <#
     }
-    #>
+#>
 }
 

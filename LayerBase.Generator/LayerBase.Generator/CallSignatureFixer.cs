@@ -83,4 +83,3 @@ public class CallSignatureFixer : CodeFixProvider
         return document.WithSyntaxRoot(newRoot);
     }
 }
-

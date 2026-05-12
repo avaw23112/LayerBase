@@ -26,7 +26,7 @@ public partial class World
             assignValues.AppendLine($"t{i}Component = t{i}ComponentValue;");
             assignValuesEvents.AppendLine($"OnComponentSet<T{i}>(entity);");
         }
-    #>
+#>
 
     [SkipLocalsInit]
     public void Set<<#= generics #>>(in QueryDescription queryDescription, <#= parameters #>)
@@ -48,6 +48,6 @@ public partial class World
     }
     <#
     }
-    #>
+#>
 }
 

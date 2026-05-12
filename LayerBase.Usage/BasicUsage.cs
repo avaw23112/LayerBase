@@ -43,4 +43,3 @@ public static class BasicUsage
         LayerHub.Send(new PlayerSpawnEvent { Name = "Hero", Level = 1 });
     }
 }
-

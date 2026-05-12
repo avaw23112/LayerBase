@@ -20,7 +20,6 @@ internal class Pool<T>
     /// <param name="Length"></param>
     public readonly record struct PooledArray(T[] Array, int Length) : IDisposable
     {
-
         /// <summary>
         ///     Returns a reference to the item at the index.
         /// </summary>

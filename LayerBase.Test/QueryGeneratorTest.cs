@@ -13,7 +13,6 @@ namespace EventsTest;
 
 public class testManager : ILayerContext
 {
-    
 }
 
 public struct PositionComponent :　IComponent
@@ -22,17 +21,18 @@ public struct PositionComponent :　IComponent
     public float Y;
 }
 
-public struct VelocityComponent:　IComponent
+public struct VelocityComponent :　IComponent
 {
     public float X;
     public float Y;
 }
 
-public struct AoiComponent:　IComponent
+public struct AoiComponent :　IComponent
 {
     public bool IsVisible;
 }
-public  struct MoveViewEvent:IActorEvent
+
+public struct MoveViewEvent : IActorEvent
 {
     public float X;
     public float Y;
@@ -70,12 +70,13 @@ internal sealed partial class ProbeActor : IPooledActor
         RecycleDeadlineTicks = 0;
     }
 }
-public sealed partial class EnemyViewService : IService,LayerBase.DI.Options.IUpdate
+
+public sealed partial class EnemyViewService : IService, LayerBase.DI.Options.IUpdate
 {
     public void ConfigureServices(IServiceCollection services)
     {
-            
     }
+
     public void Update()
     {
         UpdateEnemyView();
@@ -145,9 +146,10 @@ public class QueryBringTests
                                .WithComponent<AoiComponent>()
                                .Build();
         runtime.EcsWorld.WithProjectedActor<ProbeActor>(entity);
-        
-        entity.Set(new PositionComponent() { X = 10f, Y = 20f }, new VelocityComponent { X = 3f, Y = 4f }, new AoiComponent { IsVisible = true });
-        
+
+        entity.Set(new PositionComponent() { X = 10f, Y = 20f }, new VelocityComponent { X = 3f, Y = 4f },
+            new AoiComponent { IsVisible = true });
+
         runtime.Pump(0.1f);
         runtime.Pump(0.1f);
         PositionComponent position = runtime.EcsWorld.Get<PositionComponent>(entity);
@@ -168,8 +170,6 @@ internal partial class LayerTestLayer : Layer
 
 #endregion
 
-
 public class QueryGeneratorTest
 {
-    
 }

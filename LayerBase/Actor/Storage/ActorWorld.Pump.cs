@@ -66,8 +66,8 @@ public sealed partial class ActorWorld
     }
 
     private ActorMailPumpStats PumpActorBehaviours(
-        ref RuntimeFrameBudget budget,
-        in ActorMailPumpOptions options)
+        ref RuntimeFrameBudget   budget,
+        in  ActorMailPumpOptions options)
     {
         ActorMailPumpStatsBuilder stats = _mailPumpStatsBuilder;
         stats.Reset();
@@ -119,8 +119,8 @@ public sealed partial class ActorWorld
     }
 
     private PumpOneResult TryPumpOne(
-        ref RuntimeFrameBudget budget,
-        in ActorMailPumpOptions options,
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
         ActorMailPumpStatsBuilder stats)
     {
         PumpOneResult callResult = TryPumpOneFromDirtyBuckets(
@@ -147,11 +147,11 @@ public sealed partial class ActorWorld
     }
 
     private static PumpOneResult TryPumpOneFromDirtyBuckets(
-        DirtyBucketList dirtyBuckets,
-        IActorEventBucket[] buckets,
-        ref int cursor,
-        ref RuntimeFrameBudget budget,
-        in ActorMailPumpOptions options,
+        DirtyBucketList           dirtyBuckets,
+        IActorEventBucket[]       buckets,
+        ref int                   cursor,
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
         ActorMailPumpStatsBuilder stats)
     {
         if (dirtyBuckets.Count == 0 || buckets.Length == 0)

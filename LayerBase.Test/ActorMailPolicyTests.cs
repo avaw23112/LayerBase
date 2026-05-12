@@ -109,7 +109,8 @@ public class ActorMailPolicyTests
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Capacity)), Is.EqualTo(8));
 
         PostValues(world, actorId, 6, 9);
-        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Capacity)), Is.EqualTo(16));
+        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Capacity)),
+            Is.EqualTo(16));
     }
 
     [Test]
@@ -239,7 +240,8 @@ public class ActorMailPolicyTests
 
         Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
 
-        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)), Is.GreaterThan(0));
+        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)),
+            Is.GreaterThan(0));
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Count)), Is.EqualTo(1));
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Tail)), Is.EqualTo(1));
     }
@@ -262,7 +264,8 @@ public class ActorMailPolicyTests
         Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
         Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
 
-        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)), Is.GreaterThan(0));
+        Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)),
+            Is.GreaterThan(0));
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Count)), Is.EqualTo(2));
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.Tail)), Is.EqualTo(2));
 
@@ -336,7 +339,9 @@ public class ActorMailPolicyTests
     private static TField GetMailField<TField>(ActorWorld world, ActorId actorId, string fieldName)
     {
         object mail = GetMailBoxed(world, actorId);
-        FieldInfo field = mail.GetType().GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)!;
+        FieldInfo field = mail.GetType()
+                              .GetField(fieldName,
+                                  BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)!;
         return (TField)field.GetValue(mail)!;
     }
 
@@ -351,16 +356,19 @@ public class ActorMailPolicyTests
     private static object GetColumnField<TEvent>(ActorWorld world, ActorId actorId, string? fieldName)
         where TEvent : struct
     {
-        FieldInfo archetypesField = typeof(ActorWorld).GetField("_archetypes", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        FieldInfo archetypesField =
+            typeof(ActorWorld).GetField("_archetypes", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array archetypes = (Array)archetypesField.GetValue(world)!;
         object archetype = archetypes.GetValue(actorId.ArchetypeId)!;
 
-        FieldInfo storagesField = archetype.GetType().GetField("_storages", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        FieldInfo storagesField =
+            archetype.GetType().GetField("_storages", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array storages = (Array)storagesField.GetValue(archetype)!;
         object storage = storages.GetValue(0)!;
 
         int eventId = EventTypeId<TEvent>.Id;
-        FieldInfo columnsField = storage.GetType().GetField("_columnsByEventId", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        FieldInfo columnsField =
+            storage.GetType().GetField("_columnsByEventId", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array columns = (Array)columnsField.GetValue(storage)!;
         object column = columns.GetValue(eventId)!;
 

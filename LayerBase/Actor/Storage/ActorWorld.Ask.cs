@@ -6,8 +6,8 @@ namespace LayerBase.Actor;
 public sealed partial class ActorWorld
 {
     public LBTask<TResponse> Ask<TRequest, TResponse>(
-        ActorId actorId,
-        in TRequest request,
+        ActorId           actorId,
+        in TRequest       request,
         CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
@@ -30,7 +30,7 @@ public sealed partial class ActorWorld
     }
 
     internal PostResult TryPostCall<TRequest, TResponse>(
-        ActorId actorId,
+        ActorId                               actorId,
         in ActorCallMail<TRequest, TResponse> mail)
         where TRequest : struct
         where TResponse : struct
@@ -49,12 +49,12 @@ public sealed partial class ActorWorld
     private static ActorCallFailureKind ToCallFailureKind(PostResult postResult)
     {
         return postResult.ActorStatus switch
-        {
-            ActorPostStatus.ActorNotFound => ActorCallFailureKind.InvalidActorId,
-            ActorPostStatus.ActorNotAlive => ActorCallFailureKind.ActorNotFound,
-            ActorPostStatus.ActorPendingDestroy => ActorCallFailureKind.PendingDestroy,
-            ActorPostStatus.MailFullRejected => ActorCallFailureKind.MailboxFull,
-            _ => ActorCallFailureKind.MailboxFull
-        };
+               {
+                   ActorPostStatus.ActorNotFound       => ActorCallFailureKind.InvalidActorId,
+                   ActorPostStatus.ActorNotAlive       => ActorCallFailureKind.ActorNotFound,
+                   ActorPostStatus.ActorPendingDestroy => ActorCallFailureKind.PendingDestroy,
+                   ActorPostStatus.MailFullRejected    => ActorCallFailureKind.MailboxFull,
+                   _                                   => ActorCallFailureKind.MailboxFull
+               };
     }
 }

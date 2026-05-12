@@ -141,4 +141,3 @@ public class TimerSchedulerTests
         public int Id { get; set; }
     }
 }
-

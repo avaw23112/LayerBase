@@ -21,7 +21,8 @@ public sealed partial class ActorWorld
 
         builder.AppendLine("Actor Debug Info");
         builder.AppendLine("----------------");
-        builder.AppendLine($"ActorId: Archetype={actorId.ArchetypeId}, Slot={actorId.SlotIndex}, Generation={actorId.Generation}");
+        builder.AppendLine(
+            $"ActorId: Archetype={actorId.ArchetypeId}, Slot={actorId.SlotIndex}, Generation={actorId.Generation}");
         builder.AppendLine($"Valid: {info.IsValid}");
         builder.AppendLine($"Alive: {info.IsAlive}");
         builder.AppendLine($"Enabled: {info.IsEnabled}");
@@ -31,7 +32,8 @@ public sealed partial class ActorWorld
         builder.AppendLine($"Tags: {string.Join(", ", info.Tags)}");
         builder.AppendLine($"Groups: {string.Join(", ", info.Groups)}");
         builder.AppendLine($"PendingMailCount: {info.PendingMailCount}");
-        builder.AppendLine($"Lifecycle: Update={info.HasUpdate}, LateUpdate={info.HasLateUpdate}, FixedUpdate={info.HasFixedUpdate}");
+        builder.AppendLine(
+            $"Lifecycle: Update={info.HasUpdate}, LateUpdate={info.HasLateUpdate}, FixedUpdate={info.HasFixedUpdate}");
 
         if (!string.IsNullOrEmpty(info.FailureReason))
         {

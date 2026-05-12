@@ -7,7 +7,7 @@ internal static class EventMailPoolRuntime<TEvent>
     private static EventMailPool<TEvent>?[] s_mailPools = new EventMailPool<TEvent>?[4];
 
     public static void BindWorld(
-        ActorWorld world,
+        ActorWorld            world,
         EventMailPool<TEvent> mailPool)
     {
         int index = world.RuntimeIndex;
@@ -17,7 +17,7 @@ internal static class EventMailPoolRuntime<TEvent>
     }
 
     public static bool TryGetMailPool(
-        ActorWorld world,
+        ActorWorld                 world,
         out EventMailPool<TEvent>? mailPool)
     {
         int index = world.RuntimeIndex;

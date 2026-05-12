@@ -10,7 +10,7 @@ public readonly struct TimerHandle
         Index = index;
         Version = version;
     }
-    
+
     public bool IsInvalid => Index < 0;
     public static TimerHandle Invalid => new(-1, 0);
 }

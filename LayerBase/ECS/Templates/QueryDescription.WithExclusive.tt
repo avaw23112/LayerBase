@@ -15,7 +15,7 @@ public partial struct QueryDescription
     for (var index = 2; index <= Amount; index++) // Amount muss vorher definiert sein
     {
         var generics = AppendGenerics(index);
-    #>
+#>
 
     [UnscopedRef]
     public ref QueryDescription WithExclusive<<#= generics #>>()
@@ -26,6 +26,6 @@ public partial struct QueryDescription
     }
     <#
     }
-    #>
+#>
 }
 

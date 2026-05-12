@@ -140,7 +140,8 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
         var emitsBindingAccessor = implementsCtx || implementsService;
 
         return new ClassMeta(symbol.Name, symbol.ContainingNamespace.ToDisplayString(), symbol.ToDisplayString(),
-            implementsCtx, emitsBindingAccessor, handlers, delayProps, diagnostics, isPartial, cds.Identifier.GetLocation());
+            implementsCtx, emitsBindingAccessor, handlers, delayProps, diagnostics, isPartial,
+            cds.Identifier.GetLocation());
     }
 
     private static void GenerateMergedCode(SourceProductionContext spc, ImmutableArray<ClassMeta> metas)
@@ -230,9 +231,9 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                 sb.AppendLine("        {");
                 foreach (var h in allHandlers)
                 {
-                    var reg = h.Attr.Contains("Async") ? "SubscribeAsync" :
-                        h.Attr.Contains("Parallel")    ? "SubscribeParallel" :
-                        h.Attr.Contains("Notify")      ? "SubscribeNotify" : 
+                    var reg = h.Attr.Contains("Async")                                  ? "SubscribeAsync" :
+                        h.Attr.Contains("Parallel")                                     ? "SubscribeParallel" :
+                        h.Attr.Contains("Notify")                                       ? "SubscribeNotify" :
                         h.Attr == "SubscribeFlow" || h.Attr == "SubscribeFlowAttribute" ? "SubscribeFlow" : "Subscribe";
 
                     sb.AppendLine($"            layer.{reg}<{h.Evt}>(this.{h.Name});");
@@ -304,8 +305,8 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
 
         if (method.Parameters[0].RefKind != RefKind.In) return false;
 
-        if (attrName == "Subscribe" || attrName == "SubscribeAttribute" || 
-            attrName.Contains("Notify") || attrName.Contains("Parallel")) 
+        if (attrName == "Subscribe" || attrName == "SubscribeAttribute" ||
+            attrName.Contains("Notify") || attrName.Contains("Parallel"))
             return method.ReturnsVoid;
 
         return IsReturnType(method.ReturnType, "global::LayerBase.Core.Event.EventHandledState");
@@ -314,10 +315,10 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
     private static string GetExpectedSignature(string attrName)
     {
         if (attrName.Contains("Async")) return "LBTask Handle(TEvent value)";
-        if (attrName == "Subscribe" || attrName == "SubscribeAttribute" || 
-            attrName.Contains("Notify") || attrName.Contains("Parallel")) 
+        if (attrName == "Subscribe" || attrName == "SubscribeAttribute" ||
+            attrName.Contains("Notify") || attrName.Contains("Parallel"))
             return "void Handle(in TEvent value)";
-        
+
         return "EventHandledState Handle(in TEvent value)";
     }
 
@@ -361,8 +362,10 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
 
     private class ClassMeta
     {
-        public ClassMeta(string       name,       string ns, string display, bool ctx, bool bindingAccessor, List<HandlerInfo> handlers,
-                         List<string> delayProps, List<HandlerDiagnostic> diagnostics, bool isPartial, Location? location)
+        public ClassMeta(string            name, string ns, string display, bool ctx, bool bindingAccessor,
+                         List<HandlerInfo> handlers,
+                         List<string>      delayProps, List<HandlerDiagnostic> diagnostics, bool isPartial,
+                         Location?         location)
         {
             ClassName = name;
             Namespace = ns;

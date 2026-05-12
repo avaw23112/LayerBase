@@ -9,16 +9,27 @@ namespace LayerBase.Test;
 [TestFixture]
 public class Phase5Tests
 {
-    public partial struct Phase5DirtySignalEvent { public int Value; }
-    public class Phase5DirtySignalEventMeta : EventMetaData<Phase5DirtySignalEvent>
+    public partial struct Phase5DirtySignalEvent
     {
-        public override EventPostPolicy? PostPolicy => new EventPostPolicy(PostDeliveryMode.DirtySignal, BackpressurePolicy.RejectNew, 0);
+        public int Value;
     }
 
-    public partial struct Phase5CoalescedEvent { public int Value; }
+    public class Phase5DirtySignalEventMeta : EventMetaData<Phase5DirtySignalEvent>
+    {
+        public override EventPostPolicy? PostPolicy =>
+            new EventPostPolicy(PostDeliveryMode.DirtySignal, BackpressurePolicy.RejectNew, 0);
+    }
+
+    public partial struct Phase5CoalescedEvent
+    {
+        public int Value;
+    }
+
     public class Phase5CoalescedEventMeta : EventMetaData<Phase5CoalescedEvent>
     {
-        public override EventPostPolicy? PostPolicy => new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0);
+        public override EventPostPolicy? PostPolicy =>
+            new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0);
+
         public override bool TryMergePostEvent(ref Phase5CoalescedEvent current, in Phase5CoalescedEvent next)
         {
             current.Value += next.Value;
@@ -26,7 +37,11 @@ public class Phase5Tests
         }
     }
 
-    public partial struct Phase5CustomTimerEvent { public int Value; }
+    public partial struct Phase5CustomTimerEvent
+    {
+        public int Value;
+    }
+
     public class Phase5CustomTimerEventMeta : EventMetaData<Phase5CustomTimerEvent>
     {
         public override EventTimerPolicy? TimerPolicy => new EventTimerPolicy(
@@ -38,7 +53,11 @@ public class Phase5Tests
         );
     }
 
-    public partial struct Phase5DefaultTtlEvent { public int Value; }
+    public partial struct Phase5DefaultTtlEvent
+    {
+        public int Value;
+    }
+
     public class Phase5DefaultTtlEventMeta : EventMetaData<Phase5DefaultTtlEvent>
     {
         public override EventBufferPolicy? BufferPolicy => new EventBufferPolicy(
@@ -62,10 +81,10 @@ public class Phase5Tests
     public void TestDirtySignalPolicyFromMetaData()
     {
         EventMetaDataHandler.RegisterMetaData<Phase5DirtySignalEvent>(new Phase5DirtySignalEventMeta());
-        
+
         var runtime = new LayerRuntime.LayersBuilder(new LayerRuntime(101))
-            .Push(new TestLayer())
-            .Build();
+                      .Push(new TestLayer())
+                      .Build();
 
         int callCount = 0;
         runtime.EventCenter.SubscribeNotify<Phase5DirtySignalEvent>(0, (in Phase5DirtySignalEvent _) => callCount++);
@@ -82,14 +101,15 @@ public class Phase5Tests
     public void TestPostPolicyFromMetaData()
     {
         EventMetaDataHandler.RegisterMetaData<Phase5CoalescedEvent>(new Phase5CoalescedEventMeta());
-        
+
         var runtime = new LayerRuntime.LayersBuilder(new LayerRuntime(101))
-            .Push(new TestLayer())
-            .Build();
+                      .Push(new TestLayer())
+                      .Build();
 
         int callCount = 0;
         int lastValue = 0;
-        runtime.EventCenter.SubscribeNotify<Phase5CoalescedEvent>(0, (in Phase5CoalescedEvent e) => {
+        runtime.EventCenter.SubscribeNotify<Phase5CoalescedEvent>(0, (in Phase5CoalescedEvent e) =>
+        {
             callCount++;
             lastValue = e.Value;
         });
@@ -110,8 +130,8 @@ public class Phase5Tests
         EventMetaDataHandler.RegisterMetaData<Phase5CustomTimerEvent>(new Phase5CustomTimerEventMeta());
 
         var runtime = new LayerRuntime.LayersBuilder(new LayerRuntime(102))
-            .Push(new TestLayer())
-            .Build();
+                      .Push(new TestLayer())
+                      .Build();
 
         int callCount = 0;
         runtime.EventCenter.SubscribeNotify<Phase5CustomTimerEvent>(0, (in Phase5CustomTimerEvent _) => callCount++);
@@ -131,11 +151,11 @@ public class Phase5Tests
 
         var testLayer = new TestLayer();
         var runtime = new LayerRuntime.LayersBuilder(new LayerRuntime(103))
-            .Push(testLayer)
-            .Build();
+                      .Push(testLayer)
+                      .Build();
 
         var publisher = testLayer.GetDelayPublisher<Phase5DefaultTtlEvent>();
-        
+
         publisher.Publish(new Phase5DefaultTtlEvent { Value = 1 }, 0); // Use default 0.1s
 
         Assert.That(publisher.TryGet(out _), Is.True);

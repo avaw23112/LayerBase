@@ -13,10 +13,10 @@ namespace Arch.Core
     public partial class World
     {
         <#
-        for (var index = 2; index <= Amount; index++)
-        {
-            var generics = AppendGenerics(index);
-        #>
+    for (var index = 2; index <= Amount; index++)
+    {
+        var generics = AppendGenerics(index);
+#>
 
         [Pure]
         public Components<<#= generics #>> Get<<#= generics #>>(Entity entity)
@@ -27,7 +27,7 @@ namespace Arch.Core
             return archetype.Get<<#= generics #>>(ref slot);
         }
         <#
-        }
-        #>
+    }
+#>
     }
 }

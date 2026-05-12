@@ -35,4 +35,3 @@ internal static class Program
         GeneratorVerification.Run();
     }
 }
-

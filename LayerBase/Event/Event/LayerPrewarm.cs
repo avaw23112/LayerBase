@@ -69,8 +69,8 @@ public readonly struct LayerPrewarmOptions
     /// 创建预热参数。
     /// </summary>
     public LayerPrewarmOptions(
-        LayerPrewarmTargets targets = LayerPrewarmTargets.Default,
-        int layerCount = 0)
+        LayerPrewarmTargets targets    = LayerPrewarmTargets.Default,
+        int                 layerCount = 0)
     {
         Targets = targets;
         LayerCount = layerCount;

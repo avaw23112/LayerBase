@@ -5,7 +5,6 @@ namespace Arch.Core;
 
 public partial class World
 {
-
     /// <summary>
     ///     Creates or returns an <see cref="Archetype"/> based on the old one with one additional component.
     ///     Automatically creates a link between them for quick access.

@@ -39,6 +39,7 @@ public class PriorityQueue<TElement, TPriority>
             priority = default!;
             return false;
         }
+
         element = _nodes[0].Element;
         priority = _nodes[0].Priority;
         return true;
@@ -69,8 +70,10 @@ public class PriorityQueue<TElement, TPriority>
             int left = 2 * index + 1;
             int right = 2 * index + 2;
 
-            if (left < _size && _comparer.Compare(_nodes[left].Priority, _nodes[smallest].Priority) < 0) smallest = left;
-            if (right < _size && _comparer.Compare(_nodes[right].Priority, _nodes[smallest].Priority) < 0) smallest = right;
+            if (left < _size && _comparer.Compare(_nodes[left].Priority, _nodes[smallest].Priority) < 0)
+                smallest = left;
+            if (right < _size && _comparer.Compare(_nodes[right].Priority, _nodes[smallest].Priority) < 0)
+                smallest = right;
 
             if (smallest == index) break;
             Swap(index, smallest);

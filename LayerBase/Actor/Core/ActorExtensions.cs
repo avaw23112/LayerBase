@@ -11,21 +11,21 @@ public static class ActorExtensions
     {
         return ActorGeneratedAccess.RequireGenerated(actor).GetId();
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Post<TEvent>(this IActor actor, in TEvent value)
         where TEvent : struct
     {
         ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime.Post(in value);
     }
-        
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void PostLastest<TEvent>(this IActor actor, in TEvent value)
         where TEvent : struct
     {
         ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime.PostLatest(in value);
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void PostCoalesced<TEvent>(this IActor actor, in TEvent value)
         where TEvent : struct
@@ -39,6 +39,7 @@ public static class ActorExtensions
     {
         ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime.Send(in value);
     }
+
     public static TimerHandle SchedulePost<TValue>(
         this IActor         actor,
         in   TValue         value,
@@ -64,31 +65,33 @@ public static class ActorExtensions
             repeatMode: repeatMode ?? timerPolicy?.RepeatMode,
             catchUpPolicy: catchUpPolicy ?? timerPolicy?.CatchUpPolicy);
     }
-    
-    public static LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(this IActor actor,TRequest request, 
-                                                                           CancellationToken cancellationToken = default)
+
+    public static LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(this IActor actor, TRequest request,
+                                                                           CancellationToken cancellationToken =
+                                                                               default)
         where TLayer : Layer
         where TRequest : struct
         where TResponse : struct
     {
-       return ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime.CallAsync<TLayer,TRequest,TResponse>(request);
+        return ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime
+                                   .CallAsync<TLayer, TRequest, TResponse>(request);
     }
-    
-    
+
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult PostInside<TEvent>(this IActor actor, in TEvent value)
         where TEvent : struct
     {
         return ActorGeneratedAccess.RequireGenerated(actor).Context.PostInside(in value);
     }
-    
+
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool GetEnable(this IActor actor)
     {
         return ActorGeneratedAccess.RequireGenerated(actor).Context.IsEnable();
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool SetEnable(this IActor actor, bool enable)
     {

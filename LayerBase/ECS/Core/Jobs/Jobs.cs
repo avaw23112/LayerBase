@@ -112,7 +112,6 @@ public interface IChunkJob
 /// </summary>
 public struct ForEachJob : IChunkJob
 {
-
     /// <summary>
     ///     The <see cref="ForEach"/> callback invoked for each <see cref="Entity"/>;
     /// </summary>
@@ -122,11 +121,10 @@ public struct ForEachJob : IChunkJob
     ///     Called on each <see cref="Chunk"/> and iterates over all <see cref="Entity"/>'s to call the <see cref="ForEach"/> callback for each.
     /// </summary>
     /// <param name="chunk">A reference to the chunk which is currently processed.</param>
-
     public readonly void Execute(ref Chunk chunk)
     {
         ref var entityFirstElement = ref chunk.Entity(0);
-        foreach(var entityIndex in chunk)
+        foreach (var entityIndex in chunk)
         {
             var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
             ForEach(entity);
@@ -142,7 +140,6 @@ public struct ForEachJob : IChunkJob
 /// <typeparam name="T">The generic type, inhereting from <see cref="IForEach{T0}"/>.</typeparam>
 public struct IForEachJob<T> : IChunkJob where T : IForEach
 {
-
     /// <summary>
     /// The <see cref="IForEach{T0}"/> interface reference being invoked.
     /// </summary>
@@ -153,11 +150,10 @@ public struct IForEachJob<T> : IChunkJob where T : IForEach
     /// </summary>
     /// <param name="index">The chunk index.</param>
     /// <param name="chunk">A reference to the chunk which is currently processed.</param>
-
     public void Execute(ref Chunk chunk)
     {
         ref var entityFirstElement = ref chunk.Entity(0);
-        foreach(var entityIndex in chunk)
+        foreach (var entityIndex in chunk)
         {
             var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
             ForEach.Update(entity);
@@ -172,7 +168,6 @@ public struct IForEachJob<T> : IChunkJob where T : IForEach
 /// <typeparam name="T">The generic type that implements the <see cref="IChunkJob"/> interface.</typeparam>
 public sealed class ChunkIterationJob<T> : IJob where T : IChunkJob
 {
-
     /// <summary>
     ///     Initializes a new instance of the <see cref="ChunkIterationJob{T}"/> class.
     /// </summary>

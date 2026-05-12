@@ -24,7 +24,7 @@ public partial class World
     }
 
     internal bool TryGetProjectionMeta(
-        Entity entity,
+        Entity                    entity,
         out ProjectedActorMetaRef metaRef)
     {
         if (!EntityInfo.Has(entity.Id))
@@ -46,7 +46,7 @@ public partial class World
     }
 
     internal void AddActiveProjectedActor(
-        Entity entity,
+        Entity                 entity,
         ref ProjectedActorMeta meta)
     {
         _activeProjectedActors.Add(entity, ref meta);

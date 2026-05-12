@@ -10,10 +10,10 @@ internal readonly struct ActorQueryDescriptor : IEquatable<ActorQueryDescriptor>
     public readonly ActorGroupSignature NoneGroups;
 
     public ActorQueryDescriptor(
-        BehaviourSignature allBehaviours,
-        BehaviourSignature noneBehaviours,
-        ActorTagSignature allTags,
-        ActorTagSignature noneTags,
+        BehaviourSignature  allBehaviours,
+        BehaviourSignature  noneBehaviours,
+        ActorTagSignature   allTags,
+        ActorTagSignature   noneTags,
         ActorGroupSignature allGroups,
         ActorGroupSignature noneGroups)
     {

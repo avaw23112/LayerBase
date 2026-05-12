@@ -10,7 +10,7 @@ public readonly struct DelayTimerHandle
         Index = index;
         Version = version;
     }
-    
+
     public bool IsValid => Index >= 0;
     public static readonly DelayTimerHandle Invalid = new DelayTimerHandle(-1, 0);
 }
