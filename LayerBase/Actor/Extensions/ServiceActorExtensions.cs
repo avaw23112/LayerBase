@@ -26,4 +26,10 @@ public static class ServiceActorExtensions
     {
         return service.Actors().Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
     }
+
+    public static TActor CreateActor<TActor>( this IService service,bool usePool = false)
+        where TActor: class,IActor,new()
+    {
+        return service.Actors().CreateActor<TActor>(usePool);
+    }
 }

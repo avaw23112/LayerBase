@@ -21,6 +21,7 @@ public ref struct EntityCreateBuilder
     private readonly PooledList<ComponentType>  _componentTypes;
     private int _actorTypeId = -1;
     private float _keepAliveSeconds;
+    private bool _isCreatedActor = false;
     private ProjectedActorReleasePolicy _releasePolicy;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -57,12 +58,17 @@ public ref struct EntityCreateBuilder
                                                             ProjectedActorReleasePolicy releasePolicy = ProjectedActorReleasePolicy.ReturnToPool)
         where TActor : class, IPooledActor, new()
     {
+        if (_isCreatedActor)
+        {
+            return this;
+        }
         _actorTypeId =  ActorType<TActor>.Id;
         ProjectedActorTypeRegistry.RegisterGenerated(_actorTypeId,typeof(TActor),static actorWorld => actorWorld.CreateProjectedActor<TActor>());
         this._keepAliveSeconds = keepAliveSeconds;
         this._releasePolicy = releasePolicy;
+        this._isCreatedActor = true;
         return this;
-    }   
+    }
 
     public Entity Build()
     {

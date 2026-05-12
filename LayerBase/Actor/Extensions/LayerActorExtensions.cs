@@ -27,4 +27,10 @@ public static class LayerActorExtensions
     {
         return layer.Actors().Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
     }
+    
+    public static TActor CreateActor<TActor>( this Layer layer,bool usePool = false)
+        where TActor: class,IActor,new()
+    {
+        return layer.Actors().CreateActor<TActor>(usePool);
+    }
 }
