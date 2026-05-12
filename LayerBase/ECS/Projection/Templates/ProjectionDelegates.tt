@@ -3,6 +3,7 @@
 <#@ include file="Helpers.ttinclude" #>
 #nullable enable
 using Arch.Core;
+using LayerBase.ECS;
 
 namespace LayerBase.ECS.Projection.Flow;
 
@@ -20,6 +21,29 @@ public delegate bool ProjectionPredicate<<#= compG #>>(
 public delegate void <#= evtName #><<#= AG(c, e) #>>(
         <#= FEP(c, e) #>)
     <#= FEC(e) #>;
+
+<# } #>
+<# } #>
+<# for (var c = 1; c <= ComponentAmount; c++) { #>
+<# var compG = CG(c); #>
+public interface IQueryJob<<#= compG #>>
+{
+    void Execute(
+        Entity entity<# for (var i = 0; i < c; i++) { #>,
+        ref T<#= i #> c<#= i #><# } #>);
+}
+
+<# } #>
+<# for (var c = 1; c <= ComponentAmount; c++) { #>
+<# for (var e = 1; e <= EventAmount; e++) { #>
+<# var allG = AG(c, e); #>
+public interface IProjectionJob<#= c #>x<#= e #><<#= allG #>>
+{
+    ProjectResult Execute(
+        Entity entity<# for (var i = 0; i < c; i++) { #>,
+        ref T<#= i #> c<#= i #><# } #><# for (var i = 0; i < e; i++) { #>,
+        ref TEvent<#= i #> e<#= i #><# } #>);
+}
 
 <# } #>
 <# } #>

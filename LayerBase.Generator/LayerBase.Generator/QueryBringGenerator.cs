@@ -399,7 +399,9 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         sb.AppendLine($"            var job = new __{method.EntryPointName}Job(this);");
         sb.AppendLine();
 
-        sb.AppendLine($"            this.Query<{compGeneric}>()");
+        // 使用 global::LayerBase.ServiceECSExtensions.Query<T...>(this) 避免生成代码依赖 using 解析扩展方法。
+        sb.AppendLine("            global::LayerBase.ServiceECSExtensions");
+        sb.AppendLine($"                .Query<{compGeneric}>(this)");
         sb.AppendLine("                .ForEach(ref job);");
     }
 
@@ -413,22 +415,27 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         sb.AppendLine($"            var job = new __{method.EntryPointName}Job(this);");
         sb.AppendLine();
 
-        sb.AppendLine($"            this.Query<{compGeneric}>()");
+        // 使用 global::LayerBase.ServiceECSExtensions.Query<T...>(this) 避免生成代码依赖 using 解析扩展方法。
+        // ref job 必须放在 ForEach 上。Post() 不接收 job。Post() 是 Batch 流的终点。
+        sb.AppendLine("            global::LayerBase.ServiceECSExtensions");
+        sb.AppendLine($"                .Query<{compGeneric}>(this)");
         sb.AppendLine($"                .Bring<{eventGeneric}>()");
-        sb.AppendLine("                .ForEach(ref job);");
+        sb.AppendLine("                .ForEach(ref job)");
+        sb.AppendLine("                .Batch()");
+        sb.AppendLine("                .Post();");
     }
 
     private static void GenerateJobStruct(StringBuilder sb, QueryMethodInfo method)
     {
         bool hasBring = method.BringEventTypes.Length > 0;
 
-        string jobGeneric = BuildJobGenericArguments(method);
+        string jobInterfaceName = BuildJobInterfaceName(method);
         string selfTypeName = GetTypeDisplayName(method.MethodSymbol.ContainingType);
         string methodName = method.MethodSymbol.Name;
 
-        // IQueryJob<T...>：Query ForEach 需要的执行接口。
-        // 这里的 T... 由组件类型和 Bring 事件类型共同组成。
-        sb.AppendLine($"        private readonly struct __{method.EntryPointName}Job : IQueryJob<{jobGeneric}>");
+        // IQueryJob<T...>：纯 ECS Query ForEach 需要的执行接口。
+        // IProjectionJob{C}x{E}<T...>：Query + Bring ForEach 需要的执行接口。
+        sb.AppendLine($"        private readonly struct __{method.EntryPointName}Job : {jobInterfaceName}");
         sb.AppendLine("        {");
 
         // _self 保存当前业务类实例。
@@ -479,6 +486,8 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
     private static List<string> BuildExecuteParameters(QueryMethodInfo method)
     {
+        bool hasBring = method.BringEventTypes.Length > 0;
+
         var parameters = new List<string>
         {
             // Entity 参数固定由 Query Job 接口提供。
@@ -488,8 +497,11 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         for (int i = 0; i < method.ComponentTypes.Length; i++)
         {
-            string refKind = method.ComponentRefKinds[i] == RefKind.Ref ? "ref" : "in";
             string typeName = GetTypeDisplayName(method.ComponentTypes[i]);
+
+            // Bring 分支：接口层统一使用 ref，便于 Flow 模板复用。
+            // 纯 Query 分支：保留用户原始 ref / in 语义。
+            string refKind = hasBring ? "ref" : (method.ComponentRefKinds[i] == RefKind.Ref ? "ref" : "in");
 
             // c0、c1、c2 是生成代码内部使用的组件变量名。
             // 它们会按用户方法中组件参数的出现顺序排列。
@@ -553,6 +565,23 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
             method.ComponentTypes
                 .Concat(method.BringEventTypes)
                 .Select(static type => GetTypeDisplayName(type)));
+    }
+
+    private static string BuildJobInterfaceName(QueryMethodInfo method)
+    {
+        string jobGeneric = BuildJobGenericArguments(method);
+
+        bool hasBring = method.BringEventTypes.Length > 0;
+
+        if (!hasBring)
+        {
+            return $"IQueryJob<{jobGeneric}>";
+        }
+
+        int componentCount = method.ComponentTypes.Length;
+        int eventCount = method.BringEventTypes.Length;
+
+        return $"IProjectionJob{componentCount}x{eventCount}<{jobGeneric}>";
     }
 
     private static string BuildPartialClassDeclaration(INamedTypeSymbol classSymbol)

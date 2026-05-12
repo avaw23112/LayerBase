@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using Arch.Core;
 using CommunityToolkit.HighPerformance;
 using LayerBase.Actor;
+using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 
 namespace LayerBase.ECS.Projection.Flow;
@@ -254,6 +255,194 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         }
     }
 
+    public static void ForEach<TJob>(
+        World world,
+        Query query,
+        ProjectionPredicate<#= compGP #>? predicate,
+        ref TJob job)
+        where TJob : struct, IQueryJob<<#= compG #>>
+    {
+        foreach (ref Chunk chunk in query.GetChunkIterator())
+        {
+            CollectForEachChunk(
+                ref chunk,
+                predicate,
+                ref job);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CollectForEachChunk<TJob>(
+        ref Chunk chunk,
+        ProjectionPredicate<#= compGP #>? predicate,
+        ref TJob job)
+        where TJob : struct, IQueryJob<<#= compG #>>
+    {
+<#= FirstComponentRefs(c) #>
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
+        int count =
+            chunk.Count;
+
+        for (int row = 0; row < count; row++)
+        {
+<#= RowComponentRefs(c) #>
+            Entity entity =
+                Unsafe.Add(
+                    ref firstEntity,
+                    row);
+
+            if (predicate != null && !predicate(<#= PredicateArgs(c) #>))
+            {
+                continue;
+            }
+
+            job.Execute(
+                entity<# for (var i = 0; i < c; i++) { #>,
+                ref c<#= i #><# } #>);
+        }
+    }
+
+    public static void Post<TEvent0, TJob>(
+        World world,
+        Query query,
+        ProjectionPredicate<#= compGP #>? predicate,
+        ref TJob job)
+        where TEvent0 : struct
+        where TJob : struct, IProjectionJob<#= c #>x1<<#= compG #>, TEvent0>
+    {
+        ActorWorld actorWorld =
+            world.Runtime.Actors;
+
+        long nowTicks =
+            Stopwatch.GetTimestamp();
+
+        ProjectionBatchBuffer<TEvent0> batch0 =
+            ProjectionBatchBuffer<TEvent0>.Rent();
+
+        try
+        {
+            foreach (ref Chunk chunk in query.GetChunkIterator())
+            {
+                CollectPostJobChunk(
+                    world,
+                    actorWorld,
+                    ref chunk,
+                    predicate,
+                    ref job,
+                    nowTicks,
+                    ref batch0);
+            }
+
+            batch0.PostTo(
+                actorWorld);
+        }
+        finally
+        {
+            batch0.Dispose();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CollectPostJobChunk<TEvent0, TJob>(
+        World world,
+        ActorWorld actorWorld,
+        ref Chunk chunk,
+        ProjectionPredicate<#= compGP #>? predicate,
+        ref TJob job,
+        long nowTicks,
+        ref ProjectionBatchBuffer<TEvent0> batch0)
+        where TEvent0 : struct
+        where TJob : struct, IProjectionJob<#= c #>x1<<#= compG #>, TEvent0>
+    {
+<#= FirstComponentRefs(c) #>
+        ref ProjectedActorMeta firstMeta =
+            ref chunk.FirstProjection();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
+        int count =
+            chunk.Count;
+
+        for (int row = 0; row < count; row++)
+        {
+<#= RowComponentRefs(c) #>
+            Entity entity =
+                Unsafe.Add(
+                    ref firstEntity,
+                    row);
+
+            if (predicate != null && !predicate(<#= PredicateArgs(c) #>))
+            {
+                continue;
+            }
+
+            TEvent0 e0 =
+                default;
+
+            ProjectResult result =
+                job.Execute(
+                    entity<# for (var i = 0; i < c; i++) { #>,
+                    ref c<#= i #><# } #>,
+                    ref e0);
+
+            if (result == ProjectResult.Fail)
+            {
+                continue;
+            }
+
+            ref ProjectedActorMeta meta =
+                ref Unsafe.Add(
+                    ref firstMeta,
+                    row);
+
+            ActorId actorId =
+                meta.ActorId;
+
+            if (!actorId.IsValid)
+            {
+                actorId =
+                    ProjectedActorBinding.EnsureProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref meta,
+                        nowTicks);
+
+                if (!actorId.IsValid)
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                ProjectedActorBinding.TouchProjectedActor(
+                    actorWorld,
+                    ref meta,
+                    nowTicks);
+
+                actorId =
+                    meta.ActorId;
+
+                if (!actorId.IsValid)
+                {
+                    continue;
+                }
+            }
+
+            if (result == ProjectResult.Touch)
+            {
+                continue;
+            }
+
+            batch0.Add(
+                actorId,
+                in e0);
+        }
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
@@ -369,6 +558,153 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
         {
 <# for (var i = e - 1; i >= 0; i--) { #>
             batch<#= i #>.Dispose();
+<# } #>
+        }
+    }
+
+    public static void Post<TJob>(
+        World world,
+        Query query,
+        ProjectionPredicate<#= compGP #>? predicate,
+        ref TJob job)
+        where TJob : struct, IProjectionJob<#= c #>x<#= e #><<#= allG #>>
+    {
+        ActorWorld actorWorld =
+            world.Runtime.Actors;
+
+        long nowTicks =
+            Stopwatch.GetTimestamp();
+
+<# for (var i = 0; i < e; i++) { #>
+        ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> =
+            ProjectionBatchBuffer<TEvent<#= i #>>.Rent();
+<# } #>
+
+        try
+        {
+            foreach (ref Chunk chunk in query.GetChunkIterator())
+            {
+                CollectPostJobChunk(
+                    world,
+                    actorWorld,
+                    ref chunk,
+                    predicate,
+                    ref job,
+                    nowTicks<# for (var i = 0; i < e; i++) { #>,
+                    ref batch<#= i #><# } #>);
+            }
+
+<# for (var i = 0; i < e; i++) { #>
+            batch<#= i #>.PostTo(
+                actorWorld);
+<# } #>
+        }
+        finally
+        {
+<# for (var i = e - 1; i >= 0; i--) { #>
+            batch<#= i #>.Dispose();
+<# } #>
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CollectPostJobChunk<TJob>(
+        World world,
+        ActorWorld actorWorld,
+        ref Chunk chunk,
+        ProjectionPredicate<#= compGP #>? predicate,
+        ref TJob job,
+        long nowTicks<# for (var i = 0; i < e; i++) { #>,
+        ref ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #><# } #>)
+        where TJob : struct, IProjectionJob<#= c #>x<#= e #><<#= allG #>>
+    {
+<#= FirstComponentRefs(c) #>
+        ref ProjectedActorMeta firstMeta =
+            ref chunk.FirstProjection();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
+        int count =
+            chunk.Count;
+
+        for (int row = 0; row < count; row++)
+        {
+<#= RowComponentRefs(c) #>
+            Entity entity =
+                Unsafe.Add(
+                    ref firstEntity,
+                    row);
+
+            if (predicate != null && !predicate(<#= PredicateArgs(c) #>))
+            {
+                continue;
+            }
+
+<# for (var i = 0; i < e; i++) { #>
+            TEvent<#= i #> e<#= i #> =
+                default;
+<# } #>
+
+            ProjectResult result =
+                job.Execute(
+                    entity<# for (var i = 0; i < c; i++) { #>,
+                    ref c<#= i #><# } #><# for (var i = 0; i < e; i++) { #>,
+                    ref e<#= i #><# } #>);
+
+            if (result == ProjectResult.Fail)
+            {
+                continue;
+            }
+
+            ref ProjectedActorMeta meta =
+                ref Unsafe.Add(
+                    ref firstMeta,
+                    row);
+
+            ActorId actorId =
+                meta.ActorId;
+
+            if (!actorId.IsValid)
+            {
+                actorId =
+                    ProjectedActorBinding.EnsureProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref meta,
+                        nowTicks);
+
+                if (!actorId.IsValid)
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                ProjectedActorBinding.TouchProjectedActor(
+                    actorWorld,
+                    ref meta,
+                    nowTicks);
+
+                actorId =
+                    meta.ActorId;
+
+                if (!actorId.IsValid)
+                {
+                    continue;
+                }
+            }
+
+            if (result == ProjectResult.Touch)
+            {
+                continue;
+            }
+
+<# for (var i = 0; i < e; i++) { #>
+            batch<#= i #>.Add(
+                actorId,
+                in e<#= i #>);
 <# } #>
         }
     }

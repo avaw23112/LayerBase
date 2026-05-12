@@ -3,6 +3,7 @@
 <#@ include file="Helpers.ttinclude" #>
 #nullable enable
 using Arch.Core;
+using LayerBase.ECS;
 
 namespace LayerBase.ECS.Projection.Flow;
 
@@ -136,6 +137,17 @@ public readonly struct ProjectionQueryFlow<#= c #><<#= compG #>>
     {
         ProjectionExecutor<#= c #><<#= compG #>>.Touch(_world, _query, _predicate);
     }
+
+    public void ForEach<TJob>(
+        ref TJob job)
+        where TJob : struct, IQueryJob<<#= compG #>>
+    {
+        ProjectionExecutor<#= c #><<#= compG #>>.ForEach(
+            _world,
+            _query,
+            _predicate,
+            ref job);
+    }
 }
 
 <# for (var e = 1; e <= EventAmount; e++) { #>
@@ -161,6 +173,17 @@ public readonly struct ProjectionBringFlow<#= c #><#= suffix #><<#= allG #>>
     public ProjectionPostFlow<#= c #><#= suffix #><<#= allG #>> ForEach(<#= dName #><<#= allG #>> forEach)
     {
         return new ProjectionPostFlow<#= c #><#= suffix #><<#= allG #>>(_world, _query, _predicate, forEach);
+    }
+
+    public ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, TJob> ForEach<TJob>(
+        ref TJob job)
+        where TJob : struct, IProjectionJob<#= c #>x<#= e #><<#= allG #>>
+    {
+        return new ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, TJob>(
+            _world,
+            _query,
+            _predicate,
+            job);
     }
 }
 
@@ -188,6 +211,66 @@ public readonly struct ProjectionPostFlow<#= c #><#= suffix #><<#= allG #>>
         ProjectionExecutor<#= c #><<#= compG #>>.Post(_world, _query, _predicate, _forEach);
 <# } else { #>
         ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>.Post(_world, _query, _predicate, _forEach);
+<# } #>
+    }
+}
+
+public readonly struct ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, TJob>
+    where TJob : struct, IProjectionJob<#= c #>x<#= e #><<#= allG #>>
+<#= cons #>
+{
+    private readonly World _world;
+    private readonly Query _query;
+    private readonly ProjectionPredicate<#= compGP #>? _predicate;
+    private readonly TJob _job;
+
+    internal ProjectionJobPostFlow<#= c #><#= suffix #>(
+        World world,
+        Query query,
+        ProjectionPredicate<#= compGP #>? predicate,
+        TJob job)
+    {
+        // world 参数作用：
+        // 当前 ECS World。
+
+        // query 参数作用：
+        // 当前 Projection Query。
+
+        // predicate 参数作用：
+        // 可选过滤条件。
+
+        // job 参数作用：
+        // 源生成器生成的 Projection Job。
+        // 它会调用用户写的 [Query] + [Bring] 方法。
+
+        _world = world;
+        _query = query;
+        _predicate = predicate;
+        _job = job;
+    }
+
+    public ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, TJob> Batch()
+    {
+        return this;
+    }
+
+    public void Post()
+    {
+        TJob job =
+            _job;
+
+<# if (e == 1) { #>
+        ProjectionExecutor<#= c #><<#= compG #>>.Post(
+            _world,
+            _query,
+            _predicate,
+            ref job);
+<# } else { #>
+        ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>.Post(
+            _world,
+            _query,
+            _predicate,
+            ref job);
 <# } #>
     }
 }
