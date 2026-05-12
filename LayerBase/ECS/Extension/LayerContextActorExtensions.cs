@@ -129,11 +129,13 @@ public static class LayerContextECSExtensions
     /// </summary>
     /// <param name="ILayerContext">当前 ILayerContext，内部应当能访问对应的 ECSWorld。</param>
     /// <returns>返回当前 ILayerContext 绑定的 ECSWorld。</returns>
-    private static World ECSWorld(ILayerContext ILayerContext)
+    public static World ECSWorld(this ILayerContext ILayerContext)
     {
-        // 这里保留你项目中原本的实现。
-        // 它的职责是把 ILayerContext 映射到对应的 ECSWorld。
-        throw new NotImplementedException();
+        if (ILayerContext == null)
+        {
+            throw new ArgumentNullException(nameof(ILayerContext));
+        }
+        return ServiceLayerBinder.RequireBinding(ILayerContext).Runtime.EcsWorld;
     }
 
 }

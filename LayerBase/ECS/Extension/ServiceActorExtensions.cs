@@ -129,11 +129,12 @@ public static class ServiceECSExtensions
     /// </summary>
     /// <param name="IService">当前 IService，内部应当能访问对应的 ECSWorld。</param>
     /// <returns>返回当前 IService 绑定的 ECSWorld。</returns>
-    private static World ECSWorld(IService IService)
+    public static World ECSWorld(this IService service)
     {
-        // 这里保留你项目中原本的实现。
-        // 它的职责是把 IService 映射到对应的 ECSWorld。
-        throw new NotImplementedException();
+        if (service == null)
+        {
+            throw new ArgumentNullException(nameof(service));
+        }
+        return ServiceLayerBinder.RequireBinding(service).Runtime.EcsWorld;
     }
-
 }
