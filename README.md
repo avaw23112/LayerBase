@@ -7,6 +7,8 @@
 **LayerBase** 是一款专为 Unity、Godot 及纯 C# 服务端打造的高性能事件架构与通讯总线框架。它打破了传统面向对象（OOP）事件总线的性能瓶颈，在底层采用了
 **面向数据设计（Data-Oriented Design, DOD）**与**SOA（Structure of Arrays**内存布局。在保证业务代码极简、解耦的同时，为中大型项目提供规范的事件流转控制。
 
+- ECS内核部分使用Arch框架，后续更新计划中会尝试自研 : https://github.com/genaray/Arch
+
 ---
 
 ## 🤔 架构演进：我们为什么需要 LayerBase？

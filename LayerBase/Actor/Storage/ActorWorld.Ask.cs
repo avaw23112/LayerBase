@@ -39,7 +39,6 @@ public sealed partial class ActorWorld
         {
             return PostResult.Failure(
                 ActorPostStatus.ActorNotFound,
-                "Invalid ActorId.ArchetypeId.",
                 PostFailureKind.InvalidActorId);
         }
 

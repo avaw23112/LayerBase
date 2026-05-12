@@ -104,7 +104,6 @@ internal sealed class BehaviourArchetype
         {
             return PostResult.Failure(
                 ActorPostStatus.ActorNotFound,
-                "Actor archetype storage is missing.",
                 PostFailureKind.InvalidActorId);
         }
 
@@ -115,13 +114,11 @@ internal sealed class BehaviourArchetype
             {
                 return PostResult.Failure(
                     ActorPostStatus.ActorPendingDestroy,
-                    "Actor is pending destroy.",
                     PostFailureKind.PendingDestroy);
             }
 
             return PostResult.Failure(
                 ActorPostStatus.ActorNotAlive,
-                "ActorId is stale or actor slot is not alive.",
                 PostFailureKind.InvalidActorId);
         }
 

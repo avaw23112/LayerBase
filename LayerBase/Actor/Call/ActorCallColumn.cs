@@ -39,7 +39,6 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         {
             return PostResult.Failure(
                 ActorPostStatus.ActorPendingDestroy,
-                "Actor is pending destroy.",
                 PostFailureKind.PendingDestroy);
         }
 
@@ -47,7 +46,6 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         {
             return PostResult.Failure(
                 ActorPostStatus.ActorNotAlive,
-                "Actor is destroying.",
                 PostFailureKind.Destroying);
         }
 
@@ -56,7 +54,6 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         {
             return PostResult.Failure(
                 ActorPostStatus.ActorDisabledRejected,
-                "Actor is disabled.",
                 PostFailureKind.DisabledActor);
         }
 

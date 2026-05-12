@@ -223,14 +223,14 @@ public sealed class PostScheduler : IDisposable
                 if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
                 return EnqueueLatestInternal(typeId, in value);
             default:
-                return PostResult.Failure("Unknown delivery mode");
+                return PostResult.Failure();
         }
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private PostResult FailSchedulerDisposed()
     {
-        return PostResult.Failure("Scheduler disposed");
+        return PostResult.Failure();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -287,7 +287,7 @@ public sealed class PostScheduler : IDisposable
         {
             if (typeId < _pendingCount.Length && FastArray.At(_pendingCount, typeId) >= plan.MaxPending)
             {
-                return PostResult.Failure($"Max pending reached for event type {typeId}");
+                return PostResult.Failure();
             }
 
             FastArray.At(_pendingCount, typeId)++;
@@ -324,7 +324,7 @@ public sealed class PostScheduler : IDisposable
         var bit = 1UL << (typeId & 63);
 
         if (segment >= _dirtyPendingBits.Length)
-            return PostResult.Failure($"Dirty buffer is not initialized for event type {typeof(T).Name}.");
+            return PostResult.Failure();
 
         if ((FastArray.At(_dirtyPendingBits, segment) & bit) == 0)
         {
@@ -353,7 +353,7 @@ public sealed class PostScheduler : IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static PostResult FailEventTypeNotRegistered<T>() where T : struct
     {
-        return PostResult.Failure($"Event type {typeof(T).Name} was not registered before Build.");
+        return PostResult.Failure();
     }
 
     private PostResult EnqueueLatestInternal<T>(int typeId, in T value) where T : struct
@@ -378,7 +378,7 @@ public sealed class PostScheduler : IDisposable
             return PostResult.Success;
         }
 
-        return PostResult.Failure("Event type not registered during build.");
+        return PostResult.Failure();
     }
 
     private PostResult EnqueueCoalescedInternal<T>(int typeId, in T value) where T : struct
@@ -441,7 +441,7 @@ public sealed class PostScheduler : IDisposable
             return EnqueueNormalWithPlan(typeId, in value, in fallbackPlan);
         }
 
-        return PostResult.Failure("Merge failed");
+        return PostResult.Failure();
     }
 
     private PostResult HandleMergeFailureInternalLocked<T>(
@@ -457,7 +457,7 @@ public sealed class PostScheduler : IDisposable
         switch (plan.MergeFailure)
         {
             case MergeFailurePolicy.Reject:
-                return PostResult.Failure("Merge failed.");
+                return PostResult.Failure();
 
             case MergeFailurePolicy.FallbackToLatest:
                 _payloadStorage.Release(slot.PayloadHandle);
@@ -473,7 +473,7 @@ public sealed class PostScheduler : IDisposable
                 return PostResult.Enqueued();
 
             default:
-                return PostResult.Failure($"Unsupported merge failure policy: {plan.MergeFailure}.");
+                return PostResult.Failure();
         }
     }
 
@@ -492,7 +492,7 @@ public sealed class PostScheduler : IDisposable
         {
             case BackpressurePolicy.RejectNew:
                 _payloadStorage.Release(item.PayloadHandle);
-                return PostResult.Failure("Queue full");
+                return PostResult.Failure();
             case BackpressurePolicy.DropNewest:
                 _payloadStorage.Release(item.PayloadHandle);
                 return PostResult.Dropped();
@@ -506,10 +506,10 @@ public sealed class PostScheduler : IDisposable
                 }
 
                 _payloadStorage.Release(item.PayloadHandle);
-                return PostResult.Failure("Queue full (even after drop oldest)");
+                return PostResult.Failure();
             default:
                 _payloadStorage.Release(item.PayloadHandle);
-                return PostResult.Failure($"Unsupported backpressure policy: {item.Policy}");
+                return PostResult.Failure();
         }
     }
 

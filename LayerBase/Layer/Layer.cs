@@ -682,7 +682,7 @@ public abstract class Layer : Node, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
-        if (OwnerContext == null) return PostResult.Failure("Layer not attached to context.");
+        if (OwnerContext == null) return PostResult.Failure();
         return OwnerContext.TryPost(value, policy);
     }
 

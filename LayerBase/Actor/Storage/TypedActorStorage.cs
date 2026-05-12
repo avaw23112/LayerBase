@@ -415,7 +415,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             return PostResult.Failure(
                 ActorPostStatus.EventNotSupported,
-                $"Actor type {typeof(TActor).Name} does not support request {typeof(TRequest).Name} / response {typeof(TResponse).Name}.",
                 PostFailureKind.UnsupportedEvent);
         }
 
@@ -423,7 +422,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             return PostResult.Failure(
                 ActorPostStatus.EventNotSupported,
-                $"Actor type {typeof(TActor).Name} does not support request {typeof(TRequest).Name} / response {typeof(TResponse).Name}.",
                 PostFailureKind.UnsupportedEvent);
         }
 

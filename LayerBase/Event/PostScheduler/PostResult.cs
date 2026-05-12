@@ -21,12 +21,11 @@ public readonly struct PostResult
 
     public static PostResult Success => new(true);
 
-    public static PostResult Failure(string message, PostFailureKind failureKind = PostFailureKind.Unknown)
+    public static PostResult Failure(PostFailureKind failureKind = PostFailureKind.Unknown)
         => new(false, countsAsPending: true, failureKind: failureKind);
 
     public static PostResult Failure(
         Actor.ActorPostStatus actorStatus,
-        string                message,
         PostFailureKind       failureKind = PostFailureKind.Unknown)
         => new(false, countsAsPending: true, failureKind: failureKind, actorStatus: actorStatus);
 

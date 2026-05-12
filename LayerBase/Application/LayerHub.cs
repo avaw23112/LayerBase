@@ -157,7 +157,7 @@ public static class LayerHub
     {
         return s_primaryRuntime != null
             ? s_primaryRuntime.TryPost(value, policy)
-            : PostResult.Failure("No Primary LayerRuntime created.");
+            : PostResult.Failure();
     }
 
     /// <summary>
