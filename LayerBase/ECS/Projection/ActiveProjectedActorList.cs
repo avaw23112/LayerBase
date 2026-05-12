@@ -58,7 +58,7 @@ internal sealed class ActiveProjectedActorList
                     meta.ActorId,
                     out IPooledActor pooledActor))
             {
-                meta.ClearActor();
+                ProjectedActorBindingUtility.Clear(world, entity, ref meta);
                 RemoveAt(world, i, ref meta);
                 continue;
             }
@@ -72,7 +72,7 @@ internal sealed class ActiveProjectedActorList
                 meta.ActorId,
                 meta.ReleasePolicy);
 
-            meta.ClearActor();
+            ProjectedActorBindingUtility.Clear(world, entity, ref meta);
             RemoveAt(world, i, ref meta);
         }
     }

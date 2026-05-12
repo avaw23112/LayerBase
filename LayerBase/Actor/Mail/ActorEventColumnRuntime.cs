@@ -21,6 +21,50 @@ internal abstract class ActorEventColumnRuntime
         in  ActorMailPumpOptions  options,
         ActorMailPumpStatsBuilder stats);
 
+    /// <summary>
+    /// 批量 Pump 当前 Column。
+    ///
+    /// 参数说明：
+    /// budget：当前帧预算，包含事件数量预算和时间预算。
+    /// options：邮箱 Pump 配置。
+    /// stats：Pump 统计构建器。
+    /// maxEvents：当前 Column 本次最多允许连续处理多少事件。
+    ///
+    /// 作用：
+    /// 默认实现只调用一次 PumpOne，用于保持兼容。
+    /// 真正的高性能 Column 可以 override 这个方法。
+    /// </summary>
+    public virtual ActorPumpManyResult PumpMany(
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
+        ActorMailPumpStatsBuilder stats,
+        int                       maxEvents)
+    {
+        if (maxEvents <= 0)
+        {
+            return ActorPumpManyResult.NoWork();
+        }
+
+        ActorColumnPumpResult result = PumpOne(
+            budget: ref budget,
+            options: in options,
+            stats: stats);
+
+        if (result == ActorColumnPumpResult.Processed)
+        {
+            return ActorPumpManyResult.ProcessedBatch(1);
+        }
+
+        if (result == ActorColumnPumpResult.ActorLimited)
+        {
+            return new ActorPumpManyResult(
+                processed: 0,
+                result: PumpOneResult.ActorLimited);
+        }
+
+        return ActorPumpManyResult.NoWork();
+    }
+
     public abstract bool HasPendingWork();
 
     public abstract void EnsureSlotCapacity(int slotIndex);

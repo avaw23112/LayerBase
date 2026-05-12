@@ -63,6 +63,48 @@ internal sealed class ActorCallBucket<TRequest, TResponse> : IActorEventBucket
             : PumpOneResult.EmptyBucket;
     }
 
+    public ActorPumpManyResult PumpMany(
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
+        ActorMailPumpStatsBuilder stats,
+        int                       bucketIndex,
+        int                       maxEvents)
+    {
+        // Call bucket 涉及 request/response 语义，先保留旧路径。
+        // 只调用一次 PumpOne，保持兼容。
+        if (maxEvents <= 0)
+        {
+            return ActorPumpManyResult.NoWork();
+        }
+
+        PumpOneResult result = PumpOne(
+            budget: ref budget,
+            options: in options,
+            stats: stats,
+            bucketIndex: bucketIndex);
+
+        if (result == PumpOneResult.Processed)
+        {
+            return ActorPumpManyResult.ProcessedBatch(1);
+        }
+
+        if (result == PumpOneResult.BucketLimited)
+        {
+            return new ActorPumpManyResult(
+                processed: 0,
+                result: PumpOneResult.BucketLimited);
+        }
+
+        if (result == PumpOneResult.ActorLimited)
+        {
+            return new ActorPumpManyResult(
+                processed: 0,
+                result: PumpOneResult.ActorLimited);
+        }
+
+        return ActorPumpManyResult.NoWork();
+    }
+
     public bool HasPendingWork()
     {
         for (int i = 0; i < _count; i++)

@@ -244,6 +244,112 @@ internal sealed class EventColumn<TActor, TEvent> :
         return _dirtySlots.Count > 0;
     }
 
+    /// <summary>
+    /// 批量 Pump 当前 Column。
+    ///
+    /// 参数说明：
+    /// budget：当前帧预算。
+    /// options：邮箱 Pump 配置。
+    /// stats：Pump 统计构建器。
+    /// maxEvents：本次最多处理多少事件。
+    ///
+    /// 作用：
+    /// 如果当前配置适合批量快路径，则处理一个事件。
+    /// 注意：为了保持跨 Column 的公平性，每次调用只处理一个事件。
+    /// 批量处理的收益来自减少外层调度器的调用次数。
+    /// </summary>
+    public override ActorPumpManyResult PumpMany(
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
+        ActorMailPumpStatsBuilder stats,
+        int                       maxEvents)
+    {
+        // 如果当前配置不适合批量快路径，则回退默认实现。
+        // 这样可以保证复杂限流、释放空邮箱等场景不被破坏。
+        if (!CanUsePumpManyFast(options))
+        {
+            return base.PumpMany(
+                budget: ref budget,
+                options: in options,
+                stats: stats,
+                maxEvents: maxEvents);
+        }
+
+        // 为了保持跨 Column 的公平性，每次调用只处理一个事件。
+        // 批量处理的收益来自减少外层调度器的调用次数。
+        if (maxEvents <= 0 || !budget.HasRemainingEventBudget())
+        {
+            return ActorPumpManyResult.NoWork();
+        }
+
+        while (_dirtySlots.TryPeek(out int slotIndex))
+        {
+            ref EventMail<TEvent> mail = ref _mails[slotIndex];
+
+            // 从当前 slot 的邮箱中取出一个事件。
+            // 如果没有事件，说明 dirty 标记已经过期，直接移除。
+            if (!EventMailReader.TryDequeue(ref mail, _mailPool, out TEvent value))
+            {
+                _dirtySlots.Pop();
+                continue;
+            }
+
+            // 检查当前 slot 是否仍然可 Pump。
+            // 这里会过滤 PendingDestroy、Destroying、空 Actor 等情况。
+            if (!_owner.CanPumpSlot(slotIndex))
+            {
+                _dirtySlots.Pop();
+                continue;
+            }
+
+            TActor? actor = _owner.Actors[slotIndex];
+            if (actor == null)
+            {
+                _dirtySlots.Pop();
+                continue;
+            }
+
+            // 调用 ActorBehaviour invoker。
+            // _invoker 通常由生成器或 Actor 元数据构建。
+            _invoker(actor, in value);
+
+            // 消耗一个事件预算。
+            budget.ConsumeEvent();
+
+            // 当前邮箱清空后移除 dirty slot。
+            // 如果还有事件，则移动到队尾，保留基本公平性。
+            if (mail.Count == 0)
+            {
+                _dirtySlots.Pop();
+            }
+            else
+            {
+                _dirtySlots.MoveHeadToTail();
+            }
+
+            return ActorPumpManyResult.ProcessedBatch(1);
+        }
+
+        return ActorPumpManyResult.NoWork();
+    }
+
+    /// <summary>
+    /// 判断当前 Column 是否可以使用批量 Pump 快路径。
+    ///
+    /// 参数说明：
+    /// options：Actor 邮箱 Pump 配置。
+    ///
+    /// 返回值：
+    /// true 表示可以连续处理多个事件。
+    /// false 表示必须回退 PumpOne。
+    /// </summary>
+    private bool CanUsePumpManyFast(in ActorMailPumpOptions options)
+    {
+        return options.MaxMailsPerActorPerPump <= 0
+               && options.MaxMailsPerBucketPerPump <= 0
+               && !_options.ReleaseWhenEmpty;
+    }
+
     private bool CanUsePumpFastPath(in ActorMailPumpOptions options)
     {
         return options.MaxMailsPerActorPerPump <= 0

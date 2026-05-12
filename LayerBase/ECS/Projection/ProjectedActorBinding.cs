@@ -21,7 +21,7 @@ internal static class ProjectedActorBinding
         }
 
         handle.Actor.RecycleDeadlineTicks = ProjectedActorTime.BuildDeadline(nowTicks, meta.KeepAliveTicks);
-        meta.BindActor(handle.ActorId);
+        ProjectedActorBindingUtility.Bind(world, entity, ref meta, handle.ActorId);
         world.AddActiveProjectedActor(entity, ref meta);
         return handle.ActorId;
     }

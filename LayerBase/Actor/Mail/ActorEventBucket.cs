@@ -62,6 +62,90 @@ internal sealed class ActorEventBucket<TEvent> : IActorEventBucket
             : PumpOneResult.EmptyBucket;
     }
 
+    public ActorPumpManyResult PumpMany(
+        ref RuntimeFrameBudget    budget,
+        in  ActorMailPumpOptions  options,
+        ActorMailPumpStatsBuilder stats,
+        int                       bucketIndex,
+        int                       maxEvents)
+    {
+        if (_count == 0 || maxEvents <= 0)
+        {
+            return ActorPumpManyResult.NoWork();
+        }
+
+        if (!stats.CanProcessBucket(bucketIndex, options))
+        {
+            stats.BucketLimitHits++;
+
+            return new ActorPumpManyResult(
+                processed: 0,
+                result: PumpOneResult.BucketLimited);
+        }
+
+        int totalProcessed = 0;
+        int checkedCount = 0;
+        bool actorLimited = false;
+
+        while (checkedCount < _count &&
+               totalProcessed < maxEvents &&
+               budget.HasRemainingEventBudget())
+        {
+            int index = _cursor;
+
+            // 轮转 cursor，避免长期偏向某一个 column。
+            _cursor = index + 1 == _count ? 0 : index + 1;
+            checkedCount++;
+
+            ActorEventColumnRuntime column = _columns[index];
+
+            int remaining = maxEvents - totalProcessed;
+
+            ActorPumpManyResult result = column.PumpMany(
+                budget: ref budget,
+                options: in options,
+                stats: stats,
+                maxEvents: remaining);
+
+            if (result.Processed > 0)
+            {
+                totalProcessed += result.Processed;
+                stats.ProcessedTotal += result.Processed;
+
+                if (options.MaxMailsPerBucketPerPump > 0)
+                {
+                    for (int i = 0; i < result.Processed; i++)
+                    {
+                        stats.RecordBucketProcessed(bucketIndex);
+                    }
+                }
+
+                return ActorPumpManyResult.ProcessedBatch(totalProcessed);
+            }
+
+            if (result.Result == PumpOneResult.ActorLimited)
+            {
+                actorLimited = true;
+            }
+
+            if (result.Result == PumpOneResult.BucketLimited)
+            {
+                return result;
+            }
+        }
+
+        if (totalProcessed > 0)
+        {
+            return ActorPumpManyResult.ProcessedBatch(totalProcessed);
+        }
+
+        return actorLimited
+            ? new ActorPumpManyResult(
+                processed: 0,
+                result: PumpOneResult.ActorLimited)
+            : ActorPumpManyResult.NoWork();
+    }
+
     public bool HasPendingWork()
     {
         for (int i = 0; i < _count; i++)
