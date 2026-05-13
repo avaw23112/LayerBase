@@ -74,23 +74,10 @@ public sealed partial class ActorWorld
         out int                  slotIndex)
         where TEvent : struct
     {
-        if (!TryGetPhysicalRow(actorId, state, out row, out slotIndex))
-        {
-            return false;
-        }
-
-        return IsActorGenerationAlive(actorId);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool IsActorGenerationAlive(ActorId actorId)
-    {
-        if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
-        {
-            return false;
-        }
-
-        return _archetypes[actorId.ArchetypeId].IsCurrentGeneration(actorId);
+        row = state.RowsByArchetype[actorId.ArchetypeId];
+        slotIndex = actorId.SlotIndex;
+        return (uint)slotIndex < (uint)row.Mails.Length
+               && _archetypes[actorId.ArchetypeId].IsCurrentGeneration(actorId);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

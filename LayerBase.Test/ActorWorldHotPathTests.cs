@@ -33,7 +33,8 @@ public sealed partial class ActorWorldHotPathTests
             maxMailsPerBucketPerPump: 0,
             maxMailsPerActorPerPump: 0,
             maxEmptyBucketChecksPerPump: 1,
-            timeCheckInterval: 0);
+            timeCheckInterval: 0,
+            maxEventCountPerPump:64);
 
         Assert.That(options.TimeCheckInterval, Is.EqualTo(1));
     }

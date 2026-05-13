@@ -93,6 +93,7 @@ public partial class ActorPostPumpTests
     public void Pump_respects_budget_and_retains_remaining_mail()
     {
         var world = new ActorWorld();
+        world.MailPumpOptions = ActorMailPumpOptions.Fair;
         RecordingActor actor = world.CreateActor<RecordingActor>();
 
         actor.PostInside(new ActorDamageEvent(10));
@@ -114,6 +115,7 @@ public partial class ActorPostPumpTests
     public void Event_bucket_round_robins_across_columns()
     {
         var world = new ActorWorld();
+        world.MailPumpOptions  = ActorMailPumpOptions.Fair;
         RecordingActor actorA = world.CreateActor<RecordingActor>();
         SecondaryRecordingActor actorB = world.CreateActor<SecondaryRecordingActor>();
 

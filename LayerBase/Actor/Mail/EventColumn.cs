@@ -282,7 +282,11 @@ internal sealed class EventColumn<TActor, TEvent> :
             return ActorPumpManyResult.NoWork();
         }
 
-        while (_dirtySlots.TryPeek(out int slotIndex))
+        int processed = 0;
+        int batchLimit = Math.Min(maxEvents,options.MaxEventCountPerPump);
+        while (processed < batchLimit &&
+               budget.HasRemainingEventBudget() &&
+               _dirtySlots.TryPeek(out int slotIndex))
         {
             ref EventMail<TEvent> mail = ref _mails[slotIndex];
 
@@ -315,6 +319,7 @@ internal sealed class EventColumn<TActor, TEvent> :
 
             // 消耗一个事件预算。
             budget.ConsumeEvent();
+            processed++;
 
             // 当前邮箱清空后移除 dirty slot。
             // 如果还有事件，则移动到队尾，保留基本公平性。
@@ -327,10 +332,10 @@ internal sealed class EventColumn<TActor, TEvent> :
                 _dirtySlots.MoveHeadToTail();
             }
 
-            return ActorPumpManyResult.ProcessedBatch(1);
         }
-
-        return ActorPumpManyResult.NoWork();
+        return processed > 0
+            ? ActorPumpManyResult.ProcessedBatch(processed)
+            : ActorPumpManyResult.NoWork();
     }
 
     /// <summary>

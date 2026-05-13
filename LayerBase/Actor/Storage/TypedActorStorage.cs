@@ -168,7 +168,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                && _states[slotIndex] == ActorSlotState.Alive
                && _actors[slotIndex] != null;
     }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override bool IsCurrentGeneration(ActorId actorId)
     {
         int slotIndex = actorId.SlotIndex;

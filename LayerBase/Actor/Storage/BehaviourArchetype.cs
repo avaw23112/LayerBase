@@ -252,7 +252,6 @@ internal sealed class BehaviourArchetype
         {
             return false;
         }
-
         return storage.IsCurrentGeneration(actorId);
     }
 
