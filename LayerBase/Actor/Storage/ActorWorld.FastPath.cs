@@ -51,16 +51,23 @@ public sealed partial class ActorWorld
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool TryGetPhysicalRowWithGeneration<TEvent>(
-        ActorId                  actorId,
+        in  ActorId               actorId,
         EventPostState<TEvent>   state,
         out EventPostRow<TEvent> row,
         out int                  slotIndex)
         where TEvent : struct
     {
-        row = state.RowsByArchetype[ actorId.ArchetypeId];
+        EventPostRow<TEvent>[] rows = state.RowsByArchetype;
+        int archetypeId = actorId.ArchetypeId;
+        if ((uint)archetypeId >= (uint)rows.Length)
+        {
+            row = default;
+            slotIndex = default;
+            return false;
+        }
+        row = rows[actorId.ArchetypeId];
         slotIndex = actorId.SlotIndex;
-        return row.Generations[slotIndex] == actorId.Generation
-               && row.ActorExists[slotIndex];
+        return row.Generations[slotIndex] == actorId.Generation && row.ActorExists[slotIndex];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -78,7 +85,7 @@ public sealed partial class ActorWorld
         EnsureMailAllocated(ref mail, pool, options.InitialCapacity);
         if (mail.Count >= mail.Capacity && !pool.TryGrow(ref mail))
         {
-            PostResult growFailure = HandleGrowFailure(ref mail, in value, pool, options);
+            PostResult growFailure = HandleGrowFailure(ref mail, in value,options);
             if (!growFailure.IsSuccess || !growFailure.CountsAsPending)
             {
                 return growFailure;
@@ -279,7 +286,6 @@ public sealed partial class ActorWorld
     private static PostResult HandleGrowFailure<TEvent>(
         ref EventMail<TEvent> mail,
         in  TEvent            value,
-        EventMailPool<TEvent> pool,
         ActorMailOptions      options)
         where TEvent : struct
     {
@@ -397,7 +403,7 @@ public sealed partial class ActorWorld
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static PostResult BuildPostFailureCold(ActorId actorId)
+    private static PostResult BuildPostFailureCold(in ActorId actorId)
     {
         return PostResult.Failure(
             ActorPostStatus.PhysicalTargetInvalid,
