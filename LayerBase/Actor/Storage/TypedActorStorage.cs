@@ -29,6 +29,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private ActorCallColumnRuntime?[] _callColumnsByRouteId = Array.Empty<ActorCallColumnRuntime?>();
     private Type?[] _callRequestTypesByRouteId = Array.Empty<Type?>();
     private Type?[] _callResponseTypesByRouteId = Array.Empty<Type?>();
+    private bool[] _actorExists;
 
     internal int ArchetypeId => _archetypeId;
     public override string ActorTypeName => typeof(TActor).Name;
@@ -39,6 +40,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     internal int[] EnabledPostGenerations => _enabledPostGenerations;
     public ActorSlotState[] States => _states;
     public bool[] Enabled => _enabled;
+    public bool[] ActorExists => _actorExists;
     public int MaxSlot => Math.Min(_nextSlotIndex, _actors.Length);
 
     public TypedActorStorage(int archetypeId, int maxEventTypeId, int initialCapacity)
@@ -55,6 +57,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _enabledPostGenerations = new int[_actors.Length];
         _enabled = new bool[_actors.Length];
         _createdFromPool = new bool[_actors.Length];
+        _actorExists = new bool[_actors.Length];
         _lifecycleHandles = new ActorLifecycleHandles[_actors.Length];
         for (int i = 0; i < _lifecycleHandles.Length; i++)
         {
@@ -135,6 +138,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             : AllocateNewSlot();
 
         _actors[slotIndex] = actor;
+        _actorExists[slotIndex] = true;
         _states[slotIndex] = ActorSlotState.Alive;
         _enabled[slotIndex] = true;
         _slotFlags[slotIndex] = ActorSlotFlags.Alive | ActorSlotFlags.Enabled;
@@ -809,6 +813,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _enabledPostGenerations, newSize);
         Array.Resize(ref _enabled, newSize);
         Array.Resize(ref _createdFromPool, newSize);
+        Array.Resize(ref _actorExists, newSize);
         Array.Resize(ref _lifecycleHandles, newSize);
         for (int i = oldSize; i < newSize; i++)
         {
@@ -848,6 +853,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         Array.Resize(ref _columnsByEventId, newSize);
+        Array.Resize(ref _actorExists,newSize);
     }
 
     private void FinalizeDestroySlot(int slotIndex, ActorWorld world)
@@ -878,6 +884,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         bool returnToPool = _createdFromPool[slotIndex];
 
         _actors[slotIndex] = null;
+        _actorExists[slotIndex] = false;
         _enabled[slotIndex] = false;
         _states[slotIndex] = ActorSlotState.Empty;
         _slotFlags[slotIndex] = ActorSlotFlags.None;

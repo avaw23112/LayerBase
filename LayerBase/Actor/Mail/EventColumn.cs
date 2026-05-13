@@ -204,7 +204,9 @@ internal sealed class EventColumn<TActor, TEvent> :
             mails: _mails,
             dirtySlots: _dirtySlots,
             bucketIndex: _bucketIndex,
-            plan: _plan);
+            plan: _plan,
+            generations: _owner.Generations,
+            actorExists: _owner.ActorExists);
     }
 
     public override void ClearMail(int slotIndex)

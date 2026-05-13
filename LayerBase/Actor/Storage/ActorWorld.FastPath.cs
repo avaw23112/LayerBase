@@ -33,7 +33,9 @@ public sealed partial class ActorWorld
         EventMail<TEvent>[]        mails,
         DirtySlotList              dirtySlots,
         int                        bucketIndex,
-        ActorEventPostPlan<TEvent> plan)
+        ActorEventPostPlan<TEvent> plan,
+        int[]                      generations,
+        bool[]                     actorExists)
         where TEvent : struct
     {
         EventPostState<TEvent> state = GetOrCreateEventPostState(plan);
@@ -41,43 +43,24 @@ public sealed partial class ActorWorld
         state.RowsByArchetype[archetypeId] = new EventPostRow<TEvent>(
             mails,
             dirtySlots,
-            bucketIndex);
+            bucketIndex,
+            generations,
+            actorExists);
     }
 
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool TryGetPhysicalRow<TEvent>(
+    internal static bool TryGetPhysicalRowWithGeneration<TEvent>(
         ActorId                  actorId,
         EventPostState<TEvent>   state,
         out EventPostRow<TEvent> row,
         out int                  slotIndex)
         where TEvent : struct
     {
-        EventPostRow<TEvent>[] rows = state.RowsByArchetype;
-        int archetypeId = actorId.ArchetypeId;
-        if ((uint)archetypeId >= (uint)rows.Length)
-        {
-            row = default;
-            slotIndex = default;
-            return false;
-        }
-
-        row = rows[archetypeId];
+        row = state.RowsByArchetype[ actorId.ArchetypeId];
         slotIndex = actorId.SlotIndex;
-        return (uint)slotIndex < (uint)row.Mails.Length;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool TryGetPhysicalRowWithGeneration<TEvent>(
-        ActorId                  actorId,
-        EventPostState<TEvent>   state,
-        out EventPostRow<TEvent> row,
-        out int                  slotIndex)
-        where TEvent : struct
-    {
-        row = state.RowsByArchetype[actorId.ArchetypeId];
-        slotIndex = actorId.SlotIndex;
-        return (uint)slotIndex < (uint)row.Mails.Length
-               && _archetypes[actorId.ArchetypeId].IsCurrentGeneration(actorId);
+        return row.Generations[slotIndex] == actorId.Generation
+               && row.ActorExists[slotIndex];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -101,8 +84,7 @@ public sealed partial class ActorWorld
                 return growFailure;
             }
         }
-
-        WriteQueued(ref mail, in value, dirtySlots, slotIndex, bucketIndex, pool);
+        WriteQueued(ref mail, in value, dirtySlots, slotIndex, bucketIndex);
         return PostResult.Success;
     }
 
@@ -126,7 +108,7 @@ public sealed partial class ActorWorld
                 PostFailureKind.MailboxFull);
         }
 
-        WriteQueued(ref mail, in value, dirtySlots, slotIndex, bucketIndex, pool);
+        WriteQueued(ref mail, in value, dirtySlots, slotIndex, bucketIndex);
         return PostResult.Success;
     }
 
@@ -164,7 +146,7 @@ public sealed partial class ActorWorld
             return PostResult.Success;
         }
 
-        WriteQueued(ref mail, in value, dirtySlots, slotIndex, bucketIndex, pool);
+        WriteQueued(ref mail, in value, dirtySlots, slotIndex, bucketIndex);
         return PostResult.Success;
     }
 
@@ -274,8 +256,7 @@ public sealed partial class ActorWorld
         in  TEvent            value,
         DirtySlotList         dirtySlots,
         int                   slotIndex,
-        int                   bucketIndex,
-        EventMailPool<TEvent> pool)
+        int                   bucketIndex)
         where TEvent : struct
     {
         TEvent[] buffer = mail.Buffer!;
@@ -367,7 +348,9 @@ public sealed partial class ActorWorld
         return new EventPostRow<TEvent>(
             Array.Empty<EventMail<TEvent>>(),
             DirtySlotList.Empty,
-            -1);
+            -1,
+            Array.Empty<int>(),
+            Array.Empty<bool>());
     }
 
     private static void EnsureRowsCapacity<TEvent>(

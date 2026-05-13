@@ -16,12 +16,17 @@ public sealed partial class ActorWorld
         {
             return BuildEventNotSupportedCold<TEvent>();
         }
-
         if (!TryGetPhysicalRowWithGeneration(actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
         {
             return BuildPostFailureCold(actorId);
         }
-
+        return PostRoute(value, state, slotIndex, row);
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private PostResult PostRoute<TEvent>(TEvent value, EventPostState<TEvent> state, int slotIndex, EventPostRow<TEvent> row)
+        where TEvent : struct
+    {
         switch (state.RouteCode)
         {
             case ActorPostRouteCode.QueuedGrow:
@@ -48,9 +53,23 @@ public sealed partial class ActorWorld
         in TEvent             value)
         where TEvent : struct
     {
-        foreach (ActorId actorId in actorIds)
+        int length = actorIds.Length;
+        int i = 0;
+        int unrolledLength = length - (length % 8);
+        for (; i < unrolledLength; i += 8)
         {
-            _ = PostTo(actorId, in value);
+            _ = PostTo(actorIds[i], in value);
+            _ = PostTo(actorIds[i + 1], in value);
+            _ = PostTo(actorIds[i + 2], in value);
+            _ = PostTo(actorIds[i + 3], in value);
+            _ = PostTo(actorIds[i + 4], in value);
+            _ = PostTo(actorIds[i + 5], in value);
+            _ = PostTo(actorIds[i + 6], in value);
+            _ = PostTo(actorIds[i + 7], in value);
+        }
+        for (; i < length; i++)
+        {
+            _ = PostTo(actorIds[i], in value);
         }
     }
 }

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace LayerBase.Actor;
 
 internal sealed class DirtySlotList
@@ -30,6 +32,30 @@ internal sealed class DirtySlotList
         _marks[slotIndex] = _stamp;
         EnsureItemCapacity(_count + 1);
         int tail = (_head + _count) % _items.Length;
+        _items[tail] = slotIndex;
+        _count++;
+    }
+
+    /// <summary>
+    /// 标记指定 slot 为 dirty，不检查容量。
+    /// 使用前提：slotIndex < _marks.Length 且 _count + 1 <= _items.Length。
+    /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void MarkKnownCapacity(int slotIndex)
+    {
+        if (_marks[slotIndex] == _stamp)
+        {
+            return;
+        }
+
+        _marks[slotIndex] = _stamp;
+
+        int tail = _head + _count;
+        if (tail >= _items.Length)
+        {
+            tail -= _items.Length;
+        }
+
         _items[tail] = slotIndex;
         _count++;
     }
@@ -93,6 +119,7 @@ internal sealed class DirtySlotList
         }
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void EnsureItemCapacity(int required)
     {
         if (required <= _items.Length)
@@ -115,7 +142,7 @@ internal sealed class DirtySlotList
         _items = newItems;
         _head = 0;
     }
-
+    [System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void EnsureMarkCapacity(int required)
     {
         if (required <= _marks.Length)

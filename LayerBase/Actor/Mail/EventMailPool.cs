@@ -83,7 +83,6 @@ internal sealed class EventMailPool<TEvent>
         }
 
         TEvent[] newBuffer = _buffer.ResizeWithBuffer(mail.BufferId, mail.Head, mail.Count, nextCapacity);
-
         mail.Buffer = newBuffer;
         mail.Head = 0;
         mail.Tail = mail.Count;

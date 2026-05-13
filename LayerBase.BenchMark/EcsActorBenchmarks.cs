@@ -1376,8 +1376,7 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     {
         for (int i = 0; i < SmallCount; i++)
         {
-            // 只测投递，不执行 Pump。
-            // 用于判断 Actor: PostTo + Pump 的成本是否主要来自写邮箱。
+      
             _pureActorWorld.PostTo(_pureActorIds[i], in _moveEvent);
         }
     }
