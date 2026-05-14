@@ -746,13 +746,13 @@ public static class ServiceExtensions
             .Publish(value, ttl, contractId);
     }
 
-    public static PostResult PostTo<TEvent>(
+    public static void PostTo<TEvent>(
         this IService service,
         ActorId       actorId,
         in TEvent     value)
         where TEvent : struct
     {
-        return service
+         service
                .GetBinding()
                .Runtime.PostTo(actorId, in value);
     }
@@ -1043,13 +1043,13 @@ public static class LayerContextExtensions
             .Publish(value, ttl, contractId);
     }
 
-    public static PostResult PostTo<TEvent>(
+    public static void PostTo<TEvent>(
         this ILayerContext context,
         ActorId            actorId,
         in TEvent          value)
         where TEvent : struct
     {
-        return context
+         context
                .GetBinding()
                .Runtime.PostTo(actorId, in value);
     }

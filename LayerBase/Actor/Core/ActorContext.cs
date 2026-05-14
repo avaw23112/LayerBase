@@ -20,17 +20,17 @@ public readonly struct ActorContext
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult PostInside<TEvent>(in TEvent value)
+    public void PostInside<TEvent>(in TEvent value)
         where TEvent : struct
     {
-        return World.PostTo(ActorId, in value);
+         World.PostTo(ActorId, in value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPostInside<TEvent>(in TEvent value)
+    public void TryPostInside<TEvent>(in TEvent value)
         where TEvent : struct
     {
-        return World.PostTo(ActorId, in value);
+         World.PostTo(ActorId, in value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -79,10 +79,10 @@ public static class ActorExtensions
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static PostResult PostInside<TEvent>(this IActor actor, in TEvent value)
+    public static void PostInside<TEvent>(this IActor actor, in TEvent value)
         where TEvent : struct
     {
-        return ActorGeneratedAccess.RequireGenerated(actor).Context.PostInside(in value);
+        ActorGeneratedAccess.RequireGenerated(actor).Context.PostInside(in value);
     }
 
 

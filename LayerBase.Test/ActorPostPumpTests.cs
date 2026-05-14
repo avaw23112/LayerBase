@@ -41,9 +41,8 @@ public partial class ActorPostPumpTests
         var world = new ActorWorld();
         RecordingActor actor = world.CreateActor<RecordingActor>();
 
-        PostResult postResult = actor.PostInside(new ActorDamageEvent(7));
+        actor.PostInside(new ActorDamageEvent(7));
 
-        Assert.That(postResult.IsSuccess, Is.True);
         Assert.That(RecordingActor.Trace, Is.Empty);
 
         var budget = new RuntimeFrameBudget(maxEvents: 8, usedEvents: 0, deadlineTicks: 0);
@@ -76,17 +75,20 @@ public partial class ActorPostPumpTests
         RecordingActor actor = world.CreateActor<RecordingActor>();
         ActorId validId = actor.GetActorId();
 
-        PostResult invalidArchetype =
-            world.PostTo(new ActorId(validId.ArchetypeId + 99, validId.SlotIndex, validId.Generation),
-                new ActorDamageEvent(1));
-        PostResult staleGeneration =
-            world.PostTo(new ActorId(validId.ArchetypeId, validId.SlotIndex, validId.Generation + 1),
-                new ActorDamageEvent(1));
-        PostResult unsupportedEvent = world.PostTo(validId, new ActorHealEvent(2));
+        // PostTo with invalid archetype should not throw
+        world.PostTo(new ActorId(validId.ArchetypeId + 99, validId.SlotIndex, validId.Generation),
+            new ActorDamageEvent(1));
+        // PostTo with stale generation should not throw
+        world.PostTo(new ActorId(validId.ArchetypeId, validId.SlotIndex, validId.Generation + 1),
+            new ActorDamageEvent(1));
+        // PostTo with unsupported event should not throw
+        world.PostTo(validId, new ActorHealEvent(2));
 
-        Assert.That(invalidArchetype.IsSuccess, Is.False);
-        Assert.That(staleGeneration.IsSuccess, Is.False);
-        Assert.That(unsupportedEvent.IsSuccess, Is.False);
+        // Pump should not process any of the invalid posts
+        var budget = new RuntimeFrameBudget(8, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        Assert.That(RecordingActor.Trace, Is.Empty);
     }
 
     [Test]
@@ -156,13 +158,20 @@ public partial class ActorPostPumpTests
             releaseWhenEmpty: true));
         RecordingActor actor = world.CreateActor<RecordingActor>();
 
-        Assert.That(actor.PostInside(new ActorDamageEvent(1)).IsSuccess, Is.True);
-        Assert.That(actor.PostInside(new ActorDamageEvent(2)).IsSuccess, Is.True);
-        Assert.That(actor.PostInside(new ActorDamageEvent(3)).IsSuccess, Is.True);
-        Assert.That(actor.PostInside(new ActorDamageEvent(4)).IsSuccess, Is.True);
+        // These should succeed without throwing
+        actor.PostInside(new ActorDamageEvent(1));
+        actor.PostInside(new ActorDamageEvent(2));
+        actor.PostInside(new ActorDamageEvent(3));
+        actor.PostInside(new ActorDamageEvent(4));
 
-        PostResult rejected = actor.PostInside(new ActorDamageEvent(5));
-        Assert.That(rejected.IsSuccess, Is.False);
+        // This should be rejected silently (mailbox full)
+        actor.PostInside(new ActorDamageEvent(5));
+
+        // Pump should only process the first 4 events
+        var budget = new RuntimeFrameBudget(8, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        Assert.That(RecordingActor.Trace, Is.EqualTo(new[] { "R:1", "R:2", "R:3", "R:4" }));
     }
 
     [Test]

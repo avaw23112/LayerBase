@@ -128,9 +128,10 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
-        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
-        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(3)).IsSuccess, Is.True);
+        // PostTo should not throw
+        world.PostTo(actorId, new ActorMailPolicyEvent(1));
+        world.PostTo(actorId, new ActorMailPolicyEvent(2));
+        world.PostTo(actorId, new ActorMailPolicyEvent(3));
 
         Pump(world);
 
@@ -152,9 +153,15 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
-        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
-        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(3)).IsSuccess, Is.False);
+        // PostTo should not throw
+        world.PostTo(actorId, new ActorMailPolicyEvent(1));
+        world.PostTo(actorId, new ActorMailPolicyEvent(2));
+        world.PostTo(actorId, new ActorMailPolicyEvent(3));
+
+        // Pump should only process the first 2 events (3rd was rejected)
+        Pump(world);
+
+        Assert.That(ActorMailPolicyTrace.Values, Is.EqualTo(new[] { 1, 2 }));
     }
 
     [Test]
@@ -196,9 +203,13 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        PostResult result = world.PostTo(actorId, new ActorMailPolicyEvent(1));
-        Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.FailureKind, Is.EqualTo(PostFailureKind.UnsupportedEvent));
+        // PostTo with DropNewest policy should not throw
+        world.PostTo(actorId, new ActorMailPolicyEvent(1));
+
+        // Pump should not process the event (unsupported)
+        Pump(world);
+
+        Assert.That(ActorMailPolicyTrace.Values, Is.Empty);
     }
 
     [Test]
@@ -238,7 +249,8 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
+        // PostTo should not throw
+        world.PostTo(actorId, new ActorMailPolicyEvent(1));
 
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)),
             Is.GreaterThan(0));
@@ -261,8 +273,9 @@ public class ActorMailPolicyTests
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         ActorId actorId = actor.GetActorId();
 
-        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(1)).IsSuccess, Is.True);
-        Assert.That(world.PostTo(actorId, new ActorMailPolicyEvent(2)).IsSuccess, Is.True);
+        // PostTo should not throw
+        world.PostTo(actorId, new ActorMailPolicyEvent(1));
+        world.PostTo(actorId, new ActorMailPolicyEvent(2));
 
         Assert.That(GetMailField<int>(world, actorId, nameof(EventMail<ActorMailPolicyEvent>.BufferId)),
             Is.GreaterThan(0));
@@ -309,7 +322,9 @@ public class ActorMailPolicyTests
 
         ActorMailPolicyActor actor = world.CreateActor<ActorMailPolicyActor>();
         Assert.That(actor.SetEnable(false), Is.True);
-        Assert.That(world.PostTo(actor.GetActorId(), new ActorMailPolicyEvent(9)).IsSuccess, Is.True);
+
+        // PostTo with disabled actor should not throw
+        world.PostTo(actor.GetActorId(), new ActorMailPolicyEvent(9));
 
         Pump(world);
 
@@ -325,8 +340,7 @@ public class ActorMailPolicyTests
     {
         for (int i = fromInclusive; i <= toInclusive; i++)
         {
-            PostResult result = world.PostTo(actorId, new ActorMailPolicyEvent(i));
-            Assert.That(result.IsSuccess, Is.True, $"Failed to post value {i}.");
+            world.PostTo(actorId, new ActorMailPolicyEvent(i));
         }
     }
 

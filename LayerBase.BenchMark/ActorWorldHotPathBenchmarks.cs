@@ -63,7 +63,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
             BenchEvent11,
             BenchEvent12>();
 
-        _ = _prewarmWorld.PostTo(
+       _prewarmWorld.PostTo(
             _prewarmActorId,
             HotPostBenchmarkEvent.Instance);
         PumpAll(_prewarmWorld);
@@ -112,7 +112,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
     {
         for (int i = 0; i < PostLoopCount; i++)
         {
-            _ = _singleWorld.PostTo(_singleActorId, ActorBenchEvent.Instance);
+             _singleWorld.PostTo(_singleActorId, ActorBenchEvent.Instance);
         }
     }
 
@@ -125,7 +125,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
     {
         for (int i = 0; i < PostLoopCount; i++)
         {
-            _ = _prewarmWorld.PostTo(_prewarmActorId, HotPostBenchmarkEvent.Instance);
+            _prewarmWorld.PostTo(_prewarmActorId, HotPostBenchmarkEvent.Instance);
         }
     }
 
@@ -138,7 +138,7 @@ public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
     {
         for (int i = 0; i < PostLoopCount; i++)
         {
-            _ = _batchWorld.PostTo(_batchActorIds[i % ActorCount], ActorBenchEvent.Instance);
+            _batchWorld.PostTo(_batchActorIds[i % ActorCount], ActorBenchEvent.Instance);
         }
     }
 

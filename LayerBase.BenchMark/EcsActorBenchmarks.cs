@@ -1376,8 +1376,11 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     {
         for (int i = 0; i < SmallCount; i++)
         {
-      
             _pureActorWorld.PostTo(_pureActorIds[i], in _moveEvent);
+            //10us 是纯数组遍历成本
+            //2us 是_pureActorWorld.PostTo空转成本
+            //14us 是postTo索引固定成本
+            //36us 是写入邮箱的固定成本
         }
     }
     [IterationSetup(Target = nameof(Actor_PumpOnly_1000))]

@@ -153,8 +153,7 @@ public class ActorHardeningTests
         Assert.That(pendingInfo.IsValid, Is.True);
         Assert.That(pendingInfo.IsPendingDestroy, Is.True);
 
-        PostResult pendingPost = world.PostTo(actorId, new ActorHardeningEvent(1));
-        Assert.That(pendingPost.IsSuccess, Is.True);
+         world.PostTo(actorId, new ActorHardeningEvent(1));
 
         var budget = new RuntimeFrameBudget(16, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
@@ -182,50 +181,6 @@ public class ActorHardeningTests
         Assert.That(queryDump, Does.Contain("AliveCount"));
     }
 
-    [Test]
-    public void Coalesced_policy_maps_to_DiagnosticOnly_and_returns_EventNotSupported()
-    {
-        var world = new ActorWorld(new ActorMailOptions(
-            postPolicy: ActorPostPolicy.Coalesced,
-            fullPolicy: ActorMailFullPolicy.Grow,
-            growFailurePolicy: ActorMailFullPolicy.RejectNew,
-            initialCapacity: 4,
-            maxCapacity: 16,
-            growFactor: 2,
-            releaseWhenEmpty: true));
-
-        HardeningProbeActor actor = world.CreateActor<HardeningProbeActor>();
-        ActorId actorId = actor.GetActorId();
-
-        PostResult result = world.PostTo(actorId, new ActorHardeningMergeEvent(1));
-        Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.FailureKind, Is.EqualTo(PostFailureKind.UnsupportedEvent));
-    }
-
-    [Test]
-    public void Coalesced_policy_returns_EventNotSupported_for_unmergeable_events()
-    {
-        var world = new ActorWorld(new ActorMailOptions(
-            postPolicy: ActorPostPolicy.Coalesced,
-            fullPolicy: ActorMailFullPolicy.Grow,
-            growFailurePolicy: ActorMailFullPolicy.RejectNew,
-            initialCapacity: 4,
-            maxCapacity: 16,
-            growFactor: 2,
-            releaseWhenEmpty: true));
-
-        HardeningProbeActor actor = world.CreateActor<HardeningProbeActor>();
-        ActorId actorId = actor.GetActorId();
-
-        PostResult first = world.PostTo(actorId, new ActorHardeningUnmergeableEvent(4));
-        Assert.That(first.IsSuccess, Is.False);
-        Assert.That(first.FailureKind, Is.EqualTo(PostFailureKind.UnsupportedEvent));
-        Assert.That(first.ActorStatus, Is.EqualTo(ActorPostStatus.EventNotSupported));
-
-        PostResult second = world.PostTo(actorId, new ActorHardeningUnmergeableEvent(5));
-        Assert.That(second.IsSuccess, Is.False);
-        Assert.That(second.FailureKind, Is.EqualTo(PostFailureKind.UnsupportedEvent));
-    }
 
     [Test]
     public void Query_count_extensions_track_alive_enabled_and_empty()

@@ -70,6 +70,7 @@ public ref struct EntityCreateBuilder
         this._keepAliveSeconds = keepAliveSeconds;
         this._releasePolicy = releasePolicy;
         this._isCreatedActor = true;
+        this._componentTypes.Add(typeof(ProjectedActorRef));
         return this;
     }
 

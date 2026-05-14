@@ -162,7 +162,9 @@ public class ActorLifecycleTests
 
         Assert.That(world.DestroyActor(oldId), Is.True);
         Assert.That(world.IsAlive(oldId), Is.False);
-        Assert.That(world.PostTo(oldId, new ActorLifecycleEvent(8)).IsSuccess, Is.True);
+
+        // PostTo with pending destroy actor should not throw
+        world.PostTo(oldId, new ActorLifecycleEvent(8));
 
         ActorQueryResult query = world.QueryActor<ActorLifecycleEvent>();
         Assert.That(query.DebugActors, Is.Empty);
@@ -181,7 +183,10 @@ public class ActorLifecycleTests
 
         Assert.That(newId.SlotIndex, Is.EqualTo(oldId.SlotIndex));
         Assert.That(newId.Generation, Is.GreaterThan(oldId.Generation));
-        Assert.That(world.PostTo(oldId, new ActorLifecycleEvent(9)).IsSuccess, Is.False);
+
+        // PostTo with old (stale) actor id should not throw
+        world.PostTo(oldId, new ActorLifecycleEvent(9));
+
         Assert.That(world.IsAlive(newId), Is.True);
     }
 

@@ -971,7 +971,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                 continue;
             }
 
-            _ = world.PostQueuedGrowCore(
+            world.PostQueuedGrowCore(
                 slotIndex,
                 in value,
                 row.Mails,
@@ -996,7 +996,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                 continue;
             }
 
-            _ = world.PostQueuedRejectNewCore(
+            world.PostQueuedRejectNewCore(
                 slotIndex,
                 in value,
                 row.Mails,
@@ -1021,7 +1021,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                 continue;
             }
 
-            _ = world.PostQueuedDropOldestCore(
+            world.PostQueuedDropOldestCore(
                 slotIndex,
                 in value,
                 row.Mails,
@@ -1046,7 +1046,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                 continue;
             }
 
-            _ = world.PostLatestCore(
+            world.PostLatestCore(
                 slotIndex,
                 in value,
                 row.Mails,
@@ -1070,7 +1070,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                 continue;
             }
 
-            _ = world.PostDirtyCore(
+            world.PostDirtyCore(
                 slotIndex,
                 in value,
                 row.Mails,
