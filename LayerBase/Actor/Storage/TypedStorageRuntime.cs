@@ -33,13 +33,6 @@ internal abstract class TypedStorageRuntime
     public abstract bool IsLifecycleRunnable(int slotIndex, int generation);
 
     public abstract void PostAll<TEvent>(
-        ActorWorld             world,
-        EventPostState<TEvent> state,
-        ActorPostRouteCode     routeCode,
-        in TEvent              value)
-        where TEvent : struct;
-
-    public abstract void PostAll<TEvent>(
         ActorWorld world,
         in TEvent  value)
         where TEvent : struct;

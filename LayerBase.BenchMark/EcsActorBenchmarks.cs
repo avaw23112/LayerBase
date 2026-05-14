@@ -12,6 +12,7 @@ using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.ECS.Projection;
+using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 
 namespace Benchmarks;
@@ -149,12 +150,41 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     /// 移动事件。
     /// DeltaX / DeltaY 表示一次移动事件携带的位移。
     /// </summary>
-    public struct MoveEvent
+    public partial struct MoveEvent
     {
         public float DeltaX;
         public float DeltaY;
     }
-
+    /// <summary>
+    /// MoveEvent 的 benchmark 专用元数据。
+    ///
+    /// 作用：
+    /// 1. 专门为 benchmark 放大 EventStreamSegmentPool 的保留上限。
+    /// 2. 验证 10000 规模下的 132KB GC 是否来自 Segment 重新分配。
+    /// 3. 不影响正式业务代码，因为这个类型只写在 benchmark 项目里。
+    /// </summary>
+    private sealed class MoveEventBenchmarkMetaData : EventMetaData<MoveEvent>
+    {
+        /// <summary>
+        /// MoveEvent 的 Actor 邮件配置。
+        ///
+        /// segmentCapacity：
+        /// 每个 EventStreamSegment 能存多少封 MoveEvent 邮件。
+        ///
+        /// maxRetainedSegments：
+        /// Segment 池最多保留多少个空闲 Segment。
+        ///
+        /// 这里使用：
+        /// 1024 * 10 = 10240
+        ///
+        /// 作用：
+        /// 覆盖 benchmark 的 LargeCount = 10000，避免每轮测试重新 new Segment。
+        /// </summary>
+        public override ActorMailOptions? ActorMailOptions =>
+            LayerBase.Actor.ActorMailOptions.EventStream(
+                segmentCapacity: 1024,
+                maxRetainedSegments: 10);
+    }
     /// <summary>
     /// 伤害事件。
     /// 当前 MinimalActor / PooledActor 不处理该事件。

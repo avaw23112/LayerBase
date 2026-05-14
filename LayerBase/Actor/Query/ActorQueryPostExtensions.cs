@@ -321,30 +321,4 @@ public static class ActorQueryPostExtensions
                 in value);
         }
     }
-
-    private static void PostAllQueuedByRouteCode<TEvent>(
-        ActorQueryResult       query,
-        in TEvent              value,
-        EventPostState<TEvent> state,
-        ActorPostRouteCode     routeCode)
-        where TEvent : struct
-    {
-        foreach (BehaviourArchetype archetype in query.Cache.Archetypes)
-        {
-            archetype.PostAll(query.World, state, routeCode, in value);
-        }
-    }
-
-    private static void PostAllNonQueuedByRouteCode<TEvent>(
-        ActorQueryResult       query,
-        in TEvent              value,
-        EventPostState<TEvent> state,
-        ActorPostRouteCode     routeCode)
-        where TEvent : struct
-    {
-        foreach (BehaviourArchetype archetype in query.Cache.Archetypes)
-        {
-            archetype.PostAll(query.World, state, routeCode, in value);
-        }
-    }
 }

@@ -210,36 +210,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
     public override void PostAll<TEvent>(
         ActorWorld             world,
-        EventPostState<TEvent> state,
-        ActorPostRouteCode     routeCode,
         in TEvent              value)
-        where TEvent : struct
-    {
-        // Use EventStream for PostAll
-        EventStreamCenter<TEvent>? streamCenter =
-            EventStreamRuntime<TEvent>.GetCenterUnchecked(world.RuntimeIndex, _archetypeId);
-
-        if (streamCenter == null)
-        {
-            return;
-        }
-
-        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
-        {
-            if (!CanPostAllSlot(slotIndex))
-            {
-                continue;
-            }
-
-            int generation = _generations[slotIndex];
-            var actorId = new ActorId(_archetypeId, slotIndex, generation);
-            streamCenter.Post(actorId, in value);
-        }
-    }
-
-    public override void PostAll<TEvent>(
-        ActorWorld world,
-        in TEvent  value)
         where TEvent : struct
     {
         // Use EventStream for PostAll
