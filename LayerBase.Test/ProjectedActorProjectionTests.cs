@@ -124,7 +124,7 @@ public class ProjectedActorProjectionTests
 
         Entity entity = runtime.EcsWorld.Create(
             new ProjectionPositionComponent { X = 1f, Y = 2f },
-            new ProjectionVelocityComponent { X = 3f, Y = 4f });
+            new ProjectionVelocityComponent { X = 3f, Y = 4f },new ProjectedActorRef());
         runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 1, keepAliveSeconds: 0.5f);
 
         runtime.EcsWorld
@@ -169,7 +169,7 @@ public class ProjectedActorProjectionTests
 
         Entity entity = runtime.EcsWorld.Create(
             new ProjectionPositionComponent { X = 10f, Y = 20f },
-            new ProjectionAoiComponent { IsVisible = true });
+            new ProjectionAoiComponent { IsVisible = true },new ProjectedActorRef());
         runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 2, keepAliveSeconds: 0.01f);
 
         runtime.EcsWorld
@@ -194,9 +194,10 @@ public class ProjectedActorProjectionTests
     {
         LayerRuntime runtime = CreateRuntime();
         RegisterProjectionProbe(runtime, actorTypeId: 3);
-
-        Entity first = runtime.EcsWorld.Create(new ProjectionPositionComponent { X = 1f, Y = 1f });
-        Entity second = runtime.EcsWorld.Create(new ProjectionPositionComponent { X = 2f, Y = 2f });
+        
+        
+        Entity first = runtime.EcsWorld.Create(new ProjectionPositionComponent { X = 1f, Y = 1f },new ProjectedActorRef());
+        Entity second = runtime.EcsWorld.Create(new ProjectionPositionComponent { X = 2f, Y = 2f },new ProjectedActorRef());
         runtime.EcsWorld.WithProjectedActor(second, actorTypeId: 3, keepAliveSeconds: 0.5f);
 
         runtime.EcsWorld
@@ -284,7 +285,7 @@ public class ProjectedActorProjectionTests
         LayerRuntime runtime = CreateRuntime();
         RegisterProjectionProbe(runtime, actorTypeId: 10);
 
-        Entity entity = runtime.EcsWorld.Create();
+        Entity entity = runtime.EcsWorld.Create(new ProjectedActorRef());
         runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
 
         runtime.EcsWorld
@@ -304,7 +305,7 @@ public class ProjectedActorProjectionTests
         LayerRuntime runtime = CreateRuntime();
         RegisterProjectionProbe(runtime, actorTypeId: 10);
 
-        Entity entity = runtime.EcsWorld.Create();
+        Entity entity = runtime.EcsWorld.Create(new ProjectedActorRef());
         runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
 
         ref ProjectedActorMeta meta =

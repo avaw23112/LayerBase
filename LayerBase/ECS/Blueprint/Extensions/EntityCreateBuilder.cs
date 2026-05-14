@@ -55,8 +55,7 @@ public ref struct EntityCreateBuilder
     }
 
     public EntityCreateBuilder WithProjectedActor<TActor>(float keepAliveSeconds = 0.2f,
-                                                          ProjectedActorReleasePolicy releasePolicy =
-                                                              ProjectedActorReleasePolicy.ReturnToPool)
+                                                          ProjectedActorReleasePolicy releasePolicy = ProjectedActorReleasePolicy.ReturnToPool)
         where TActor : class, IPooledActor, new()
     {
         if (_isCreatedActor)

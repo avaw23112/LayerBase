@@ -57,7 +57,18 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
 
     public void PostTo(ActorWorld actorWorld)
     {
-        for (int i = 0; i < Count; i++)
+        int i = 0;
+        int length = Count;
+        int unrolledLength = length - (length % 4);
+        
+        for (; i < unrolledLength; i += 4)
+        {
+            actorWorld.PostTo(_actorIds[i], in _events[i]);
+            actorWorld.PostTo(_actorIds[i + 1], in _events[i+1]);
+            actorWorld.PostTo(_actorIds[i + 2], in _events[i+2]);
+            actorWorld.PostTo(_actorIds[i + 3], in _events[i+3]);
+        }
+        for (; i < length; i++)
         {
             actorWorld.PostTo(_actorIds[i], in _events[i]);
         }

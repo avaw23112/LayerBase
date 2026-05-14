@@ -62,36 +62,70 @@ internal static class ProjectionExecutor0
         ref ProjectionBatchBuffer<TEvent> batch)
         where TEvent : struct
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
         {
             Entity entity = Unsafe.Add(ref firstEntity, row);
+
             if (predicate != null && !predicate(in entity))
             {
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            TEvent output = default;
-            forEach(in entity, ref output);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
+
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
-                if (!actorId.IsValid) continue;
+                actorId =
+                    ProjectedActorBinding.EnsureProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
+
+                if (!actorId.IsValid)
+                {
+                    continue;
+                }
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
+
+                if (!alive)
+                {
+                    continue;
+                }
+
+                actorId = actorRef.ActorId;
             }
 
-            batch.Add(actorId, in output);
+            TEvent output = default;
+
+            forEach(
+                in entity,
+                ref output);
+
+            batch.Add(
+                actorId,
+                in output);
         }
     }
 
@@ -103,26 +137,43 @@ internal static class ProjectionExecutor0
         ProjectionPredicate? predicate,
         long nowTicks)
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
         {
             Entity entity = Unsafe.Add(ref firstEntity, row);
+
             if (predicate != null && !predicate(in entity))
             {
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            if (!meta.ActorId.IsValid)
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
+
+            if (!actorRef.ActorId.IsValid)
             {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                _ = ProjectedActorBinding.EnsureProjectedActor(
+                    world,
+                    actorWorld,
+                    entity,
+                    ref actorRef,
+                    nowTicks);
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                _ = ProjectedActorBinding.TouchProjectedActor(
+                    world,
+                    actorWorld,
+                    entity,
+                    ref actorRef,
+                    nowTicks);
             }
         }
     }
@@ -163,8 +214,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1)
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -174,24 +229,25 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
 
             forEach(in entity, ref e0, ref e1);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -241,8 +297,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent1> batch1,
         ref ProjectionBatchBuffer<TEvent2> batch2)
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -252,7 +312,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -260,17 +321,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -327,8 +388,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent2> batch2,
         ref ProjectionBatchBuffer<TEvent3> batch3)
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -338,7 +403,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -347,17 +413,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -421,8 +487,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent3> batch3,
         ref ProjectionBatchBuffer<TEvent4> batch4)
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -432,7 +502,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -442,17 +513,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -523,8 +594,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent4> batch4,
         ref ProjectionBatchBuffer<TEvent5> batch5)
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -534,7 +609,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -545,17 +621,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -633,8 +709,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent5> batch5,
         ref ProjectionBatchBuffer<TEvent6> batch6)
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -644,7 +724,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -656,17 +737,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -751,8 +832,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent6> batch6,
         ref ProjectionBatchBuffer<TEvent7> batch7)
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -762,7 +847,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -775,17 +861,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -877,8 +963,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent7> batch7,
         ref ProjectionBatchBuffer<TEvent8> batch8)
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -888,7 +978,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -902,17 +993,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -1011,8 +1102,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent8> batch8,
         ref ProjectionBatchBuffer<TEvent9> batch9)
     {
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -1022,7 +1117,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -1037,17 +1133,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -1208,8 +1304,8 @@ internal static class ProjectionExecutor1<T0>
         where TJob : struct, IProjectionJob1x1<T0, TEvent0>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -1244,13 +1340,13 @@ internal static class ProjectionExecutor1<T0>
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -1259,7 +1355,7 @@ internal static class ProjectionExecutor1<T0>
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -1269,18 +1365,21 @@ internal static class ProjectionExecutor1<T0>
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -1306,8 +1405,12 @@ internal static class ProjectionExecutor1<T0>
         where TEvent : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -1320,22 +1423,25 @@ internal static class ProjectionExecutor1<T0>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            TEvent output = default;
-            forEach(in entity, ref c0, ref output);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
+
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
+
+            TEvent output = default;
+            forEach(in entity, ref c0, ref output);
 
             batch.Add(actorId, in output);
         }
@@ -1350,8 +1456,12 @@ internal static class ProjectionExecutor1<T0>
         long nowTicks)
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -1364,14 +1474,16 @@ internal static class ProjectionExecutor1<T0>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            if (!meta.ActorId.IsValid)
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
+
+            if (!actorRef.ActorId.IsValid)
             {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
         }
     }
@@ -1465,8 +1577,8 @@ where TEvent0 : struct
         where TJob : struct, IProjectionJob1x2<T0, TEvent0, TEvent1>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -1504,13 +1616,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -1519,7 +1631,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -1529,18 +1641,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -1563,8 +1678,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent1> batch1)
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -1575,24 +1694,25 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
 
             forEach(in entity, ref c0, ref e0, ref e1);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -1701,8 +1821,8 @@ where TEvent0 : struct
         where TJob : struct, IProjectionJob1x3<T0, TEvent0, TEvent1, TEvent2>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -1743,13 +1863,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -1758,7 +1878,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -1768,18 +1888,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -1806,8 +1929,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent2> batch2)
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -1818,7 +1945,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -1826,17 +1954,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref e0, ref e1, ref e2);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -1958,8 +2086,8 @@ where TEvent0 : struct
         where TJob : struct, IProjectionJob1x4<T0, TEvent0, TEvent1, TEvent2, TEvent3>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -2003,13 +2131,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -2018,7 +2146,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -2028,18 +2156,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -2070,8 +2201,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent3> batch3)
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -2082,7 +2217,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -2091,17 +2227,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref e0, ref e1, ref e2, ref e3);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -2236,8 +2372,8 @@ where TEvent0 : struct
         where TJob : struct, IProjectionJob1x5<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -2284,13 +2420,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -2299,7 +2435,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -2309,18 +2445,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -2355,8 +2494,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent4> batch4)
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -2367,7 +2510,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -2377,17 +2521,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref e0, ref e1, ref e2, ref e3, ref e4);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -2535,8 +2679,8 @@ where TEvent0 : struct
         where TJob : struct, IProjectionJob1x6<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -2586,13 +2730,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -2601,7 +2745,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -2611,18 +2755,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -2661,8 +2808,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent5> batch5)
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -2673,7 +2824,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -2684,17 +2836,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -2855,8 +3007,8 @@ where TEvent0 : struct
         where TJob : struct, IProjectionJob1x7<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -2909,13 +3061,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -2924,7 +3076,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -2934,18 +3086,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -2988,8 +3143,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent6> batch6)
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -3000,7 +3159,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -3012,17 +3172,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -3196,8 +3356,8 @@ where TEvent0 : struct
         where TJob : struct, IProjectionJob1x8<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -3253,13 +3413,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -3268,7 +3428,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -3278,18 +3438,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -3336,8 +3499,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent7> batch7)
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -3348,7 +3515,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -3361,17 +3529,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -3558,8 +3726,8 @@ where TEvent0 : struct
         where TJob : struct, IProjectionJob1x9<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -3618,13 +3786,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -3633,7 +3801,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -3643,18 +3811,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -3705,8 +3876,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent8> batch8)
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -3717,7 +3892,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -3731,17 +3907,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -3941,8 +4117,8 @@ where TEvent0 : struct
         where TJob : struct, IProjectionJob1x10<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -4004,13 +4180,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -4019,7 +4195,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -4029,18 +4205,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -4095,8 +4274,12 @@ where TEvent0 : struct
         ref ProjectionBatchBuffer<TEvent9> batch9)
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -4107,7 +4290,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -4122,17 +4306,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -4297,8 +4481,8 @@ internal static class ProjectionExecutor2<T0, T1>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -4335,13 +4519,13 @@ internal static class ProjectionExecutor2<T0, T1>
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -4350,7 +4534,7 @@ internal static class ProjectionExecutor2<T0, T1>
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -4360,18 +4544,21 @@ internal static class ProjectionExecutor2<T0, T1>
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -4398,8 +4585,12 @@ internal static class ProjectionExecutor2<T0, T1>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -4413,22 +4604,25 @@ internal static class ProjectionExecutor2<T0, T1>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            TEvent output = default;
-            forEach(in entity, ref c0, ref c1, ref output);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
+
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
+
+            TEvent output = default;
+            forEach(in entity, ref c0, ref c1, ref output);
 
             batch.Add(actorId, in output);
         }
@@ -4444,8 +4638,12 @@ internal static class ProjectionExecutor2<T0, T1>
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -4459,14 +4657,16 @@ internal static class ProjectionExecutor2<T0, T1>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            if (!meta.ActorId.IsValid)
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
+
+            if (!actorRef.ActorId.IsValid)
             {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
         }
     }
@@ -4561,8 +4761,8 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -4602,13 +4802,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -4617,7 +4817,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -4627,18 +4827,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -4662,8 +4865,12 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -4675,24 +4882,25 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
 
             forEach(in entity, ref c0, ref c1, ref e0, ref e1);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -4802,8 +5010,8 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -4846,13 +5054,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -4861,7 +5069,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -4871,18 +5079,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -4910,8 +5121,12 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -4923,7 +5138,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -4931,17 +5147,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref e0, ref e1, ref e2);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -5064,8 +5280,8 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -5111,13 +5327,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -5126,7 +5342,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -5136,18 +5352,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -5179,8 +5398,12 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -5192,7 +5415,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -5201,17 +5425,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref e0, ref e1, ref e2, ref e3);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -5347,8 +5571,8 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -5397,13 +5621,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -5412,7 +5636,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -5422,18 +5646,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -5469,8 +5696,12 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -5482,7 +5713,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -5492,17 +5724,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref e0, ref e1, ref e2, ref e3, ref e4);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -5651,8 +5883,8 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -5704,13 +5936,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -5719,7 +5951,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -5729,18 +5961,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -5780,8 +6015,12 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -5793,7 +6032,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -5804,17 +6044,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -5976,8 +6216,8 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -6032,13 +6272,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -6047,7 +6287,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -6057,18 +6297,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -6112,8 +6355,12 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -6125,7 +6372,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -6137,17 +6385,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -6322,8 +6570,8 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -6381,13 +6629,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -6396,7 +6644,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -6406,18 +6654,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -6465,8 +6716,12 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -6478,7 +6733,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -6491,17 +6747,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -6689,8 +6945,8 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -6751,13 +7007,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -6766,7 +7022,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -6776,18 +7032,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -6839,8 +7098,12 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -6852,7 +7115,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -6866,17 +7130,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -7077,8 +7341,8 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -7142,13 +7406,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -7157,7 +7421,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -7167,18 +7431,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -7234,8 +7501,12 @@ where TEvent0 : struct
     {
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -7247,7 +7518,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -7262,17 +7534,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -7441,8 +7713,8 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -7481,13 +7753,13 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -7496,7 +7768,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -7506,18 +7778,21 @@ internal static class ProjectionExecutor3<T0, T1, T2>
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -7545,8 +7820,12 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -7561,22 +7840,25 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            TEvent output = default;
-            forEach(in entity, ref c0, ref c1, ref c2, ref output);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
+
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
+
+            TEvent output = default;
+            forEach(in entity, ref c0, ref c1, ref c2, ref output);
 
             batch.Add(actorId, in output);
         }
@@ -7593,8 +7875,12 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -7609,14 +7895,16 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            if (!meta.ActorId.IsValid)
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
+
+            if (!actorRef.ActorId.IsValid)
             {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
         }
     }
@@ -7712,8 +8000,8 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -7755,13 +8043,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -7770,7 +8058,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -7780,18 +8068,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -7816,8 +8107,12 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -7830,24 +8125,25 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
 
             forEach(in entity, ref c0, ref c1, ref c2, ref e0, ref e1);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -7958,8 +8254,8 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -8004,13 +8300,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -8019,7 +8315,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -8029,18 +8325,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -8069,8 +8368,12 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -8083,7 +8386,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -8091,17 +8395,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref e0, ref e1, ref e2);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -8225,8 +8529,8 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -8274,13 +8578,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -8289,7 +8593,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -8299,18 +8603,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -8343,8 +8650,12 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -8357,7 +8668,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -8366,17 +8678,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref e0, ref e1, ref e2, ref e3);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -8513,8 +8825,8 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -8565,13 +8877,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -8580,7 +8892,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -8590,18 +8902,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -8638,8 +8953,12 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -8652,7 +8971,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -8662,17 +8982,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref e0, ref e1, ref e2, ref e3, ref e4);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -8822,8 +9142,8 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -8877,13 +9197,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -8892,7 +9212,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -8902,18 +9222,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -8954,8 +9277,12 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -8968,7 +9295,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -8979,17 +9307,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -9152,8 +9480,8 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -9210,13 +9538,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -9225,7 +9553,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -9235,18 +9563,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -9291,8 +9622,12 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -9305,7 +9640,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -9317,17 +9653,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -9503,8 +9839,8 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -9564,13 +9900,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -9579,7 +9915,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -9589,18 +9925,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -9649,8 +9988,12 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -9663,7 +10006,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -9676,17 +10020,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -9875,8 +10219,8 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -9939,13 +10283,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -9954,7 +10298,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -9964,18 +10308,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -10028,8 +10375,12 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -10042,7 +10393,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -10056,17 +10408,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -10268,8 +10620,8 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -10335,13 +10687,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -10350,7 +10702,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -10360,18 +10712,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -10428,8 +10783,12 @@ where TEvent0 : struct
         ref T0 first0 = ref chunk.GetFirst<T0>();
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -10442,7 +10801,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -10457,17 +10817,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -10640,8 +11000,8 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -10682,13 +11042,13 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -10697,7 +11057,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -10707,18 +11067,21 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -10747,8 +11110,12 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -10764,22 +11131,25 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            TEvent output = default;
-            forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref output);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
+
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
+
+            TEvent output = default;
+            forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref output);
 
             batch.Add(actorId, in output);
         }
@@ -10797,8 +11167,12 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -10814,14 +11188,16 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            if (!meta.ActorId.IsValid)
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
+
+            if (!actorRef.ActorId.IsValid)
             {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
         }
     }
@@ -10918,8 +11294,8 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -10963,13 +11339,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -10978,7 +11354,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -10988,18 +11364,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -11025,8 +11404,12 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -11040,24 +11423,25 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref e0, ref e1);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -11169,8 +11553,8 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -11217,13 +11601,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -11232,7 +11616,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -11242,18 +11626,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -11283,8 +11670,12 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -11298,7 +11689,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -11306,17 +11698,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref e0, ref e1, ref e2);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -11441,8 +11833,8 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -11492,13 +11884,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -11507,7 +11899,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -11517,18 +11909,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -11562,8 +11957,12 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -11577,7 +11976,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -11586,17 +11986,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref e0, ref e1, ref e2, ref e3);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -11734,8 +12134,8 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -11788,13 +12188,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -11803,7 +12203,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -11813,18 +12213,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -11862,8 +12265,12 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -11877,7 +12284,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -11887,17 +12295,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref e0, ref e1, ref e2, ref e3, ref e4);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -12048,8 +12456,8 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -12105,13 +12513,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -12120,7 +12528,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -12130,18 +12538,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -12183,8 +12594,12 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -12198,7 +12613,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -12209,17 +12625,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -12383,8 +12799,8 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -12443,13 +12859,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -12458,7 +12874,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -12468,18 +12884,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -12525,8 +12944,12 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -12540,7 +12963,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -12552,17 +12976,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -12739,8 +13163,8 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -12802,13 +13226,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -12817,7 +13241,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -12827,18 +13251,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -12888,8 +13315,12 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -12903,7 +13334,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -12916,17 +13348,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -13116,8 +13548,8 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -13182,13 +13614,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -13197,7 +13629,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -13207,18 +13639,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -13272,8 +13707,12 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -13287,7 +13726,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -13301,17 +13741,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -13514,8 +13954,8 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -13583,13 +14023,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -13598,7 +14038,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -13608,18 +14048,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -13677,8 +14120,12 @@ where TEvent0 : struct
         ref T1 first1 = ref chunk.GetFirst<T1>();
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -13692,7 +14139,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -13707,17 +14155,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -13894,8 +14342,8 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -13938,13 +14386,13 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -13953,7 +14401,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -13963,18 +14411,21 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -14004,8 +14455,12 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -14022,22 +14477,25 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            TEvent output = default;
-            forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref output);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
+
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
+
+            TEvent output = default;
+            forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref output);
 
             batch.Add(actorId, in output);
         }
@@ -14056,8 +14514,12 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -14074,14 +14536,16 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            if (!meta.ActorId.IsValid)
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
+
+            if (!actorRef.ActorId.IsValid)
             {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
         }
     }
@@ -14179,8 +14643,8 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -14226,13 +14690,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -14241,7 +14705,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -14251,18 +14715,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -14289,8 +14756,12 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -14305,24 +14776,25 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref e0, ref e1);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -14435,8 +14907,8 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -14485,13 +14957,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -14500,7 +14972,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -14510,18 +14982,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -14552,8 +15027,12 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -14568,7 +15047,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -14576,17 +15056,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref e0, ref e1, ref e2);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -14712,8 +15192,8 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -14765,13 +15245,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -14780,7 +15260,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -14790,18 +15270,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -14836,8 +15319,12 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -14852,7 +15339,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -14861,17 +15349,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref e0, ref e1, ref e2, ref e3);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -15010,8 +15498,8 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -15066,13 +15554,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -15081,7 +15569,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -15091,18 +15579,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -15141,8 +15632,12 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -15157,7 +15652,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -15167,17 +15663,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref e0, ref e1, ref e2, ref e3, ref e4);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -15329,8 +15825,8 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -15388,13 +15884,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -15403,7 +15899,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -15413,18 +15909,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -15467,8 +15966,12 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -15483,7 +15986,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -15494,17 +15998,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -15669,8 +16173,8 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -15731,13 +16235,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -15746,7 +16250,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -15756,18 +16260,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -15814,8 +16321,12 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -15830,7 +16341,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -15842,17 +16354,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -16030,8 +16542,8 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -16095,13 +16607,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -16110,7 +16622,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -16120,18 +16632,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -16182,8 +16697,12 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -16198,7 +16717,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -16211,17 +16731,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -16412,8 +16932,8 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -16480,13 +17000,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -16495,7 +17015,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -16505,18 +17025,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -16571,8 +17094,12 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -16587,7 +17114,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -16601,17 +17129,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -16815,8 +17343,8 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -16886,13 +17414,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -16901,7 +17429,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -16911,18 +17439,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -16981,8 +17512,12 @@ where TEvent0 : struct
         ref T2 first2 = ref chunk.GetFirst<T2>();
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -16997,7 +17532,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -17012,17 +17548,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -17203,8 +17739,8 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -17249,13 +17785,13 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -17264,7 +17800,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -17274,18 +17810,21 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -17316,8 +17855,12 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -17335,22 +17878,25 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            TEvent output = default;
-            forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref output);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
+
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
+
+            TEvent output = default;
+            forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref output);
 
             batch.Add(actorId, in output);
         }
@@ -17370,8 +17916,12 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -17389,14 +17939,16 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            if (!meta.ActorId.IsValid)
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
+
+            if (!actorRef.ActorId.IsValid)
             {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
         }
     }
@@ -17495,8 +18047,8 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -17544,13 +18096,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -17559,7 +18111,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -17569,18 +18121,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -17608,8 +18163,12 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -17625,24 +18184,25 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref e0, ref e1);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -17756,8 +18316,8 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -17808,13 +18368,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -17823,7 +18383,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -17833,18 +18393,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -17876,8 +18439,12 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -17893,7 +18460,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -17901,17 +18469,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref e0, ref e1, ref e2);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -18038,8 +18606,8 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -18093,13 +18661,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -18108,7 +18676,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -18118,18 +18686,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -18165,8 +18736,12 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -18182,7 +18757,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -18191,17 +18767,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref e0, ref e1, ref e2, ref e3);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -18341,8 +18917,8 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -18399,13 +18975,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -18414,7 +18990,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -18424,18 +19000,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -18475,8 +19054,12 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -18492,7 +19075,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -18502,17 +19086,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref e0, ref e1, ref e2, ref e3, ref e4);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -18665,8 +19249,8 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -18726,13 +19310,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -18741,7 +19325,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -18751,18 +19335,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -18806,8 +19393,12 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -18823,7 +19414,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -18834,17 +19426,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -19010,8 +19602,8 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -19074,13 +19666,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -19089,7 +19681,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -19099,18 +19691,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -19158,8 +19753,12 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -19175,7 +19774,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -19187,17 +19787,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -19376,8 +19976,8 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -19443,13 +20043,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -19458,7 +20058,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -19468,18 +20068,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -19531,8 +20134,12 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -19548,7 +20155,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -19561,17 +20169,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -19763,8 +20371,8 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -19833,13 +20441,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -19848,7 +20456,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -19858,18 +20466,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -19925,8 +20536,12 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -19942,7 +20557,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -19956,17 +20572,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -20171,8 +20787,8 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -20244,13 +20860,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -20259,7 +20875,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -20269,18 +20885,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -20340,8 +20959,12 @@ where TEvent0 : struct
         ref T3 first3 = ref chunk.GetFirst<T3>();
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -20357,7 +20980,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -20372,17 +20996,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -20567,8 +21191,8 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -20615,13 +21239,13 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -20630,7 +21254,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -20640,18 +21264,21 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -20683,8 +21310,12 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -20703,22 +21334,25 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            TEvent output = default;
-            forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref output);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
+
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
+
+            TEvent output = default;
+            forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref output);
 
             batch.Add(actorId, in output);
         }
@@ -20739,8 +21373,12 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -20759,14 +21397,16 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            if (!meta.ActorId.IsValid)
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
+
+            if (!actorRef.ActorId.IsValid)
             {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
         }
     }
@@ -20866,8 +21506,8 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -20917,13 +21557,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -20932,7 +21572,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -20942,18 +21582,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -20982,8 +21625,12 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -21000,24 +21647,25 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref e0, ref e1);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -21132,8 +21780,8 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -21186,13 +21834,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -21201,7 +21849,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -21211,18 +21859,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -21255,8 +21906,12 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -21273,7 +21928,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -21281,17 +21937,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref e0, ref e1, ref e2);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -21419,8 +22075,8 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -21476,13 +22132,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -21491,7 +22147,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -21501,18 +22157,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -21549,8 +22208,12 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -21567,7 +22230,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -21576,17 +22240,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref e0, ref e1, ref e2, ref e3);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -21727,8 +22391,8 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -21787,13 +22451,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -21802,7 +22466,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -21812,18 +22476,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -21864,8 +22531,12 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -21882,7 +22553,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -21892,17 +22564,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref e0, ref e1, ref e2, ref e3, ref e4);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -22056,8 +22728,8 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -22119,13 +22791,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -22134,7 +22806,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -22144,18 +22816,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -22200,8 +22875,12 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -22218,7 +22897,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -22229,17 +22909,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -22406,8 +23086,8 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -22472,13 +23152,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -22487,7 +23167,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -22497,18 +23177,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -22557,8 +23240,12 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -22575,7 +23262,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -22587,17 +23275,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -22777,8 +23465,8 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -22846,13 +23534,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -22861,7 +23549,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -22871,18 +23559,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -22935,8 +23626,12 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -22953,7 +23648,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -22966,17 +23662,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -23169,8 +23865,8 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -23241,13 +23937,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -23256,7 +23952,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -23266,18 +23962,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -23334,8 +24033,12 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -23352,7 +24055,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -23366,17 +24070,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -23582,8 +24286,8 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -23657,13 +24361,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -23672,7 +24376,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -23682,18 +24386,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -23754,8 +24461,12 @@ where TEvent0 : struct
         ref T4 first4 = ref chunk.GetFirst<T4>();
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -23772,7 +24483,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -23787,17 +24499,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -23986,8 +24698,8 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -24036,13 +24748,13 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -24051,7 +24763,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -24061,18 +24773,21 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -24105,8 +24820,12 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -24126,22 +24845,25 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            TEvent output = default;
-            forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref output);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
+
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
+
+            TEvent output = default;
+            forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref output);
 
             batch.Add(actorId, in output);
         }
@@ -24163,8 +24885,12 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -24184,14 +24910,16 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                 continue;
             }
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
-            if (!meta.ActorId.IsValid)
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
+
+            if (!actorRef.ActorId.IsValid)
             {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
+                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
             }
         }
     }
@@ -24292,8 +25020,8 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -24345,13 +25073,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -24360,7 +25088,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -24370,18 +25098,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -24411,8 +25142,12 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -24430,24 +25165,25 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6, in c7))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref e0, ref e1);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -24563,8 +25299,8 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -24619,13 +25355,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -24634,7 +25370,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -24644,18 +25380,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -24689,8 +25428,12 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -24708,7 +25451,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6, in c7))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -24716,17 +25460,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref e0, ref e1, ref e2);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -24855,8 +25599,8 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -24914,13 +25658,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -24929,7 +25673,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -24939,18 +25683,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -24988,8 +25735,12 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -25007,7 +25758,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6, in c7))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -25016,17 +25768,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref e0, ref e1, ref e2, ref e3);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -25168,8 +25920,8 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -25230,13 +25982,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -25245,7 +25997,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -25255,18 +26007,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -25308,8 +26063,12 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -25327,7 +26086,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6, in c7))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -25337,17 +26097,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref e0, ref e1, ref e2, ref e3, ref e4);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -25502,8 +26262,8 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -25567,13 +26327,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -25582,7 +26342,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -25592,18 +26352,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -25649,8 +26412,12 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -25668,7 +26435,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6, in c7))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -25679,17 +26447,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -25857,8 +26625,8 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -25925,13 +26693,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -25940,7 +26708,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -25950,18 +26718,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -26011,8 +26782,12 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -26030,7 +26805,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6, in c7))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -26042,17 +26818,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -26233,8 +27009,8 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -26304,13 +27080,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -26319,7 +27095,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -26329,18 +27105,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -26394,8 +27173,12 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -26413,7 +27196,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6, in c7))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -26426,17 +27210,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -26630,8 +27414,8 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -26704,13 +27488,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -26719,7 +27503,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -26729,18 +27513,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -26798,8 +27585,12 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -26817,7 +27608,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6, in c7))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -26831,17 +27623,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);
@@ -27048,8 +27840,8 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta =
-            ref chunk.FirstProjection();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
 
         ref Entity firstEntity =
             ref chunk.Entities.DangerousGetReference();
@@ -27125,13 +27917,13 @@ where TEvent0 : struct
                 continue;
             }
 
-            ref ProjectedActorMeta meta =
+            ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(
-                    ref firstMeta,
+                    ref firstActorRef,
                     row);
 
             ActorId actorId =
-                meta.ActorId;
+                actorRef.ActorId;
 
             if (!actorId.IsValid)
             {
@@ -27140,7 +27932,7 @@ where TEvent0 : struct
                         world,
                         actorWorld,
                         entity,
-                        ref meta,
+                        ref actorRef,
                         nowTicks);
 
                 if (!actorId.IsValid)
@@ -27150,18 +27942,21 @@ where TEvent0 : struct
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(
-                    actorWorld,
-                    ref meta,
-                    nowTicks);
+                bool alive =
+                    ProjectedActorBinding.TouchProjectedActor(
+                        world,
+                        actorWorld,
+                        entity,
+                        ref actorRef,
+                        nowTicks);
 
-                actorId =
-                    meta.ActorId;
-
-                if (!actorId.IsValid)
+                if (!alive)
                 {
                     continue;
                 }
+
+                actorId =
+                    actorRef.ActorId;
             }
 
             if (result == ProjectResult.Touch)
@@ -27223,8 +28018,12 @@ where TEvent0 : struct
         ref T5 first5 = ref chunk.GetFirst<T5>();
         ref T6 first6 = ref chunk.GetFirst<T6>();
         ref T7 first7 = ref chunk.GetFirst<T7>();
-        ref ProjectedActorMeta firstMeta = ref chunk.FirstProjection();
-        ref Entity firstEntity = ref chunk.Entities.DangerousGetReference();
+        ref ProjectedActorRef firstActorRef =
+            ref chunk.GetFirst<ProjectedActorRef>();
+
+        ref Entity firstEntity =
+            ref chunk.Entities.DangerousGetReference();
+
         int count = chunk.Count;
 
         for (int row = 0; row < count; row++)
@@ -27242,7 +28041,8 @@ where TEvent0 : struct
             if (predicate != null && !predicate(in entity, in c0, in c1, in c2, in c3, in c4, in c5, in c6, in c7))
                 continue;
 
-            ref ProjectedActorMeta meta = ref Unsafe.Add(ref firstMeta, row);
+            ref ProjectedActorRef actorRef =
+                ref Unsafe.Add(ref firstActorRef, row);
 
             TEvent0 e0 = default;
             TEvent1 e1 = default;
@@ -27257,17 +28057,17 @@ where TEvent0 : struct
 
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
-            ActorId actorId = meta.ActorId;
+            ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref meta, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                ProjectedActorBinding.TouchProjectedActor(actorWorld, ref meta, nowTicks);
-                actorId = meta.ActorId;
-                if (!actorId.IsValid) continue;
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                if (!alive) continue;
+                actorId = actorRef.ActorId;
             }
 
             batch0.Add(actorId, in e0);

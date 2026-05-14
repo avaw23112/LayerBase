@@ -455,10 +455,10 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
             .WithAll<Position, Velocity, EcsQueryLargeTag>();
 
         _hybridQuerySmall = new QueryDescription()
-            .WithAll<Position, Velocity, HybridSmallTag>();
+            .WithAll<Position, Velocity, HybridSmallTag, ProjectedActorRef>();
 
         _hybridQueryLarge = new QueryDescription()
-            .WithAll<Position, Velocity, HybridLargeTag>();
+            .WithAll<Position, Velocity, HybridLargeTag, ProjectedActorRef>();
     }
 
     /// <summary>
@@ -599,7 +599,8 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
                     Dx = 1,
                     Dy = 1
                 },
-                new HybridSmallTag());
+                new HybridSmallTag(),
+                new ProjectedActorRef());
 
             _hybridSmallEntities[i] = entity;
 
@@ -627,7 +628,8 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
                     Dx = 1,
                     Dy = 1
                 },
-                new HybridLargeTag());
+                new HybridLargeTag(),
+                new ProjectedActorRef());
 
             _hybridLargeEntities[i] = entity;
 
@@ -746,6 +748,26 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
         handle.Actor.RecycleDeadlineTicks = long.MaxValue;
 
         meta.BindActor(handle.ActorId);
+
+        // ProjectedActorRef：
+        // Entity 到 ActorId 的热路径缓存组件。
+        // Hybrid / FullPipeline benchmark 会直接读取它，不再通过 TryGetProjectionMeta 反查。
+        if (world.Has<ProjectedActorRef>(entity))
+        {
+            ref ProjectedActorRef actorRef =
+                ref world.Get<ProjectedActorRef>(entity);
+
+            actorRef.ActorId = handle.ActorId;
+        }
+        else
+        {
+            world.Add(
+                entity,
+                new ProjectedActorRef
+                {
+                    ActorId = handle.ActorId
+                });
+        }
 
         // AddActiveProjectedActor 只在 Setup 中调用。
         // 作用：让框架内部 active projected actor 列表保持一致。
@@ -875,6 +897,32 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
                 valid++;
             }
         }
+
+        _intSink = valid;
+    }
+
+    /// <summary>
+    /// 验证 ProjectedActorRef 中的 ActorId 是否全部有效。
+    ///
+    /// 作用：
+    /// 如果这个测试结果不是 1000，说明 ForceBindProjectedActor 没有同步写入 ProjectedActorRef。
+    /// </summary>
+    [Benchmark(Description = "Debug: ProjectedRef ActorId Valid Count × 1000")]
+    [BenchmarkCategory("Debug")]
+    public void Debug_ProjectedRef_ActorId_ValidCount_1000()
+    {
+        int valid = 0;
+
+        _ecsWorld.Query(
+            in _hybridQuerySmall,
+            (ref Position pos, ref Velocity vel, ref ProjectedActorRef actorRef) =>
+            {
+                if (actorRef.ActorId.IsValid &&
+                    _actorWorld.TryGetActor(actorRef.ActorId, out _))
+                {
+                    valid++;
+                }
+            });
 
         _intSink = valid;
     }
@@ -1215,6 +1263,57 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
         _intSink = found;
     }
 
+    /// <summary>
+    /// ProjectedActorRef → ActorId 读取，1000 个。
+    ///
+    /// 作用：
+    /// 测量新的 projected cache 热路径。
+    /// 该路径不再通过 Entity 调 TryGetProjectionMeta，也不再读取 ProjectedActorMeta。
+    /// </summary>
+    [Benchmark(Description = "Projection: ProjectedRef ActorId Read × 1000")]
+    [BenchmarkCategory("Projection")]
+    public void Projection_ProjectedRef_ActorIdRead_1000()
+    {
+        int found = 0;
+
+        _ecsWorld.Query(
+            in _hybridQuerySmall,
+            (ref Position pos, ref Velocity vel, ref ProjectedActorRef actorRef) =>
+            {
+                if (actorRef.ActorId.IsValid)
+                {
+                    found++;
+                }
+            });
+
+        _intSink = found;
+    }
+
+    /// <summary>
+    /// ProjectedActorRef → ActorId 读取，10000 个。
+    ///
+    /// 作用：
+    /// 测量新的 projected cache 大批量热路径。
+    /// </summary>
+    [Benchmark(Description = "Projection: ProjectedRef ActorId Read × 10000")]
+    [BenchmarkCategory("Projection")]
+    public void Projection_ProjectedRef_ActorIdRead_10000()
+    {
+        int found = 0;
+
+        _ecsWorld.Query(
+            in _hybridQueryLarge,
+            (ref Position pos, ref Velocity vel, ref ProjectedActorRef actorRef) =>
+            {
+                if (actorRef.ActorId.IsValid)
+                {
+                    found++;
+                }
+            });
+
+        _intSink = found;
+    }
+
     // ══════════════════════════════════════════════════════
     // Hybrid
     // ══════════════════════════════════════════════════════
@@ -1250,19 +1349,24 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     /// ECS Query → Projection Lookup → Actor PostTo，1000 个。
     /// 不包含 Pump。
     /// </summary>
-    [Benchmark(Description = "Hybrid: ECS Query → Projection Lookup → Actor PostTo × 1000")]
+    [Benchmark(Description = "Hybrid: ECS Query → ProjectedRef → Actor PostTo × 1000")]
     [BenchmarkCategory("Hybrid")]
-    public void Hybrid_ECSQuery_ProjectionLookup_ActorPost_1000()
+    public void Hybrid_ECSQuery_ProjectedRef_ActorPost_1000()
     {
         _ecsWorld.Query(
             in _hybridQuerySmall,
-            (Entity entity, ref Position pos, ref Velocity vel) =>
+            (ref Position pos, ref Velocity vel, ref ProjectedActorRef actorRef) =>
             {
-                if (_ecsWorld.TryGetProjectionMeta(entity, out var metaRef) &&
-                    metaRef.Value.HasActor)
+                ActorId actorId = actorRef.ActorId;
+
+                if (!actorId.IsValid)
                 {
-                    _actorWorld.PostTo(metaRef.Value.ActorId, in _moveEvent);
+                    return;
                 }
+
+                _actorWorld.PostTo(
+                    actorId,
+                    in _moveEvent);
             });
     }
 
@@ -1270,19 +1374,24 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     /// ECS Query → Projection Lookup → Actor PostTo，10000 个。
     /// 不包含 Pump。
     /// </summary>
-    [Benchmark(Description = "Hybrid: ECS Query → Projection Lookup → Actor PostTo × 10000")]
+    [Benchmark(Description = "Hybrid: ECS Query → ProjectedRef → Actor PostTo × 10000")]
     [BenchmarkCategory("Hybrid")]
-    public void Hybrid_ECSQuery_ProjectionLookup_ActorPost_10000()
+    public void Hybrid_ECSQuery_ProjectedRef_ActorPost_10000()
     {
         _ecsWorld.Query(
             in _hybridQueryLarge,
-            (Entity entity, ref Position pos, ref Velocity vel) =>
+            (ref Position pos, ref Velocity vel, ref ProjectedActorRef actorRef) =>
             {
-                if (_ecsWorld.TryGetProjectionMeta(entity, out var metaRef) &&
-                    metaRef.Value.HasActor)
+                ActorId actorId = actorRef.ActorId;
+
+                if (!actorId.IsValid)
                 {
-                    _actorWorld.PostTo(metaRef.Value.ActorId, in _moveEvent);
+                    return;
                 }
+
+                _actorWorld.PostTo(
+                    actorId,
+                    in _moveEvent);
             });
     }
 
@@ -1290,19 +1399,24 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     /// 完整小批量链路：
     /// ECS Query → Projection Lookup → Actor PostTo → Pump。
     /// </summary>
-    [Benchmark(Description = "Full Pipeline: ECS Query → Projection Lookup → Actor PostTo → Pump × 1000")]
+    [Benchmark(Description = "Full Pipeline: ECS Query → ProjectedRef → Actor PostTo → Pump × 1000")]
     [BenchmarkCategory("Hybrid")]
-    public void FullPipeline_ECSQuery_ProjectionLookup_ActorPost_Pump_1000()
+    public void FullPipeline_ECSQuery_ProjectedRef_ActorPost_Pump_1000()
     {
         _ecsWorld.Query(
             in _hybridQuerySmall,
-            (Entity entity, ref Position pos, ref Velocity vel) =>
+            (ref Position pos, ref Velocity vel, ref ProjectedActorRef actorRef) =>
             {
-                if (_ecsWorld.TryGetProjectionMeta(entity, out var metaRef) &&
-                    metaRef.Value.HasActor)
+                ActorId actorId = actorRef.ActorId;
+
+                if (!actorId.IsValid)
                 {
-                    _actorWorld.PostTo(metaRef.Value.ActorId, in _moveEvent);
+                    return;
                 }
+
+                _actorWorld.PostTo(
+                    actorId,
+                    in _moveEvent);
             });
 
         var budget = new RuntimeFrameBudget(
@@ -1321,19 +1435,24 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     /// 完整大批量链路：
     /// ECS Query → Projection Lookup → Actor PostTo → Pump。
     /// </summary>
-    [Benchmark(Description = "Full Pipeline: ECS Query → Projection Lookup → Actor PostTo → Pump × 10000")]
+    [Benchmark(Description = "Full Pipeline: ECS Query → ProjectedRef → Actor PostTo → Pump × 10000")]
     [BenchmarkCategory("Hybrid")]
-    public void FullPipeline_ECSQuery_ProjectionLookup_ActorPost_Pump_10000()
+    public void FullPipeline_ECSQuery_ProjectedRef_ActorPost_Pump_10000()
     {
         _ecsWorld.Query(
             in _hybridQueryLarge,
-            (Entity entity, ref Position pos, ref Velocity vel) =>
+            (ref Position pos, ref Velocity vel, ref ProjectedActorRef actorRef) =>
             {
-                if (_ecsWorld.TryGetProjectionMeta(entity, out var metaRef) &&
-                    metaRef.Value.HasActor)
+                ActorId actorId = actorRef.ActorId;
+
+                if (!actorId.IsValid)
                 {
-                    _actorWorld.PostTo(metaRef.Value.ActorId, in _moveEvent);
+                    return;
                 }
+
+                _actorWorld.PostTo(
+                    actorId,
+                    in _moveEvent);
             });
 
         var budget = new RuntimeFrameBudget(
@@ -1377,10 +1496,6 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
         for (int i = 0; i < SmallCount; i++)
         {
             _pureActorWorld.PostTo(_pureActorIds[i], in _moveEvent);
-            //10us 是纯数组遍历成本
-            //2us 是_pureActorWorld.PostTo空转成本
-            //14us 是postTo索引固定成本
-            //36us 是写入邮箱的固定成本
         }
     }
     [IterationSetup(Target = nameof(Actor_PumpOnly_1000))]

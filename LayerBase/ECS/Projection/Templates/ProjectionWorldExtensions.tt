@@ -3,6 +3,7 @@
 <#@ include file="Helpers.ttinclude" #>
 #nullable enable
 using Arch.Core;
+using LayerBase.ECS.Projection;
 
 namespace LayerBase.ECS.Projection.Flow;
 
@@ -12,7 +13,15 @@ public static class ProjectionWorldExtensions
         this World world)
     {
         QueryDescription description = new QueryDescription();
-        return new ProjectionQueryFlow0(world, world.Query(in description));
+
+        // ProjectedActorRef：
+        // Projection 热路径必须组件。
+        // 作用：保证进入 ProjectionExecutor 的 chunk 必然拥有 ActorId 缓存。
+        description.WithAll<ProjectedActorRef>();
+
+        return new ProjectionQueryFlow0(
+            world,
+            world.Query(in description));
     }
 
 <#
@@ -26,8 +35,17 @@ public static class ProjectionWorldExtensions
         this World world)
     {
         QueryDescription description = new QueryDescription();
+
+        // ProjectedActorRef：
+        // 必须作为 Projection Query 的基础组件。
+        description.WithAll<ProjectedActorRef>();
+
+        // 用户业务组件。
         description.WithAll<<#= compG #>>();
-        return new ProjectionQueryFlow<#= c #><<#= compG #>>(world, world.Query(in description));
+
+        return new ProjectionQueryFlow<#= c #><<#= compG #>>(
+            world,
+            world.Query(in description));
     }
 
 <#

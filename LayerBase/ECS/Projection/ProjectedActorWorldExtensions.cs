@@ -9,7 +9,7 @@ namespace LayerBase.ECS.Projection;
 public static class ProjectedActorWorldExtensions
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void WithProjectedActor<TActor>(
+    internal static void WithProjectedActor<TActor>(
         this World                  world,
         Entity                      entity,
         float                       keepAliveSeconds = 0.2f,
@@ -22,7 +22,6 @@ public static class ProjectedActorWorldExtensions
             throw new InvalidOperationException(
                 $"ProjectedActor type {typeof(TActor).Name} was not generated. Make sure it implements IPooledActor and is visible to the generator.");
         }
-
         ProjectedActorTypeRegistry.RegisterGenerated(actorTypeId, typeof(TActor),
             static actorWorld => actorWorld.CreateProjectedActor<TActor>());
         WithProjectedActor(world, entity, actorTypeId, keepAliveSeconds, releasePolicy);
@@ -37,6 +36,6 @@ public static class ProjectedActorWorldExtensions
         ProjectedActorReleasePolicy releasePolicy    = ProjectedActorReleasePolicy.ReturnToPool)
     {
         ref ProjectedActorMeta meta = ref world.GetProjectionMeta(entity);
-        meta.MarkProjected(actorTypeId, ProjectedActorTime.SecondsToTicks(keepAliveSeconds), releasePolicy);
+        ProjectedActorMarkUtility.MarkProjected(world, entity, ref meta, actorTypeId, ProjectedActorTime.SecondsToTicks(keepAliveSeconds), releasePolicy);
     }
 }
