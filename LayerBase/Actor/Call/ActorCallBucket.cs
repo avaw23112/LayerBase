@@ -85,21 +85,25 @@ internal sealed class ActorCallBucket<TRequest, TResponse> : IActorEventBucket
 
         if (result == PumpOneResult.Processed)
         {
-            return ActorPumpManyResult.ProcessedBatch(1);
+            return ActorPumpManyResult.ProcessedBatch(
+                processed: 1,
+                hasMoreWork: HasPendingWork());
         }
 
         if (result == PumpOneResult.BucketLimited)
         {
             return new ActorPumpManyResult(
                 processed: 0,
-                result: PumpOneResult.BucketLimited);
+                result: PumpOneResult.BucketLimited,
+                hasMoreWork: true);
         }
 
         if (result == PumpOneResult.ActorLimited)
         {
             return new ActorPumpManyResult(
                 processed: 0,
-                result: PumpOneResult.ActorLimited);
+                result: PumpOneResult.ActorLimited,
+                hasMoreWork: true);
         }
 
         return ActorPumpManyResult.NoWork();

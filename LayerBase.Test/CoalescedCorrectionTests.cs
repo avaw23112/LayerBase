@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace LayerBase.Test;
 
 [TestFixture]
-public class CoalescedCorrectionTests
+public partial class CoalescedCorrectionTests
 {
     public partial struct DamageEvent
     {
@@ -36,7 +36,7 @@ public class CoalescedCorrectionTests
     {
     }
 
-    public class DirtyEventMeta : EventMetaData<DirtyEvent>
+    public  class DirtyEventMeta : EventMetaData<DirtyEvent>
     {
         public override EventPostPolicy? PostPolicy => new EventPostPolicy(
             PostDeliveryMode.DirtySignal,

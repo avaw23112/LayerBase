@@ -7,6 +7,14 @@ using LayerBase.ECS.Projection;
 
 namespace LayerBase.ECS.Projection.Flow;
 
+/// <summary>
+/// 确保 ProjectedActorRef 组件类型在首次使用前注册。
+/// </summary>
+internal static class ProjectedActorRefComponentRegistration
+{
+    internal static readonly int ComponentId = ProjectedActorRefRegistration.ComponentType.Id;
+}
+
 public static class ProjectionWorldExtensions
 {
     public static ProjectionQueryFlow0 Query(

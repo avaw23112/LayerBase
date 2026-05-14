@@ -4,6 +4,15 @@ using Arch.Core;
 namespace LayerBase.ECS.Projection;
 
 /// <summary>
+/// 确保 ProjectedActorRef 组件类型在 Arch ECS 中注册。
+/// 通过访问 Component&lt;ProjectedActorRef&gt; 触发静态构造函数。
+/// </summary>
+internal static class ProjectedActorRefRegistration
+{
+    internal static readonly ComponentType ComponentType = Component<ProjectedActorRef>.ComponentType;
+}
+
+/// <summary>
 /// Projected Actor 标记工具。
 /// 作用：统一标记 Entity 为可投影，并保证 ProjectedActorRef 热路径组件存在。
 /// </summary>

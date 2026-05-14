@@ -80,12 +80,14 @@ internal sealed class ActorEventBucket<TEvent> : IActorEventBucket
 
             return new ActorPumpManyResult(
                 processed: 0,
-                result: PumpOneResult.BucketLimited);
+                result: PumpOneResult.BucketLimited,
+                hasMoreWork: true);
         }
 
         int totalProcessed = 0;
         int checkedCount = 0;
         bool actorLimited = false;
+        bool hasMoreWork = false;
 
         while (checkedCount < _count &&
                totalProcessed < maxEvents &&
@@ -120,7 +122,15 @@ internal sealed class ActorEventBucket<TEvent> : IActorEventBucket
                     }
                 }
 
-                return ActorPumpManyResult.ProcessedBatch(totalProcessed);
+                // 如果当前 Column 仍有工作，标记 hasMoreWork。
+                if (result.HasMoreWork)
+                {
+                    hasMoreWork = true;
+                }
+
+                return ActorPumpManyResult.ProcessedBatch(
+                    processed: totalProcessed,
+                    hasMoreWork: hasMoreWork || HasOtherColumnsPending(index));
             }
 
             if (result.Result == PumpOneResult.ActorLimited)
@@ -130,20 +140,49 @@ internal sealed class ActorEventBucket<TEvent> : IActorEventBucket
 
             if (result.Result == PumpOneResult.BucketLimited)
             {
-                return result;
+                return new ActorPumpManyResult(
+                    processed: result.Processed,
+                    result: result.Result,
+                    hasMoreWork: true);
             }
         }
 
         if (totalProcessed > 0)
         {
-            return ActorPumpManyResult.ProcessedBatch(totalProcessed);
+            return ActorPumpManyResult.ProcessedBatch(
+                processed: totalProcessed,
+                hasMoreWork: hasMoreWork);
         }
 
         return actorLimited
             ? new ActorPumpManyResult(
                 processed: 0,
-                result: PumpOneResult.ActorLimited)
+                result: PumpOneResult.ActorLimited,
+                hasMoreWork: true)
             : ActorPumpManyResult.NoWork();
+    }
+
+    /// <summary>
+    /// 检查除指定索引外的其他 Column 是否有待处理工作。
+    ///
+    /// 参数说明：
+    /// excludeIndex：要排除的 Column 索引。
+    ///
+    /// 作用：
+    /// 在当前 Column 处理完后，检查其他 Column 是否仍有工作。
+    /// 避免调用 HasPendingWork() 进行全量扫描。
+    /// </summary>
+    private bool HasOtherColumnsPending(int excludeIndex)
+    {
+        for (int i = 0; i < _count; i++)
+        {
+            if (i != excludeIndex && _columns[i].HasPendingWork())
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public bool HasPendingWork()

@@ -98,11 +98,18 @@ public sealed partial class ActorWorld
 
             var options = ActorMailPumpOptions.Default;
             var stats = new ActorMailPumpStatsBuilder();
-            PumpOneResult result = bucket.PumpOne(ref budget, options, stats, bucketIndex);
+            int maxEvents = budget.RemainingEventBudget;
 
-            if (result == PumpOneResult.Processed)
+            ActorPumpManyResult result = bucket.PumpMany(
+                ref budget,
+                options,
+                stats,
+                bucketIndex,
+                maxEvents);
+
+            if (result.HasProcessed)
             {
-                if (bucket.HasPendingWork())
+                if (result.HasMoreWork)
                 {
                     _dirtyCallBuckets.MoveHeadToTail();
                 }
@@ -111,7 +118,8 @@ public sealed partial class ActorWorld
                     _dirtyCallBuckets.Pop();
                 }
             }
-            else if (result == PumpOneResult.NoWork || result == PumpOneResult.EmptyBucket)
+            else if (result.Result == PumpOneResult.NoWork ||
+                     result.Result == PumpOneResult.EmptyBucket)
             {
                 _dirtyCallBuckets.Pop();
             }

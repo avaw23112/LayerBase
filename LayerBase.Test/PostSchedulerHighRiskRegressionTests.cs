@@ -7,7 +7,7 @@ using NUnit.Framework;
 namespace EventsTest;
 
 [TestFixture]
-public class RebuildEventPoliciesRegressionTests
+public partial class RebuildEventPoliciesRegressionTests
 {
     [SetUp]
     public void SetUp()
