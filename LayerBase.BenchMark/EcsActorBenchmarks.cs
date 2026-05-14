@@ -163,7 +163,7 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     /// 2. 验证 10000 规模下的 132KB GC 是否来自 Segment 重新分配。
     /// 3. 不影响正式业务代码，因为这个类型只写在 benchmark 项目里。
     /// </summary>
-    private sealed class MoveEventBenchmarkMetaData : EventMetaData<MoveEvent>
+    public sealed class MoveEventBenchmarkMetaData : EventMetaData<MoveEvent>
     {
         /// <summary>
         /// MoveEvent 的 Actor 邮件配置。
@@ -381,7 +381,10 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     public void GlobalSetup()
     {
         LayerHub.Reset();
-
+        
+        EventMetaDataRegistry.RegisterMetaData<MoveEvent>(
+            new MoveEventBenchmarkMetaData());
+        
         _moveEvent = new MoveEvent
         {
             DeltaX = 1,
