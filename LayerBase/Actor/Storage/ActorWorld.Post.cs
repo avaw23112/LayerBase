@@ -9,34 +9,12 @@ public sealed partial class ActorWorld
     public void PostTo<TEvent>(in ActorId actorId, in TEvent value)
         where TEvent : struct
     {
-        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetStateUnchecked(RuntimeIndex);
-        if (state == null || state.RouteCode == ActorPostRouteCode.Disabled)
+        EventStreamCenter<TEvent>? streamCenter =
+            EventStreamRuntime<TEvent>.GetCenterUnchecked(RuntimeIndex, actorId.ArchetypeId);
+
+        if (streamCenter != null)
         {
-            return ;
-        }
-        if (!TryGetPhysicalRowWithGeneration(in actorId, state, out EventPostRow<TEvent> row, out int slotIndex))
-        {
-            return ;
-        } 
-        PostRoute(in value, state, slotIndex,in row);
-    }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void PostRoute<TEvent>(in TEvent value, EventPostState<TEvent> state, int slotIndex,in EventPostRow<TEvent> row)
-        where TEvent : struct
-    {
-        switch (state.RouteCode)
-        {
-            case ActorPostRouteCode.QueuedGrow: 
-                PostQueuedGrowCore(slotIndex, in value,in row.Mails, row.DirtySlots, row.BucketIndex, state.Pool,in  state.Options);break;
-            case ActorPostRouteCode.QueuedRejectNew:
-                PostQueuedRejectNewCore(slotIndex, in value,in  row.Mails, row.DirtySlots, row.BucketIndex, state.Pool, in state.Options);break;
-            case ActorPostRouteCode.QueuedDropOldest: 
-               PostQueuedDropOldestCore(slotIndex, in value,in  row.Mails, row.DirtySlots, row.BucketIndex, state.Pool,in  state.Options);break;
-            case ActorPostRouteCode.Latest: 
-                PostLatestCore(slotIndex, in value,in  row.Mails, row.DirtySlots, row.BucketIndex, state.Pool);break;
-            case ActorPostRouteCode.Dirty: 
-                PostDirtyCore(slotIndex, in value,in  row.Mails, row.DirtySlots, row.BucketIndex, state.Pool);break;
+            streamCenter.Post(actorId, in value);
         }
     }
 

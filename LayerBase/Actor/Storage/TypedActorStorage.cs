@@ -10,7 +10,11 @@ namespace LayerBase.Actor;
 internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     where TActor : class, IActor
 {
+    // 全局 slot 计数器，确保不同 Actor 类型的 slotIndex 唯一
+    private static int s_globalSlotCounter;
+
     private ActorEventColumnRuntime[] _columnsByEventId;
+    private IEventStreamCenterRuntime?[] _eventStreamRuntimesByEventId = Array.Empty<IEventStreamCenterRuntime?>();
     private TActor?[] _actors;
     private int[] _generations;
     private ActorSlotState[] _states;
@@ -30,6 +34,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private Type?[] _callRequestTypesByRouteId = Array.Empty<Type?>();
     private Type?[] _callResponseTypesByRouteId = Array.Empty<Type?>();
     private bool[] _actorExists;
+    private ActorWorld? _world;
 
     internal int ArchetypeId => _archetypeId;
     public override string ActorTypeName => typeof(TActor).Name;
@@ -172,6 +177,28 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                && _states[slotIndex] == ActorSlotState.Alive
                && _actors[slotIndex] != null;
     }
+
+    /// <summary>
+    /// 获取指定 slot 的 Actor 实例。
+    ///
+    /// 作用：
+    /// 用于 EventStream handler 注册时获取 Actor 实例。
+    /// </summary>
+    /// <param name="slotIndex">
+    /// slot 索引。
+    /// </param>
+    /// <returns>
+    /// Actor 实例，如果 slot 无效则返回 null。
+    /// </returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public TActor? GetActorAtSlot(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_actors.Length)
+        {
+            return null;
+        }
+        return _actors[slotIndex];
+    }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override bool IsCurrentGeneration(ActorId actorId)
     {
@@ -188,39 +215,52 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         in TEvent              value)
         where TEvent : struct
     {
-        EventPostRow<TEvent>[] rows = state.RowsByArchetype;
-        if ((uint)_archetypeId >= (uint)rows.Length)
+        // Use EventStream for PostAll
+        EventStreamCenter<TEvent>? streamCenter =
+            EventStreamRuntime<TEvent>.GetCenterUnchecked(world.RuntimeIndex, _archetypeId);
+
+        if (streamCenter == null)
         {
             return;
         }
 
-        EventPostRow<TEvent> row = rows[_archetypeId];
-        if (!row.IsValid)
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+        {
+            if (!CanPostAllSlot(slotIndex))
+            {
+                continue;
+            }
+
+            int generation = _generations[slotIndex];
+            var actorId = new ActorId(_archetypeId, slotIndex, generation);
+            streamCenter.Post(actorId, in value);
+        }
+    }
+
+    public override void PostAll<TEvent>(
+        ActorWorld world,
+        in TEvent  value)
+        where TEvent : struct
+    {
+        // Use EventStream for PostAll
+        EventStreamCenter<TEvent>? streamCenter =
+            EventStreamRuntime<TEvent>.GetCenterUnchecked(world.RuntimeIndex, _archetypeId);
+
+        if (streamCenter == null)
         {
             return;
         }
 
-        switch (routeCode)
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
         {
-            case ActorPostRouteCode.QueuedGrow:
-                PostAllQueuedGrow(world, row, state, in value);
-                break;
+            if (!CanPostAllSlot(slotIndex))
+            {
+                continue;
+            }
 
-            case ActorPostRouteCode.QueuedRejectNew:
-                PostAllQueuedRejectNew(world, row, state, in value);
-                break;
-
-            case ActorPostRouteCode.QueuedDropOldest:
-                PostAllQueuedDropOldest(world, row, state, in value);
-                break;
-
-            case ActorPostRouteCode.Latest:
-                PostAllLatest(world, row, state, in value);
-                break;
-
-            case ActorPostRouteCode.Dirty:
-                PostAllDirty(world, row, state, in value);
-                break;
+            int generation = _generations[slotIndex];
+            var actorId = new ActorId(_archetypeId, slotIndex, generation);
+            streamCenter.Post(actorId, in value);
         }
     }
 
@@ -349,22 +389,21 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                 "Actor slot is not alive.");
         }
 
-        if (!TryGetColumn(out EventColumn<TActor, TEvent>? column))
+        // 直接通过 EventStreamCenter 的 handler 调用，不经过邮箱队列
+        EventStreamCenter<TEvent>? streamCenter =
+            EventStreamRuntime<TEvent>.GetCenterUnchecked(_world?.RuntimeIndex ?? -1, _archetypeId);
+
+        if (streamCenter == null)
         {
             return DispatchResult.Failure(
                 DispatchFailureKind.UnsupportedEvent,
                 $"Actor type {typeof(TActor).Name} does not support event {typeof(TEvent).Name}.");
         }
 
-        TActor? actor = _actors[slotIndex];
-        if (actor == null)
-        {
-            return DispatchResult.Failure(
-                DispatchFailureKind.ActorNotFound,
-                "Actor slot is empty.");
-        }
-
-        return column.DispatchNow(actor, in value);
+        // 直接分发，不经过邮箱
+        var actorId = new ActorId(_archetypeId, slotIndex, generation);
+        streamCenter.DispatchNow(actorId, in value);
+        return DispatchResult.Success();
     }
 
     public override LBTask<TResponse> ImmediatelyAsk<TRequest, TResponse>(
@@ -451,13 +490,14 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     public void BuildColumns(ActorTypeMeta<TActor> meta, ActorWorld world)
     {
         _meta = meta;
+        _world = world;
         BuildCallRoutes(meta);
         BuildCallColumns(meta, world);
 
         foreach (ActorBehaviourEntry entry in meta.Behaviours)
         {
-            EnsureEventColumnCapacity(entry.EventTypeId);
-            _columnsByEventId[entry.EventTypeId] = entry.Factory(this, entry.Invoker, world);
+            // All behaviours now use EventStream
+            EnsureEventStreamCapacity(entry.EventTypeId);
         }
     }
 
@@ -498,27 +538,79 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         action(_actors, _states, _enabled, MaxSlot, ref state);
     }
 
-    internal ActorEventColumnRuntime BuildColumnDirect<TEvent>(
-        ActorWorld                            world,
-        ActorBehaviourInvoker<TActor, TEvent> invoker)
-        where TEvent : struct
+    /// <summary>
+    /// 注册 Actor 的 EventStream 处理器。
+    ///
+    /// 作用：
+    /// 在 Actor 创建时调用，为每个事件类型注册 handler。
+    /// </summary>
+    /// <param name="actor">
+    /// Actor 实例。
+    /// </param>
+    /// <param name="actorId">
+    /// ActorId 实例。
+    /// </param>
+    /// <param name="slotIndex">
+    /// slot 索引。
+    /// </param>
+    /// <param name="world">
+    /// ActorWorld 实例。
+    /// </param>
+    internal void RegisterStreamHandlers(
+        TActor    actor,
+        ActorId   actorId,
+        int       slotIndex,
+        ActorWorld world)
     {
-        ActorEventPostPlan<TEvent> plan = ActorEventPostPlanBuilder.Build<TEvent>(world.DefaultMailOptions);
-        EventPostState<TEvent> state = world.GetOrCreateEventPostState(plan);
-        var column = new EventColumn<TActor, TEvent>(
-            world: world,
-            owner: this,
-            invoker: invoker,
-            mailPool: state.Pool,
-            options: plan.MailOptions,
-            bucketIndex: plan.EventId,
-            initialSlotCapacity: _actors.Length,
-            plan: plan);
+        if (_meta == null)
+        {
+            return;
+        }
 
-        world.RegisterColumn<TEvent>(plan.EventId, column);
-        column.RefreshPostRowBinding();
+        foreach (ActorBehaviourEntry entry in _meta.Behaviours)
+        {
+            if (entry.IsStreamHandler && entry.StreamRegister != null)
+            {
+                entry.StreamRegister(actor, _archetypeId, slotIndex, actorId.Generation, world);
+            }
+        }
+    }
 
-        return column;
+    /// <summary>
+    /// 注销 Actor 的 EventStream 处理器。
+    ///
+    /// 作用：
+    /// 在 Actor 销毁时调用，清除所有事件类型的 handler。
+    /// </summary>
+    /// <param name="actorId">
+    /// ActorId 实例。
+    /// </param>
+    /// <param name="world">
+    /// ActorWorld 实例。
+    /// </param>
+    internal void UnregisterStreamHandlers(
+        ActorId   actorId,
+        ActorWorld world)
+    {
+        if (_meta == null)
+        {
+            return;
+        }
+
+        int slotIndex = actorId.SlotIndex;
+
+        // 直接从 EventStreamCenter 注销 handler
+        // 通过 world 的 _eventStreamRuntimes 列表查找对应的 runtime
+        foreach (ActorBehaviourEntry entry in _meta.Behaviours)
+        {
+            if (entry.IsStreamHandler)
+            {
+                // 使用静态查找获取 EventStreamCenter
+                // 这里需要通过反射或类型擦除的方式来注销
+                // 简化：直接调用 world 的方法来注销
+                world.UnregisterStreamHandler(_archetypeId, slotIndex, entry.EventType);
+            }
+        }
     }
 
     private void BuildCallColumns(ActorTypeMeta<TActor> meta, ActorWorld world)
@@ -582,6 +674,22 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _callColumnsByRouteId, newSize);
         Array.Resize(ref _callRequestTypesByRouteId, newSize);
         Array.Resize(ref _callResponseTypesByRouteId, newSize);
+    }
+
+    private void EnsureEventStreamCapacity(int eventTypeId)
+    {
+        if ((uint)eventTypeId < (uint)_eventStreamRuntimesByEventId.Length)
+        {
+            return;
+        }
+
+        int newSize = _eventStreamRuntimesByEventId.Length == 0 ? 4 : _eventStreamRuntimesByEventId.Length;
+        while (newSize <= eventTypeId)
+        {
+            newSize *= 2;
+        }
+
+        Array.Resize(ref _eventStreamRuntimesByEventId, newSize);
     }
 
     internal void RegisterLifecycleInterfaces(
@@ -874,6 +982,11 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _slotFlags[slotIndex] |= ActorSlotFlags.Destroying;
         RefreshPostGenerations(slotIndex);
 
+        // 注销 EventStream handlers
+        int generation = _generations[slotIndex];
+        var actorId = new ActorId(_archetypeId, slotIndex, generation);
+        UnregisterStreamHandlers(actorId, world);
+
         if (actor is IDestroy destroy)
         {
             destroy.Destroy();
@@ -957,129 +1070,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             : -1;
     }
 
-    private void PostAllQueuedGrow<TEvent>(
-        ActorWorld             world,
-        EventPostRow<TEvent>   row,
-        EventPostState<TEvent> state,
-        in TEvent              value)
-        where TEvent : struct
-    {
-        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
-        {
-            if (!CanPostAllSlot(slotIndex))
-            {
-                continue;
-            }
-
-            world.PostQueuedGrowCore(
-                slotIndex,
-                in value,
-                row.Mails,
-                row.DirtySlots,
-                row.BucketIndex,
-                state.Pool,
-                state.Options);
-        }
-    }
-
-    private void PostAllQueuedRejectNew<TEvent>(
-        ActorWorld             world,
-        EventPostRow<TEvent>   row,
-        EventPostState<TEvent> state,
-        in TEvent              value)
-        where TEvent : struct
-    {
-        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
-        {
-            if (!CanPostAllSlot(slotIndex))
-            {
-                continue;
-            }
-
-            world.PostQueuedRejectNewCore(
-                slotIndex,
-                in value,
-                row.Mails,
-                row.DirtySlots,
-                row.BucketIndex,
-                state.Pool,
-                state.Options);
-        }
-    }
-
-    private void PostAllQueuedDropOldest<TEvent>(
-        ActorWorld             world,
-        EventPostRow<TEvent>   row,
-        EventPostState<TEvent> state,
-        in TEvent              value)
-        where TEvent : struct
-    {
-        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
-        {
-            if (!CanPostAllSlot(slotIndex))
-            {
-                continue;
-            }
-
-            world.PostQueuedDropOldestCore(
-                slotIndex,
-                in value,
-                row.Mails,
-                row.DirtySlots,
-                row.BucketIndex,
-                state.Pool,
-                state.Options);
-        }
-    }
-
-    private void PostAllLatest<TEvent>(
-        ActorWorld             world,
-        EventPostRow<TEvent>   row,
-        EventPostState<TEvent> state,
-        in TEvent              value)
-        where TEvent : struct
-    {
-        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
-        {
-            if (!CanPostAllSlot(slotIndex))
-            {
-                continue;
-            }
-
-            world.PostLatestCore(
-                slotIndex,
-                in value,
-                row.Mails,
-                row.DirtySlots,
-                row.BucketIndex,
-                state.Pool);
-        }
-    }
-
-    private void PostAllDirty<TEvent>(
-        ActorWorld             world,
-        EventPostRow<TEvent>   row,
-        EventPostState<TEvent> state,
-        in TEvent              value)
-        where TEvent : struct
-    {
-        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
-        {
-            if (!CanPostAllSlot(slotIndex))
-            {
-                continue;
-            }
-
-            world.PostDirtyCore(
-                slotIndex,
-                in value,
-                row.Mails,
-                row.DirtySlots,
-                row.BucketIndex,
-                state.Pool);
-        }
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool CanPostAllSlot(int slotIndex)
     {
@@ -1130,20 +1120,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                                           && attribute.GetType().GetGenericTypeDefinition() == typeof(GroupAttribute<>))
                .Select(static attribute => attribute.GetType().GetGenericArguments()[0].Name)
                .OrderBy(static name => name, StringComparer.Ordinal)
-               .ToArray();
-    }
-
-    internal bool TryGetColumn<TEvent>(out EventColumn<TActor, TEvent>? column)
-        where TEvent : struct
-    {
-        int eventId = EventTypeId<TEvent>.Id;
-        if ((uint)eventId >= (uint)_columnsByEventId.Length)
-        {
-            column = null;
-            return false;
-        }
-
-        column = _columnsByEventId[eventId] as EventColumn<TActor, TEvent>;
-        return column != null;
+                .ToArray();
     }
 }

@@ -39,6 +39,11 @@ internal abstract class TypedStorageRuntime
         in TEvent              value)
         where TEvent : struct;
 
+    public abstract void PostAll<TEvent>(
+        ActorWorld world,
+        in TEvent  value)
+        where TEvent : struct;
+
     public abstract bool IsCurrentGeneration(ActorId actorId);
 
     // Post<TEvent>: removed. Use ActorWorld.PostTo through compiled route.

@@ -82,8 +82,8 @@ public class ActorCoreTests
     {
         var builder = new ActorTypeMetaBuilder();
 
-        builder.AddBehaviour<BuilderActor, ActorCoreEventB>(static (BuilderActor _, in ActorCoreEventB _) => { });
-        builder.AddBehaviour<BuilderActor, ActorCoreEventA>(static (BuilderActor _, in ActorCoreEventA _) => { });
+        builder.AddBehaviour<BuilderActor, ActorCoreEventB>(static (BuilderActor _) => (in ActorCoreEventB _) => { });
+        builder.AddBehaviour<BuilderActor, ActorCoreEventA>(static (BuilderActor _) => (in ActorCoreEventA _) => { });
 
         ActorTypeMeta<BuilderActor> meta = builder.Build<BuilderActor>();
 
@@ -187,7 +187,7 @@ public class ActorCoreTests
         public void __BuildActorMeta(ActorTypeMetaBuilder builder)
         {
             BuildCount++;
-            builder.AddBehaviour<CachedActor, ActorCoreEventA>(static (CachedActor _, in ActorCoreEventA _) => { });
+            builder.AddBehaviour<CachedActor, ActorCoreEventA>(static (CachedActor _) => (in ActorCoreEventA _) => { });
         }
 
         public ActorId GetId()

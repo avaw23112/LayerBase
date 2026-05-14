@@ -28,6 +28,7 @@ public sealed partial class ActorWorld
             generation: storage.GetGeneration(slotIndex));
 
         generated.ActorInit(new ActorContext(this, actorId));
+        storage.RegisterStreamHandlers(actor, actorId, slotIndex, this);
         storage.RegisterLifecycleInterfaces(actor, actorId, slotIndex, this);
         return actor;
     }

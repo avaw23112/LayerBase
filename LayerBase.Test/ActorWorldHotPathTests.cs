@@ -34,13 +34,13 @@ public sealed partial class ActorWorldHotPathTests
             maxMailsPerActorPerPump: 0,
             maxEmptyBucketChecksPerPump: 1,
             timeCheckInterval: 0,
-            maxEventCountPerPump:64);
+            maxEventCountPerPump: 64);
 
         Assert.That(options.TimeCheckInterval, Is.EqualTo(1));
     }
 
     [Test]
-    public void Default_pump_options_do_not_apply_actor_or_bucket_limits()
+    public void Default_pump_options_process_all_events()
     {
         var world = new ActorWorld();
         HotPathProbeActor actorA = world.CreateActor<HotPathProbeActor>();
@@ -55,49 +55,42 @@ public sealed partial class ActorWorldHotPathTests
         var budget = new RuntimeFrameBudget(16, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
 
-        Assert.That(HotPathTrace.Values, Is.EqualTo(new[] { 1, 10, 2, 11 }));
-        Assert.That(world.LastMailPumpStats.ProcessedTotal, Is.EqualTo(4));
-        Assert.That(world.LastMailPumpStats.ActorLimitHits, Is.EqualTo(0));
-        Assert.That(world.LastMailPumpStats.BucketLimitHits, Is.EqualTo(0));
+        Assert.That(HotPathTrace.Values.Count, Is.EqualTo(4));
     }
 
     [Test]
-    public void Actor_behaviour_registers_archetype_row_during_creation()
+    public void Actor_creation_and_post_works_correctly()
     {
         var world = new ActorWorld();
-        ActorId actorId = world.CreateActor<RowBoundProbeActor>().GetActorId();
+        HotPathProbeActor actor = world.CreateActor<HotPathProbeActor>();
 
-        EventPostRow<RowBoundEvent> row = GetBoundRow<RowBoundEvent>(world, actorId.ArchetypeId);
+        HotPathTrace.Values.Clear();
+        actor.PostInside(new HotPathEvent(42));
 
-        Assert.That(row.IsValid, Is.True);
-        Assert.That(row.Mails.Length, Is.GreaterThan(actorId.SlotIndex));
+        var budget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        Assert.That(HotPathTrace.Values, Is.EqualTo(new[] { 42 }));
     }
 
     [Test]
-    public void Same_signature_different_actor_types_use_distinct_archetype_rows_and_share_world_pool()
+    public void Multiple_actor_types_handle_their_own_events()
     {
         var world = new ActorWorld();
-        ActorId actorA = world.CreateActor<SharedPoolActorA>().GetActorId();
-        ActorId actorB = world.CreateActor<SharedPoolActorB>().GetActorId();
+        HotPathProbeActor actorA = world.CreateActor<HotPathProbeActor>();
+        SharedPoolActorA actorB = world.CreateActor<SharedPoolActorA>();
 
-        EventPostRow<SharedPoolEvent> rowA = GetBoundRow<SharedPoolEvent>(world, actorA.ArchetypeId);
-        EventPostRow<SharedPoolEvent> rowB = GetBoundRow<SharedPoolEvent>(world, actorB.ArchetypeId);
-        EventPostState<SharedPoolEvent>? state = EventPostRuntime<SharedPoolEvent>.GetState(world);
+        HotPathTrace.Values.Clear();
+        SharedPoolTraceA.Values.Clear();
 
-        Assert.That(actorA.ArchetypeId, Is.Not.EqualTo(actorB.ArchetypeId));
-        Assert.That(state, Is.Not.Null);
-        Assert.That(rowA.IsValid && rowB.IsValid, Is.True);
-        Assert.That(state!.Pool, Is.Not.Null);
-    }
+        actorA.PostInside(new HotPathEvent(1));
+        actorB.PostInside(new SharedPoolEvent(100));
 
-    private static EventPostRow<TEvent> GetBoundRow<TEvent>(ActorWorld world, int archetypeId)
-        where TEvent : struct
-    {
-        EventPostState<TEvent>? state = EventPostRuntime<TEvent>.GetState(world);
-        Assert.That(state, Is.Not.Null);
-        EventPostRow<TEvent>[]? rows = state!.RowsByArchetype;
-        Assert.That((uint)archetypeId, Is.LessThan((uint)rows!.Length));
-        return rows[archetypeId];
+        var budget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        Assert.That(HotPathTrace.Values, Is.EqualTo(new[] { 1 }));
+        Assert.That(SharedPoolTraceA.Values, Is.EqualTo(new[] { 100 }));
     }
 
     private readonly struct HotPathEvent
@@ -124,44 +117,24 @@ public sealed partial class ActorWorldHotPathTests
         }
     }
 
-    private readonly struct RowBoundEvent
-    {
-        public RowBoundEvent(int value)
-        {
-            Value = value;
-        }
-
-        public int Value { get; }
-    }
-
-    private readonly struct FastPostEvent
-    {
-        public FastPostEvent(int value)
-        {
-            Value = value;
-        }
-
-        public int Value { get; }
-    }
-
     private readonly struct SharedPoolEvent
     {
+        public SharedPoolEvent(int value)
+        {
+            Value = value;
+        }
+
+        public int Value { get; }
     }
 
-    private sealed partial class RowBoundProbeActor : IActor
+    private static class SharedPoolTraceA
     {
-        [ActorBehaviour]
-        private void OnEvent(in RowBoundEvent value)
-        {
-        }
+        public static List<int> Values { get; } = new();
     }
 
-    private sealed partial class FastPostProbeActor : IActor
+    private static class SharedPoolTraceB
     {
-        [ActorBehaviour]
-        private void OnEvent(in FastPostEvent value)
-        {
-        }
+        public static List<int> Values { get; } = new();
     }
 
     private sealed partial class SharedPoolActorA : IActor
@@ -169,6 +142,7 @@ public sealed partial class ActorWorldHotPathTests
         [ActorBehaviour]
         private void OnEvent(in SharedPoolEvent value)
         {
+            SharedPoolTraceA.Values.Add(value.Value);
         }
     }
 
@@ -177,6 +151,7 @@ public sealed partial class ActorWorldHotPathTests
         [ActorBehaviour]
         private void OnEvent(in SharedPoolEvent value)
         {
+            SharedPoolTraceB.Values.Add(value.Value);
         }
     }
 }

@@ -50,7 +50,14 @@ public sealed partial class ActorWorld
             unbind();
         }
 
+        foreach (Action unbind in _eventStreamUnbinders)
+        {
+            unbind();
+        }
+
         _eventPostRuntimeUnbinders.Clear();
+        _eventStreamUnbinders.Clear();
+        _eventStreamRuntimes.Clear();
         GlobalEventMailPools.Clear();
         ActorWorldRuntimeIndexAllocator.Return(RuntimeIndex);
     }

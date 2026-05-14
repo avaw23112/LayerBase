@@ -7,4 +7,9 @@ public static class EventMetaDataRegistry
         if (metaData == null) throw new ArgumentNullException(nameof(metaData));
         EventMetaDataHandler.RegisterMetaData<EventType>(metaData);
     }
+
+    public static Actor.ActorMailOptions? GetActorMailOptions<TEvent>() where TEvent : struct
+    {
+        return EventMetaDataHandler.GetActorMailOptions<TEvent>();
+    }
 }

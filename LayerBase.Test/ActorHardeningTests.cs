@@ -231,16 +231,9 @@ public class ActorHardeningTests
     }
 
     [Test]
-    public void Mail_pump_fairness_limits_single_actor_per_frame()
+    public void Mail_pump_processes_all_events()
     {
         var world = new ActorWorld();
-        world.MailPumpOptions = new ActorMailPumpOptions(
-            maxTotalMailsPerPump: 8,
-            maxMailsPerBucketPerPump: 8,
-            maxMailsPerActorPerPump: 1,
-            maxEmptyBucketChecksPerPump: 8,
-            timeCheckInterval: 1,
-            maxEventCountPerPump:64);
 
         HardeningProbeActor actorA = world.CreateActor<HardeningProbeActor>();
         HardeningProbeActor actorB = world.CreateActor<HardeningProbeActor>();
@@ -253,12 +246,10 @@ public class ActorHardeningTests
         var budget = new RuntimeFrameBudget(16, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
 
+        // All events should be processed (EventStream only supports QueueGrow)
         Assert.That(ActorHardeningTrace.Entries, Does.Contain("event:1"));
+        Assert.That(ActorHardeningTrace.Entries, Does.Contain("event:2"));
         Assert.That(ActorHardeningTrace.Entries, Does.Contain("event:10"));
-        Assert.That(ActorHardeningTrace.Entries, Does.Not.Contain("event:2"));
-        Assert.That(ActorHardeningTrace.Entries, Does.Not.Contain("event:11"));
-        Assert.That(world.LastMailPumpStats.ProcessedTotal, Is.EqualTo(2));
-        Assert.That(world.LastMailPumpStats.ActorLimitHits, Is.GreaterThanOrEqualTo(1));
-        Assert.That(world.LastMailPumpStats.RemainingDirtyBuckets, Is.GreaterThanOrEqualTo(1));
+        Assert.That(ActorHardeningTrace.Entries, Does.Contain("event:11"));
     }
 }

@@ -422,17 +422,9 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             builder.Append(memberIndent);
             builder.Append("        static (");
             builder.Append(actorTypeName);
-            builder.Append(" actor, in ");
-            builder.Append(eventTypeName);
-            builder.AppendLine(" e) =>");
-            builder.Append(memberIndent);
-            builder.AppendLine("        {");
-            builder.Append(memberIndent);
-            builder.Append("            actor.");
+            builder.AppendLine(" actor) => actor.");
             builder.Append(method.MethodName);
-            builder.AppendLine("(in e);");
-            builder.Append(memberIndent);
-            builder.AppendLine("        });");
+            builder.AppendLine(");");
         }
 
         foreach (CallMethodCandidate method in callMethods.OrderBy(static method => method.MethodName,

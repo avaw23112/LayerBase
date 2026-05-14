@@ -314,27 +314,10 @@ public static class ActorQueryPostExtensions
     private static void PostAllSingle<TEvent>(ActorQueryResult query, in TEvent value)
         where TEvent : struct
     {
-        EventPostState<TEvent>? state =
-            EventPostRuntime<TEvent>.GetStateUnchecked(query.World.RuntimeIndex);
-
-        if (state == null)
-        {
-            return;
-        }
-
-        ActorPostRouteCode routeCode = state.RouteCode;
-
-        if (routeCode == ActorPostRouteCode.Disabled)
-        {
-            return;
-        }
-
         foreach (BehaviourArchetype archetype in query.Cache.Archetypes)
         {
             archetype.PostAll(
                 query.World,
-                state,
-                routeCode,
                 in value);
         }
     }

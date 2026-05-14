@@ -11,14 +11,30 @@ public sealed class ActorTypeMetaBuilder
     private readonly HashSet<int> _tagIds = new();
     private readonly HashSet<int> _groupIds = new();
 
+    /// <summary>
+    /// 添加行为处理器工厂。
+    ///
+    /// 作用：
+    /// 接收 handler factory，在 Actor 创建时将实例方法绑定为事件处理委托。
+    /// 生成器会生成 static (TActor actor) => actor.Method 形式的工厂。
+    /// </summary>
+    /// <typeparam name="TActor">
+    /// Actor 类型。
+    /// </typeparam>
+    /// <typeparam name="TEvent">
+    /// 事件类型。
+    /// </typeparam>
+    /// <param name="handlerFactory">
+    /// 处理器工厂委托。
+    /// </param>
     public void AddBehaviour<TActor, TEvent>(
-        ActorBehaviourInvoker<TActor, TEvent> invoker)
+        ActorBehaviourHandlerFactory<TActor, TEvent> handlerFactory)
         where TActor : class, IActor
         where TEvent : struct
     {
-        if (invoker == null)
+        if (handlerFactory == null)
         {
-            throw new ArgumentNullException(nameof(invoker));
+            throw new ArgumentNullException(nameof(handlerFactory));
         }
 
         int eventTypeId = EventTypeId<TEvent>.Id;
@@ -28,16 +44,35 @@ public sealed class ActorTypeMetaBuilder
                 $"Actor type {typeof(TActor).Name} already has behaviour for event {typeof(TEvent).Name}.");
         }
 
+        // 创建类型化的注册委托，避免运行时反射
+        ActorStreamHandlerRegister streamRegister = (actor, archetypeId, slotIndex, generation, world) =>
+        {
+            var typedActor = (TActor)actor;
+            ActorEventHandler<TEvent> handler = handlerFactory(typedActor);
+
+            // 确保 EventStreamCenter 存在（per-archetype）
+            EventStreamCenter<TEvent>? center =
+                EventStreamRuntime<TEvent>.GetCenterUnchecked(world.RuntimeIndex, archetypeId);
+
+            if (center == null)
+            {
+                // 创建 EventStream 运行时
+                ActorEventStreamPlan<TEvent> plan = ActorEventStreamPlanBuilder.Build<TEvent>();
+                world.GetOrCreateEventStreamRuntime<TEvent>(plan, archetypeId);
+                center = EventStreamRuntime<TEvent>.GetCenterUnchecked(world.RuntimeIndex, archetypeId);
+            }
+
+            if (center != null)
+            {
+                center.RegisterHandler(slotIndex, generation, handler);
+            }
+        };
+
         _entries.Add(new ActorBehaviourEntry(
             eventTypeId,
             typeof(TEvent),
-            invoker,
-            static (storage, rawInvoker, world) =>
-            {
-                var typedStorage = (TypedActorStorage<TActor>)storage;
-                var typedInvoker = (ActorBehaviourInvoker<TActor, TEvent>)rawInvoker;
-                return typedStorage.BuildColumnDirect(world, typedInvoker);
-            }));
+            handlerFactory,
+            streamRegister));
     }
 
     public void AddCallBehaviour<TActor, TRequest, TResponse>(

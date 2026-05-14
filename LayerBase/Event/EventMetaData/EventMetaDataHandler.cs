@@ -69,6 +69,11 @@ internal static class EventMetaDataHandler
             : EventCategoryToken.Empty;
     }
 
+    public static Actor.ActorMailOptions? GetActorMailOptions<TEvent>() where TEvent : struct
+    {
+        return ResolveMetaData<TEvent>()?.GetActorMailOptions();
+    }
+
     public static void OnEventExpectation<EventType>(EventType e, Exception exception) where EventType : struct
     {
         var metaData = ResolveMetaData<EventType>();

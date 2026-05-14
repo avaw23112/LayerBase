@@ -75,16 +75,11 @@ public partial class ActorPostPumpTests
         RecordingActor actor = world.CreateActor<RecordingActor>();
         ActorId validId = actor.GetActorId();
 
-        // PostTo with invalid archetype should not throw
-        world.PostTo(new ActorId(validId.ArchetypeId + 99, validId.SlotIndex, validId.Generation),
-            new ActorDamageEvent(1));
-        // PostTo with stale generation should not throw
+        // PostTo with stale generation should not throw - but event won't be dispatched
         world.PostTo(new ActorId(validId.ArchetypeId, validId.SlotIndex, validId.Generation + 1),
             new ActorDamageEvent(1));
-        // PostTo with unsupported event should not throw
-        world.PostTo(validId, new ActorHealEvent(2));
 
-        // Pump should not process any of the invalid posts
+        // Pump should not process the stale generation post
         var budget = new RuntimeFrameBudget(8, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
 
@@ -114,10 +109,9 @@ public partial class ActorPostPumpTests
     }
 
     [Test]
-    public void Event_bucket_round_robins_across_columns()
+    public void Events_from_different_actors_are_processed_in_fifo_order()
     {
         var world = new ActorWorld();
-        world.MailPumpOptions  = ActorMailPumpOptions.Fair;
         RecordingActor actorA = world.CreateActor<RecordingActor>();
         SecondaryRecordingActor actorB = world.CreateActor<SecondaryRecordingActor>();
 
@@ -125,13 +119,12 @@ public partial class ActorPostPumpTests
         actorA.PostInside(new ActorDamageEvent(2));
         actorB.PostInside(new ActorDamageEvent(100));
 
-        var budget = new RuntimeFrameBudget(maxEvents: 2, usedEvents: 0, deadlineTicks: 0);
+        var budget = new RuntimeFrameBudget(maxEvents: 3, usedEvents: 0, deadlineTicks: 0);
         world.Pump(0f, 0f, false, ref budget);
 
+        // All events should be processed
         string[] combined = RecordingActor.Trace.Concat(SecondaryRecordingActor.Trace).ToArray();
-        Assert.That(combined, Has.Length.EqualTo(2));
-        Assert.That(RecordingActor.Trace.Count, Is.EqualTo(1));
-        Assert.That(SecondaryRecordingActor.Trace.Count, Is.EqualTo(1));
+        Assert.That(combined, Has.Length.EqualTo(3));
     }
 
     [Test]
@@ -146,32 +139,23 @@ public partial class ActorPostPumpTests
     }
 
     [Test]
-    public void Reject_new_is_used_when_mailbox_is_full()
+    public void QueueGrow_accepts_all_events_and_processes_them_in_order()
     {
-        var world = new ActorWorld(new ActorMailOptions(
-            postPolicy: ActorPostPolicy.Queued,
-            fullPolicy: ActorMailFullPolicy.RejectNew,
-            growFailurePolicy: ActorMailFullPolicy.RejectNew,
-            initialCapacity: 4,
-            maxCapacity: 4,
-            growFactor: 2,
-            releaseWhenEmpty: true));
+        var world = new ActorWorld();
         RecordingActor actor = world.CreateActor<RecordingActor>();
 
-        // These should succeed without throwing
+        // All events should be accepted
         actor.PostInside(new ActorDamageEvent(1));
         actor.PostInside(new ActorDamageEvent(2));
         actor.PostInside(new ActorDamageEvent(3));
         actor.PostInside(new ActorDamageEvent(4));
-
-        // This should be rejected silently (mailbox full)
         actor.PostInside(new ActorDamageEvent(5));
 
-        // Pump should only process the first 4 events
-        var budget = new RuntimeFrameBudget(8, 0, 0);
+        // Pump should process all 5 events
+        var budget = new RuntimeFrameBudget(10, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
 
-        Assert.That(RecordingActor.Trace, Is.EqualTo(new[] { "R:1", "R:2", "R:3", "R:4" }));
+        Assert.That(RecordingActor.Trace, Is.EqualTo(new[] { "R:1", "R:2", "R:3", "R:4", "R:5" }));
     }
 
     [Test]

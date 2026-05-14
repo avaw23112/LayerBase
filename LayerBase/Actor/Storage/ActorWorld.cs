@@ -25,6 +25,11 @@ public sealed partial class ActorWorld : IDisposable
     internal ActorMailOptions DefaultMailOptions { get; }
     private ActorWorldState _state;
 
+    // EventStream 运行时管理
+    private List<IEventStreamCenterRuntime> _eventStreamRuntimes = new();
+    private readonly List<Action> _eventStreamUnbinders = new();
+    private readonly DirtyBucketList _dirtyEventStreams = new();
+
     internal ActorWorld()
     {
         RuntimeIndex = ActorWorldRuntimeIndexAllocator.Rent();
@@ -129,6 +134,74 @@ public sealed partial class ActorWorld : IDisposable
 
         bucket.AddColumn(column);
         column.BindDirtyBucket(_dirtyCallBuckets, routeId);
+    }
+
+    /// <summary>
+    /// 获取或创建 EventStream 运行时。
+    ///
+    /// 作用：
+    /// 如果指定事件类型的 EventStream 运行时已存在，直接返回。
+    /// 否则创建新的运行时并注册到当前 ActorWorld。
+    /// </summary>
+    /// <typeparam name="TEvent">
+    /// 事件类型。
+    /// </typeparam>
+    /// <param name="plan">
+    /// EventStream 构建计划。
+    /// </param>
+    /// <returns>
+    /// EventStream 运行时实例。
+    /// </returns>
+    internal EventStreamRuntime<TEvent> GetOrCreateEventStreamRuntime<TEvent>(
+        ActorEventStreamPlan<TEvent> plan,
+        int                          archetypeId = 0)
+        where TEvent : struct
+    {
+        // 检查是否已存在（使用完整 key 查找）
+        int eventTypeId = plan.EventId;
+        int searchKey = (RuntimeIndex << 20) | (archetypeId << 10) | eventTypeId;
+        foreach (var existing in _eventStreamRuntimes)
+        {
+            if (existing is EventStreamRuntime<TEvent> typedExisting &&
+                typedExisting.SearchKey == searchKey)
+            {
+                return typedExisting;
+            }
+        }
+
+        var runtime = new EventStreamRuntime<TEvent>(
+            RuntimeIndex,
+            archetypeId,
+            plan.StreamOptions);
+
+        _eventStreamRuntimes.Add(runtime);
+        EventStreamRuntime<TEvent>.BindWorld(runtime);
+
+        _eventStreamUnbinders.Add(() =>
+        {
+            EventStreamRuntime<TEvent>.UnbindWorld(RuntimeIndex, archetypeId);
+        });
+
+        return runtime;
+    }
+
+    private void EnsureEventStreamCapacity(int eventTypeId)
+    {
+        // 不再需要，因为使用 List
+    }
+
+    /// <summary>
+    /// 注销指定 archetype 和 slot 的 EventStream handler。
+    /// </summary>
+    internal void UnregisterStreamHandler(int archetypeId, int slotIndex, Type eventType)
+    {
+        foreach (var runtime in _eventStreamRuntimes)
+        {
+            if (runtime is EventStreamRuntimeBase streamRuntime)
+            {
+                streamRuntime.UnregisterHandler(slotIndex);
+            }
+        }
     }
 
     internal ActorMailOptions ResolveMailOptions(int eventTypeId)

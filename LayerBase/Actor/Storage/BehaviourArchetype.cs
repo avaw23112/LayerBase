@@ -271,6 +271,20 @@ internal sealed class BehaviourArchetype
         storage.PostAll(world, state, routeCode, in value);
     }
 
+    internal void PostAll<TEvent>(
+        ActorWorld world,
+        in TEvent  value)
+        where TEvent : struct
+    {
+        if (!TryGetStorage(out TypedStorageRuntime? storage)
+            || storage == null)
+        {
+            return;
+        }
+
+        storage.PostAll(world, in value);
+    }
+
     internal void SweepPendingDestroy(ActorWorld world)
     {
         for (int i = 0; i < _storages.Length; i++)
