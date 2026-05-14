@@ -315,11 +315,25 @@ public sealed class EventMetaDataGenerator : IIncrementalGenerator
             builder.AppendLine("{");
 
             AppendIndent(builder, staticCtorIndent + 1);
+            builder.Append("global::LayerBase.Event.EventMetaData.EventMetaDataAutoRegister<")
+                   .Append(eventTypeDisplay)
+                   .AppendLine(">.SetReplay(");
+
+            AppendIndent(builder, staticCtorIndent + 2);
+            builder.AppendLine("static () =>");
+
+            AppendIndent(builder, staticCtorIndent + 2);
+            builder.AppendLine("{");
+
+            AppendIndent(builder, staticCtorIndent + 3);
             builder.Append("global::LayerBase.Event.EventMetaData.EventMetaDataRegistry.RegisterMetaData<")
                    .Append(eventTypeDisplay)
                    .Append(">(new ")
                    .Append(metaDataDisplay)
                    .AppendLine("());");
+
+            AppendIndent(builder, staticCtorIndent + 2);
+            builder.AppendLine("});");
 
             AppendIndent(builder, staticCtorIndent);
             builder.AppendLine("}");

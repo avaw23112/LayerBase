@@ -4,13 +4,15 @@ namespace LayerBase.Event.EventMetaData;
 
 public static class EventMetaDataRegistry
 {
-    public static void RegisterMetaData<EventType>(IEventMetaData metaData) where EventType : struct
+    public static void RegisterMetaData<EventType>(IEventMetaData metaData)
+        where EventType : struct
     {
         if (metaData == null) throw new ArgumentNullException(nameof(metaData));
         EventMetaDataHandler.RegisterMetaData<EventType>(metaData);
     }
 
-    public static Actor.ActorMailOptions? GetActorMailOptions<TEvent>() where TEvent : struct
+    public static Actor.ActorMailOptions? GetActorMailOptions<TEvent>()
+        where TEvent : struct
     {
         EventMetaDataAutoRegister<TEvent>.EnsureInitialized();
         EventMetaData<TEvent>? metaData = EventMetaDataHandler.ResolveRegisteredMetaData<TEvent>();
@@ -19,56 +21,58 @@ public static class EventMetaDataRegistry
 }
 
 /// <summary>
-/// EventMetaData 自动注册触发器。
-///
-/// 作用：
-/// 1. 在读取 EventMetaData 前，强制触发 TEvent 的静态构造函数。
-/// 2. 让源生成器写入 TEvent.static ctor 的注册逻辑稳定执行。
-/// 3. 避免用户手动 new EventPrewarmBootstrapper。
+/// EventMetaData 自动注册器。
 /// </summary>
 /// <typeparam name="TEvent">
 /// 事件类型。
 /// </typeparam>
-internal static class EventMetaDataAutoRegister<TEvent>
+public static class EventMetaDataAutoRegister<TEvent>
     where TEvent : struct
 {
     /// <summary>
-    /// 是否已经尝试触发过 TEvent 的静态构造函数。
+    /// 是否已经触发过 TEvent 的静态构造函数。
     /// </summary>
-    private static bool s_initialized;
+    private static bool s_classConstructorTriggered;
 
     /// <summary>
-    /// 确保 TEvent 的静态构造函数已经执行。
+    /// 可重复执行的元数据注册动作。
+    /// </summary>
+    private static Action? s_replay;
+
+    /// <summary>
+    /// 设置可重复执行的注册动作。
+    /// </summary>
+    public static void SetReplay(Action replay)
+    {
+        s_replay = replay ?? throw new ArgumentNullException(nameof(replay));
+    }
+
+    /// <summary>
+    /// 确保 TEvent 的元数据已注册。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void EnsureInitialized()
     {
-        if (s_initialized)
+        if (!s_classConstructorTriggered)
         {
-            return;
+            EnsureClassConstructorTriggeredSlow();
         }
 
-        EnsureInitializedSlow();
+        s_replay?.Invoke();
     }
 
     /// <summary>
-    /// 慢路径初始化。
-    ///
-    /// 作用：
-    /// RuntimeHelpers.RunClassConstructor 会强制执行 TEvent 的静态构造函数。
-    /// 如果 TEvent 没有静态构造函数，该调用也是安全的。
+    /// 慢路径：触发 TEvent 静态构造函数。
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void EnsureInitializedSlow()
+    private static void EnsureClassConstructorTriggeredSlow()
     {
-        if (s_initialized)
+        if (s_classConstructorTriggered)
         {
             return;
         }
 
-        RuntimeHelpers.RunClassConstructor(
-            typeof(TEvent).TypeHandle);
-
-        s_initialized = true;
+        RuntimeHelpers.RunClassConstructor(typeof(TEvent).TypeHandle);
+        s_classConstructorTriggered = true;
     }
 }

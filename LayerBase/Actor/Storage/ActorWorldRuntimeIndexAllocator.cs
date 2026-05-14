@@ -5,21 +5,20 @@ internal static class ActorWorldRuntimeIndexAllocator
     private static int s_nextIndex;
     private static readonly Stack<int> s_free = new();
 
+#if DEBUG
+    private static readonly HashSet<int> s_rented = new();
+#endif
+
     public static int Rent()
     {
-        lock (s_free)
-        {
-            return s_free.Count > 0
-                ? s_free.Pop()
-                : s_nextIndex++;
-        }
+        int index = s_free.Count > 0
+            ? s_free.Pop()
+            : s_nextIndex++;
+        return index;
     }
 
     public static void Return(int index)
     {
-        lock (s_free)
-        {
-            s_free.Push(index);
-        }
+        s_free.Push(index);
     }
 }

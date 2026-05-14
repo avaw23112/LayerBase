@@ -6,6 +6,14 @@ namespace LayerBase.Actor;
 
 public sealed partial class ActorWorld
 {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool CanUseWorldFast()
+    {
+        return _state is ActorWorldState.Created
+            or ActorWorldState.Building
+            or ActorWorldState.Running;
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static PostResult BuildEventNotSupportedCold<TEvent>()
         where TEvent : struct

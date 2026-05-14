@@ -5,6 +5,11 @@ public sealed partial class ActorWorld
     public TActor CreateActor<TActor>(bool usePool = false)
         where TActor : class, IActor, new()
     {
+        if (!CanUseWorldFast())
+        {
+            throw new ObjectDisposedException(nameof(ActorWorld));
+        }
+
         TActor actor = usePool
             ? RentActorFromPool<TActor>()
             : new TActor();
