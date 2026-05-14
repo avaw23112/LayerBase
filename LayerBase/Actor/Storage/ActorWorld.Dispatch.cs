@@ -7,6 +7,13 @@ public sealed partial class ActorWorld
         in TEvent value)
         where TEvent : struct
     {
+        if (!CanUseWorldFast())
+        {
+            return DispatchResult.Failure(
+                DispatchFailureKind.ActorNotFound,
+                "ActorWorld is not available.");
+        }
+
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
         {
             return DispatchResult.Failure(

@@ -4,6 +4,11 @@ public sealed partial class ActorWorld
 {
     public bool DestroyActor(ActorId actorId)
     {
+        if (!CanUseWorldFast())
+        {
+            return false;
+        }
+
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
         {
             return false;
@@ -20,6 +25,11 @@ public sealed partial class ActorWorld
 
     public bool IsAlive(ActorId actorId)
     {
+        if (!CanUseWorldFast())
+        {
+            return false;
+        }
+
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
         {
             return false;

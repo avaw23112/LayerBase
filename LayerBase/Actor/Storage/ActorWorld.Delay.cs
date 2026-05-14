@@ -39,7 +39,7 @@ public sealed partial class ActorWorld
 
     private void EnsureDelayAvailable()
     {
-        if (_state == ActorWorldState.Disposed)
+        if (!CanUseWorldFast())
         {
             throw new ObjectDisposedException(nameof(ActorWorld));
         }

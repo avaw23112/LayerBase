@@ -35,6 +35,13 @@ public sealed partial class ActorWorld
         where TRequest : struct
         where TResponse : struct
     {
+        if (!CanUseWorldFast())
+        {
+            return PostResult.Failure(
+                ActorPostStatus.ActorNotFound,
+                PostFailureKind.InvalidActorId);
+        }
+
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
         {
             return PostResult.Failure(

@@ -23,6 +23,11 @@ public sealed partial class ActorWorld
     {
         actor = null;
 
+        if (!CanUseWorldFast())
+        {
+            return false;
+        }
+
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
         {
             return false;
@@ -60,6 +65,11 @@ public sealed partial class ActorWorld
         ActorId                     actorId,
         ProjectedActorReleasePolicy releasePolicy)
     {
+        if (!CanUseWorldFast())
+        {
+            return false;
+        }
+
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
         {
             return false;

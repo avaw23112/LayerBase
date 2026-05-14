@@ -64,6 +64,11 @@ public sealed partial class ActorWorld
 
     public bool IsEnable(ActorId actorId)
     {
+        if (!CanUseWorldFast())
+        {
+            return false;
+        }
+
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
         {
             return false;
@@ -74,6 +79,11 @@ public sealed partial class ActorWorld
 
     public bool SetEnable(ActorId actorId, bool enable)
     {
+        if (!CanUseWorldFast())
+        {
+            return false;
+        }
+
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
         {
             return false;

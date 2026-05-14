@@ -16,6 +16,13 @@ public sealed partial class ActorWorld
             return LBTask<TResponse>.FromCanceled(cancellationToken);
         }
 
+        if (!CanUseWorldFast())
+        {
+            return ActorCallFailure.InvalidActor<TResponse>(
+                actorId,
+                ActorCallFailureKind.Disposed);
+        }
+
         if ((uint)actorId.ArchetypeId >= (uint)_archetypes.Length)
         {
             return ActorCallFailure.InvalidActor<TResponse>(
