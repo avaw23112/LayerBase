@@ -193,8 +193,13 @@ public sealed partial class ActorWorld : IDisposable
     }
 
     /// <summary>
-    /// 注销指定 archetype 和 slot 的 EventStream handler。
+    /// 注销指定 slot 的 EventStream handler。
+    ///
+    /// 注意：
+    /// 此方法会遍历所有 EventStreamRuntime，性能较差。
+    /// 推荐使用 ActorBehaviourEntry.StreamUnregister 替代。
     /// </summary>
+    [Obsolete("Use ActorBehaviourEntry.StreamUnregister instead.")]
     internal void UnregisterStreamHandler(int slotIndex)
     {
         foreach (var runtime in _eventStreamRuntimes)

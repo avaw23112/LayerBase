@@ -548,17 +548,16 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     }
 
     /// <summary>
-    /// 注销 Actor 的 EventStream 处理器。
+    /// 注销当前 slot 上 Actor 的所有 EventStream handlers。
+    ///
+    /// 参数说明：
+    /// actorId：ActorId 实例。
+    /// world：当前 ActorWorld。
     ///
     /// 作用：
-    /// 在 Actor 销毁时调用，清除所有事件类型的 handler。
+    /// 通过 ActorBehaviourEntry.StreamUnregister 精确清理当前 Actor 的事件处理器。
+    /// 不再让 ActorWorld 遍历全部 EventStreamRuntime。
     /// </summary>
-    /// <param name="actorId">
-    /// ActorId 实例。
-    /// </param>
-    /// <param name="world">
-    /// ActorWorld 实例。
-    /// </param>
     internal void UnregisterStreamHandlers(
         ActorId   actorId,
         ActorWorld world)
@@ -570,17 +569,25 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
         int slotIndex = actorId.SlotIndex;
 
-        // 直接从 EventStreamCenter 注销 handler
-        // 通过 world 的 _eventStreamRuntimes 列表查找对应的 runtime
         foreach (ActorBehaviourEntry entry in _meta.Behaviours)
         {
-            if (entry.IsStreamHandler)
+            if (!entry.IsStreamHandler)
             {
-                // 使用静态查找获取 EventStreamCenter
-                // 这里需要通过反射或类型擦除的方式来注销
-                // 简化：直接调用 world 的方法来注销
-                world.UnregisterStreamHandler(slotIndex);
+                continue;
             }
+
+            ActorStreamHandlerUnregister? unregister =
+                entry.StreamUnregister;
+
+            if (unregister == null)
+            {
+                continue;
+            }
+
+            unregister(
+                _archetypeId,
+                slotIndex,
+                world);
         }
     }
 

@@ -68,11 +68,24 @@ public sealed class ActorTypeMetaBuilder
             }
         };
 
+        // 创建类型化的注销委托，避免运行时遍历全部 EventStreamRuntime
+        ActorStreamHandlerUnregister streamUnregister =
+            static (archetypeId, slotIndex, world) =>
+            {
+                EventStreamCenter<TEvent>? center =
+                    EventStreamRuntime<TEvent>.GetCenterUnchecked(
+                        world.RuntimeIndex,
+                        archetypeId);
+
+                center?.UnregisterHandler(slotIndex);
+            };
+
         _entries.Add(new ActorBehaviourEntry(
             eventTypeId,
             typeof(TEvent),
             handlerFactory,
-            streamRegister));
+            streamRegister,
+            streamUnregister));
     }
 
     public void AddCallBehaviour<TActor, TRequest, TResponse>(
