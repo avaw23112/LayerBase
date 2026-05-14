@@ -8,7 +8,7 @@ using LayerBase.Layers;
 namespace Benchmarks;
 
 [MemoryDiagnoser]
-public class PostSchedulerBenchmarks : EventBenchmarkBase
+public partial class PostSchedulerBenchmarks : EventBenchmarkBase
 {
     private LayerRuntime _runtime = null!;
 

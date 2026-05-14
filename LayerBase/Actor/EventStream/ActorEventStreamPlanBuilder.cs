@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using LayerBase.Core.Event;
 using LayerBase.Event.EventMetaData;
 
@@ -33,7 +34,6 @@ public static class ActorEventStreamPlanBuilder
     {
         int eventId = EventTypeId<TEvent>.Id;
         EventStreamOptions streamOptions = ResolveStreamOptions<TEvent>();
-
         return new ActorEventStreamPlan<TEvent>(
             eventId,
             streamOptions);
@@ -44,7 +44,6 @@ public static class ActorEventStreamPlanBuilder
     {
         ActorMailOptions? metaOptions =
             EventMetaDataRegistry.GetActorMailOptions<TEvent>();
-
         if (metaOptions.HasValue)
         {
             return new EventStreamOptions(

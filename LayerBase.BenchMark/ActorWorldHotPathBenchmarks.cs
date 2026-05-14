@@ -5,7 +5,7 @@ using LayerBase.Event.EventMetaData;
 namespace Benchmarks;
 
 [MemoryDiagnoser]
-public class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
+public partial class ActorWorldArchetypeRowBenchmarks : EventBenchmarkBase
 {
     private const int ActorCount = 1000;
     private const int PostLoopCount = 1_000_000;

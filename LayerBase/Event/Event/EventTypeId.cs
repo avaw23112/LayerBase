@@ -60,7 +60,7 @@ internal static class EventTypeIdAllocator
 /// 事件类型。
 /// 例如 CardPlayedEvent、DamageEvent、TurnStartedEvent。
 /// </typeparam>
-internal static class EventTypeId<TEvent>
+internal static class EventTypeId<TEvent> where TEvent : struct
 {
     /// <summary>
     /// 当前 TEvent 对应的事件类型 ID。

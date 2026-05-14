@@ -7,7 +7,7 @@ using NUnit.Framework;
 namespace LayerBase.Test;
 
 [TestFixture]
-public class Phase5Tests
+public partial class Phase5Tests
 {
     public partial struct Phase5DirtySignalEvent
     {

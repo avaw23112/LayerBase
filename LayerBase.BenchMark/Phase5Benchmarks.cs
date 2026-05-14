@@ -7,7 +7,7 @@ using LayerBase.Layers;
 namespace LayerBase.BenchMark;
 
 [MemoryDiagnoser]
-public class Phase5Benchmarks
+public partial class Phase5Benchmarks
 {
     private LayerRuntime _runtime = null!;
     private IDelayPublisher<BenchEvent> _publisher = null!;

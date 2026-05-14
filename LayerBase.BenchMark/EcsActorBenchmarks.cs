@@ -382,8 +382,7 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     {
         LayerHub.Reset();
         
-        EventMetaDataRegistry.RegisterMetaData<MoveEvent>(
-            new MoveEventBenchmarkMetaData());
+       // EventMetaDataRegistry.RegisterMetaData<MoveEvent>(new MoveEventBenchmarkMetaData());
         
         _moveEvent = new MoveEvent
         {
