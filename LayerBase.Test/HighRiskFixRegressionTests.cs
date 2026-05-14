@@ -236,6 +236,35 @@ public class HighRiskFixRegressionTests
     }
 
     [Test]
+    public void Delay_post_throws_after_runtime_stop()
+    {
+        var world = new ActorWorld();
+        HighRiskActor actor = world.CreateActor<HighRiskActor>();
+        ActorId actorId = actor.GetActorId();
+
+        world.RuntimeStop();
+
+        Assert.Throws<ObjectDisposedException>(() =>
+            world.DelayPost(actorId, new HighRiskActorEvent(8), 1f));
+    }
+
+    [Test]
+    public void Delay_ask_throws_after_runtime_stop()
+    {
+        var world = new ActorWorld();
+        HighRiskActor actor = world.CreateActor<HighRiskActor>();
+        ActorId actorId = actor.GetActorId();
+
+        world.RuntimeStop();
+
+        Assert.Throws<ObjectDisposedException>(() =>
+            world.DelayAsk<HighRiskCallRequest, HighRiskCallResponse>(
+                actorId,
+                new HighRiskCallRequest(2),
+                1f));
+    }
+
+    [Test]
     public void Enable_and_destroy_queries_return_false_after_dispose()
     {
         var world = new ActorWorld();

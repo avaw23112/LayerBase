@@ -20,7 +20,7 @@
         <PackageLicenseUrl>https://github.com/avaw23112/LayerBase</PackageLicenseUrl>
         <RepositoryUrl>https://github.com/avaw23112/LayerBase.git</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <Version>1.4.9</Version>
+        <Version>1.5.0</Version>
         <PackageOutputPath>$(MSBuildProjectDirectory)/../../nupkgs</PackageOutputPath>
     </PropertyGroup>
 
