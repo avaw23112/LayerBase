@@ -75,8 +75,15 @@ internal sealed class EventStreamSegment<TEvent>
     /// 重置 Segment 状态以便复用。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Reset()
+    public void Reset(bool clearItems)
     {
+        if (clearItems)
+        {
+            Array.Clear(
+                Items,
+                0,
+                WriteIndex);
+        }
         WriteIndex = 0;
         ReadIndex = 0;
         Next = null;

@@ -579,7 +579,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                 // 使用静态查找获取 EventStreamCenter
                 // 这里需要通过反射或类型擦除的方式来注销
                 // 简化：直接调用 world 的方法来注销
-                world.UnregisterStreamHandler(_archetypeId, slotIndex, entry.EventType);
+                world.UnregisterStreamHandler(slotIndex);
             }
         }
     }

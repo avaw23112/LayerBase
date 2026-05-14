@@ -17,6 +17,7 @@ internal sealed class EventStreamSegmentPool<TEvent>
 {
     private readonly int _segmentCapacity;
     private readonly int _maxRetained;
+    private readonly bool _clearItemsOnReturn = RuntimeHelpers.IsReferenceOrContainsReferences<TEvent>();
     private EventStreamSegment<TEvent>? _first;
     private int _count;
 
@@ -71,12 +72,13 @@ internal sealed class EventStreamSegmentPool<TEvent>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Return(EventStreamSegment<TEvent> segment)
     {
+        segment.Reset(_clearItemsOnReturn);
+        
         if (_count >= _maxRetained)
         {
             return;
         }
 
-        segment.Reset();
         segment.Next = _first;
         _first = segment;
         _count++;

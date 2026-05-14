@@ -192,15 +192,10 @@ public sealed partial class ActorWorld : IDisposable
         return runtime;
     }
 
-    private void EnsureEventStreamCapacity(int eventTypeId)
-    {
-        // 不再需要，因为使用 List
-    }
-
     /// <summary>
     /// 注销指定 archetype 和 slot 的 EventStream handler。
     /// </summary>
-    internal void UnregisterStreamHandler(int archetypeId, int slotIndex, Type eventType)
+    internal void UnregisterStreamHandler(int slotIndex)
     {
         foreach (var runtime in _eventStreamRuntimes)
         {
@@ -210,16 +205,7 @@ public sealed partial class ActorWorld : IDisposable
             }
         }
     }
-
-    internal ActorMailOptions ResolveMailOptions(int eventTypeId)
-    {
-        if (Runtime?.PolicyTable != null)
-        {
-            return Runtime.PolicyTable.GetActorMailOptions(eventTypeId);
-        }
-
-        return DefaultMailOptions;
-    }
+    
 
     private void EnsureEventBucketCapacity(int eventTypeId)
     {

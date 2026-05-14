@@ -46,6 +46,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
         var methods = new List<MethodCandidate>();
         var callMethods = new List<CallMethodCandidate>();
+
         foreach (MemberDeclarationSyntax member in declaration.Members)
         {
             if (member is not MethodDeclarationSyntax methodDeclaration)
@@ -70,6 +71,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
                     MethodDisplay: methodSymbol.ToDisplayString(),
                     MethodSymbol: methodSymbol,
                     Location: methodSymbol.Locations.FirstOrDefault()));
+
                 continue;
             }
 
@@ -83,7 +85,11 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
         bool manuallyImplementsGeneratedMeta = ImplementsInterface(classSymbol, "LayerBase.Actor.IGeneratedActorMeta");
         bool hasTagOrGroupMetadata = HasTagOrGroupMetadata(classSymbol);
-        if (methods.Count == 0 && callMethods.Count == 0 && !manuallyImplementsGeneratedMeta && !hasTagOrGroupMetadata)
+
+        if (methods.Count == 0 &&
+            callMethods.Count == 0 &&
+            !manuallyImplementsGeneratedMeta &&
+            !hasTagOrGroupMetadata)
         {
             return null;
         }
@@ -113,6 +119,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
     private static void GenerateClass(SourceProductionContext context, ImmutableArray<ClassCandidate> candidates)
     {
         INamedTypeSymbol classSymbol = candidates[0].ClassSymbol;
+
         ImmutableArray<MethodCandidate> methods = candidates
                                                   .SelectMany(static candidate => candidate.Methods)
                                                   .GroupBy(static method => method.MethodDisplay)
@@ -126,12 +133,14 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
                                                           .ToImmutableArray();
 
         bool hasTagOrGroupMetadata = candidates.Any(static candidate => candidate.HasTagOrGroupMetadata);
+
         if (methods.Length == 0 && callMethods.Length == 0 && !hasTagOrGroupMetadata)
         {
             return;
         }
 
         List<Diagnostic> diagnostics = CollectDiagnostics(classSymbol, candidates, methods, callMethods);
+
         foreach (Diagnostic diagnostic in diagnostics)
         {
             context.ReportDiagnostic(diagnostic);
@@ -183,6 +192,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         }
 
         var seenEventTypes = new Dictionary<ITypeSymbol, MethodCandidate>(SymbolEqualityComparer.Default);
+
         foreach (MethodCandidate method in methods)
         {
             IMethodSymbol methodSymbol = method.MethodSymbol;
@@ -214,6 +224,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             }
 
             IParameterSymbol parameter = methodSymbol.Parameters[0];
+
             if (parameter.RefKind != RefKind.In)
             {
                 diagnostics.Add(Diagnostic.Create(
@@ -247,6 +258,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         }
 
         var seenCallRoutes = new Dictionary<string, CallMethodCandidate>(StringComparer.Ordinal);
+
         foreach (CallMethodCandidate method in callMethods)
         {
             IMethodSymbol methodSymbol = method.MethodSymbol;
@@ -298,6 +310,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             }
 
             IParameterSymbol requestParameter = methodSymbol.Parameters[0];
+
             if (requestParameter.RefKind != RefKind.In)
             {
                 diagnostics.Add(Diagnostic.Create(
@@ -318,8 +331,9 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             }
 
             IParameterSymbol cancellationTokenParameter = methodSymbol.Parameters[1];
-            if (cancellationTokenParameter.RefKind != RefKind.None
-                || cancellationTokenParameter.Type.ToDisplayString() != "System.Threading.CancellationToken")
+
+            if (cancellationTokenParameter.RefKind != RefKind.None ||
+                cancellationTokenParameter.Type.ToDisplayString() != "System.Threading.CancellationToken")
             {
                 diagnostics.Add(Diagnostic.Create(
                     ActorBehaviourDiagnostics.CallMethodMustHaveRequestAndCancellationToken,
@@ -355,6 +369,14 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         ImmutableArray<CallMethodCandidate> callMethods)
     {
         var builder = new StringBuilder();
+
+        ImmutableArray<MethodCandidate> orderedMethods =
+            methods
+                .OrderBy(static method => method.MethodName, StringComparer.Ordinal)
+                .ThenBy(static method => method.EventType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    StringComparer.Ordinal)
+                .ToImmutableArray();
+
         builder.AppendLine("// <auto-generated />");
         builder.AppendLine("#nullable enable");
 
@@ -368,6 +390,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         AppendContainingTypesStart(builder, classSymbol.ContainingType, 1);
 
         string indent = GetIndent(classSymbol.ContainingType, 1);
+
         builder.Append(indent);
         builder.Append(GetAccessibility(classSymbol.DeclaredAccessibility));
         builder.Append(" partial class ");
@@ -375,13 +398,17 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         builder.Append(GetTypeParameterList(classSymbol));
         builder.AppendLine(" : global::LayerBase.Actor.IGeneratedActorMeta");
         AppendConstraintClauses(builder, classSymbol, indent);
+
         builder.Append(indent);
         builder.AppendLine("{");
 
         string memberIndent = indent + "    ";
+        string actorTypeName = classSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
         builder.Append(memberIndent);
         builder.AppendLine("public global::LayerBase.Actor.ActorContext Context { get; private set; }");
         builder.AppendLine();
+
         builder.Append(memberIndent);
         builder.AppendLine("global::LayerBase.Actor.ActorId global::LayerBase.Actor.IGeneratedActorMeta.GetId()");
         builder.Append(memberIndent);
@@ -403,28 +430,123 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         builder.AppendLine("}");
         builder.AppendLine();
 
+        EmitCachedActorBehaviourHandlers(builder, memberIndent, orderedMethods);
+        EmitBuildActorMeta(builder, memberIndent, actorTypeName, orderedMethods, callMethods, classSymbol);
+
+        builder.Append(indent);
+        builder.AppendLine("}");
+
+        AppendContainingTypesEnd(builder, classSymbol.ContainingType, 1);
+
+        if (!classSymbol.ContainingNamespace.IsGlobalNamespace)
+        {
+            builder.AppendLine("}");
+        }
+
+        return builder.ToString();
+    }
+
+    private static void EmitCachedActorBehaviourHandlers(
+        StringBuilder                    builder,
+        string                           memberIndent,
+        ImmutableArray<MethodCandidate>  orderedMethods)
+    {
+        for (int i = 0; i < orderedMethods.Length; i++)
+        {
+            MethodCandidate method = orderedMethods[i];
+
+            if (method.EventType == null)
+            {
+                continue;
+            }
+
+            string eventTypeName =
+                method.EventType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            string fieldName =
+                GetHandlerCacheFieldName(i, method);
+
+            string getterName =
+                GetHandlerGetterName(i, method);
+
+            builder.Append(memberIndent);
+            builder.Append("private global::LayerBase.Actor.ActorEventHandler<");
+            builder.Append(eventTypeName);
+            builder.Append(">? ");
+            builder.Append(fieldName);
+            builder.AppendLine(";");
+            builder.AppendLine();
+
+            builder.Append(memberIndent);
+            builder.AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(");
+            builder.Append(memberIndent);
+            builder.AppendLine("    global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+
+            builder.Append(memberIndent);
+            builder.Append("private global::LayerBase.Actor.ActorEventHandler<");
+            builder.Append(eventTypeName);
+            builder.Append("> ");
+            builder.Append(getterName);
+            builder.AppendLine("()");
+
+            builder.Append(memberIndent);
+            builder.AppendLine("{");
+
+            builder.Append(memberIndent);
+            builder.Append("    return ");
+            builder.Append(fieldName);
+            builder.Append(" ??= ");
+            builder.Append(method.MethodName);
+            builder.AppendLine(";");
+
+            builder.Append(memberIndent);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+    }
+
+    private static void EmitBuildActorMeta(
+        StringBuilder                       builder,
+        string                              memberIndent,
+        string                              actorTypeName,
+        ImmutableArray<MethodCandidate>     orderedMethods,
+        ImmutableArray<CallMethodCandidate> callMethods,
+        INamedTypeSymbol                    classSymbol)
+    {
         builder.Append(memberIndent);
         builder.AppendLine(
             "void global::LayerBase.Actor.IGeneratedActorMeta.__BuildActorMeta(global::LayerBase.Actor.ActorTypeMetaBuilder builder)");
         builder.Append(memberIndent);
         builder.AppendLine("{");
 
-        string actorTypeName = classSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        foreach (MethodCandidate method in methods.OrderBy(static method => method.MethodName, StringComparer.Ordinal))
+        for (int i = 0; i < orderedMethods.Length; i++)
         {
-            string eventTypeName = method.EventType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            MethodCandidate method = orderedMethods[i];
+
+            if (method.EventType == null)
+            {
+                continue;
+            }
+
+            string eventTypeName =
+                method.EventType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            string getterName =
+                GetHandlerGetterName(i, method);
+
             builder.Append(memberIndent);
             builder.Append("    builder.AddBehaviour<");
             builder.Append(actorTypeName);
             builder.Append(", ");
             builder.Append(eventTypeName);
             builder.AppendLine(">(");
+
             builder.Append(memberIndent);
             builder.Append("        static (");
             builder.Append(actorTypeName);
-            builder.AppendLine(" actor) => actor.");
-            builder.Append(method.MethodName);
-            builder.AppendLine(");");
+            builder.Append(" actor) => actor.");
+            builder.Append(getterName);
+            builder.AppendLine("());");
         }
 
         foreach (CallMethodCandidate method in callMethods.OrderBy(static method => method.MethodName,
@@ -433,6 +555,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             IMethodSymbol methodSymbol = method.MethodSymbol;
             ITypeSymbol requestType = methodSymbol.Parameters[0].Type;
             ITypeSymbol responseType = ((INamedTypeSymbol)methodSymbol.ReturnType).TypeArguments[0];
+
             string requestTypeName = requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             string responseTypeName = responseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
@@ -444,6 +567,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             builder.Append(", ");
             builder.Append(responseTypeName);
             builder.AppendLine(">(");
+
             builder.Append(memberIndent);
             builder.Append("        static (");
             builder.Append(actorTypeName);
@@ -451,13 +575,15 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             builder.Append(requestTypeName);
             builder.Append(" request, global::System.Threading.CancellationToken cancellationToken) =>");
             builder.AppendLine();
+
             builder.Append(memberIndent);
             builder.AppendLine("        {");
+
             builder.Append(memberIndent);
             builder.Append("            return actor.");
             builder.Append(method.MethodName);
-            builder.Append("(in request, cancellationToken);");
-            builder.AppendLine();
+            builder.AppendLine("(in request, cancellationToken);");
+
             builder.Append(memberIndent);
             builder.AppendLine("        });");
         }
@@ -480,14 +606,48 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
         builder.Append(memberIndent);
         builder.AppendLine("}");
-        builder.Append(indent);
-        builder.AppendLine("}");
+    }
 
-        AppendContainingTypesEnd(builder, classSymbol.ContainingType, 1);
+    private static string GetHandlerCacheFieldName(
+        int             index,
+        MethodCandidate method)
+    {
+        return "__layerbase_cachedHandler_"
+               + index.ToString(System.Globalization.CultureInfo.InvariantCulture)
+               + "_"
+               + SanitizeIdentifier(method.MethodName);
+    }
 
-        if (!classSymbol.ContainingNamespace.IsGlobalNamespace)
+    private static string GetHandlerGetterName(
+        int             index,
+        MethodCandidate method)
+    {
+        return "__layerbase_GetCachedHandler_"
+               + index.ToString(System.Globalization.CultureInfo.InvariantCulture)
+               + "_"
+               + SanitizeIdentifier(method.MethodName);
+    }
+
+    private static string SanitizeIdentifier(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
         {
-            builder.AppendLine("}");
+            return "Handler";
+        }
+
+        var builder = new StringBuilder(value.Length);
+
+        for (int i = 0; i < value.Length; i++)
+        {
+            char ch = value[i];
+
+            if (i == 0)
+            {
+                builder.Append(char.IsLetter(ch) || ch == '_' ? ch : '_');
+                continue;
+            }
+
+            builder.Append(char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_');
         }
 
         return builder.ToString();
@@ -501,14 +661,18 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         }
 
         AppendContainingTypesStart(builder, typeSymbol.ContainingType, level);
+
         string indent = new(' ', level * 4);
+
         builder.Append(indent);
         builder.Append(GetAccessibility(typeSymbol.DeclaredAccessibility));
         builder.Append(" partial class ");
         builder.Append(typeSymbol.Name);
         builder.Append(GetTypeParameterList(typeSymbol));
         builder.AppendLine();
+
         AppendConstraintClauses(builder, typeSymbol, indent);
+
         builder.Append(indent);
         builder.AppendLine("{");
     }
@@ -521,7 +685,9 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         }
 
         AppendContainingTypesEnd(builder, typeSymbol.ContainingType, level);
+
         string indent = new(' ', level * 4);
+
         builder.Append(indent);
         builder.AppendLine("}");
     }
@@ -531,6 +697,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         foreach (ITypeParameterSymbol typeParameter in symbol.TypeParameters)
         {
             string constraint = BuildConstraintClause(typeParameter);
+
             if (constraint.Length == 0)
             {
                 continue;
@@ -597,6 +764,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
     private static string GetIndent(INamedTypeSymbol? containingType, int namespaceLevel)
     {
         int level = namespaceLevel;
+
         for (INamedTypeSymbol? current = containingType; current != null; current = current.ContainingType)
         {
             level++;
@@ -624,8 +792,9 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         foreach (AttributeData attribute in methodSymbol.GetAttributes())
         {
             string? attributeName = attribute.AttributeClass?.ToDisplayString();
-            if (attributeName == "LayerBase.Actor.ActorBehaviourAttribute"
-                || attributeName == "LayerBase.Actor.ActorBehavioursAttribute")
+
+            if (attributeName == "LayerBase.Actor.ActorBehaviourAttribute" ||
+                attributeName == "LayerBase.Actor.ActorBehavioursAttribute")
             {
                 return true;
             }
@@ -649,10 +818,10 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
     private static bool TryGetLBTaskResultType(ITypeSymbol returnType, out ITypeSymbol? resultType)
     {
-        if (returnType is INamedTypeSymbol namedType
-            && namedType.Arity == 1
-            && namedType.Name == "LBTask"
-            && namedType.ContainingNamespace.ToDisplayString() == "LayerBase.Async")
+        if (returnType is INamedTypeSymbol namedType &&
+            namedType.Arity == 1 &&
+            namedType.Name == "LBTask" &&
+            namedType.ContainingNamespace.ToDisplayString() == "LayerBase.Async")
         {
             resultType = namedType.TypeArguments[0];
             return true;
@@ -664,8 +833,8 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
     private static bool HasTagOrGroupMetadata(INamedTypeSymbol classSymbol)
     {
-        return GetTagTypes(classSymbol).Length > 0
-               || GetGroupTypes(classSymbol).Length > 0;
+        return GetTagTypes(classSymbol).Length > 0 ||
+               GetGroupTypes(classSymbol).Length > 0;
     }
 
     private static ImmutableArray<INamedTypeSymbol> GetTagTypes(INamedTypeSymbol classSymbol)
@@ -699,9 +868,9 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             return false;
         }
 
-        return attributeClass.Name == attributeName
-               && attributeClass.TypeArguments.Length == 1
-               && attributeClass.ContainingNamespace.ToDisplayString() == "LayerBase.Actor";
+        return attributeClass.Name == attributeName &&
+               attributeClass.TypeArguments.Length == 1 &&
+               attributeClass.ContainingNamespace.ToDisplayString() == "LayerBase.Actor";
     }
 
     private static bool ImplementsInterface(INamedTypeSymbol symbol, string interfaceName)
