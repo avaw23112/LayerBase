@@ -30,6 +30,12 @@ public sealed partial class ActorWorld : IDisposable
     private readonly List<Action> _eventStreamUnbinders = new();
     private readonly DirtyBucketList _dirtyEventStreams = new();
 
+    /// <summary>
+    /// 是否注册过 Call Bucket。
+    /// 用于跳过空 Call Bucket 的检查。
+    /// </summary>
+    private bool _hasCallBuckets;
+
     internal ActorWorld()
     {
         RuntimeIndex = ActorWorldRuntimeIndexAllocator.Rent();
@@ -130,6 +136,7 @@ public sealed partial class ActorWorld : IDisposable
         {
             bucket = new ActorCallBucket<TRequest, TResponse>();
             _callBucketsByRouteId[routeId] = bucket;
+            _hasCallBuckets = true;
         }
 
         bucket.AddColumn(column);

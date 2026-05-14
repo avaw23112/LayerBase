@@ -7,6 +7,14 @@ internal sealed class ActorLifecycleScheduler
     private readonly ActorLifecycleFreeList<ILateUpdate> _lateUpdates = new();
     private readonly ActorLifecycleFreeList<IFixedUpdate> _fixedUpdates = new();
 
+    /// <summary>
+    /// 生命周期 Pump 时间检查间隔。
+    /// 每处理多少个生命周期条目后检查一次时间预算。
+    /// 默认值 64 表示每处理 64 个条目后检查一次时间预算。
+    /// 值 1 表示每个条目都检查（旧行为）。
+    /// </summary>
+    public int TimeCheckInterval { get; set; } = 64;
+
     public ActorLifecycleScheduler(ActorWorld world)
     {
         _world = world;
@@ -64,7 +72,8 @@ internal sealed class ActorLifecycleScheduler
                 // instance 参数表示具体 IFixedUpdate Actor。
                 // deltaTime 参数表示固定逻辑步长。
                 instance.FixedUpdate(deltaTime);
-            });
+            },
+            timeCheckInterval: TimeCheckInterval);
     }
 
     public void PumpUpdate(
@@ -87,7 +96,8 @@ internal sealed class ActorLifecycleScheduler
                 // instance 参数表示具体 IUpdate Actor。
                 // deltaTime 参数表示当前帧间隔。
                 instance.Update(deltaTime);
-            });
+            },
+            timeCheckInterval: TimeCheckInterval);
     }
 
     public void PumpLateUpdate(
@@ -110,6 +120,7 @@ internal sealed class ActorLifecycleScheduler
                 // instance 参数表示具体 ILateUpdate Actor。
                 // deltaTime 参数表示当前帧间隔。
                 instance.LateUpdate(deltaTime);
-            });
+            },
+            timeCheckInterval: TimeCheckInterval);
     }
 }

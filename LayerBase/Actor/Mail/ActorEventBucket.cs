@@ -7,11 +7,28 @@ internal sealed class ActorEventBucket<TEvent> : IActorEventBucket
     private int _count;
     private int _cursor;
 
+    /// <summary>
+    /// 单 Column 快路径缓存。
+    /// 当 _count == 1 时，_singleColumn 指向唯一的 Column。
+    /// 当 _count > 1 时，_singleColumn 为 null。
+    /// </summary>
+    private ActorEventColumnRuntime? _singleColumn;
+
     public void AddColumn(ActorEventColumnRuntime column)
     {
         EnsureCapacity(_count + 1);
         _columns[_count] = column;
         _count++;
+
+        // 更新单 Column 快路径缓存。
+        if (_count == 1)
+        {
+            _singleColumn = column;
+        }
+        else
+        {
+            _singleColumn = null;
+        }
     }
 
     public PumpOneResult PumpOne(
@@ -84,6 +101,33 @@ internal sealed class ActorEventBucket<TEvent> : IActorEventBucket
                 hasMoreWork: true);
         }
 
+        // 单 Column 快路径：
+        // 当 Bucket 只有一个 Column 时，跳过 cursor 轮转和 checkedCount 循环。
+        if (_count == 1)
+        {
+            ActorPumpManyResult result = _singleColumn!.PumpMany(
+                budget: ref budget,
+                options: in options,
+                stats: stats,
+                maxEvents: maxEvents);
+
+            if (result.Processed > 0)
+            {
+                stats.ProcessedTotal += result.Processed;
+
+                if (options.MaxMailsPerBucketPerPump > 0)
+                {
+                    for (int i = 0; i < result.Processed; i++)
+                    {
+                        stats.RecordBucketProcessed(bucketIndex);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        // 多 Column 通用路径。
         int totalProcessed = 0;
         int checkedCount = 0;
         bool actorLimited = false;

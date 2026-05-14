@@ -12,7 +12,7 @@ public sealed partial class ActorWorldHotPathTests
 
         Assert.That(options.MaxMailsPerBucketPerPump, Is.EqualTo(0));
         Assert.That(options.MaxMailsPerActorPerPump, Is.EqualTo(0));
-        Assert.That(options.TimeCheckInterval, Is.EqualTo(64));
+        Assert.That(options.TimeCheckInterval, Is.EqualTo(128));
     }
 
     [Test]

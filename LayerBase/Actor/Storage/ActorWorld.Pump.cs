@@ -71,6 +71,13 @@ public sealed partial class ActorWorld
 
     private void PumpCallBuckets(ref RuntimeFrameBudget budget)
     {
+        // 跳过空 Call Bucket。
+        // 如果项目没有使用 Actor Call，Call 路径会成为固定分支成本。
+        if (!_hasCallBuckets || _dirtyCallBuckets.Count == 0)
+        {
+            return;
+        }
+
         while (budget.HasRemainingEventBudget())
         {
             if (_dirtyCallBuckets.Count == 0)

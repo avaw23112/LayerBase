@@ -77,7 +77,37 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
         _free[_freeCount] = handle.Index;
         _freeCount++;
 
+        // 删除后尝试裁剪尾部空洞。
+        // 如果删除的是尾部的条目，可以减少 _count，避免无效遍历。
+        TrimTrailingHoles();
+
         return true;
+    }
+
+    /// <summary>
+    /// 裁剪尾部空洞。
+    ///
+    /// 作用：
+    /// 当尾部的条目被删除后，_count 不会自动下降。
+    /// 这个方法会从尾部向前扫描，将 _count 降低到最后一个存活条目之后。
+    ///
+    /// 注意：
+    /// 只裁剪尾部空洞，不移动中间存活条目。
+    /// 这样可以避免破坏外部保存的 ActorLifecycleHandle。
+    /// </summary>
+    private void TrimTrailingHoles()
+    {
+        while (_count > 0)
+        {
+            int last = _count - 1;
+            if (_occupied[last])
+            {
+                break;
+            }
+
+            _entries[last] = default;
+            _count--;
+        }
     }
 
     public void ForEach<TState>(
@@ -98,11 +128,15 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
     public void PumpBudgeted(
         ref LifecycleFrameState   state,
         ref RuntimeFrameBudget    budget,
-        LifecycleCall<TLifecycle> invoker)
+        LifecycleCall<TLifecycle> invoker,
+        int                       timeCheckInterval = 1)
     {
         // state 参数表示生命周期遍历上下文。
         // budget 参数表示当前帧剩余预算。
         // invoker 参数表示具体调用哪个生命周期方法。
+        // timeCheckInterval 参数表示每处理多少个生命周期条目后检查一次时间预算。
+        //   默认值 1 表示每个条目都检查（旧行为）。
+        //   值 64 表示每处理 64 个条目后检查一次时间预算。
         if (_count == 0)
         {
             return;
@@ -110,6 +144,7 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
 
         int checkedCount = 0;
         int maxCount = _count;
+        int processedSinceTimeCheck = 0;
 
         while (checkedCount < maxCount)
         {
@@ -118,9 +153,17 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
                 return;
             }
 
-            if (!budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp()))
+            // 时间预算检查分摊：
+            // 只有在处理了 timeCheckInterval 个条目后才检查时间预算。
+            // 这样可以减少 Stopwatch.GetTimestamp() 的调用频率。
+            if (processedSinceTimeCheck <= 0)
             {
-                return;
+                if (!budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp()))
+                {
+                    return;
+                }
+
+                processedSinceTimeCheck = timeCheckInterval;
             }
 
             int index = _cursor;
@@ -150,6 +193,7 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
             // 每调用一个生命周期方法，消耗一个预算单元。
             // 当前 RuntimeFrameBudget 叫 Event，但这里实际作为 WorkUnit 使用。
             budget.ConsumeEvent();
+            processedSinceTimeCheck--;
         }
     }
 
