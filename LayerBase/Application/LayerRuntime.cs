@@ -9,6 +9,7 @@ using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
+using LayerBase.Snap;
 
 namespace LayerBase;
 
@@ -45,9 +46,11 @@ public sealed partial class LayerRuntime : IDisposable
 
     private RuntimeTimerSink? _timerSink;
     internal DelayPublisherManager? DelayManager { get; private set; }
+    private FullSnapRuntime? _fullSnap;
 
     public bool IsDebugMode { get; internal set; }
     public event Action<LayerEventInfo>? OnLayerEventInfo;
+    public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
 
     private FixedUpdateOptions _fixedUpdateOptions = FixedUpdateOptions.Disabled;
     private float _fixedUpdateAccumulator;
@@ -148,6 +151,34 @@ public sealed partial class LayerRuntime : IDisposable
     internal void BuildServiceProvider()
     {
         _worldProvider = new ServiceProvider(Services);
+    }
+
+    internal void BuildFullSnapCache()
+    {
+        _fullSnap = new FullSnapRuntime(this);
+
+        if (_chain == null)
+        {
+            return;
+        }
+
+        var visited = new HashSet<object>(LayerBase.Snap.ReferenceEqualityComparer.Instance);
+
+        foreach (var layer in _chain.GetNodes().OfType<Layer>())
+        {
+            if (layer is IGeneratedFullSnapNode layerNode && visited.Add(layerNode))
+            {
+                _fullSnap.Register(layerNode);
+            }
+
+            foreach (IGeneratedFullSnapNode node in layer.GetFullSnapNodes())
+            {
+                if (visited.Add(node))
+                {
+                    _fullSnap.Register(node);
+                }
+            }
+        }
     }
 
     internal int GetNextLayerIndex()
@@ -862,6 +893,7 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime.Actors.PrepareRuntimeBuild();
             _layerChain.Build(1024, true);
             _runtime.Actors.CompleteRuntimeBuild();
+            _runtime.BuildFullSnapCache();
             _runtime.PolicyTable.Freeze();
 
             if (_debugMode)

@@ -8,6 +8,7 @@ using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.Event.Delay;
+using LayerBase.Snap;
 
 namespace LayerBase.Layers;
 
@@ -398,6 +399,27 @@ public abstract class Layer : Node, IDisposable
         foreach (var resolved in m_resolvedServices)
             yield return new SharedFieldBinder.Participant(resolved.Instance, this,
                 resolved.Descriptor.RegistrationScopeId);
+    }
+
+    internal IEnumerable<IGeneratedFullSnapNode> GetFullSnapNodes()
+    {
+        var visited = new HashSet<object>(ObjectReferenceComparer.Instance);
+
+        foreach (var registration in m_activeServices)
+        {
+            if (registration.Service is IGeneratedFullSnapNode node && visited.Add(node))
+            {
+                yield return node;
+            }
+        }
+
+        foreach (var resolved in m_resolvedServices)
+        {
+            if (resolved.Instance is IGeneratedFullSnapNode node && visited.Add(node))
+            {
+                yield return node;
+            }
+        }
     }
 
     private void AddActiveService(RegisteredService registration)
