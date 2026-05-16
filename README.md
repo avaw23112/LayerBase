@@ -79,6 +79,102 @@ LayerBase 专为高频事件交互设计，在 .NET 8/9 环境下表现卓越。
 
 ---
 
+## 💾 Snap 快照能力
+
+LayerBase 现已内建一套**运行时业务快照**能力，用于保存和恢复需要持久化的 Layer / Service / Manager 状态。
+
+它刻意不是“整份 Runtime 内存镜像”，而是**业务字段显式快照**：
+
+- **`IFullSnap`**：参与 Runtime 级完整快照，由框架在 Build 后自动收集并由 `runtime.FullSnap` 统一调度。
+- **`IClipSnap<T>`**：面向局部状态切片，由业务代码主动调用，不进入 FullSnap 文档流。
+- **`SnapWriter` / `SnapReader`**：基于 `System.Text.Json.Nodes` 的显式字段写入/读取 API。
+- **`SnapArrayWriter` / `SnapArrayReader`**：保留数组逐项读写模型，适合实体列表、背包项等复杂数组数据。
+
+### FullSnap 示例
+
+```csharp
+using LayerBase.DI;
+using LayerBase.Snap;
+
+public sealed partial class BattleContext : ILayerContext, IFullSnap
+{
+    public int RoomId;
+    public int CurrentFrame;
+
+    public void WriteFullSnap(ref SnapWriter writer)
+    {
+        writer.WriteInt32("roomId", RoomId);
+        writer.WriteInt32("currentFrame", CurrentFrame);
+    }
+
+    public void ReadFullSnap(ref SnapReader reader)
+    {
+        RoomId = reader.ReadInt32("roomId");
+        CurrentFrame = reader.ReadInt32("currentFrame");
+    }
+}
+```
+
+```csharp
+var document = runtime.FullSnap.Serialize();
+string json = runtime.FullSnap.SerializeJson();
+
+runtime.FullSnap.Deserialize(document);
+runtime.FullSnap.DeserializeJson(json);
+```
+
+### ClipSnap 示例
+
+```csharp
+using LayerBase.Snap;
+
+public sealed class BattleSyncService :
+    IClipSnap<MoveClip>,
+    IClipSnap<HealthClip>
+{
+    private float _x;
+    private float _y;
+    private int _hp;
+
+    MoveClip IClipSnap<MoveClip>.Serialize() => new(_x, _y);
+    void IClipSnap<MoveClip>.Deserialize(in MoveClip clip)
+    {
+        _x = clip.X;
+        _y = clip.Y;
+    }
+
+    HealthClip IClipSnap<HealthClip>.Serialize() => new(_hp);
+    void IClipSnap<HealthClip>.Deserialize(in HealthClip clip)
+    {
+        _hp = clip.Hp;
+    }
+}
+```
+
+```csharp
+MoveClip move = syncService.Clip<MoveClip>().Serialize();
+syncService.Clip<MoveClip>().Deserialize(in move);
+```
+
+### 默认不进入 FullSnap 的对象
+
+以下对象**不会**被框架默认写入完整快照：
+
+- `EcsWorld`
+- `ActorWorld`
+- `ProjectedActor`
+- Actor 邮箱 / PostScheduler / Timer / Delay 内部队列
+- 渲染对象、物理对象、线程对象、`Task`
+
+推荐做法：
+
+- **ECS 批量数据**：在 `IFullSnap.WriteFullSnap` 中通过 Query 选择性导出。
+- **关键 Actor 状态**：通过 `IClipSnap<T>` 或 Manager / Service 显式同步。
+
+> 说明：`IClipSnap<T>` 只是**单对象、单切片**的数据导出/导入能力，不是跨 Layer 编排边界。如果一个需求想借此隐藏多层聚合、广播或工作流协调，那通常应被视为设计异味。
+
+---
+
 ## 📦 安装指南
 
 1. **NuGet 快速安装 (推荐)**：
@@ -982,6 +1078,103 @@ Beyond efficiency, LayerBase focuses on engineering robustness:
 
 * Note: Handlers registered with **[SubscribeNotify]** do not capture exceptions for maximum performance; users must
   guarantee safety.
+
+---
+
+## 💾 Snap Snapshot Capability (New)
+
+LayerBase now includes a built-in **runtime business snapshot** system for saving and restoring the Layer / Service /
+Manager state that should actually be persisted.
+
+It is intentionally **not** a full runtime memory image. Instead, it is an **explicit business-field snapshot** model:
+
+- **`IFullSnap`**: participates in runtime-wide full snapshots, automatically collected after Build and orchestrated by `runtime.FullSnap`.
+- **`IClipSnap<T>`**: a local state slice exported/imported explicitly by business code, outside the FullSnap document flow.
+- **`SnapWriter` / `SnapReader`**: explicit field write/read APIs built on `System.Text.Json.Nodes`.
+- **`SnapArrayWriter` / `SnapArrayReader`**: indexed array read/write helpers for inventories, entity batches, and other structured arrays.
+
+### FullSnap Example
+
+```csharp
+using LayerBase.DI;
+using LayerBase.Snap;
+
+public sealed partial class BattleContext : ILayerContext, IFullSnap
+{
+    public int RoomId;
+    public int CurrentFrame;
+
+    public void WriteFullSnap(ref SnapWriter writer)
+    {
+        writer.WriteInt32("roomId", RoomId);
+        writer.WriteInt32("currentFrame", CurrentFrame);
+    }
+
+    public void ReadFullSnap(ref SnapReader reader)
+    {
+        RoomId = reader.ReadInt32("roomId");
+        CurrentFrame = reader.ReadInt32("currentFrame");
+    }
+}
+```
+
+```csharp
+var document = runtime.FullSnap.Serialize();
+string json = runtime.FullSnap.SerializeJson();
+
+runtime.FullSnap.Deserialize(document);
+runtime.FullSnap.DeserializeJson(json);
+```
+
+### ClipSnap Example
+
+```csharp
+using LayerBase.Snap;
+
+public sealed class BattleSyncService :
+    IClipSnap<MoveClip>,
+    IClipSnap<HealthClip>
+{
+    private float _x;
+    private float _y;
+    private int _hp;
+
+    MoveClip IClipSnap<MoveClip>.Serialize() => new(_x, _y);
+    void IClipSnap<MoveClip>.Deserialize(in MoveClip clip)
+    {
+        _x = clip.X;
+        _y = clip.Y;
+    }
+
+    HealthClip IClipSnap<HealthClip>.Serialize() => new(_hp);
+    void IClipSnap<HealthClip>.Deserialize(in HealthClip clip)
+    {
+        _hp = clip.Hp;
+    }
+}
+```
+
+```csharp
+MoveClip move = syncService.Clip<MoveClip>().Serialize();
+syncService.Clip<MoveClip>().Deserialize(in move);
+```
+
+### Objects Excluded from FullSnap by Default
+
+The framework does **not** write the following into full snapshots by default:
+
+- `EcsWorld`
+- `ActorWorld`
+- `ProjectedActor`
+- Actor mailboxes / PostScheduler / Timer / Delay internal queues
+- render objects, physics objects, threads, and `Task`
+
+Recommended usage:
+
+- **Bulk ECS state**: selectively export it from `IFullSnap.WriteFullSnap` via Query.
+- **Important Actor state**: synchronize it explicitly through `IClipSnap<T>` or a Manager / Service.
+
+> Note: `IClipSnap<T>` is only a **single-object, single-slice** export/import mechanism. It is not a cross-layer orchestration boundary. If a request needs multi-layer aggregation, broadcast, or workflow coordination, hiding that behind ClipSnap is usually a design smell.
 
 ---
 
