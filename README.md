@@ -329,6 +329,18 @@ public partial class PlayerInputManager : ILayerContext, IUpdate
 
 Service 负责将相关的 Manager 注册到 DI 容器中。
 通过 `[OwnerLayer]` 特性，可以将 Service 静态绑定到指定的 Layer 层级。
+在当前语义下，推荐按下面的职责边界理解这几个特性：
+
+* `[OwnerLayer]`：`Service -> Layer`，以及 `ILayerCallHandler<TRequest, TResponse> -> Layer`
+* `[OwnerService]`：`ILayerContext` / `IEventHandler<T>` / `IEventHandlerAsync<T> -> Service`
+* `[Mount]`：父级显式装配子级，并控制顺序、注入与实现类型绑定
+
+这意味着：
+
+* `Layer` 是执行边界；
+* `Service` 是业务域聚合；
+* `Manager` / `EventHandler` 是 Service 域内处理单元；
+* `CallHandler` 是 Layer 级单目标功能切片，不是跨 Layer 编排边界。
 
 此外，您可以使用 `[Mount]` 特性实现**声明式依赖注入**。`[Mount]` 在不同位置有不同语义：
 
@@ -350,9 +362,37 @@ public partial class CombatService : IService
     // 如果字段类型是具体的 ILayerContext 实现，源生成器会自动注册：
     // services.TryAddScoped<DamageManager, DamageManager>()
     // 并在运行期自动完成注入。
+    //
+    // 当您需要“显式挂载”和“字段顺序语义”时使用 [Mount]；
+    // 当您只想声明归属关系时，优先使用 [OwnerService]。
     [Mount] private DamageManager _damageManager;
 }
 ```
+
+#### 2.1 通过 `[OwnerService]` 声明 Service 归属
+
+```csharp
+[OwnerLayer(typeof(BattleLayer))]
+public sealed partial class CombatService : IService
+{
+}
+
+[OwnerService(typeof(CombatService))]
+public sealed partial class DamageManager : ILayerContext
+{
+}
+
+[OwnerService(typeof(CombatService))]
+public sealed class DamageEventHandler : IEventHandler<DamageEvent>
+{
+    public void Deal(in DamageEvent @event)
+    {
+    }
+}
+```
+
+`[OwnerService]` 适合表达“这个上下文/事件处理器属于哪个 Service 域”，但它**不负责**字段顺序控制。
+如果既有 `[Mount]` 又有 owner-only 注册，owner-only 项会追加在显式 `[Mount]` 成员之后。
 
 #### 3. 构造函数
 
@@ -883,7 +923,7 @@ public readonly struct QueryPlayerDataResponse
     public readonly int Level;
 }
 
-// 在 Layer 或 Service 中注册处理器
+// 在 Layer 中注册处理器
 public partial class PlayerLayer : Layer
 {
     [Call]
@@ -902,6 +942,34 @@ public partial class PlayerLayer : Layer
 var response = await runtime.CallAsync<QueryPlayerDataRequest, QueryPlayerDataResponse>(
     new QueryPlayerDataRequest { PlayerId = 42 });
 ```
+
+补充规则：
+
+* `[Call]` **只能**定义在 `Layer` 方法上；
+* `IService` 和 `ILayerContext` 不应声明 `[Call]`；
+* 如果您需要独立的请求处理类型，请使用 `ILayerCallHandler<TRequest, TResponse> + [OwnerLayer]`；
+* `Call` 只表达**单目标、单响应**的 Layer 功能切片。
+
+```csharp
+[OwnerLayer(typeof(PlayerLayer))]
+public sealed class QueryPlayerDataHandler
+    : ILayerCallHandler<QueryPlayerDataRequest, QueryPlayerDataResponse>
+{
+    public LBTask<QueryPlayerDataResponse> HandleAsync(
+        QueryPlayerDataRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var data = this.Get<PlayerDatabase>().Get(request.PlayerId);
+        return LBTask.FromResult(new QueryPlayerDataResponse
+        {
+            Name = data.Name,
+            Level = data.Level
+        });
+    }
+}
+```
+
+如果一个请求想同时命中多个 Layer、做聚合、广播或工作流协调，这通常说明您需要的是更显式的编排模型，而不是继续扩展 `Call` 语义。
 
 ---
 
@@ -1345,6 +1413,18 @@ public partial class PlayerInputManager : ILayerContext, IUpdate
 
 Services are responsible for registering related Managers into the DI container.
 By using the `[OwnerLayer]` attribute, a Service can be statically bound to a specific Layer.
+Under the current semantics, the recommended boundary is:
+
+* `[OwnerLayer]`: `Service -> Layer`, and `ILayerCallHandler<TRequest, TResponse> -> Layer`
+* `[OwnerService]`: `ILayerContext` / `IEventHandler<T>` / `IEventHandlerAsync<T> -> Service`
+* `[Mount]`: explicit parent-owned assembly, ordering, injection, and implementation binding
+
+In practice:
+
+* `Layer` is the execution boundary;
+* `Service` is the business-domain aggregate;
+* `Manager` / `EventHandler` are Service-local processing units;
+* `CallHandler` is a Layer-level single-target functional slice, not a cross-layer orchestration boundary.
 
 Additionally, you can use the `[Mount]` attribute for **declarative dependency injection**. The `[Mount]` attribute has
 different semantics depending on its location:
@@ -1368,9 +1448,38 @@ public partial class CombatService : IService
     // If the field type is a concrete ILayerContext implementation, the source generator automatically registers it:
     // services.TryAddScoped<DamageManager, DamageManager>()
     // and automatically performs injection at runtime.
+    //
+    // Use [Mount] when you want explicit mounting and field-order semantics.
+    // Use [OwnerService] when you only want to declare ownership.
     [Mount] private DamageManager _damageManager;
 }
 ```
+
+#### 2.1 Declare Service ownership via `[OwnerService]`
+
+```csharp
+[OwnerLayer(typeof(BattleLayer))]
+public sealed partial class CombatService : IService
+{
+}
+
+[OwnerService(typeof(CombatService))]
+public sealed partial class DamageManager : ILayerContext
+{
+}
+
+[OwnerService(typeof(CombatService))]
+public sealed class DamageEventHandler : IEventHandler<DamageEvent>
+{
+    public void Deal(in DamageEvent @event)
+    {
+    }
+}
+```
+
+`[OwnerService]` is ideal for expressing which Service domain owns a context or event handler, but it does **not**
+control field ordering. If you mix explicit `[Mount]` members with owner-only registrations, the owner-only items are
+appended after mounted members.
 
 #### 3. Constructors
 
@@ -1907,7 +2016,7 @@ public readonly struct QueryPlayerDataResponse
     public readonly int Level;
 }
 
-// Register handler in Layer or Service
+// Register handler in Layer
 public partial class PlayerLayer : Layer
 {
     [Call]
@@ -1926,6 +2035,35 @@ public partial class PlayerLayer : Layer
 var response = await runtime.CallAsync<QueryPlayerDataRequest, QueryPlayerDataResponse>(
     new QueryPlayerDataRequest { PlayerId = 42 });
 ```
+
+Additional rules:
+
+* `[Call]` can be declared **only** on `Layer` methods;
+* `IService` and `ILayerContext` should not declare `[Call]`;
+* if you want an explicit standalone handler type, use `ILayerCallHandler<TRequest, TResponse> + [OwnerLayer]`;
+* `Call` is only for a **single-target, single-response** Layer slice.
+
+```csharp
+[OwnerLayer(typeof(PlayerLayer))]
+public sealed class QueryPlayerDataHandler
+    : ILayerCallHandler<QueryPlayerDataRequest, QueryPlayerDataResponse>
+{
+    public LBTask<QueryPlayerDataResponse> HandleAsync(
+        QueryPlayerDataRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var data = this.Get<PlayerDatabase>().Get(request.PlayerId);
+        return LBTask.FromResult(new QueryPlayerDataResponse
+        {
+            Name = data.Name,
+            Level = data.Level
+        });
+    }
+}
+```
+
+If one request wants to hit multiple layers, aggregate responses, broadcast, or coordinate a workflow, that is usually
+a sign that you need a more explicit orchestration model rather than widening `Call` semantics.
 
 ---
 

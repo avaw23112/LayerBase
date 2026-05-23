@@ -12,14 +12,20 @@ Generator）** 插件。
 
 通过挂载简单的特性，`LayerBase.Generator` 将在后台静默生成所有的样板代码：
 
-1. **自动依赖注入与层级挂载 (`[OwnerLayer]`)**
-    - 只需给您的 `Service` 或切片式的 `EventHandler` 打上 `[OwnerLayer(typeof(YourLayer))]` 特性，生成器便会生成自动注册逻辑。
-    - `LayerHub.CreateLayers().Build()` 能够全自动扫描并在后台完成服务依赖、实例创建与层级挂载。
-2. **事件总线零反射绑定 (`[SubscribeFlow]`, `[SubscribeAsync]`)**
+1. **自动依赖注入与层级挂载 (`[OwnerLayer]` / `[OwnerService]` / `[Mount]`)**
+    - 使用 `[OwnerLayer(typeof(YourLayer))]` 将 `Service` 或 `ILayerCallHandler<TRequest, TResponse>` 绑定到 Layer。
+    - 使用 `[OwnerService(typeof(YourService))]` 将 `ILayerContext`、`IEventHandler<T>` 或 `IEventHandlerAsync<T>` 绑定到 Service。
+    - 使用 `[Mount]` 进行父级显式装配、顺序控制、字段/属性注入，以及 interface/abstract 到实现类型的绑定。
+    - `LayerHub.CreateLayers().Build()` 能够自动完成注册、实例创建、挂载与注入。
+2. **Call 自动绑定与边界约束 (`[Call]`)**
+    - `[Call]` 方法现在只允许定义在 `Layer` 上。
+    - 如果您需要显式独立处理器，请使用 `ILayerCallHandler<TRequest, TResponse> + [OwnerLayer]`。
+    - `Call` 只表示 Layer 级**单目标功能切片**，不应该被扩展为多 Layer 聚合、广播或工作流编排边界。
+3. **事件总线零反射绑定 (`[SubscribeFlow]`, `[SubscribeAsync]`)**
     - 不再需要手动维护繁琐的 `EventBus.SubscribeFlow<T>(Method)`。
     - 只需在您的 `Manager` (继承 `ILayerContext`) 的事件处理方法上挂载 `[SubscribeFlow]` 或 `[SubscribeAsync]`。
     - 源生成器会直接提取函数的底层委托，生成高密度的包装类并注入全局总线，**彻底消除运行时反射查找。**
-3. **全局异常与元数据观察 (`EventMetaData<T>`)**
+4. **全局异常与元数据观察 (`EventMetaData<T>`)**
     - 对于网络同步包或核心状态事件，只需定义一个继承自 `EventMetaData<T>` 的类。
     - 生成器会自动将它与 `partial struct` 事件绑定，建立一个**全局级别的、零侵入的异常拦截点**
       ，任何对该事件处理所产生的未捕获异常都会流向这里进行统一监控。
@@ -66,6 +72,21 @@ public partial struct PlayerDeadEvent { ... }
 2. 请确保您的类被标记为 `partial`，因为生成器需要在该类的同名分部中写入 `Initialize` 接口的实现逻辑。
 3. 请确保您的处理方法的参数前面使用了 `in` 修饰符（如 `in DamageEvent e`），以享受结构体的零分配传递。
 
+### 为什么我的 `[Call]` 不能再写在 `IService` 上？
+
+因为 `Call` 现在被收紧为 **Layer 级单目标功能切片**：
+
+1. `[Call]` 只能定义在 `Layer` 方法上；
+2. `IService` / `ILayerContext` 不再允许声明 `[Call]`；
+3. 如果您需要独立处理器，请改用 `ILayerCallHandler<TRequest, TResponse> + [OwnerLayer]`。
+
+如果一个请求想同时命中多个 Layer、做聚合、广播或流程协调，这通常说明您需要更显式的编排模型，而不是继续扩大 `Call` 的语义。
+
+### 什么时候用 `[OwnerService]`，什么时候用 `[Mount]`？
+
+* 用 `[OwnerService]`：当您只想声明“这个 Manager / EventHandler 属于哪个 Service 域”；
+* 用 `[Mount]`：当您需要显式装配、字段顺序语义、接口实现绑定或父级注入控制。
+
 ---
 
 ## 🔗 关于 LayerBase
@@ -92,19 +113,23 @@ LayerBase to achieve **zero runtime reflection overhead** and extreme throughput
 
 By attaching simple attributes, `LayerBase.Generator` silently generates all the boilerplate code in the background:
 
-1. **Automatic Dependency Injection & Layer Mounting (`[OwnerLayer]`)**
-    - Simply tag your `Service` or slice-based `EventHandler` with the `[OwnerLayer(typeof(YourLayer))]` attribute, and
-      the generator will produce the auto-registration logic.
-    - `LayerHub.CreateLayers().Build()` can fully automatically scan and complete service dependency resolution,
-      instance creation, and layer mounting in the background.
-2. **Zero-Reflection Event Bus Binding (`[SubscribeFlow]`, `[SubscribeAsync]`)**
+1. **Automatic DI and ownership binding (`[OwnerLayer]` / `[OwnerService]` / `[Mount]`)**
+    - Use `[OwnerLayer(typeof(YourLayer))]` to bind a `Service` or `ILayerCallHandler<TRequest, TResponse>` to a Layer.
+    - Use `[OwnerService(typeof(YourService))]` to bind an `ILayerContext`, `IEventHandler<T>`, or `IEventHandlerAsync<T>` to a Service.
+    - Use `[Mount]` for explicit parent-owned assembly, ordering, field/property injection, and interface/abstract implementation binding.
+    - `LayerHub.CreateLayers().Build()` automatically completes registration, instance creation, mounting, and injection.
+2. **Call auto-binding and boundary rules (`[Call]`)**
+    - `[Call]` methods are now allowed only on `Layer`.
+    - If you want an explicit standalone handler, use `ILayerCallHandler<TRequest, TResponse> + [OwnerLayer]`.
+    - `Call` only represents a Layer-level **single-target functional slice**; it should not hide multi-layer aggregation, broadcast, or workflow orchestration.
+3. **Zero-Reflection Event Bus Binding (`[SubscribeFlow]`, `[SubscribeAsync]`)**
     - No more manual maintenance of tedious `EventBus.SubscribeFlow<T>(Method)` calls.
     - Just attach `[SubscribeFlow]` or `[SubscribeAsync]` to the event handling methods in your `Manager` (inheriting
       from
       `ILayerContext`).
     - The Source Generator extracts the underlying delegates directly, generates high-density wrapper classes, and
       injects them into the global bus, **completely eliminating runtime reflection lookups.**
-3. **Global Exception & MetaData Observation (`EventMetaData<T>`)**
+4. **Global Exception & MetaData Observation (`EventMetaData<T>`)**
     - For network sync packets or core state events, simply define a class inheriting from `EventMetaData<T>`.
     - The generator automatically binds it to your `partial struct` event, establishing a **global-level, non-intrusive
       exception interception point**. Any unhandled exceptions generated during the processing of that event will flow
@@ -157,6 +182,22 @@ public partial struct PlayerDeadEvent { ... }
    `Initialize` interface in a partial part of that class.
 3. Ensure your handling method's parameter uses the `in` modifier (e.g., `in DamageEvent e`) to enjoy zero-allocation
    passing of structs.
+
+### Why can’t I put `[Call]` on `IService` anymore?
+
+Because `Call` is now intentionally narrowed to a **Layer-level single-target functional slice**:
+
+1. `[Call]` can only be declared on `Layer` methods;
+2. `IService` / `ILayerContext` must not declare `[Call]`;
+3. if you need an explicit standalone handler type, use `ILayerCallHandler<TRequest, TResponse> + [OwnerLayer]`.
+
+If one request wants to hit multiple layers, aggregate responses, broadcast, or coordinate a workflow, that usually
+means you need a more explicit orchestration model instead of widening `Call` semantics.
+
+### When should I use `[OwnerService]` vs `[Mount]`?
+
+* Use `[OwnerService]` when you only want to declare which Service domain owns a Manager / EventHandler.
+* Use `[Mount]` when you need explicit assembly, field-order semantics, interface implementation binding, or parent-controlled injection.
 
 ---
 
