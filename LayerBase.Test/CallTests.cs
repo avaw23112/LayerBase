@@ -176,20 +176,6 @@ public partial class CallTests
         Assert.That(layer.GetService<SceneService>().LastScene, Is.EqualTo("LayerScene"));
     }
 
-    [Test]
-    public async Task Service_method_marked_with_Call_is_auto_registered()
-    {
-        var layer = new ServiceMethodLayer();
-        layer.RegisterService(new ServiceMethodCallModule());
-        LayerHub.CreateLayers().Push(layer).Build();
-
-        var response = await LayerHub.For<ServiceMethodLayer>()
-                                     .CallAsync<ServiceMethodRequest, ServiceMethodResponse>(
-                                         new ServiceMethodRequest("ServiceScene"));
-
-        Assert.That(response.SceneName, Is.EqualTo("ServiceScene"));
-        Assert.That(layer.GetService<SceneService>().LastScene, Is.EqualTo("ServiceScene"));
-    }
 }
 
 public struct SwitchSceneRequest
@@ -366,26 +352,6 @@ public readonly struct LayerMethodResponse
     public string SceneName { get; }
 }
 
-public readonly struct ServiceMethodRequest
-{
-    public ServiceMethodRequest(string sceneName)
-    {
-        SceneName = sceneName;
-    }
-
-    public string SceneName { get; }
-}
-
-public readonly struct ServiceMethodResponse
-{
-    public ServiceMethodResponse(string sceneName)
-    {
-        SceneName = sceneName;
-    }
-
-    public string SceneName { get; }
-}
-
 public sealed class SceneService
 {
     public string LastScene { get; private set; } = string.Empty;
@@ -417,21 +383,6 @@ public sealed partial class AudioLayerServicesModule : IService
     }
 }
 
-public sealed partial class ServiceMethodCallModule : IService
-{
-    public void ConfigureServices(IServiceCollection services)
-    {
-        services.AddScoped<SceneService, SceneService>();
-    }
-
-    [Call]
-    public LBTask<ServiceMethodResponse> HandleServiceMethodAsync(ServiceMethodRequest request)
-    {
-        this.GetService<SceneService>().SwitchTo(request.SceneName);
-        return LBTask<ServiceMethodResponse>.FromResult(new ServiceMethodResponse(request.SceneName));
-    }
-}
-
 public partial class CoreLayer : Layer
 {
 }
@@ -456,10 +407,6 @@ public partial class LayerMethodLayer : Layer
         GetService<SceneService>().SwitchTo(request.SceneName);
         return LBTask<LayerMethodResponse>.FromResult(new LayerMethodResponse(request.SceneName));
     }
-}
-
-public class ServiceMethodLayer : Layer
-{
 }
 
 [OwnerLayer(typeof(CoreLayer))]

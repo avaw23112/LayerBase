@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
@@ -14,10 +14,6 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
 {
     private const string CallAttributeMetadataName = "LayerBase.Call.CallAttribute";
     private const string LayerMetadataName = "LayerBase.Layers.Layer";
-    private const string ServiceMetadataName = "LayerBase.DI.IService";
-    private const string LayerContextMetadataName = "LayerBase.DI.ILayerContext";
-    private const string CancellationTokenMetadataName = "System.Threading.CancellationToken";
-    private const string LBTaskMetadataName = "LayerBase.Async.LBTask`1";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -25,23 +21,20 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
                                  .ForAttributeWithMetadataName(
                                      CallAttributeMetadataName,
                                      static (node, _) => node is MethodDeclarationSyntax,
-                                     static (ctx,  _) => new CallMethodCandidate((IMethodSymbol)ctx.TargetSymbol))
+                                     static (ctx, _) => new CallMethodCandidate((IMethodSymbol)ctx.TargetSymbol))
                                  .Collect();
 
         var source = context.CompilationProvider.Combine(callMethods);
         context.RegisterSourceOutput(source, static (spc, value) => Execute(spc, value.Left, value.Right));
     }
 
-    private static void Execute(SourceProductionContext             spc, Compilation compilation,
+    private static void Execute(SourceProductionContext spc, Compilation compilation,
                                 ImmutableArray<CallMethodCandidate> candidates)
     {
         if (candidates.IsDefaultOrEmpty) return;
 
         var layerSymbol = compilation.GetTypeByMetadataName(LayerMetadataName);
-        var serviceSymbol = compilation.GetTypeByMetadataName(ServiceMetadataName);
-        var layerContextSymbol = compilation.GetTypeByMetadataName(LayerContextMetadataName);
-
-        if (layerSymbol == null || serviceSymbol == null) return;
+        if (layerSymbol == null) return;
 
         var diagnostics = new List<Diagnostic>();
         var validBindings = new List<CallMethodBinding>();
@@ -66,7 +59,7 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var ownerKind = GetOwnerKind(ownerType, layerSymbol, serviceSymbol, layerContextSymbol);
+            var ownerKind = GetOwnerKind(ownerType, layerSymbol);
             if (ownerKind == CallOwnerKind.Invalid)
             {
                 diagnostics.Add(Diagnostic.Create(Diagnostics.UnsupportedOwner, location, ownerType.ToDisplayString()));
@@ -105,11 +98,11 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
     }
 
     private static bool TryCreateBinding(
-        IMethodSymbol          method,
-        INamedTypeSymbol       ownerType,
-        CallOwnerKind          ownerKind,
+        IMethodSymbol method,
+        INamedTypeSymbol ownerType,
+        CallOwnerKind ownerKind,
         out CallMethodBinding? binding,
-        out string?            expectedSignature)
+        out string? expectedSignature)
     {
         expectedSignature =
             "LBTask<TResponse> Handle(TRequest request) or LBTask<TResponse> Handle(TRequest request, CancellationToken cancellationToken)";
@@ -159,29 +152,12 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
         return true;
     }
 
-    private static CallOwnerKind GetOwnerKind(
-        INamedTypeSymbol  ownerType,
-        INamedTypeSymbol  layerSymbol,
-        INamedTypeSymbol  serviceSymbol,
-        INamedTypeSymbol? layerContextSymbol)
+    private static CallOwnerKind GetOwnerKind(INamedTypeSymbol ownerType, INamedTypeSymbol layerSymbol)
     {
         if (InheritsFrom(ownerType, layerSymbol))
             return CallOwnerKind.Layer;
 
-        if (Implements(ownerType, serviceSymbol))
-            return CallOwnerKind.Service;
-
-        if (layerContextSymbol != null && Implements(ownerType, layerContextSymbol))
-            return CallOwnerKind.Invalid;
-
         return CallOwnerKind.Invalid;
-    }
-
-    private static bool Implements(INamedTypeSymbol ownerType, INamedTypeSymbol interfaceSymbol)
-    {
-        return ownerType.AllInterfaces.Any(i =>
-            SymbolEqualityComparer.Default.Equals(i, interfaceSymbol) ||
-            SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, interfaceSymbol));
     }
 
     private static bool InheritsFrom(INamedTypeSymbol ownerType, INamedTypeSymbol baseType)
@@ -314,7 +290,7 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
             new(
                 "LBG302",
                 "Unsupported [Call] owner",
-                "Type '{0}' uses [Call] on a method but [Call] methods are only supported on Layer and IService types. ILayerContext modules must not declare [Call].",
+                "Type '{0}' uses [Call] on a method but [Call] methods are only supported on Layer types. IService and ILayerContext modules must not declare [Call]. Use an explicit ILayerCallHandler<TRequest, TResponse> with [OwnerLayer] for Layer-level functional slices.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -353,12 +329,12 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
     {
         public CallMethodBinding(
             INamedTypeSymbol ownerType,
-            CallOwnerKind    ownerKind,
-            string           methodName,
-            string           generatedIdentifier,
-            string           requestDisplay,
-            string           responseDisplay,
-            bool             takesCancellationToken)
+            CallOwnerKind ownerKind,
+            string methodName,
+            string generatedIdentifier,
+            string requestDisplay,
+            string responseDisplay,
+            bool takesCancellationToken)
         {
             OwnerType = ownerType;
             OwnerKind = ownerKind;
@@ -381,7 +357,6 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
     private enum CallOwnerKind
     {
         Invalid = 0,
-        Layer = 1,
-        Service = 2
+        Layer = 1
     }
 }

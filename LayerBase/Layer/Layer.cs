@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using LayerBase.Async;
 using LayerBase.Call;
@@ -28,6 +29,12 @@ public sealed class OwnerLayerAttribute : Attribute
 /// </summary>
 public abstract class Layer : Node, IDisposable
 {
+    private static readonly MethodInfo s_bindInterfaceEventHandlerFlowMethod =
+        typeof(Layer).GetMethod(nameof(BindInterfaceEventHandlerFlow), BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+    private static readonly MethodInfo s_bindInterfaceEventHandlerAsyncMethod =
+        typeof(Layer).GetMethod(nameof(BindInterfaceEventHandlerAsync), BindingFlags.Instance | BindingFlags.NonPublic)!;
+
     private readonly List<(Type Req, Type Resp, Type Handler)> m_callHandlers = new();
     private readonly List<RegisteredService> m_activeServices = new();
     private readonly object m_callRouteLock = new();
@@ -331,11 +338,60 @@ public abstract class Layer : Node, IDisposable
             subscribers.Add(auto);
         }
 
+        foreach (var resolved in m_resolvedServices)
+        {
+            if (resolved.Instance is IAutoSubscribe) continue;
+            BindInterfaceEventHandlers(resolved.Instance);
+        }
+
         DiscoveredSubscribers = subscribers;
         var ops = Interlocked.Exchange(ref m_pendingOps, new ConcurrentQueue<Action<Layer>>());
         if (ops != null)
             foreach (var op in ops)
                 op(this);
+    }
+
+    private void BindInterfaceEventHandlers(object instance)
+    {
+        foreach (var iface in instance.GetType().GetInterfaces())
+        {
+            if (!iface.IsGenericType) continue;
+
+            var genericDefinition = iface.GetGenericTypeDefinition();
+            var typeArguments = iface.GetGenericArguments();
+            if (typeArguments.Length != 1 || !typeArguments[0].IsValueType) continue;
+
+            if (genericDefinition == typeof(IEventHandler<>))
+            {
+                s_bindInterfaceEventHandlerFlowMethod.MakeGenericMethod(typeArguments[0]).Invoke(this, [instance]);
+                continue;
+            }
+
+            if (genericDefinition == typeof(IEventHandlerAsync<>))
+            {
+                s_bindInterfaceEventHandlerAsyncMethod.MakeGenericMethod(typeArguments[0]).Invoke(this, [instance]);
+            }
+        }
+    }
+
+    private void BindInterfaceEventHandlerFlow<T>(object instance) where T : struct
+    {
+        if (OwnerContext == null || RouteIndex == -1) return;
+
+        var handler = (IEventHandler<T>)instance;
+        OwnerContext.EventCenter.SubscribeFlow(RouteIndex, handler);
+        m_subscriptions.Add(UnsubscribeFlowHandlerToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+        RecordSubscribedEvent(typeof(T));
+    }
+
+    private void BindInterfaceEventHandlerAsync<T>(object instance) where T : struct
+    {
+        if (OwnerContext == null || RouteIndex == -1) return;
+
+        var handler = (IEventHandlerAsync<T>)instance;
+        OwnerContext.EventCenter.SubscribeAsync(RouteIndex, handler);
+        m_subscriptions.Add(UnsubscribeAsyncHandlerToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+        RecordSubscribedEvent(typeof(T));
     }
 
     internal void LifecycleBuild()
@@ -766,6 +822,34 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
+    private sealed class UnsubscribeFlowHandlerToken<T> : IDisposable where T : struct
+    {
+        private static readonly ConcurrentBag<UnsubscribeFlowHandlerToken<T>> Pool = new();
+        private EventCenter? _center;
+        private int _disposed;
+        private IEventHandler<T>? _handler;
+        private int _layerIndex;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            _center?.UnsubscribeFlow(_layerIndex, _handler!);
+            _center = null;
+            _handler = null;
+            Pool.Add(this);
+        }
+
+        public static UnsubscribeFlowHandlerToken<T> Rent(EventCenter c, int l, IEventHandler<T> h)
+        {
+            if (!Pool.TryTake(out var t)) t = new UnsubscribeFlowHandlerToken<T>();
+            t._center = c;
+            t._layerIndex = l;
+            t._handler = h;
+            t._disposed = 0;
+            return t;
+        }
+    }
+
     private sealed class UnsubscribeDelegateAsyncToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeDelegateAsyncToken<T>> Pool = new();
@@ -786,6 +870,34 @@ public abstract class Layer : Node, IDisposable
         public static UnsubscribeDelegateAsyncToken<T> Rent(EventCenter c, int l, EventHandleDelegateAsync<T> h)
         {
             if (!Pool.TryTake(out var t)) t = new UnsubscribeDelegateAsyncToken<T>();
+            t._center = c;
+            t._layerIndex = l;
+            t._handler = h;
+            t._disposed = 0;
+            return t;
+        }
+    }
+
+    private sealed class UnsubscribeAsyncHandlerToken<T> : IDisposable where T : struct
+    {
+        private static readonly ConcurrentBag<UnsubscribeAsyncHandlerToken<T>> Pool = new();
+        private EventCenter? _center;
+        private int _disposed;
+        private IEventHandlerAsync<T>? _handler;
+        private int _layerIndex;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            _center?.UnsubscribeAsync(_layerIndex, _handler!);
+            _center = null;
+            _handler = null;
+            Pool.Add(this);
+        }
+
+        public static UnsubscribeAsyncHandlerToken<T> Rent(EventCenter c, int l, IEventHandlerAsync<T> h)
+        {
+            if (!Pool.TryTake(out var t)) t = new UnsubscribeAsyncHandlerToken<T>();
             t._center = c;
             t._layerIndex = l;
             t._handler = h;
