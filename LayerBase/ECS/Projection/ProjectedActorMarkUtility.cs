@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Arch.Core;
+using LayerBase.Actor;
 
 namespace LayerBase.ECS.Projection;
 
@@ -20,35 +22,51 @@ internal static class ProjectedActorMarkUtility
 {
     /// <summary>
     /// 将 Entity 标记为可投影 Actor。
+    ///
+    /// world 参数作用：
+    /// 当前 ECS World。
+    ///
+    /// entity 参数作用：
+    /// 被标记的目标 Entity。
+    ///
+    /// meta 参数作用：
+    /// Entity 对应的 ProjectedActorMeta。
+    ///
+    /// actorTypeId 参数作用：
+    /// Actor 类型编号，用于后续 Lazy 创建 Actor。
+    ///
+    /// keepAliveOverrideTicks 参数作用：
+    /// 显式覆盖的保活时长。
+    /// null 表示使用 ActorOptions 中的 KeepAliveTicks。
+    ///
+    /// releasePolicy 参数作用：
+    /// 兼容旧释放策略。
     /// </summary>
-    /// <param name="world">ECS World。</param>
-    /// <param name="entity">目标 Entity。</param>
-    /// <param name="meta">ProjectedActorMeta 引用。</param>
-    /// <param name="actorTypeId">Projected Actor 类型 ID。</param>
-    /// <param name="keepAliveTicks">保活时间。</param>
-    /// <param name="releasePolicy">释放策略。</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void MarkProjected(
         World world,
         Entity entity,
         ref ProjectedActorMeta meta,
         int actorTypeId,
-        long keepAliveTicks,
+        long? keepAliveOverrideTicks,
         ProjectedActorReleasePolicy releasePolicy)
     {
         ProjectedActorOptions options =
             ProjectedActorTypeRegistry.GetOptions(actorTypeId);
 
+        long effectiveKeepAliveTicks =
+            keepAliveOverrideTicks ?? options.KeepAliveTicks;
+
         meta.MarkProjected(
             actorTypeId,
-            keepAliveTicks,
+            effectiveKeepAliveTicks,
             releasePolicy,
             in options);
 
         ProjectedActorRef actorRef =
             ProjectedActorRef.CreateProjectable(
                 actorTypeId,
-                keepAliveTicks,
+                effectiveKeepAliveTicks,
                 releasePolicy,
                 in options);
 
@@ -60,5 +78,57 @@ internal static class ProjectedActorMarkUtility
         {
             world.Add(entity, actorRef);
         }
+
+        if (options.CreatePolicy == ProjectedActorCreatePolicy.OnMark)
+        {
+            EnsureOnMarkProjectedActor(
+                world,
+                entity,
+                ref meta);
+        }
+    }
+
+    /// <summary>
+    /// EnsureOnMarkProjectedActor 作用：
+    /// 当 ActorOptions.CreatePolicy 为 OnMark 时，立即创建并绑定 ProjectedActor。
+    ///
+    /// world 参数作用：
+    /// 当前 ECS World。
+    ///
+    /// entity 参数作用：
+    /// 被标记为可投影的 Entity。
+    ///
+    /// meta 参数作用：
+    /// Entity 对应的 ProjectedActorMeta。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void EnsureOnMarkProjectedActor(
+        World world,
+        Entity entity,
+        ref ProjectedActorMeta meta)
+    {
+        if (meta.ActorId.IsValid)
+        {
+            return;
+        }
+
+        if (!world.Has<ProjectedActorRef>(entity))
+        {
+            return;
+        }
+
+        ref ProjectedActorRef actorRef =
+            ref world.Get<ProjectedActorRef>(entity);
+
+        long nowTicks =
+            Stopwatch.GetTimestamp();
+
+        ProjectedActorBinding.EnsureProjectedActor(
+            world,
+            world.Runtime.Actors,
+            entity,
+            ref meta,
+            ref actorRef,
+            nowTicks);
     }
 }

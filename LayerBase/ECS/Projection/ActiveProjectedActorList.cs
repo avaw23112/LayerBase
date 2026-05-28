@@ -34,34 +34,34 @@ internal sealed class ActiveProjectedActorList
     /// <summary>
     /// Sweep 预算化版本。
     ///
-    /// 参数说明：
-    /// world：ECS World。
-    /// actorWorld：ActorWorld。
-    /// maxCount：单帧最多处理的 Actor 数量。
+    /// world 参数作用：
+    /// 当前 ECS World。
     ///
-    /// 行为：
-    /// 1. 单帧最多处理 maxCount 个。
-    /// 2. 多帧轮转处理所有 active projected actor。
-    /// 3. 不使用 Dictionary。
-    /// 4. Disable 不清 ActorId。
-    /// 5. 到期判断使用 ProjectedActorRef.ExpireAtTicks，不再依赖 IPooledActor。
+    /// actorWorld 参数作用：
+    /// 当前 ActorWorld，用于执行 Disable / ReturnToPool 等生命周期操作。
+    ///
+    /// maxCount 参数作用：
+    /// 单帧最多检查的 ProjectedActor 数量。
+    /// 注意：这里限制的是检查数量，不是退场数量。
     /// </summary>
     public void Sweep(
         World      world,
         ActorWorld actorWorld,
         int        maxCount = 512)
     {
-        if (_count == 0)
+        if (_count == 0 || maxCount <= 0)
         {
             return;
         }
 
         long nowTicks = Stopwatch.GetTimestamp();
-        int processed = 0;
+        int inspected = 0;
 
-        for (int i = 0; i < _count && processed < maxCount; i++)
+        for (int i = 0; i < _count && inspected < maxCount;)
         {
             int index = (_sweepCursor + i) % _count;
+            inspected++;
+
             Entity entity = _items[index].Entity;
 
             if (!world.TryGetProjectionMeta(
@@ -69,7 +69,6 @@ internal sealed class ActiveProjectedActorList
                     out ProjectedActorMetaRef metaRef))
             {
                 RemoveDeadAt(world, index);
-                processed++;
                 continue;
             }
 
@@ -77,7 +76,13 @@ internal sealed class ActiveProjectedActorList
             if (!meta.ActorId.IsValid)
             {
                 RemoveAt(world, index, ref meta);
-                processed++;
+                continue;
+            }
+
+            if (!world.Has<ProjectedActorRef>(entity))
+            {
+                ProjectedActorBindingUtility.Clear(world, entity, ref meta);
+                RemoveAt(world, index, ref meta);
                 continue;
             }
 
@@ -87,6 +92,7 @@ internal sealed class ActiveProjectedActorList
             // 使用 ExpireAtTicks 判断是否到期
             if (nowTicks < actorRef.ExpireAtTicks)
             {
+                i++;
                 continue;
             }
 
@@ -98,15 +104,19 @@ internal sealed class ActiveProjectedActorList
                 ProjectedActorBindingUtility.Clear(world, entity, ref meta);
                 actorRef.ClearActor();
                 RemoveAt(world, index, ref meta);
-                processed++;
                 continue;
             }
 
             RetireProjectedActor(world, actorWorld, entity, ref meta, ref actorRef, pooledActor);
-            processed++;
         }
 
-        _sweepCursor = (_sweepCursor + processed) % Math.Max(1, _count);
+        if (_count == 0)
+        {
+            _sweepCursor = 0;
+            return;
+        }
+
+        _sweepCursor = (_sweepCursor + inspected) % _count;
     }
 
     /// <summary>
@@ -125,6 +135,12 @@ internal sealed class ActiveProjectedActorList
             case ProjectedActorRetirePolicy.Disable:
                 actorWorld.DisableProjectedActor(meta.ActorId);
                 meta.State = ProjectedActorState.Disabled;
+
+                // ExpireAtTicks 参数作用：
+                // Disable 后不再让该 Actor 持续命中到期判断。
+                // 下一次 Touch 时 RefreshProjectedActorInterest 会先 OnEnable，再刷新 ExpireAtTicks。
+                actorRef.ExpireAtTicks = long.MaxValue;
+
                 return;
 
             case ProjectedActorRetirePolicy.ReturnToPool:

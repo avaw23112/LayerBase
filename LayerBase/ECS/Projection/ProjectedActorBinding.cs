@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.CompilerServices;
 using Arch.Core;
 using LayerBase.Actor;
@@ -87,6 +88,11 @@ internal static class ProjectedActorBinding
         return handle.ActorId;
     }
 
+    /// <summary>
+    /// 旧 TouchProjectedActor 兼容方法。
+    /// 新代码必须使用 RefreshProjectedActorInterest。
+    /// </summary>
+    [Obsolete("Use RefreshProjectedActorInterest instead. This method no longer refreshes ExpireAtTicks.")]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void TouchProjectedActor(
         ActorWorld             actorWorld,
@@ -103,9 +109,6 @@ internal static class ProjectedActorBinding
             meta.ClearActor();
             return;
         }
-
-        // 注意：这个方法现在只用于兼容旧路径
-        // 新路径使用 RefreshProjectedActorInterest
     }
 
     /// <summary>

@@ -133,7 +133,7 @@ public class ProjectedActorProjectionTests
         Entity entity = runtime.EcsWorld.Create(
             new ProjectionPositionComponent { X = 1f, Y = 2f },
             new ProjectionVelocityComponent { X = 3f, Y = 4f },new ProjectedActorRef());
-        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 1, keepAliveSeconds: 0.5f);
+        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 1, keepAliveOverrideTicks: ProjectedActorTime.SecondsToTicks(0.5f), releasePolicy: ProjectedActorReleasePolicy.ReturnToPool);
 
         runtime.EcsWorld
                .Query<ProjectionPositionComponent, ProjectionVelocityComponent>()
@@ -178,7 +178,7 @@ public class ProjectedActorProjectionTests
         Entity entity = runtime.EcsWorld.Create(
             new ProjectionPositionComponent { X = 10f, Y = 20f },
             new ProjectionAoiComponent { IsVisible = true },new ProjectedActorRef());
-        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 2, keepAliveSeconds: 0.01f);
+        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 2, keepAliveOverrideTicks: ProjectedActorTime.SecondsToTicks(0.01f), releasePolicy: ProjectedActorReleasePolicy.ReturnToPool);
 
         runtime.EcsWorld
                .Query<ProjectionPositionComponent, ProjectionAoiComponent>()
@@ -206,7 +206,7 @@ public class ProjectedActorProjectionTests
         
         Entity first = runtime.EcsWorld.Create(new ProjectionPositionComponent { X = 1f, Y = 1f },new ProjectedActorRef());
         Entity second = runtime.EcsWorld.Create(new ProjectionPositionComponent { X = 2f, Y = 2f },new ProjectedActorRef());
-        runtime.EcsWorld.WithProjectedActor(second, actorTypeId: 3, keepAliveSeconds: 0.5f);
+        runtime.EcsWorld.WithProjectedActor(second, actorTypeId: 3, keepAliveOverrideTicks: ProjectedActorTime.SecondsToTicks(0.5f), releasePolicy: ProjectedActorReleasePolicy.ReturnToPool);
 
         runtime.EcsWorld
                .Query<ProjectionPositionComponent>()
@@ -272,7 +272,7 @@ public class ProjectedActorProjectionTests
         RegisterProjectionProbe(runtime, actorTypeId: 10);
 
         Entity entity = runtime.EcsWorld.Create();
-        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
+        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveOverrideTicks: ProjectedActorTime.SecondsToTicks(0.5f), releasePolicy: ProjectedActorReleasePolicy.ReturnToPool);
 
         runtime.EcsWorld
                .Query()
@@ -294,7 +294,7 @@ public class ProjectedActorProjectionTests
         RegisterProjectionProbe(runtime, actorTypeId: 10);
 
         Entity entity = runtime.EcsWorld.Create(new ProjectedActorRef());
-        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
+        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveOverrideTicks: ProjectedActorTime.SecondsToTicks(0.5f), releasePolicy: ProjectedActorReleasePolicy.ReturnToPool);
 
         runtime.EcsWorld
                .Query()
@@ -314,7 +314,7 @@ public class ProjectedActorProjectionTests
         RegisterProjectionProbe(runtime, actorTypeId: 10);
 
         Entity entity = runtime.EcsWorld.Create(new ProjectedActorRef());
-        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
+        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveOverrideTicks: ProjectedActorTime.SecondsToTicks(0.5f), releasePolicy: ProjectedActorReleasePolicy.ReturnToPool);
 
         ref ProjectedActorMeta meta =
             ref runtime.EcsWorld.GetProjectionMeta(entity);
@@ -332,7 +332,7 @@ public class ProjectedActorProjectionTests
         Entity entity = runtime.EcsWorld.Create(
             new ProjectionPositionComponent(),
             new ProjectionVelocityComponent());
-        runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 10, keepAliveSeconds: 0.5f);
+        runtime.EcsWorld.WithProjectedActor<ProjectionProbeActor>(entity,  keepAliveSeconds: 0.5f,releasePolicy:ProjectedActorReleasePolicy.ReturnToPool);
 
         ref ProjectedActorMeta meta =
             ref runtime.EcsWorld.GetProjectionMeta(entity);

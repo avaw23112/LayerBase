@@ -23,24 +23,50 @@ public static class ProjectedActorWorldExtensions
                 $"ProjectedActor type {typeof(TActor).Name} was not generated. Make sure it implements IPooledActor and is visible to the generator.");
         }
 
-        // TODO(ProjectedActor Registry Migration):
-        // 该 RegisterGenerated 仅用于兼容旧路径。
-        // 最终注册应由 GeneratedProjectedActorTypes.RegisterAll 在 LayersBuilder.Build 阶段完成。
         ProjectedActorTypeRegistry.RegisterGenerated(actorTypeId, typeof(TActor),
             static actorWorld => actorWorld.CreateProjectedActor<TActor>());
 
-        WithProjectedActor(world, entity, actorTypeId, keepAliveSeconds, releasePolicy);
+        long keepAliveTicks = ProjectedActorTime.SecondsToTicks(keepAliveSeconds);
+        WithProjectedActor(world, entity, actorTypeId, keepAliveTicks, releasePolicy);
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    /// <summary>
+    /// 将 Entity 标记为可投影 Actor。
+    ///
+    /// world 参数作用：
+    /// 当前 ECS World。
+    ///
+    /// entity 参数作用：
+    /// 需要绑定 ProjectedActor 的 Entity。
+    ///
+    /// actorTypeId 参数作用：
+    /// ProjectedActor 类型编号。
+    ///
+    /// keepAliveOverrideTicks 参数作用：
+    /// 显式覆盖的保活时长。
+    /// null 表示使用 ProjectedActorOptions.KeepAliveTicks。
+    ///
+    /// releasePolicy 参数作用：
+    /// 兼容旧释放策略。
+    /// </summary>
     internal static void WithProjectedActor(
-        this World                  world,
-        Entity                      entity,
-        int                         actorTypeId,
-        float                       keepAliveSeconds = 0.2f,
-        ProjectedActorReleasePolicy releasePolicy    = ProjectedActorReleasePolicy.ReturnToPool)
+        this World world,
+        Entity entity,
+        int actorTypeId,
+        long? keepAliveOverrideTicks,
+        ProjectedActorReleasePolicy releasePolicy)
     {
-        ref ProjectedActorMeta meta = ref world.GetProjectionMeta(entity);
-        ProjectedActorMarkUtility.MarkProjected(world, entity, ref meta, actorTypeId, ProjectedActorTime.SecondsToTicks(keepAliveSeconds), releasePolicy);
+        ref ProjectedActorMeta meta =
+            ref world.GetProjectionMeta(entity);
+
+        ProjectedActorMarkUtility.MarkProjected(
+            world,
+            entity,
+            ref meta,
+            actorTypeId,
+            keepAliveOverrideTicks,
+            releasePolicy);
     }
+
+
 }

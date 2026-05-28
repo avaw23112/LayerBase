@@ -36,7 +36,22 @@ internal static class ProjectedActorTypeRegistry
     }
 
     /// <summary>
-    /// 旧 RegisterGenerated - 兼容冷路径，首次调用时反射读取 ActorOptionsAttribute 并缓存。
+    /// RegisterGenerated 作用：
+    /// 注册 ActorTypeId 对应的 Actor Type、Factory 和 ProjectedActorOptions。
+    ///
+    /// actorTypeId 参数作用：
+    /// Actor 类型编号。
+    ///
+    /// actorType 参数作用：
+    /// Actor 的 CLR Type。
+    ///
+    /// factory 参数作用：
+    /// Actor 创建函数。
+    ///
+    /// 逻辑说明：
+    /// 1. Type / Factory 每次写入，保持原有 RegisterGenerated 语义。
+    /// 2. ActorOptions 只在首次注册时通过反射解析一次。
+    /// 3. 后续热路径只通过 GetOptions 读取缓存。
     /// </summary>
     public static void RegisterGenerated(
         int                   actorTypeId,
@@ -44,11 +59,15 @@ internal static class ProjectedActorTypeRegistry
         ProjectedActorFactory factory)
     {
         EnsureCapacity(actorTypeId);
+
+        _typesById[actorTypeId] = actorType;
+        _factoriesById[actorTypeId] = factory;
+
         if (!_optionsInitializedById[actorTypeId])
         {
-            _typesById[actorTypeId] = actorType;
-            _factoriesById[actorTypeId] = factory;
-            _optionsById[actorTypeId] = CreateOptionsFromAttribute(actorType);
+            _optionsById[actorTypeId] =
+                CreateOptionsFromAttribute(actorType);
+
             _optionsInitializedById[actorTypeId] = true;
         }
     }
