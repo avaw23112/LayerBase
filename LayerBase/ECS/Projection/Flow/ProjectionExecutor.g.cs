@@ -82,40 +82,20 @@ internal static class ProjectionExecutor0
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
+
+            if (!alive)
+            {
+                continue;
+            }
+
             ActorId actorId = actorRef.ActorId;
-
-            if (!actorId.IsValid)
-            {
-                actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
-
-                if (!actorId.IsValid)
-                {
-                    continue;
-                }
-            }
-            else
-            {
-                bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
-
-                if (!alive)
-                {
-                    continue;
-                }
-
-                actorId = actorRef.ActorId;
-            }
 
             TEvent output = default;
 
@@ -157,24 +137,13 @@ internal static class ProjectionExecutor0
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            if (!actorRef.ActorId.IsValid)
-            {
-                _ = ProjectedActorBinding.EnsureProjectedActor(
-                    world,
-                    actorWorld,
-                    entity,
-                    ref actorRef,
-                    nowTicks);
-            }
-            else
-            {
-                _ = ProjectedActorBinding.TouchProjectedActor(
-                    world,
-                    actorWorld,
-                    entity,
-                    ref actorRef,
-                    nowTicks);
-            }
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
         }
     }
 }
@@ -237,18 +206,11 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1);
 
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            if (!alive) continue;
+
             ActorId actorId = actorRef.ActorId;
-            if (!actorId.IsValid)
-            {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
-            }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
 
             batch0.Add(actorId, in e0);
             batch1.Add(actorId, in e1);
@@ -321,18 +283,11 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2);
 
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            if (!alive) continue;
+
             ActorId actorId = actorRef.ActorId;
-            if (!actorId.IsValid)
-            {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
-            }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
 
             batch0.Add(actorId, in e0);
             batch1.Add(actorId, in e1);
@@ -413,18 +368,11 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3);
 
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            if (!alive) continue;
+
             ActorId actorId = actorRef.ActorId;
-            if (!actorId.IsValid)
-            {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
-            }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
 
             batch0.Add(actorId, in e0);
             batch1.Add(actorId, in e1);
@@ -513,18 +461,11 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4);
 
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            if (!alive) continue;
+
             ActorId actorId = actorRef.ActorId;
-            if (!actorId.IsValid)
-            {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
-            }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
 
             batch0.Add(actorId, in e0);
             batch1.Add(actorId, in e1);
@@ -621,18 +562,11 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            if (!alive) continue;
+
             ActorId actorId = actorRef.ActorId;
-            if (!actorId.IsValid)
-            {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
-            }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
 
             batch0.Add(actorId, in e0);
             batch1.Add(actorId, in e1);
@@ -737,18 +671,11 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            if (!alive) continue;
+
             ActorId actorId = actorRef.ActorId;
-            if (!actorId.IsValid)
-            {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
-            }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
 
             batch0.Add(actorId, in e0);
             batch1.Add(actorId, in e1);
@@ -861,18 +788,11 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            if (!alive) continue;
+
             ActorId actorId = actorRef.ActorId;
-            if (!actorId.IsValid)
-            {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
-            }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
 
             batch0.Add(actorId, in e0);
             batch1.Add(actorId, in e1);
@@ -993,18 +913,11 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            if (!alive) continue;
+
             ActorId actorId = actorRef.ActorId;
-            if (!actorId.IsValid)
-            {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
-            }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
 
             batch0.Add(actorId, in e0);
             batch1.Add(actorId, in e1);
@@ -1133,18 +1046,11 @@ where TEvent0 : struct
 
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            if (!alive) continue;
+
             ActorId actorId = actorRef.ActorId;
-            if (!actorId.IsValid)
-            {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
-            }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
 
             batch0.Add(actorId, in e0);
             batch1.Add(actorId, in e1);
@@ -1345,42 +1251,20 @@ internal static class ProjectionExecutor1<T0>
                     ref firstActorRef,
                     row);
 
-            ActorId actorId =
-                actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
-
-                if (!actorId.IsValid)
-                {
-                    continue;
-                }
+                continue;
             }
-            else
-            {
-                bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
 
-                if (!alive)
-                {
-                    continue;
-                }
-
-                actorId =
-                    actorRef.ActorId;
-            }
+            ActorId actorId = actorRef.ActorId;
 
             if (result == ProjectResult.Touch)
             {
@@ -1426,19 +1310,20 @@ internal static class ProjectionExecutor1<T0>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
+                continue;
             }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
+
+            ActorId actorId = actorRef.ActorId;
 
             TEvent output = default;
             forEach(in entity, ref c0, ref output);
@@ -1477,14 +1362,13 @@ internal static class ProjectionExecutor1<T0>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            if (!actorRef.ActorId.IsValid)
-            {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
-            else
-            {
-                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
         }
     }
 }
@@ -4524,42 +4408,20 @@ internal static class ProjectionExecutor2<T0, T1>
                     ref firstActorRef,
                     row);
 
-            ActorId actorId =
-                actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
-
-                if (!actorId.IsValid)
-                {
-                    continue;
-                }
+                continue;
             }
-            else
-            {
-                bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
 
-                if (!alive)
-                {
-                    continue;
-                }
-
-                actorId =
-                    actorRef.ActorId;
-            }
+            ActorId actorId = actorRef.ActorId;
 
             if (result == ProjectResult.Touch)
             {
@@ -4607,19 +4469,20 @@ internal static class ProjectionExecutor2<T0, T1>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
+                continue;
             }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
+
+            ActorId actorId = actorRef.ActorId;
 
             TEvent output = default;
             forEach(in entity, ref c0, ref c1, ref output);
@@ -4660,14 +4523,13 @@ internal static class ProjectionExecutor2<T0, T1>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            if (!actorRef.ActorId.IsValid)
-            {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
-            else
-            {
-                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
         }
     }
 }
@@ -7758,42 +7620,20 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                     ref firstActorRef,
                     row);
 
-            ActorId actorId =
-                actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
-
-                if (!actorId.IsValid)
-                {
-                    continue;
-                }
+                continue;
             }
-            else
-            {
-                bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
 
-                if (!alive)
-                {
-                    continue;
-                }
-
-                actorId =
-                    actorRef.ActorId;
-            }
+            ActorId actorId = actorRef.ActorId;
 
             if (result == ProjectResult.Touch)
             {
@@ -7843,19 +7683,20 @@ internal static class ProjectionExecutor3<T0, T1, T2>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
+                continue;
             }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
+
+            ActorId actorId = actorRef.ActorId;
 
             TEvent output = default;
             forEach(in entity, ref c0, ref c1, ref c2, ref output);
@@ -7898,14 +7739,13 @@ internal static class ProjectionExecutor3<T0, T1, T2>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            if (!actorRef.ActorId.IsValid)
-            {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
-            else
-            {
-                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
         }
     }
 }
@@ -11047,42 +10887,20 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                     ref firstActorRef,
                     row);
 
-            ActorId actorId =
-                actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
-
-                if (!actorId.IsValid)
-                {
-                    continue;
-                }
+                continue;
             }
-            else
-            {
-                bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
 
-                if (!alive)
-                {
-                    continue;
-                }
-
-                actorId =
-                    actorRef.ActorId;
-            }
+            ActorId actorId = actorRef.ActorId;
 
             if (result == ProjectResult.Touch)
             {
@@ -11134,19 +10952,20 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
+                continue;
             }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
+
+            ActorId actorId = actorRef.ActorId;
 
             TEvent output = default;
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref output);
@@ -11191,14 +11010,13 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            if (!actorRef.ActorId.IsValid)
-            {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
-            else
-            {
-                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
         }
     }
 }
@@ -14391,42 +14209,20 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                     ref firstActorRef,
                     row);
 
-            ActorId actorId =
-                actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
-
-                if (!actorId.IsValid)
-                {
-                    continue;
-                }
+                continue;
             }
-            else
-            {
-                bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
 
-                if (!alive)
-                {
-                    continue;
-                }
-
-                actorId =
-                    actorRef.ActorId;
-            }
+            ActorId actorId = actorRef.ActorId;
 
             if (result == ProjectResult.Touch)
             {
@@ -14480,19 +14276,20 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
+                continue;
             }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
+
+            ActorId actorId = actorRef.ActorId;
 
             TEvent output = default;
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref output);
@@ -14539,14 +14336,13 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            if (!actorRef.ActorId.IsValid)
-            {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
-            else
-            {
-                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
         }
     }
 }
@@ -17790,42 +17586,20 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                     ref firstActorRef,
                     row);
 
-            ActorId actorId =
-                actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
-
-                if (!actorId.IsValid)
-                {
-                    continue;
-                }
+                continue;
             }
-            else
-            {
-                bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
 
-                if (!alive)
-                {
-                    continue;
-                }
-
-                actorId =
-                    actorRef.ActorId;
-            }
+            ActorId actorId = actorRef.ActorId;
 
             if (result == ProjectResult.Touch)
             {
@@ -17881,19 +17655,20 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
+                continue;
             }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
+
+            ActorId actorId = actorRef.ActorId;
 
             TEvent output = default;
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref output);
@@ -17942,14 +17717,13 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            if (!actorRef.ActorId.IsValid)
-            {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
-            else
-            {
-                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
         }
     }
 }
@@ -21244,42 +21018,20 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                     ref firstActorRef,
                     row);
 
-            ActorId actorId =
-                actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
-
-                if (!actorId.IsValid)
-                {
-                    continue;
-                }
+                continue;
             }
-            else
-            {
-                bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
 
-                if (!alive)
-                {
-                    continue;
-                }
-
-                actorId =
-                    actorRef.ActorId;
-            }
+            ActorId actorId = actorRef.ActorId;
 
             if (result == ProjectResult.Touch)
             {
@@ -21337,19 +21089,20 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
+                continue;
             }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
+
+            ActorId actorId = actorRef.ActorId;
 
             TEvent output = default;
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref output);
@@ -21400,14 +21153,13 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            if (!actorRef.ActorId.IsValid)
-            {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
-            else
-            {
-                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
         }
     }
 }
@@ -24753,42 +24505,20 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                     ref firstActorRef,
                     row);
 
-            ActorId actorId =
-                actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
-
-                if (!actorId.IsValid)
-                {
-                    continue;
-                }
+                continue;
             }
-            else
-            {
-                bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
-                        entity,
-                        ref actorRef,
-                        nowTicks);
 
-                if (!alive)
-                {
-                    continue;
-                }
-
-                actorId =
-                    actorRef.ActorId;
-            }
+            ActorId actorId = actorRef.ActorId;
 
             if (result == ProjectResult.Touch)
             {
@@ -24848,19 +24578,20 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            ActorId actorId = actorRef.ActorId;
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
 
-            if (!actorId.IsValid)
+            if (!alive)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!actorId.IsValid) continue;
+                continue;
             }
-            else
-            {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-                if (!alive) continue;
-                actorId = actorRef.ActorId;
-            }
+
+            ActorId actorId = actorRef.ActorId;
 
             TEvent output = default;
             forEach(in entity, ref c0, ref c1, ref c2, ref c3, ref c4, ref c5, ref c6, ref c7, ref output);
@@ -24913,14 +24644,13 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
             ref ProjectedActorRef actorRef =
                 ref Unsafe.Add(ref firstActorRef, row);
 
-            if (!actorRef.ActorId.IsValid)
-            {
-                _ = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
-            else
-            {
-                _ = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
-            }
+            // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
         }
     }
 }

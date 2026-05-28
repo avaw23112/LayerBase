@@ -86,4 +86,55 @@ public sealed partial class ActorWorld
             this,
             releasePolicy);
     }
+
+    /// <summary>
+    /// 检查 ProjectedActor 是否处于 Disabled 状态。
+    /// </summary>
+    internal bool IsProjectedActorDisabled(ActorId actorId)
+    {
+        return !IsEnable(actorId);
+    }
+
+    /// <summary>
+    /// 将 ProjectedActor 从 Disabled 恢复为 Active。
+    ///
+    /// 返回值：
+    /// true 表示 Enable 成功。
+    /// false 表示 Actor 不存在或 Enable 失败。
+    /// </summary>
+    internal bool EnableProjectedActorIfDisabled(ActorId actorId)
+    {
+        if (!TryGetPooledActor(actorId, out IPooledActor actor))
+        {
+            return false;
+        }
+
+        SetEnable(actorId, true);
+        actor.OnEnable();
+        return true;
+    }
+
+    /// <summary>
+    /// 将 ProjectedActor 从 Active 进入 Disabled 状态。
+    ///
+    /// 返回值：
+    /// true 表示 Disable 成功。
+    /// false 表示 Actor 不存在或已经 Disabled。
+    /// </summary>
+    internal bool DisableProjectedActor(ActorId actorId)
+    {
+        if (!TryGetPooledActor(actorId, out IPooledActor actor))
+        {
+            return false;
+        }
+
+        if (IsProjectedActorDisabled(actorId))
+        {
+            return true;
+        }
+
+        actor.OnDisable();
+        SetEnable(actorId, false);
+        return true;
+    }
 }

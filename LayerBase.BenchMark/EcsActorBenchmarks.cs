@@ -233,12 +233,6 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
     /// </summary>
     public sealed partial class PooledActor : IActor, IPooledActor
     {
-        /// <summary>
-        /// 回收截止时间戳。
-        /// 作用：Projected Actor 的 keep-alive 系统会根据它判断是否可以回收。
-        /// </summary>
-        public long RecycleDeadlineTicks { get; set; }
-
         public int MoveCount;
 
         /// <summary>
@@ -255,6 +249,14 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
         /// 当前不需要额外清理。
         /// </summary>
         public void OnReturn()
+        {
+        }
+
+        public void OnEnable()
+        {
+        }
+
+        public void OnDisable()
         {
         }
 
@@ -776,9 +778,6 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
             return ActorId.Invalid;
         }
 
-        // 避免 benchmark 运行过程中 projected actor 被 keep-alive 扫描回收。
-        handle.Actor.RecycleDeadlineTicks = long.MaxValue;
-
         meta.BindActor(handle.ActorId);
 
         // ProjectedActorRef：
@@ -790,6 +789,8 @@ public partial class EcsActorBenchmarks : EventBenchmarkBase
                 ref world.Get<ProjectedActorRef>(entity);
 
             actorRef.ActorId = handle.ActorId;
+            // 避免 benchmark 运行过程中 projected actor 被 keep-alive 扫描回收。
+            actorRef.ExpireAtTicks = long.MaxValue;
         }
         else
         {

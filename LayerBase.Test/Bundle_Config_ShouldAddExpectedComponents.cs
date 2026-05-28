@@ -276,13 +276,19 @@ public sealed class BundleBlueprintTests
 
     public sealed class TestEnemyActor : IPooledActor
     {
-        public long RecycleDeadlineTicks { get; set; }
-
         public void OnRent()
         {
         }
 
         public void OnReturn()
+        {
+        }
+
+        public void OnEnable()
+        {
+        }
+
+        public void OnDisable()
         {
         }
     }

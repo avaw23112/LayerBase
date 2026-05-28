@@ -12,18 +12,35 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
 
     public int Count { get; private set; }
 
+    /// <summary>
+    /// GrowCount 作用：
+    /// 记录 Grow 调用次数，用于测试容量预测。
+    /// </summary>
+    internal int GrowCount { get; private set; }
+
     private ProjectionBatchBuffer(ActorId[] actorIds, TEvent[] events)
     {
         _actorIds = actorIds;
         _events = events;
         Count = 0;
+        GrowCount = 0;
     }
 
+    /// <summary>
+    /// Rent 支持 initialCapacity 参数。
+    ///
+    /// 参数说明：
+    /// initialCapacity：初始容量，用于容量预测。
+    /// </summary>
     public static ProjectionBatchBuffer<TEvent> Rent(int initialCapacity = 64)
     {
+        int safeCapacity = initialCapacity <= 0
+            ? 64
+            : initialCapacity;
+
         return new ProjectionBatchBuffer<TEvent>(
-            ArrayPool<ActorId>.Shared.Rent(initialCapacity),
-            ArrayPool<TEvent>.Shared.Rent(initialCapacity));
+            ArrayPool<ActorId>.Shared.Rent(safeCapacity),
+            ArrayPool<TEvent>.Shared.Rent(safeCapacity));
     }
 
     public void Add(ActorId actorId, in TEvent value)
@@ -41,6 +58,7 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
 
     private void Grow()
     {
+        GrowCount++;
         int newLength = _actorIds.Length << 1;
         ActorId[] newActorIds = ArrayPool<ActorId>.Shared.Rent(newLength);
         TEvent[] newEvents = ArrayPool<TEvent>.Shared.Rent(newLength);

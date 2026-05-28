@@ -36,16 +36,21 @@ internal static class ProjectedActorMarkUtility
         long keepAliveTicks,
         ProjectedActorReleasePolicy releasePolicy)
     {
+        ProjectedActorOptions options =
+            ProjectedActorTypeRegistry.GetOptions(actorTypeId);
+
         meta.MarkProjected(
             actorTypeId,
             keepAliveTicks,
-            releasePolicy);
+            releasePolicy,
+            in options);
 
         ProjectedActorRef actorRef =
             ProjectedActorRef.CreateProjectable(
                 actorTypeId,
                 keepAliveTicks,
-                releasePolicy);
+                releasePolicy,
+                in options);
 
         if (world.Has<ProjectedActorRef>(entity))
         {

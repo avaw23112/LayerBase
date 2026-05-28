@@ -52,8 +52,8 @@ public partial class World
         _activeProjectedActors.Add(entity, ref meta);
     }
 
-    internal void SweepProjectedActors()
+    internal void SweepProjectedActors(int maxCount = 512)
     {
-        _activeProjectedActors.Sweep(this, Runtime.Actors);
+        _activeProjectedActors.Sweep(this, Runtime.Actors, maxCount);
     }
 }

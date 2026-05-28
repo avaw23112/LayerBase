@@ -190,6 +190,55 @@ public class ActorGeneratorTests
             string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
     }
 
+    [Test]
+    public void Generated_actor_options_only_actor_code_compiles_without_errors()
+    {
+        (GeneratorRunResult result, Compilation outputCompilation) = RunGeneratorWithCompilation("""
+            using LayerBase.Actor;
+            using LayerBase.ECS.Projection;
+
+            namespace Sample;
+
+            [ActorOptions(
+                retirePolicy: ProjectedActorRetirePolicy.Disable,
+                createPolicy: ProjectedActorCreatePolicy.Lazy,
+                keepAliveSeconds: 1.0f,
+                touchIntervalSeconds: 0.2f)]
+            public sealed partial class EnemyActor : IPooledActor
+            {
+                public void OnRent()
+                {
+                }
+
+                public void OnReturn()
+                {
+                }
+
+                public void OnEnable()
+                {
+                }
+
+                public void OnDisable()
+                {
+                }
+            }
+            """);
+
+        Assert.That(GetGeneratorDiagnostics(result), Is.Empty);
+
+        ImmutableArray<Diagnostic> errors = outputCompilation.GetDiagnostics()
+                                                             .Where(static diagnostic =>
+                                                                 diagnostic.Severity == DiagnosticSeverity.Error)
+                                                             .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = result.GeneratedSources.Single().SourceText.ToString();
+        Assert.That(generated, Does.Contain("partial class EnemyActor : global::LayerBase.Actor.IGeneratedActorMeta"));
+        Assert.That(generated, Does.Contain("void global::LayerBase.Actor.IGeneratedActorMeta.__BuildActorMeta"));
+    }
+
     [TestCase("LBACTOR001", """
                             using LayerBase.Actor;
 

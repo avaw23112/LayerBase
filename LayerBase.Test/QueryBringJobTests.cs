@@ -54,8 +54,6 @@ internal sealed partial class JobProbeActor : IPooledActor
     public static int RentCount { get; set; }
     public static int ReturnCount { get; set; }
 
-    public long RecycleDeadlineTicks { get; set; }
-
     [ActorBehaviour]
     private void OnMove(in JobMoveViewEvent value)
     {
@@ -65,13 +63,19 @@ internal sealed partial class JobProbeActor : IPooledActor
     public void OnRent()
     {
         RentCount++;
-        RecycleDeadlineTicks = 0;
     }
 
     public void OnReturn()
     {
         ReturnCount++;
-        RecycleDeadlineTicks = 0;
+    }
+
+    public void OnEnable()
+    {
+    }
+
+    public void OnDisable()
+    {
     }
 }
 

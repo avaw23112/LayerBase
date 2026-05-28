@@ -18,6 +18,7 @@ internal static class ProjectedActorBindingUtility
     /// entity：需要绑定 Actor 的 Entity。
     /// meta：ProjectedActorMeta 引用。
     /// actorId：新绑定的 ActorId。
+    /// nowTicks：当前时间戳，用于初始化 ExpireAtTicks。
     ///
     /// 作用：
     /// 同时写入 internal meta 和 public ref。
@@ -27,10 +28,11 @@ internal static class ProjectedActorBindingUtility
         World world,
         Entity entity,
         ref ProjectedActorMeta meta,
-        ActorId actorId)
+        ActorId actorId,
+        long nowTicks)
     {
         meta.BindActor(actorId);
-        UpsertRef(world, entity, in meta, actorId);
+        UpsertRef(world, entity, in meta, actorId, nowTicks);
     }
 
     /// <summary>
@@ -40,6 +42,7 @@ internal static class ProjectedActorBindingUtility
     /// meta：ProjectedActorMeta 引用。
     /// actorRef：ProjectedActorRef 引用。
     /// actorId：新绑定的 ActorId。
+    /// nowTicks：当前时间戳，用于初始化 ExpireAtTicks。
     ///
     /// 作用：
     /// 用于模板热路径。
@@ -49,10 +52,11 @@ internal static class ProjectedActorBindingUtility
     public static void Bind(
         ref ProjectedActorMeta meta,
         ref ProjectedActorRef actorRef,
-        ActorId actorId)
+        ActorId actorId,
+        long nowTicks)
     {
         meta.BindActor(actorId);
-        actorRef.Bind(actorId);
+        actorRef.Bind(actorId, nowTicks);
     }
 
     /// <summary>
@@ -78,7 +82,8 @@ internal static class ProjectedActorBindingUtility
             world,
             entity,
             in meta,
-            ActorId.Invalid);
+            ActorId.Invalid,
+            0); // 清理时 nowTicks 传 0
     }
 
     /// <summary>
@@ -136,18 +141,28 @@ internal static class ProjectedActorBindingUtility
     /// <param name="entity">目标 Entity。</param>
     /// <param name="meta">当前 ProjectedActorMeta。</param>
     /// <param name="actorId">要写入的 ActorId。</param>
+    /// <param name="nowTicks">当前时间戳。</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void UpsertRef(
         World world,
         Entity entity,
         in ProjectedActorMeta meta,
-        ActorId actorId)
+        ActorId actorId,
+        long nowTicks)
     {
         var actorRef = new ProjectedActorRef(
             actorId,
             meta.ActorTypeId,
             meta.KeepAliveTicks,
             meta.ReleasePolicy);
+
+        actorRef.RetirePolicy = meta.RetirePolicy;
+        actorRef.CreatePolicy = meta.CreatePolicy;
+        actorRef.TouchIntervalTicks = meta.TouchIntervalTicks;
+        actorRef.NextTouchTicks = meta.NextTouchTicks;
+
+        // 初始化 ExpireAtTicks
+        actorRef.ExpireAtTicks = ProjectedActorTime.BuildDeadline(nowTicks, meta.KeepAliveTicks);
 
         if (world.Has<ProjectedActorRef>(entity))
         {

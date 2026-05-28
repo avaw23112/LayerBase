@@ -22,8 +22,13 @@ public static class ProjectedActorWorldExtensions
             throw new InvalidOperationException(
                 $"ProjectedActor type {typeof(TActor).Name} was not generated. Make sure it implements IPooledActor and is visible to the generator.");
         }
+
+        // TODO(ProjectedActor Registry Migration):
+        // 该 RegisterGenerated 仅用于兼容旧路径。
+        // 最终注册应由 GeneratedProjectedActorTypes.RegisterAll 在 LayersBuilder.Build 阶段完成。
         ProjectedActorTypeRegistry.RegisterGenerated(actorTypeId, typeof(TActor),
             static actorWorld => actorWorld.CreateProjectedActor<TActor>());
+
         WithProjectedActor(world, entity, actorTypeId, keepAliveSeconds, releasePolicy);
     }
 

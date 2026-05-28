@@ -10,8 +10,7 @@ namespace LayerBase.ECS.Projection;
 /// 1. 作为普通 ECS 组件参与 Projection Query。
 /// 2. 保存 ProjectionExecutor 热路径所需的 ActorId。
 /// 3. 保存冷路径创建 Actor 所需的 ActorTypeId。
-/// 4. 保存 Touch 时刷新回收时间所需的 KeepAliveTicks。
-/// 5. 避免 ProjectionExecutor 每行读取 ProjectedActorMeta。
+/// 4. 保存 Projection 生命周期状态（ExpireAtTicks），不再依赖 IPooledActor。
 /// </summary>
 public struct ProjectedActorRef
 {
@@ -29,26 +28,50 @@ public struct ProjectedActorRef
     ///
     /// 参数作用：
     /// ActorId 无效时，EnsureProjectedActor 使用该字段创建正确类型的 Actor。
-    ///
-    /// 注意：
-    /// 该字段是 internal，业务层不应依赖它。
     /// </summary>
     internal int ActorTypeId;
 
     /// <summary>
-    /// Projected Actor 保活时间。
-    ///
-    /// 参数作用：
-    /// TouchProjectedActor 使用该字段刷新 IPooledActor.RecycleDeadlineTicks。
+    /// KeepAliveTicks 参数作用：
+    /// 最后一次 Touch 后，Actor 还能保持 Active 的时长。
+    /// 这是从 ActorOptions 缓存来的类型级策略。
     /// </summary>
     internal long KeepAliveTicks;
 
     /// <summary>
+    /// ExpireAtTicks 参数作用：
+    /// 当前 Actor 的实际到期时间。
+    /// 每次 Touch 时刷新为 nowTicks + KeepAliveTicks。
+    /// Sweep 时通过 nowTicks >= ExpireAtTicks 判断是否退场。
+    /// </summary>
+    internal long ExpireAtTicks;
+
+    /// <summary>
+    /// TouchIntervalTicks 参数作用：
+    /// 两次真实 Touch 之间的最小间隔。
+    /// 用于避免短时间重复刷新 ExpireAtTicks。
+    /// </summary>
+    internal long TouchIntervalTicks;
+
+    /// <summary>
+    /// NextTouchTicks 参数作用：
+    /// 下一次允许真实 Touch 的时间。
+    /// nowTicks 小于该值时，可以跳过真实刷新。
+    /// </summary>
+    internal long NextTouchTicks;
+
+    /// <summary>
+    /// 退场策略。
+    /// </summary>
+    internal ProjectedActorRetirePolicy RetirePolicy;
+
+    /// <summary>
+    /// 创建策略。
+    /// </summary>
+    internal ProjectedActorCreatePolicy CreatePolicy;
+
+    /// <summary>
     /// Projected Actor 释放策略。
-    ///
-    /// 参数作用：
-    /// 与 ProjectedActorMeta.ReleasePolicy 保持一致。
-    /// 当前热路径一般不直接读取它，但需要保留配置同步能力。
     /// </summary>
     internal ProjectedActorReleasePolicy ReleasePolicy;
 
@@ -64,9 +87,6 @@ public struct ProjectedActorRef
     /// <summary>
     /// 构造未绑定但可投影的 ProjectedActorRef。
     /// </summary>
-    /// <param name="actorTypeId">Projected Actor 类型 ID。</param>
-    /// <param name="keepAliveTicks">Projected Actor 保活时间。如果传入负数，则修正为 0。</param>
-    /// <param name="releasePolicy">Projected Actor 释放策略。</param>
     public ProjectedActorRef(
         int actorTypeId,
         long keepAliveTicks,
@@ -75,16 +95,39 @@ public struct ProjectedActorRef
         ActorId = ActorId.Invalid;
         ActorTypeId = actorTypeId;
         KeepAliveTicks = keepAliveTicks < 0 ? 0 : keepAliveTicks;
+        ExpireAtTicks = 0;
         ReleasePolicy = releasePolicy;
+        TouchIntervalTicks = 0;
+        NextTouchTicks = 0;
+        RetirePolicy = ProjectedActorRetirePolicy.ReturnToPool;
+        CreatePolicy = ProjectedActorCreatePolicy.Lazy;
+    }
+
+    /// <summary>
+    /// 构造未绑定但可投影的 ProjectedActorRef（带完整选项）。
+    /// </summary>
+    internal ProjectedActorRef(
+        int actorTypeId,
+        long keepAliveTicks,
+        ProjectedActorReleasePolicy releasePolicy,
+        ProjectedActorRetirePolicy retirePolicy,
+        ProjectedActorCreatePolicy createPolicy,
+        long touchIntervalTicks)
+    {
+        ActorId = ActorId.Invalid;
+        ActorTypeId = actorTypeId;
+        KeepAliveTicks = keepAliveTicks < 0 ? 0 : keepAliveTicks;
+        ExpireAtTicks = 0;
+        ReleasePolicy = releasePolicy;
+        TouchIntervalTicks = touchIntervalTicks;
+        NextTouchTicks = 0;
+        RetirePolicy = retirePolicy;
+        CreatePolicy = createPolicy;
     }
 
     /// <summary>
     /// 构造已绑定 ActorId 的 ProjectedActorRef。
     /// </summary>
-    /// <param name="actorId">已绑定的 ActorId。</param>
-    /// <param name="actorTypeId">Projected Actor 类型 ID。</param>
-    /// <param name="keepAliveTicks">保活时间。</param>
-    /// <param name="releasePolicy">释放策略。</param>
     public ProjectedActorRef(
         ActorId actorId,
         int actorTypeId,
@@ -94,7 +137,12 @@ public struct ProjectedActorRef
         ActorId = actorId;
         ActorTypeId = actorTypeId;
         KeepAliveTicks = keepAliveTicks < 0 ? 0 : keepAliveTicks;
+        ExpireAtTicks = 0;
         ReleasePolicy = releasePolicy;
+        TouchIntervalTicks = 0;
+        NextTouchTicks = 0;
+        RetirePolicy = ProjectedActorRetirePolicy.ReturnToPool;
+        CreatePolicy = ProjectedActorCreatePolicy.Lazy;
     }
 
     /// <summary>
@@ -113,14 +161,37 @@ public struct ProjectedActorRef
     }
 
     /// <summary>
-    /// 绑定 ActorId。
+    /// 创建未绑定但可投影的 ProjectedActorRef（带完整选项）。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static ProjectedActorRef CreateProjectable(
+        int actorTypeId,
+        long keepAliveTicks,
+        ProjectedActorReleasePolicy releasePolicy,
+        in ProjectedActorOptions options)
+    {
+        return new ProjectedActorRef(
+            actorTypeId,
+            keepAliveTicks,
+            releasePolicy,
+            options.RetirePolicy,
+            options.CreatePolicy,
+            options.TouchIntervalTicks);
+    }
+
+    /// <summary>
+    /// 绑定 ActorId 并初始化到期时间。
     /// </summary>
     /// <param name="actorId">新绑定的 ActorId。</param>
+    /// <param name="nowTicks">当前时间戳。</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Bind(
-        ActorId actorId)
+        ActorId actorId,
+        long nowTicks)
     {
         ActorId = actorId;
+        ExpireAtTicks = ProjectedActorTime.BuildDeadline(nowTicks, KeepAliveTicks);
+        NextTouchTicks = nowTicks + TouchIntervalTicks;
     }
 
     /// <summary>
@@ -134,5 +205,6 @@ public struct ProjectedActorRef
     public void ClearActor()
     {
         ActorId = ActorId.Invalid;
+        ExpireAtTicks = 0;
     }
 }

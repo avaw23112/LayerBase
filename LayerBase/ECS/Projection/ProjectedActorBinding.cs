@@ -20,25 +20,13 @@ internal static class ProjectedActorBinding
             return ActorId.Invalid;
         }
 
-        handle.Actor.RecycleDeadlineTicks = ProjectedActorTime.BuildDeadline(nowTicks, meta.KeepAliveTicks);
-        ProjectedActorBindingUtility.Bind(world, entity, ref meta, handle.ActorId);
+        ProjectedActorBindingUtility.Bind(world, entity, ref meta, handle.ActorId, nowTicks);
         world.AddActiveProjectedActor(entity, ref meta);
         return handle.ActorId;
     }
 
     /// <summary>
     /// 确保 Entity 拥有 Projected Actor（热路径版本）。
-    ///
-    /// 参数说明：
-    /// world：ECS World。
-    /// actorWorld：ActorWorld。
-    /// entity：当前 Entity。
-    /// meta：当前 Entity 的 ProjectedActorMeta。
-    /// actorRef：当前 Entity 的 ProjectedActorRef。
-    /// nowTicks：当前时间戳。
-    ///
-    /// 返回值：
-    /// 有效 ActorId，或 ActorId.Invalid。
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static ActorId EnsureProjectedActor(
@@ -56,24 +44,14 @@ internal static class ProjectedActorBinding
             return ActorId.Invalid;
         }
 
-        handle.Actor.RecycleDeadlineTicks = ProjectedActorTime.BuildDeadline(nowTicks, meta.KeepAliveTicks);
-        ProjectedActorBindingUtility.Bind(ref meta, ref actorRef, handle.ActorId);
+        // 绑定 ActorId 并初始化 ExpireAtTicks
+        ProjectedActorBindingUtility.Bind(ref meta, ref actorRef, handle.ActorId, nowTicks);
         world.AddActiveProjectedActor(entity, ref meta);
         return handle.ActorId;
     }
 
     /// <summary>
     /// 确保 Entity 拥有 Projected Actor（不读 meta 的热路径版本）。
-    ///
-    /// 参数说明：
-    /// world：ECS World。
-    /// actorWorld：ActorWorld。
-    /// entity：当前 Entity。
-    /// actorRef：ProjectedActorRef 热路径缓存。
-    /// nowTicks：当前时间戳。
-    ///
-    /// 返回值：
-    /// 有效 ActorId，或 ActorId.Invalid。
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static ActorId EnsureProjectedActor(
@@ -94,12 +72,8 @@ internal static class ProjectedActorBinding
             return ActorId.Invalid;
         }
 
-        handle.Actor.RecycleDeadlineTicks =
-            ProjectedActorTime.BuildDeadline(
-                nowTicks,
-                actorRef.KeepAliveTicks);
-
-        actorRef.Bind(handle.ActorId);
+        // 绑定 ActorId 并初始化 ExpireAtTicks
+        actorRef.Bind(handle.ActorId, nowTicks);
 
         ref ProjectedActorMeta meta =
             ref world.GetProjectionMeta(entity);
@@ -130,21 +104,12 @@ internal static class ProjectedActorBinding
             return;
         }
 
-        pooledActor.RecycleDeadlineTicks = ProjectedActorTime.BuildDeadline(nowTicks, meta.KeepAliveTicks);
+        // 注意：这个方法现在只用于兼容旧路径
+        // 新路径使用 RefreshProjectedActorInterest
     }
 
     /// <summary>
     /// 刷新 Projected Actor 保活时间（热路径版本）。
-    ///
-    /// 参数说明：
-    /// actorWorld：ActorWorld。
-    /// meta：ProjectedActorMeta。
-    /// actorRef：ProjectedActorRef。
-    /// nowTicks：当前时间戳。
-    ///
-    /// 返回值：
-    /// true：actor 仍然有效。
-    /// false：actor 已失效，meta/ref 已清理。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TouchProjectedActor(
@@ -167,22 +132,13 @@ internal static class ProjectedActorBinding
             return false;
         }
 
-        pooledActor.RecycleDeadlineTicks = ProjectedActorTime.BuildDeadline(nowTicks, meta.KeepAliveTicks);
+        // 刷新 ExpireAtTicks
+        RefreshDeadline(ref actorRef, nowTicks);
         return true;
     }
 
     /// <summary>
     /// 刷新 Projected Actor 保活时间（不读 meta 的热路径版本）。
-    ///
-    /// 参数说明：
-    /// world：ECS World。
-    /// actorWorld：ActorWorld。
-    /// entity：当前 Entity。
-    /// actorRef：ProjectedActorRef 热路径缓存。
-    /// nowTicks：当前时间戳。
-    ///
-    /// 返回值：
-    /// true 表示 actor 仍然有效；false 表示 actor 已失效。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TouchProjectedActor(
@@ -208,20 +164,14 @@ internal static class ProjectedActorBinding
             return false;
         }
 
-        pooledActor.RecycleDeadlineTicks =
-            ProjectedActorTime.BuildDeadline(
-                nowTicks,
-                actorRef.KeepAliveTicks);
-
+        // 刷新 ExpireAtTicks
+        RefreshDeadline(ref actorRef, nowTicks);
         return true;
     }
 
     /// <summary>
     /// 根据 Entity 清理 meta/ref。
     /// </summary>
-    /// <param name="world">ECS World。</param>
-    /// <param name="entity">当前 Entity。</param>
-    /// <param name="actorRef">ProjectedActorRef。</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ClearByEntity(
         World world,
@@ -234,5 +184,89 @@ internal static class ProjectedActorBinding
             ref world.GetProjectionMeta(entity);
 
         meta.ClearActor();
+    }
+
+    /// <summary>
+    /// 刷新 Projected Actor 兴趣（热路径版本）。
+    ///
+    /// 行为：
+    /// 1. ActorId 无效时不能被节流跳过，必须 Ensure。
+    /// 2. Disabled 状态不能因为 NextTouchTicks 跳过 Enable。
+    /// 3. Active 状态才允许节流直接 return true。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool RefreshProjectedActorInterest(
+        World                 world,
+        ActorWorld            actorWorld,
+        Entity                entity,
+        ref ProjectedActorRef actorRef,
+        long                  nowTicks)
+    {
+        ActorId actorId = actorRef.ActorId;
+
+        if (!actorId.IsValid)
+        {
+            actorId = EnsureProjectedActor(
+                world,
+                actorWorld,
+                entity,
+                ref actorRef,
+                nowTicks);
+
+            return actorId.IsValid;
+        }
+
+        if (actorWorld.IsProjectedActorDisabled(actorId))
+        {
+            if (!actorWorld.EnableProjectedActorIfDisabled(actorId))
+            {
+                ClearByEntity(world, entity, ref actorRef);
+                return false;
+            }
+
+            // Disabled 恢复后刷新 ExpireAtTicks
+            RefreshDeadline(
+                ref actorRef,
+                nowTicks);
+
+            return true;
+        }
+
+        if (nowTicks < actorRef.NextTouchTicks)
+        {
+            return true;
+        }
+
+        // 刷新 ExpireAtTicks
+        RefreshDeadline(
+            ref actorRef,
+            nowTicks);
+
+        return true;
+    }
+
+    /// <summary>
+    /// RefreshDeadline 作用：
+    /// 刷新 ProjectedActor 的兴趣到期时间。
+    ///
+    /// 注意：不再需要 TryGetPooledActor，因为 ExpireAtTicks 由 Projection 系统内部维护。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void RefreshDeadline(
+        ref ProjectedActorRef actorRef,
+        long                  nowTicks)
+    {
+        // ExpireAtTicks 作用：
+        // 保存当前 Actor 的实际到期时间。
+        // 它由 Projection 系统内部维护，不再写入 IPooledActor。
+        actorRef.ExpireAtTicks =
+            ProjectedActorTime.BuildDeadline(
+                nowTicks,
+                actorRef.KeepAliveTicks);
+
+        // NextTouchTicks 作用：
+        // 控制下一次允许真实 Touch 的时间。
+        actorRef.NextTouchTicks =
+            nowTicks + actorRef.TouchIntervalTicks;
     }
 }

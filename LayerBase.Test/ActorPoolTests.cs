@@ -12,22 +12,26 @@ internal sealed partial class PooledProbeActor : IPooledActor
     public static int RentCount { get; set; }
     public static int ReturnCount { get; set; }
 
-    public long RecycleDeadlineTicks { get; set; }
-
     public int State { get; set; }
 
     public void OnRent()
     {
         RentCount++;
-        RecycleDeadlineTicks = 0;
         State = 0;
     }
 
     public void OnReturn()
     {
         ReturnCount++;
-        RecycleDeadlineTicks = 0;
         State = -1;
+    }
+
+    public void OnEnable()
+    {
+    }
+
+    public void OnDisable()
+    {
     }
 }
 

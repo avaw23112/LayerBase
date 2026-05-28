@@ -64,8 +64,10 @@ public ref struct EntityCreateBuilder
         }
 
         _actorTypeId = ActorType<TActor>.Id;
+
         ProjectedActorTypeRegistry.RegisterGenerated(_actorTypeId, typeof(TActor),
             static actorWorld => actorWorld.CreateProjectedActor<TActor>());
+
         this._keepAliveSeconds = keepAliveSeconds;
         this._releasePolicy = releasePolicy;
         this._isCreatedActor = true;
