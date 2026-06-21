@@ -17,7 +17,6 @@ public sealed partial class LayerRuntime : IDisposable
 {
     private LayerChain? _chain;
     internal LayerBaseSynchronizationContext? _context;
-    public WorldTaskApi? Tasks { get; private set; }
     private int _layerIndexCounter;
     private int _layerTypeBindingsVersion;
     private readonly Dictionary<Type, LayerTypeBinding> _layerTypeBindings = new();
@@ -226,16 +225,12 @@ public sealed partial class LayerRuntime : IDisposable
                 }
             }
 
-            // �� PostScheduler.Pump ǰ���˿��߳��¼���
-            // MaxIngressPostsPerPump �������Ʊ�֡�����˶��ٸ����߳��¼���
-            // ��ֹ��̨�̳߳��������¼��������߳�һ֡��������
             if (_scheduler != null)
             {
                 var ingressResult = _postIngress.DrainTo(
                     _scheduler,
                     _scheduler.Options.MaxIngressPostsPerPump);
 
-                //�����Debugģʽ���Զ��ϱ�ʧ�ܽ��
                 if (IsDebugMode && ingressResult.Failed > 0)
                 {
                     ReportWarning(
@@ -408,24 +403,6 @@ public sealed partial class LayerRuntime : IDisposable
         Scheduler.TryPostLatest(value);
     }
 
-    /// <summary>
-    /// �������߳��ύ�¼���
-    ///
-    /// ����������������ɷ��¼���
-    /// ��ֻ���¼�������߳���ڶ��У�
-    /// ����Ͷ�ݷ�������һ�� Runtime.Pump��
-    /// </summary>
-    /// <typeparam name="T">
-    /// �¼����͡�
-    /// ������ struct��
-    /// </typeparam>
-    /// <param name="value">
-    /// �¼����ݡ�
-    /// </param>
-    /// <param name="policy">
-    /// ��ѡ Post ���ԡ�
-    /// null ��ʾʹ���¼�Ĭ�ϲ��ԡ�
-    /// </param>
     public void PostFromAnyThread<T>(
         in T             value,
         EventPostPolicy? policy = default)
@@ -439,24 +416,6 @@ public sealed partial class LayerRuntime : IDisposable
         _postIngress.Enqueue(value, policy);
     }
 
-    /// <summary>
-    /// �������̳߳����ύ�¼���
-    /// </summary>
-    /// <typeparam name="T">
-    /// �¼����͡�
-    /// ������ struct��
-    /// </typeparam>
-    /// <param name="value">
-    /// �¼����ݡ�
-    /// </param>
-    /// <param name="policy">
-    /// ��ѡ Post ���ԡ�
-    /// null ��ʾʹ���¼�Ĭ�ϲ��ԡ�
-    /// </param>
-    /// <returns>
-    /// true ��ʾ�Ѿ�������߳���ڶ��С�
-    /// false ��ʾ Runtime �Ѿ��ͷš�
-    /// </returns>
     public bool TryPostFromAnyThread<T>(
         in T             value,
         EventPostPolicy? policy = default)
@@ -568,7 +527,6 @@ public sealed partial class LayerRuntime : IDisposable
         Actors.Dispose();
         EcsWorld.Dispose();
 
-        // 释放当前世界内的 Singleton 实例�?
         Services.Dispose();
 
         _scheduler?.Dispose();
@@ -882,7 +840,6 @@ public sealed partial class LayerRuntime : IDisposable
             if (_runtime._context == null)
                 _runtime._context = LayerBaseSynchronizationContext.Install();
 
-            _runtime.Tasks = new WorldTaskApi(_runtime._context);
             _layerChain.Prebuild();
 
             _runtime._fixedUpdateOptions = _fixedUpdateOptions;

@@ -78,14 +78,22 @@ public readonly struct LBTask
         return new LBTask(src);
     }
 
-    public static LBTask RunOnMainThread(Action action, SynchronizationContext ctx)
+    public static LBTask RunOnMainThread(Action action, SynchronizationContext? ctx = null)
     {
         if (action == null) throw new ArgumentNullException(nameof(action));
+        
+        ctx ??= SynchronizationContext.Current;
         if (ctx == null) throw new ArgumentNullException(nameof(ctx));
 
         var src = LBTaskSource.Rent(ctx);
         var work = RunActionWorkItem.Rent(action, src);
-        ctx.Post(RunActionWorkItem.InvokeOnContext, work);
+        
+        if (ctx is LayerBaseSynchronizationContext lbCtx)
+            lbCtx.ScheduleInFrames(static state => RunActionWorkItem.InvokeOnContext(state), work, 1);
+        else if (ctx != null)
+            ctx.Post(RunActionWorkItem.InvokeOnContext, work);
+        else
+            ThreadPool.QueueUserWorkItem(static state => RunActionWorkItem.InvokeOnContext(state), work);
         return new LBTask(src);
     }
 
@@ -696,14 +704,22 @@ public readonly struct LBTask<T>
         return new LBTask<T>(src);
     }
 
-    public static LBTask<T> RunOnMainThread(Func<T> func, SynchronizationContext ctx)
+    public static LBTask<T> RunOnMainThread(Func<T> func, SynchronizationContext? ctx  = null)
     {
         if (func == null) throw new ArgumentNullException(nameof(func));
+
+        ctx ??= SynchronizationContext.Current;
         if (ctx == null) throw new ArgumentNullException(nameof(ctx));
 
         var src = LBTaskSource<T>.Rent(ctx);
         var work = RunFuncWorkItem.Rent(func, src);
-        ctx.Post(RunFuncWorkItem.InvokeOnContext, work);
+        
+        if (ctx is LayerBaseSynchronizationContext lbCtx)
+            lbCtx.ScheduleInFrames(static state => RunFuncWorkItem.InvokeOnContext(state), work, 1);
+        else if (ctx != null)
+            ctx.Post(RunFuncWorkItem.InvokeOnContext, work);
+        else 
+            ThreadPool.QueueUserWorkItem(static state => RunFuncWorkItem.InvokeOnContext(state), work);
         return new LBTask<T>(src);
     }
 

@@ -8,7 +8,6 @@ public sealed partial class LayerRuntime
 {
     public World EcsWorld { get; private set; } = null!;
 
-
     internal void InitializeEcsWorld()
     {
         EcsWorld = World.Create();
