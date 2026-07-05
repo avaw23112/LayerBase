@@ -127,10 +127,12 @@ public static class ServiceECSExtensions
     }
 
     /// <summary>
-    /// 从 IService 中取得 ECSWorld。
+    /// Gets the ECS <see cref="World"/> bound to the current service.
+    ///
+    /// Advanced API:
+    /// Prefer <c>Query</c> in normal business code. Access <see cref="World"/> directly only when you need
+    /// lower-level ECS capabilities and understand the threading and structural-change rules yourself.
     /// </summary>
-    /// <param name="IService">当前 IService，内部应当能访问对应的 ECSWorld。</param>
-    /// <returns>返回当前 IService 绑定的 ECSWorld。</returns>
     public static World ECSWorld(this IService service)
     {
         if (service == null)

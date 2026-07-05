@@ -6,6 +6,13 @@ namespace LayerBase;
 
 public static class ServiceActorExtensions
 {
+    /// <summary>
+    /// Gets the <see cref="ActorWorld"/> bound to the current service.
+    ///
+    /// Advanced API:
+    /// Prefer the context-first actor facade APIs in normal business code. Access <see cref="ActorWorld"/>
+    /// directly only when doing batch actor operations, framework integration, or low-level tuning.
+    /// </summary>
     public static ActorWorld Actors(this IService service)
     {
         if (service == null)

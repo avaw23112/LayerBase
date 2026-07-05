@@ -123,10 +123,12 @@ public static class LayerQueryExtensions
     }
 
     /// <summary>
-    /// 从 Layer 中取得 ECSWorld。
+    /// Gets the ECS <see cref="World"/> bound to the current layer.
+    ///
+    /// Advanced API:
+    /// Prefer <c>Query</c> in normal business code. Access <see cref="World"/> directly only when you need
+    /// lower-level ECS capabilities and understand the threading and structural-change rules yourself.
     /// </summary>
-    /// <param name="layer">当前 Layer，内部应当能访问对应的 ECSWorld。</param>
-    /// <returns>返回当前 Layer 绑定的 ECSWorld。</returns>
     public static World ECSWorld(this Layer layer)
     {
         if (layer == null)
