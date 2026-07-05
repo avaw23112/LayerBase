@@ -160,6 +160,48 @@ public class ActorGeneratorTests
     }
 
     [Test]
+    public void Actor_lifecycle_method_attributes_generate_metadata_entries()
+    {
+        GeneratorRunResult result = RunGenerator("""
+                                                 using LayerBase.Actor;
+
+                                                 namespace Sample;
+
+                                                 public sealed partial class EnemyActor : IActor
+                                                 {
+                                                     [ActorUpdate(TickTier.Hot)]
+                                                     private void Combat(float dt)
+                                                     {
+                                                     }
+
+                                                     [ActorLateUpdate(TickTier.Warm, Phase = 2)]
+                                                     private void Refresh(float dt)
+                                                     {
+                                                     }
+
+                                                     [ActorFixedUpdate(TickTier.Cold)]
+                                                     private void Sim(float dt)
+                                                     {
+                                                     }
+                                                 }
+                                                 """);
+
+        Assert.That(GetGeneratorDiagnostics(result), Is.Empty);
+
+        string generated = result.GeneratedSources.Single().SourceText.ToString();
+        Assert.That(generated, Does.Contain("builder.AddLifecycleMethod("));
+        Assert.That(generated, Does.Contain("global::LayerBase.Actor.ActorLifecyclePhase.Update"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Actor.ActorLifecyclePhase.LateUpdate"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Actor.ActorLifecyclePhase.FixedUpdate"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Actor.TickTier.Hot"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Actor.TickTier.Warm"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Actor.TickTier.Cold"));
+        Assert.That(generated, Does.Contain("Invoke_Lifecycle_Combat"));
+        Assert.That(generated, Does.Contain("Invoke_Lifecycle_Refresh"));
+        Assert.That(generated, Does.Contain("Invoke_Lifecycle_Sim"));
+    }
+
+    [Test]
     public void Generated_tag_group_actor_code_compiles_without_errors()
     {
         (GeneratorRunResult result, Compilation outputCompilation) = RunGeneratorWithCompilation("""
@@ -482,6 +524,51 @@ public class ActorGeneratorTests
                                 private LBTask<GetHpResponse> OnGetHpAgain(in GetHpRequest request, CancellationToken cancellationToken)
                                 {
                                     return LBTask<GetHpResponse>.FromResult(default);
+                                }
+                            }
+                            """)]
+    [TestCase("LBACTOR301", """
+                            using LayerBase.Actor;
+
+                            public sealed partial class EnemyActor : IActor
+                            {
+                                [ActorUpdate]
+                                private static void Combat(float dt)
+                                {
+                                }
+                            }
+                            """)]
+    [TestCase("LBACTOR302", """
+                            using LayerBase.Actor;
+
+                            public sealed partial class EnemyActor : IActor
+                            {
+                                [ActorUpdate]
+                                private int Combat(float dt)
+                                {
+                                    return 0;
+                                }
+                            }
+                            """)]
+    [TestCase("LBACTOR303", """
+                            using LayerBase.Actor;
+
+                            public sealed partial class EnemyActor : IActor
+                            {
+                                [ActorUpdate]
+                                private void Combat()
+                                {
+                                }
+                            }
+                            """)]
+    [TestCase("LBACTOR304", """
+                            using LayerBase.Actor;
+
+                            public sealed partial class EnemyActor : IActor
+                            {
+                                [ActorUpdate]
+                                private void Combat(float dt, float extra)
+                                {
                                 }
                             }
                             """)]

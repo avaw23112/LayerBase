@@ -124,4 +124,36 @@ internal static class ActorBehaviourDiagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor LifecycleMethodMustBeInstance = new(
+        id: "LBACTOR301",
+        title: "Actor lifecycle method cannot be static",
+        messageFormat: "Actor lifecycle method '{0}' cannot be static",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor LifecycleMethodMustReturnVoid = new(
+        id: "LBACTOR302",
+        title: "Actor lifecycle method must return void",
+        messageFormat: "Actor lifecycle method '{0}' must return void",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor LifecycleMethodMustHaveSingleFloatParameter = new(
+        id: "LBACTOR303",
+        title: "Actor lifecycle method must have a single float parameter",
+        messageFormat: "Actor lifecycle method '{0}' must have exactly one parameter",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor LifecycleMethodParameterMustBeFloat = new(
+        id: "LBACTOR304",
+        title: "Actor lifecycle method parameter must be float",
+        messageFormat: "Actor lifecycle method '{0}' parameter must be declared as 'float deltaTime'",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

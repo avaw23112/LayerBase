@@ -15,58 +15,64 @@ public sealed partial class ActorWorld
         {
             return;
         }
-
-        if (DelayScheduler.HasPending)
+        try
         {
-            DelayScheduler.Tick(deltaTime);
-        }
+            if (DelayScheduler.HasPending)
+            {
+                DelayScheduler.Tick(deltaTime);
+            }
 
-        SweepPendingDestroy();
+            SweepPendingDestroy();
 
-        // Pump Call buckets (old system, still needed for Ask/Call)
-        PumpCallBuckets(ref budget);
+            // Pump Call buckets (old system, still needed for Ask/Call)
+            PumpCallBuckets(ref budget);
 
-        if (!CanContinue(ref budget))
-        {
-            return;
-        }
+            if (!CanContinue(ref budget))
+            {
+                return;
+            }
 
-        // Pump EventStream runtimes
-        PumpEventStreams(ref budget);
+            // Pump EventStream runtimes
+            PumpEventStreams(ref budget);
 
-        if (!CanContinue(ref budget))
-        {
-            return;
-        }
+            if (!CanContinue(ref budget))
+            {
+                return;
+            }
 
-        if (pumpFixedUpdate)
-        {
-            Lifecycle.PumpFixedUpdate(
-                fixedDeltaTime: fixedDeltaTime,
+            if (pumpFixedUpdate)
+            {
+                Lifecycle.PumpFixedUpdate(
+                    fixedDeltaTime: fixedDeltaTime,
+                    budget: ref budget);
+            }
+
+            if (!CanContinue(ref budget))
+            {
+                SweepPendingDestroy();
+                return;
+            }
+
+            Lifecycle.PumpUpdate(
+                deltaTime: deltaTime,
                 budget: ref budget);
-        }
 
-        if (!CanContinue(ref budget))
-        {
+            if (!CanContinue(ref budget))
+            {
+                SweepPendingDestroy();
+                return;
+            }
+
+            Lifecycle.PumpLateUpdate(
+                deltaTime: deltaTime,
+                budget: ref budget);
+
             SweepPendingDestroy();
-            return;
         }
-
-        Lifecycle.PumpUpdate(
-            deltaTime: deltaTime,
-            budget: ref budget);
-
-        if (!CanContinue(ref budget))
+        finally
         {
-            SweepPendingDestroy();
-            return;
+            Lifecycle.EndFrame();
         }
-
-        Lifecycle.PumpLateUpdate(
-            deltaTime: deltaTime,
-            budget: ref budget);
-
-        SweepPendingDestroy();
     }
 
     private void PumpCallBuckets(ref RuntimeFrameBudget budget)

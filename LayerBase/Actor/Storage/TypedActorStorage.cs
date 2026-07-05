@@ -675,6 +675,22 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             handles.FixedUpdate = world.Lifecycle.AddFixedUpdate(actorId, fixedUpdate);
         }
 
+        if (_meta?.LifecycleMethods.Length > 0)
+        {
+            handles.Extra = new ActorLifecycleHandle[_meta.LifecycleMethods.Length];
+            for (int i = 0; i < _meta.LifecycleMethods.Length; i++)
+            {
+                ActorLifecycleMethodMeta method = _meta.LifecycleMethods[i];
+                handles.Extra[i] = world.Lifecycle.AddMethod(
+                    method.Phase,
+                    actorId,
+                    actor,
+                    method.Invoker,
+                    method.Tier,
+                    method.TickPhase);
+            }
+        }
+
         _lifecycleHandles[slotIndex] = handles;
 
         if (actor is IStart start)
@@ -950,6 +966,21 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         world.Lifecycle.RemoveUpdate(handles.Update);
         world.Lifecycle.RemoveLateUpdate(handles.LateUpdate);
         world.Lifecycle.RemoveFixedUpdate(handles.FixedUpdate);
+
+        if (_meta != null && handles.Extra != null)
+        {
+            int removeCount = Math.Min(handles.Extra.Length, _meta.LifecycleMethods.Length);
+            for (int i = 0; i < removeCount; i++)
+            {
+                ActorLifecycleMethodMeta method = _meta.LifecycleMethods[i];
+                world.Lifecycle.RemoveMethod(
+                    method.Phase,
+                    method.Tier,
+                    method.TickPhase,
+                    handles.Extra[i]);
+            }
+        }
+
         _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
     }
 

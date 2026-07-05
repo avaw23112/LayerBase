@@ -74,6 +74,21 @@ public partial class ServiceMountContextTests
 
         DuplicateManager.SetTrace(null!);
     }
+
+    [Test]
+    public void Context_get_alias_resolves_layer_service()
+    {
+        var layer = new ServiceMountTestLayer();
+
+        LayerHub.CreateLayers()
+                .Push(layer)
+                .Build();
+
+        ILayerContext context = layer.Service!.MountedManager!;
+        ServiceMountTestService service = context.Get<ServiceMountTestService>();
+
+        Assert.That(service, Is.SameAs(layer.Service));
+    }
 }
 
 public partial class ServiceMountTestLayer : Layer

@@ -1108,6 +1108,12 @@ public static class LayerContextExtensions
         return ServiceLayerBinder.RequireLayer(context.GetBinding()).OnEvent<TValue>();
     }
 
+    public static T Get<T>(this ILayerContext context)
+        where T : class
+    {
+        return context.GetService<T>();
+    }
+
     public static T GetService<T>(this ILayerContext context)
         where T : class
     {

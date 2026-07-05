@@ -6,6 +6,7 @@ public sealed class ActorTypeMetaBuilder
 {
     private readonly List<ActorBehaviourEntry> _entries = new();
     private readonly List<ActorCallEntry> _callEntries = new();
+    private readonly List<ActorLifecycleMethodMeta> _lifecycleMethods = new();
     private readonly HashSet<int> _eventIds = new();
     private readonly HashSet<int> _callRouteIds = new();
     private readonly HashSet<int> _tagIds = new();
@@ -131,6 +132,24 @@ public sealed class ActorTypeMetaBuilder
         _groupIds.Add(ActorGroupId<TGroup>.Id);
     }
 
+    public void AddLifecycleMethod(
+        ActorLifecyclePhase         phase,
+        TickTier                    tier,
+        int                         tickPhase,
+        ActorLifecycleMethodInvoker invoker)
+    {
+        if (invoker == null)
+        {
+            throw new ArgumentNullException(nameof(invoker));
+        }
+
+        _lifecycleMethods.Add(new ActorLifecycleMethodMeta(
+            phase,
+            tier,
+            tickPhase,
+            invoker));
+    }
+
     internal ActorTypeMeta<TActor> Build<TActor>()
         where TActor : class, IActor
     {
@@ -154,10 +173,13 @@ public sealed class ActorTypeMetaBuilder
                          .OrderBy(static id => id)
                          .ToArray();
 
+        ActorLifecycleMethodMeta[] lifecycleMethods = _lifecycleMethods.ToArray();
+
         return new ActorTypeMeta<TActor>(
             new BehaviourSignature(eventTypeIds),
             entries,
             callEntries,
+            lifecycleMethods,
             tagIds,
             groupIds);
     }

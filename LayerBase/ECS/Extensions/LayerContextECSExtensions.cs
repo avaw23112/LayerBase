@@ -128,10 +128,12 @@ public static class LayerContextECSExtensions
     }
 
     /// <summary>
-    /// 从 ILayerContext 中取得 ECSWorld。
+    /// Gets the ECS <see cref="World"/> bound to the current context.
+    ///
+    /// Advanced API:
+    /// Prefer <c>Query</c> in normal business code. Access <see cref="World"/> directly only when you need
+    /// lower-level ECS capabilities and understand the threading and structural-change rules yourself.
     /// </summary>
-    /// <param name="ILayerContext">当前 ILayerContext，内部应当能访问对应的 ECSWorld。</param>
-    /// <returns>返回当前 ILayerContext 绑定的 ECSWorld。</returns>
     public static World ECSWorld(this ILayerContext ILayerContext)
     {
         if (ILayerContext == null)

@@ -46,6 +46,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
         var methods = new List<MethodCandidate>();
         var callMethods = new List<CallMethodCandidate>();
+        var lifecycleMethods = new List<LifecycleMethodCandidate>();
 
         foreach (MemberDeclarationSyntax member in declaration.Members)
         {
@@ -57,6 +58,11 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             if (context.SemanticModel.GetDeclaredSymbol(methodDeclaration) is not IMethodSymbol methodSymbol)
             {
                 continue;
+            }
+
+            if (TryGetLifecycleMethodCandidate(methodSymbol, out LifecycleMethodCandidate? lifecycleMethod))
+            {
+                lifecycleMethods.Add(lifecycleMethod!);
             }
 
             if (!HasActorBehaviourAttribute(methodSymbol))
@@ -89,6 +95,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
         if (methods.Count == 0 &&
             callMethods.Count == 0 &&
+            lifecycleMethods.Count == 0 &&
             !manuallyImplementsGeneratedMeta &&
             !hasTagOrGroupMetadata &&
             !hasProjectedActorOptionsAttribute)
@@ -101,6 +108,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             Declaration: declaration,
             Methods: methods.ToImmutableArray(),
             CallMethods: callMethods.ToImmutableArray(),
+            LifecycleMethods: lifecycleMethods.ToImmutableArray(),
             ManuallyImplementsGeneratedMeta: manuallyImplementsGeneratedMeta,
             HasTagOrGroupMetadata: hasTagOrGroupMetadata,
             HasProjectedActorOptionsAttribute: hasProjectedActorOptionsAttribute);
@@ -135,19 +143,35 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
                                                           .Select(static group => group.First())
                                                           .ToImmutableArray();
 
+        ImmutableArray<LifecycleMethodCandidate> lifecycleMethods = candidates
+                                                                    .SelectMany(static candidate =>
+                                                                        candidate.LifecycleMethods)
+                                                                    .GroupBy(static method =>
+                                                                        method.MethodDisplay
+                                                                        + "::"
+                                                                        + method.PhaseSource)
+                                                                    .Select(static group => group.First())
+                                                                    .ToImmutableArray();
+
         bool hasTagOrGroupMetadata = candidates.Any(static candidate => candidate.HasTagOrGroupMetadata);
         bool hasProjectedActorOptionsAttribute =
             candidates.Any(static candidate => candidate.HasProjectedActorOptionsAttribute);
 
         if (methods.Length == 0 &&
             callMethods.Length == 0 &&
+            lifecycleMethods.Length == 0 &&
             !hasTagOrGroupMetadata &&
             !hasProjectedActorOptionsAttribute)
         {
             return;
         }
 
-        List<Diagnostic> diagnostics = CollectDiagnostics(classSymbol, candidates, methods, callMethods);
+        List<Diagnostic> diagnostics = CollectDiagnostics(
+            classSymbol,
+            candidates,
+            methods,
+            callMethods,
+            lifecycleMethods);
 
         foreach (Diagnostic diagnostic in diagnostics)
         {
@@ -159,15 +183,16 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             return;
         }
 
-        string source = GenerateSource(classSymbol, methods, callMethods);
+        string source = GenerateSource(classSymbol, methods, callMethods, lifecycleMethods);
         context.AddSource(GetHintName(classSymbol), SourceText.From(source, Encoding.UTF8));
     }
 
     private static List<Diagnostic> CollectDiagnostics(
-        INamedTypeSymbol                    classSymbol,
-        ImmutableArray<ClassCandidate>      candidates,
-        ImmutableArray<MethodCandidate>     methods,
-        ImmutableArray<CallMethodCandidate> callMethods)
+        INamedTypeSymbol                        classSymbol,
+        ImmutableArray<ClassCandidate>          candidates,
+        ImmutableArray<MethodCandidate>         methods,
+        ImmutableArray<CallMethodCandidate>     callMethods,
+        ImmutableArray<LifecycleMethodCandidate> lifecycleMethods)
     {
         var diagnostics = new List<Diagnostic>();
 
@@ -368,13 +393,56 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             seenCallRoutes.Add(routeKey, method);
         }
 
+        foreach (LifecycleMethodCandidate method in lifecycleMethods)
+        {
+            IMethodSymbol methodSymbol = method.MethodSymbol;
+
+            if (methodSymbol.IsStatic)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.LifecycleMethodMustBeInstance,
+                    method.Location,
+                    method.MethodName));
+                continue;
+            }
+
+            if (methodSymbol.ReturnsVoid == false)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.LifecycleMethodMustReturnVoid,
+                    method.Location,
+                    method.MethodName));
+            }
+
+            if (methodSymbol.Parameters.Length != 1)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    methodSymbol.Parameters.Length == 0
+                        ? ActorBehaviourDiagnostics.LifecycleMethodMustHaveSingleFloatParameter
+                        : ActorBehaviourDiagnostics.LifecycleMethodParameterMustBeFloat,
+                    method.Location,
+                    method.MethodName));
+                continue;
+            }
+
+            IParameterSymbol parameter = methodSymbol.Parameters[0];
+            if (parameter.RefKind != RefKind.None || parameter.Type.SpecialType != SpecialType.System_Single)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    ActorBehaviourDiagnostics.LifecycleMethodParameterMustBeFloat,
+                    parameter.Locations.FirstOrDefault() ?? method.Location,
+                    method.MethodName));
+            }
+        }
+
         return diagnostics;
     }
 
     private static string GenerateSource(
-        INamedTypeSymbol                    classSymbol,
-        ImmutableArray<MethodCandidate>     methods,
-        ImmutableArray<CallMethodCandidate> callMethods)
+        INamedTypeSymbol                        classSymbol,
+        ImmutableArray<MethodCandidate>         methods,
+        ImmutableArray<CallMethodCandidate>     callMethods,
+        ImmutableArray<LifecycleMethodCandidate> lifecycleMethods)
     {
         var builder = new StringBuilder();
 
@@ -383,6 +451,13 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
                 .OrderBy(static method => method.MethodName, StringComparer.Ordinal)
                 .ThenBy(static method => method.EventType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     StringComparer.Ordinal)
+                .ToImmutableArray();
+
+        ImmutableArray<LifecycleMethodCandidate> orderedLifecycleMethods =
+            lifecycleMethods
+                .OrderBy(static method => method.PhaseSortKey)
+                .ThenBy(static method => method.TierValue)
+                .ThenBy(static method => method.MethodName, StringComparer.Ordinal)
                 .ToImmutableArray();
 
         builder.AppendLine("// <auto-generated />");
@@ -439,7 +514,15 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         builder.AppendLine();
 
         EmitCachedActorBehaviourHandlers(builder, memberIndent, orderedMethods);
-        EmitBuildActorMeta(builder, memberIndent, actorTypeName, orderedMethods, callMethods, classSymbol);
+        EmitLifecycleInvokers(builder, memberIndent, actorTypeName, orderedLifecycleMethods);
+        EmitBuildActorMeta(
+            builder,
+            memberIndent,
+            actorTypeName,
+            orderedMethods,
+            callMethods,
+            orderedLifecycleMethods,
+            classSymbol);
 
         builder.Append(indent);
         builder.AppendLine("}");
@@ -513,13 +596,47 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         }
     }
 
+    private static void EmitLifecycleInvokers(
+        StringBuilder                             builder,
+        string                                    memberIndent,
+        string                                    actorTypeName,
+        ImmutableArray<LifecycleMethodCandidate>  orderedLifecycleMethods)
+    {
+        for (int i = 0; i < orderedLifecycleMethods.Length; i++)
+        {
+            LifecycleMethodCandidate method = orderedLifecycleMethods[i];
+            string invokerName = GetLifecycleInvokerName(i, method);
+
+            builder.Append(memberIndent);
+            builder.AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(");
+            builder.Append(memberIndent);
+            builder.AppendLine("    global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+            builder.Append(memberIndent);
+            builder.Append("private static void ");
+            builder.Append(invokerName);
+            builder.AppendLine("(global::LayerBase.Actor.IActor actor, float deltaTime)");
+            builder.Append(memberIndent);
+            builder.AppendLine("{");
+            builder.Append(memberIndent);
+            builder.Append("    ((");
+            builder.Append(actorTypeName);
+            builder.Append(")actor).");
+            builder.Append(method.MethodName);
+            builder.AppendLine("(deltaTime);");
+            builder.Append(memberIndent);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+    }
+
     private static void EmitBuildActorMeta(
-        StringBuilder                       builder,
-        string                              memberIndent,
-        string                              actorTypeName,
-        ImmutableArray<MethodCandidate>     orderedMethods,
-        ImmutableArray<CallMethodCandidate> callMethods,
-        INamedTypeSymbol                    classSymbol)
+        StringBuilder                              builder,
+        string                                     memberIndent,
+        string                                     actorTypeName,
+        ImmutableArray<MethodCandidate>            orderedMethods,
+        ImmutableArray<CallMethodCandidate>        callMethods,
+        ImmutableArray<LifecycleMethodCandidate>   orderedLifecycleMethods,
+        INamedTypeSymbol                           classSymbol)
     {
         builder.Append(memberIndent);
         builder.AppendLine(
@@ -596,6 +713,31 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             builder.AppendLine("        });");
         }
 
+        for (int i = 0; i < orderedLifecycleMethods.Length; i++)
+        {
+            LifecycleMethodCandidate method = orderedLifecycleMethods[i];
+            string invokerName = GetLifecycleInvokerName(i, method);
+
+            builder.Append(memberIndent);
+            builder.AppendLine("    builder.AddLifecycleMethod(");
+            builder.Append(memberIndent);
+            builder.Append("        ");
+            builder.Append(method.PhaseSource);
+            builder.AppendLine(",");
+            builder.Append(memberIndent);
+            builder.Append("        ");
+            builder.Append(GetTickTierSource(method.TierValue));
+            builder.AppendLine(",");
+            builder.Append(memberIndent);
+            builder.Append("        ");
+            builder.Append(method.TickPhase.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            builder.AppendLine(",");
+            builder.Append(memberIndent);
+            builder.Append("        ");
+            builder.Append(invokerName);
+            builder.AppendLine(");");
+        }
+
         foreach (INamedTypeSymbol tagType in GetTagTypes(classSymbol))
         {
             builder.Append(memberIndent);
@@ -634,6 +776,29 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
                + index.ToString(System.Globalization.CultureInfo.InvariantCulture)
                + "_"
                + SanitizeIdentifier(method.MethodName);
+    }
+
+    private static string GetLifecycleInvokerName(
+        int                      index,
+        LifecycleMethodCandidate method)
+    {
+        return "__layerbase_Invoke_Lifecycle_"
+               + SanitizeIdentifier(method.MethodName)
+               + "_"
+               + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static string GetTickTierSource(int tierValue)
+    {
+        return tierValue switch
+               {
+                   0 => "global::LayerBase.Actor.TickTier.Hot",
+                   1 => "global::LayerBase.Actor.TickTier.Warm",
+                   2 => "global::LayerBase.Actor.TickTier.Cold",
+                   3 => "global::LayerBase.Actor.TickTier.Dormant",
+                   _ => "(global::LayerBase.Actor.TickTier)"
+                        + tierValue.ToString(System.Globalization.CultureInfo.InvariantCulture)
+               };
     }
 
     private static string SanitizeIdentifier(string value)
@@ -811,6 +976,81 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         return false;
     }
 
+    private static bool TryGetLifecycleMethodCandidate(
+        IMethodSymbol methodSymbol,
+        out LifecycleMethodCandidate? candidate)
+    {
+        foreach (AttributeData attribute in methodSymbol.GetAttributes())
+        {
+            if (!TryMapLifecyclePhase(attribute, out LifecyclePhaseKind phaseKind))
+            {
+                continue;
+            }
+
+            int tierValue = 0;
+            if (attribute.ConstructorArguments.Length > 0 &&
+                attribute.ConstructorArguments[0].Value is int rawTierValue)
+            {
+                tierValue = rawTierValue;
+            }
+
+            int tickPhase = -1;
+            foreach (KeyValuePair<string, TypedConstant> namedArgument in attribute.NamedArguments)
+            {
+                if (namedArgument.Key == "Phase" && namedArgument.Value.Value is int rawPhase)
+                {
+                    tickPhase = rawPhase;
+                    break;
+                }
+            }
+
+            candidate = new LifecycleMethodCandidate(
+                MethodName: methodSymbol.Name,
+                MethodDisplay: methodSymbol.ToDisplayString(),
+                PhaseKind: phaseKind,
+                PhaseSource: GetLifecyclePhaseSource(phaseKind),
+                PhaseSortKey: (int)phaseKind,
+                TierValue: tierValue,
+                TickPhase: tickPhase,
+                MethodSymbol: methodSymbol,
+                Location: methodSymbol.Locations.FirstOrDefault());
+            return true;
+        }
+
+        candidate = null;
+        return false;
+    }
+
+    private static bool TryMapLifecyclePhase(AttributeData attribute, out LifecyclePhaseKind phaseKind)
+    {
+        switch (attribute.AttributeClass?.ToDisplayString())
+        {
+            case "LayerBase.Actor.ActorUpdateAttribute":
+                phaseKind = LifecyclePhaseKind.Update;
+                return true;
+            case "LayerBase.Actor.ActorLateUpdateAttribute":
+                phaseKind = LifecyclePhaseKind.LateUpdate;
+                return true;
+            case "LayerBase.Actor.ActorFixedUpdateAttribute":
+                phaseKind = LifecyclePhaseKind.FixedUpdate;
+                return true;
+            default:
+                phaseKind = default;
+                return false;
+        }
+    }
+
+    private static string GetLifecyclePhaseSource(LifecyclePhaseKind phaseKind)
+    {
+        return phaseKind switch
+               {
+                   LifecyclePhaseKind.Update => "global::LayerBase.Actor.ActorLifecyclePhase.Update",
+                   LifecyclePhaseKind.LateUpdate => "global::LayerBase.Actor.ActorLifecyclePhase.LateUpdate",
+                   LifecyclePhaseKind.FixedUpdate => "global::LayerBase.Actor.ActorLifecyclePhase.FixedUpdate",
+                   _ => "global::LayerBase.Actor.ActorLifecyclePhase.Update"
+               };
+    }
+
     private static bool HasActorCallBehaviourAttribute(IMethodSymbol methodSymbol)
     {
         foreach (AttributeData attribute in methodSymbol.GetAttributes())
@@ -912,6 +1152,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         ClassDeclarationSyntax              Declaration,
         ImmutableArray<MethodCandidate>     Methods,
         ImmutableArray<CallMethodCandidate> CallMethods,
+        ImmutableArray<LifecycleMethodCandidate> LifecycleMethods,
         bool                                ManuallyImplementsGeneratedMeta,
         bool                                HasTagOrGroupMetadata,
         bool                                HasProjectedActorOptionsAttribute);
@@ -928,4 +1169,22 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         string        MethodDisplay,
         IMethodSymbol MethodSymbol,
         Location?     Location);
+
+    private sealed record LifecycleMethodCandidate(
+        string        MethodName,
+        string        MethodDisplay,
+        LifecyclePhaseKind PhaseKind,
+        string        PhaseSource,
+        int           PhaseSortKey,
+        int           TierValue,
+        int           TickPhase,
+        IMethodSymbol MethodSymbol,
+        Location?     Location);
+
+    private enum LifecyclePhaseKind
+    {
+        Update = 0,
+        LateUpdate = 1,
+        FixedUpdate = 2
+    }
 }

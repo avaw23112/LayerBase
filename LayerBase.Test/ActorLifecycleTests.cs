@@ -23,6 +23,7 @@ internal static class ActorLifecycleTrace
         LifecycleProbeActor.BehaviourHook = null;
         LifecycleProbeActor.UpdateHook = null;
         LifecycleProbeActor.DestroyCount = 0;
+        DormantLifecycleProbeActor.Triggered = false;
     }
 }
 
@@ -65,6 +66,45 @@ internal sealed partial class LifecycleProbeActor : IActor, IStart, LayerBase.Ac
     {
         DestroyCount++;
         ActorLifecycleTrace.Entries.Add("destroy");
+    }
+}
+
+internal sealed partial class MethodLifecycleProbeActor : IActor
+{
+    [ActorUpdate(TickTier.Hot)]
+    private void Combat(float dt)
+    {
+        ActorLifecycleTrace.Entries.Add($"method-hot:{dt:0.###}");
+    }
+
+    [ActorUpdate(TickTier.Warm)]
+    private void Think(float dt)
+    {
+        ActorLifecycleTrace.Entries.Add($"method-warm:{dt:0.###}");
+    }
+
+    [ActorUpdate(TickTier.Cold)]
+    private void Maintain(float dt)
+    {
+        ActorLifecycleTrace.Entries.Add($"method-cold:{dt:0.###}");
+    }
+
+    [ActorLateUpdate(TickTier.Hot)]
+    private void RefreshLate(float dt)
+    {
+        ActorLifecycleTrace.Entries.Add($"method-late:{dt:0.###}");
+    }
+}
+
+internal sealed partial class DormantLifecycleProbeActor : IActor
+{
+    public static bool Triggered { get; set; }
+
+    [ActorUpdate(TickTier.Dormant)]
+    private void Sleep(float dt)
+    {
+        Triggered = true;
+        ActorLifecycleTrace.Entries.Add($"method-dormant:{dt:0.###}");
     }
 }
 
@@ -264,5 +304,68 @@ public class ActorLifecycleTests
             budget: ref budget);
 
         Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "update:0.2", "destroy" }));
+    }
+
+    [Test]
+    public void Method_level_lifecycle_methods_are_registered_and_pumped()
+    {
+        var world = new ActorWorld();
+        world.CreateActor<MethodLifecycleProbeActor>();
+        ActorLifecycleTrace.Entries.Clear();
+
+        var budget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(
+            deltaTime: 0.5f,
+            fixedDeltaTime: 0f,
+            pumpFixedUpdate: false,
+            budget: ref budget);
+
+        Assert.That(
+            ActorLifecycleTrace.Entries,
+            Is.EqualTo(new[]
+            {
+                "method-hot:0.5",
+                "method-warm:0.5",
+                "method-cold:0.5",
+                "method-late:0.5"
+            }));
+        Assert.That(budget.UsedEvents, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void Method_level_lifecycle_respects_budget_and_prioritizes_hot_before_warm_and_cold()
+    {
+        var world = new ActorWorld();
+        world.CreateActor<MethodLifecycleProbeActor>();
+        ActorLifecycleTrace.Entries.Clear();
+
+        var budget = new RuntimeFrameBudget(1, 0, 0);
+        world.Pump(
+            deltaTime: 0.5f,
+            fixedDeltaTime: 0f,
+            pumpFixedUpdate: false,
+            budget: ref budget);
+
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "method-hot:0.5" }));
+        Assert.That(budget.UsedEvents, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Dormant_lifecycle_methods_are_not_pumped_automatically()
+    {
+        var world = new ActorWorld();
+        world.CreateActor<DormantLifecycleProbeActor>();
+        ActorLifecycleTrace.Entries.Clear();
+
+        var budget = new RuntimeFrameBudget(8, 0, 0);
+        world.Pump(
+            deltaTime: 0.25f,
+            fixedDeltaTime: 0f,
+            pumpFixedUpdate: false,
+            budget: ref budget);
+
+        Assert.That(ActorLifecycleTrace.Entries, Is.Empty);
+        Assert.That(DormantLifecycleProbeActor.Triggered, Is.False);
+        Assert.That(budget.UsedEvents, Is.EqualTo(0));
     }
 }

@@ -7,6 +7,7 @@ internal sealed class ActorTypeMeta<TActor>
 
     public ActorBehaviourEntry[] Behaviours { get; }
     public ActorCallEntry[] CallBehaviours { get; }
+    public ActorLifecycleMethodMeta[] LifecycleMethods { get; }
 
     public int[] TagIds { get; }
 
@@ -16,12 +17,14 @@ internal sealed class ActorTypeMeta<TActor>
         BehaviourSignature    signature,
         ActorBehaviourEntry[] behaviours,
         ActorCallEntry[]      callBehaviours,
+        ActorLifecycleMethodMeta[] lifecycleMethods,
         int[]                 tagIds,
         int[]                 groupIds)
     {
         Signature = signature;
         Behaviours = behaviours ?? throw new ArgumentNullException(nameof(behaviours));
         CallBehaviours = callBehaviours ?? throw new ArgumentNullException(nameof(callBehaviours));
+        LifecycleMethods = lifecycleMethods ?? throw new ArgumentNullException(nameof(lifecycleMethods));
         TagIds = tagIds ?? throw new ArgumentNullException(nameof(tagIds));
         GroupIds = groupIds ?? throw new ArgumentNullException(nameof(groupIds));
     }

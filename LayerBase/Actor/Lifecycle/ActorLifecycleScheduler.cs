@@ -6,6 +6,10 @@ internal sealed class ActorLifecycleScheduler
     private readonly ActorLifecycleFreeList<IUpdate> _updates = new();
     private readonly ActorLifecycleFreeList<ILateUpdate> _lateUpdates = new();
     private readonly ActorLifecycleFreeList<IFixedUpdate> _fixedUpdates = new();
+    private readonly ActorLifecycleMethodTickLane _methodUpdates = new();
+    private readonly ActorLifecycleMethodTickLane _methodLateUpdates = new();
+    private readonly ActorLifecycleMethodTickLane _methodFixedUpdates = new();
+    private int _frameIndex;
 
     /// <summary>
     /// 生命周期 Pump 时间检查间隔。
@@ -35,6 +39,17 @@ internal sealed class ActorLifecycleScheduler
         return _fixedUpdates.Add(actorId, fixedUpdate);
     }
 
+    public ActorLifecycleHandle AddMethod(
+        ActorLifecyclePhase         phase,
+        ActorId                     actorId,
+        IActor                      actor,
+        ActorLifecycleMethodInvoker invoker,
+        TickTier                    tier,
+        int                         tickPhase)
+    {
+        return GetLane(phase).Add(actorId, actor, invoker, tier, tickPhase);
+    }
+
 
     public void RemoveUpdate(ActorLifecycleHandle handle)
     {
@@ -49,6 +64,15 @@ internal sealed class ActorLifecycleScheduler
     public void RemoveFixedUpdate(ActorLifecycleHandle handle)
     {
         _fixedUpdates.Remove(handle);
+    }
+
+    public void RemoveMethod(
+        ActorLifecyclePhase phase,
+        TickTier            tier,
+        int                 tickPhase,
+        ActorLifecycleHandle handle)
+    {
+        GetLane(phase).Remove(handle, tier, tickPhase);
     }
 
 
@@ -74,6 +98,12 @@ internal sealed class ActorLifecycleScheduler
                 instance.FixedUpdate(deltaTime);
             },
             timeCheckInterval: TimeCheckInterval);
+
+        _methodFixedUpdates.Pump(
+            frameIndex: _frameIndex,
+            state: ref state,
+            budget: ref budget,
+            timeCheckInterval: TimeCheckInterval);
     }
 
     public void PumpUpdate(
@@ -97,6 +127,12 @@ internal sealed class ActorLifecycleScheduler
                 // deltaTime 参数表示当前帧间隔。
                 instance.Update(deltaTime);
             },
+            timeCheckInterval: TimeCheckInterval);
+
+        _methodUpdates.Pump(
+            frameIndex: _frameIndex,
+            state: ref state,
+            budget: ref budget,
             timeCheckInterval: TimeCheckInterval);
     }
 
@@ -122,5 +158,30 @@ internal sealed class ActorLifecycleScheduler
                 instance.LateUpdate(deltaTime);
             },
             timeCheckInterval: TimeCheckInterval);
+
+        _methodLateUpdates.Pump(
+            frameIndex: _frameIndex,
+            state: ref state,
+            budget: ref budget,
+            timeCheckInterval: TimeCheckInterval);
+    }
+
+    public void EndFrame()
+    {
+        unchecked
+        {
+            _frameIndex++;
+        }
+    }
+
+    private ActorLifecycleMethodTickLane GetLane(ActorLifecyclePhase phase)
+    {
+        return phase switch
+               {
+                   ActorLifecyclePhase.Update => _methodUpdates,
+                   ActorLifecyclePhase.LateUpdate => _methodLateUpdates,
+                   ActorLifecyclePhase.FixedUpdate => _methodFixedUpdates,
+                   _ => _methodUpdates
+               };
     }
 }
