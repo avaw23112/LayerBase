@@ -1,6 +1,6 @@
 namespace LayerBase.Actor;
 
-internal sealed class ActorCallBucket<TRequest, TResponse> : IActorEventBucket
+internal sealed class ActorCallBucket<TRequest, TResponse> : IActorCallBucket
     where TRequest : struct
     where TResponse : struct
 {

@@ -96,7 +96,7 @@ public sealed partial class ActorWorld
                 continue;
             }
 
-            IActorEventBucket? bucket = _callBucketsByRouteId[bucketIndex];
+            IActorCallBucket? bucket = _callBucketsByRouteId[bucketIndex];
             if (bucket == null)
             {
                 _dirtyCallBuckets.Pop();

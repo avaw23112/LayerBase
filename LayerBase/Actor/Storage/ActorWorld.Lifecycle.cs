@@ -43,19 +43,13 @@ public sealed partial class ActorWorld
         _state = ActorWorldState.Disposed;
         DelayScheduler.Clear();
         _queryCacheByDescriptor.Clear();
-        _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
-        _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
-        foreach (Action unbind in _eventPostRuntimeUnbinders)
-        {
-            unbind();
-        }
+        _callBucketsByRouteId = Array.Empty<IActorCallBucket>();
 
         foreach (Action unbind in _eventStreamUnbinders)
         {
             unbind();
         }
 
-        _eventPostRuntimeUnbinders.Clear();
         _eventStreamUnbinders.Clear();
         _eventStreamRuntimes.Clear();
         GlobalEventMailPools.Clear();

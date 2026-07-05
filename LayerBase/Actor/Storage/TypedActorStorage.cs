@@ -13,7 +13,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     // 全局 slot 计数器，确保不同 Actor 类型的 slotIndex 唯一
     private static int s_globalSlotCounter;
 
-    private ActorEventColumnRuntime[] _columnsByEventId;
     private IEventStreamCenterRuntime?[] _eventStreamRuntimesByEventId = Array.Empty<IEventStreamCenterRuntime?>();
     private TActor?[] _actors;
     private int[] _generations;
@@ -48,10 +47,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     public bool[] ActorExists => _actorExists;
     public int MaxSlot => Math.Min(_nextSlotIndex, _actors.Length);
 
-    public TypedActorStorage(int archetypeId, int maxEventTypeId, int initialCapacity)
+    public TypedActorStorage(int archetypeId, int initialCapacity)
     {
         _archetypeId = archetypeId;
-        _columnsByEventId = new ActorEventColumnRuntime[Math.Max(maxEventTypeId + 1, 1)];
         int capacity = Math.Max(initialCapacity, 1);
         _actors = new TActor?[capacity];
         _generations = new int[_actors.Length];
@@ -540,10 +538,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
         foreach (ActorBehaviourEntry entry in _meta.Behaviours)
         {
-            if (entry.IsStreamHandler && entry.StreamRegister != null)
-            {
-                entry.StreamRegister(actor, _archetypeId, slotIndex, actorId.Generation, world);
-            }
+            entry.StreamRegister(actor, _archetypeId, slotIndex, actorId.Generation, world);
         }
     }
 
@@ -571,20 +566,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
         foreach (ActorBehaviourEntry entry in _meta.Behaviours)
         {
-            if (!entry.IsStreamHandler)
-            {
-                continue;
-            }
-
-            ActorStreamHandlerUnregister? unregister =
-                entry.StreamUnregister;
-
-            if (unregister == null)
-            {
-                continue;
-            }
-
-            unregister(
+            entry.StreamUnregister(
                 _archetypeId,
                 slotIndex,
                 world);
@@ -775,14 +757,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     public override int GetTotalPendingMailCount()
     {
         int count = 0;
-        foreach (ActorEventColumnRuntime? column in _columnsByEventId)
-        {
-            if (column != null)
-            {
-                count += column.GetTotalPendingCount();
-            }
-        }
-
         foreach (ActorCallColumnRuntime? column in _callColumnsByRouteId)
         {
             if (column != null)
@@ -905,41 +879,14 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             _lifecycleHandles[i] = ActorLifecycleHandles.Empty;
         }
-
-        foreach (ActorEventColumnRuntime? column in _columnsByEventId)
-        {
-            column?.RefreshPostRowBinding();
-        }
     }
 
     private void EnsureColumnCapacity(int slotIndex)
     {
-        foreach (ActorEventColumnRuntime? column in _columnsByEventId)
-        {
-            column?.EnsureSlotCapacity(slotIndex);
-        }
-
         foreach (ActorCallColumnRuntime? column in _callColumnsByRouteId)
         {
             column?.EnsureSlotCapacity(slotIndex);
         }
-    }
-
-    private void EnsureEventColumnCapacity(int eventTypeId)
-    {
-        if ((uint)eventTypeId < (uint)_columnsByEventId.Length)
-        {
-            return;
-        }
-
-        int newSize = _columnsByEventId.Length == 0 ? 4 : _columnsByEventId.Length;
-        while (newSize <= eventTypeId)
-        {
-            newSize *= 2;
-        }
-
-        Array.Resize(ref _columnsByEventId, newSize);
-        Array.Resize(ref _actorExists,newSize);
     }
 
     private void FinalizeDestroySlot(int slotIndex, ActorWorld world)
@@ -1008,11 +955,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
 
     private void ClearAllMails(int slotIndex)
     {
-        foreach (ActorEventColumnRuntime? column in _columnsByEventId)
-        {
-            column?.ClearMail(slotIndex);
-        }
-
         foreach (ActorCallColumnRuntime? column in _callColumnsByRouteId)
         {
             column?.ClearMail(slotIndex);
@@ -1060,14 +1002,6 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private int GetPendingMailCount(int slotIndex)
     {
         int count = 0;
-        foreach (ActorEventColumnRuntime? column in _columnsByEventId)
-        {
-            if (column != null)
-            {
-                count += column.GetPendingCount(slotIndex);
-            }
-        }
-
         foreach (ActorCallColumnRuntime? column in _callColumnsByRouteId)
         {
             if (column != null)

@@ -85,13 +85,13 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
 
         bool manuallyImplementsGeneratedMeta = ImplementsInterface(classSymbol, "LayerBase.Actor.IGeneratedActorMeta");
         bool hasTagOrGroupMetadata = HasTagOrGroupMetadata(classSymbol);
-        bool hasActorOptionsAttribute = HasActorOptionsAttribute(classSymbol);
+        bool hasProjectedActorOptionsAttribute = HasProjectedActorOptionsAttribute(classSymbol);
 
         if (methods.Count == 0 &&
             callMethods.Count == 0 &&
             !manuallyImplementsGeneratedMeta &&
             !hasTagOrGroupMetadata &&
-            !hasActorOptionsAttribute)
+            !hasProjectedActorOptionsAttribute)
         {
             return null;
         }
@@ -103,7 +103,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
             CallMethods: callMethods.ToImmutableArray(),
             ManuallyImplementsGeneratedMeta: manuallyImplementsGeneratedMeta,
             HasTagOrGroupMetadata: hasTagOrGroupMetadata,
-            HasActorOptionsAttribute: hasActorOptionsAttribute);
+            HasProjectedActorOptionsAttribute: hasProjectedActorOptionsAttribute);
     }
 
     private static void Generate(SourceProductionContext context, ImmutableArray<ClassCandidate?> candidates)
@@ -136,12 +136,13 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
                                                           .ToImmutableArray();
 
         bool hasTagOrGroupMetadata = candidates.Any(static candidate => candidate.HasTagOrGroupMetadata);
-        bool hasActorOptionsAttribute = candidates.Any(static candidate => candidate.HasActorOptionsAttribute);
+        bool hasProjectedActorOptionsAttribute =
+            candidates.Any(static candidate => candidate.HasProjectedActorOptionsAttribute);
 
         if (methods.Length == 0 &&
             callMethods.Length == 0 &&
             !hasTagOrGroupMetadata &&
-            !hasActorOptionsAttribute)
+            !hasProjectedActorOptionsAttribute)
         {
             return;
         }
@@ -844,11 +845,13 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
                GetGroupTypes(classSymbol).Length > 0;
     }
 
-    private static bool HasActorOptionsAttribute(INamedTypeSymbol classSymbol)
+    private static bool HasProjectedActorOptionsAttribute(INamedTypeSymbol classSymbol)
     {
         return classSymbol.GetAttributes()
                           .Any(static attribute =>
-                              attribute.AttributeClass?.ToDisplayString() == "LayerBase.Actor.ActorOptionsAttribute");
+                              attribute.AttributeClass?.ToDisplayString() is
+                                  "LayerBase.ECS.Projection.ProjectedActorOptionsAttribute" or
+                                  "LayerBase.Actor.ActorOptionsAttribute");
     }
 
     private static ImmutableArray<INamedTypeSymbol> GetTagTypes(INamedTypeSymbol classSymbol)
@@ -911,7 +914,7 @@ public sealed class ActorBehaviourGenerator : IIncrementalGenerator
         ImmutableArray<CallMethodCandidate> CallMethods,
         bool                                ManuallyImplementsGeneratedMeta,
         bool                                HasTagOrGroupMetadata,
-        bool                                HasActorOptionsAttribute);
+        bool                                HasProjectedActorOptionsAttribute);
 
     private sealed record MethodCandidate(
         string        MethodName,

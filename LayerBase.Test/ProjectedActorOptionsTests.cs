@@ -9,7 +9,7 @@ namespace LayerBase.Test;
 
 #region Test Types
 
-[ActorOptions(
+[ProjectedActorOptions(
     retirePolicy: ProjectedActorRetirePolicy.Disable,
     createPolicy: ProjectedActorCreatePolicy.Lazy,
     keepAliveSeconds: 1.0f,
@@ -42,7 +42,7 @@ internal sealed partial class DisablePolicyProbeActor : IPooledActor
     }
 }
 
-[ActorOptions(
+[ProjectedActorOptions(
     retirePolicy: ProjectedActorRetirePolicy.ReturnToPool,
     createPolicy: ProjectedActorCreatePolicy.Lazy,
     keepAliveSeconds: 0.5f,
@@ -60,6 +60,30 @@ internal sealed partial class ReturnToPoolPolicyProbeActor : IPooledActor
     public void OnReturn()
     {
         ReturnCount++;
+    }
+
+    public void OnEnable()
+    {
+    }
+
+    public void OnDisable()
+    {
+    }
+}
+
+[ProjectedActorOptions(
+    retirePolicy: ProjectedActorRetirePolicy.Disable,
+    createPolicy: ProjectedActorCreatePolicy.Lazy,
+    keepAliveSeconds: 1.5f,
+    touchIntervalSeconds: 0.3f)]
+internal sealed partial class ProjectionAttributeProbeActor : IPooledActor
+{
+    public void OnRent()
+    {
+    }
+
+    public void OnReturn()
+    {
     }
 
     public void OnEnable()
@@ -200,6 +224,23 @@ public class ProjectedActorOptionsTests
         Assert.That(options.CreatePolicy, Is.EqualTo(ProjectedActorCreatePolicy.OnMark));
         Assert.That(options.KeepAliveTicks, Is.EqualTo(ProjectedActorTime.SecondsToTicks(2.0f)));
         Assert.That(options.TouchIntervalTicks, Is.EqualTo(ProjectedActorTime.SecondsToTicks(0.5f)));
+    }
+
+    [Test]
+    public void RegisterGenerated_CachesOptions_FromProjectedActorOptionsAttribute()
+    {
+        int actorTypeId = 103;
+
+        ProjectedActorTypeRegistry.RegisterGenerated(
+            actorTypeId,
+            typeof(ProjectionAttributeProbeActor),
+            static actorWorld => actorWorld.CreateProjectedActor<ProjectionAttributeProbeActor>());
+
+        ProjectedActorOptions options = ProjectedActorTypeRegistry.GetOptions(actorTypeId);
+        Assert.That(options.RetirePolicy, Is.EqualTo(ProjectedActorRetirePolicy.Disable));
+        Assert.That(options.CreatePolicy, Is.EqualTo(ProjectedActorCreatePolicy.Lazy));
+        Assert.That(options.KeepAliveTicks, Is.EqualTo(ProjectedActorTime.SecondsToTicks(1.5f)));
+        Assert.That(options.TouchIntervalTicks, Is.EqualTo(ProjectedActorTime.SecondsToTicks(0.3f)));
     }
 
     [Test]

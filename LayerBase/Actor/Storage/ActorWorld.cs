@@ -1,4 +1,4 @@
-﻿namespace LayerBase.Actor;
+namespace LayerBase.Actor;
 
 public sealed partial class ActorWorld : IDisposable
 {
@@ -6,11 +6,8 @@ public sealed partial class ActorWorld : IDisposable
     private BehaviourArchetype[] _archetypes = Array.Empty<BehaviourArchetype>();
     private readonly Dictionary<ActorArchetypeKey, BehaviourArchetype> _archetypeMap = new();
     private readonly Dictionary<ActorQueryDescriptor, ActorQueryCache> _queryCacheByDescriptor = new();
-    private IActorEventBucket[] _eventBucketsByEventId = Array.Empty<IActorEventBucket>();
-    private IActorEventBucket[] _callBucketsByRouteId = Array.Empty<IActorEventBucket>();
-    private readonly DirtyBucketList _dirtyEventBuckets = new();
     internal GlobalEventMailPoolRegistry GlobalEventMailPools { get; } = new();
-    private readonly List<Action> _eventPostRuntimeUnbinders = new();
+    private IActorCallBucket[] _callBucketsByRouteId = Array.Empty<IActorCallBucket>();
     private readonly DirtyBucketList _dirtyCallBuckets = new();
     private int _bucketCursor;
     private int _callBucketCursor;
@@ -104,21 +101,6 @@ public sealed partial class ActorWorld : IDisposable
         QueryVersion++;
     }
 
-    internal void RegisterColumn<TEvent>(int eventTypeId, ActorEventColumnRuntime column)
-        where TEvent : struct
-    {
-        EnsureEventBucketCapacity(eventTypeId);
-
-        if (_eventBucketsByEventId[eventTypeId] is not ActorEventBucket<TEvent> bucket)
-        {
-            bucket = new ActorEventBucket<TEvent>();
-            _eventBucketsByEventId[eventTypeId] = bucket;
-        }
-
-        bucket.AddColumn(column);
-        column.BindDirtyBucket(_dirtyEventBuckets, eventTypeId);
-    }
-
     internal void RegisterCallColumn<TRequest, TResponse>(int routeId, ActorCallColumnRuntime column)
         where TRequest : struct
         where TResponse : struct
@@ -167,22 +149,6 @@ public sealed partial class ActorWorld : IDisposable
         return runtime;
     }
 
-    private void EnsureEventBucketCapacity(int eventTypeId)
-    {
-        if ((uint)eventTypeId < (uint)_eventBucketsByEventId.Length)
-        {
-            return;
-        }
-
-        int newSize = _eventBucketsByEventId.Length == 0 ? 4 : _eventBucketsByEventId.Length;
-        while (newSize <= eventTypeId)
-        {
-            newSize *= 2;
-        }
-
-        Array.Resize(ref _eventBucketsByEventId, newSize);
-    }
-
     private void EnsureCallBucketCapacity(int routeId)
     {
         if ((uint)routeId < (uint)_callBucketsByRouteId.Length)
@@ -199,4 +165,3 @@ public sealed partial class ActorWorld : IDisposable
         Array.Resize(ref _callBucketsByRouteId, newSize);
     }
 }
-

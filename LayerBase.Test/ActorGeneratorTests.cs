@@ -199,7 +199,7 @@ public class ActorGeneratorTests
 
             namespace Sample;
 
-            [ActorOptions(
+            [ProjectedActorOptions(
                 retirePolicy: ProjectedActorRetirePolicy.Disable,
                 createPolicy: ProjectedActorCreatePolicy.Lazy,
                 keepAliveSeconds: 1.0f,

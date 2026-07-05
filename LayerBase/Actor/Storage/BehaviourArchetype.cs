@@ -83,7 +83,6 @@ internal sealed class BehaviourArchetype
 
         var storage = new TypedActorStorage<TActor>(
             ArchetypeId,
-            Math.Max(EventTypeIdAllocator.MaxId, 1),
             4);
 
         storage.BuildColumns(meta, world);

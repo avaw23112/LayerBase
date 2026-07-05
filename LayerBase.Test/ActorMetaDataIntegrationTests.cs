@@ -160,6 +160,19 @@ public class ActorMetaDataIntegrationTests
         Assert.That(ActorMetaDataTrace.Values, Is.EqualTo(new[] { 1, 2 }));
     }
 
+    [Test]
+    public void Actor_storage_no_longer_keeps_legacy_event_columns_field()
+    {
+        LayerRuntime runtime = BuildRuntime();
+        ActorMetaDataActor actor = runtime.Actors.CreateActor<ActorMetaDataActor>();
+
+        object storage = GetStorage(runtime.Actors, actor.GetActorId());
+        FieldInfo? legacyColumnsField =
+            storage.GetType().GetField("_columnsByEventId", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.That(legacyColumnsField, Is.Null);
+    }
+
     private static LayerRuntime BuildRuntime()
     {
         var runtime = new LayerRuntime(1);
@@ -168,15 +181,7 @@ public class ActorMetaDataIntegrationTests
         return builder.Build();
     }
 
-    private static ActorMailOptions GetColumnOptions<TEvent>(ActorWorld world, ActorId actorId)
-        where TEvent : struct
-    {
-        object column = GetColumn(world, actorId, EventTypeId<TEvent>.Id);
-        FieldInfo optionsField = column.GetType().GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return (ActorMailOptions)optionsField.GetValue(column)!;
-    }
-
-    private static object GetColumn(ActorWorld world, ActorId actorId, int eventTypeId)
+    private static object GetStorage(ActorWorld world, ActorId actorId)
     {
         FieldInfo archetypesField =
             typeof(ActorWorld).GetField("_archetypes", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -186,12 +191,7 @@ public class ActorMetaDataIntegrationTests
         FieldInfo storagesField =
             archetype.GetType().GetField("_storages", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Array storages = (Array)storagesField.GetValue(archetype)!;
-        object storage = storages.GetValue(0)!;
-
-        FieldInfo columnsField =
-            storage.GetType().GetField("_columnsByEventId", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        Array columns = (Array)columnsField.GetValue(storage)!;
-        return columns.GetValue(eventTypeId)!;
+        return storages.GetValue(0)!;
     }
 
     private sealed class ActorMetaLayer : Layer
