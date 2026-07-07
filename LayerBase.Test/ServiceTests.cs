@@ -89,29 +89,6 @@ public partial class ServiceRegistrationTests
     }
 
     [Test]
-    public void Layer_GetService_is_thread_safe_in_parallel_handlers()
-    {
-        var layer = new DemoLayer();
-        layer.RegisterService(new ConcurrentServiceModule());
-        LayerHub.CreateLayers().Push(layer).Build();
-
-        LayerHub.InitializeJobScheduler(4);
-
-        var count = 0;
-        layer.SubscribeParallel((in ServiceTestEvent e) =>
-        {
-            var s = layer.GetService<IDemoService>();
-            if (s != null) Interlocked.Increment(ref count);
-        });
-
-        for (var i = 0; i < 100; i++) layer.Send(new ServiceTestEvent());
-
-        // Wait a bit for parallel processing
-        Thread.Sleep(500);
-        Assert.That(count, Is.EqualTo(100));
-    }
-
-    [Test]
     public void IService_that_implements_IUpdate_is_pumped()
     {
         var layer = new DemoLayer();

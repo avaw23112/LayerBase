@@ -6,11 +6,5 @@ namespace LayerBase;
 
 public sealed partial class LayerRuntime
 {
-    public World EcsWorld { get; private set; } = null!;
-
-    internal void InitializeEcsWorld()
-    {
-        EcsWorld = World.Create();
-        EcsWorld.BindRuntime(this);
-    }
+    public World EcsWorld => _scopeHost.MainScope.EcsWorld;
 }

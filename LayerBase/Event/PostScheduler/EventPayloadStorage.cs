@@ -9,6 +9,7 @@ internal interface IEventStore : IDisposable
     void Release(int                 index, int version);
     void Dispatch(int                index, int version, EventCenter center);
     void DispatchDefault(EventCenter center);
+    PostResult Post(int index, int version, PostScheduler scheduler);
 }
 
 internal static class PayloadStoreCache<T> where T : struct
@@ -127,6 +128,14 @@ internal sealed class EventStore<T> : IEventStore where T : struct
         center.Send(default(T));
     }
 
+    public PostResult Post(int index, int version, PostScheduler scheduler)
+    {
+        if (TryGet(new PayloadHandle(EventTypeId<T>.Id, index, version), out var value))
+            return scheduler.TryPost(value);
+
+        return PostResult.Failure();
+    }
+
     private void Grow()
     {
         int oldCapacity = _capacity;
@@ -242,6 +251,12 @@ internal sealed class EventPayloadStorage : IDisposable
         return ref store.GetRef(handle.Index, handle.Version);
     }
 
+    public bool TryGet<T>(int runtimeId, PayloadHandle handle, out T value) where T : struct
+    {
+        var store = GetStoreFast<T>(runtimeId);
+        return store.TryGet(handle, out value);
+    }
+
     public void EnsureStore<T>(int runtimeId) where T : struct
     {
         GetStoreFast<T>(runtimeId);
@@ -265,6 +280,13 @@ internal sealed class EventPayloadStorage : IDisposable
         }
 
         store.Dispatch(handle.Index, handle.Version, center);
+    }
+
+    public PostResult Post(PayloadHandle handle, PostScheduler scheduler)
+    {
+        if (handle.IsInvalid) return PostResult.Failure();
+        var store = GetStoreByTypeId(handle.EventTypeId);
+        return store?.Post(handle.Index, handle.Version, scheduler) ?? PostResult.Failure();
     }
 
     public void DispatchDefault(int eventTypeId, EventCenter center)

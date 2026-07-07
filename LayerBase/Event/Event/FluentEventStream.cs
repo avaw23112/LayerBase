@@ -57,24 +57,6 @@ public readonly struct LayerEventStream<T> where T : struct
     }
 
 
-    public void HandleParallel(EventNotifyDelegate<T> handler, Action<int, int, int, Exception> reportError)
-    {
-        if (handler == null) throw new ArgumentNullException(nameof(handler));
-        if (_predicate == null)
-        {
-            _layer.SubscribeParallel(handler, reportError);
-        }
-        else
-        {
-            var pred = _predicate;
-            _layer.SubscribeParallel((in T e) =>
-            {
-                if (pred(in e)) handler(in e);
-            }, reportError);
-        }
-    }
-
-
     public void Handle(EventNotifyDelegate<T> handler)
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));

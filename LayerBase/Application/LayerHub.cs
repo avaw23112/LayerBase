@@ -188,55 +188,6 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// 从任意线程向 Primary Runtime 提交事件。
-    /// </summary>
-    /// <typeparam name="T">
-    /// 事件类型。
-    /// 必须是 struct。
-    /// </typeparam>
-    /// <param name="value">
-    /// 事件数据。
-    /// </param>
-    /// <param name="policy">
-    /// 可选 Post 策略。
-    /// null 表示使用事件默认策略。
-    /// </param>
-    public static void PostFromAnyThread<T>(
-        in T             value,
-        EventPostPolicy? policy = default)
-        where T : struct
-    {
-        s_primaryRuntime?.PostFromAnyThread(value, policy);
-    }
-
-    /// <summary>
-    /// 从任意线程尝试向 Primary Runtime 提交事件。
-    /// </summary>
-    /// <typeparam name="T">
-    /// 事件类型。
-    /// 必须是 struct。
-    /// </typeparam>
-    /// <param name="value">
-    /// 事件数据。
-    /// </param>
-    /// <param name="policy">
-    /// 可选 Post 策略。
-    /// null 表示使用事件默认策略。
-    /// </param>
-    /// <returns>
-    /// true 表示已进入 Primary Runtime 的跨线程入口队列。
-    /// false 表示当前没有 Primary Runtime，或 Runtime 已释放。
-    /// </returns>
-    public static bool TryPostFromAnyThread<T>(
-        in T             value,
-        EventPostPolicy? policy = default)
-        where T : struct
-    {
-        return s_primaryRuntime != null &&
-               s_primaryRuntime.TryPostFromAnyThread(value, policy);
-    }
-
-    /// <summary>
     /// 便捷 API：向 Primary Runtime 投递合并事件。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -246,29 +197,17 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// 便捷 API：创建指向 Primary Runtime 的调用目标。
-    /// </summary>
-    public static LayerRuntime.LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer
-    {
-        if (s_primaryRuntime == null)
-            throw new InvalidOperationException("No Primary LayerRuntime created. Call CreateLayers().Build() first.");
-        return s_primaryRuntime.For<TLayer>();
-    }
-
-    /// <summary>
-    /// 便捷 API：在 Primary Runtime 上执行跨层调用。
+    /// 便捷 API：在 Primary Runtime 的当前 Scope 上执行本地调用。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(TRequest request,
-                                                                           CancellationToken cancellationToken =
-                                                                               default)
-        where TLayer : Layer
+    public static LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
+                                                                   CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
     {
         if (s_primaryRuntime == null)
             throw new InvalidOperationException("No Primary LayerRuntime created. Call CreateLayers().Build() first.");
-        return s_primaryRuntime.CallAsync<TLayer, TRequest, TResponse>(request, cancellationToken);
+        return s_primaryRuntime.CallAsync<TRequest, TResponse>(request, cancellationToken);
     }
 
     internal static void Internal_Register(LayerRuntime runtime)

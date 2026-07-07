@@ -65,7 +65,7 @@ public class ConcurrencySimplifiedTests
             resumeThreadId = Thread.CurrentThread.ManagedThreadId;
         }
 
-        using (runtime._context!.EnterScope())
+        using (runtime.ScopeHost.MainScope.SynchronizationContext!.EnterScope())
         {
             _ = Flow();
         }
@@ -93,7 +93,7 @@ public class ConcurrencySimplifiedTests
         int mainThreadId = Thread.CurrentThread.ManagedThreadId;
 
         LBTask<string> task;
-        using (runtime._context!.EnterScope())
+        using (runtime.ScopeHost.MainScope.SynchronizationContext!.EnterScope())
         {
             task = LBTask.RunBackground(() =>
             {
@@ -131,7 +131,7 @@ public class ConcurrencySimplifiedTests
         runtime = builder.Build();
 
         int completedCount = 0;
-        using (runtime._context!.EnterScope())
+        using (runtime.ScopeHost.MainScope.SynchronizationContext!.EnterScope())
         {
             LBTask.RunBackground(() => { Thread.Sleep(10); }).GetAwaiter()
                   .OnCompleted(() => Interlocked.Increment(ref completedCount));

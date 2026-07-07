@@ -66,15 +66,13 @@ public static class ActorExtensions
             catchUpPolicy: catchUpPolicy ?? timerPolicy?.CatchUpPolicy);
     }
 
-    public static LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(this IActor actor, TRequest request,
-                                                                           CancellationToken cancellationToken =
-                                                                               default)
-        where TLayer : Layer
+    public static LBTask<TResponse> CallAsync<TRequest, TResponse>(this IActor actor, TRequest request,
+                                                                   CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
     {
         return ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime
-                                   .CallAsync<TLayer, TRequest, TResponse>(request);
+                                   .CallAsync<TRequest, TResponse>(request, cancellationToken);
     }
 
 

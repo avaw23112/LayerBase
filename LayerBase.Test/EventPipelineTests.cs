@@ -104,36 +104,6 @@ public class EventPipelineTests
         }
     }
 
-    [Test]
-    public void Faulted_parallel_handler_is_disabled_and_reported_once()
-    {
-        LayerHub.InitializeJobScheduler(1);
-        var layer = new TraceLayer("L1", _trace);
-        var errorOccurred = new ManualResetEventSlim(false);
-        Action<LayerEventInfo> handler = info =>
-        {
-            if (info.Type == LayerEventInfoType.Error) errorOccurred.Set();
-        };
-
-        LayerHub.OnLayerEventInfo += handler;
-        try
-        {
-            layer.SubscribeParallel((in TestEvent e) => throw new Exception("ParallelBoom"));
-            LayerHub.CreateLayers().Push(layer).Build();
-
-            LayerHub.Send(new TestEvent());
-            Assert.That(errorOccurred.Wait(1000), Is.True, "Error signal timeout");
-
-            errorOccurred.Reset();
-            LayerHub.Send(new TestEvent());
-            Assert.That(errorOccurred.Wait(100), Is.False, "Should have fused");
-        }
-        finally
-        {
-            LayerHub.OnLayerEventInfo -= handler;
-        }
-    }
-
     private class TraceLayer : Layer
     {
         private readonly bool _handle;

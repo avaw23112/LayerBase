@@ -1,9 +1,6 @@
-using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using LayerBase.Async;
 using LayerBase.Core.EventHandler;
-using LayerBase.Event.EventMetaData;
-using LayerBase.Tools.Job;
 
 namespace LayerBase.Core.Event;
 
@@ -17,12 +14,10 @@ internal interface IEventBucketNonGeneric
     void AddAsync(int layerIndex, object handler);
     void AddNotify(int layerIndex, object handler);
     void AddSubscribe(int layerIndex, object handler);
-    void AddParallel(int layerIndex, object handler, Action<int, int, int, Exception> reportError);
     void RemoveFlow(int layerIndex, object handler);
     void RemoveAsync(int layerIndex, object handler);
     void RemoveNotify(int layerIndex, object handler);
     void RemoveSubscribe(int layerIndex, object handler);
-    void RemoveParallel(int layerIndex, object handler);
 }
 
 internal interface IHandlerBucket
@@ -52,7 +47,6 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     private readonly Action _onDirty;
     internal List<NotifyHandlerEntry<T>> MasterNotify = new();
     internal List<OrderedHandlerEntry<T>> MasterOrdered = new();
-    internal List<ParallelHandlerEntry<T>> MasterParallel = new();
     internal List<NotifyHandlerEntry<T>> MasterSubscribe = new();
     internal List<UnorderedHandlerEntry<T>> MasterUnordered = new();
 
@@ -61,7 +55,7 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         _onDirty = onDirty;
     }
 
-    public bool HasHandlers => MasterOrdered.Count > 0 || MasterUnordered.Count > 0 || MasterParallel.Count > 0 ||
+    public bool HasHandlers => MasterOrdered.Count > 0 || MasterUnordered.Count > 0 ||
                                MasterNotify.Count > 0 || MasterSubscribe.Count > 0;
 
     public void Reset()
@@ -70,7 +64,6 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         {
             foreach (var h in MasterOrdered) h.Circuit.Reset();
             foreach (var h in MasterUnordered) h.Circuit.Reset();
-            foreach (var h in MasterParallel) h.Reset();
             foreach (var h in MasterNotify) h.Circuit.Reset();
             foreach (var h in MasterSubscribe) h.Circuit.Reset();
         }
@@ -132,24 +125,6 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
     }
 
 
-    public void AddParallel(IEventHandler<T> h, Action<int, int, int, Exception> re)
-    {
-        lock (_lock)
-        {
-            MasterParallel = CopyWith(MasterParallel, ParallelHandlerEntry<T>.Create(h, re));
-            _onDirty();
-        }
-    }
-
-    public void AddParallel(EventNotifyDelegate<T> h, Action<int, int, int, Exception> re)
-    {
-        lock (_lock)
-        {
-            MasterParallel = CopyWith(MasterParallel, ParallelHandlerEntry<T>.Create(h, re));
-            _onDirty();
-        }
-    }
-
     public void Remove(IEventHandler<T> h)
     {
         lock (_lock)
@@ -173,24 +148,6 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
         lock (_lock)
         {
             MasterOrdered = CopyWithout(MasterOrdered, x => x.SyncHandler == h);
-            _onDirty();
-        }
-    }
-
-    public void RemoveParallel(EventNotifyDelegate<T> h)
-    {
-        lock (_lock)
-        {
-            MasterParallel = CopyWithout(MasterParallel, x => x.StopIfSource(h));
-            _onDirty();
-        }
-    }
-
-    public void RemoveParallel(IEventHandler<T> h)
-    {
-        lock (_lock)
-        {
-            MasterParallel = CopyWithout(MasterParallel, x => x.StopIfSource(h));
             _onDirty();
         }
     }
@@ -363,152 +320,3 @@ internal readonly struct UnorderedHandlerEntry<T> where T : struct
     }
 }
 
-internal readonly struct ParallelHandlerEntry<T> where T : struct
-{
-    private readonly ParallelSubscriptionQueue<T> _q;
-    public object Source => _q.Source;
-
-    private ParallelHandlerEntry(ParallelSubscriptionQueue<T> q)
-    {
-        _q = q;
-    }
-
-    public static ParallelHandlerEntry<T> Create(IEventHandler<T> h, Action<int, int, int, Exception> re)
-    {
-        return new ParallelHandlerEntry<T>(new ParallelSubscriptionQueue<T>(h, re));
-    }
-
-    public static ParallelHandlerEntry<T> Create(EventNotifyDelegate<T> h, Action<int, int, int, Exception> re)
-    {
-        return new ParallelHandlerEntry<T>(new ParallelSubscriptionQueue<T>(h, re));
-    }
-
-    public void Enqueue(int l, in T v)
-    {
-        _q.Enqueue(l, in v);
-    }
-
-    public void Reset()
-    {
-        _q.Reset();
-    }
-
-    public void Stop()
-    {
-        _q.Stop();
-    }
-
-    public bool StopIfSource(EventNotifyDelegate<T> h)
-    {
-        if (!_q.HasSource(h)) return false;
-        Stop();
-        return true;
-    }
-
-    public bool StopIfSource(IEventHandler<T> h)
-    {
-        if (!_q.HasSource(h)) return false;
-        Stop();
-        return true;
-    }
-
-    public HandlerCircuit Circuit => _q.Circuit;
-}
-
-internal sealed class ParallelSubscriptionQueue<T> where T : struct
-{
-    private readonly Action _drainInstance;
-    private readonly int _eventNameId, _handlerNameId;
-    private readonly Action<int, int, int, Exception> _err;
-    private readonly ConcurrentQueue<T> _evs = new();
-    private readonly EventNotifyDelegate<T>? _sd;
-    private readonly IEventHandler<T>? _sh;
-    public readonly HandlerCircuit Circuit = new();
-    private int _lIdx, _sched;
-
-    public ParallelSubscriptionQueue(IEventHandler<T> h, Action<int, int, int, Exception> re)
-    {
-        _sh = h;
-        _err = re;
-        _handlerNameId = HandlerNameSymbol.FromInstance(h);
-        _eventNameId = EventTypeSymbol<T>.NameId;
-        _drainInstance = Drain;
-    }
-
-    public ParallelSubscriptionQueue(EventNotifyDelegate<T> h, Action<int, int, int, Exception> re)
-    {
-        _sd = h;
-        _err = re;
-        _handlerNameId = HandlerNameSymbol.FromDelegate(h);
-        _eventNameId = EventTypeSymbol<T>.NameId;
-        _drainInstance = Drain;
-    }
-
-    public object Source => (object?)_sh ?? _sd!;
-
-    public bool HasSource(EventNotifyDelegate<T> h)
-    {
-        return _sd == h;
-    }
-
-    public bool HasSource(IEventHandler<T> h)
-    {
-        return ReferenceEquals(_sh, h);
-    }
-
-    public void Enqueue(int l, in T v)
-    {
-        _lIdx = l;
-        if (!Circuit.IsDisabled)
-        {
-            _evs.Enqueue(v);
-            TrySched();
-        }
-    }
-
-    public void Reset()
-    {
-        Circuit.Reset();
-        while (_evs.TryDequeue(out _)) ;
-    }
-
-    public void Stop()
-    {
-        Circuit.TryDisable();
-        while (_evs.TryDequeue(out _)) ;
-    }
-
-    private void TrySched()
-    {
-        if (!Circuit.IsDisabled && Interlocked.CompareExchange(ref _sched, 1, 0) == 0)
-            if (!JobSchedulers.Default.TrySchedule(_drainInstance))
-                ThreadPool.QueueUserWorkItem(_ => Drain());
-    }
-
-    private void Drain()
-    {
-        try
-        {
-            while (_evs.TryDequeue(out var p))
-            {
-                if (Circuit.IsDisabled) break;
-                try
-                {
-                    if (_sh != null) _sh.Deal(in p);
-                    else _sd!(in p);
-                }
-                catch (Exception e)
-                {
-                    EventMetaDataHandler.OnEventExpectation(p, e);
-                    if (Circuit.TryDisable()) _err(_lIdx, _handlerNameId, _eventNameId, e);
-                    break;
-                }
-            }
-        }
-        finally
-        {
-            Volatile.Write(ref _sched, 0);
-            if (!_evs.IsEmpty) TrySched();
-        }
-    }
-}

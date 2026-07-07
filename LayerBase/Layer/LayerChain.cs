@@ -1,20 +1,18 @@
 ﻿using System.Text;
-using LayerBase.Core.DataStruct;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
+using LayerBase.Scope;
 
 namespace LayerBase.Layers;
 
 /// <summary>
-/// 管理 Layer 链的内部实现。负责 Layer 的索引分配、生命周期构建和逐帧推进。
-/// 使用位掩码（ulong）加速活跃 Layer 的遍历，最多支持 64 个 Layer。
+/// 管理 Layer 链的内部实现。负责 Layer 的索引分配和生命周期构建。
 /// </summary>
 internal sealed class LayerChain
 {
     private readonly ResponsibilityChain _responsibilityChain;
     private readonly LayerRuntime _owner;
     private Layer?[] _indexedLayers = Array.Empty<Layer?>();
-    private ulong _logicActiveMask;
     private ulong _hasDelayMask;
     private bool _delayDirty;
 
@@ -77,17 +75,11 @@ internal sealed class LayerChain
     }
 
     /// <summary>
-    /// 依次执行所有 Layer 的 RuntimeStop 和 Dispose。
+    /// 按 Scope 生命周期计划逆序释放所有 Layer。
     /// </summary>
     internal void DisposeLayers()
     {
-        foreach (var node in _responsibilityChain)
-            if (node is Layer layer)
-                layer.RunRuntimeStop();
-
-        foreach (var node in _responsibilityChain)
-            if (node is Layer layer)
-                layer.Dispose();
+        _owner.ScopeHost.MainScope.LifecyclePlan.DisposeReverse();
     }
 
     /// <summary>
@@ -119,62 +111,21 @@ internal sealed class LayerChain
         SharedFieldBinder.Bind(
             builtLayers.SelectMany(static layer => layer.GetSharedFieldParticipants(true)));
 
-        _logicActiveMask = 0;
         _hasDelayMask = 0;
         var allSubscribers = new List<IAutoSubscribe>();
         foreach (var layer in builtLayers)
         {
             layer.LifecycleBuild();
             allSubscribers.AddRange(layer.DiscoveredSubscribers);
-            if (layer.HasActiveLogic) _logicActiveMask |= 1UL << layer.RouteIndex;
             if (layer.HasDelayPublisher) _hasDelayMask |= 1UL << layer.RouteIndex;
         }
 
-        foreach (var layer in builtLayers)
-            layer.RunPostBuild();
-
-        foreach (var layer in builtLayers)
-            layer.RunRuntimeStart();
+        var lifecyclePlan = ScopeLifecyclePlan.Build(builtLayers);
+        _owner.ScopeHost.MainScope.SetLifecyclePlan(lifecyclePlan);
+        lifecyclePlan.RunPostBuild();
+        lifecyclePlan.RunRuntimeStart();
 
         EventGraphValidator.Validate(allSubscribers, _owner);
-    }
-
-    /// <summary>
-    /// 逐帧推进所有活跃 Layer 的 Update。
-    /// </summary>
-    internal void Pump(float deltaTime)
-    {
-        var activeMask = _logicActiveMask;
-        if (activeMask == 0) return;
-
-        while (activeMask != 0)
-        {
-            var index = BitHelper.TrailingZeroCount(activeMask);
-            if (index == -1 || index >= _indexedLayers.Length) break;
-
-            var layer = _indexedLayers[index];
-            layer?.Pump(deltaTime);
-            activeMask &= ~(1UL << index);
-        }
-    }
-
-    /// <summary>
-    /// 以固定时间步长推进所有活跃 Layer 的 FixedUpdate。
-    /// </summary>
-    internal void PumpFixed(float fixedDeltaTime)
-    {
-        var activeMask = _logicActiveMask;
-        if (activeMask == 0) return;
-
-        while (activeMask != 0)
-        {
-            var index = BitHelper.TrailingZeroCount(activeMask);
-            if (index == -1 || index >= _indexedLayers.Length) break;
-
-            var layer = _indexedLayers[index];
-            layer?.PumpFixed(fixedDeltaTime);
-            activeMask &= ~(1UL << index);
-        }
     }
 
     /// <summary>

@@ -331,18 +331,6 @@ public static class ServiceExtensions
         ServiceLayerBinder.RequireLayer(service.GetBinding()).Subscribe(handler);
     }
 
-    public static void SubscribeParallel<TValue>(
-        this IService               service,
-        EventNotifyDelegate<TValue> handler)
-        where TValue : struct
-    {
-        var binding = service.GetBinding();
-
-        ServiceLayerBinder.RequireLayer(binding).SubscribeParallel(
-            handler,
-            binding.Runtime.ReportLayerEventError);
-    }
-
     public static LayerEventStream<TValue> OnEvent<TValue>(
         this IService service)
         where TValue : struct
@@ -626,18 +614,6 @@ public static class LayerContextExtensions
         where TValue : struct
     {
         ServiceLayerBinder.RequireLayer(context.GetBinding()).Subscribe(handler);
-    }
-
-    public static void SubscribeParallel<TValue>(
-        this ILayerContext          context,
-        EventNotifyDelegate<TValue> handler)
-        where TValue : struct
-    {
-        var binding = context.GetBinding();
-
-        ServiceLayerBinder.RequireLayer(binding).SubscribeParallel(
-            handler,
-            binding.Runtime.ReportLayerEventError);
     }
 
     public static LayerEventStream<TValue> OnEvent<TValue>(

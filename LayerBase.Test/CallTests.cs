@@ -17,16 +17,15 @@ public partial class CallTests
     }
 
     [Test]
-    public async Task CallAsync_routes_to_target_layer_and_returns_result()
+    public async Task CallAsync_routes_by_request_response_and_returns_result()
     {
         var coreLayer = new CoreLayer();
         coreLayer.RegisterService(new CoreLayerServicesModule());
 
         LayerHub.CreateLayers().Push(coreLayer).Build();
 
-        var response = await LayerHub.For<CoreLayer>()
-                                     .CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
-                                         new SwitchSceneRequest("BattleScene"));
+        var response = await LayerHub.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
+            new SwitchSceneRequest("BattleScene"));
 
         Assert.That(response.SceneName, Is.EqualTo("BattleScene"));
         Assert.That(response.Success, Is.True);
@@ -34,14 +33,13 @@ public partial class CallTests
     }
 
     [Test]
-    public void CallAsync_fails_when_target_layer_is_missing()
+    public void CallAsync_fails_when_local_route_is_missing()
     {
         LayerHub.CreateLayers().Push(new UiLayer()).Build();
 
         Assert.That(async () =>
-                await LayerHub.For<CoreLayer>()
-                              .CallAsync<SwitchSceneRequest, SwitchSceneResponse>(new SwitchSceneRequest("Missing")),
-            Throws.TypeOf<LayerCallTargetNotFoundException>());
+                await LayerHub.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(new SwitchSceneRequest("Missing")),
+            Throws.TypeOf<LayerCallRouteNotFoundException>());
     }
 
     [Test]
@@ -52,8 +50,7 @@ public partial class CallTests
         LayerHub.CreateLayers().Push(coreLayer).Build();
 
         Assert.That(async () =>
-                await LayerHub.For<CoreLayer>()
-                              .CallAsync<UnknownRequest, UnknownResponse>(new UnknownRequest("NoRoute")),
+                await LayerHub.CallAsync<UnknownRequest, UnknownResponse>(new UnknownRequest("NoRoute")),
             Throws.TypeOf<LayerCallRouteNotFoundException>());
     }
 
@@ -64,16 +61,15 @@ public partial class CallTests
         coreLayer.RegisterService(new CoreLayerServicesModule());
         LayerHub.CreateLayers().Push(coreLayer).Build();
 
-        var response = await LayerHub.For<CoreLayer>()
-                                     .CallAsync<ServiceLookupRequest, ServiceLookupResponse>(
-                                         new ServiceLookupRequest("LookupValue"));
+        var response = await LayerHub.CallAsync<ServiceLookupRequest, ServiceLookupResponse>(
+            new ServiceLookupRequest("LookupValue"));
 
         Assert.That(response.StoredValue, Is.EqualTo("LookupValue"));
         Assert.That(coreLayer.GetService<SceneService>().LastScene, Is.EqualTo("LookupValue"));
     }
 
     [Test]
-    public async Task CallHandler_can_compose_other_layer_capability_via_call()
+    public async Task CallHandler_can_compose_other_layer_capability_via_local_call()
     {
         var coreLayer = new CoreLayer();
         coreLayer.RegisterService(new CoreLayerServicesModule());
@@ -82,9 +78,8 @@ public partial class CallTests
 
         LayerHub.CreateLayers().Push(coreLayer).Push(audioLayer).Build();
 
-        var response = await LayerHub.For<CoreLayer>()
-                                     .CallAsync<CrossLayerAccessRequest, CrossLayerAccessResponse>(
-                                         new CrossLayerAccessRequest());
+        var response = await LayerHub.CallAsync<CrossLayerAccessRequest, CrossLayerAccessResponse>(
+            new CrossLayerAccessRequest());
 
         Assert.That(response.Value, Is.EqualTo("MainMixer"));
     }
@@ -100,9 +95,8 @@ public partial class CallTests
         LayerHub.CreateLayers().Push(coreLayer).Push(audioLayer).Build();
 
         Assert.That(async () =>
-                await LayerHub.For<CoreLayer>()
-                              .CallAsync<DirectCrossLayerAccessRequest, DirectCrossLayerAccessResponse>(
-                                  new DirectCrossLayerAccessRequest()),
+                await LayerHub.CallAsync<DirectCrossLayerAccessRequest, DirectCrossLayerAccessResponse>(
+                    new DirectCrossLayerAccessRequest()),
             Throws.TypeOf<InvalidOperationException>());
     }
 
@@ -114,8 +108,7 @@ public partial class CallTests
         LayerHub.CreateLayers().Push(coreLayer).Build();
 
         Assert.That(async () =>
-                await LayerHub.For<CoreLayer>()
-                              .CallAsync<NoOwnerLayerRequest, NoOwnerLayerResponse>(new NoOwnerLayerRequest()),
+                await LayerHub.CallAsync<NoOwnerLayerRequest, NoOwnerLayerResponse>(new NoOwnerLayerRequest()),
             Throws.TypeOf<LayerCallRouteNotFoundException>());
     }
 
@@ -127,9 +120,8 @@ public partial class CallTests
         LayerHub.CreateLayers().Push(coreLayer).Build();
 
         using var cts = new CancellationTokenSource();
-        var response = await LayerHub.For<CoreLayer>()
-                                     .CallAsync<CancellationEchoRequest, CancellationEchoResponse>(
-                                         new CancellationEchoRequest(), cts.Token);
+        var response = await LayerHub.CallAsync<CancellationEchoRequest, CancellationEchoResponse>(
+            new CancellationEchoRequest(), cts.Token);
 
         Assert.That(response.CanBeCanceled, Is.True);
         Assert.That(CancellationEchoCallHandler.LastToken, Is.EqualTo(cts.Token));
@@ -143,8 +135,7 @@ public partial class CallTests
         LayerHub.CreateLayers().Push(coreLayer).Build();
 
         Assert.That(async () =>
-                await LayerHub.For<CoreLayer>()
-                              .CallAsync<ThrowingRequest, ThrowingResponse>(new ThrowingRequest()),
+                await LayerHub.CallAsync<ThrowingRequest, ThrowingResponse>(new ThrowingRequest()),
             Throws.TypeOf<InvalidOperationException>().With.Message.Contains("Call exploded"));
     }
 
@@ -155,7 +146,7 @@ public partial class CallTests
         coreLayer.RegisterService(new CoreLayerServicesModule());
         LayerHub.CreateLayers().Push(coreLayer).Build();
 
-        var response = await LayerHub.CallAsync<CoreLayer, SwitchSceneRequest, SwitchSceneResponse>(
+        var response = await LayerHub.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
             new SwitchSceneRequest("TitleScene"));
 
         Assert.That(response.SceneName, Is.EqualTo("TitleScene"));
@@ -168,12 +159,27 @@ public partial class CallTests
         layer.RegisterService(new CoreLayerServicesModule());
         LayerHub.CreateLayers().Push(layer).Build();
 
-        var response = await LayerHub.For<LayerMethodLayer>()
-                                     .CallAsync<LayerMethodRequest, LayerMethodResponse>(
-                                         new LayerMethodRequest("LayerScene"));
+        var response = await LayerHub.CallAsync<LayerMethodRequest, LayerMethodResponse>(
+            new LayerMethodRequest("LayerScene"));
 
         Assert.That(response.SceneName, Is.EqualTo("LayerScene"));
         Assert.That(layer.GetService<SceneService>().LastScene, Is.EqualTo("LayerScene"));
+    }
+
+    [Test]
+    public async Task Local_call_routes_by_request_response_without_target_layer()
+    {
+        var coreLayer = new CoreLayer();
+        coreLayer.RegisterService(new CoreLayerServicesModule());
+
+        LayerHub.CreateLayers().Push(coreLayer).Build();
+
+        var response = await LayerHub.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
+            new SwitchSceneRequest("ScopeLocalScene"));
+
+        Assert.That(response.SceneName, Is.EqualTo("ScopeLocalScene"));
+        Assert.That(response.Success, Is.True);
+        Assert.That(coreLayer.GetService<SceneService>().LastScene, Is.EqualTo("ScopeLocalScene"));
     }
 
 }
@@ -441,7 +447,7 @@ public sealed class CrossLayerAccessCallHandler : ILayerCallHandler<CrossLayerAc
     public async LBTask<CrossLayerAccessResponse> HandleAsync(CrossLayerAccessRequest request,
                                                               CancellationToken       cancellationToken = default)
     {
-        var audioResponse = await LayerHub.CallAsync<AudioLayer, AudioMixerQueryRequest, AudioMixerQueryResponse>(
+        var audioResponse = await this.Call<AudioMixerQueryRequest, AudioMixerQueryResponse>(
             new AudioMixerQueryRequest(),
             cancellationToken);
 

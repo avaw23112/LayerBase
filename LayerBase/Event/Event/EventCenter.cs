@@ -41,12 +41,6 @@ public sealed class EventCenter
         GetBucket<T>().Add(layerIndex, handleDelegate);
     }
 
-    internal void SubscribeParallel<T>(int layerIndex, EventNotifyDelegate<T> handleDelegate,
-                                       Action<int, int, int, Exception> reportError) where T : struct
-    {
-        GetBucket<T>().AddParallel(layerIndex, handleDelegate, reportError);
-    }
-
     internal void SubscribeNotify<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
         GetBucket<T>().AddNotify(layerIndex, handler);
@@ -70,11 +64,6 @@ public sealed class EventCenter
     internal void UnsubscribeNotify<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
         GetBucket<T>().RemoveNotify(layerIndex, handler);
-    }
-
-    internal void UnsubscribeParallel<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
-    {
-        GetBucket<T>().RemoveParallel(layerIndex, handler);
     }
 
     internal void Unsubscribe<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
@@ -114,12 +103,6 @@ public sealed class EventCenter
         GetBucket(eventType).AddSubscribe(layerIndex, handler);
     }
 
-    internal void SubscribeParallel(int layerIndex, object handler, Type eventType,
-                                     Action<int, int, int, Exception> reportError)
-    {
-        GetBucket(eventType).AddParallel(layerIndex, handler, reportError);
-    }
-
     internal void UnsubscribeFlow(int layerIndex, object handler, Type eventType)
     {
         GetBucket(eventType).RemoveFlow(layerIndex, handler);
@@ -138,11 +121,6 @@ public sealed class EventCenter
     internal void Unsubscribe(int layerIndex, object handler, Type eventType)
     {
         GetBucket(eventType).RemoveSubscribe(layerIndex, handler);
-    }
-
-    internal void UnsubscribeParallel(int layerIndex, object handler, Type eventType)
-    {
-        GetBucket(eventType).RemoveParallel(layerIndex, handler);
     }
 
     #endregion
@@ -281,11 +259,8 @@ public sealed class EventCenter
         private FaultTable<T> _faultTable =
             new(Array.Empty<FaultSlot>(), Array.Empty<FaultSlot>(), Array.Empty<FaultSlot>());
 
-        private ParallelHandlerEntry<T>[] _flatParallel = Array.Empty<ParallelHandlerEntry<T>>();
-
         private int _syncCountTotal;
         private int _asyncCountTotal;
-        private int _parallelCountTotal;
         private int _notifyCountTotal;
         private int _notifySafeCountTotal;
 
@@ -301,7 +276,6 @@ public sealed class EventCenter
         private ulong _subscriberMask;
         private ulong _syncMask;
         private ulong _asyncMask;
-        private ulong _parallelMask;
         private ulong _notifyMask;
         private ulong _notifySafeMask;
 
@@ -357,14 +331,12 @@ public sealed class EventCenter
 
             _syncCountTotal = 0;
             _asyncCountTotal = 0;
-            _parallelCountTotal = 0;
             _notifyCountTotal = 0;
             _notifySafeCountTotal = 0;
 
             _subscriberMask = 0;
             _syncMask = 0;
             _asyncMask = 0;
-            _parallelMask = 0;
             _notifyMask = 0;
             _notifySafeMask = 0;
 
@@ -376,13 +348,6 @@ public sealed class EventCenter
             ReturnFaultArrays(_faultTable);
             _faultTable = new FaultTable<T>(Array.Empty<FaultSlot>(), Array.Empty<FaultSlot>(),
                 Array.Empty<FaultSlot>());
-
-            if (_flatParallel != null && _flatParallel.Length > 0 &&
-                _flatParallel != Array.Empty<ParallelHandlerEntry<T>>())
-            {
-                ArrayPool<ParallelHandlerEntry<T>>.Shared.Return(_flatParallel, true);
-                _flatParallel = Array.Empty<ParallelHandlerEntry<T>>();
-            }
         }
 
         private void ReturnArrayHelper<TDelegate>(ref TDelegate[] handlers)
@@ -430,11 +395,10 @@ public sealed class EventCenter
         {
             if (_disposed) return;
 
-            int totalSync = 0, totalAsync = 0, totalParallel = 0, totalNotify = 0, totalSubscribe = 0;
+            int totalSync = 0, totalAsync = 0, totalNotify = 0, totalSubscribe = 0;
             ulong newMask = 0,
                 newSyncMask = 0,
                 newAsyncMask = 0,
-                newParallelMask = 0,
                 newNotifyMask = 0,
                 newSubscribeMask = 0;
             for (var i = 0; i < _buckets.Length; i++)
@@ -456,7 +420,6 @@ public sealed class EventCenter
                     else if (h.AsyncWrapper != null) bAsync++;
                 }
 
-                var bParallel = b.MasterParallel.Count;
                 var bNotify = 0;
                 foreach (var h in b.MasterNotify)
                     if (!h.Circuit.IsDisabled)
@@ -468,21 +431,19 @@ public sealed class EventCenter
 
                 totalSync += bSync;
                 totalAsync += bAsync;
-                totalParallel += bParallel;
                 totalNotify += bNotify;
                 totalSubscribe += bSubscribe;
                 var bit = 1UL << i;
                 if (bSync > 0) newSyncMask |= bit;
                 if (bAsync > 0) newAsyncMask |= bit;
-                if (bParallel > 0) newParallelMask |= bit;
                 if (bNotify > 0) newNotifyMask |= bit;
                 if (bSubscribe > 0) newSubscribeMask |= bit;
-                if (bSync > 0 || bAsync > 0 || bParallel > 0 || bNotify > 0 || bSubscribe > 0) newMask |= bit;
+                if (bSync > 0 || bAsync > 0 || bNotify > 0 || bSubscribe > 0) newMask |= bit;
             }
 
-            RentArrays(totalSync, totalAsync, totalNotify, totalSubscribe, totalParallel);
+            RentArrays(totalSync, totalAsync, totalNotify, totalSubscribe);
 
-            int sIdx = 0, aIdx = 0, pIdx = 0, nIdx = 0, nsIdx = 0;
+            int sIdx = 0, aIdx = 0, nIdx = 0, nsIdx = 0;
             var syncFaults = _faultTable.SyncFaults;
             var asyncFaults = _faultTable.AsyncFaults;
             var subscribeFaults = _faultTable.SubscribeFaults;
@@ -544,33 +505,29 @@ public sealed class EventCenter
                             subscribeFaults[nsIdx] = new FaultSlot(i, h.Circuit, h.HandlerNameId);
                             nsIdx++;
                         }
-
-                    foreach (var h in b.MasterParallel) _flatParallel[pIdx++] = h;
                 }
             }
 
-            ClearArrays(sIdx, aIdx, nIdx, nsIdx, pIdx);
+            ClearArrays(sIdx, aIdx, nIdx, nsIdx);
             _syncCountTotal = sIdx;
             _asyncCountTotal = aIdx;
-            _parallelCountTotal = pIdx;
             _notifyCountTotal = nIdx;
             _notifySafeCountTotal = nsIdx;
 
             _subscriberMask = newMask;
             _syncMask = newSyncMask;
             _asyncMask = newAsyncMask;
-            _parallelMask = newParallelMask;
             _notifyMask = newNotifyMask;
             _notifySafeMask = newSubscribeMask;
 
             IdentifySpecializations();
         }
 
-        private void RentArrays(int totalSync, int totalAsync, int totalNotify, int totalSubscribe, int totalParallel)
+        private void RentArrays(int totalSync, int totalAsync, int totalNotify, int totalSubscribe)
         {
             if (_syncHandlers.Length < totalSync)
             {
-                ReturnArraysForRebuild(true, false, false, false, false);
+                ReturnArraysForRebuild(true, false, false, false);
                 _syncHandlers = ArrayPool<EventHandleDelegate<T>>.Shared.Rent(totalSync);
                 var syncFaults = ArrayPool<FaultSlot>.Shared.Rent(totalSync);
                 _faultTable = new FaultTable<T>(syncFaults, _faultTable.AsyncFaults, _faultTable.SubscribeFaults);
@@ -578,7 +535,7 @@ public sealed class EventCenter
 
             if (_asyncHandlers.Length < totalAsync)
             {
-                ReturnArraysForRebuild(false, true, false, false, false);
+                ReturnArraysForRebuild(false, true, false, false);
                 _asyncHandlers = ArrayPool<EventHandleDelegateAsync<T>>.Shared.Rent(totalAsync);
                 var asyncFaults = ArrayPool<FaultSlot>.Shared.Rent(totalAsync);
                 _faultTable = new FaultTable<T>(_faultTable.SyncFaults, asyncFaults, _faultTable.SubscribeFaults);
@@ -586,40 +543,32 @@ public sealed class EventCenter
 
             if (_notifyHandlers.Length < totalNotify)
             {
-                ReturnArraysForRebuild(false, false, true, false, false);
+                ReturnArraysForRebuild(false, false, true, false);
                 _notifyHandlers = ArrayPool<EventNotifyDelegate<T>>.Shared.Rent(totalNotify);
             }
 
             if (_subscribeHandlers.Length < totalSubscribe)
             {
-                ReturnArraysForRebuild(false, false, false, true, false);
+                ReturnArraysForRebuild(false, false, false, true);
                 _subscribeHandlers = ArrayPool<EventNotifyDelegate<T>>.Shared.Rent(totalSubscribe);
                 var subscribeFaults = ArrayPool<FaultSlot>.Shared.Rent(totalSubscribe);
                 _faultTable = new FaultTable<T>(_faultTable.SyncFaults, _faultTable.AsyncFaults, subscribeFaults);
             }
-
-            if (_flatParallel.Length < totalParallel)
-            {
-                if (_flatParallel != Array.Empty<ParallelHandlerEntry<T>>())
-                    ArrayPool<ParallelHandlerEntry<T>>.Shared.Return(_flatParallel, true);
-                _flatParallel = ArrayPool<ParallelHandlerEntry<T>>.Shared.Rent(totalParallel);
-            }
         }
 
-        private void ClearArrays(int sIdx, int aIdx, int nIdx, int nsIdx, int pIdx)
+        private void ClearArrays(int sIdx, int aIdx, int nIdx, int nsIdx)
         {
             Array.Clear(_syncHandlers, sIdx, _syncHandlers.Length - sIdx);
             Array.Clear(_asyncHandlers, aIdx, _asyncHandlers.Length - aIdx);
             Array.Clear(_notifyHandlers, nIdx, _notifyHandlers.Length - nIdx);
             Array.Clear(_subscribeHandlers, nsIdx, _subscribeHandlers.Length - nsIdx);
-            Array.Clear(_flatParallel, pIdx, _flatParallel.Length - pIdx);
 
             Array.Clear(_faultTable.SyncFaults, sIdx, _faultTable.SyncFaults.Length - sIdx);
             Array.Clear(_faultTable.AsyncFaults, aIdx, _faultTable.AsyncFaults.Length - aIdx);
             Array.Clear(_faultTable.SubscribeFaults, nsIdx, _faultTable.SubscribeFaults.Length - nsIdx);
         }
 
-        private void ReturnArraysForRebuild(bool sync, bool async, bool notify, bool subscribe, bool parallel)
+        private void ReturnArraysForRebuild(bool sync, bool async, bool notify, bool subscribe)
         {
             if (sync)
             {
@@ -659,7 +608,7 @@ public sealed class EventCenter
 
         private void IdentifySpecializations()
         {
-            var singleSync = _syncCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
+            var singleSync = _syncCountTotal == 1 && _asyncCountTotal == 0 &&
                              _notifyCountTotal == 0 && _notifySafeCountTotal == 0;
             if (singleSync)
             {
@@ -672,7 +621,7 @@ public sealed class EventCenter
                 _singleSyncHandler = null;
             }
 
-            var singleNotify = _notifyCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
+            var singleNotify = _notifyCountTotal == 1 && _asyncCountTotal == 0 &&
                                _syncCountTotal == 0 && _notifySafeCountTotal == 0;
             if (singleNotify)
             {
@@ -685,7 +634,7 @@ public sealed class EventCenter
                 _singleNotifyHandler = null;
             }
 
-            var singleSubscribe = _notifySafeCountTotal == 1 && _asyncCountTotal == 0 && _parallelCountTotal == 0 &&
+            var singleSubscribe = _notifySafeCountTotal == 1 && _asyncCountTotal == 0 &&
                                   _syncCountTotal == 0 && _notifyCountTotal == 0;
             if (singleSubscribe)
             {
@@ -699,7 +648,7 @@ public sealed class EventCenter
             }
 
             _isSmallNotifyFanoutOnly = _notifyCountTotal + _notifySafeCountTotal is >= 2 and <= 8 &&
-                                       _asyncCountTotal == 0 && _parallelCountTotal == 0 && _syncCountTotal == 0;
+                                       _asyncCountTotal == 0 && _syncCountTotal == 0;
         }
 
         public void Add(int layerIndex, IEventHandler<T> h)
@@ -723,18 +672,6 @@ public sealed class EventCenter
         public void AddSubscribe(int layerIndex, EventNotifyDelegate<T> h)
         {
             GetOrCreate(layerIndex).AddSubscribe(h);
-            MarkDirty();
-        }
-
-        public void AddParallel(int layerIndex, IEventHandler<T> h, Action<int, int, int, Exception> re)
-        {
-            GetOrCreate(layerIndex).AddParallel(h, re);
-            MarkDirty();
-        }
-
-        public void AddParallel(int layerIndex, EventNotifyDelegate<T> h, Action<int, int, int, Exception> re)
-        {
-            GetOrCreate(layerIndex).AddParallel(h, re);
             MarkDirty();
         }
 
@@ -764,24 +701,6 @@ public sealed class EventCenter
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
             {
                 _buckets[layerIndex]!.Remove(h);
-                MarkDirty();
-            }
-        }
-
-        public void RemoveParallel(int layerIndex, EventNotifyDelegate<T> h)
-        {
-            if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
-            {
-                _buckets[layerIndex]!.RemoveParallel(h);
-                MarkDirty();
-            }
-        }
-
-        public void RemoveParallel(int layerIndex, IEventHandler<T> h)
-        {
-            if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
-            {
-                _buckets[layerIndex]!.RemoveParallel(h);
                 MarkDirty();
             }
         }
@@ -849,15 +768,6 @@ public sealed class EventCenter
             AddSubscribe(layerIndex, (EventNotifyDelegate<T>)handler);
         }
 
-        void IEventBucketNonGeneric.AddParallel(int layerIndex, object handler,
-                                                 Action<int, int, int, Exception> reportError)
-        {
-            if (handler is IEventHandler<T> h)
-                AddParallel(layerIndex, h, reportError);
-            else
-                AddParallel(layerIndex, (EventNotifyDelegate<T>)handler, reportError);
-        }
-
         void IEventBucketNonGeneric.RemoveFlow(int layerIndex, object handler)
         {
             if (handler is IEventHandler<T> h)
@@ -884,13 +794,6 @@ public sealed class EventCenter
             RemoveSubscribe(layerIndex, (EventNotifyDelegate<T>)handler);
         }
 
-        void IEventBucketNonGeneric.RemoveParallel(int layerIndex, object handler)
-        {
-            if (handler is IEventHandler<T> h)
-                RemoveParallel(layerIndex, h);
-            else
-                RemoveParallel(layerIndex, (EventNotifyDelegate<T>)handler);
-        }
         #endregion
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -918,9 +821,6 @@ public sealed class EventCenter
             }
 
             if (_asyncMask != 0) DispatchAsync(0, _asyncCountTotal, in value);
-            if (_parallelMask != 0)
-                for (var j = 0; j < _parallelCountTotal; j++)
-                    _flatParallel[j].Enqueue(-1, in value);
 
             return res;
         }

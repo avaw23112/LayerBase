@@ -46,12 +46,6 @@ public sealed class CallUsageAnalyzer : IIncrementalGenerator
 
         if (methodSymbol.IsGenericMethod && methodSymbol.TypeArguments.Length >= 2)
         {
-            // Usually Request is the 2nd generic arg in LayerHub.CallAsync<L, Req, Resp>
-            // Or 1st in handler.Call<L, Req, Resp>
-            var requestType = methodSymbol.Name == "CallAsync"
-                ? methodSymbol.TypeArguments[1]
-                : methodSymbol.TypeArguments[1];
-
             // To be safe, find the parameter named 'request'
             var reqParam =
                 methodSymbol.Parameters.FirstOrDefault(p =>

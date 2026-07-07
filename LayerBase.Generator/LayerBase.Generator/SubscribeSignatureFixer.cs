@@ -53,9 +53,9 @@ public class SubscribeSignatureFixer : CodeFixProvider
         var attrName = attr.Name.ToString();
         var isAsync = attrName.Contains("Async");
 
-        // Subscribe (原 Subscribe), SubscribeNotify, SubscribeParallel 返回 void
+        // Subscribe and SubscribeNotify return void.
         var isVoidReturn = attrName == "Subscribe" || attrName == "SubscribeAttribute" ||
-                           attrName.Contains("Notify") || attrName.Contains("Parallel");
+                           attrName.Contains("Notify");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
         if (root == null) return document;

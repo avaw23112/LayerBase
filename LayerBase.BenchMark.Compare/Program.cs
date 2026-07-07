@@ -256,7 +256,7 @@ public class RequestResponseCompareBench : CompareBenchmarkBase
     public void LayerBase()
     {
         for (var i = 0; i < HundredThousand; i++)
-            CompareSink.IntValue = LayerHub.CallAsync<CompareCallLayer, CompareRequest, CompareResponse>(_request)
+            CompareSink.IntValue = LayerHub.CallAsync<CompareRequest, CompareResponse>(_request)
                                            .GetAwaiter().GetResult().Value;
     }
 }

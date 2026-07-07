@@ -9,6 +9,7 @@ using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
+using LayerBase.Scope;
 using LayerBase.Snap;
 
 namespace LayerBase;
@@ -23,9 +24,8 @@ public sealed partial class LayerRuntime : IDisposable
     #region External Dependencies
     // 核心子系统，在构造时创建，贯穿 Runtime 生命周期。
     internal WorldServiceRoot Services { get; }
-    public EventCenter EventCenter { get; internal set; }
+    public EventCenter EventCenter => _scopeHost.MainScope.EventCenter;
     public ActorWorld Actors { get; }
-    private readonly PostIngressQueue _postIngress = new();
     #endregion
 
     #region Runtime State - Configuration
@@ -36,13 +36,10 @@ public sealed partial class LayerRuntime : IDisposable
     #region Runtime State - Subsystems
     // 各子系统实例，在 Build 过程中创建。
     private LayerChain? _chain;
-    internal LayerBaseSynchronizationContext? _context;
-    private PostScheduler? _scheduler;
-    private TimeScheduler<ITimerAction>? _timer;
-    private RuntimeTimerSink? _timerSink;
+    private readonly ScopeRuntimeHost _scopeHost;
     private ServiceProvider? _worldProvider;
     private FullSnapRuntime? _fullSnap;
-    internal DelayPublisherManager? DelayManager { get; private set; }
+    internal DelayPublisherManager? DelayManager => _scopeHost.MainScope.DelayManager;
     #endregion
 
     #region Runtime State - Layer Bindings
@@ -55,28 +52,32 @@ public sealed partial class LayerRuntime : IDisposable
     #region Runtime State - Identification
     // Runtime 的唯一标识符和释放标记。
     private readonly int _id;
+    private readonly int _generation = 1;
+    private readonly ScopeRef<MainScope> _mainScope;
     private bool _disposed;
-    #endregion
-
-    #region Runtime State - Timing
-    private float _fixedUpdateAccumulator;
     #endregion
 
     #region Properties
     public int Id => _id;
+
+    public ScopeRef<MainScope> Main => _mainScope;
 
     public LayerBase.DI.IServiceProvider ServiceProvider =>
         _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
 
     public T GetService<T>() where T : class => ServiceProvider.Get<T>();
 
-    public PostScheduler Scheduler => _scheduler ?? throw new InvalidOperationException("Runtime not built.");
+    public PostScheduler Scheduler => _scopeHost.MainScope.PostScheduler ?? throw new InvalidOperationException("Runtime not built.");
 
-    public TimeScheduler<ITimerAction> Timer => _timer ?? throw new InvalidOperationException("Runtime not built.");
+    public TimeScheduler<ITimerAction> Timer => _scopeHost.MainScope.Timer ?? throw new InvalidOperationException("Runtime not built.");
 
     public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
 
     public bool IsDebugMode { get; internal set; }
+
+    internal bool IsDisposed => _disposed;
+
+    internal ScopeRuntimeHost ScopeHost => _scopeHost;
     #endregion
 
     #region Events
@@ -87,17 +88,30 @@ public sealed partial class LayerRuntime : IDisposable
     internal LayerRuntime(int id)
     {
         _id = id;
-        EventCenter = new EventCenter();
         Actors = new ActorWorld(this);
         Services = new WorldServiceRoot(this);
-        InitializeEcsWorld();
+        _scopeHost = ScopeRuntimeHost.CreateMain(this, _id, _generation);
+        _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
         LayerHub.Internal_Register(this);
     }
 
-    private EventBuildPolicyTable? _policyTable;
+    public ScopeRef<TScope> GetScope<TScope>()
+        where TScope : IScopeDefinition
+    {
+        if (TryGetScope<TScope>(out var scope))
+            return scope;
+
+        throw new InvalidOperationException($"Scope `{typeof(TScope).FullName}` is not registered in this runtime.");
+    }
+
+    public bool TryGetScope<TScope>(out ScopeRef<TScope> scope)
+        where TScope : IScopeDefinition
+    {
+        return _scopeHost.TryGetScope(out scope);
+    }
 
     public EventBuildPolicyTable PolicyTable =>
-        _policyTable ?? throw new InvalidOperationException("Runtime not built.");
+        _scopeHost.MainScope.PolicyTable ?? throw new InvalidOperationException("Runtime not built.");
 
     internal void InitializeScheduler(PostSchedulerOptions options)
     {
@@ -106,13 +120,14 @@ public sealed partial class LayerRuntime : IDisposable
 
     public void RebuildEventPolicies()
     {
-        if (_scheduler == null) throw new InvalidOperationException("Runtime not built.");
-        BuildEventPolicies(_scheduler.Options);
+        var scheduler = _scopeHost.MainScope.PostScheduler;
+        if (scheduler == null) throw new InvalidOperationException("Runtime not built.");
+        BuildEventPolicies(scheduler.Options);
     }
 
     private void BuildEventPolicies(PostSchedulerOptions options)
     {
-        _policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
+        var policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
         var metaData = LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData().ToList();
         var plans = new List<PostTypePlan>();
 
@@ -122,21 +137,21 @@ public sealed partial class LayerRuntime : IDisposable
             _ = meta.GetIdentity();
 
             var postPolicy = meta.GetPostPolicy();
-            _policyTable.SetMetaData(eventId, meta);
+            policyTable.SetMetaData(eventId, meta);
             if (postPolicy != null)
-                _policyTable.SetPostPolicy(eventId, postPolicy.Value);
+                policyTable.SetPostPolicy(eventId, postPolicy.Value);
 
             var timerPolicy = meta.GetTimerPolicy();
             if (timerPolicy != null)
-                _policyTable.SetTimerPolicy(eventId, timerPolicy.Value);
+                policyTable.SetTimerPolicy(eventId, timerPolicy.Value);
 
             var bufferPolicy = meta.GetBufferPolicy();
             if (bufferPolicy != null)
-                _policyTable.SetBufferPolicy(eventId, bufferPolicy.Value);
+                policyTable.SetBufferPolicy(eventId, bufferPolicy.Value);
 
             var actorMailOptions = meta.GetActorMailOptions();
             if (actorMailOptions != null)
-                _policyTable.SetActorMailOptions(eventId, actorMailOptions.Value);
+                policyTable.SetActorMailOptions(eventId, actorMailOptions.Value);
 
             var effectivePolicy =
                 postPolicy ?? new EventPostPolicy(PostDeliveryMode.Normal, options.DefaultBackpressure, 0);
@@ -144,28 +159,17 @@ public sealed partial class LayerRuntime : IDisposable
                 effectivePolicy.MaxPending, options.DefaultBackpressure, effectivePolicy.MergeFailure));
         }
 
-        if (_scheduler == null)
-        {
-            _scheduler = new PostScheduler(_id, EventCenter, options, _policyTable);
-            EventCenter.PostScheduler = _scheduler;
-        }
-        else
-        {
-            _scheduler.UpdatePolicyTable(_policyTable);
-        }
-
-        _scheduler.BuildPlans(plans.ToArray());
+        _scopeHost.MainScope.InitializeOrUpdateScheduler(options, policyTable, plans.ToArray());
     }
 
     internal void InitializeTimer(TimeSchedulerOptions options)
     {
-        _timer = new TimeScheduler<ITimerAction>(options);
-        _timerSink = new RuntimeTimerSink(_scheduler!, _policyTable!);
+        _scopeHost.MainScope.InitializeTimer(options);
     }
 
     internal void InitializeDelay(DelayBufferOptions options)
     {
-        DelayManager = DelayPublisherManager.Create(options, _policyTable!);
+        _scopeHost.MainScope.InitializeDelay(options);
     }
 
     internal void BuildServiceProvider()
@@ -208,13 +212,14 @@ public sealed partial class LayerRuntime : IDisposable
     {
         if (_disposed) return;
 
-        if (_context != null)
+        var context = _scopeHost.MainScope.SynchronizationContext;
+        if (context != null)
         {
-            using var scope = _context.EnterScope();
+            using var scope = context.EnterScope();
 
             // Completion drain (only when sync context exists)
             var policy = IsDebugMode ? CompletionExceptionPolicy.Throw : CompletionExceptionPolicy.ReportAndContinue;
-            _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0, policy,
+            context.Update(_scopeHost.MainScope.PostScheduler?.Options.MaxCompletionsPerPump ?? 0, policy,
                 ex => ReportLayerEventError(-1, "System", "Completion", ex));
         }
 
@@ -224,49 +229,27 @@ public sealed partial class LayerRuntime : IDisposable
     private void PumpCore(float deltaTime)
     {
         // 1. Time tick
-        _timer?.Tick(deltaTime, _timerSink!);
+        _scopeHost.MainScope.TickTimer(deltaTime);
 
         // 2. Delay tick
         if (_chain != null && _chain.HasAnyDelay)
             DelayManager?.Tick(deltaTime);
 
-        // 3. FixedUpdate accumulator
-        if (_fixedUpdateOptions.Enabled)
-        {
-            _fixedUpdateAccumulator += deltaTime;
-            int steps = 0;
-            while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime &&
-                   steps < _fixedUpdateOptions.MaxStepsPerPump)
-            {
-                _chain?.PumpFixed(_fixedUpdateOptions.FixedDeltaTime);
-                _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
-                steps++;
-            }
-        }
+        // 3. Scope-local FixedUpdate accumulator
+        _scopeHost.MainScope.PumpFixedUpdate(_fixedUpdateOptions, deltaTime);
 
-        // 4. Ingress drain
-        if (_scheduler != null)
-        {
-            var ingressResult = _postIngress.DrainTo(
-                _scheduler,
-                _scheduler.Options.MaxIngressPostsPerPump);
+        // 4. Scope ingress + post pump + layer pump + actor pump
+        _scopeHost.MainScope.PumpIngress();
 
-            if (IsDebugMode && ingressResult.Failed > 0)
-            {
-                ReportWarning(-1, "PostIngressQueue", "DrainTo",
-                    $"PostFromAnyThread failed: {ingressResult.Failed}/{ingressResult.Drained}");
-            }
-        }
-
-        // 5. Post pump + layer pump + actor pump
-        PostPumpStats postStats = _scheduler?.Pump()
+        var scheduler = _scopeHost.MainScope.PostScheduler;
+        PostPumpStats postStats = scheduler?.Pump()
                                   ?? new PostPumpStats(0, 0, 0, 0);
 
-        _chain?.Pump(deltaTime);
+        _scopeHost.MainScope.PumpUpdate(deltaTime);
 
-        if (_scheduler != null)
+        if (scheduler != null)
         {
-            RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
+            RuntimeFrameBudget actorBudget = CreateActorBudget(scheduler.Options, postStats);
             bool pumpActorFixedUpdate = _fixedUpdateOptions.Enabled;
             float actorFixedDeltaTime = _fixedUpdateOptions.Enabled
                 ? _fixedUpdateOptions.FixedDeltaTime
@@ -357,19 +340,6 @@ public sealed partial class LayerRuntime : IDisposable
         Scheduler.TryPostLatest(value);
     }
 
-    public void PostFromAnyThread<T>(in T value, EventPostPolicy? policy = default) where T : struct
-    {
-        if (_disposed) return;
-        _postIngress.Enqueue(value, policy);
-    }
-
-    public bool TryPostFromAnyThread<T>(in T value, EventPostPolicy? policy = default) where T : struct
-    {
-        if (_disposed) return false;
-        _postIngress.Enqueue(value, policy);
-        return true;
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostCoalesced<T>(in T value) where T : struct
     {
@@ -379,7 +349,7 @@ public sealed partial class LayerRuntime : IDisposable
     public TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
     {
         var eventId = EventTypeId<T>.Id;
-        var timerPolicy = _policyTable?.GetTimerPolicy(eventId);
+        var timerPolicy = PolicyTable.GetTimerPolicy(eventId);
 
         return Timer.Schedule(
             new PostEventAction<T>(value, timerPolicy?.ExpiredPostPolicy),
@@ -390,63 +360,15 @@ public sealed partial class LayerRuntime : IDisposable
     #endregion
 
     #region Public API - Cross-Layer Call
-    public LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer
-    {
-        TryResolveLayerTarget<TLayer>(out var layer, out var error);
-        return new LayerCallTarget<TLayer>(this, layer, error);
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(TRequest request,
-                                                                    CancellationToken cancellationToken = default)
-        where TLayer : Layer
+    public LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
+                                                            CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
     {
-        var version = GetLayerTypeBindingsVersion();
-        if (LayerHub.GetCallCacheVersion<TLayer, TRequest, TResponse>(_id) != version)
-            return CallAsyncSlow<TLayer, TRequest, TResponse>(version, request, cancellationToken);
-
-        var invoker = LayerHub.GetCallInvoker<TLayer, TRequest, TResponse>(_id);
-        if (invoker != null) return invoker(request, cancellationToken);
-        return LBTask<TResponse>.FromException(LayerHub.GetCallError<TLayer, TRequest, TResponse>(_id)!);
+        return _scopeHost.MainScope.CallLocalAsync<TRequest, TResponse>(request, cancellationToken);
     }
 
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(int version, TRequest request,
-                                                                         CancellationToken cancellationToken)
-        where TLayer : Layer
-        where TRequest : struct
-        where TResponse : struct
-    {
-        UpdateLayerCallCache<TLayer, TRequest, TResponse>(version);
-        var invoker = LayerHub.GetCallInvoker<TLayer, TRequest, TResponse>(_id);
-        if (invoker != null) return invoker(request, cancellationToken);
-        return LBTask<TResponse>.FromException(LayerHub.GetCallError<TLayer, TRequest, TResponse>(_id)!);
-    }
-
-    private void UpdateLayerCallCache<TLayer, TRequest, TResponse>(int version)
-        where TLayer : Layer
-        where TRequest : struct
-        where TResponse : struct
-    {
-        if (TryResolveLayerTarget<TLayer>(out var layer, out var error))
-        {
-            try
-            {
-                var invoker = layer!.GetCallInvoker<TRequest, TResponse>();
-                LayerHub.UpdateLayerCallCache<TLayer, TRequest, TResponse>(_id, version, invoker, null);
-            }
-            catch (Exception ex)
-            {
-                LayerHub.UpdateLayerCallCache<TLayer, TRequest, TResponse>(_id, version, null, ex);
-            }
-        }
-        else
-        {
-            LayerHub.UpdateLayerCallCache<TLayer, TRequest, TResponse>(_id, version, null, error);
-        }
-    }
     #endregion
 
     #region Lifecycle - Dispose
@@ -455,19 +377,13 @@ public sealed partial class LayerRuntime : IDisposable
         if (_disposed) return;
         _disposed = true;
 
-        _postIngress.Clear();
+        _scopeHost.MainScope.RunRuntimeStop();
         _chain?.DisposeLayers();
         _chain = null;
         Actors.RuntimeStop();
         Actors.Dispose();
-        EcsWorld.Dispose();
         Services.Dispose();
-        _scheduler?.Dispose();
-        _timer?.Dispose();
-        DelayManager?.Clear();
-        DelayManager = null;
-        EventCenter.Reset();
-        _context?.Dispose();
+        _scopeHost.Dispose();
         LayerHub.ClearRuntimeCaches(_id);
         LayerHub.Internal_Unregister(this);
     }
@@ -523,6 +439,16 @@ public sealed partial class LayerRuntime : IDisposable
         }
     }
 
+    internal void BuildLocalCallRegistry()
+    {
+        _scopeHost.MainScope.ClearLocalCallRegistry();
+        if (_chain == null) return;
+
+        foreach (var layer in _chain.GetNodes())
+        foreach (var entry in layer.LocalCallRouteEntries)
+            _scopeHost.MainScope.LocalCalls.Register(entry);
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void InvalidateLayerTargetCaches()
     {
@@ -537,7 +463,8 @@ public sealed partial class LayerRuntime : IDisposable
 
     public string GetPolicyMarkdown()
     {
-        if (_policyTable == null)
+        var policyTable = _scopeHost.MainScope.PolicyTable;
+        if (policyTable == null)
         {
             return "Runtime not built.";
         }
@@ -551,7 +478,7 @@ public sealed partial class LayerRuntime : IDisposable
             "| RuntimeId | StableId | StableKey | Version | Event Type | Post Mode | Backpressure | MaxPending | MergeFailure | Timer | Buffer |");
         sb.AppendLine("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |");
 
-        foreach (var snapshot in _policyTable.ExportSnapshots())
+        foreach (var snapshot in policyTable.ExportSnapshots())
         {
             var post = snapshot.PostPolicy;
             var timer = snapshot.TimerPolicy;
@@ -776,10 +703,10 @@ public sealed partial class LayerRuntime : IDisposable
             if (_layerChain == null) throw new InvalidOperationException("No layers added.");
             _built = true;
 
-            if (_runtime._context == null)
-                _runtime._context = LayerBaseSynchronizationContext.Install();
+            _runtime._scopeHost.MainScope.InstallSynchronizationContext();
 
             _layerChain.Prebuild();
+            _runtime.BuildLocalCallRegistry();
 
             _runtime._fixedUpdateOptions = _fixedUpdateOptions;
             _runtime.InitializeScheduler(_postOptions);
@@ -829,50 +756,5 @@ public sealed partial class LayerRuntime : IDisposable
         }
     }
 
-    public readonly struct LayerCallTarget<TLayer> where TLayer : Layer
-    {
-        private readonly LayerRuntime _owner;
-        private readonly TLayer? _layer;
-        private readonly Exception? _error;
-
-        internal LayerCallTarget(LayerRuntime owner, TLayer? layer, Exception? error)
-        {
-            _owner = owner;
-            _layer = layer;
-            _error = error;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest          request,
-                                                                CancellationToken cancellationToken = default)
-            where TRequest : struct
-            where TResponse : struct
-        {
-            if (_layer != null)
-                return _layer.CallAsync<TRequest, TResponse>(request, cancellationToken);
-
-            if (_error != null)
-                return LBTask<TResponse>.FromException(_error);
-
-            if (_owner.TryResolveLayerTarget<TLayer>(out var layer, out var error))
-                return layer!.CallAsync<TRequest, TResponse>(request, cancellationToken);
-
-            return LBTask<TResponse>.FromException(error!);
-        }
-    }
-
-    private sealed class RuntimeTimerSink : IExpiredTimerSink<ITimerAction>
-    {
-        private readonly PostScheduler _scheduler;
-        private readonly EventBuildPolicyTable _policyTable;
-
-        public RuntimeTimerSink(PostScheduler scheduler, EventBuildPolicyTable policyTable)
-        {
-            _scheduler = scheduler;
-            _policyTable = policyTable;
-        }
-
-        public bool TryAcceptExpired(in ITimerAction payload, TimerHandle handle) => payload.Execute(_scheduler);
-    }
     #endregion
 }

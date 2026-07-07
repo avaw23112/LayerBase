@@ -15,9 +15,7 @@ public class HeavyComputeEventMetaData : EventMetaData<HeavyComputeEvent>
 
 public partial class ComputeLayer : Layer
 {
-    // [SubscribeParallel] 会在独立的线程池中执行�?
-    // 这提供了极致的性能，同时也实现了故障隔离�?
-    [SubscribeParallel]
+    [Subscribe]
     private void DoWork(in HeavyComputeEvent e)
     {
         if (e.Data < 0) throw new Exception("Compute Error!"); // 故意制造异�?

@@ -32,16 +32,15 @@ public static class LayerCallHandlerExtensions
         return ServiceLayerBinder.Require(handler).GetService<TService>();
     }
 
-    public static LBTask<TResponse> Call<TLayer, TRequest, TResponse>(this ILayerCallHandler handler, TRequest request,
-                                                                      CancellationToken cancellationToken = default)
-        where TLayer : Layer
+    public static LBTask<TResponse> Call<TRequest, TResponse>(this ILayerCallHandler handler, TRequest request,
+                                                              CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
         var layer = ServiceLayerBinder.Require(handler);
         if (layer.OwnerContext == null) throw new InvalidOperationException("Layer not attached to a runtime context.");
-        return layer.OwnerContext.CallAsync<TLayer, TRequest, TResponse>(request, cancellationToken);
+        return layer.OwnerContext.CallAsync<TRequest, TResponse>(request, cancellationToken);
     }
 }
 

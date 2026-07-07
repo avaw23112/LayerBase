@@ -334,7 +334,7 @@ public class CallSubsystemBench : EventBenchmarkBase
         // 逻辑说明�?
         // 1. 这里固定命中 CallBenchLayer�?
         // 2. �?LayerHub 完成层定位、请求类型匹配、处理器调度�?
-        return LayerHub.CallAsync<CallBenchLayer, CallRequest, CallResponse>(request)
+        return LayerHub.CallAsync<CallRequest, CallResponse>(request)
                        .GetAwaiter()
                        .GetResult();
     }
@@ -1000,7 +1000,7 @@ public partial class ParallelNoopManager : IService
         s.AddSingleton(this);
     }
 
-    [SubscribeParallel]
+    [Subscribe]
     public void Handle(in ParallelBenchEvent e)
     {
     }
@@ -1015,7 +1015,7 @@ public partial class ParallelWorkloadManager : IService
         s.AddSingleton(this);
     }
 
-    [SubscribeParallel]
+    [Subscribe]
     public void Handle(in ParallelWorkloadEvent value)
     {
         var acc = _sink;

@@ -13,31 +13,6 @@ public class ConcurrencyStabilityTests
     }
 
     [Test]
-    public void MultiThreaded_Send_Post_StressTest()
-    {
-        var layer = new TestLayer();
-        LayerHub.CreateLayers().Push(layer).Build();
-
-        var threadCount = 8;
-        var iterations = 1000;
-        var tasks = new Task[threadCount];
-
-        for (int t = 0; t < threadCount; t++)
-        {
-            tasks[t] = Task.Run(() =>
-            {
-                for (int i = 0; i < iterations; i++)
-                {
-                    LayerHub.PostFromAnyThread(new StressEvent(i));
-                }
-            });
-        }
-
-        LayerHub.Pump(0.16f);
-        Assert.DoesNotThrow(() => Task.WaitAll(tasks), "Stress test should not cause deadlocks or crashes");
-    }
-
-    [Test]
     public void Send_And_Reset_Interleaved_Test()
     {
         var run = true;

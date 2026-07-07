@@ -232,7 +232,6 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                 foreach (var h in allHandlers)
                 {
                     var reg = h.Attr.Contains("Async")                                  ? "SubscribeAsync" :
-                        h.Attr.Contains("Parallel")                                     ? "SubscribeParallel" :
                         h.Attr.Contains("Notify")                                       ? "SubscribeNotify" :
                         h.Attr == "SubscribeFlow" || h.Attr == "SubscribeFlowAttribute" ? "SubscribeFlow" : "Subscribe";
 

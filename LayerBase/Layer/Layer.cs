@@ -8,6 +8,7 @@ using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.Event.Delay;
+using LayerBase.Scope;
 using LayerBase.Snap;
 
 namespace LayerBase.Layers;
@@ -45,6 +46,7 @@ public abstract class Layer : Node, IDisposable
     private readonly object _callRouteLock = new();
     // 已注册的调用处理器的元数据列表。
     private readonly List<(Type Req, Type Resp, Type Handler)> _callHandlers = new();
+    private readonly List<ScopeLocalCallRouteEntry> _localCallRouteEntries = new();
     // 按路由 ID 索引的调用路由处理器类型。
     private Type?[] _callRouteHandlerTypes = Array.Empty<Type?>();
     // 按路由 ID 索引的调用路由执行委托。
@@ -102,6 +104,8 @@ public abstract class Layer : Node, IDisposable
 
     /// <summary>已注册的所有调用处理器。</summary>
     public IReadOnlyList<(Type Req, Type Resp, Type Handler)> CallHandlers => _callHandlers;
+
+    internal IReadOnlyList<ScopeLocalCallRouteEntry> LocalCallRouteEntries => _localCallRouteEntries;
 
     /// <summary>该 Layer 生产（发送/发布）的事件类型列表。</summary>
     public IReadOnlyList<Type> ProducedEvents => _producedEvents;
@@ -235,6 +239,7 @@ public abstract class Layer : Node, IDisposable
         _callRouteInvokers = Array.Empty<object?>();
         _callRouteHandlerTypes = Array.Empty<Type?>();
         _callHandlers.Clear();
+        _localCallRouteEntries.Clear();
         _producedEvents.Clear();
         _sharedFields.Clear();
         _subscribedEvents.Clear();
@@ -330,6 +335,53 @@ public abstract class Layer : Node, IDisposable
     {
         for (var i = 0; i < _runtimeStops.Count; i++)
             _runtimeStops[i].RuntimeStop();
+    }
+
+    internal ScopeLayerLifecycleSlice AppendScopeLifecycle(
+        List<LifecycleInvoker> initialize,
+        List<LifecycleInvoker> postBuild,
+        List<LifecycleInvoker> runtimeStart,
+        List<UpdateInvoker> update,
+        List<FixedUpdateInvoker> fixedUpdate,
+        List<LifecycleInvoker> runtimeStop,
+        List<LifecycleInvoker> dispose)
+    {
+        var initializeStart = initialize.Count;
+        var postBuildStart = postBuild.Count;
+        var runtimeStartStart = runtimeStart.Count;
+        var updateStart = update.Count;
+        var fixedUpdateStart = fixedUpdate.Count;
+        var runtimeStopStart = runtimeStop.Count;
+        var disposeStart = dispose.Count;
+
+        if (_postBuilds.Count > 0)
+            postBuild.Add(RunPostBuild);
+        if (_runtimeStarts.Count > 0)
+            runtimeStart.Add(RunRuntimeStart);
+        if (HasActiveLogic)
+            update.Add(Pump);
+        if (_fixedUpdates.Count > 0)
+            fixedUpdate.Add(PumpFixed);
+        if (_runtimeStops.Count > 0)
+            runtimeStop.Add(RunRuntimeStop);
+        dispose.Add(Dispose);
+
+        return new ScopeLayerLifecycleSlice(
+            RouteIndex,
+            initializeStart,
+            initialize.Count - initializeStart,
+            postBuildStart,
+            postBuild.Count - postBuildStart,
+            runtimeStartStart,
+            runtimeStart.Count - runtimeStartStart,
+            updateStart,
+            update.Count - updateStart,
+            fixedUpdateStart,
+            fixedUpdate.Count - fixedUpdateStart,
+            runtimeStopStart,
+            runtimeStop.Count - runtimeStopStart,
+            disposeStart,
+            dispose.Count - disposeStart);
     }
     #endregion
 
@@ -484,23 +536,6 @@ public abstract class Layer : Node, IDisposable
         return new LayerEventStream<T>(this);
     }
 
-    /// <summary>订阅并行事件处理器。</summary>
-    public void SubscribeParallel<T>(EventNotifyDelegate<T> handler,
-                                     Action<int, int, int, Exception>? reportError = null) where T : struct
-    {
-        ThrowIfDisposed();
-        if (RouteIndex != -1 && OwnerContext != null)
-        {
-            OwnerContext.EventCenter.SubscribeParallel(RouteIndex, handler,
-                reportError ?? OwnerContext.ReportLayerEventError);
-            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Parallel));
-        }
-        else
-        {
-            _pendingOps.Enqueue(l => l.SubscribeParallel(handler, reportError));
-        }
-    }
-
     /// <summary>订阅延迟事件发布器。同一事件类型只会创建一个发布器实例。</summary>
     public IDelayPublisher<T> SubscribeDelay<T>() where T : struct
     {
@@ -562,6 +597,14 @@ public abstract class Layer : Node, IDisposable
             invokers[routeId] = invoker;
             handlerTypes[routeId] = handler.GetType();
             _callHandlers.Add((typeof(TRequest), typeof(TResponse), handler.GetType()));
+            _localCallRouteEntries.Add(new ScopeLocalCallRouteEntry(
+                routeId,
+                typeof(TRequest),
+                typeof(TResponse),
+                handler.GetType(),
+                GetType(),
+                invoker,
+                new ScopeLocalCallDispatcher<TRequest, TResponse>(invoker)));
             Volatile.Write(ref _callRouteInvokers, invokers);
             Volatile.Write(ref _callRouteHandlerTypes, handlerTypes);
         }
@@ -758,7 +801,7 @@ public abstract class Layer : Node, IDisposable
         public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
     }
 
-    private enum UnsubscribeKind { Flow, Async, Notify, Subscribe, Parallel }
+    private enum UnsubscribeKind { Flow, Async, Notify, Subscribe }
 
     /// <summary>
     /// 非泛型 UnsubscribeToken，避免 IL2CPP 环境下的 MakeGenericMethod 问题。
@@ -790,9 +833,6 @@ public abstract class Layer : Node, IDisposable
                     break;
                 case UnsubscribeKind.Subscribe:
                     _center?.Unsubscribe(_layerIndex, _handler!, _eventType!);
-                    break;
-                case UnsubscribeKind.Parallel:
-                    _center?.UnsubscribeParallel(_layerIndex, _handler!, _eventType!);
                     break;
             }
             _center = null;

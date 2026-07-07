@@ -226,19 +226,6 @@ public partial class RuntimeSafetyRegressionTests
     }
 
     [Test]
-    public void Parallel_subscription_is_dispatchable_immediately_after_subscribe()
-    {
-        using var received = new ManualResetEventSlim(false);
-        var center = new EventCenter();
-        center.SubscribeParallel<ParallelRegressionEvent>(0, (in ParallelRegressionEvent _) => received.Set(),
-            (_, _, _, ex) => throw ex);
-
-        center.Send(new ParallelRegressionEvent { Value = 1 });
-
-        Assert.That(received.Wait(TimeSpan.FromSeconds(2)), Is.True);
-    }
-
-    [Test]
     public void Long_timer_cancel_does_not_promote_reused_slot_from_stale_heap_entry()
     {
         var scheduler = new TimeScheduler<int>(new TimeSchedulerOptions(

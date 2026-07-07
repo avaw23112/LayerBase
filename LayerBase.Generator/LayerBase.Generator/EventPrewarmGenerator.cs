@@ -23,7 +23,6 @@ public sealed class EventPrewarmGenerator : IIncrementalGenerator
     private const string SubscribeNotifyAttributeName = "LayerBase.Core.Event.SubscribeNotifyAttribute";
     private const string SubscribeFlowAttributeName = "LayerBase.Core.Event.SubscribeFlowAttribute";
     private const string SubscribeAsyncAttributeName = "LayerBase.Core.Event.SubscribeAsyncAttribute";
-    private const string SubscribeParallelAttributeName = "LayerBase.Core.Event.SubscribeParallelAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -98,8 +97,7 @@ public sealed class EventPrewarmGenerator : IIncrementalGenerator
             if (name == SubscribeAttributeName ||
                 name == SubscribeNotifyAttributeName ||
                 name == SubscribeFlowAttributeName ||
-                name == SubscribeAsyncAttributeName ||
-                name == SubscribeParallelAttributeName)
+                name == SubscribeAsyncAttributeName)
             {
                 if (symbol.Parameters.Length > 0)
                 {
