@@ -5,6 +5,10 @@ using LayerBase.Layers;
 
 namespace LayerBase.DI;
 
+/// <summary>
+/// 服务提供者的内部实现。支持依赖注入的生命周期管理（Singleton、Scoped、Transient），
+/// 构造函数自动解析、[Mount] 标记的字段/属性注入，以及循环依赖检测。
+/// </summary>
 internal sealed class ServiceProvider : IServiceProvider, IDisposable
 {
     private readonly ConcurrentDictionary<Type, Lazy<object>> _instances = new();
@@ -216,12 +220,12 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         }
     }
 
+    /// <summary>
+    /// 选择用于 DI 创建实例的构造函数。
+    /// 优先选择带有 [Mount] 标记的构造函数；如果没有，则选择参数最多的 public 构造函数。
+    /// </summary>
     private static ConstructorInfo SelectConstructor(Type implementationType)
     {
-        // implementationType：
-        // 当前需要由 DI 创建的实现类型。
-        // 例如 CombatService、DamageManager、SomeRepository。
-
         var allConstructors = implementationType.GetConstructors(
             BindingFlags.Instance |
             BindingFlags.Public |

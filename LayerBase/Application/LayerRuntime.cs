@@ -13,47 +13,77 @@ using LayerBase.Snap;
 
 namespace LayerBase;
 
+/// <summary>
+/// LayerBase 的运行时实例。每个 LayerRuntime 拥有独立的 Layer 链、事件中心、
+/// 调度器、定时器、Actor 世界、ECS 世界和服务容器。
+/// 通过 LayerRuntime.LayersBuilder（由 LayerHub.CreateLayers 返回）进行构建。
+/// </summary>
 public sealed partial class LayerRuntime : IDisposable
 {
-    private LayerChain? _chain;
-    internal LayerBaseSynchronizationContext? _context;
-    private int _layerIndexCounter;
-    private int _layerTypeBindingsVersion;
-    private readonly Dictionary<Type, LayerTypeBinding> _layerTypeBindings = new();
-    private bool _disposed;
-    private readonly int _id;
-
-    private readonly PostIngressQueue _postIngress = new();
-
-    public int Id => _id;
+    #region External Dependencies
+    // 核心子系统，在构造时创建，贯穿 Runtime 生命周期。
     internal WorldServiceRoot Services { get; }
     public EventCenter EventCenter { get; internal set; }
     public ActorWorld Actors { get; }
+    private readonly PostIngressQueue _postIngress = new();
+    #endregion
 
+    #region Runtime State - Configuration
+    // 运行时配置参数。
+    private FixedUpdateOptions _fixedUpdateOptions = FixedUpdateOptions.Disabled;
+    #endregion
+
+    #region Runtime State - Subsystems
+    // 各子系统实例，在 Build 过程中创建。
+    private LayerChain? _chain;
+    internal LayerBaseSynchronizationContext? _context;
+    private PostScheduler? _scheduler;
+    private TimeScheduler<ITimerAction>? _timer;
+    private RuntimeTimerSink? _timerSink;
     private ServiceProvider? _worldProvider;
+    private FullSnapRuntime? _fullSnap;
+    internal DelayPublisherManager? DelayManager { get; private set; }
+    #endregion
+
+    #region Runtime State - Layer Bindings
+    // Layer 注册信息：索引计数器、类型绑定表、版本号。
+    private int _layerIndexCounter;
+    private int _layerTypeBindingsVersion;
+    private readonly Dictionary<Type, LayerTypeBinding> _layerTypeBindings = new();
+    #endregion
+
+    #region Runtime State - Identification
+    // Runtime 的唯一标识符和释放标记。
+    private readonly int _id;
+    private bool _disposed;
+    #endregion
+
+    #region Runtime State - Timing
+    private float _fixedUpdateAccumulator;
+    #endregion
+
+    #region Properties
+    public int Id => _id;
 
     public LayerBase.DI.IServiceProvider ServiceProvider =>
         _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
 
     public T GetService<T>() where T : class => ServiceProvider.Get<T>();
 
-    private PostScheduler? _scheduler;
     public PostScheduler Scheduler => _scheduler ?? throw new InvalidOperationException("Runtime not built.");
 
-    private TimeScheduler<ITimerAction>? _timer;
     public TimeScheduler<ITimerAction> Timer => _timer ?? throw new InvalidOperationException("Runtime not built.");
 
-    private RuntimeTimerSink? _timerSink;
-    internal DelayPublisherManager? DelayManager { get; private set; }
-    private FullSnapRuntime? _fullSnap;
-
-    public bool IsDebugMode { get; internal set; }
-    public event Action<LayerEventInfo>? OnLayerEventInfo;
     public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
 
-    private FixedUpdateOptions _fixedUpdateOptions = FixedUpdateOptions.Disabled;
-    private float _fixedUpdateAccumulator;
+    public bool IsDebugMode { get; internal set; }
+    #endregion
 
+    #region Events
+    public event Action<LayerEventInfo>? OnLayerEventInfo;
+    #endregion
+
+    #region Constructors & Initialization
     internal LayerRuntime(int id)
     {
         _id = id;
@@ -94,27 +124,19 @@ public sealed partial class LayerRuntime : IDisposable
             var postPolicy = meta.GetPostPolicy();
             _policyTable.SetMetaData(eventId, meta);
             if (postPolicy != null)
-            {
                 _policyTable.SetPostPolicy(eventId, postPolicy.Value);
-            }
 
             var timerPolicy = meta.GetTimerPolicy();
             if (timerPolicy != null)
-            {
                 _policyTable.SetTimerPolicy(eventId, timerPolicy.Value);
-            }
 
             var bufferPolicy = meta.GetBufferPolicy();
             if (bufferPolicy != null)
-            {
                 _policyTable.SetBufferPolicy(eventId, bufferPolicy.Value);
-            }
 
             var actorMailOptions = meta.GetActorMailOptions();
             if (actorMailOptions != null)
-            {
                 _policyTable.SetActorMailOptions(eventId, actorMailOptions.Value);
-            }
 
             var effectivePolicy =
                 postPolicy ?? new EventPostPolicy(PostDeliveryMode.Normal, options.DefaultBackpressure, 0);
@@ -135,7 +157,6 @@ public sealed partial class LayerRuntime : IDisposable
         _scheduler.BuildPlans(plans.ToArray());
     }
 
-
     internal void InitializeTimer(TimeSchedulerOptions options)
     {
         _timer = new TimeScheduler<ITimerAction>(options);
@@ -155,27 +176,18 @@ public sealed partial class LayerRuntime : IDisposable
     internal void BuildFullSnapCache()
     {
         _fullSnap = new FullSnapRuntime(this);
-
-        if (_chain == null)
-        {
-            return;
-        }
+        if (_chain == null) return;
 
         var visited = new HashSet<object>(LayerBase.Snap.ReferenceEqualityComparer.Instance);
-
         foreach (var layer in _chain.GetNodes().OfType<Layer>())
         {
             if (layer is IGeneratedFullSnapNode layerNode && visited.Add(layerNode))
-            {
                 _fullSnap.Register(layerNode);
-            }
 
             foreach (IGeneratedFullSnapNode node in layer.GetFullSnapNodes())
             {
                 if (visited.Add(node))
-                {
                     _fullSnap.Register(node);
-                }
             }
         }
     }
@@ -189,9 +201,10 @@ public sealed partial class LayerRuntime : IDisposable
     {
         _chain?.MarkDelayDirty();
     }
+    #endregion
 
+    #region Lifecycle - Pump
     public void Pump(float deltaTime)
-
     {
         if (_disposed) return;
 
@@ -199,136 +212,78 @@ public sealed partial class LayerRuntime : IDisposable
         {
             using var scope = _context.EnterScope();
 
-            // 1. Time tick
-            _timer?.Tick(deltaTime, _timerSink!);
-
-            // 2. Delay tick (Only if needed)
-            if (_chain != null && _chain.HasAnyDelay)
-                DelayManager?.Tick(deltaTime);
-
-            // 3. Completion drain (Stage 5 Concurrency Simplified)
+            // Completion drain (only when sync context exists)
             var policy = IsDebugMode ? CompletionExceptionPolicy.Throw : CompletionExceptionPolicy.ReportAndContinue;
             _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0, policy,
                 ex => ReportLayerEventError(-1, "System", "Completion", ex));
-
-            // 4. FixedUpdate accumulator
-            if (_fixedUpdateOptions.Enabled)
-            {
-                _fixedUpdateAccumulator += deltaTime;
-                int steps = 0;
-                while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime &&
-                       steps < _fixedUpdateOptions.MaxStepsPerPump)
-                {
-                    _chain?.PumpFixed(_fixedUpdateOptions.FixedDeltaTime);
-                    _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
-                    steps++;
-                }
-            }
-
-            if (_scheduler != null)
-            {
-                var ingressResult = _postIngress.DrainTo(
-                    _scheduler,
-                    _scheduler.Options.MaxIngressPostsPerPump);
-
-                if (IsDebugMode && ingressResult.Failed > 0)
-                {
-                    ReportWarning(
-                        -1,
-                        "PostIngressQueue",
-                        "DrainTo",
-                        $"PostFromAnyThread failed: {ingressResult.Failed}/{ingressResult.Drained}");
-                }
-            }
-
-            // 5. Post pump
-            PostPumpStats postStats = _scheduler?.Pump()
-                                      ?? new PostPumpStats(0, 0, 0, 0);
-
-            _chain?.Pump(deltaTime);
-
-            if (_scheduler != null)
-            {
-                RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
-                bool pumpActorFixedUpdate = _fixedUpdateOptions.Enabled;
-                float actorFixedDeltaTime = _fixedUpdateOptions.Enabled
-                    ? _fixedUpdateOptions.FixedDeltaTime
-                    : 0f;
-
-                Actors.Pump(
-                    deltaTime: deltaTime,
-                    fixedDeltaTime: actorFixedDeltaTime,
-                    pumpFixedUpdate: pumpActorFixedUpdate,
-                    budget: ref actorBudget);
-
-                EcsWorld.SweepProjectedActors();
-            }
         }
-        else
-        {
-            // 1. Time tick
-            _timer?.Tick(deltaTime, _timerSink!);
 
-            // 2. Delay tick (Only if needed)
-            if (_chain != null && _chain.HasAnyDelay)
-                DelayManager?.Tick(deltaTime);
-
-            // 3. FixedUpdate accumulator
-            if (_fixedUpdateOptions.Enabled)
-            {
-                _fixedUpdateAccumulator += deltaTime;
-                int steps = 0;
-                while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime &&
-                       steps < _fixedUpdateOptions.MaxStepsPerPump)
-                {
-                    _chain?.PumpFixed(_fixedUpdateOptions.FixedDeltaTime);
-                    _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
-                    steps++;
-                }
-            }
-
-            if (_scheduler != null)
-            {
-                var ingressResult = _postIngress.DrainTo(
-                    _scheduler,
-                    _scheduler.Options.MaxIngressPostsPerPump);
-
-                if (IsDebugMode && ingressResult.Failed > 0)
-                {
-                    ReportWarning(
-                        -1,
-                        "PostIngressQueue",
-                        "DrainTo",
-                        $"PostFromAnyThread failed: {ingressResult.Failed}/{ingressResult.Drained}");
-                }
-            }
-
-            // 4. Post pump
-            PostPumpStats postStats = _scheduler?.Pump()
-                                      ?? new PostPumpStats(0, 0, 0, 0);
-
-            _chain?.Pump(deltaTime);
-
-            if (_scheduler != null)
-            {
-                RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
-                bool pumpActorFixedUpdate = _fixedUpdateOptions.Enabled;
-                float actorFixedDeltaTime = _fixedUpdateOptions.Enabled
-                    ? _fixedUpdateOptions.FixedDeltaTime
-                    : 0f;
-
-                Actors.Pump(
-                    deltaTime: deltaTime,
-                    fixedDeltaTime: actorFixedDeltaTime,
-                    pumpFixedUpdate: pumpActorFixedUpdate,
-                    budget: ref actorBudget);
-
-                EcsWorld.SweepProjectedActors();
-            }
-        }
+        PumpCore(deltaTime);
     }
 
+    private void PumpCore(float deltaTime)
+    {
+        // 1. Time tick
+        _timer?.Tick(deltaTime, _timerSink!);
 
+        // 2. Delay tick
+        if (_chain != null && _chain.HasAnyDelay)
+            DelayManager?.Tick(deltaTime);
+
+        // 3. FixedUpdate accumulator
+        if (_fixedUpdateOptions.Enabled)
+        {
+            _fixedUpdateAccumulator += deltaTime;
+            int steps = 0;
+            while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime &&
+                   steps < _fixedUpdateOptions.MaxStepsPerPump)
+            {
+                _chain?.PumpFixed(_fixedUpdateOptions.FixedDeltaTime);
+                _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
+                steps++;
+            }
+        }
+
+        // 4. Ingress drain
+        if (_scheduler != null)
+        {
+            var ingressResult = _postIngress.DrainTo(
+                _scheduler,
+                _scheduler.Options.MaxIngressPostsPerPump);
+
+            if (IsDebugMode && ingressResult.Failed > 0)
+            {
+                ReportWarning(-1, "PostIngressQueue", "DrainTo",
+                    $"PostFromAnyThread failed: {ingressResult.Failed}/{ingressResult.Drained}");
+            }
+        }
+
+        // 5. Post pump + layer pump + actor pump
+        PostPumpStats postStats = _scheduler?.Pump()
+                                  ?? new PostPumpStats(0, 0, 0, 0);
+
+        _chain?.Pump(deltaTime);
+
+        if (_scheduler != null)
+        {
+            RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
+            bool pumpActorFixedUpdate = _fixedUpdateOptions.Enabled;
+            float actorFixedDeltaTime = _fixedUpdateOptions.Enabled
+                ? _fixedUpdateOptions.FixedDeltaTime
+                : 0f;
+
+            Actors.Pump(
+                deltaTime: deltaTime,
+                fixedDeltaTime: actorFixedDeltaTime,
+                pumpFixedUpdate: pumpActorFixedUpdate,
+                budget: ref actorBudget);
+
+            EcsWorld.SweepProjectedActors();
+        }
+    }
+    #endregion
+
+    #region Public API - Event Send / Post
     private static RuntimeFrameBudget CreateActorBudget(PostSchedulerOptions options, PostPumpStats postStats)
     {
         long deadlineTicks = 0;
@@ -344,7 +299,6 @@ public sealed partial class LayerRuntime : IDisposable
             usedEvents: postStats.ProcessedCount,
             deadlineTicks: deadlineTicks);
     }
-
     public void ReportInfo(LayerEventInfo info)
     {
         OnLayerEventInfo?.Invoke(info);
@@ -403,29 +357,15 @@ public sealed partial class LayerRuntime : IDisposable
         Scheduler.TryPostLatest(value);
     }
 
-    public void PostFromAnyThread<T>(
-        in T             value,
-        EventPostPolicy? policy = default)
-        where T : struct
+    public void PostFromAnyThread<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
-        if (_disposed)
-        {
-            return;
-        }
-
+        if (_disposed) return;
         _postIngress.Enqueue(value, policy);
     }
 
-    public bool TryPostFromAnyThread<T>(
-        in T             value,
-        EventPostPolicy? policy = default)
-        where T : struct
+    public bool TryPostFromAnyThread<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
-        if (_disposed)
-        {
-            return false;
-        }
-
+        if (_disposed) return false;
         _postIngress.Enqueue(value, policy);
         return true;
     }
@@ -443,14 +383,13 @@ public sealed partial class LayerRuntime : IDisposable
 
         return Timer.Schedule(
             new PostEventAction<T>(value, timerPolicy?.ExpiredPostPolicy),
-            delaySeconds,
-            repeatCount: 0,
-            intervalSeconds: 0,
+            delaySeconds, repeatCount: 0, intervalSeconds: 0,
             repeatMode: timerPolicy?.RepeatMode,
-            catchUpPolicy: timerPolicy?.CatchUpPolicy
-        );
+            catchUpPolicy: timerPolicy?.CatchUpPolicy);
     }
+    #endregion
 
+    #region Public API - Cross-Layer Call
     public LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer
     {
         TryResolveLayerTarget<TLayer>(out var layer, out var error);
@@ -459,35 +398,30 @@ public sealed partial class LayerRuntime : IDisposable
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(TRequest request,
-                                                                    CancellationToken cancellationToken =
-                                                                        default)
+                                                                    CancellationToken cancellationToken = default)
         where TLayer : Layer
         where TRequest : struct
         where TResponse : struct
     {
         var version = GetLayerTypeBindingsVersion();
-
         if (LayerHub.GetCallCacheVersion<TLayer, TRequest, TResponse>(_id) != version)
             return CallAsyncSlow<TLayer, TRequest, TResponse>(version, request, cancellationToken);
 
         var invoker = LayerHub.GetCallInvoker<TLayer, TRequest, TResponse>(_id);
         if (invoker != null) return invoker(request, cancellationToken);
-
         return LBTask<TResponse>.FromException(LayerHub.GetCallError<TLayer, TRequest, TResponse>(_id)!);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(int               version, TRequest request,
+    private LBTask<TResponse> CallAsyncSlow<TLayer, TRequest, TResponse>(int version, TRequest request,
                                                                          CancellationToken cancellationToken)
         where TLayer : Layer
         where TRequest : struct
         where TResponse : struct
     {
         UpdateLayerCallCache<TLayer, TRequest, TResponse>(version);
-
         var invoker = LayerHub.GetCallInvoker<TLayer, TRequest, TResponse>(_id);
         if (invoker != null) return invoker(request, cancellationToken);
-
         return LBTask<TResponse>.FromException(LayerHub.GetCallError<TLayer, TRequest, TResponse>(_id)!);
     }
 
@@ -513,22 +447,21 @@ public sealed partial class LayerRuntime : IDisposable
             LayerHub.UpdateLayerCallCache<TLayer, TRequest, TResponse>(_id, version, null, error);
         }
     }
+    #endregion
 
+    #region Lifecycle - Dispose
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
 
         _postIngress.Clear();
-
         _chain?.DisposeLayers();
         _chain = null;
         Actors.RuntimeStop();
         Actors.Dispose();
         EcsWorld.Dispose();
-
         Services.Dispose();
-
         _scheduler?.Dispose();
         _timer?.Dispose();
         DelayManager?.Clear();
@@ -538,7 +471,9 @@ public sealed partial class LayerRuntime : IDisposable
         LayerHub.ClearRuntimeCaches(_id);
         LayerHub.Internal_Unregister(this);
     }
+    #endregion
 
+    #region Internal - Layer Registration
     internal void RegisterLayerInstance(Layer layer)
     {
         var layerType = layer.GetType();
@@ -595,7 +530,9 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     public int GetLayerTypeBindingsVersion() => Volatile.Read(ref _layerTypeBindingsVersion);
+    #endregion
 
+    #region Diagnostics
     public string GetTopologySummary() => _chain?.GetTopologySummary() ?? "No layers built.";
 
     public string GetPolicyMarkdown()
@@ -765,7 +702,9 @@ public sealed partial class LayerRuntime : IDisposable
 
         return sb.ToString();
     }
+    #endregion
 
+    #region Nested Types
     public sealed class LayersBuilder
     {
         private readonly LayerRuntime _runtime;
@@ -935,4 +874,5 @@ public sealed partial class LayerRuntime : IDisposable
 
         public bool TryAcceptExpired(in ITimerAction payload, TimerHandle handle) => payload.Execute(_scheduler);
     }
+    #endregion
 }

@@ -1,5 +1,9 @@
 ﻿namespace LayerBase.DI;
 
+/// <summary>
+/// 服务集合，用于在 Layer 的 ConfigureServices 中注册服务描述符。
+/// 支持 Singleton、Scoped（Layer 级）和 Transient 三种生命周期。
+/// </summary>
 public class ServiceCollection : IServiceCollection
 {
     private readonly List<ServiceDescriptor> _descriptors = new();

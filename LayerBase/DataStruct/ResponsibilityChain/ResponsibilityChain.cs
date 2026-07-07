@@ -2,13 +2,17 @@
 
 namespace LayerBase.Core.ResponsibilityChain;
 
+/// <summary>
+/// 责任链实现。每个节点（Node）构成双向链表，支持在任意位置添加、移除和移动节点。
+/// 通过 RcOwnerToken 机制确保节点只能属于一条链。
+/// </summary>
 internal sealed class ResponsibilityChain : IEnumerable<Node>
 {
-    private readonly RcOwnerToken m_OwnerToken;
+    private readonly RcOwnerToken _ownerToken;
 
     public ResponsibilityChain(RcOwnerToken token)
     {
-        m_OwnerToken = token;
+        _ownerToken = token;
     }
 
     public Node? Head { get; private set; }
@@ -196,13 +200,13 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
 
     private void EnsureOwned(Node node)
     {
-        if (!node.OwnerToken.Equals(m_OwnerToken))
+        if (!node.OwnerToken.Equals(_ownerToken))
             throw new InvalidOperationException("Node does not belong to this chain.");
     }
 
     private void DetermineOwned(Node node)
     {
-        if (!node.OwnerToken.Equals(m_OwnerToken)) node.OwnerToken = m_OwnerToken;
+        if (!node.OwnerToken.Equals(_ownerToken)) node.OwnerToken = _ownerToken;
     }
 
     private void ValidateAcyclic()
@@ -230,7 +234,7 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
 
         while (cur != null)
         {
-            if (!cur.OwnerToken.Equals(m_OwnerToken))
+            if (!cur.OwnerToken.Equals(_ownerToken))
                 throw new InvalidOperationException("Invalid chain: node.Owner mismatch.");
 
             if (!ReferenceEquals(cur.Prev, prev))
@@ -255,30 +259,30 @@ internal sealed class ResponsibilityChain : IEnumerable<Node>
 
     public struct Enumerator : IEnumerator<Node>
     {
-        private readonly Node? m_start;
-        private Node? m_current;
+        private readonly Node? _start;
+        private Node? _current;
 
         internal Enumerator(Node? start)
         {
-            m_start = start;
-            m_current = null;
+            _start = start;
+            _current = null;
         }
 
-        public Node Current => m_current!;
-        object IEnumerator.Current => m_current!;
+        public Node Current => _current!;
+        object IEnumerator.Current => _current!;
 
         public bool MoveNext()
         {
-            if (m_current == null)
-                m_current = m_start;
+            if (_current == null)
+                _current = _start;
             else
-                m_current = m_current.Next;
-            return m_current != null;
+                _current = _current.Next;
+            return _current != null;
         }
 
         public void Reset()
         {
-            m_current = null;
+            _current = null;
         }
 
         public void Dispose()

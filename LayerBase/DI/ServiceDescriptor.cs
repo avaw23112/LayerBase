@@ -1,5 +1,8 @@
 namespace LayerBase.DI;
 
+/// <summary>
+/// 服务生命周期。
+/// </summary>
 public enum ServiceLifetime
 {
     Singleton,
@@ -8,6 +11,9 @@ public enum ServiceLifetime
     Instance
 }
 
+/// <summary>
+/// 服务描述符，描述一个服务的类型、实现、生命周期和工厂方法。
+/// </summary>
 public sealed class ServiceDescriptor
 {
     public ServiceDescriptor(Type                            serviceType, Type?   implType, ServiceLifetime lifetime,

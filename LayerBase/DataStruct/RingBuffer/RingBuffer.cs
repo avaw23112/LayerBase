@@ -2,6 +2,10 @@ using System.Runtime.CompilerServices;
 
 namespace LayerBase.Core.DataStruct;
 
+/// <summary>
+/// 基于数组的环形缓冲区。物理容量向上取整为 2 的幂以支持快速位运算取模。
+/// 用于 Actor 邮件系统等需要高效 FIFO 的场景。
+/// </summary>
 internal sealed class RingBuffer<T>
 {
     private readonly T[] _buffer;

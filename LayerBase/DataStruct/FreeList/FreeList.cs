@@ -2,6 +2,9 @@ using System.Runtime.CompilerServices;
 
 namespace LayerBase.Core.EventStateTrace;
 
+/// <summary>
+/// 空闲列表中的槽位。存储值、版本号、使用状态和链表指针。
+/// </summary>
 internal struct Slot<T> where T : struct
 {
     public T Value;
@@ -11,6 +14,9 @@ internal struct Slot<T> where T : struct
     public bool Completed;
 }
 
+/// <summary>
+/// 空闲列表中槽位的引用令牌，包含全局索引和版本号。
+/// </summary>
 internal struct SlotRef
 {
     public SlotRef(int globalIndex, ushort version)
@@ -26,6 +32,11 @@ internal struct SlotRef
     public ushort Version { get; }
 }
 
+/// <summary>
+/// 基于分块（slab）的空闲列表。支持 Rent（租用）、TryBorrow（借用）和 Release（释放）操作。
+/// 每个槽位使用版本号防止悬挂引用（ABA 问题）。
+/// 用于 TimerScheduler 等需要对象池化和安全并发访问的场景。
+/// </summary>
 internal sealed class FreeList<T> where T : struct
 {
     private readonly List<Slot<T>[]> _slabs = new();

@@ -143,7 +143,7 @@ public sealed class SyncRuntimeModelImprovementTests
 
     private static System.Collections.ICollection GetPendingOps(Layer layer)
     {
-        var field = typeof(Layer).GetField("m_pendingOps", BindingFlags.Instance | BindingFlags.NonPublic);
+        var field = typeof(Layer).GetField("_pendingOps", BindingFlags.Instance | BindingFlags.NonPublic);
         return (System.Collections.ICollection)field!.GetValue(layer)!;
     }
 

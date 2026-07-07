@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using LayerBase.Async;
@@ -13,313 +13,267 @@ using LayerBase.Snap;
 
 namespace LayerBase.Layers;
 
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
-public sealed class OwnerLayerAttribute : Attribute
-{
-    public OwnerLayerAttribute(Type layerType)
-    {
-        LayerType = layerType;
-    }
-
-    public Type LayerType { get; }
-}
-
 /// <summary>
 /// 逻辑分层（Layer）的基类。Layer 是事件路由、服务管理和逻辑执行的基本单元。
+/// 每个 Layer 拥有自己的服务容器、事件订阅、延迟发布器和调用路由表。
 /// </summary>
 public abstract class Layer : Node, IDisposable
 {
+    #region Constants
+    // 反射方法句柄，用于自动绑定 IEventHandler 接口的事件订阅。
     private static readonly MethodInfo s_bindInterfaceEventHandlerFlowMethod =
         typeof(Layer).GetMethod(nameof(BindInterfaceEventHandlerFlow), BindingFlags.Instance | BindingFlags.NonPublic)!;
 
     private static readonly MethodInfo s_bindInterfaceEventHandlerAsyncMethod =
         typeof(Layer).GetMethod(nameof(BindInterfaceEventHandlerAsync), BindingFlags.Instance | BindingFlags.NonPublic)!;
+    #endregion
 
-    private readonly List<(Type Req, Type Resp, Type Handler)> m_callHandlers = new();
-    private readonly List<RegisteredService> m_activeServices = new();
-    private readonly object m_callRouteLock = new();
+    #region External Dependencies
+    // 服务集合，用于在 ConfigureServices 中累积服务描述符，最终生成 ServiceProvider。
+    private readonly ServiceCollection _serviceCollection;
+    #endregion
 
-    private readonly ConcurrentDictionary<Type, IDelayPublisherInternal> m_delayPublishers = new();
-    private readonly List<RegisteredService> m_manualServices = new();
-    private readonly List<Type> m_producedEvents = new();
+    #region Runtime State - Service Management
+    // 已注册的服务类型集合，用于去重。
+    private readonly HashSet<Type> _registeredServiceTypes = new();
+    // 手动注册的服务列表（用户通过 RegisterService 注册）。
+    private readonly List<RegisteredService> _manualServices = new();
+    // 构建过程中收集到的活跃服务。
+    private readonly List<RegisteredService> _activeServices = new();
+    // 已解析的服务列表（由 ServiceProvider 创建）。
+    private List<ServiceProvider.ResolvedService> _resolvedServices = new();
+    // Layer 级服务提供者。
+    private ServiceProvider? _serviceProvider;
+    // 是否正在收集生成器自动挂载的服务。
+    private bool _collectingGeneratedServices;
+    // 下一个服务作用域 ID 计数器。
+    private int _nextServiceScopeId;
+    #endregion
 
-    private readonly HashSet<Type> m_registeredServiceTypes = new();
-    private readonly ServiceCollection m_serviceCollection;
-    private readonly List<IUpdate> m_serviceUpdates = new();
-    private readonly List<IPostBuild> m_postBuilds = new();
-    private readonly List<IRuntimeStart> m_runtimeStarts = new();
-    private readonly List<IRuntimeStop> m_runtimeStops = new();
-    private readonly List<IFixedUpdate> m_fixedUpdates = new();
-    private readonly List<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> m_sharedFields = new();
-    private readonly List<IDisposable> m_subscriptions = new();
-    private readonly List<Type> m_subscribedEvents = new();
+    #region Runtime State - Call Route
+    // 调用路由的锁，保护并发注册。
+    private readonly object _callRouteLock = new();
+    // 已注册的调用处理器的元数据列表。
+    private readonly List<(Type Req, Type Resp, Type Handler)> _callHandlers = new();
+    // 按路由 ID 索引的调用路由处理器类型。
+    private Type?[] _callRouteHandlerTypes = Array.Empty<Type?>();
+    // 按路由 ID 索引的调用路由执行委托。
+    private object?[] _callRouteInvokers = Array.Empty<object?>();
+    #endregion
 
-    private Type?[] m_callRouteHandlerTypes = Array.Empty<Type?>();
+    #region Runtime State - Event & Subscribe
+    // 事件订阅的 Dispose Token 列表，用于在 Layer 释放时自动取消订阅。
+    private readonly List<IDisposable> _subscriptions = new();
+    // Layer 订阅的事件类型列表。
+    private readonly List<Type> _subscribedEvents = new();
+    // Layer 生产的事件类型列表。
+    private readonly List<Type> _producedEvents = new();
+    // 当 Layer 尚未分配 RouteIndex 时，暂存订阅操作的队列。
+    private ConcurrentQueue<Action<Layer>> _pendingOps = new();
+    #endregion
 
-    private object?[] m_callRouteInvokers = Array.Empty<object?>();
-    private bool m_collectingGeneratedServices;
-    private int m_disposed;
-    private int m_nextServiceScopeId;
+    #region Runtime State - Lifecycle
+    // IUpdate 服务列表，每帧调用。
+    private readonly List<IUpdate> _serviceUpdates = new();
+    // IPostBuild 服务列表，构建完成后调用。
+    private readonly List<IPostBuild> _postBuilds = new();
+    // IRuntimeStart 服务列表，启动时调用。
+    private readonly List<IRuntimeStart> _runtimeStarts = new();
+    // IRuntimeStop 服务列表，停止时调用。
+    private readonly List<IRuntimeStop> _runtimeStops = new();
+    // IFixedUpdate 服务列表，固定步长调用。
+    private readonly List<IFixedUpdate> _fixedUpdates = new();
+    #endregion
 
-    private ConcurrentQueue<Action<Layer>> m_pendingOps = new();
-    private List<ServiceProvider.ResolvedService> m_resolvedServices = new();
-    private ServiceProvider? m_serviceProvider;
+    #region Runtime State - Delay
+    // 延迟发布器缓存。键为事件类型，值为对应的发布器实例。
+    private readonly ConcurrentDictionary<Type, IDelayPublisherInternal> _delayPublishers = new();
+    #endregion
 
+    #region Runtime State - Shared Field Metadata
+    // 共享字段声明列表，用于跨 Layer 数据绑定。
+    private readonly List<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> _sharedFields = new();
+    #endregion
+
+    #region Runtime State - Disposal
+    // 0=未释放，1=已释放。使用 int 配合 Interlocked 保证线程安全。
+    private int _disposed;
+    #endregion
+
+    #region Properties
+    /// <summary>当前 Layer 所属的 Runtime 上下文。</summary>
     public LayerRuntime? OwnerContext { get; private set; }
 
+    /// <summary>当前 Layer 在责任链中的路由索引。</summary>
+    public int RouteIndex { get; private set; } = -1;
+
+    /// <summary>通过自动绑定发现的事件订阅者列表。</summary>
+    public IReadOnlyList<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = Array.Empty<IAutoSubscribe>();
+
+    /// <summary>已注册的所有调用处理器。</summary>
+    public IReadOnlyList<(Type Req, Type Resp, Type Handler)> CallHandlers => _callHandlers;
+
+    /// <summary>该 Layer 生产（发送/发布）的事件类型列表。</summary>
+    public IReadOnlyList<Type> ProducedEvents => _producedEvents;
+
+    /// <summary>该 Layer 声明的共享字段列表。</summary>
+    public IReadOnlyList<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> SharedFields => _sharedFields;
+
+    /// <summary>该 Layer 订阅的事件类型列表。</summary>
+    public IReadOnlyList<Type> SubscribedEvents => _subscribedEvents;
+
+    /// <summary>当前 Layer 是否包含活跃逻辑。</summary>
+    public virtual bool HasActiveLogic =>
+        _serviceUpdates.Count > 0 || _delayPublishers.Count > 0 || _fixedUpdates.Count > 0;
+
+    /// <summary>当前 Layer 是否有活跃的延迟发布器。</summary>
+    internal bool HasDelayPublisher
+    {
+        get
+        {
+            if (_delayPublishers.IsEmpty) return false;
+            foreach (var kvp in _delayPublishers)
+                if (kvp.Value.HasActiveDelays) return true;
+            return false;
+        }
+    }
+    #endregion
+
+    #region Constructors
+    protected Layer()
+    {
+        _serviceCollection = new ServiceCollection();
+    }
+    #endregion
+
+    #region Lifecycle - Attach / Detach
     internal void AttachToContext(LayerRuntime context)
     {
         OwnerContext = context;
         ServiceLayerBinder.Attach(this, this);
     }
 
-    protected Layer()
+    internal void DetachFromContext()
     {
-        m_serviceCollection = new ServiceCollection();
+        ServiceLayerBinder.Detach(this);
+        OwnerContext = null;
+        RouteIndex = -1;
     }
+    #endregion
 
-    /// <summary>
-    /// 获取 Layer 的路由索引。
-    /// </summary>
-    public int RouteIndex { get; private set; } = -1;
-
-    public IReadOnlyList<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = Array.Empty<IAutoSubscribe>();
-    public IReadOnlyList<(Type Req, Type Resp, Type Handler)> CallHandlers => m_callHandlers;
-    public IReadOnlyList<Type> ProducedEvents => m_producedEvents;
-    public IReadOnlyList<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> SharedFields => m_sharedFields;
-    public IReadOnlyList<Type> SubscribedEvents => m_subscribedEvents;
-
-
-    public virtual bool HasActiveLogic =>
-        m_serviceUpdates.Count > 0 || m_delayPublishers.Count > 0 || m_fixedUpdates.Count > 0;
-
-    internal bool HasDelayPublisher
-    {
-        get
-        {
-            if (m_delayPublishers.IsEmpty) return false;
-            foreach (var kvp in m_delayPublishers)
-            {
-                if (kvp.Value.HasActiveDelays) return true;
-            }
-
-            return false;
-        }
-    }
-
-
-    /// <summary>
-    /// 释放 Layer 资源。
-    /// </summary>
+    #region Lifecycle - Dispose
+    /// <summary>释放 Layer 占用的所有资源。</summary>
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref m_disposed, 1) != 0) return;
-        lock (m_subscriptions)
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+        lock (_subscriptions)
         {
-            foreach (var sub in m_subscriptions) sub.Dispose();
-            m_subscriptions.Clear();
+            foreach (var sub in _subscriptions) sub.Dispose();
+            _subscriptions.Clear();
         }
 
-        while (m_pendingOps.TryDequeue(out _))
-        {
-        }
+        while (_pendingOps.TryDequeue(out _)) { }
 
         DetachResolvedObjects();
         ReleaseDelayPublishers();
-
-        m_serviceUpdates.Clear();
-        m_activeServices.Clear();
-        m_resolvedServices.Clear();
-
-        m_serviceProvider?.Dispose();
-        m_serviceProvider = null;
-
+        _serviceUpdates.Clear();
+        _activeServices.Clear();
+        _resolvedServices.Clear();
+        _serviceProvider?.Dispose();
+        _serviceProvider = null;
         DetachFromContext();
-    }
-
-    private void ReleaseDelayPublishers()
-    {
-        if (m_delayPublishers.IsEmpty)
-        {
-            return;
-        }
-
-        var manager = OwnerContext?.DelayManager;
-
-        foreach (var publisher in m_delayPublishers.Values)
-        {
-            if (manager != null && publisher.PublisherId >= 0)
-            {
-                // manager.UnregisterPublisher will call publisher.Deactivate()
-                manager.UnregisterPublisher(publisher.PublisherId);
-            }
-
-            // Safety fallback: ensure publisher is deactivated even if manager is gone 
-            // or if it was registered in a different manager (e.g. during a context switch)
-            publisher.Deactivate();
-        }
-
-        m_delayPublishers.Clear();
-
-        OwnerContext?.MarkDelayDirty();
     }
 
     private void DetachResolvedObjects()
     {
         ServiceLayerBinder.Detach(this);
-
-        foreach (var registration in m_activeServices)
-        {
+        foreach (var registration in _activeServices)
             ServiceLayerBinder.Detach(registration.Service);
-        }
-
-        foreach (var registration in m_manualServices)
-        {
+        foreach (var registration in _manualServices)
             ServiceLayerBinder.Detach(registration.Service);
-        }
-
-        foreach (var resolved in m_resolvedServices)
-        {
+        foreach (var resolved in _resolvedServices)
             ServiceLayerBinder.Detach(resolved.Instance);
+    }
+
+    private void ReleaseDelayPublishers()
+    {
+        if (_delayPublishers.IsEmpty) return;
+        var manager = OwnerContext?.DelayManager;
+        foreach (var publisher in _delayPublishers.Values)
+        {
+            if (manager != null && publisher.PublisherId >= 0)
+                manager.UnregisterPublisher(publisher.PublisherId);
+            publisher.Deactivate();
         }
+        _delayPublishers.Clear();
+        OwnerContext?.MarkDelayDirty();
     }
+    #endregion
 
-    internal void DetachFromContext()
-    {
-        ServiceLayerBinder.Detach(this);
+    #region Lifecycle - Build
+    /// <summary>配置 Layer 专属的服务容器。子类可重写此方法注册所需服务。</summary>
+    public virtual void ConfigureServices(IServiceCollection services) { }
 
-        OwnerContext = null;
-        RouteIndex = -1;
-    }
-
-    /// <summary>
-    /// 配置 Layer 专属的服务容器。
-    /// </summary>
-    /// <param name="services">服务集合。</param>
-    public virtual void ConfigureServices(IServiceCollection services)
-    {
-    }
-
-    /// <summary>
-    /// 初始化 Layer 的服务。
-    /// </summary>
+    /// <summary>初始化 Layer 的服务。触发生成器实现的自动挂载逻辑。</summary>
     internal void InitializeServices()
     {
-        // 触发生成器实现的 Layer 自动挂载逻辑
         if (this is IAutoLayerMount layerMount)
-        {
             layerMount.__AutoMountServices(this);
-        }
     }
 
-    /// <summary>
-    /// 手动注册一个服务到当前 Layer。
-    /// </summary>
-    /// <param name="service">要注册的服务实例。</param>
-    public void RegisterService(IService service)
-    {
-        RegisterService(service.GetType(), service);
-    }
-
-    /// <summary>
-    /// 手动注册一个服务到当前 Layer，并指定其暴露的服务类型。
-    /// </summary>
-    /// <param name="serviceType">暴露的服务类型（如接口或基类）。</param>
-    /// <param name="service">要注册的服务实例。</param>
-    public void RegisterService(Type serviceType, IService service)
-    {
-        if (service == null) throw new ArgumentNullException(nameof(service));
-        if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
-
-        if (m_serviceProvider != null)
-        {
-            throw new InvalidOperationException(
-                "RegisterService must be called before the layer is built. Register services before LayerHub.CreateLayers().Push(...).Build().");
-        }
-
-        if (!m_registeredServiceTypes.Add(serviceType))
-            return;
-
-        // 绑定 Service 到当前 Layer (写入绑定槽位)。允许用户在 Push 前手动注册；
-        // PrepareBuild/AddActiveService 会在 Layer 已附加到 Runtime 后再次写入有效绑定。
-        if (OwnerContext != null)
-        {
-            ServiceLayerBinder.Attach(service, this);
-        }
-
-        var registration = new RegisteredService(serviceType, service, Interlocked.Increment(ref m_nextServiceScopeId));
-        if (m_collectingGeneratedServices)
-        {
-            AddActiveService(registration);
-            return;
-        }
-
-        m_manualServices.Add(registration);
-    }
-
-    /// <summary>
-    /// 从当前 Layer 解析服务实例。
-    /// </summary>
-    /// <typeparam name="T">服务类型。</typeparam>
-    /// <returns>服务实例。</returns>
-    public T GetService<T>() where T : class
-    {
-        return m_serviceProvider?.Get<T>() ?? throw new InvalidOperationException("Layer not built.");
-    }
-
+    /// <summary>准备构建过程：清理旧状态、重新初始化服务容器。</summary>
     internal void PrepareBuild()
     {
         DetachResolvedObjects();
 
-        lock (m_subscriptions)
+        lock (_subscriptions)
         {
-            foreach (var sub in m_subscriptions) sub.Dispose();
-            m_subscriptions.Clear();
+            foreach (var sub in _subscriptions) sub.Dispose();
+            _subscriptions.Clear();
         }
 
         ReleaseDelayPublishers();
+        _serviceUpdates.Clear();
+        _postBuilds.Clear();
+        _runtimeStarts.Clear();
+        _runtimeStops.Clear();
+        _fixedUpdates.Clear();
+        _activeServices.Clear();
+        _resolvedServices.Clear();
+        _serviceCollection.Reset();
+        _callRouteInvokers = Array.Empty<object?>();
+        _callRouteHandlerTypes = Array.Empty<Type?>();
+        _callHandlers.Clear();
+        _producedEvents.Clear();
+        _sharedFields.Clear();
+        _subscribedEvents.Clear();
+        _registeredServiceTypes.Clear();
 
-        m_serviceUpdates.Clear();
-        m_postBuilds.Clear();
-        m_runtimeStarts.Clear();
-        m_runtimeStops.Clear();
-        m_fixedUpdates.Clear();
-        m_activeServices.Clear();
-        m_resolvedServices.Clear();
-        m_serviceCollection.Reset();
-        m_callRouteInvokers = Array.Empty<object?>();
-        m_callRouteHandlerTypes = Array.Empty<Type?>();
-        m_callHandlers.Clear();
-        m_producedEvents.Clear();
-        m_sharedFields.Clear();
-        m_subscribedEvents.Clear();
-        m_registeredServiceTypes.Clear();
-
-        foreach (var registration in m_manualServices)
+        foreach (var registration in _manualServices)
         {
-            m_registeredServiceTypes.Add(registration.ServiceType);
+            _registeredServiceTypes.Add(registration.ServiceType);
             AddActiveService(registration);
         }
 
-        m_collectingGeneratedServices = true;
+        _collectingGeneratedServices = true;
         InitializeServices();
-        ConfigureServices(m_serviceCollection);
-        m_collectingGeneratedServices = false;
+        ConfigureServices(_serviceCollection);
+        _collectingGeneratedServices = false;
 
-        var descriptors = m_serviceCollection.ToDescriptors();
+        var descriptors = _serviceCollection.ToDescriptors();
         var newProvider = new ServiceProvider(OwnerContext!.Services, descriptors, this);
-        var oldProvider = Interlocked.Exchange(ref m_serviceProvider, newProvider);
+        var oldProvider = Interlocked.Exchange(ref _serviceProvider, newProvider);
         oldProvider?.Dispose();
 
         newProvider.InjectMembers(this);
-        foreach (var registration in m_activeServices)
-        {
+        foreach (var registration in _activeServices)
             newProvider.InjectMembers(registration.Service);
-        }
 
-        m_resolvedServices = newProvider.ResolveOrderedServices(descriptors);
+        _resolvedServices = newProvider.ResolveOrderedServices(descriptors);
     }
 
+    /// <summary>构建自动绑定：调用路由、事件订阅和延迟发布器。</summary>
     internal void BuildAutoBinding()
     {
         BindAutoCallHandlers();
@@ -331,210 +285,77 @@ public abstract class Layer : Node, IDisposable
             subscribers.Add(layerAutoSubscribe);
         }
 
-        foreach (var resolved in m_resolvedServices)
+        foreach (var resolved in _resolvedServices)
         {
             if (resolved.Instance is not IAutoSubscribe auto) continue;
             auto.AutoBind(this);
             subscribers.Add(auto);
         }
 
-        foreach (var resolved in m_resolvedServices)
+        foreach (var resolved in _resolvedServices)
         {
             if (resolved.Instance is IAutoSubscribe) continue;
             BindInterfaceEventHandlers(resolved.Instance);
         }
 
         DiscoveredSubscribers = subscribers;
-        var ops = Interlocked.Exchange(ref m_pendingOps, new ConcurrentQueue<Action<Layer>>());
+        var ops = Interlocked.Exchange(ref _pendingOps, new ConcurrentQueue<Action<Layer>>());
         if (ops != null)
             foreach (var op in ops)
                 op(this);
     }
 
-    private void BindInterfaceEventHandlers(object instance)
-    {
-        foreach (var iface in instance.GetType().GetInterfaces())
-        {
-            if (!iface.IsGenericType) continue;
-
-            var genericDefinition = iface.GetGenericTypeDefinition();
-            var typeArguments = iface.GetGenericArguments();
-            if (typeArguments.Length != 1 || !typeArguments[0].IsValueType) continue;
-
-            if (genericDefinition == typeof(IEventHandler<>))
-            {
-                s_bindInterfaceEventHandlerFlowMethod.MakeGenericMethod(typeArguments[0]).Invoke(this, [instance]);
-                continue;
-            }
-
-            if (genericDefinition == typeof(IEventHandlerAsync<>))
-            {
-                s_bindInterfaceEventHandlerAsyncMethod.MakeGenericMethod(typeArguments[0]).Invoke(this, [instance]);
-            }
-        }
-    }
-
-    private void BindInterfaceEventHandlerFlow<T>(object instance) where T : struct
-    {
-        if (OwnerContext == null || RouteIndex == -1) return;
-
-        var handler = (IEventHandler<T>)instance;
-        OwnerContext.EventCenter.SubscribeFlow(RouteIndex, handler);
-        m_subscriptions.Add(UnsubscribeFlowHandlerToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
-        RecordSubscribedEvent(typeof(T));
-    }
-
-    private void BindInterfaceEventHandlerAsync<T>(object instance) where T : struct
-    {
-        if (OwnerContext == null || RouteIndex == -1) return;
-
-        var handler = (IEventHandlerAsync<T>)instance;
-        OwnerContext.EventCenter.SubscribeAsync(RouteIndex, handler);
-        m_subscriptions.Add(UnsubscribeAsyncHandlerToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
-        RecordSubscribedEvent(typeof(T));
-    }
-
+    /// <summary>构建生命周期：收集 IInitializable/IUpdate/IFixedUpdate 等接口实现并分类存储。</summary>
     internal void LifecycleBuild()
     {
-        foreach (var resolved in m_resolvedServices)
+        foreach (var resolved in _resolvedServices)
         {
             if (resolved.Instance is IInitializable init) init.Initialize();
-            if (resolved.Instance is IUpdate up) m_serviceUpdates.Add(up);
-            if (resolved.Instance is IFixedUpdate fixedUpdate) m_fixedUpdates.Add(fixedUpdate);
-            if (resolved.Instance is IPostBuild postBuild) m_postBuilds.Add(postBuild);
-            if (resolved.Instance is IRuntimeStart runtimeStart) m_runtimeStarts.Add(runtimeStart);
-            if (resolved.Instance is IRuntimeStop runtimeStop) m_runtimeStops.Add(runtimeStop);
+            if (resolved.Instance is IUpdate up) _serviceUpdates.Add(up);
+            if (resolved.Instance is IFixedUpdate fixedUpdate) _fixedUpdates.Add(fixedUpdate);
+            if (resolved.Instance is IPostBuild postBuild) _postBuilds.Add(postBuild);
+            if (resolved.Instance is IRuntimeStart runtimeStart) _runtimeStarts.Add(runtimeStart);
+            if (resolved.Instance is IRuntimeStop runtimeStop) _runtimeStops.Add(runtimeStop);
         }
 
-        if (this is IFixedUpdate layerFixedUpdate) m_fixedUpdates.Add(layerFixedUpdate);
-        if (this is IPostBuild layerPostBuild) m_postBuilds.Add(layerPostBuild);
-        if (this is IRuntimeStart layerRuntimeStart) m_runtimeStarts.Add(layerRuntimeStart);
-        if (this is IRuntimeStop layerRuntimeStop) m_runtimeStops.Add(layerRuntimeStop);
+        if (this is IFixedUpdate layerFixedUpdate) _fixedUpdates.Add(layerFixedUpdate);
+        if (this is IPostBuild layerPostBuild) _postBuilds.Add(layerPostBuild);
+        if (this is IRuntimeStart layerRuntimeStart) _runtimeStarts.Add(layerRuntimeStart);
+        if (this is IRuntimeStop layerRuntimeStop) _runtimeStops.Add(layerRuntimeStop);
     }
 
     internal void RunPostBuild()
     {
-        for (var i = 0; i < m_postBuilds.Count; i++)
-        {
-            m_postBuilds[i].PostBuild();
-        }
+        for (var i = 0; i < _postBuilds.Count; i++)
+            _postBuilds[i].PostBuild();
     }
 
     internal void RunRuntimeStart()
     {
-        for (var i = 0; i < m_runtimeStarts.Count; i++)
-        {
-            m_runtimeStarts[i].RuntimeStart();
-        }
+        for (var i = 0; i < _runtimeStarts.Count; i++)
+            _runtimeStarts[i].RuntimeStart();
     }
 
     internal void RunRuntimeStop()
     {
-        for (var i = 0; i < m_runtimeStops.Count; i++)
-        {
-            m_runtimeStops[i].RuntimeStop();
-        }
+        for (var i = 0; i < _runtimeStops.Count; i++)
+            _runtimeStops[i].RuntimeStop();
+    }
+    #endregion
+
+    #region Lifecycle - Pump
+    /// <summary>每帧推进服务更新。子类可重写此方法添加自定义更新逻辑。</summary>
+    public virtual void Pump(float deltaTime)
+    {
+        for (var i = 0; i < _serviceUpdates.Count; i++)
+            _serviceUpdates[i].Update();
     }
 
+    /// <summary>以固定时间步长推进固定更新。</summary>
     internal void PumpFixed(float fixedDeltaTime)
     {
-        for (var i = 0; i < m_fixedUpdates.Count; i++)
-        {
-            m_fixedUpdates[i].FixedUpdate(fixedDeltaTime);
-        }
-    }
-
-    internal IEnumerable<SharedFieldBinder.Participant> GetSharedFieldParticipants(bool includeGlobalScope)
-    {
-        if (includeGlobalScope)
-            yield return new SharedFieldBinder.Participant(this, this, 0);
-
-        foreach (var service in m_activeServices)
-            yield return new SharedFieldBinder.Participant(service.Service, this, service.ScopeId);
-
-        foreach (var resolved in m_resolvedServices)
-            yield return new SharedFieldBinder.Participant(resolved.Instance, this,
-                resolved.Descriptor.RegistrationScopeId);
-    }
-
-    internal IEnumerable<IGeneratedFullSnapNode> GetFullSnapNodes()
-    {
-        var visited = new HashSet<object>(ObjectReferenceComparer.Instance);
-
-        foreach (var registration in m_activeServices)
-        {
-            if (registration.Service is IGeneratedFullSnapNode node && visited.Add(node))
-            {
-                yield return node;
-            }
-        }
-
-        foreach (var resolved in m_resolvedServices)
-        {
-            if (resolved.Instance is IGeneratedFullSnapNode node && visited.Add(node))
-            {
-                yield return node;
-            }
-        }
-    }
-
-    private void AddActiveService(RegisteredService registration)
-    {
-        m_activeServices.Add(registration);
-        ServiceLayerBinder.Attach(registration.Service, this);
-
-        // 🚀 核心改进：将已挂载的服务实例注册进 Layer 作用域的 ServiceCollection。
-        // 这样 ServiceProvider.InjectMembers 才能在后续注入过程（如 Layer 的字段注入）中找到这些实例。
-        m_serviceCollection.Add(new ServiceDescriptor(
-            registration.ServiceType,
-            null,
-            ServiceLifetime.Scoped,
-            _ => registration.Service,
-            null,
-            registration.ScopeId));
-
-        using var _ = m_serviceCollection.PushRegistrationScope(registration.ScopeId);
-
-        if (registration.Service is IAutoServiceMount autoMount)
-        {
-            autoMount.__AutoMountContexts(m_serviceCollection);
-        }
-
-        registration.Service.ConfigureServices(m_serviceCollection);
-    }
-
-    public void RecordSubscribedEvent(Type eventType)
-    {
-        if (eventType == null) throw new ArgumentNullException(nameof(eventType));
-        m_subscribedEvents.Add(eventType);
-    }
-
-    public void RecordProducedEvent(Type eventType)
-    {
-        if (eventType == null) throw new ArgumentNullException(nameof(eventType));
-        m_producedEvents.Add(eventType);
-    }
-
-    internal void RecordSharedField(Type ownerType, string key, Type fieldType, bool isProvider)
-    {
-        m_sharedFields.Add((ownerType, key, fieldType, isProvider));
-    }
-
-    private void BindAutoCallHandlers()
-    {
-        var boundInstances = new HashSet<object>(ObjectReferenceComparer.Instance);
-
-        BindAutoCallHandler(this, boundInstances);
-
-        foreach (var registration in m_activeServices)
-            BindAutoCallHandler(registration.Service, boundInstances);
-    }
-
-    private void BindAutoCallHandler(object candidate, HashSet<object> boundInstances)
-    {
-        if (!boundInstances.Add(candidate)) return;
-        if (candidate is IAutoCallBinder autoCallBinder)
-            autoCallBinder.AutoBindCalls(this);
+        for (var i = 0; i < _fixedUpdates.Count; i++)
+            _fixedUpdates[i].FixedUpdate(fixedDeltaTime);
     }
 
     internal void SetRouteIndex(int routeIndex)
@@ -542,80 +363,139 @@ public abstract class Layer : Node, IDisposable
         RouteIndex = routeIndex;
         ServiceLayerBinder.Attach(this, this);
     }
+    #endregion
 
-
-    public virtual void Pump(float deltaTime)
+    #region Public API - Service Management
+    /// <summary>手动注册一个服务到当前 Layer，自动推断服务类型。</summary>
+    public void RegisterService(IService service)
     {
-        for (var i = 0; i < m_serviceUpdates.Count; i++) m_serviceUpdates[i].Update();
+        RegisterService(service.GetType(), service);
     }
 
-    private void ThrowIfDisposed()
+    /// <summary>手动注册一个服务到当前 Layer，并指定其暴露的服务类型。必须在 Build 之前调用。</summary>
+    public void RegisterService(Type serviceType, IService service)
     {
-        if (Volatile.Read(ref m_disposed) != 0) throw new ObjectDisposedException(nameof(Layer));
+        if (service == null) throw new ArgumentNullException(nameof(service));
+        if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
+        if (_serviceProvider != null)
+            throw new InvalidOperationException(
+                "RegisterService must be called before the layer is built. Register services before LayerHub.CreateLayers().Push(...).Build().");
+
+        if (!_registeredServiceTypes.Add(serviceType)) return;
+
+        if (OwnerContext != null)
+            ServiceLayerBinder.Attach(service, this);
+
+        var registration = new RegisteredService(serviceType, service, Interlocked.Increment(ref _nextServiceScopeId));
+        if (_collectingGeneratedServices)
+        {
+            AddActiveService(registration);
+            return;
+        }
+        _manualServices.Add(registration);
     }
 
+    /// <summary>从当前 Layer 的服务容器解析指定类型的服务实例。</summary>
+    public T GetService<T>() where T : class
+    {
+        return _serviceProvider?.Get<T>() ?? throw new InvalidOperationException("Layer 尚未构建。");
+    }
+    #endregion
+
+    #region Public API - Event Send / Post
+    /// <summary>同步发送事件到事件中心（立即派发）。</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EventHandledState Send<T>(in T value) where T : struct
+    {
+        if (OwnerContext == null) throw new InvalidOperationException("Layer 未附加到 Runtime 上下文。");
+        return OwnerContext.EventCenter.Send(value);
+    }
+
+    /// <summary>投递事件到调度队列（异步派发）。</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Post<T>(in T value) where T : struct
+    {
+        _ = TryPost(value);
+    }
+
+    /// <summary>尝试投递事件到调度队列，返回投递结果。</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    {
+        if (OwnerContext == null) return PostResult.Failure();
+        return OwnerContext.TryPost(value, policy);
+    }
+    #endregion
+
+    #region Public API - Event Subscription
+    /// <summary>订阅 Flow 类型的事件处理器（可中断事件流）。</summary>
     public void SubscribeFlow<T>(EventHandleDelegate<T> handler) where T : struct
     {
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.SubscribeFlow(RouteIndex, handler);
-            m_subscriptions.Add(UnsubscribeFlowToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+            _subscriptions.Add(UnsubscribeFlowToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
         {
-            m_pendingOps.Enqueue(l => l.SubscribeFlow(handler));
+            _pendingOps.Enqueue(l => l.SubscribeFlow(handler));
         }
     }
 
+    /// <summary>订阅 Notify 类型的事件通知。</summary>
     public void SubscribeNotify<T>(EventNotifyDelegate<T> handler) where T : struct
     {
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.SubscribeNotify(RouteIndex, handler);
-            m_subscriptions.Add(UnsubscribeNotifyToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+            _subscriptions.Add(UnsubscribeNotifyToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
         {
-            m_pendingOps.Enqueue(l => l.SubscribeNotify(handler));
+            _pendingOps.Enqueue(l => l.SubscribeNotify(handler));
         }
     }
 
+    /// <summary>订阅事件（同 SubscribeNotify）。</summary>
     public void Subscribe<T>(EventNotifyDelegate<T> handler) where T : struct
     {
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.Subscribe(RouteIndex, handler);
-            m_subscriptions.Add(UnsubscribeToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+            _subscriptions.Add(UnsubscribeToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
         {
-            m_pendingOps.Enqueue(l => l.Subscribe(handler));
+            _pendingOps.Enqueue(l => l.Subscribe(handler));
         }
     }
 
+    /// <summary>订阅异步事件处理器。</summary>
     public void SubscribeAsync<T>(EventHandleDelegateAsync<T> handler) where T : struct
     {
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.SubscribeAsync(RouteIndex, handler);
-            m_subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+            _subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
         {
-            m_pendingOps.Enqueue(l => l.SubscribeAsync(handler));
+            _pendingOps.Enqueue(l => l.SubscribeAsync(handler));
         }
     }
 
+    /// <summary>创建流畅的事件流查询对象。</summary>
     public LayerEventStream<T> OnEvent<T>() where T : struct
     {
         return new LayerEventStream<T>(this);
     }
 
-    public void SubscribeParallel<T>(EventNotifyDelegate<T>            handler,
+    /// <summary>订阅并行事件处理器。</summary>
+    public void SubscribeParallel<T>(EventNotifyDelegate<T> handler,
                                      Action<int, int, int, Exception>? reportError = null) where T : struct
     {
         ThrowIfDisposed();
@@ -623,36 +503,37 @@ public abstract class Layer : Node, IDisposable
         {
             OwnerContext.EventCenter.SubscribeParallel(RouteIndex, handler,
                 reportError ?? OwnerContext.ReportLayerEventError);
-            m_subscriptions.Add(UnsubscribeParallelToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+            _subscriptions.Add(UnsubscribeParallelToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
         }
         else
         {
-            m_pendingOps.Enqueue(l => l.SubscribeParallel(handler, reportError));
+            _pendingOps.Enqueue(l => l.SubscribeParallel(handler, reportError));
         }
     }
 
+    /// <summary>订阅延迟事件发布器。同一事件类型只会创建一个发布器实例。</summary>
     public IDelayPublisher<T> SubscribeDelay<T>() where T : struct
     {
         var type = typeof(T);
-        if (m_delayPublishers.TryGetValue(type, out var existing)) return (IDelayPublisher<T>)existing;
+        if (_delayPublishers.TryGetValue(type, out var existing)) return (IDelayPublisher<T>)existing;
 
         var manager = OwnerContext?.DelayManager;
-        if (manager == null) throw new InvalidOperationException("DelayPublisherManager not initialized.");
+        if (manager == null) throw new InvalidOperationException("DelayPublisherManager 未初始化。");
 
         var publisher = new DelayPublisher<T>(manager, this);
         int id = manager.RegisterPublisher(publisher);
         publisher.SetId(id);
 
-        var actual = m_delayPublishers.GetOrAdd(type, publisher);
+        var actual = _delayPublishers.GetOrAdd(type, publisher);
         if (actual == publisher)
-        {
             OwnerContext?.MarkDelayDirty();
-        }
 
         return (IDelayPublisher<T>)actual;
     }
+    #endregion
 
-
+    #region Public API - Call Route
+    /// <summary>注册一个调用路由处理器。同一请求-响应对只能注册一个处理器。</summary>
     protected internal void RegisterCallHandler<TRequest, TResponse>(ILayerCallHandler<TRequest, TResponse> handler)
         where TRequest : struct
         where TResponse : struct
@@ -664,10 +545,10 @@ public abstract class Layer : Node, IDisposable
         var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
         var invoker = (LayerCallInvoker<TRequest, TResponse>)handler.HandleAsync;
 
-        lock (m_callRouteLock)
+        lock (_callRouteLock)
         {
-            var invokers = m_callRouteInvokers;
-            var handlerTypes = m_callRouteHandlerTypes;
+            var invokers = _callRouteInvokers;
+            var handlerTypes = _callRouteHandlerTypes;
 
             if (routeId >= invokers.Length)
             {
@@ -683,51 +564,176 @@ public abstract class Layer : Node, IDisposable
             if (invokers[routeId] != null)
             {
                 if (handlerTypes[routeId] == handler.GetType()) return;
-
                 throw new LayerCallRouteConflictException(
-                    GetType(),
-                    typeof(TRequest),
-                    typeof(TResponse),
-                    handlerTypes[routeId] ?? invokers[routeId]!.GetType(),
-                    handler.GetType());
+                    GetType(), typeof(TRequest), typeof(TResponse),
+                    handlerTypes[routeId] ?? invokers[routeId]!.GetType(), handler.GetType());
             }
 
             invokers[routeId] = invoker;
             handlerTypes[routeId] = handler.GetType();
-            m_callHandlers.Add((typeof(TRequest), typeof(TResponse), handler.GetType()));
-            Volatile.Write(ref m_callRouteInvokers, invokers);
-            Volatile.Write(ref m_callRouteHandlerTypes, handlerTypes);
+            _callHandlers.Add((typeof(TRequest), typeof(TResponse), handler.GetType()));
+            Volatile.Write(ref _callRouteInvokers, invokers);
+            Volatile.Write(ref _callRouteHandlerTypes, handlerTypes);
         }
     }
+    #endregion
 
+    #region Public API - Metadata Recording
+    /// <summary>记录当前 Layer 订阅的事件类型。</summary>
+    public void RecordSubscribedEvent(Type eventType)
+    {
+        if (eventType == null) throw new ArgumentNullException(nameof(eventType));
+        _subscribedEvents.Add(eventType);
+    }
+
+    /// <summary>记录当前 Layer 生产的事件类型。</summary>
+    public void RecordProducedEvent(Type eventType)
+    {
+        if (eventType == null) throw new ArgumentNullException(nameof(eventType));
+        _producedEvents.Add(eventType);
+    }
+
+    internal void RecordSharedField(Type ownerType, string key, Type fieldType, bool isProvider)
+    {
+        _sharedFields.Add((ownerType, key, fieldType, isProvider));
+    }
+    #endregion
+
+    #region Internal - Call Route Resolution
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal LayerCallInvoker<TRequest, TResponse> GetCallInvoker<TRequest, TResponse>()
         where TRequest : struct
         where TResponse : struct
     {
         var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
-        var invokers = Volatile.Read(ref m_callRouteInvokers);
+        var invokers = Volatile.Read(ref _callRouteInvokers);
         if ((uint)routeId >= (uint)invokers.Length || invokers[routeId] == null)
             ThrowRouteNotFound<TRequest, TResponse>();
-
         return (LayerCallInvoker<TRequest, TResponse>)invokers[routeId]!;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest          request,
-                                                              CancellationToken cancellationToken = default)
+    internal LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
+                                                               CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
     {
-        if (Volatile.Read(ref m_disposed) != 0) ThrowDisposed();
+        if (Volatile.Read(ref _disposed) != 0) ThrowDisposed();
         if (cancellationToken.IsCancellationRequested) return LBTask<TResponse>.FromCanceled(cancellationToken);
 
         var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
-        var invokers = Volatile.Read(ref m_callRouteInvokers);
+        var invokers = Volatile.Read(ref _callRouteInvokers);
         if ((uint)routeId >= (uint)invokers.Length || invokers[routeId] == null)
             ThrowRouteNotFound<TRequest, TResponse>();
-
         return ((LayerCallInvoker<TRequest, TResponse>)invokers[routeId]!)(request, cancellationToken);
+    }
+    #endregion
+
+    #region Internal - Shared Field & Snap
+    internal IEnumerable<SharedFieldBinder.Participant> GetSharedFieldParticipants(bool includeGlobalScope)
+    {
+        if (includeGlobalScope)
+            yield return new SharedFieldBinder.Participant(this, this, 0);
+        foreach (var service in _activeServices)
+            yield return new SharedFieldBinder.Participant(service.Service, this, service.ScopeId);
+        foreach (var resolved in _resolvedServices)
+            yield return new SharedFieldBinder.Participant(resolved.Instance, this, resolved.Descriptor.RegistrationScopeId);
+    }
+
+    internal IEnumerable<IGeneratedFullSnapNode> GetFullSnapNodes()
+    {
+        var visited = new HashSet<object>(ObjectReferenceComparer.Instance);
+        foreach (var registration in _activeServices)
+        {
+            if (registration.Service is IGeneratedFullSnapNode node && visited.Add(node))
+                yield return node;
+        }
+        foreach (var resolved in _resolvedServices)
+        {
+            if (resolved.Instance is IGeneratedFullSnapNode node && visited.Add(node))
+                yield return node;
+        }
+    }
+    #endregion
+
+    #region Internal - Auto Binding
+    private void BindAutoCallHandlers()
+    {
+        var boundInstances = new HashSet<object>(ObjectReferenceComparer.Instance);
+        BindAutoCallHandler(this, boundInstances);
+        foreach (var registration in _activeServices)
+            BindAutoCallHandler(registration.Service, boundInstances);
+    }
+
+    private void BindAutoCallHandler(object candidate, HashSet<object> boundInstances)
+    {
+        if (!boundInstances.Add(candidate)) return;
+        if (candidate is IAutoCallBinder autoCallBinder)
+            autoCallBinder.AutoBindCalls(this);
+    }
+
+    private void BindInterfaceEventHandlers(object instance)
+    {
+        foreach (var iface in instance.GetType().GetInterfaces())
+        {
+            if (!iface.IsGenericType) continue;
+            var genericDefinition = iface.GetGenericTypeDefinition();
+            var typeArguments = iface.GetGenericArguments();
+            if (typeArguments.Length != 1 || !typeArguments[0].IsValueType) continue;
+
+            if (genericDefinition == typeof(IEventHandler<>))
+            {
+                s_bindInterfaceEventHandlerFlowMethod.MakeGenericMethod(typeArguments[0]).Invoke(this, [instance]);
+                continue;
+            }
+            if (genericDefinition == typeof(IEventHandlerAsync<>))
+            {
+                s_bindInterfaceEventHandlerAsyncMethod.MakeGenericMethod(typeArguments[0]).Invoke(this, [instance]);
+            }
+        }
+    }
+
+    private void BindInterfaceEventHandlerFlow<T>(object instance) where T : struct
+    {
+        if (OwnerContext == null || RouteIndex == -1) return;
+        var handler = (IEventHandler<T>)instance;
+        OwnerContext.EventCenter.SubscribeFlow(RouteIndex, handler);
+        _subscriptions.Add(UnsubscribeFlowHandlerToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+        RecordSubscribedEvent(typeof(T));
+    }
+
+    private void BindInterfaceEventHandlerAsync<T>(object instance) where T : struct
+    {
+        if (OwnerContext == null || RouteIndex == -1) return;
+        var handler = (IEventHandlerAsync<T>)instance;
+        OwnerContext.EventCenter.SubscribeAsync(RouteIndex, handler);
+        _subscriptions.Add(UnsubscribeAsyncHandlerToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+        RecordSubscribedEvent(typeof(T));
+    }
+
+    private void AddActiveService(RegisteredService registration)
+    {
+        _activeServices.Add(registration);
+        ServiceLayerBinder.Attach(registration.Service, this);
+
+        _serviceCollection.Add(new ServiceDescriptor(
+            registration.ServiceType, null, ServiceLifetime.Scoped,
+            _ => registration.Service, null, registration.ScopeId));
+
+        using var _ = _serviceCollection.PushRegistrationScope(registration.ScopeId);
+
+        if (registration.Service is IAutoServiceMount autoMount)
+            autoMount.__AutoMountContexts(_serviceCollection);
+
+        registration.Service.ConfigureServices(_serviceCollection);
+    }
+    #endregion
+
+    #region Validation & Guards
+    private void ThrowIfDisposed()
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+            throw new ObjectDisposedException(nameof(Layer));
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -743,28 +749,8 @@ public abstract class Layer : Node, IDisposable
     {
         throw new LayerCallRouteNotFoundException(GetType(), typeof(TRequest), typeof(TResponse));
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EventHandledState Send<T>(in T value) where T : struct
-    {
-        if (OwnerContext == null) throw new InvalidOperationException("Layer not attached to context.");
-        return OwnerContext.EventCenter.Send(value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Post<T>(in T value) where T : struct
-    {
-        _ = TryPost(value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
-    {
-        if (OwnerContext == null) return PostResult.Failure();
-        return OwnerContext.TryPost(value, policy);
-    }
-
-
+    #endregion
+    #region Nested Types
     internal readonly struct RegisteredService
     {
         public RegisteredService(Type serviceType, IService service, int scopeId)
@@ -774,26 +760,35 @@ public abstract class Layer : Node, IDisposable
             ScopeId = scopeId;
         }
 
+        /// <summary>服务注册时声明的类型（通常为接口）。</summary>
         public Type ServiceType { get; }
+
+        /// <summary>服务实例。</summary>
         public IService Service { get; }
+
+        /// <summary>服务在 Layer 内的作用域 ID。</summary>
         public int ScopeId { get; }
     }
 
+    /// <summary>
+    /// 基于引用相等性的对象比较器，用于 HashSet 等场景。
+    /// </summary>
     private sealed class ObjectReferenceComparer : IEqualityComparer<object>
     {
         public static readonly ObjectReferenceComparer Instance = new();
 
-        public new bool Equals(object? x, object? y)
-        {
-            return ReferenceEquals(x, y);
-        }
+        public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
 
-        public int GetHashCode(object obj)
-        {
-            return RuntimeHelpers.GetHashCode(obj);
-        }
+        public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
     }
 
+    // ── 以下 6 个 UnsubscribeToken 类为同一模式的对象池化实现 ──
+    // 每个类负责一种订阅类型的取消注册，在 Dispose 时调用 EventCenter 的对应 Unsubscribe 方法，
+    // 然后将自己归还到静态池中以减少 GC 压力。
+
+    /// <summary>
+    /// 用于取消 Flow 委托事件订阅的 Token。Dispose 时自动从 EventCenter 取消注册并回收到对象池。
+    /// </summary>
     private sealed class UnsubscribeFlowToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeFlowToken<T>> Pool = new();
@@ -822,6 +817,9 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
+    /// <summary>
+    /// 用于取消 Flow 接口事件订阅（IEventHandler）的 Token。Dispose 时自动取消注册并回收到对象池。
+    /// </summary>
     private sealed class UnsubscribeFlowHandlerToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeFlowHandlerToken<T>> Pool = new();
@@ -850,6 +848,9 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
+    /// <summary>
+    /// 用于取消异步委托事件订阅的 Token。Dispose 时自动取消注册并回收到对象池。
+    /// </summary>
     private sealed class UnsubscribeDelegateAsyncToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeDelegateAsyncToken<T>> Pool = new();
@@ -878,6 +879,9 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
+    /// <summary>
+    /// 用于取消异步接口事件订阅（IEventHandlerAsync）的 Token。Dispose 时自动取消注册并回收到对象池。
+    /// </summary>
     private sealed class UnsubscribeAsyncHandlerToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeAsyncHandlerToken<T>> Pool = new();
@@ -906,6 +910,9 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
+    /// <summary>
+    /// 用于取消 Notify 事件订阅的 Token。Dispose 时自动取消注册并回收到对象池。
+    /// </summary>
     private sealed class UnsubscribeNotifyToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeNotifyToken<T>> Pool = new();
@@ -934,6 +941,9 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
+    /// <summary>
+    /// 用于取消 Subscribe 事件订阅的 Token。Dispose 时自动取消注册并回收到对象池。
+    /// </summary>
     private sealed class UnsubscribeToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeToken<T>> Pool = new();
@@ -962,6 +972,9 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
+    /// <summary>
+    /// 用于取消 Parallel 事件订阅的 Token。Dispose 时自动取消注册并回收到对象池。
+    /// </summary>
     private sealed class UnsubscribeParallelToken<T> : IDisposable where T : struct
     {
         private static readonly ConcurrentBag<UnsubscribeParallelToken<T>> Pool = new();
@@ -989,4 +1002,5 @@ public abstract class Layer : Node, IDisposable
             return t;
         }
     }
+    #endregion
 }

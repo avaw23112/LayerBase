@@ -3,7 +3,7 @@ using System;
 namespace LayerBase.DI.Options;
 
 /// <summary>
-/// Declares that the annotated context or event handler belongs to a specific IService domain.
+/// 声明被标记的上下文或事件处理器属于指定的 IService 域。
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
 public sealed class OwnerServiceAttribute : Attribute

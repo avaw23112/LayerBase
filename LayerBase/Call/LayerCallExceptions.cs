@@ -1,5 +1,8 @@
 ﻿namespace LayerBase.Call;
 
+/// <summary>
+/// 调用目标 Layer 未找到时抛出的异常。
+/// </summary>
 public sealed class LayerCallTargetNotFoundException : InvalidOperationException
 {
     public LayerCallTargetNotFoundException(Type layerType)
@@ -8,6 +11,9 @@ public sealed class LayerCallTargetNotFoundException : InvalidOperationException
     }
 }
 
+/// <summary>
+/// 调用目标 Layer 存在多个实例时抛出的异常。
+/// </summary>
 public sealed class LayerCallTargetAmbiguousException : InvalidOperationException
 {
     public LayerCallTargetAmbiguousException(Type layerType)
@@ -16,6 +22,9 @@ public sealed class LayerCallTargetAmbiguousException : InvalidOperationExceptio
     }
 }
 
+/// <summary>
+/// 在 Layer 中未找到指定请求-响应类型的调用路由时抛出的异常。
+/// </summary>
 public sealed class LayerCallRouteNotFoundException : InvalidOperationException
 {
     public LayerCallRouteNotFoundException(Type layerType, Type requestType, Type responseType)
@@ -25,6 +34,9 @@ public sealed class LayerCallRouteNotFoundException : InvalidOperationException
     }
 }
 
+/// <summary>
+/// 同一请求-响应对注册了多个处理器时抛出的异常。
+/// </summary>
 public sealed class LayerCallRouteConflictException : InvalidOperationException
 {
     public LayerCallRouteConflictException(Type layerType, Type requestType, Type responseType,

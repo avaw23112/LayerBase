@@ -2,20 +2,25 @@
 
 namespace LayerBase.Core;
 
+/// <summary>
+/// 事件队列在满时的处理策略。
+/// </summary>
 public enum EventQueueOverflowStrategy
 {
+    /// <summary>抛出异常。</summary>
     ThrowException,
-
-
+    /// <summary>直接丢弃（无异常）。</summary>
     Throw,
-
-
+    /// <summary>覆盖最旧的元素。</summary>
     OverWrite,
-
-
+    /// <summary>扩展队列容量。</summary>
     Scaling
 }
 
+/// <summary>
+/// 基于分块（chunk）的可覆写队列。支持动态扩容、ArrayPool 内存复用和多种溢出策略。
+/// 用于 PostScheduler 中的事件缓冲。
+/// </summary>
 public sealed class PooledChunkedOverwriteQueue<T> : IDisposable where T : struct
 {
     private readonly int _chunkSize;

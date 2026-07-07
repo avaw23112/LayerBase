@@ -4,10 +4,16 @@ using LayerBase.Layers;
 
 namespace LayerBase.Call;
 
+/// <summary>
+/// 跨层调用处理器的标记接口。
+/// </summary>
 public interface ILayerCallHandler
 {
 }
 
+/// <summary>
+/// 跨层调用处理器的泛型接口。处理 TRequest 请求并返回 TResponse 响应。
+/// </summary>
 public interface ILayerCallHandler<TRequest, TResponse> : ILayerCallHandler
     where TRequest : struct
     where TResponse : struct
@@ -15,6 +21,9 @@ public interface ILayerCallHandler<TRequest, TResponse> : ILayerCallHandler
     LBTask<TResponse> HandleAsync(TRequest request, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// 调用处理器的扩展方法，提供便捷的服务解析和跨层调用能力。
+/// </summary>
 public static class LayerCallHandlerExtensions
 {
     public static TService Get<TService>(this ILayerCallHandler handler) where TService : class

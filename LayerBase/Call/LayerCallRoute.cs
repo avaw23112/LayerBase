@@ -2,6 +2,9 @@
 
 namespace LayerBase.Call;
 
+/// <summary>
+/// 跨层调用的实际执行委托。
+/// </summary>
 internal delegate LBTask<TResponse> LayerCallInvoker<TRequest, TResponse>(
     TRequest          request,
     CancellationToken cancellationToken)

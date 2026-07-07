@@ -1,5 +1,9 @@
 namespace LayerBase.Core.DataStruct;
 
+/// <summary>
+/// 基于最小堆的优先级队列。TPriority 越小优先级越高。
+/// 当 .NET 6+ 时优先使用系统内置的 PriorityQueue。
+/// </summary>
 public class PriorityQueue<TElement, TPriority>
 {
     private (TElement Element, TPriority Priority)[] _nodes;

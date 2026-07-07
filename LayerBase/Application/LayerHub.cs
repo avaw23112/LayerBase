@@ -11,6 +11,9 @@ using LayerBase.Tools.Job;
 
 namespace LayerBase;
 
+/// <summary>
+/// Layer 事件信息的严重级别。
+/// </summary>
 public enum LayerEventInfoType
 {
     Debug,
@@ -19,6 +22,9 @@ public enum LayerEventInfoType
     Error
 }
 
+/// <summary>
+/// 描述 Layer 运行时产生的事件信息，包括来源、事件名、消息和异常。
+/// </summary>
 public readonly struct LayerEventInfo
 {
     public readonly int LayerIndex;
@@ -45,6 +51,10 @@ public readonly struct LayerEventInfo
     }
 }
 
+/// <summary>
+/// LayerBase 的全局静态入口。管理多个 LayerRuntime 实例的生命周期，
+/// 并提供便捷 API 访问 Primary Runtime 的事件发送、投递和跨层调用。
+/// </summary>
 public static class LayerHub
 {
     private static readonly List<WeakReference<LayerRuntime>> s_runtimes = new();
@@ -60,7 +70,7 @@ public static class LayerHub
     public static event Action<LayerEventInfo>? OnLayerEventInfo;
 
     /// <summary>
-    /// Creates a new isolated LayerRuntime. The first one created becomes the Primary runtime.
+    /// 创建一个新的独立 LayerRuntime。第一个创建的 Runtime 自动成为 Primary。
     /// </summary>
     public static LayerRuntime.LayersBuilder CreateLayers()
     {
@@ -83,8 +93,7 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// Optional: Pumps all active runtimes tracked by the Hub.
-    /// Users can also pump their runtimes manually.
+    /// 推进 Hub 跟踪的所有活跃 Runtime。用户也可以手动泵送各自的 Runtime。
     /// </summary>
     public static void Pump(float deltaTime)
     {
@@ -102,7 +111,7 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// Resets the global registry, disposes every tracked runtime, and clears static caches.
+    /// 重置全局注册表，释放所有跟踪的 Runtime，并清除静态缓存。
     /// </summary>
     public static void Reset()
     {
@@ -135,7 +144,7 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// Convenience API: Sends event to the Primary runtime.
+    /// 便捷 API：向 Primary Runtime 同步发送事件。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Send<T>(in T value) where T : struct
@@ -144,7 +153,7 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// Convenience API: Posts event to the Primary runtime.
+    /// 便捷 API：向 Primary Runtime 投递事件。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Post<T>(in T value) where T : struct
@@ -161,7 +170,7 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// Convenience API: Marks an event type as dirty in the Primary runtime.
+    /// 便捷 API：在 Primary Runtime 中将事件类型标记为脏。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void MarkDirty<T>() where T : struct
@@ -170,7 +179,7 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// Convenience API: Posts a latest event to the Primary runtime.
+    /// 便捷 API：向 Primary Runtime 投递最新值事件（合并模式）。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void PostLatest<T>(in T value) where T : struct
@@ -228,7 +237,7 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// Convenience API: Posts a coalesced event to the Primary runtime.
+    /// 便捷 API：向 Primary Runtime 投递合并事件。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void PostCoalesced<T>(in T value) where T : struct
@@ -237,7 +246,7 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// Convenience API: Creates a call target for the Primary runtime.
+    /// 便捷 API：创建指向 Primary Runtime 的调用目标。
     /// </summary>
     public static LayerRuntime.LayerCallTarget<TLayer> For<TLayer>() where TLayer : Layer
     {
@@ -247,7 +256,7 @@ public static class LayerHub
     }
 
     /// <summary>
-    /// Convenience API: Performs a call on the Primary runtime.
+    /// 便捷 API：在 Primary Runtime 上执行跨层调用。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static LBTask<TResponse> CallAsync<TLayer, TRequest, TResponse>(TRequest request,

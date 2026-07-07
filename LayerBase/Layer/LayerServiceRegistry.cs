@@ -3,6 +3,10 @@ using System.Reflection;
 
 namespace LayerBase.Layers;
 
+/// <summary>
+/// 全局 Layer 服务注册表。允许在 Layer 构建前注册自定义初始化逻辑。
+/// 用于跨 Layer 的服务注入和自动配置场景。
+/// </summary>
 public static class LayerServiceRegistry
 {
     private static readonly ConcurrentDictionary<Type, Action<Layer>> s_registrations = new();

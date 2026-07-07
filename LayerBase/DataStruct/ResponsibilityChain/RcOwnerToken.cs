@@ -1,5 +1,9 @@
 namespace LayerBase.Core.ResponsibilityChain;
 
+/// <summary>
+/// 责任链的所有权令牌。节点通过匹配此令牌来确认自己属于哪条链。
+/// 防止一个节点被添加到多个链中。
+/// </summary>
 public struct RcOwnerToken : IEquatable<RcOwnerToken>
 {
     public long Id;

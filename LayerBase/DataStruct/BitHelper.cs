@@ -5,6 +5,10 @@ using System.Runtime.CompilerServices;
 
 namespace LayerBase.Core.DataStruct;
 
+/// <summary>
+/// 位运算工具类。提供尾随零计数和向上取最接近的 2 的幂等操作。
+/// 在.NET Core 上使用内置的 BitOperations 以获得最佳性能。
+/// </summary>
 internal static class BitHelper
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

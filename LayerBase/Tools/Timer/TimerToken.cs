@@ -1,5 +1,9 @@
 namespace LayerBase.Tools.Timer;
 
+/// <summary>
+/// 定时任务令牌，用于标识和取消一个已注册的定时任务。
+/// 包含类型 ID、索引和版本号，通过版本号机制防止悬挂引用。
+/// </summary>
 public readonly struct TimerToken : IEquatable<TimerToken>
 {
     internal readonly int Index;
