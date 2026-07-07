@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LayerBase.Async;
@@ -14,7 +15,7 @@ namespace LayerBase.Core.Event;
 public sealed class EventCenter
 {
     private readonly ConcurrentDictionary<int, Action> _bucketCacheResetters = new();
-    private readonly ConcurrentDictionary<int, object> _eventBuckets = new();
+    private readonly ConcurrentDictionary<int, IEventBucketNonGeneric> _eventBuckets = new();
     private readonly object _lock = new();
     private int _isResetting;
 
@@ -91,6 +92,61 @@ public sealed class EventCenter
         GetBucket<T>().Remove(layerIndex, handleDelegate);
     }
 
+    #region Non-generic subscription path (IL2CPP-safe)
+
+    internal void SubscribeFlow(int layerIndex, object handler, Type eventType)
+    {
+        GetBucket(eventType).AddFlow(layerIndex, handler);
+    }
+
+    internal void SubscribeAsync(int layerIndex, object handler, Type eventType)
+    {
+        GetBucket(eventType).AddAsync(layerIndex, handler);
+    }
+
+    internal void SubscribeNotify(int layerIndex, object handler, Type eventType)
+    {
+        GetBucket(eventType).AddNotify(layerIndex, handler);
+    }
+
+    internal void Subscribe(int layerIndex, object handler, Type eventType)
+    {
+        GetBucket(eventType).AddSubscribe(layerIndex, handler);
+    }
+
+    internal void SubscribeParallel(int layerIndex, object handler, Type eventType,
+                                     Action<int, int, int, Exception> reportError)
+    {
+        GetBucket(eventType).AddParallel(layerIndex, handler, reportError);
+    }
+
+    internal void UnsubscribeFlow(int layerIndex, object handler, Type eventType)
+    {
+        GetBucket(eventType).RemoveFlow(layerIndex, handler);
+    }
+
+    internal void UnsubscribeAsync(int layerIndex, object handler, Type eventType)
+    {
+        GetBucket(eventType).RemoveAsync(layerIndex, handler);
+    }
+
+    internal void UnsubscribeNotify(int layerIndex, object handler, Type eventType)
+    {
+        GetBucket(eventType).RemoveNotify(layerIndex, handler);
+    }
+
+    internal void Unsubscribe(int layerIndex, object handler, Type eventType)
+    {
+        GetBucket(eventType).RemoveSubscribe(layerIndex, handler);
+    }
+
+    internal void UnsubscribeParallel(int layerIndex, object handler, Type eventType)
+    {
+        GetBucket(eventType).RemoveParallel(layerIndex, handler);
+    }
+
+    #endregion
+
     /// <summary>
     /// 派发同步事件。
     /// </summary>
@@ -121,7 +177,7 @@ public sealed class EventCenter
         lock (_lock)
         {
             foreach (var bucket in _eventBuckets.Values)
-                if (bucket is IResetable b)
+                if (bucket is IDisposable b)
                     b.Dispose();
             _eventBuckets.Clear();
             foreach (var resetter in _bucketCacheResetters.Values) resetter();
@@ -181,6 +237,23 @@ public sealed class EventCenter
         return bucket;
     }
 
+    private IEventBucketNonGeneric GetBucket(Type eventType)
+    {
+        var typeId = GetEventTypeId(eventType);
+        return _eventBuckets.GetOrAdd(typeId, _ =>
+        {
+            var bucketType = typeof(EventBucket<>).MakeGenericType(eventType);
+            return (IEventBucketNonGeneric)Activator.CreateInstance(bucketType, this);
+        });
+    }
+
+    private static int GetEventTypeId(Type eventType)
+    {
+        var idType = typeof(EventTypeId<>).MakeGenericType(eventType);
+        var idField = idType.GetField("Id", BindingFlags.Public | BindingFlags.Static);
+        return (int)idField!.GetValue(null)!;
+    }
+
     private static class BucketCache<T> where T : struct
     {
         public static EventBucket<T>? Instance;
@@ -191,7 +264,7 @@ public sealed class EventCenter
         void Reset();
     }
 
-    private sealed class EventBucket<T> : IResetable where T : struct
+    private sealed class EventBucket<T> : IResetable, IEventBucketNonGeneric where T : struct
     {
         private readonly object _lock = new();
         public readonly EventCenter? Owner;
@@ -748,6 +821,77 @@ public sealed class EventCenter
                 MarkDirty();
             }
         }
+
+        #region IEventBucketNonGeneric
+        void IEventBucketNonGeneric.AddFlow(int layerIndex, object handler)
+        {
+            if (handler is IEventHandler<T> h)
+                Add(layerIndex, h);
+            else
+                Add(layerIndex, (EventHandleDelegate<T>)handler);
+        }
+
+        void IEventBucketNonGeneric.AddAsync(int layerIndex, object handler)
+        {
+            if (handler is IEventHandlerAsync<T> h)
+                Add(layerIndex, h);
+            else
+                Add(layerIndex, (EventHandleDelegateAsync<T>)handler);
+        }
+
+        void IEventBucketNonGeneric.AddNotify(int layerIndex, object handler)
+        {
+            AddNotify(layerIndex, (EventNotifyDelegate<T>)handler);
+        }
+
+        void IEventBucketNonGeneric.AddSubscribe(int layerIndex, object handler)
+        {
+            AddSubscribe(layerIndex, (EventNotifyDelegate<T>)handler);
+        }
+
+        void IEventBucketNonGeneric.AddParallel(int layerIndex, object handler,
+                                                 Action<int, int, int, Exception> reportError)
+        {
+            if (handler is IEventHandler<T> h)
+                AddParallel(layerIndex, h, reportError);
+            else
+                AddParallel(layerIndex, (EventNotifyDelegate<T>)handler, reportError);
+        }
+
+        void IEventBucketNonGeneric.RemoveFlow(int layerIndex, object handler)
+        {
+            if (handler is IEventHandler<T> h)
+                Remove(layerIndex, h);
+            else if (handler is EventHandleDelegate<T> d)
+                Remove(layerIndex, d);
+        }
+
+        void IEventBucketNonGeneric.RemoveAsync(int layerIndex, object handler)
+        {
+            if (handler is IEventHandlerAsync<T> h)
+                Remove(layerIndex, h);
+            else if (handler is EventHandleDelegateAsync<T> d)
+                Remove(layerIndex, d);
+        }
+
+        void IEventBucketNonGeneric.RemoveNotify(int layerIndex, object handler)
+        {
+            RemoveNotify(layerIndex, (EventNotifyDelegate<T>)handler);
+        }
+
+        void IEventBucketNonGeneric.RemoveSubscribe(int layerIndex, object handler)
+        {
+            RemoveSubscribe(layerIndex, (EventNotifyDelegate<T>)handler);
+        }
+
+        void IEventBucketNonGeneric.RemoveParallel(int layerIndex, object handler)
+        {
+            if (handler is IEventHandler<T> h)
+                RemoveParallel(layerIndex, h);
+            else
+                RemoveParallel(layerIndex, (EventNotifyDelegate<T>)handler);
+        }
+        #endregion
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public EventHandledState Dispatch(in T value)

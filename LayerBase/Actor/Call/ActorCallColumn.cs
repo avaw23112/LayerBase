@@ -5,7 +5,7 @@ namespace LayerBase.Actor;
 
 internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
     ActorCallColumnRuntime
-    where TActor : class, IActor
+    where TActor : class, IActor, new()
     where TRequest : struct
     where TResponse : struct
 {

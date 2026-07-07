@@ -74,7 +74,7 @@ internal sealed class BehaviourArchetype
     }
 
     public TypedActorStorage<TActor> GetOrCreateStorage<TActor>(ActorTypeMeta<TActor> meta, ActorWorld world)
-        where TActor : class, IActor
+        where TActor : class, IActor, new()
     {
         if (_storages.Length > 0)
         {
@@ -208,7 +208,7 @@ internal sealed class BehaviourArchetype
     }
 
     internal bool TryGetStorage<TActor>(out TypedActorStorage<TActor>? storage)
-        where TActor : class, IActor
+        where TActor : class, IActor, new()
     {
         if (!TryGetStorage(out TypedStorageRuntime? rawStorage)
             || rawStorage is not TypedActorStorage<TActor> typedStorage)
@@ -371,7 +371,7 @@ internal sealed class BehaviourArchetype
     }
 
     internal void ForEachActor<TActor>(Action<TActor> action)
-        where TActor : class, IActor
+        where TActor : class, IActor, new()
     {
         for (int i = 0; i < _storages.Length; i++)
         {
@@ -383,7 +383,7 @@ internal sealed class BehaviourArchetype
     }
 
     internal void ForEachActor<TActor, TState>(ref TState state, ActorForEachAction<TActor, TState> action)
-        where TActor : class, IActor
+        where TActor : class, IActor, new()
     {
         for (int i = 0; i < _storages.Length; i++)
         {
@@ -395,7 +395,7 @@ internal sealed class BehaviourArchetype
     }
 
     internal void ForEachStorage<TActor, TState>(ref TState state, ActorStorageForEachAction<TActor, TState> action)
-        where TActor : class, IActor
+        where TActor : class, IActor, new()
     {
         for (int i = 0; i < _storages.Length; i++)
         {

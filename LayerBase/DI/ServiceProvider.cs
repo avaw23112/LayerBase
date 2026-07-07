@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq.Expressions;
 using System.Reflection;
 using LayerBase.DI.Options;
 using LayerBase.Layers;
@@ -17,6 +18,27 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
     private readonly Layer? _ownerLayer;
     private ResolutionContext? _activeResolutionContext;
     private int _disposed;
+
+    private static readonly ConcurrentDictionary<MemberInfo, Func<object, object?, object>> s_setterCache = new();
+    private static readonly ConcurrentDictionary<Type, bool> s_scannedTypes = new();
+
+    // 进程启动时检测是否支持 Expression.Compile（JIT）。
+    // true 表示可以使用编译委托（Windows / 启用了 JIT 的 Mono）；
+    // false 表示回退到 FieldInfo.SetValue（IL2CPP / AOT）。
+    private static readonly bool s_canCompileExpression;
+
+    static ServiceProvider()
+    {
+        try
+        {
+            Expression.Lambda<Action>(Expression.Empty()).Compile();
+            s_canCompileExpression = true;
+        }
+        catch
+        {
+            s_canCompileExpression = false;
+        }
+    }
 
     internal ServiceProvider(WorldServiceRoot worldRoot)
     {
@@ -275,19 +297,66 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
     {
         var t = instance.GetType();
 
+        if (s_scannedTypes.TryGetValue(t, out var hasMount) && !hasMount)
+            return;
+
+        var foundAny = false;
+
         foreach (var f in t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
         {
             if (f.GetCustomAttribute<MountAttribute>() == null) continue;
+            foundAny = true;
             var dep = GetServiceInternal(f.FieldType, context);
-            if (dep != null) f.SetValue(instance, dep);
+            if (dep != null)
+            {
+                var setter = s_setterCache.GetOrAdd(f, mi => CreateFieldSetter((FieldInfo)mi));
+                setter(instance, dep);
+            }
         }
 
         foreach (var p in t.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
         {
             if (p.GetCustomAttribute<MountAttribute>() == null || !p.CanWrite) continue;
+            foundAny = true;
             var dep = GetServiceInternal(p.PropertyType, context);
-            if (dep != null) p.SetValue(instance, dep, null);
+            if (dep != null)
+            {
+                var setter = s_setterCache.GetOrAdd(p, mi => CreatePropertySetter((PropertyInfo)mi));
+                setter(instance, dep);
+            }
         }
+
+        s_scannedTypes[t] = foundAny;
+    }
+
+    private static Func<object, object?, object> CreateFieldSetter(FieldInfo field)
+    {
+        if (!s_canCompileExpression)
+            return (obj, val) => { field.SetValue(obj, val); return obj; };
+
+        var target = Expression.Parameter(typeof(object));
+        var value = Expression.Parameter(typeof(object));
+        var expr = Expression.Assign(
+            Expression.Field(Expression.Convert(target, field.DeclaringType!), field),
+            Expression.Convert(value, field.FieldType));
+        var lambda = Expression.Lambda<Action<object, object?>>(expr, target, value);
+        var compiled = lambda.Compile();
+        return (obj, val) => { compiled(obj, val); return obj; };
+    }
+
+    private static Func<object, object?, object> CreatePropertySetter(PropertyInfo property)
+    {
+        if (!s_canCompileExpression)
+            return (obj, val) => { property.SetValue(obj, val); return obj; };
+
+        var target = Expression.Parameter(typeof(object));
+        var value = Expression.Parameter(typeof(object));
+        var expr = Expression.Assign(
+            Expression.Property(Expression.Convert(target, property.DeclaringType!), property),
+            Expression.Convert(value, property.PropertyType));
+        var lambda = Expression.Lambda<Action<object, object?>>(expr, target, value);
+        var compiled = lambda.Compile();
+        return (obj, val) => { compiled(obj, val); return obj; };
     }
 
     private sealed class ResolutionContext

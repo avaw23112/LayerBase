@@ -8,7 +8,7 @@ using LayerBase.ECS.Projection;
 namespace LayerBase.Actor;
 
 internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
-    where TActor : class, IActor
+    where TActor : class, IActor, new()
 {
     // 全局 slot 计数器，确保不同 Actor 类型的 slotIndex 唯一
     private static int s_globalSlotCounter;

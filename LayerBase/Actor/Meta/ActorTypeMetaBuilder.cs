@@ -91,7 +91,7 @@ public sealed class ActorTypeMetaBuilder
 
     public void AddCallBehaviour<TActor, TRequest, TResponse>(
         ActorCallInvoker<TActor, TRequest, TResponse> invoker)
-        where TActor : class, IActor
+        where TActor : class, IActor, new()
         where TRequest : struct
         where TResponse : struct
     {

@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using LayerBase.Async;
 using LayerBase.Call;
@@ -19,15 +18,6 @@ namespace LayerBase.Layers;
 /// </summary>
 public abstract class Layer : Node, IDisposable
 {
-    #region Constants
-    // 反射方法句柄，用于自动绑定 IEventHandler 接口的事件订阅。
-    private static readonly MethodInfo s_bindInterfaceEventHandlerFlowMethod =
-        typeof(Layer).GetMethod(nameof(BindInterfaceEventHandlerFlow), BindingFlags.Instance | BindingFlags.NonPublic)!;
-
-    private static readonly MethodInfo s_bindInterfaceEventHandlerAsyncMethod =
-        typeof(Layer).GetMethod(nameof(BindInterfaceEventHandlerAsync), BindingFlags.Instance | BindingFlags.NonPublic)!;
-    #endregion
-
     #region External Dependencies
     // 服务集合，用于在 ConfigureServices 中累积服务描述符，最终生成 ServiceProvider。
     private readonly ServiceCollection _serviceCollection;
@@ -435,7 +425,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.SubscribeFlow(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeFlowToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Flow));
         }
         else
         {
@@ -450,7 +440,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.SubscribeNotify(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeNotifyToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Notify));
         }
         else
         {
@@ -465,7 +455,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.Subscribe(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Subscribe));
         }
         else
         {
@@ -480,7 +470,7 @@ public abstract class Layer : Node, IDisposable
         if (RouteIndex != -1 && OwnerContext != null)
         {
             OwnerContext.EventCenter.SubscribeAsync(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeDelegateAsyncToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Async));
         }
         else
         {
@@ -503,7 +493,7 @@ public abstract class Layer : Node, IDisposable
         {
             OwnerContext.EventCenter.SubscribeParallel(RouteIndex, handler,
                 reportError ?? OwnerContext.ReportLayerEventError);
-            _subscriptions.Add(UnsubscribeParallelToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
+            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Parallel));
         }
         else
         {
@@ -683,32 +673,18 @@ public abstract class Layer : Node, IDisposable
 
             if (genericDefinition == typeof(IEventHandler<>))
             {
-                s_bindInterfaceEventHandlerFlowMethod.MakeGenericMethod(typeArguments[0]).Invoke(this, [instance]);
+                OwnerContext.EventCenter.SubscribeFlow(RouteIndex, instance, typeArguments[0]);
+                _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Flow));
+                RecordSubscribedEvent(typeArguments[0]);
                 continue;
             }
             if (genericDefinition == typeof(IEventHandlerAsync<>))
             {
-                s_bindInterfaceEventHandlerAsyncMethod.MakeGenericMethod(typeArguments[0]).Invoke(this, [instance]);
+                OwnerContext.EventCenter.SubscribeAsync(RouteIndex, instance, typeArguments[0]);
+                _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Async));
+                RecordSubscribedEvent(typeArguments[0]);
             }
         }
-    }
-
-    private void BindInterfaceEventHandlerFlow<T>(object instance) where T : struct
-    {
-        if (OwnerContext == null || RouteIndex == -1) return;
-        var handler = (IEventHandler<T>)instance;
-        OwnerContext.EventCenter.SubscribeFlow(RouteIndex, handler);
-        _subscriptions.Add(UnsubscribeFlowHandlerToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
-        RecordSubscribedEvent(typeof(T));
-    }
-
-    private void BindInterfaceEventHandlerAsync<T>(object instance) where T : struct
-    {
-        if (OwnerContext == null || RouteIndex == -1) return;
-        var handler = (IEventHandlerAsync<T>)instance;
-        OwnerContext.EventCenter.SubscribeAsync(RouteIndex, handler);
-        _subscriptions.Add(UnsubscribeAsyncHandlerToken<T>.Rent(OwnerContext.EventCenter, RouteIndex, handler));
-        RecordSubscribedEvent(typeof(T));
     }
 
     private void AddActiveService(RegisteredService registration)
@@ -782,222 +758,57 @@ public abstract class Layer : Node, IDisposable
         public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
     }
 
-    // ── 以下 6 个 UnsubscribeToken 类为同一模式的对象池化实现 ──
-    // 每个类负责一种订阅类型的取消注册，在 Dispose 时调用 EventCenter 的对应 Unsubscribe 方法，
-    // 然后将自己归还到静态池中以减少 GC 压力。
+    private enum UnsubscribeKind { Flow, Async, Notify, Subscribe, Parallel }
 
     /// <summary>
-    /// 用于取消 Flow 委托事件订阅的 Token。Dispose 时自动从 EventCenter 取消注册并回收到对象池。
+    /// 非泛型 UnsubscribeToken，避免 IL2CPP 环境下的 MakeGenericMethod 问题。
+    /// Dispose 时根据 Kind 调用 EventCenter 对应的非泛型 Unsubscribe 方法。
     /// </summary>
-    private sealed class UnsubscribeFlowToken<T> : IDisposable where T : struct
+    private sealed class UnsubscribeToken : IDisposable
     {
-        private static readonly ConcurrentBag<UnsubscribeFlowToken<T>> Pool = new();
+        private static readonly ConcurrentBag<UnsubscribeToken> Pool = new();
         private EventCenter? _center;
-        private EventHandleDelegate<T>? _handler;
-        private int _disposed;
         private int _layerIndex;
+        private object? _handler;
+        private Type? _eventType;
+        private UnsubscribeKind _kind;
+        private int _disposed;
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            _center?.UnsubscribeFlow(_layerIndex, _handler!);
+            switch (_kind)
+            {
+                case UnsubscribeKind.Flow:
+                    _center?.UnsubscribeFlow(_layerIndex, _handler!, _eventType!);
+                    break;
+                case UnsubscribeKind.Async:
+                    _center?.UnsubscribeAsync(_layerIndex, _handler!, _eventType!);
+                    break;
+                case UnsubscribeKind.Notify:
+                    _center?.UnsubscribeNotify(_layerIndex, _handler!, _eventType!);
+                    break;
+                case UnsubscribeKind.Subscribe:
+                    _center?.Unsubscribe(_layerIndex, _handler!, _eventType!);
+                    break;
+                case UnsubscribeKind.Parallel:
+                    _center?.UnsubscribeParallel(_layerIndex, _handler!, _eventType!);
+                    break;
+            }
             _center = null;
             _handler = null;
+            _eventType = null;
             Pool.Add(this);
         }
 
-        public static UnsubscribeFlowToken<T> Rent(EventCenter c, int l, EventHandleDelegate<T> h)
+        public static UnsubscribeToken Rent(EventCenter c, int l, object handler, Type eventType, UnsubscribeKind kind)
         {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeFlowToken<T>();
+            if (!Pool.TryTake(out var t)) t = new UnsubscribeToken();
             t._center = c;
             t._layerIndex = l;
-            t._handler = h;
-            t._disposed = 0;
-            return t;
-        }
-    }
-
-    /// <summary>
-    /// 用于取消 Flow 接口事件订阅（IEventHandler）的 Token。Dispose 时自动取消注册并回收到对象池。
-    /// </summary>
-    private sealed class UnsubscribeFlowHandlerToken<T> : IDisposable where T : struct
-    {
-        private static readonly ConcurrentBag<UnsubscribeFlowHandlerToken<T>> Pool = new();
-        private EventCenter? _center;
-        private int _disposed;
-        private IEventHandler<T>? _handler;
-        private int _layerIndex;
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            _center?.UnsubscribeFlow(_layerIndex, _handler!);
-            _center = null;
-            _handler = null;
-            Pool.Add(this);
-        }
-
-        public static UnsubscribeFlowHandlerToken<T> Rent(EventCenter c, int l, IEventHandler<T> h)
-        {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeFlowHandlerToken<T>();
-            t._center = c;
-            t._layerIndex = l;
-            t._handler = h;
-            t._disposed = 0;
-            return t;
-        }
-    }
-
-    /// <summary>
-    /// 用于取消异步委托事件订阅的 Token。Dispose 时自动取消注册并回收到对象池。
-    /// </summary>
-    private sealed class UnsubscribeDelegateAsyncToken<T> : IDisposable where T : struct
-    {
-        private static readonly ConcurrentBag<UnsubscribeDelegateAsyncToken<T>> Pool = new();
-        private EventCenter? _center;
-        private EventHandleDelegateAsync<T>? _handler;
-        private int _disposed;
-        private int _layerIndex;
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            _center?.UnsubscribeAsync(_layerIndex, _handler!);
-            _center = null;
-            _handler = null;
-            Pool.Add(this);
-        }
-
-        public static UnsubscribeDelegateAsyncToken<T> Rent(EventCenter c, int l, EventHandleDelegateAsync<T> h)
-        {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeDelegateAsyncToken<T>();
-            t._center = c;
-            t._layerIndex = l;
-            t._handler = h;
-            t._disposed = 0;
-            return t;
-        }
-    }
-
-    /// <summary>
-    /// 用于取消异步接口事件订阅（IEventHandlerAsync）的 Token。Dispose 时自动取消注册并回收到对象池。
-    /// </summary>
-    private sealed class UnsubscribeAsyncHandlerToken<T> : IDisposable where T : struct
-    {
-        private static readonly ConcurrentBag<UnsubscribeAsyncHandlerToken<T>> Pool = new();
-        private EventCenter? _center;
-        private int _disposed;
-        private IEventHandlerAsync<T>? _handler;
-        private int _layerIndex;
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            _center?.UnsubscribeAsync(_layerIndex, _handler!);
-            _center = null;
-            _handler = null;
-            Pool.Add(this);
-        }
-
-        public static UnsubscribeAsyncHandlerToken<T> Rent(EventCenter c, int l, IEventHandlerAsync<T> h)
-        {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeAsyncHandlerToken<T>();
-            t._center = c;
-            t._layerIndex = l;
-            t._handler = h;
-            t._disposed = 0;
-            return t;
-        }
-    }
-
-    /// <summary>
-    /// 用于取消 Notify 事件订阅的 Token。Dispose 时自动取消注册并回收到对象池。
-    /// </summary>
-    private sealed class UnsubscribeNotifyToken<T> : IDisposable where T : struct
-    {
-        private static readonly ConcurrentBag<UnsubscribeNotifyToken<T>> Pool = new();
-        private EventCenter? _center;
-        private EventNotifyDelegate<T>? _handler;
-        private int _disposed;
-        private int _layerIndex;
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            _center?.UnsubscribeNotify(_layerIndex, _handler!);
-            _center = null;
-            _handler = null;
-            Pool.Add(this);
-        }
-
-        public static UnsubscribeNotifyToken<T> Rent(EventCenter c, int l, EventNotifyDelegate<T> h)
-        {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeNotifyToken<T>();
-            t._center = c;
-            t._layerIndex = l;
-            t._handler = h;
-            t._disposed = 0;
-            return t;
-        }
-    }
-
-    /// <summary>
-    /// 用于取消 Subscribe 事件订阅的 Token。Dispose 时自动取消注册并回收到对象池。
-    /// </summary>
-    private sealed class UnsubscribeToken<T> : IDisposable where T : struct
-    {
-        private static readonly ConcurrentBag<UnsubscribeToken<T>> Pool = new();
-        private EventCenter? _center;
-        private EventNotifyDelegate<T>? _handler;
-        private int _disposed;
-        private int _layerIndex;
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            _center?.Unsubscribe(_layerIndex, _handler!);
-            _center = null;
-            _handler = null;
-            Pool.Add(this);
-        }
-
-        public static UnsubscribeToken<T> Rent(EventCenter c, int l, EventNotifyDelegate<T> h)
-        {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeToken<T>();
-            t._center = c;
-            t._layerIndex = l;
-            t._handler = h;
-            t._disposed = 0;
-            return t;
-        }
-    }
-
-    /// <summary>
-    /// 用于取消 Parallel 事件订阅的 Token。Dispose 时自动取消注册并回收到对象池。
-    /// </summary>
-    private sealed class UnsubscribeParallelToken<T> : IDisposable where T : struct
-    {
-        private static readonly ConcurrentBag<UnsubscribeParallelToken<T>> Pool = new();
-        private EventCenter? _center;
-        private EventNotifyDelegate<T>? _handler;
-        private int _disposed;
-        private int _layerIndex;
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            _center?.UnsubscribeParallel(_layerIndex, _handler!);
-            _center = null;
-            _handler = null;
-            Pool.Add(this);
-        }
-
-        public static UnsubscribeParallelToken<T> Rent(EventCenter c, int l, EventNotifyDelegate<T> h)
-        {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeParallelToken<T>();
-            t._center = c;
-            t._layerIndex = l;
-            t._handler = h;
+            t._handler = handler;
+            t._eventType = eventType;
+            t._kind = kind;
             t._disposed = 0;
             return t;
         }

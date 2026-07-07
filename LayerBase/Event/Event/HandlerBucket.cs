@@ -7,6 +7,24 @@ using LayerBase.Tools.Job;
 
 namespace LayerBase.Core.Event;
 
+/// <summary>
+/// 非泛型事件桶接口，用于 IL2CPP 安全的非泛型订阅路径。
+/// 避免运行时 MakeGenericMethod，所有 EventBucket&lt;T&gt; 都实现此接口。
+/// </summary>
+internal interface IEventBucketNonGeneric
+{
+    void AddFlow(int layerIndex, object handler);
+    void AddAsync(int layerIndex, object handler);
+    void AddNotify(int layerIndex, object handler);
+    void AddSubscribe(int layerIndex, object handler);
+    void AddParallel(int layerIndex, object handler, Action<int, int, int, Exception> reportError);
+    void RemoveFlow(int layerIndex, object handler);
+    void RemoveAsync(int layerIndex, object handler);
+    void RemoveNotify(int layerIndex, object handler);
+    void RemoveSubscribe(int layerIndex, object handler);
+    void RemoveParallel(int layerIndex, object handler);
+}
+
 internal interface IHandlerBucket
 {
     void Reset();

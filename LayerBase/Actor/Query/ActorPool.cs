@@ -1,7 +1,7 @@
 namespace LayerBase.Actor;
 
 internal sealed class ActorPool<TActor>
-    where TActor : class, IActor
+    where TActor : class, IActor, new()
 {
     private readonly Stack<TActor> _items = new();
     private int _maxRetained = 1024;
@@ -19,7 +19,7 @@ internal sealed class ActorPool<TActor>
         }
         else
         {
-            actor = Activator.CreateInstance<TActor>();
+            actor = new TActor();
             _createdTotal++;
         }
 
@@ -65,7 +65,7 @@ internal sealed class ActorPool<TActor>
 
         while (_items.Count < count && _items.Count < _maxRetained)
         {
-            TActor actor = Activator.CreateInstance<TActor>();
+            TActor actor = new TActor();
             _createdTotal++;
 
             if (actor is IPooledActor pooled)
