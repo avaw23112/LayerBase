@@ -66,6 +66,21 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
         FlushSubmissionsCore();
     }
 
+    public void SetWorkerIdlePolicy(EcsWorkerIdleOptions options)
+    {
+        _worker.SetIdleOptions(options);
+    }
+
+    public void NotifyFrameStart()
+    {
+        _worker.NotifyFrameStart();
+    }
+
+    public void NotifyFrameEnd()
+    {
+        _worker.NotifyFrameEnd();
+    }
+
     public long FlushSubmissionsForTest()
     {
         return FlushSubmissionsCore();

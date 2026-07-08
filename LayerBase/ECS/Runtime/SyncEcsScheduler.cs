@@ -50,6 +50,18 @@ internal sealed class SyncEcsScheduler : IEcsWorkScheduler
     {
     }
 
+    public void SetWorkerIdlePolicy(EcsWorkerIdleOptions options)
+    {
+    }
+
+    public void NotifyFrameStart()
+    {
+    }
+
+    public void NotifyFrameEnd()
+    {
+    }
+
     public void Start()
     {
     }

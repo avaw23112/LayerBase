@@ -8,6 +8,12 @@ public interface IEcsScheduler : IDisposable
 
     void FlushSubmissions();
 
+    void SetWorkerIdlePolicy(EcsWorkerIdleOptions options);
+
+    void NotifyFrameStart();
+
+    void NotifyFrameEnd();
+
     void Start();
 
     void Stop();

@@ -1048,6 +1048,350 @@ public class EcsFrameBatchBenchmarks
     }
 }
 
+[MemoryDiagnoser]
+[CategoriesColumn]
+[RankColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class EcsIdlePolicyComparisonBenchmarks
+{
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+
+    private LayerRuntime _lowLatencyRuntime = null!;
+    private LayerRuntime _balancedRuntime = null!;
+    private LayerRuntime _powerSavingRuntime = null!;
+    private LayerRuntime _adaptiveRuntime = null!;
+    private AsyncEcsScheduler _powerSavingScheduler = null!;
+    private AsyncEcsScheduler _adaptiveScheduler = null!;
+    private NoopEcsWorkItem _noopWorkItem = null!;
+    private WakeProbeEcsWorkItem _wakeProbe = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        _lowLatencyRuntime = CreateRuntime(EcsWorkerIdleOptions.LowLatency());
+        _balancedRuntime = CreateRuntime(EcsWorkerIdleOptions.Balanced());
+        _powerSavingRuntime = CreateRuntime(EcsWorkerIdleOptions.PowerSaving());
+        _adaptiveRuntime = CreateRuntime(EcsWorkerIdleOptions.AdaptiveBalanced());
+        _powerSavingScheduler = (AsyncEcsScheduler)_powerSavingRuntime.EcsWorkScheduler;
+        _adaptiveScheduler = (AsyncEcsScheduler)_adaptiveRuntime.EcsWorkScheduler;
+        _noopWorkItem = new NoopEcsWorkItem();
+        _wakeProbe = new WakeProbeEcsWorkItem();
+
+        EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_lowLatencyRuntime, 1_000);
+        EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_balancedRuntime, 1_000);
+        EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_powerSavingRuntime, 1_000);
+        EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_adaptiveRuntime, 1_000);
+
+        WarmWorker(_lowLatencyRuntime);
+        WarmWorker(_balancedRuntime);
+        WarmWorker(_adaptiveRuntime);
+        _powerSavingScheduler.WaitWorkerParkedForTest(IdleTimeout);
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        LayerHub.Reset();
+    }
+
+    [IterationSetup(Target = nameof(LowLatency_WarmWorker_EndToEnd))]
+    public void PrepareLowLatencyWarmWorker()
+    {
+        WarmWorker(_lowLatencyRuntime);
+    }
+
+    [Benchmark(Description = "LowLatency WarmWorker EndToEnd")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.IdlePolicy", "LowLatency", "WarmWorker")]
+    public void LowLatency_WarmWorker_EndToEnd()
+    {
+        RunPlainQueryEndToEnd(_lowLatencyRuntime);
+    }
+
+    [IterationSetup(Target = nameof(Balanced_WarmWorker_EndToEnd))]
+    public void PrepareBalancedWarmWorker()
+    {
+        WarmWorker(_balancedRuntime);
+    }
+
+    [Benchmark(Description = "Balanced WarmWorker EndToEnd")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.IdlePolicy", "Balanced", "WarmWorker")]
+    public void Balanced_WarmWorker_EndToEnd()
+    {
+        RunPlainQueryEndToEnd(_balancedRuntime);
+    }
+
+    [IterationSetup(Target = nameof(PowerSaving_ColdWakeLatency))]
+    public void PreparePowerSavingColdWake()
+    {
+        _powerSavingScheduler.WaitWorkerParkedForTest(IdleTimeout);
+    }
+
+    [Benchmark(Description = "PowerSaving ColdWakeLatency")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.IdlePolicy", "PowerSaving", "ColdWake")]
+    public void PowerSaving_ColdWakeLatency()
+    {
+        _wakeProbe.Reset();
+        long submitted = Stopwatch.GetTimestamp();
+        _powerSavingScheduler.Schedule(_wakeProbe);
+        long fence = _powerSavingScheduler.FlushSubmissionsForTest();
+
+        SpinWait spin = default;
+        while (_wakeProbe.StartedTimestamp == 0)
+        {
+            spin.SpinOnce();
+        }
+
+        EcsBenchmarkSink.FloatValue =
+            (float)((_wakeProbe.StartedTimestamp - submitted) * 1_000_000.0 / Stopwatch.Frequency);
+        _powerSavingRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
+    [Benchmark(Description = "Adaptive IdleTransition")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.IdlePolicy", "Adaptive", "IdleTransition")]
+    public void Adaptive_IdleTransition()
+    {
+        _adaptiveRuntime.EcsScheduler.SetWorkerIdlePolicy(EcsWorkerIdleOptions.AdaptiveBalanced());
+        WarmWorker(_adaptiveRuntime);
+        _adaptiveRuntime.EcsScheduler.NotifyFrameStart();
+        RunPlainQueryEndToEnd(_adaptiveRuntime);
+        _adaptiveRuntime.EcsScheduler.NotifyFrameEnd();
+
+        for (int i = 0; i < 3; i++)
+        {
+            _adaptiveRuntime.EcsScheduler.NotifyFrameStart();
+            _adaptiveRuntime.EcsScheduler.NotifyFrameEnd();
+        }
+
+        _adaptiveScheduler.WaitWorkerParkedForTest(IdleTimeout);
+    }
+
+    private static LayerRuntime CreateRuntime(EcsWorkerIdleOptions options)
+    {
+        return EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async, options.Policy, options);
+    }
+
+    private void WarmWorker(LayerRuntime runtime)
+    {
+        var scheduler = (AsyncEcsScheduler)runtime.EcsWorkScheduler;
+        scheduler.Schedule(_noopWorkItem);
+        long fence = scheduler.FlushSubmissionsForTest();
+        runtime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
+    private static void RunPlainQueryEndToEnd(LayerRuntime runtime)
+    {
+        var job = new MoveWithWorkJob(0);
+        runtime.EcsWorld
+               .Query<BenchPosition, BenchVelocity>()
+               .ForEach(ref job);
+
+        long fence = runtime.FlushEcsSubmissionsForTest();
+        runtime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
+    private sealed class NoopEcsWorkItem : IEcsWorkItem
+    {
+        public string DebugName => "Noop";
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+        }
+    }
+
+    private sealed class WakeProbeEcsWorkItem : IEcsWorkItem
+    {
+        private long _startedTimestamp;
+
+        public string DebugName => "WakeProbe";
+
+        public long StartedTimestamp => Volatile.Read(ref _startedTimestamp);
+
+        public void Reset()
+        {
+            Volatile.Write(ref _startedTimestamp, 0);
+        }
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+            Volatile.Write(ref _startedTimestamp, Stopwatch.GetTimestamp());
+        }
+    }
+}
+
+[MemoryDiagnoser]
+[CategoriesColumn]
+[RankColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class EcsFrameLoopTailLatencyBenchmarks
+{
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+
+    private LayerRuntime _syncRuntime = null!;
+    private LayerRuntime _asyncRuntime = null!;
+    private AsyncEcsScheduler _asyncScheduler = null!;
+    private WakeProbeEcsWorkItem _wakeProbe = null!;
+    private long[] _frameTicks = null!;
+    private long[] _wakeTicks = null!;
+
+    [Params(1_000)]
+    public int EntityCount { get; set; }
+
+    [Params(0, 32)]
+    public int WorkIterations { get; set; }
+
+    [Params(120)]
+    public int FrameCount { get; set; }
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        _syncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Sync);
+        _asyncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async, EcsWorkerIdlePolicy.Adaptive);
+        _asyncScheduler = (AsyncEcsScheduler)_asyncRuntime.EcsWorkScheduler;
+        _wakeProbe = new WakeProbeEcsWorkItem();
+        _frameTicks = new long[FrameCount];
+        _wakeTicks = new long[FrameCount];
+        EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_syncRuntime, EntityCount);
+        EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_asyncRuntime, EntityCount);
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        LayerHub.Reset();
+    }
+
+    [Benchmark(Description = "Sync FrameLoop p95")]
+    [BenchmarkCategory("09.ECS.FrameLoopTail", "Sync", "p95")]
+    public void Sync_FrameLoop_p95()
+    {
+        MeasureSyncFrames();
+        EcsBenchmarkSink.FloatValue = PercentileMicroseconds(_frameTicks, 0.95);
+    }
+
+    [Benchmark(Description = "Async FrameLoop p95")]
+    [BenchmarkCategory("09.ECS.FrameLoopTail", "Async", "p95")]
+    public void Async_FrameLoop_p95()
+    {
+        MeasureAsyncFrames();
+        EcsBenchmarkSink.FloatValue = PercentileMicroseconds(_frameTicks, 0.95);
+    }
+
+    [Benchmark(Description = "Async FrameLoop p99")]
+    [BenchmarkCategory("09.ECS.FrameLoopTail", "Async", "p99")]
+    public void Async_FrameLoop_p99()
+    {
+        MeasureAsyncFrames();
+        EcsBenchmarkSink.FloatValue = PercentileMicroseconds(_frameTicks, 0.99);
+    }
+
+    [Benchmark(Description = "WorkerWake p95")]
+    [BenchmarkCategory("09.ECS.FrameLoopTail", "WorkerWake", "p95")]
+    public void WorkerWake_p95()
+    {
+        MeasureWorkerWakeFrames();
+        EcsBenchmarkSink.FloatValue = PercentileMicroseconds(_wakeTicks, 0.95);
+    }
+
+    [Benchmark(Description = "WorkerWake p99")]
+    [BenchmarkCategory("09.ECS.FrameLoopTail", "WorkerWake", "p99")]
+    public void WorkerWake_p99()
+    {
+        MeasureWorkerWakeFrames();
+        EcsBenchmarkSink.FloatValue = PercentileMicroseconds(_wakeTicks, 0.99);
+    }
+
+    private void MeasureSyncFrames()
+    {
+        for (int frame = 0; frame < FrameCount; frame++)
+        {
+            long start = Stopwatch.GetTimestamp();
+            var job = new MoveWithWorkJob(WorkIterations);
+            _syncRuntime.EcsWorld
+                        .Query<BenchPosition, BenchVelocity>()
+                        .ForEach(ref job);
+            _syncRuntime.Pump(0.016f);
+            _frameTicks[frame] = Stopwatch.GetTimestamp() - start;
+        }
+    }
+
+    private void MeasureAsyncFrames()
+    {
+        for (int frame = 0; frame < FrameCount; frame++)
+        {
+            long start = Stopwatch.GetTimestamp();
+            var job = new MoveWithWorkJob(WorkIterations);
+            _asyncRuntime.EcsWorld
+                         .Query<BenchPosition, BenchVelocity>()
+                         .ForEach(ref job);
+
+            long fence = _asyncRuntime.FlushEcsSubmissionsForTest();
+            _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
+            _asyncRuntime.Pump(0.016f);
+            _frameTicks[frame] = Stopwatch.GetTimestamp() - start;
+        }
+    }
+
+    private void MeasureWorkerWakeFrames()
+    {
+        for (int frame = 0; frame < FrameCount; frame++)
+        {
+            _wakeProbe.Reset();
+            long submitted = Stopwatch.GetTimestamp();
+            _asyncScheduler.Schedule(_wakeProbe);
+            long fence = _asyncScheduler.FlushSubmissionsForTest();
+
+            SpinWait spin = default;
+            while (_wakeProbe.StartedTimestamp == 0)
+            {
+                spin.SpinOnce();
+            }
+
+            _wakeTicks[frame] = _wakeProbe.StartedTimestamp - submitted;
+            _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
+            _asyncRuntime.Pump(0.016f);
+        }
+    }
+
+    private static float PercentileMicroseconds(long[] values, double percentile)
+    {
+        Array.Sort(values);
+        int index = Math.Clamp(
+            (int)Math.Ceiling(percentile * values.Length) - 1,
+            0,
+            values.Length - 1);
+
+        return (float)(values[index] * 1_000_000.0 / Stopwatch.Frequency);
+    }
+
+    private sealed class WakeProbeEcsWorkItem : IEcsWorkItem
+    {
+        private long _startedTimestamp;
+
+        public string DebugName => "WakeProbe";
+
+        public long StartedTimestamp => Volatile.Read(ref _startedTimestamp);
+
+        public void Reset()
+        {
+            Volatile.Write(ref _startedTimestamp, 0);
+        }
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+            Volatile.Write(ref _startedTimestamp, Stopwatch.GetTimestamp());
+        }
+    }
+}
+
 public struct BenchPosition : IComponent
 {
     public float X;
@@ -1195,14 +1539,16 @@ internal static class EcsBenchmarkWorldFactory
 {
     public static LayerRuntime CreateRuntime(
         EcsExecutionMode mode,
-        EcsWorkerIdlePolicy idlePolicy = EcsWorkerIdlePolicy.LowLatency)
+        EcsWorkerIdlePolicy idlePolicy = EcsWorkerIdlePolicy.LowLatency,
+        EcsWorkerIdleOptions? idleOptions = null)
     {
         return LayerHub.CreateLayers()
                        .Push(new EcsBenchmarkLayer())
                        .SetEcsOptions(new EcsRuntimeOptions(
                            mode,
                            maxResultsDrainPerPump: int.MaxValue,
-                           workerIdlePolicy: idlePolicy))
+                           workerIdlePolicy: idlePolicy,
+                           workerIdleOptions: idleOptions))
                        .Build();
     }
 

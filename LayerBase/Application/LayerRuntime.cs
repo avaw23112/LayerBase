@@ -222,7 +222,15 @@ public sealed partial class LayerRuntime : IDisposable
                 ex => ReportLayerEventError(-1, "System", "Completion", ex));
         }
 
-        PumpCore(deltaTime);
+        EcsScheduler?.NotifyFrameStart();
+        try
+        {
+            PumpCore(deltaTime);
+        }
+        finally
+        {
+            EcsScheduler?.NotifyFrameEnd();
+        }
     }
 
     private void PumpCore(float deltaTime)
