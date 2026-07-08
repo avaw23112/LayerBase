@@ -7,6 +7,7 @@ using LayerBase.Core.EventHandler;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.DI.Options;
+using LayerBase.ECS;
 using LayerBase.Event.Delay;
 using LayerBase.Snap;
 
@@ -298,8 +299,18 @@ public abstract class Layer : Node, IDisposable
     /// <summary>构建生命周期：收集 IInitializable/IUpdate/IFixedUpdate 等接口实现并分类存储。</summary>
     internal void LifecycleBuild()
     {
+        if (this is IGeneratedEcsQueryRegistrar layerRegistrar)
+        {
+            layerRegistrar.RegisterGeneratedEcsQueries(OwnerContext!);
+        }
+
         foreach (var resolved in _resolvedServices)
         {
+            if (resolved.Instance is IGeneratedEcsQueryRegistrar registrar)
+            {
+                registrar.RegisterGeneratedEcsQueries(OwnerContext!);
+            }
+
             if (resolved.Instance is IInitializable init) init.Initialize();
             if (resolved.Instance is IUpdate up) _serviceUpdates.Add(up);
             if (resolved.Instance is IFixedUpdate fixedUpdate) _fixedUpdates.Add(fixedUpdate);

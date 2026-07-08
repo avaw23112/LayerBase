@@ -20,4 +20,8 @@ internal interface IEcsWorkScheduler : IEcsScheduler
     void Schedule(IEcsWorkItem item);
 
     void WaitIdleForTest(TimeSpan timeout);
+
+    long FlushSubmissionsForTest();
+
+    void WaitFenceForTest(long fence, TimeSpan timeout);
 }

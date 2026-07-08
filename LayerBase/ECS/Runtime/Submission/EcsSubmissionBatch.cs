@@ -2,36 +2,53 @@ namespace LayerBase.ECS.Runtime.Submission;
 
 internal sealed class EcsSubmissionBatch
 {
-    private IEcsWorkItem[] _items;
+    private EcsSubmissionEntry[] _entries;
     private int _count;
 
     public EcsSubmissionBatch(int capacity)
     {
-        _items = new IEcsWorkItem[Math.Max(1, capacity)];
+        _entries = new EcsSubmissionEntry[Math.Max(1, capacity)];
+        JobArena = new EcsJobArena(capacity * 64);
     }
+
+    public EcsJobArena JobArena { get; }
 
     public int Count => _count;
 
+    public long Sequence { get; set; }
+
     public void Add(IEcsWorkItem item)
     {
+        AddEntry(EcsSubmissionEntry.FromItem(item));
+    }
+
+    public void AddRecord(in EcsWorkRecord record)
+    {
+        AddEntry(EcsSubmissionEntry.FromRecord(in record));
+    }
+
+    private void AddEntry(in EcsSubmissionEntry entry)
+    {
         int index = _count;
-        if ((uint)index >= (uint)_items.Length)
+        if ((uint)index >= (uint)_entries.Length)
         {
-            Array.Resize(ref _items, _items.Length * 2);
+            Array.Resize(ref _entries, _entries.Length * 2);
         }
 
-        _items[index] = item;
+        _entries[index] = entry;
         _count = index + 1;
     }
 
-    public ReadOnlySpan<IEcsWorkItem> AsSpan()
+    public ReadOnlySpan<EcsSubmissionEntry> AsSpan()
     {
-        return _items.AsSpan(0, _count);
+        return _entries.AsSpan(0, _count);
     }
 
     public void Clear()
     {
-        Array.Clear(_items, 0, _count);
+        Array.Clear(_entries, 0, _count);
+        JobArena.Reset();
         _count = 0;
+        Sequence = 0;
     }
 }

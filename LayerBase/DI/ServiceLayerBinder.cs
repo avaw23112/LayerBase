@@ -107,6 +107,8 @@ internal static class ServiceLayerBinder
     /// </summary>
     private static ConditionalWeakTable<object, ServiceLayerBinding> s_bindingMap = new();
 
+    private static readonly object s_bindingLock = new();
+
     /// <summary>
     /// 当前绑定版本号。
     ///
@@ -121,7 +123,10 @@ internal static class ServiceLayerBinder
     /// </summary>
     public static void Reset()
     {
-        s_bindingMap = new ConditionalWeakTable<object, ServiceLayerBinding>();
+        lock (s_bindingLock)
+        {
+            s_bindingMap = new ConditionalWeakTable<object, ServiceLayerBinding>();
+        }
 
         unchecked
         {
@@ -141,7 +146,10 @@ internal static class ServiceLayerBinder
             accessor.__LayerBaseBinding = null;
         }
 
-        s_bindingMap.Remove(service);
+        lock (s_bindingLock)
+        {
+            s_bindingMap.Remove(service);
+        }
 
         if (service is IInternalLayerContext internalContext)
         {
@@ -246,8 +254,11 @@ internal static class ServiceLayerBinder
         }
         else
         {
-            s_bindingMap.Remove(service);
-            s_bindingMap.Add(service, binding);
+            lock (s_bindingLock)
+            {
+                s_bindingMap.Remove(service);
+                s_bindingMap.Add(service, binding);
+            }
         }
     }
 

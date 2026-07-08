@@ -10,6 +10,7 @@ using LayerBase.Actor;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 using LayerBase.ECS.Runtime;
+using LayerBase.ECS.Runtime.Submission;
 
 namespace LayerBase.ECS.Projection.Flow;
 
@@ -22,10 +23,16 @@ internal static class ProjectionExecutor0
         ProjectionForEach<TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -178,10 +185,16 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, <#= dName #><<#= evtG #>> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -315,10 +328,16 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         ProjectionForEach<<#= compG #>, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -363,11 +382,30 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         ref TJob job)
         where TJob : struct, IQueryJob<<#= compG #>>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -379,6 +417,40 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<<#= compG #>>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<<#= compG #>>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<#= compGP #>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<<#= compG #>>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -427,11 +499,20 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob<#= c #>x1<<#= compG #>, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -677,10 +758,16 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
 {
     public static void Post(World world, Query query, ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -738,11 +825,20 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
         ref TJob job)
         where TJob : struct, IProjectionJob<#= c #>x<#= e #><<#= allG #>>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }

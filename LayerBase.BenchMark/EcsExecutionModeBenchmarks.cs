@@ -25,17 +25,27 @@ namespace Benchmarks;
 public class EcsSpscBatchBenchmarks
 {
     private SpscRing<EcsSubmissionBatch> _ring = null!;
+    private SpscRing<EcsResultBatch> _resultRing = null!;
     private EcsSubmissionBatch _batch = null!;
     private EcsSubmissionBatch _recordBatch = null!;
     private NoopEcsWorkItem _workItem = null!;
+    private SmallArenaJob _arenaJob;
+    private EcsResultBatch _resultBatch = null!;
+    private EcsResultBatch _recordResultBatch = null!;
+    private NoopEcsResultItem _resultItem = null!;
 
     [GlobalSetup]
     public void Setup()
     {
         _ring = new SpscRing<EcsSubmissionBatch>(1024);
+        _resultRing = new SpscRing<EcsResultBatch>(1024);
         _batch = new EcsSubmissionBatch(1);
         _recordBatch = new EcsSubmissionBatch(1024);
         _workItem = new NoopEcsWorkItem();
+        _arenaJob = new SmallArenaJob(16);
+        _resultBatch = new EcsResultBatch(1);
+        _recordResultBatch = new EcsResultBatch(1024);
+        _resultItem = new NoopEcsResultItem();
     }
 
     [Benchmark(OperationsPerInvoke = 1024, Description = "Raw SPSC Batch RoundTrip - 1024")]
@@ -61,12 +71,68 @@ public class EcsSpscBatchBenchmarks
         _recordBatch.Clear();
     }
 
+    [Benchmark(OperationsPerInvoke = 1024, Description = "SubmissionBatch Record WorkRecord - 1024")]
+    [BenchmarkCategory("07.ECS.SPSC", "SubmissionBatchRecord")]
+    public void SubmissionBatch_RecordWorkRecord_1024()
+    {
+        for (int i = 0; i < 1024; i++)
+        {
+            int jobOffset = _recordBatch.JobArena.Store(in _arenaJob);
+            var record = new EcsWorkRecord(0, null!, null, jobOffset);
+            _recordBatch.AddRecord(in record);
+        }
+
+        _recordBatch.Clear();
+    }
+
+    [Benchmark(OperationsPerInvoke = 1024, Description = "Raw SPSC ResultBatch RoundTrip - 1024")]
+    [BenchmarkCategory("07.ECS.SPSC", "RawSpscResultBatchEnqueue")]
+    public void RawSpscResultBatchRoundTrip_1024()
+    {
+        for (int i = 0; i < 1024; i++)
+        {
+            _resultRing.TryEnqueue(_resultBatch);
+            _resultRing.TryDequeue(out _);
+        }
+    }
+
+    [Benchmark(OperationsPerInvoke = 1024, Description = "ResultBatch Record ResultItem - 1024")]
+    [BenchmarkCategory("07.ECS.SPSC", "ResultBatchRecord")]
+    public void ResultBatch_RecordResultItem_1024()
+    {
+        for (int i = 0; i < 1024; i++)
+        {
+            _recordResultBatch.Add(_resultItem);
+        }
+
+        _recordResultBatch.Clear(disposeItems: false);
+    }
+
     private sealed class NoopEcsWorkItem : IEcsWorkItem
     {
         public string DebugName => "Noop";
 
         public void Execute(World world, EcsResultQueue results)
         {
+        }
+    }
+
+    private sealed class NoopEcsResultItem : IEcsResultItem
+    {
+        public string DebugName => "Noop";
+
+        public void Apply(LayerRuntime runtime)
+        {
+        }
+    }
+
+    private readonly struct SmallArenaJob
+    {
+        private readonly int _workIterations;
+
+        public SmallArenaJob(int workIterations)
+        {
+            _workIterations = workIterations;
         }
     }
 }
@@ -133,6 +199,7 @@ public class EcsExecutionModeBenchmarks
     }
 
     [Benchmark(Description = "Async PlainQuery EndToEnd")]
+    [InvocationCount(1)]
     [BenchmarkCategory("07.ECS.ExecutionMode", "PlainQuery", "AsyncEndToEnd")]
     public void Async_PlainQuery_EndToEnd()
     {
@@ -141,6 +208,318 @@ public class EcsExecutionModeBenchmarks
                      .Query<BenchPosition, BenchVelocity>()
                      .ForEach(ref job);
 
+        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+    }
+}
+
+[MemoryDiagnoser]
+[CategoriesColumn]
+[RankColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class EcsAsyncSubmitBoundaryBenchmarks
+{
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+
+    private SpscRing<EcsSubmissionBatch> _rawRing = null!;
+    private EcsSubmissionBatch _batch = null!;
+    private EcsSubmissionBatch _recordBatch = null!;
+    private EcsWorkRecord _record;
+    private MoveWithWorkJob _job;
+    private LayerRuntime _runtime = null!;
+    private AsyncEcsScheduler _scheduler = null!;
+    private NoopEcsWorkItem _noopWorkItem = null!;
+    private AutoResetEvent _signal = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        _rawRing = new SpscRing<EcsSubmissionBatch>(1024);
+        _batch = new EcsSubmissionBatch(1);
+        _recordBatch = new EcsSubmissionBatch(1024);
+        _record = new EcsWorkRecord(0, null!, null, 0);
+        _job = new MoveWithWorkJob(0);
+        _runtime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async);
+        EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_runtime, 1_000);
+        _scheduler = (AsyncEcsScheduler)_runtime.EcsWorkScheduler;
+        _noopWorkItem = new NoopEcsWorkItem();
+        _signal = new AutoResetEvent(false);
+
+        var warmupJob = new MoveWithWorkJob(0);
+        _runtime.EcsWorld
+                .Query<BenchPosition, BenchVelocity>()
+                .ForEach(ref warmupJob);
+        _runtime.WaitEcsIdleForTest(IdleTimeout);
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        _signal.Dispose();
+        LayerHub.Reset();
+    }
+
+    [IterationSetup(Target = nameof(RawSpscBatchEnqueueBenchmark))]
+    public void ResetRawSpscBatchEnqueue()
+    {
+        _rawRing = new SpscRing<EcsSubmissionBatch>(1024);
+    }
+
+    [Benchmark(Description = "RawSpscBatchEnqueueBenchmark")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "RawSpsc", "SubmitOnly")]
+    public void RawSpscBatchEnqueueBenchmark()
+    {
+        _rawRing.TryEnqueue(_batch);
+    }
+
+    [Benchmark(OperationsPerInvoke = 1024, Description = "SubmissionBatchAddRecordBenchmark")]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Record", "SubmitOnly")]
+    public void SubmissionBatchAddRecordBenchmark()
+    {
+        for (int i = 0; i < 1024; i++)
+        {
+            _recordBatch.AddRecord(in _record);
+        }
+
+        _recordBatch.Clear();
+    }
+
+    [Benchmark(OperationsPerInvoke = 1024, Description = "JobArenaStoreBenchmark")]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Record", "SubmitOnly")]
+    public void JobArenaStoreBenchmark()
+    {
+        for (int i = 0; i < 1024; i++)
+        {
+            _recordBatch.JobArena.Store(in _job);
+        }
+
+        _recordBatch.Clear();
+    }
+
+    [Benchmark(OperationsPerInvoke = 1024, Description = "RecordPlainQueryOnlyBenchmark")]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Record", "SubmitOnly")]
+    public void RecordPlainQueryOnlyBenchmark()
+    {
+        for (int i = 0; i < 1024; i++)
+        {
+            int jobOffset = _recordBatch.JobArena.Store(in _job);
+            var record = new EcsWorkRecord(0, null!, null, jobOffset);
+            _recordBatch.AddRecord(in record);
+        }
+
+        _recordBatch.Clear();
+    }
+
+    [IterationSetup(Target = nameof(FlushSubmissionsOnlyBenchmark))]
+    public void PrepareFlushSubmissionsOnly()
+    {
+        _scheduler.Schedule(_noopWorkItem);
+    }
+
+    [Benchmark(Description = "FlushSubmissionsOnlyBenchmark")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Flush", "Signal")]
+    public void FlushSubmissionsOnlyBenchmark()
+    {
+        _scheduler.FlushSubmissions();
+    }
+
+    [IterationCleanup(Target = nameof(FlushSubmissionsOnlyBenchmark))]
+    public void CleanupFlushSubmissionsOnly()
+    {
+        _runtime.WaitEcsIdleForTest(IdleTimeout);
+    }
+
+    [Benchmark(Description = "QueryFlowAsyncForEachBenchmark")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "QueryFlow", "SubmitOnly")]
+    public void QueryFlowAsyncForEachBenchmark()
+    {
+        var job = new MoveWithWorkJob(0);
+        _runtime.EcsWorld
+                .Query<BenchPosition, BenchVelocity>()
+                .ForEach(ref job);
+    }
+
+    [IterationCleanup(Target = nameof(QueryFlowAsyncForEachBenchmark))]
+    public void CleanupQueryFlowAsyncForEach()
+    {
+        _runtime.WaitEcsIdleForTest(IdleTimeout);
+    }
+
+    [Benchmark(Description = "SignalOnlyBenchmark")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Signal")]
+    public void SignalOnlyBenchmark()
+    {
+        _signal.Set();
+    }
+
+    [Benchmark(Description = "EndToEndFenceBenchmark")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Fence", "EndToEnd")]
+    public void EndToEndFenceBenchmark()
+    {
+        var job = new MoveWithWorkJob(0);
+        _runtime.EcsWorld
+                .Query<BenchPosition, BenchVelocity>()
+                .ForEach(ref job);
+
+        long fence = _runtime.FlushEcsSubmissionsForTest();
+        _runtime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
+    private sealed class NoopEcsWorkItem : IEcsWorkItem
+    {
+        public string DebugName => "Noop";
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+        }
+    }
+}
+
+[MemoryDiagnoser]
+[CategoriesColumn]
+[RankColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class EcsPlainQuerySubmitHotPathBenchmarks
+{
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+
+    private LayerRuntime _asyncRuntime = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        _asyncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async);
+        EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_asyncRuntime, 1_000);
+
+        var warmupJob = new MoveWithWorkJob(0);
+        _asyncRuntime.EcsWorld
+                     .Query<BenchPosition, BenchVelocity>()
+                     .ForEach(ref warmupJob);
+        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        LayerHub.Reset();
+    }
+
+    [Benchmark(Description = "Async PlainQuery SubmitOnly HotPath")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.ExecutionMode", "PlainQuery", "AsyncSubmit", "HotPath")]
+    public void Async_PlainQuery_SubmitOnly_HotPath()
+    {
+        var job = new MoveWithWorkJob(0);
+        _asyncRuntime.EcsWorld
+                     .Query<BenchPosition, BenchVelocity>()
+                     .ForEach(ref job);
+    }
+
+    [IterationCleanup(Target = nameof(Async_PlainQuery_SubmitOnly_HotPath))]
+    public void CleanupAsyncPlainSubmitOnly()
+    {
+        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+    }
+}
+
+[MemoryDiagnoser]
+[CategoriesColumn]
+[RankColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class EcsPlainQuerySubmitPathBenchmarks
+{
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+
+    private LayerRuntime _asyncRuntime = null!;
+    private int _plainQueryId;
+    private GeneratedPlainQueryBenchService _generatedService = null!;
+
+    [Params(0, 8, 32)]
+    public int WorkIterations { get; set; }
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        _asyncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async);
+        EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_asyncRuntime, 1_000);
+        _plainQueryId = _asyncRuntime.EcsQueryRegistry.GetOrCreate<BenchPosition, BenchVelocity>();
+        _generatedService = new GeneratedPlainQueryBenchService();
+        ((IGeneratedEcsQueryRegistrar)_generatedService).RegisterGeneratedEcsQueries(_asyncRuntime);
+
+        var warmupJob = new MoveWithWorkJob(0);
+        _asyncRuntime.EcsWorld
+                     .Query<BenchPosition, BenchVelocity>()
+                     .ForEach(ref warmupJob);
+        _asyncRuntime.EcsScheduler.SubmitPlainQuery<MoveWithWorkJob, BenchPosition, BenchVelocity>(
+            _plainQueryId,
+            null,
+            in warmupJob);
+        _generatedService.GeneratedPlainMove(0);
+        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        LayerHub.Reset();
+    }
+
+    [Benchmark(Description = "Async PublicQueryApi SubmitOnly")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.SubmitPath", "PublicQueryApi", "SubmitOnly")]
+    public void Async_PublicQueryApi_SubmitOnly()
+    {
+        var job = new MoveWithWorkJob(WorkIterations);
+        _asyncRuntime.EcsWorld
+                     .Query<BenchPosition, BenchVelocity>()
+                     .ForEach(ref job);
+    }
+
+    [IterationCleanup(Target = nameof(Async_PublicQueryApi_SubmitOnly))]
+    public void CleanupPublicQueryApiSubmitOnly()
+    {
+        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+    }
+
+    [Benchmark(Description = "Async DirectSubmit SubmitOnly")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.SubmitPath", "DirectSubmit", "SubmitOnly")]
+    public void Async_DirectSubmit_SubmitOnly()
+    {
+        var job = new MoveWithWorkJob(WorkIterations);
+        _asyncRuntime.EcsScheduler.SubmitPlainQuery<MoveWithWorkJob, BenchPosition, BenchVelocity>(
+            _plainQueryId,
+            null,
+            in job);
+    }
+
+    [IterationCleanup(Target = nameof(Async_DirectSubmit_SubmitOnly))]
+    public void CleanupDirectSubmitOnly()
+    {
+        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+    }
+
+    [Benchmark(Description = "Async GeneratedQuery SubmitOnly")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.SubmitPath", "GeneratedQuery", "SubmitOnly")]
+    public void Async_GeneratedQuery_SubmitOnly()
+    {
+        _generatedService.GeneratedPlainMove(WorkIterations);
+    }
+
+    [IterationCleanup(Target = nameof(Async_GeneratedQuery_SubmitOnly))]
+    public void CleanupGeneratedQuerySubmitOnly()
+    {
         _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
     }
 }
@@ -442,6 +821,29 @@ public readonly struct MoveWithWorkJob : IQueryJob<BenchPosition, BenchVelocity>
         float y = position.Y + velocity.Y;
 
         for (int i = 0; i < _workIterations; i++)
+        {
+            x = (x * 1.0001f) + velocity.X;
+            y = (y * 0.9999f) + velocity.Y;
+        }
+
+        position.X = x;
+        position.Y = y;
+    }
+}
+
+public sealed partial class GeneratedPlainQueryBenchService
+{
+    [Query]
+    [EntryPoint(nameof(GeneratedPlainMove))]
+    private static void OnGeneratedPlainMove(
+        int workIterations,
+        ref BenchPosition position,
+        in BenchVelocity velocity)
+    {
+        float x = position.X + velocity.X;
+        float y = position.Y + velocity.Y;
+
+        for (int i = 0; i < workIterations; i++)
         {
             x = (x * 1.0001f) + velocity.X;
             y = (y * 0.9999f) + velocity.Y;

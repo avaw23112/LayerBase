@@ -297,6 +297,27 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         sb.AppendLine($"    {BuildPartialClassDeclaration(classSymbol)}");
         sb.AppendLine("    {");
 
+        sb.AppendLine("        private global::LayerBase.LayerRuntime __Runtime = null!;");
+        foreach (var method in methods)
+        {
+            sb.AppendLine($"        private int __{method.EntryPointName}QueryId;");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("        void global::LayerBase.ECS.IGeneratedEcsQueryRegistrar.RegisterGeneratedEcsQueries(");
+        sb.AppendLine("            global::LayerBase.LayerRuntime runtime)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            __Runtime = runtime;");
+        sb.AppendLine();
+        foreach (var method in methods)
+        {
+            string compGeneric = BuildComponentGenericArguments(method);
+            sb.AppendLine($"            __{method.EntryPointName}QueryId = runtime.EcsQueryRegistry.GetOrCreate<{compGeneric}>();");
+        }
+
+        sb.AppendLine("        }");
+        sb.AppendLine();
+
         foreach (var method in methods)
         {
             GenerateMethodSource(sb, method);
@@ -343,9 +364,16 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         sb.AppendLine($"            var job = new __{method.EntryPointName}Job({inputArgs});");
         sb.AppendLine();
-        sb.AppendLine("            global::LayerBase.ServiceECSExtensions");
-        sb.AppendLine($"                .Query<{compGeneric}>(this)");
-        sb.AppendLine("                .ForEach(ref job);");
+        sb.AppendLine("            if (__Runtime is null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                throw new global::System.InvalidOperationException(\"Generated ECS queries are not registered.\");");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            __Runtime.EcsScheduler");
+        sb.AppendLine($"                .SubmitPlainQuery<__{method.EntryPointName}Job, {compGeneric}>(");
+        sb.AppendLine($"                    __{method.EntryPointName}QueryId,");
+        sb.AppendLine("                    null,");
+        sb.AppendLine("                    in job);");
     }
 
     private static void GenerateBringInvocation(StringBuilder sb, QueryMethodInfo method)
@@ -356,8 +384,24 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         sb.AppendLine($"            var job = new __{method.EntryPointName}Job({inputArgs});");
         sb.AppendLine();
-        sb.AppendLine("            global::LayerBase.ServiceECSExtensions");
-        sb.AppendLine($"                .Query<{compGeneric}>(this)");
+        sb.AppendLine("            if (__Runtime is null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                throw new global::System.InvalidOperationException(\"Generated ECS queries are not registered.\");");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+
+        if (method.BringEventTypes.Length == 1)
+        {
+            sb.AppendLine("            __Runtime.EcsScheduler");
+            sb.AppendLine($"                .SubmitBringQuery<{eventGeneric}, __{method.EntryPointName}Job, {compGeneric}>(");
+            sb.AppendLine($"                    __{method.EntryPointName}QueryId,");
+            sb.AppendLine("                    null,");
+            sb.AppendLine("                    in job);");
+            return;
+        }
+
+        sb.AppendLine("            __Runtime.EcsWorld");
+        sb.AppendLine($"                .Query<{compGeneric}>()");
         sb.AppendLine($"                .Bring<{eventGeneric}>()");
         sb.AppendLine("                .ForEach(ref job)");
         sb.AppendLine("                .Batch()");
@@ -439,8 +483,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         for (int i = 0; i < method.ComponentTypes.Length; i++)
         {
             string typeName = GetTypeDisplayName(method.ComponentTypes[i]);
-            string refKind = hasBring ? "ref" : (method.ComponentRefKinds[i] == RefKind.Ref ? "ref" : "in");
-            parameters.Add($"{refKind} {typeName} c{i}");
+            parameters.Add($"ref {typeName} c{i}");
         }
 
         for (int i = 0; i < method.BringEventTypes.Length; i++)
@@ -567,7 +610,13 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         parts.Add("class");
         parts.Add(BuildTypeDeclarationName(classSymbol));
 
-        return string.Join(" ", parts);
+        string declaration = string.Join(" ", parts);
+        if (!(classSymbol.IsAbstract && classSymbol.IsSealed))
+        {
+            declaration += " : global::LayerBase.ECS.IGeneratedEcsQueryRegistrar";
+        }
+
+        return declaration;
     }
 
     private static string BuildTypeDeclarationName(INamedTypeSymbol classSymbol)

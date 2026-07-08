@@ -18,6 +18,10 @@ internal sealed class SyncEcsScheduler : IEcsWorkScheduler
 
     public bool IsSchedulerThread => false;
 
+    internal LayerRuntime Runtime => _runtime;
+
+    internal World World => _world;
+
     public void Schedule(IEcsWorkItem item)
     {
         try
@@ -27,6 +31,13 @@ internal sealed class SyncEcsScheduler : IEcsWorkScheduler
         catch (Exception ex)
         {
             _resultQueue.Enqueue(new EcsWorkFailedResult(item.DebugName, ex));
+        }
+        finally
+        {
+            if (item is IPooledEcsWorkItem pooled)
+            {
+                pooled.ReturnToPool();
+            }
         }
     }
 
@@ -48,6 +59,15 @@ internal sealed class SyncEcsScheduler : IEcsWorkScheduler
     }
 
     public void WaitIdleForTest(TimeSpan timeout)
+    {
+    }
+
+    public long FlushSubmissionsForTest()
+    {
+        return 0;
+    }
+
+    public void WaitFenceForTest(long fence, TimeSpan timeout)
     {
     }
 

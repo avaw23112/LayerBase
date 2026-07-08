@@ -9,8 +9,11 @@ internal sealed class EcsWorkQueue
     private readonly Queue<EcsSubmissionBatch> _overflow = new();
     private readonly object _overflowLock = new();
     private int _pendingBatches;
+    private long _completedSequence;
 
     public int Count => Volatile.Read(ref _pendingBatches);
+
+    public long CompletedSequence => Volatile.Read(ref _completedSequence);
 
     public void Enqueue(EcsSubmissionBatch batch)
     {
@@ -47,9 +50,13 @@ internal sealed class EcsWorkQueue
         }
     }
 
-    public void MarkCompleted()
+    public void MarkCompleted(long sequence)
     {
         Interlocked.Decrement(ref _pendingBatches);
+        if (sequence > 0)
+        {
+            Volatile.Write(ref _completedSequence, sequence);
+        }
     }
 
     public void Clear()
@@ -64,5 +71,6 @@ internal sealed class EcsWorkQueue
         }
 
         Volatile.Write(ref _pendingBatches, 0);
+        Volatile.Write(ref _completedSequence, 0);
     }
 }

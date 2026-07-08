@@ -2,12 +2,15 @@ using Arch.Core;
 using LayerBase.ECS.Runtime;
 using LayerBase.ECS.Projection;
 using LayerBase.ECS.Projection.Generated;
+using LayerBase.ECS.Runtime.Query;
 
 namespace LayerBase;
 
 public sealed partial class LayerRuntime
 {
     public World EcsWorld { get; private set; } = null!;
+
+    public EcsQueryRegistry EcsQueryRegistry { get; private set; } = null!;
 
     public IEcsScheduler EcsScheduler { get; private set; } = null!;
 
@@ -21,6 +24,7 @@ public sealed partial class LayerRuntime
 
         EcsWorld = World.Create();
         EcsWorld.BindRuntime(this);
+        EcsQueryRegistry = new EcsQueryRegistry(EcsWorld);
 
         EcsScheduler = EcsOptions.ExecutionMode switch
         {
@@ -47,5 +51,15 @@ public sealed partial class LayerRuntime
     public void WaitEcsIdleForTest(TimeSpan timeout)
     {
         EcsWorkScheduler.WaitIdleForTest(timeout);
+    }
+
+    public long FlushEcsSubmissionsForTest()
+    {
+        return EcsWorkScheduler.FlushSubmissionsForTest();
+    }
+
+    public void WaitEcsFenceForTest(long fence, TimeSpan timeout)
+    {
+        EcsWorkScheduler.WaitFenceForTest(fence, timeout);
     }
 }

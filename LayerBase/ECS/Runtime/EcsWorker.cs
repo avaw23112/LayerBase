@@ -98,7 +98,7 @@ internal sealed class EcsWorker : IDisposable
                     finally
                     {
                         Interlocked.Exchange(ref _executing, 0);
-                        _workQueue.MarkCompleted();
+                        _workQueue.MarkCompleted(batch.Sequence);
                         _submissionBatchPool.Return(batch);
                     }
                 }
@@ -117,24 +117,73 @@ internal sealed class EcsWorker : IDisposable
 
     private void ExecuteBatch(EcsSubmissionBatch batch, ref int processed)
     {
-        ReadOnlySpan<IEcsWorkItem> items = batch.AsSpan();
-        for (int i = 0; i < items.Length; i++)
+        _resultQueue.BeginBatch();
+        try
         {
-            IEcsWorkItem item = items[i];
-            processed++;
-            EcsThreadGuard.EnterExecution(_runtime.Id, _resultQueue);
+            ReadOnlySpan<EcsSubmissionEntry> entries = batch.AsSpan();
+            for (int i = 0; i < entries.Length; i++)
+            {
+                EcsSubmissionEntry entry = entries[i];
+                processed++;
 
-            try
-            {
-                item.Execute(_world, _resultQueue);
+                if (entry.IsRecord)
+                {
+                    EcsWorkRecord record = entry.Record;
+                    ExecuteRecord(batch, in record);
+                }
+                else if (entry.Item != null)
+                {
+                    ExecuteItem(entry.Item);
+                }
             }
-            catch (Exception ex)
+        }
+        finally
+        {
+            _resultQueue.EndBatch();
+        }
+    }
+
+    private void ExecuteRecord(EcsSubmissionBatch batch, in EcsWorkRecord record)
+    {
+        EcsThreadGuard.EnterExecution(_runtime.Id, _resultQueue);
+
+        try
+        {
+            EcsExecutorRegistry.Execute(
+                record.ExecutorId,
+                _world,
+                in record,
+                batch);
+        }
+        catch (Exception ex)
+        {
+            string debugName = EcsExecutorRegistry.GetDebugName(record.ExecutorId);
+            _resultQueue.Enqueue(new EcsWorkFailedResult(debugName, ex));
+        }
+        finally
+        {
+            EcsThreadGuard.ExitExecution(_runtime.Id);
+        }
+    }
+
+    private void ExecuteItem(IEcsWorkItem item)
+    {
+        EcsThreadGuard.EnterExecution(_runtime.Id, _resultQueue);
+
+        try
+        {
+            item.Execute(_world, _resultQueue);
+        }
+        catch (Exception ex)
+        {
+            _resultQueue.Enqueue(new EcsWorkFailedResult(item.DebugName, ex));
+        }
+        finally
+        {
+            EcsThreadGuard.ExitExecution(_runtime.Id);
+            if (item is IPooledEcsWorkItem pooled)
             {
-                _resultQueue.Enqueue(new EcsWorkFailedResult(item.DebugName, ex));
-            }
-            finally
-            {
-                EcsThreadGuard.ExitExecution(_runtime.Id);
+                pooled.ReturnToPool();
             }
         }
     }

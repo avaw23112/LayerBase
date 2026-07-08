@@ -296,9 +296,10 @@ public sealed partial class LayerRuntime : IDisposable
             }
             else
             {
-                EcsWorkScheduler.Schedule(new DelegateEcsWorkItem(
+                EcsWorkScheduler.Schedule(PooledEcsWorkItem<object?>.Rent(
                     "SweepProjectedActors",
-                    world => world.SweepProjectedActors()));
+                    null,
+                    static (world, _) => world.SweepProjectedActors()));
             }
 
             EcsScheduler?.FlushSubmissions();

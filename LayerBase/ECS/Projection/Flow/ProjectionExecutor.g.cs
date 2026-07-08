@@ -7,6 +7,7 @@ using LayerBase.Actor;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 using LayerBase.ECS.Runtime;
+using LayerBase.ECS.Runtime.Submission;
 
 namespace LayerBase.ECS.Projection.Flow;
 
@@ -19,10 +20,16 @@ internal static class ProjectionExecutor0
         ProjectionForEach<TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -163,10 +170,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach2<TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -242,10 +255,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach3<TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -329,10 +348,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach4<TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -424,10 +449,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach5<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -527,10 +558,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach6<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -638,10 +675,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach7<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -757,10 +800,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach8<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -884,10 +933,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach9<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -1019,10 +1074,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach10<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -1162,10 +1223,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach11<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -1313,10 +1380,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach12<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -1464,10 +1537,16 @@ internal static class ProjectionExecutor1<T0>
         ProjectionForEach<T0, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -1512,11 +1591,30 @@ internal static class ProjectionExecutor1<T0>
         ref TJob job)
         where TJob : struct, IQueryJob<T0>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -1528,6 +1626,40 @@ internal static class ProjectionExecutor1<T0>
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1571,11 +1703,20 @@ internal static class ProjectionExecutor1<T0>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob1x1<T0, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -1796,10 +1937,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach2<T0, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -1835,11 +1982,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x2<T0, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -2050,10 +2206,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach3<T0, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -2093,11 +2255,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x3<T0, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -2327,10 +2498,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach4<T0, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -2374,11 +2551,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x4<T0, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -2627,10 +2813,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach5<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -2678,11 +2870,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x5<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -2950,10 +3151,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach6<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -3005,11 +3212,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x6<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -3296,10 +3512,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach7<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -3355,11 +3577,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x7<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -3665,10 +3896,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach8<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -3728,11 +3965,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x8<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -4057,10 +4303,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach9<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -4124,11 +4376,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x9<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -4472,10 +4733,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach10<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -4543,11 +4810,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x10<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -4910,10 +5186,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach11<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -4985,11 +5267,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x11<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -5371,10 +5662,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach12<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -5450,11 +5747,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x12<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -5847,10 +6153,16 @@ internal static class ProjectionExecutor2<T0, T1>
         ProjectionForEach<T0, T1, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -5895,11 +6207,30 @@ internal static class ProjectionExecutor2<T0, T1>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -5911,6 +6242,40 @@ internal static class ProjectionExecutor2<T0, T1>
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -5957,11 +6322,20 @@ internal static class ProjectionExecutor2<T0, T1>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob2x1<T0, T1, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -6189,10 +6563,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach2<T0, T1, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -6228,11 +6608,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x2<T0, T1, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -6448,10 +6837,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach3<T0, T1, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -6491,11 +6886,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x3<T0, T1, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -6730,10 +7134,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach4<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -6777,11 +7187,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x4<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -7035,10 +7454,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach5<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -7086,11 +7511,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x5<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -7363,10 +7797,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach6<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -7418,11 +7858,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x6<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -7714,10 +8163,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach7<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -7773,11 +8228,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x7<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -8088,10 +8552,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach8<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -8151,11 +8621,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x8<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -8485,10 +8964,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach9<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -8552,11 +9037,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x9<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -8905,10 +9399,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach10<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -8976,11 +9476,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x10<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -9348,10 +9857,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach11<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -9423,11 +9938,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x11<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -9814,10 +10338,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach12<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -9893,11 +10423,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x12<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -10295,10 +10834,16 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         ProjectionForEach<T0, T1, T2, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -10343,11 +10888,30 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -10359,6 +10923,40 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1, T2>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1, T2>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1, T2>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1, T2>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -10408,11 +11006,20 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob3x1<T0, T1, T2, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -10647,10 +11254,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach2<T0, T1, T2, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -10686,11 +11299,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x2<T0, T1, T2, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -10911,10 +11533,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach3<T0, T1, T2, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -10954,11 +11582,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x3<T0, T1, T2, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -11198,10 +11835,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach4<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -11245,11 +11888,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x4<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -11508,10 +12160,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach5<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -11559,11 +12217,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x5<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -11841,10 +12508,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach6<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -11896,11 +12569,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x6<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -12197,10 +12879,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach7<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -12256,11 +12944,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x7<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -12576,10 +13273,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach8<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -12639,11 +13342,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x8<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -12978,10 +13690,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach9<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -13045,11 +13763,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x9<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -13403,10 +14130,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach10<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -13474,11 +14207,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x10<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -13851,10 +14593,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach11<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -13926,11 +14674,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x11<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -14322,10 +15079,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach12<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -14401,11 +15164,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x12<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -14808,10 +15580,16 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         ProjectionForEach<T0, T1, T2, T3, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -14856,11 +15634,30 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -14872,6 +15669,40 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1, T2, T3>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1, T2, T3>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1, T2, T3>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1, T2, T3>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -14924,11 +15755,20 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob4x1<T0, T1, T2, T3, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -15170,10 +16010,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach2<T0, T1, T2, T3, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -15209,11 +16055,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x2<T0, T1, T2, T3, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -15439,10 +16294,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach3<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -15482,11 +16343,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x3<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -15731,10 +16601,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach4<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -15778,11 +16654,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x4<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -16046,10 +16931,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach5<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -16097,11 +16988,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x5<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -16384,10 +17284,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach6<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -16439,11 +17345,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x6<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -16745,10 +17660,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach7<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -16804,11 +17725,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x7<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -17129,10 +18059,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach8<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -17192,11 +18128,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x8<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -17536,10 +18481,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach9<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -17603,11 +18554,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x9<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -17966,10 +18926,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach10<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -18037,11 +19003,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x10<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -18419,10 +19394,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach11<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -18494,11 +19475,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x11<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -18895,10 +19885,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach12<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -18974,11 +19970,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x12<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -19386,10 +20391,16 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         ProjectionForEach<T0, T1, T2, T3, T4, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -19434,11 +20445,30 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -19450,6 +20480,40 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -19505,11 +20569,20 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob5x1<T0, T1, T2, T3, T4, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -19758,10 +20831,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -19797,11 +20876,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x2<T0, T1, T2, T3, T4, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -20032,10 +21120,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -20075,11 +21169,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x3<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -20329,10 +21432,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -20376,11 +21485,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x4<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -20649,10 +21767,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -20700,11 +21824,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x5<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -20992,10 +22125,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -21047,11 +22186,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x6<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -21358,10 +22506,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -21417,11 +22571,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x7<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -21747,10 +22910,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -21810,11 +22979,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x8<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -22159,10 +23337,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -22226,11 +23410,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x9<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -22594,10 +23787,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -22665,11 +23864,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x10<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -23052,10 +24260,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach11<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -23127,11 +24341,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x11<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -23533,10 +24756,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach12<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -23612,11 +24841,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x12<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -24029,10 +25267,16 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         ProjectionForEach<T0, T1, T2, T3, T4, T5, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -24077,11 +25321,30 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -24093,6 +25356,40 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -24151,11 +25448,20 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob6x1<T0, T1, T2, T3, T4, T5, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -24411,10 +25717,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -24450,11 +25762,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x2<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -24690,10 +26011,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -24733,11 +26060,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x3<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -24992,10 +26328,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -25039,11 +26381,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x4<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -25317,10 +26668,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -25368,11 +26725,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x5<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -25665,10 +27031,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -25720,11 +27092,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x6<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -26036,10 +27417,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -26095,11 +27482,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x7<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -26430,10 +27826,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -26493,11 +27895,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x8<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -26847,10 +28258,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -26914,11 +28331,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x9<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -27287,10 +28713,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -27358,11 +28790,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x10<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -27750,10 +29191,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach11<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -27825,11 +29272,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x11<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -28236,10 +29692,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach12<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -28315,11 +29777,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x12<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -28737,10 +30208,16 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         ProjectionForEach<T0, T1, T2, T3, T4, T5, T6, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -28785,11 +30262,30 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -28801,6 +30297,40 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -28862,11 +30392,20 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob7x1<T0, T1, T2, T3, T4, T5, T6, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -29129,10 +30668,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -29168,11 +30713,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x2<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -29413,10 +30967,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -29456,11 +31016,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x3<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -29720,10 +31289,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -29767,11 +31342,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x4<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -30050,10 +31634,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -30101,11 +31691,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x5<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -30403,10 +32002,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -30458,11 +32063,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x6<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -30779,10 +32393,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -30838,11 +32458,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x7<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -31178,10 +32807,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -31241,11 +32876,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x8<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -31600,10 +33244,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -31667,11 +33317,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x9<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -32045,10 +33704,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -32116,11 +33781,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x10<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -32513,10 +34187,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach11<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -32588,11 +34268,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x11<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -33004,10 +34693,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach12<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -33083,11 +34778,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x12<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -33510,10 +35214,16 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         ProjectionForEach<T0, T1, T2, T3, T4, T5, T6, T7, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -33558,11 +35268,30 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -33574,6 +35303,40 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -33638,11 +35401,20 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob8x1<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -33912,10 +35684,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -33951,11 +35729,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x2<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -34201,10 +35988,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -34244,11 +36037,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x3<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -34513,10 +36315,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -34560,11 +36368,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x4<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -34848,10 +36665,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -34899,11 +36722,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x5<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -35206,10 +37038,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -35261,11 +37099,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x6<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -35587,10 +37434,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -35646,11 +37499,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x7<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -35991,10 +37853,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -36054,11 +37922,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x8<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -36418,10 +38295,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -36485,11 +38368,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x9<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -36868,10 +38760,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -36939,11 +38837,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x10<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -37341,10 +39248,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach11<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -37416,11 +39329,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x11<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -37837,10 +39759,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach12<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -37916,11 +39844,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x12<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -38348,10 +40285,16 @@ internal static class ProjectionExecutor9<T0, T1, T2, T3, T4, T5, T6, T7, T8>
         ProjectionForEach<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -38396,11 +40339,30 @@ internal static class ProjectionExecutor9<T0, T1, T2, T3, T4, T5, T6, T7, T8>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -38412,6 +40374,40 @@ internal static class ProjectionExecutor9<T0, T1, T2, T3, T4, T5, T6, T7, T8>
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -38479,11 +40475,20 @@ internal static class ProjectionExecutor9<T0, T1, T2, T3, T4, T5, T6, T7, T8>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob9x1<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -38760,10 +40765,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -38799,11 +40810,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x2<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -39054,10 +41074,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -39097,11 +41123,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x3<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -39371,10 +41406,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -39418,11 +41459,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x4<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -39711,10 +41761,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -39762,11 +41818,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x5<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -40074,10 +42139,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -40129,11 +42200,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x6<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -40460,10 +42540,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -40519,11 +42605,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x7<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -40869,10 +42964,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -40932,11 +43033,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x8<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -41301,10 +43411,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -41368,11 +43484,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x9<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -41756,10 +43881,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -41827,11 +43958,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x10<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -42234,10 +44374,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach11<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -42309,11 +44455,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x11<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -42735,10 +44890,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate, ProjectionForEach12<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -42814,11 +44975,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob9x12<T0, T1, T2, T3, T4, T5, T6, T7, T8, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -43251,10 +45421,16 @@ internal static class ProjectionExecutor10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         ProjectionForEach<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -43299,11 +45475,30 @@ internal static class ProjectionExecutor10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -43315,6 +45510,40 @@ internal static class ProjectionExecutor10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -43385,11 +45614,20 @@ internal static class ProjectionExecutor10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         where TEvent0 : struct
         where TJob : struct, IProjectionJob10x1<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -43673,10 +45911,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -43712,11 +45956,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x2<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -43972,10 +46225,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -44015,11 +46274,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x3<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -44294,10 +46562,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -44341,11 +46615,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x4<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -44639,10 +46922,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -44690,11 +46979,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x5<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -45007,10 +47305,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -45062,11 +47366,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x6<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -45398,10 +47711,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -45457,11 +47776,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x7<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -45812,10 +48140,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -45875,11 +48209,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x8<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -46249,10 +48592,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -46316,11 +48665,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x9<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -46709,10 +49067,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -46780,11 +49144,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -47192,10 +49565,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -47267,11 +49646,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -47698,10 +50086,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate, ProjectionForEach12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -47777,11 +50171,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob10x12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -48219,10 +50622,16 @@ internal static class ProjectionExecutor11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         ProjectionForEach<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -48267,11 +50676,30 @@ internal static class ProjectionExecutor11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -48283,6 +50711,40 @@ internal static class ProjectionExecutor11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -48356,11 +50818,20 @@ internal static class ProjectionExecutor11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         where TEvent0 : struct
         where TJob : struct, IProjectionJob11x1<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -48651,10 +51122,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -48690,11 +51167,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x2<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -48955,10 +51441,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -48998,11 +51490,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x3<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -49282,10 +51783,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -49329,11 +51836,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x4<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -49632,10 +52148,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -49683,11 +52205,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x5<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -50005,10 +52536,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -50060,11 +52597,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x6<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -50401,10 +52947,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -50460,11 +53012,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x7<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -50820,10 +53381,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -50883,11 +53450,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x8<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -51262,10 +53838,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -51329,11 +53911,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x9<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -51727,10 +54318,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -51798,11 +54395,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -52215,10 +54821,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -52290,11 +54902,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -52726,10 +55347,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate, ProjectionForEach12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -52805,11 +55432,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob11x12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -53252,10 +55888,16 @@ internal static class ProjectionExecutor12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         ProjectionForEach<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent> forEach)
         where TEvent : struct
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post<TEvent>(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -53300,11 +55942,30 @@ internal static class ProjectionExecutor12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
     {
-        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
+                world,
+                query,
+                predicate,
+                in job,
+                PlainQueryExecutorId<TJob>.Id))
+        {
+            return;
+        }
+
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
-                $"PlainQuery<{typeof(TJob).Name}>",
-                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+                "PlainQuery",
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    ForEach(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -53316,6 +55977,40 @@ internal static class ProjectionExecutor12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
                 predicate,
                 ref job);
         }
+    }
+
+    internal static int GetPlainQueryExecutorId<TJob>()
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
+    {
+        return PlainQueryExecutorId<TJob>.Id;
+    }
+
+    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
+    {
+        public string DebugName => "PlainQuery";
+
+        public void Execute(
+            World world,
+            in EcsWorkRecord record,
+            EcsSubmissionBatch batch)
+        {
+            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
+            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>?)record.Predicate;
+
+            ForEach(
+                world,
+                record.Query,
+                predicate,
+                ref scheduledJob);
+        }
+    }
+
+    private static class PlainQueryExecutorId<TJob>
+        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
+    {
+        public static readonly int Id =
+            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -53392,11 +56087,20 @@ internal static class ProjectionExecutor12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         where TEvent0 : struct
         where TJob : struct, IProjectionJob12x1<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TEvent0, TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -53694,10 +56398,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -53733,11 +56443,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x2<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -54003,10 +56722,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -54046,11 +56771,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x3<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -54335,10 +57069,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -54382,11 +57122,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x4<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -54690,10 +57439,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -54741,11 +57496,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x5<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -55068,10 +57832,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -55123,11 +57893,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x6<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -55469,10 +58248,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -55528,11 +58313,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x7<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -55893,10 +58687,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -55956,11 +58756,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x8<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -56340,10 +59149,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -56407,11 +59222,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x9<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -56810,10 +59634,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -56881,11 +59711,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -57303,10 +60142,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -57378,11 +60223,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
@@ -57819,10 +60673,16 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate, ProjectionForEach12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11> forEach)
     {
+        var scheduledState = (Query: query, Predicate: predicate, ForEach: forEach);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+                scheduledState,
+                static (scheduledWorld, state) => Post(
+                    scheduledWorld,
+                    state.Query,
+                    state.Predicate,
+                    state.ForEach)))
         {
             return;
         }
@@ -57898,11 +60758,20 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob12x12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9, TEvent10, TEvent11>
     {
-        TJob scheduledJob = job;
+        var scheduledState = (Query: query, Predicate: predicate, Job: job);
         if (EcsSchedulerUtility.ScheduleIfNeeded(
                 world,
                 "BringProjection",
-                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+                scheduledState,
+                static (scheduledWorld, state) =>
+                {
+                    TJob scheduledJob = state.Job;
+                    Post<TJob>(
+                        scheduledWorld,
+                        state.Query,
+                        state.Predicate,
+                        ref scheduledJob);
+                }))
         {
             return;
         }
