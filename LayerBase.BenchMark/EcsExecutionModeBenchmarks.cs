@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Diagnostics;
 using Arch.Core;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
@@ -229,7 +230,8 @@ public class EcsAsyncSubmitBoundaryBenchmarks
     private LayerRuntime _runtime = null!;
     private AsyncEcsScheduler _scheduler = null!;
     private NoopEcsWorkItem _noopWorkItem = null!;
-    private AutoResetEvent _signal = null!;
+    private WakeProbeEcsWorkItem _wakeProbe = null!;
+    private long _completedFence;
 
     [GlobalSetup]
     public void Setup()
@@ -244,7 +246,8 @@ public class EcsAsyncSubmitBoundaryBenchmarks
         EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_runtime, 1_000);
         _scheduler = (AsyncEcsScheduler)_runtime.EcsWorkScheduler;
         _noopWorkItem = new NoopEcsWorkItem();
-        _signal = new AutoResetEvent(false);
+        _wakeProbe = new WakeProbeEcsWorkItem();
+        _completedFence = _runtime.FlushEcsSubmissionsForTest();
 
         var warmupJob = new MoveWithWorkJob(0);
         _runtime.EcsWorld
@@ -256,7 +259,6 @@ public class EcsAsyncSubmitBoundaryBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-        _signal.Dispose();
         LayerHub.Reset();
     }
 
@@ -354,13 +356,45 @@ public class EcsAsyncSubmitBoundaryBenchmarks
     [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Signal")]
     public void SignalOnlyBenchmark()
     {
-        _signal.Set();
+        _scheduler.SignalForTest();
     }
 
-    [Benchmark(Description = "EndToEndFenceBenchmark")]
+    [IterationSetup(Target = nameof(SignalOnlyBenchmark))]
+    public void ParkWorkerForSignalOnly()
+    {
+        _scheduler.WaitWorkerParkedForTest(IdleTimeout);
+    }
+
+    [Benchmark(Description = "FenceWaitAlreadyCompletedBenchmark")]
     [InvocationCount(1)]
-    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Fence", "EndToEnd")]
-    public void EndToEndFenceBenchmark()
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Fence", "Wait")]
+    public void FenceWaitAlreadyCompletedBenchmark()
+    {
+        _runtime.WaitEcsFenceForTest(_completedFence, IdleTimeout);
+    }
+
+    [Benchmark(Description = "FenceWaitWorkerBusyBenchmark")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Fence", "Wait", "Signal")]
+    public void FenceWaitWorkerBusyBenchmark()
+    {
+        _scheduler.Schedule(_noopWorkItem);
+        long fence = _scheduler.FlushSubmissionsForTest();
+        _runtime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
+    [IterationSetup(Target = nameof(WarmWorkerEndToEndBenchmark))]
+    public void PrepareWarmWorkerEndToEnd()
+    {
+        _scheduler.Schedule(_noopWorkItem);
+        long fence = _scheduler.FlushSubmissionsForTest();
+        _runtime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
+    [Benchmark(Description = "WarmWorker EndToEnd")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Fence", "EndToEnd", "WarmWorker")]
+    public void WarmWorkerEndToEndBenchmark()
     {
         var job = new MoveWithWorkJob(0);
         _runtime.EcsWorld
@@ -371,12 +405,58 @@ public class EcsAsyncSubmitBoundaryBenchmarks
         _runtime.WaitEcsFenceForTest(fence, IdleTimeout);
     }
 
+    [IterationSetup(Target = nameof(ColdWorkerWakeLatencyBenchmark))]
+    public void ParkWorkerForColdWakeLatency()
+    {
+        _scheduler.WaitWorkerParkedForTest(IdleTimeout);
+    }
+
+    [Benchmark(Description = "ColdWorkerWakeLatencyBenchmark")]
+    [InvocationCount(1)]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "WakeLatency", "Signal", "Wait", "ColdWorker")]
+    public void ColdWorkerWakeLatencyBenchmark()
+    {
+        _wakeProbe.Reset();
+        long submitted = Stopwatch.GetTimestamp();
+        _scheduler.Schedule(_wakeProbe);
+        long fence = _scheduler.FlushSubmissionsForTest();
+
+        SpinWait spin = default;
+        while (_wakeProbe.StartedTimestamp == 0)
+        {
+            spin.SpinOnce();
+        }
+
+        EcsBenchmarkSink.FloatValue =
+            (float)((_wakeProbe.StartedTimestamp - submitted) * 1_000_000.0 / Stopwatch.Frequency);
+        _runtime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
     private sealed class NoopEcsWorkItem : IEcsWorkItem
     {
         public string DebugName => "Noop";
 
         public void Execute(World world, EcsResultQueue results)
         {
+        }
+    }
+
+    private sealed class WakeProbeEcsWorkItem : IEcsWorkItem
+    {
+        private long _startedTimestamp;
+
+        public string DebugName => "WakeProbe";
+
+        public long StartedTimestamp => Volatile.Read(ref _startedTimestamp);
+
+        public void Reset()
+        {
+            Volatile.Write(ref _startedTimestamp, 0);
+        }
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+            Volatile.Write(ref _startedTimestamp, Stopwatch.GetTimestamp());
         }
     }
 }
@@ -438,8 +518,10 @@ public class EcsPlainQuerySubmitHotPathBenchmarks
 public class EcsPlainQuerySubmitPathBenchmarks
 {
     private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+    private const int SubmitOperations = 1024;
 
     private LayerRuntime _asyncRuntime = null!;
+    private AsyncEcsScheduler _asyncScheduler = null!;
     private int _plainQueryId;
     private GeneratedPlainQueryBenchService _generatedService = null!;
 
@@ -451,10 +533,12 @@ public class EcsPlainQuerySubmitPathBenchmarks
     {
         LayerHub.Reset();
         _asyncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async);
+        _asyncScheduler = (AsyncEcsScheduler)_asyncRuntime.EcsWorkScheduler;
         EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_asyncRuntime, 1_000);
         _plainQueryId = _asyncRuntime.EcsQueryRegistry.GetOrCreate<BenchPosition, BenchVelocity>();
         _generatedService = new GeneratedPlainQueryBenchService();
         ((IGeneratedEcsQueryRegistrar)_generatedService).RegisterGeneratedEcsQueries(_asyncRuntime);
+        PrepareSubmitBatch();
 
         var warmupJob = new MoveWithWorkJob(0);
         _asyncRuntime.EcsWorld
@@ -462,7 +546,7 @@ public class EcsPlainQuerySubmitPathBenchmarks
                      .ForEach(ref warmupJob);
         _asyncRuntime.EcsScheduler.SubmitPlainQuery<MoveWithWorkJob, BenchPosition, BenchVelocity>(
             _plainQueryId,
-            null,
+            0,
             in warmupJob);
         _generatedService.GeneratedPlainMove(0);
         _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
@@ -474,15 +558,31 @@ public class EcsPlainQuerySubmitPathBenchmarks
         LayerHub.Reset();
     }
 
-    [Benchmark(Description = "Async PublicQueryApi SubmitOnly")]
-    [InvocationCount(1)]
+    [IterationSetup(
+        Targets = new[]
+        {
+            nameof(Async_PublicQueryApi_SubmitOnly),
+            nameof(Async_DirectSubmit_SubmitOnly),
+            nameof(Async_GeneratedQuery_SubmitOnly)
+        })]
+    public void PrepareSubmitBatch()
+    {
+        _asyncScheduler.EnsureCurrentSubmissionCapacityForTest(
+            SubmitOperations,
+            SubmitOperations * Unsafe.SizeOf<MoveWithWorkJob>());
+    }
+
+    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async PublicQueryApi SubmitOnly")]
     [BenchmarkCategory("07.ECS.SubmitPath", "PublicQueryApi", "SubmitOnly")]
     public void Async_PublicQueryApi_SubmitOnly()
     {
-        var job = new MoveWithWorkJob(WorkIterations);
-        _asyncRuntime.EcsWorld
-                     .Query<BenchPosition, BenchVelocity>()
-                     .ForEach(ref job);
+        for (int i = 0; i < SubmitOperations; i++)
+        {
+            var job = new MoveWithWorkJob(WorkIterations);
+            _asyncRuntime.EcsWorld
+                         .Query<BenchPosition, BenchVelocity>()
+                         .ForEach(ref job);
+        }
     }
 
     [IterationCleanup(Target = nameof(Async_PublicQueryApi_SubmitOnly))]
@@ -491,16 +591,18 @@ public class EcsPlainQuerySubmitPathBenchmarks
         _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
     }
 
-    [Benchmark(Description = "Async DirectSubmit SubmitOnly")]
-    [InvocationCount(1)]
+    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async DirectSubmit SubmitOnly")]
     [BenchmarkCategory("07.ECS.SubmitPath", "DirectSubmit", "SubmitOnly")]
     public void Async_DirectSubmit_SubmitOnly()
     {
-        var job = new MoveWithWorkJob(WorkIterations);
-        _asyncRuntime.EcsScheduler.SubmitPlainQuery<MoveWithWorkJob, BenchPosition, BenchVelocity>(
-            _plainQueryId,
-            null,
-            in job);
+        for (int i = 0; i < SubmitOperations; i++)
+        {
+            var job = new MoveWithWorkJob(WorkIterations);
+            _asyncRuntime.EcsScheduler.SubmitPlainQuery<MoveWithWorkJob, BenchPosition, BenchVelocity>(
+                _plainQueryId,
+                0,
+                in job);
+        }
     }
 
     [IterationCleanup(Target = nameof(Async_DirectSubmit_SubmitOnly))]
@@ -509,12 +611,14 @@ public class EcsPlainQuerySubmitPathBenchmarks
         _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
     }
 
-    [Benchmark(Description = "Async GeneratedQuery SubmitOnly")]
-    [InvocationCount(1)]
+    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async GeneratedQuery SubmitOnly")]
     [BenchmarkCategory("07.ECS.SubmitPath", "GeneratedQuery", "SubmitOnly")]
     public void Async_GeneratedQuery_SubmitOnly()
     {
-        _generatedService.GeneratedPlainMove(WorkIterations);
+        for (int i = 0; i < SubmitOperations; i++)
+        {
+            _generatedService.GeneratedPlainMove(WorkIterations);
+        }
     }
 
     [IterationCleanup(Target = nameof(Async_GeneratedQuery_SubmitOnly))]
@@ -894,11 +998,16 @@ public readonly struct MoveViewJob :
 
 internal static class EcsBenchmarkWorldFactory
 {
-    public static LayerRuntime CreateRuntime(EcsExecutionMode mode)
+    public static LayerRuntime CreateRuntime(
+        EcsExecutionMode mode,
+        EcsWorkerIdlePolicy idlePolicy = EcsWorkerIdlePolicy.LowLatency)
     {
         return LayerHub.CreateLayers()
                        .Push(new EcsBenchmarkLayer())
-                       .SetEcsOptions(new EcsRuntimeOptions(mode, maxResultsDrainPerPump: int.MaxValue))
+                       .SetEcsOptions(new EcsRuntimeOptions(
+                           mode,
+                           maxResultsDrainPerPump: int.MaxValue,
+                           workerIdlePolicy: idlePolicy))
                        .Build();
     }
 

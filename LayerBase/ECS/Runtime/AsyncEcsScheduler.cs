@@ -71,6 +71,32 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
         return FlushSubmissionsCore();
     }
 
+    public void EnsureCurrentSubmissionCapacityForTest(int entryCapacity, int jobArenaCapacity)
+    {
+        _currentSubmissionBatch.EnsureCapacity(entryCapacity, jobArenaCapacity);
+    }
+
+    public void SignalForTest()
+    {
+        _worker.Signal();
+    }
+
+    public void WaitWorkerParkedForTest(TimeSpan timeout)
+    {
+        long start = Stopwatch.GetTimestamp();
+        long timeoutTicks = (long)(timeout.TotalSeconds * Stopwatch.Frequency);
+
+        while (!_worker.IsParked)
+        {
+            if (Stopwatch.GetTimestamp() - start > timeoutTicks)
+            {
+                throw new TimeoutException("Timed out waiting for ECS worker to park.");
+            }
+
+            Thread.SpinWait(64);
+        }
+    }
+
     private long FlushSubmissionsCore()
     {
         EcsSubmissionBatch batch = _currentSubmissionBatch;

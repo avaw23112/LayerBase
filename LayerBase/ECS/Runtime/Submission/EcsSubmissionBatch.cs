@@ -27,6 +27,16 @@ internal sealed class EcsSubmissionBatch
         AddEntry(EcsSubmissionEntry.FromRecord(in record));
     }
 
+    public void EnsureCapacity(int entryCapacity, int jobArenaCapacity)
+    {
+        if (entryCapacity > _entries.Length)
+        {
+            Array.Resize(ref _entries, entryCapacity);
+        }
+
+        JobArena.EnsureCapacity(jobArenaCapacity);
+    }
+
     private void AddEntry(in EcsSubmissionEntry entry)
     {
         int index = _count;

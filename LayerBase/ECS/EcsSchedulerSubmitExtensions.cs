@@ -36,6 +36,47 @@ public static class EcsSchedulerSubmitExtensions
             static (World world, ArchQuery query, object? predicate, ref TJob job) => ProjectionExecutor2<T0, T1>.ForEach(world, query, (ProjectionPredicate<T0, T1>?)predicate, ref job));
     }
 
+    public static void SubmitPlainQuery<TJob, T0, T1>(this IEcsScheduler scheduler, int queryId, int predicateId, in TJob job)
+        where TJob : struct, IQueryJob<T0, T1>
+    {
+        int executorId = ProjectionExecutor2<T0, T1>.GetPlainQueryExecutorId<TJob>();
+        switch (scheduler)
+        {
+            case AsyncEcsScheduler asyncScheduler:
+            {
+                ArchQuery query = asyncScheduler.Runtime.EcsQueryRegistry.Get(queryId);
+                if (asyncScheduler.IsSchedulerThread)
+                {
+                    TJob localJob = job;
+                    ProjectionExecutor2<T0, T1>.ForEach(asyncScheduler.World, query, null, ref localJob);
+                    return;
+                }
+
+                if (!RuntimeHelpers.IsReferenceOrContainsReferences<TJob>())
+                {
+                    asyncScheduler.RecordPlainQuery(executorId, query, null, in job);
+                    return;
+                }
+
+                SubmitPlainQuery<TJob, T0, T1>(
+                    scheduler,
+                    queryId,
+                    (object?)null,
+                    in job);
+                return;
+            }
+            case SyncEcsScheduler syncScheduler:
+            {
+                ArchQuery query = syncScheduler.Runtime.EcsQueryRegistry.Get(queryId);
+                TJob localJob = job;
+                ProjectionExecutor2<T0, T1>.ForEach(syncScheduler.World, query, null, ref localJob);
+                return;
+            }
+            default:
+                throw new NotSupportedException($"Unsupported ECS scheduler type '{scheduler.GetType().FullName}'.");
+        }
+    }
+
     public static void SubmitPlainQuery<TJob, T0, T1, T2>(this IEcsScheduler scheduler, int queryId, object? predicate, in TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2>
     {
@@ -128,6 +169,17 @@ public static class EcsSchedulerSubmitExtensions
     {
         SubmitBringQueryCore(scheduler, queryId, predicate, in job,
             static (World world, ArchQuery query, object? predicate, ref TJob job) => ProjectionExecutor3<T0, T1, T2>.Post<TEvent0, TJob>(world, query, (ProjectionPredicate<T0, T1, T2>?)predicate, ref job));
+    }
+
+    public static void SubmitBringQuery<TEvent0, TJob, T0, T1, T2>(this IEcsScheduler scheduler, int queryId, int predicateId, in TJob job)
+        where TEvent0 : struct
+        where TJob : struct, IProjectionJob3x1<T0, T1, T2, TEvent0>
+    {
+        SubmitBringQuery<TEvent0, TJob, T0, T1, T2>(
+            scheduler,
+            queryId,
+            (object?)null,
+            in job);
     }
 
     public static void SubmitBringQuery<TEvent0, TJob, T0, T1, T2, T3>(this IEcsScheduler scheduler, int queryId, object? predicate, in TJob job)

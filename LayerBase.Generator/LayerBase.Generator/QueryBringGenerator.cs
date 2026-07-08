@@ -372,7 +372,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         sb.AppendLine("            __Runtime.EcsScheduler");
         sb.AppendLine($"                .SubmitPlainQuery<__{method.EntryPointName}Job, {compGeneric}>(");
         sb.AppendLine($"                    __{method.EntryPointName}QueryId,");
-        sb.AppendLine("                    null,");
+        sb.AppendLine("                    0,");
         sb.AppendLine("                    in job);");
     }
 
@@ -395,7 +395,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
             sb.AppendLine("            __Runtime.EcsScheduler");
             sb.AppendLine($"                .SubmitBringQuery<{eventGeneric}, __{method.EntryPointName}Job, {compGeneric}>(");
             sb.AppendLine($"                    __{method.EntryPointName}QueryId,");
-            sb.AppendLine("                    null,");
+            sb.AppendLine("                    0,");
             sb.AppendLine("                    in job);");
             return;
         }

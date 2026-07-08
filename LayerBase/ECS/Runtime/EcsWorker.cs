@@ -16,6 +16,7 @@ internal sealed class EcsWorker : IDisposable
     private Thread? _thread;
     private volatile bool _running;
     private int _executing;
+    private int _parked;
 
     public EcsWorker(
         LayerRuntime runtime,
@@ -35,6 +36,8 @@ internal sealed class EcsWorker : IDisposable
 
     public bool IsExecuting => Volatile.Read(ref _executing) != 0;
 
+    public bool IsParked => Volatile.Read(ref _parked) != 0;
+
     public void Start()
     {
         if (_running)
@@ -53,7 +56,10 @@ internal sealed class EcsWorker : IDisposable
 
     public void Signal()
     {
-        _signal.Set();
+        if (Volatile.Read(ref _parked) != 0)
+        {
+            _signal.Set();
+        }
     }
 
     public void Stop()
@@ -105,7 +111,7 @@ internal sealed class EcsWorker : IDisposable
 
                 if (!didWork)
                 {
-                    _signal.WaitOne();
+                    WaitForWork();
                 }
             }
         }
@@ -113,6 +119,51 @@ internal sealed class EcsWorker : IDisposable
         {
             EcsThreadGuard.Unbind(_runtime.Id);
         }
+    }
+
+    private void WaitForWork()
+    {
+        EcsWorkerIdleStrategy strategy = EcsWorkerIdleStrategy.For(_options.WorkerIdlePolicy);
+
+        for (int i = 0; i < strategy.SpinIterations && _running; i++)
+        {
+            if (_workQueue.Count != 0)
+            {
+                return;
+            }
+
+            Thread.SpinWait(strategy.SpinWaitCycles);
+        }
+
+        for (int i = 0; i < strategy.YieldIterations && _running; i++)
+        {
+            if (_workQueue.Count != 0)
+            {
+                return;
+            }
+
+            Thread.Yield();
+        }
+
+        for (int i = 0; i < strategy.SleepZeroIterations && _running; i++)
+        {
+            if (_workQueue.Count != 0)
+            {
+                return;
+            }
+
+            Thread.Sleep(0);
+        }
+
+        Volatile.Write(ref _parked, 1);
+        if (!_running || _workQueue.Count != 0)
+        {
+            Volatile.Write(ref _parked, 0);
+            return;
+        }
+
+        _signal.WaitOne();
+        Volatile.Write(ref _parked, 0);
     }
 
     private void ExecuteBatch(EcsSubmissionBatch batch, ref int processed)
@@ -185,6 +236,35 @@ internal sealed class EcsWorker : IDisposable
             {
                 pooled.ReturnToPool();
             }
+        }
+    }
+
+    private readonly struct EcsWorkerIdleStrategy
+    {
+        private EcsWorkerIdleStrategy(int spinIterations, int spinWaitCycles, int yieldIterations, int sleepZeroIterations)
+        {
+            SpinIterations = spinIterations;
+            SpinWaitCycles = spinWaitCycles;
+            YieldIterations = yieldIterations;
+            SleepZeroIterations = sleepZeroIterations;
+        }
+
+        public int SpinIterations { get; }
+
+        public int SpinWaitCycles { get; }
+
+        public int YieldIterations { get; }
+
+        public int SleepZeroIterations { get; }
+
+        public static EcsWorkerIdleStrategy For(EcsWorkerIdlePolicy policy)
+        {
+            return policy switch
+            {
+                EcsWorkerIdlePolicy.LowLatency => new EcsWorkerIdleStrategy(100_000, 16, 64, 16),
+                EcsWorkerIdlePolicy.PowerSaving => new EcsWorkerIdleStrategy(16, 4, 1, 1),
+                _ => new EcsWorkerIdleStrategy(2_048, 8, 16, 4)
+            };
         }
     }
 }

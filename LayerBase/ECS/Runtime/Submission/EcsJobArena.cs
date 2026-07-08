@@ -40,7 +40,7 @@ internal sealed class EcsJobArena
         return (value + alignment - 1) & ~(alignment - 1);
     }
 
-    private void EnsureCapacity(int required)
+    public void EnsureCapacity(int required)
     {
         if (required <= _buffer.Length)
         {
