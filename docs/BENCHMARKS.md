@@ -2,6 +2,30 @@
 
 Detailed performance benchmarks for LayerBase.
 
+## ECS Async Benchmark Boundaries
+
+Async ECS benchmark results must be read by scenario. Do not merge these metrics into a single "EndToEnd" number.
+
+| Benchmark family | What it measures | What it does not prove |
+|:--|:--|:--|
+| `EcsExecutionModeBenchmarks.Async_PlainQuery_SubmitOnly` | Public `Query<T>().ForEach(ref job)` submit cost, averaged across 1024 submits. Cleanup waits the submitted fence outside the measured body. | Worker execution, drain, actor post, renderer/game-loop interference, or cold worker wake latency. |
+| `EcsExecutionModeBenchmarks.Async_PlainQuery_EndToEnd` | Warm-worker PlainQuery submit, one flush, current-fence wait. | Cold idle wake behavior. |
+| `EcsAsyncSubmitBoundaryBenchmarks.WarmWorkerEndToEndBenchmark` | Focused warm-worker fence cost for a single PlainQuery. | Full game-frame stability. |
+| `EcsAsyncSubmitBoundaryBenchmarks.ColdWorkerWakeLatencyBenchmark` | Platform/OS cost after the ECS worker has parked. | ECS hot-path cost. Report this separately from warm-worker EndToEnd. |
+| `EcsAsyncBringBenchmarks` | Bring query execution, result drain, and actor event posting through `Pump`. | PlainQuery submit cost or cold worker wake behavior. |
+| `EcsFrameBatchBenchmarks.Async_FrameBatch_SubmitFlushOnly` | One frame submitting 1/10/100/1000 PlainQueries and flushing once; this is the frame-level SubmissionBatch amortization test. | Worker execution completion time. Cleanup waits the fence outside the measured body. |
+| `EcsFrameBatchBenchmarks.Async_FrameBatch_WarmWorkerEndToEnd` | One frame submitting 1/10/100/1000 PlainQueries, flushing once, waiting the current fence, then pumping. | Unity/Godot/render-thread scheduling stability or GC pressure from a real game. |
+
+Current ECS Async benchmark coverage proves that the core async query chain can be low-allocation and low-latency in controlled warm-worker scenarios. It does not prove that a complete game runtime is always stable. A real game can still introduce additional jitter from multiple systems submitting work in the same frame, Bring event return flow, ActorWorld drain, main-thread contention, long-running worker state, GC pressure, and engine/render threads.
+
+When reporting ECS async performance:
+
+- Use `WarmWorker EndToEnd` for ECS async execution performance.
+- Use `ColdWorkerWakeLatency` for parked-worker platform scheduling cost.
+- Use `FrameBatch SubmitManyQueries FlushOnce` for per-frame submit/flush amortization.
+- Use Bring-specific benchmarks for `SubmitBringQuery`, `ActorEventBatch<TEvent>`, `DrainResults`, and `ActorWorld.PostTo` paths.
+- Do not use old single-invocation SubmitOnly numbers as submit-cost evidence.
+
 ## Cross-Framework Growth Comparison (Events & Fan-out)
 
 Data taken from `LayerBase.BenchMark.Compare/bin/Release/net8.0/BenchmarkDotNet.Artifacts/results`.

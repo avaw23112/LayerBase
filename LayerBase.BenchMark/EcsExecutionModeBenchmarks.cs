@@ -146,9 +146,12 @@ public class EcsSpscBatchBenchmarks
 public class EcsExecutionModeBenchmarks
 {
     private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+    private const int SubmitOperations = 1024;
 
     private LayerRuntime _syncRuntime = null!;
     private LayerRuntime _asyncRuntime = null!;
+    private AsyncEcsScheduler _asyncScheduler = null!;
+    private NoopEcsWorkItem _noopWorkItem = null!;
 
     [Params(100, 1_000, 10_000, 100_000)]
     public int EntityCount { get; set; }
@@ -162,8 +165,15 @@ public class EcsExecutionModeBenchmarks
         LayerHub.Reset();
         _syncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Sync);
         _asyncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async);
+        _asyncScheduler = (AsyncEcsScheduler)_asyncRuntime.EcsWorkScheduler;
+        _noopWorkItem = new NoopEcsWorkItem();
         EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_syncRuntime, EntityCount);
         EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_asyncRuntime, EntityCount);
+        EnsureAsyncSubmitCapacity();
+
+        _asyncScheduler.Schedule(_noopWorkItem);
+        long fence = _asyncScheduler.FlushSubmissionsForTest();
+        _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
     }
 
     [GlobalCleanup]
@@ -182,24 +192,41 @@ public class EcsExecutionModeBenchmarks
                     .ForEach(ref job);
     }
 
-    [Benchmark(Description = "Async PlainQuery SubmitOnly")]
-    [InvocationCount(1)]
+    [IterationSetup(Target = nameof(Async_PlainQuery_SubmitOnly))]
+    public void PrepareAsyncPlainSubmitOnly()
+    {
+        EnsureAsyncSubmitCapacity();
+    }
+
+    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async PlainQuery SubmitOnly")]
     [BenchmarkCategory("07.ECS.ExecutionMode", "PlainQuery", "AsyncSubmit")]
     public void Async_PlainQuery_SubmitOnly()
     {
-        var job = new MoveWithWorkJob(WorkIterations);
-        _asyncRuntime.EcsWorld
-                     .Query<BenchPosition, BenchVelocity>()
-                     .ForEach(ref job);
+        for (int i = 0; i < SubmitOperations; i++)
+        {
+            var job = new MoveWithWorkJob(0);
+            _asyncRuntime.EcsWorld
+                         .Query<BenchPosition, BenchVelocity>()
+                         .ForEach(ref job);
+        }
     }
 
     [IterationCleanup(Target = nameof(Async_PlainQuery_SubmitOnly))]
     public void CleanupAsyncPlainSubmitOnly()
     {
-        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+        long fence = _asyncRuntime.FlushEcsSubmissionsForTest();
+        _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
     }
 
-    [Benchmark(Description = "Async PlainQuery EndToEnd")]
+    [IterationSetup(Target = nameof(Async_PlainQuery_EndToEnd))]
+    public void PrepareAsyncPlainEndToEnd()
+    {
+        _asyncScheduler.Schedule(_noopWorkItem);
+        long fence = _asyncScheduler.FlushSubmissionsForTest();
+        _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
+    [Benchmark(Description = "Async PlainQuery WarmWorker EndToEnd")]
     [InvocationCount(1)]
     [BenchmarkCategory("07.ECS.ExecutionMode", "PlainQuery", "AsyncEndToEnd")]
     public void Async_PlainQuery_EndToEnd()
@@ -209,7 +236,24 @@ public class EcsExecutionModeBenchmarks
                      .Query<BenchPosition, BenchVelocity>()
                      .ForEach(ref job);
 
-        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+        long fence = _asyncRuntime.FlushEcsSubmissionsForTest();
+        _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
+    private void EnsureAsyncSubmitCapacity()
+    {
+        _asyncScheduler.EnsureCurrentSubmissionCapacityForTest(
+            SubmitOperations,
+            SubmitOperations * Unsafe.SizeOf<MoveWithWorkJob>());
+    }
+
+    private sealed class NoopEcsWorkItem : IEcsWorkItem
+    {
+        public string DebugName => "Noop";
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+        }
     }
 }
 
@@ -639,6 +683,8 @@ public class EcsAsyncBringBenchmarks
 
     private LayerRuntime _syncRuntime = null!;
     private LayerRuntime _asyncRuntime = null!;
+    private AsyncEcsScheduler _asyncScheduler = null!;
+    private NoopEcsWorkItem _noopWorkItem = null!;
 
     [Params(1_000, 10_000, 100_000)]
     public int EntityCount { get; set; }
@@ -653,6 +699,8 @@ public class EcsAsyncBringBenchmarks
         BenchProjectedActor.MoveCount = 0;
         _syncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Sync);
         _asyncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async);
+        _asyncScheduler = (AsyncEcsScheduler)_asyncRuntime.EcsWorkScheduler;
+        _noopWorkItem = new NoopEcsWorkItem();
         EcsBenchmarkWorldFactory.PopulateBringWorld(_syncRuntime, EntityCount);
         EcsBenchmarkWorldFactory.PopulateBringWorld(_asyncRuntime, EntityCount);
         WarmupProjectedActors(_syncRuntime);
@@ -697,11 +745,20 @@ public class EcsAsyncBringBenchmarks
     [IterationCleanup(Target = nameof(Async_BringQuery_SubmitOnly))]
     public void CleanupAsyncBringSubmitOnly()
     {
-        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+        long fence = _asyncRuntime.FlushEcsSubmissionsForTest();
+        _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
         _asyncRuntime.Pump(0.016f);
     }
 
-    [Benchmark(Description = "Async BringQuery EndToEnd")]
+    [IterationSetup(Target = nameof(Async_BringQuery_EndToEnd))]
+    public void PrepareAsyncBringEndToEnd()
+    {
+        _asyncScheduler.Schedule(_noopWorkItem);
+        long fence = _asyncScheduler.FlushSubmissionsForTest();
+        _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
+    [Benchmark(Description = "Async BringQuery WarmWorker EndToEnd")]
     [BenchmarkCategory("08.ECS.Bring", "AsyncEndToEnd", "ExecuteDrainPost")]
     public void Async_BringQuery_EndToEnd()
     {
@@ -713,7 +770,8 @@ public class EcsAsyncBringBenchmarks
                      .Batch()
                      .Post();
 
-        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+        long fence = _asyncRuntime.FlushEcsSubmissionsForTest();
+        _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
         _asyncRuntime.Pump(0.016f);
     }
 
@@ -728,7 +786,8 @@ public class EcsAsyncBringBenchmarks
                      .Batch()
                      .Post();
 
-        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
+        long fence = _asyncRuntime.FlushEcsSubmissionsForTest();
+        _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
     }
 
     [Benchmark(Description = "Async BringQuery DrainOnly")]
@@ -762,6 +821,15 @@ public class EcsAsyncBringBenchmarks
         }
 
         runtime.Pump(0.016f);
+    }
+
+    private sealed class NoopEcsWorkItem : IEcsWorkItem
+    {
+        public string DebugName => "Noop";
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+        }
     }
 }
 
@@ -850,6 +918,133 @@ public class EcsFrameSimulationBenchmarks
         }
 
         EcsBenchmarkSink.IntValue = acc;
+    }
+}
+
+[MemoryDiagnoser]
+[CategoriesColumn]
+[RankColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class EcsFrameBatchBenchmarks
+{
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+
+    private LayerRuntime _asyncRuntime = null!;
+    private AsyncEcsScheduler _asyncScheduler = null!;
+    private NoopEcsWorkItem _noopWorkItem = null!;
+    private long _lastFence;
+
+    [Params(1_000)]
+    public int EntityCount { get; set; }
+
+    [Params(1, 10, 100, 1_000)]
+    public int QueryCount { get; set; }
+
+    [Params(0, 256)]
+    public int MainThreadWorkIterations { get; set; }
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        LayerHub.Reset();
+        _asyncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async);
+        _asyncScheduler = (AsyncEcsScheduler)_asyncRuntime.EcsWorkScheduler;
+        _noopWorkItem = new NoopEcsWorkItem();
+        EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_asyncRuntime, EntityCount);
+        EnsureFrameSubmitCapacity();
+        WarmWorker();
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        LayerHub.Reset();
+    }
+
+    [IterationSetup(Target = nameof(Async_FrameBatch_SubmitFlushOnly))]
+    public void PrepareSubmitFlushOnly()
+    {
+        EnsureFrameSubmitCapacity();
+    }
+
+    [Benchmark(Description = "Async FrameBatch SubmitManyQueries FlushOnce")]
+    [BenchmarkCategory("09.ECS.FrameBatch", "Async", "SubmitFlushOnly")]
+    public void Async_FrameBatch_SubmitFlushOnly()
+    {
+        SubmitFrameQueries();
+        SimulateMainThreadWork(MainThreadWorkIterations);
+        _lastFence = _asyncRuntime.FlushEcsSubmissionsForTest();
+    }
+
+    [IterationCleanup(Target = nameof(Async_FrameBatch_SubmitFlushOnly))]
+    public void CleanupSubmitFlushOnly()
+    {
+        _asyncRuntime.WaitEcsFenceForTest(_lastFence, IdleTimeout);
+    }
+
+    [IterationSetup(Target = nameof(Async_FrameBatch_WarmWorkerEndToEnd))]
+    public void PrepareWarmWorkerEndToEnd()
+    {
+        EnsureFrameSubmitCapacity();
+        WarmWorker();
+    }
+
+    [Benchmark(Description = "Async FrameBatch WarmWorker EndToEnd")]
+    [BenchmarkCategory("09.ECS.FrameBatch", "Async", "WarmWorker", "EndToEnd")]
+    public void Async_FrameBatch_WarmWorkerEndToEnd()
+    {
+        SubmitFrameQueries();
+        SimulateMainThreadWork(MainThreadWorkIterations);
+        long fence = _asyncRuntime.FlushEcsSubmissionsForTest();
+        _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
+        _asyncRuntime.Pump(0.016f);
+    }
+
+    private void SubmitFrameQueries()
+    {
+        for (int i = 0; i < QueryCount; i++)
+        {
+            var job = new MoveWithWorkJob(0);
+            _asyncRuntime.EcsWorld
+                         .Query<BenchPosition, BenchVelocity>()
+                         .ForEach(ref job);
+        }
+    }
+
+    private void EnsureFrameSubmitCapacity()
+    {
+        _asyncScheduler.EnsureCurrentSubmissionCapacityForTest(
+            QueryCount,
+            QueryCount * Unsafe.SizeOf<MoveWithWorkJob>());
+    }
+
+    private void WarmWorker()
+    {
+        _asyncScheduler.Schedule(_noopWorkItem);
+        long fence = _asyncScheduler.FlushSubmissionsForTest();
+        _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void SimulateMainThreadWork(int iterations)
+    {
+        int acc = EcsBenchmarkSink.IntValue;
+        for (int i = 0; i < iterations; i++)
+        {
+            acc = unchecked((acc * 16777619) ^ (i + 31));
+        }
+
+        EcsBenchmarkSink.IntValue = acc;
+    }
+
+    private sealed class NoopEcsWorkItem : IEcsWorkItem
+    {
+        public string DebugName => "Noop";
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+        }
     }
 }
 
