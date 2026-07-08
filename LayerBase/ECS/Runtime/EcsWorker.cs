@@ -1,4 +1,5 @@
 using Arch.Core;
+using LayerBase.ECS.Runtime.Submission;
 
 namespace LayerBase.ECS.Runtime;
 
@@ -8,6 +9,7 @@ internal sealed class EcsWorker : IDisposable
     private readonly World _world;
     private readonly EcsWorkQueue _workQueue;
     private readonly EcsResultQueue _resultQueue;
+    private readonly EcsSubmissionBatchPool _submissionBatchPool;
     private readonly EcsRuntimeOptions _options;
     private readonly AutoResetEvent _signal = new(false);
 
@@ -20,12 +22,14 @@ internal sealed class EcsWorker : IDisposable
         World world,
         EcsWorkQueue workQueue,
         EcsResultQueue resultQueue,
+        EcsSubmissionBatchPool submissionBatchPool,
         EcsRuntimeOptions options)
     {
         _runtime = runtime;
         _world = world;
         _workQueue = workQueue;
         _resultQueue = resultQueue;
+        _submissionBatchPool = submissionBatchPool;
         _options = options;
     }
 
@@ -78,30 +82,24 @@ internal sealed class EcsWorker : IDisposable
                 int processed = 0;
 
                 while ((_options.MaxWorkItemsPerWake <= 0 || processed < _options.MaxWorkItemsPerWake) &&
-                       _workQueue.TryDequeue(out IEcsWorkItem? item))
+                       _workQueue.TryDequeue(out EcsSubmissionBatch? batch))
                 {
-                    if (item == null)
+                    if (batch == null)
                     {
                         continue;
                     }
 
                     didWork = true;
-                    processed++;
                     Interlocked.Exchange(ref _executing, 1);
-                    EcsThreadGuard.EnterExecution(_runtime.Id, _resultQueue);
-
                     try
                     {
-                        item.Execute(_world, _resultQueue);
-                    }
-                    catch (Exception ex)
-                    {
-                        _resultQueue.Enqueue(new EcsWorkFailedResult(item.DebugName, ex));
+                        ExecuteBatch(batch, ref processed);
                     }
                     finally
                     {
-                        EcsThreadGuard.ExitExecution(_runtime.Id);
                         Interlocked.Exchange(ref _executing, 0);
+                        _workQueue.MarkCompleted();
+                        _submissionBatchPool.Return(batch);
                     }
                 }
 
@@ -114,6 +112,30 @@ internal sealed class EcsWorker : IDisposable
         finally
         {
             EcsThreadGuard.Unbind(_runtime.Id);
+        }
+    }
+
+    private void ExecuteBatch(EcsSubmissionBatch batch, ref int processed)
+    {
+        ReadOnlySpan<IEcsWorkItem> items = batch.AsSpan();
+        for (int i = 0; i < items.Length; i++)
+        {
+            IEcsWorkItem item = items[i];
+            processed++;
+            EcsThreadGuard.EnterExecution(_runtime.Id, _resultQueue);
+
+            try
+            {
+                item.Execute(_world, _resultQueue);
+            }
+            catch (Exception ex)
+            {
+                _resultQueue.Enqueue(new EcsWorkFailedResult(item.DebugName, ex));
+            }
+            finally
+            {
+                EcsThreadGuard.ExitExecution(_runtime.Id);
+            }
         }
     }
 }

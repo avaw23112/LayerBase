@@ -274,6 +274,7 @@ public sealed partial class LayerRuntime : IDisposable
                                   ?? new PostPumpStats(0, 0, 0, 0);
 
         _chain?.Pump(deltaTime);
+        EcsScheduler?.FlushSubmissions();
 
         if (_scheduler != null)
         {
@@ -299,6 +300,8 @@ public sealed partial class LayerRuntime : IDisposable
                     "SweepProjectedActors",
                     world => world.SweepProjectedActors()));
             }
+
+            EcsScheduler?.FlushSubmissions();
         }
     }
     #endregion

@@ -10,10 +10,66 @@ using LayerBase.Core;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 using LayerBase.ECS.Projection.Flow;
+using LayerBase.ECS.Runtime.Queues;
+using LayerBase.ECS.Runtime.Submission;
 using LayerBase.ECS.Runtime;
 using LayerBase.Layers;
 
 namespace Benchmarks;
+
+[MemoryDiagnoser]
+[CategoriesColumn]
+[RankColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class EcsSpscBatchBenchmarks
+{
+    private SpscRing<EcsSubmissionBatch> _ring = null!;
+    private EcsSubmissionBatch _batch = null!;
+    private EcsSubmissionBatch _recordBatch = null!;
+    private NoopEcsWorkItem _workItem = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _ring = new SpscRing<EcsSubmissionBatch>(1024);
+        _batch = new EcsSubmissionBatch(1);
+        _recordBatch = new EcsSubmissionBatch(1024);
+        _workItem = new NoopEcsWorkItem();
+    }
+
+    [Benchmark(OperationsPerInvoke = 1024, Description = "Raw SPSC Batch RoundTrip - 1024")]
+    [BenchmarkCategory("07.ECS.SPSC", "RawSpscBatchEnqueue")]
+    public void RawSpscBatchRoundTrip_1024()
+    {
+        for (int i = 0; i < 1024; i++)
+        {
+            _ring.TryEnqueue(_batch);
+            _ring.TryDequeue(out _);
+        }
+    }
+
+    [Benchmark(OperationsPerInvoke = 1024, Description = "SubmissionBatch Record WorkItem - 1024")]
+    [BenchmarkCategory("07.ECS.SPSC", "SubmissionBatchRecord")]
+    public void SubmissionBatch_RecordWorkItem_1024()
+    {
+        for (int i = 0; i < 1024; i++)
+        {
+            _recordBatch.Add(_workItem);
+        }
+
+        _recordBatch.Clear();
+    }
+
+    private sealed class NoopEcsWorkItem : IEcsWorkItem
+    {
+        public string DebugName => "Noop";
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+        }
+    }
+}
 
 [MemoryDiagnoser]
 [CategoriesColumn]

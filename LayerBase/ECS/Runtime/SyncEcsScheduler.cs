@@ -35,6 +35,10 @@ internal sealed class SyncEcsScheduler : IEcsWorkScheduler
         return _resultQueue.DrainToMainThread(_runtime, maxCount);
     }
 
+    public void FlushSubmissions()
+    {
+    }
+
     public void Start()
     {
     }

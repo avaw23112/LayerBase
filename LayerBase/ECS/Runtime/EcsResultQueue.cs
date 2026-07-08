@@ -1,14 +1,24 @@
-using System.Collections.Concurrent;
+using LayerBase.ECS.Runtime.Queues;
 
 namespace LayerBase.ECS.Runtime;
 
 internal sealed class EcsResultQueue
 {
-    private readonly ConcurrentQueue<IEcsResultItem> _queue = new();
+    private readonly SpscRing<IEcsResultItem> _ring = new(16_384);
+    private readonly Queue<IEcsResultItem> _overflow = new();
+    private readonly object _overflowLock = new();
 
     public void Enqueue(IEcsResultItem item)
     {
-        _queue.Enqueue(item);
+        if (_ring.TryEnqueue(item))
+        {
+            return;
+        }
+
+        lock (_overflowLock)
+        {
+            _overflow.Enqueue(item);
+        }
     }
 
     public EcsDrainStats DrainToMainThread(LayerRuntime runtime, int maxCount)
@@ -17,8 +27,13 @@ internal sealed class EcsResultQueue
         int failed = 0;
 
         while ((maxCount <= 0 || drained < maxCount) &&
-               _queue.TryDequeue(out IEcsResultItem? item))
+               TryDequeue(out IEcsResultItem? item))
         {
+            if (item == null)
+            {
+                continue;
+            }
+
             try
             {
                 item.Apply(runtime);
@@ -37,12 +52,37 @@ internal sealed class EcsResultQueue
 
     public void Clear()
     {
-        while (_queue.TryDequeue(out IEcsResultItem? item))
+        while (TryDequeue(out IEcsResultItem? item))
         {
+            if (item == null)
+            {
+                continue;
+            }
+
             if (item is IDisposable disposable)
             {
                 disposable.Dispose();
             }
+        }
+    }
+
+    private bool TryDequeue(out IEcsResultItem? item)
+    {
+        if (_ring.TryDequeue(out item))
+        {
+            return true;
+        }
+
+        lock (_overflowLock)
+        {
+            if (_overflow.Count == 0)
+            {
+                item = null;
+                return false;
+            }
+
+            item = _overflow.Dequeue();
+            return true;
         }
     }
 }

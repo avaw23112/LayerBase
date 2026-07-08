@@ -6,6 +6,8 @@ public interface IEcsScheduler : IDisposable
 
     EcsDrainStats DrainResults(int maxCount);
 
+    void FlushSubmissions();
+
     void Start();
 
     void Stop();
