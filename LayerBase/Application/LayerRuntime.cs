@@ -7,9 +7,11 @@ using LayerBase.Call;
 using LayerBase.Core.Event;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
+using LayerBase.ECS.Runtime;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
 using LayerBase.Snap;
+using LayerBase.Worker;
 
 namespace LayerBase;
 
@@ -25,6 +27,7 @@ public sealed partial class LayerRuntime : IDisposable
     internal WorldServiceRoot Services { get; }
     public EventCenter EventCenter { get; internal set; }
     public ActorWorld Actors { get; }
+    public WorkerRuntime Worker { get; }
     private readonly PostIngressQueue _postIngress = new();
     #endregion
 
@@ -89,6 +92,7 @@ public sealed partial class LayerRuntime : IDisposable
         _id = id;
         EventCenter = new EventCenter();
         Actors = new ActorWorld(this);
+        Worker = new WorkerRuntime(Math.Max(1, Environment.ProcessorCount - 1));
         Services = new WorldServiceRoot(this);
         InitializeEcsWorld();
         LayerHub.Internal_Register(this);
@@ -223,6 +227,13 @@ public sealed partial class LayerRuntime : IDisposable
 
     private void PumpCore(float deltaTime)
     {
+        if (_scheduler != null)
+        {
+            Worker.DrainEventsTo(_scheduler, _scheduler.Options.MaxIngressPostsPerPump);
+        }
+
+        EcsScheduler?.DrainResults(EcsOptions.MaxResultsDrainPerPump);
+
         // 1. Time tick
         _timer?.Tick(deltaTime, _timerSink!);
 
@@ -278,7 +289,16 @@ public sealed partial class LayerRuntime : IDisposable
                 pumpFixedUpdate: pumpActorFixedUpdate,
                 budget: ref actorBudget);
 
-            EcsWorld.SweepProjectedActors();
+            if (EcsScheduler.Mode == EcsExecutionMode.Sync || EcsWorkScheduler.IsSchedulerThread)
+            {
+                EcsWorld.SweepProjectedActors();
+            }
+            else
+            {
+                EcsWorkScheduler.Schedule(new DelegateEcsWorkItem(
+                    "SweepProjectedActors",
+                    world => world.SweepProjectedActors()));
+            }
         }
     }
     #endregion
@@ -456,6 +476,8 @@ public sealed partial class LayerRuntime : IDisposable
         _disposed = true;
 
         _postIngress.Clear();
+        EcsScheduler.Dispose();
+        Worker.Dispose();
         _chain?.DisposeLayers();
         _chain = null;
         Actors.RuntimeStop();
@@ -770,6 +792,18 @@ public sealed partial class LayerRuntime : IDisposable
             return this;
         }
 
+        public LayersBuilder SetEcsOptions(EcsRuntimeOptions options)
+        {
+            if (_built) throw new InvalidOperationException("Cannot configure ECS after Build has been called.");
+            _runtime.ConfigureEcs(options);
+            return this;
+        }
+
+        public LayersBuilder SetEcsExecutionMode(EcsExecutionMode executionMode)
+        {
+            return SetEcsOptions(new EcsRuntimeOptions(executionMode));
+        }
+
         public LayerRuntime Build()
         {
             if (_built) throw new InvalidOperationException("LayersBuilder.Build can only be called once.");
@@ -791,6 +825,8 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime.Actors.CompleteRuntimeBuild();
             _runtime.BuildFullSnapCache();
             _runtime.PolicyTable.Freeze();
+            _runtime.EcsScheduler.Start();
+            _runtime.Worker.Start();
 
             if (_debugMode)
             {

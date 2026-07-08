@@ -2,8 +2,8 @@
     import namespace="System.Linq"
 #>
 <#+
-    const int ComponentAmount = 8;
-    const int EventAmount = 10;
+    const int ComponentAmount = 12;
+    const int EventAmount = 12;
 
     string CG(int count)
     {

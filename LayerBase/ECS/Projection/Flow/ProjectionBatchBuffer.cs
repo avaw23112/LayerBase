@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
+using Arch.Core;
 using LayerBase.Actor;
+using LayerBase.ECS.Runtime;
 
 namespace LayerBase.ECS.Projection.Flow;
 
@@ -90,6 +92,21 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
         {
             actorWorld.PostTo(_actorIds[i], in _events[i]);
         }
+    }
+
+    public void PostToOrEnqueue(World world, ActorWorld actorWorld, string debugName)
+    {
+        if (!EcsThreadGuard.TryGetCurrentResultQueue(world.Runtime.Id, out EcsResultQueue? results) ||
+            results == null)
+        {
+            PostTo(actorWorld);
+            return;
+        }
+
+        results.Enqueue(new ActorEventBatchResult<TEvent>(debugName, this));
+        _actorIds = Array.Empty<ActorId>();
+        _events = Array.Empty<TEvent>();
+        Count = 0;
     }
 
     public void Dispose()

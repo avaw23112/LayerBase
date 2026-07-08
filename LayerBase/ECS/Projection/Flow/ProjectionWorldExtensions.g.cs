@@ -165,4 +165,72 @@ public static class ProjectionWorldExtensions
             world.Query(in description));
     }
 
+    public static ProjectionQueryFlow9<T0, T1, T2, T3, T4, T5, T6, T7, T8> Query<T0, T1, T2, T3, T4, T5, T6, T7, T8>(
+        this World world)
+    {
+        QueryDescription description = new QueryDescription();
+
+        // ProjectedActorRef：
+        // 必须作为 Projection Query 的基础组件。
+        description.WithAll<ProjectedActorRef>();
+
+        // 用户业务组件。
+        description.WithAll<T0, T1, T2, T3, T4, T5, T6, T7, T8>();
+
+        return new ProjectionQueryFlow9<T0, T1, T2, T3, T4, T5, T6, T7, T8>(
+            world,
+            world.Query(in description));
+    }
+
+    public static ProjectionQueryFlow10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> Query<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(
+        this World world)
+    {
+        QueryDescription description = new QueryDescription();
+
+        // ProjectedActorRef：
+        // 必须作为 Projection Query 的基础组件。
+        description.WithAll<ProjectedActorRef>();
+
+        // 用户业务组件。
+        description.WithAll<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>();
+
+        return new ProjectionQueryFlow10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(
+            world,
+            world.Query(in description));
+    }
+
+    public static ProjectionQueryFlow11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> Query<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(
+        this World world)
+    {
+        QueryDescription description = new QueryDescription();
+
+        // ProjectedActorRef：
+        // 必须作为 Projection Query 的基础组件。
+        description.WithAll<ProjectedActorRef>();
+
+        // 用户业务组件。
+        description.WithAll<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>();
+
+        return new ProjectionQueryFlow11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(
+            world,
+            world.Query(in description));
+    }
+
+    public static ProjectionQueryFlow12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> Query<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(
+        this World world)
+    {
+        QueryDescription description = new QueryDescription();
+
+        // ProjectedActorRef：
+        // 必须作为 Projection Query 的基础组件。
+        description.WithAll<ProjectedActorRef>();
+
+        // 用户业务组件。
+        description.WithAll<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>();
+
+        return new ProjectionQueryFlow12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(
+            world,
+            world.Query(in description));
+    }
+
 }

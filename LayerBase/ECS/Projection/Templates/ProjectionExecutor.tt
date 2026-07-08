@@ -9,6 +9,7 @@ using CommunityToolkit.HighPerformance;
 using LayerBase.Actor;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
+using LayerBase.ECS.Runtime;
 
 namespace LayerBase.ECS.Projection.Flow;
 
@@ -21,6 +22,14 @@ internal static class ProjectionExecutor0
         ProjectionForEach<TEvent> forEach)
         where TEvent : struct
     {
+        if (EcsSchedulerUtility.ScheduleIfNeeded(
+                world,
+                "BringProjection",
+                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+        {
+            return;
+        }
+
         ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
@@ -32,7 +41,7 @@ internal static class ProjectionExecutor0
                 CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostToOrEnqueue(world, actorWorld, "BringProjection");
         }
         finally
         {
@@ -169,6 +178,14 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, <#= dName #><<#= evtG #>> forEach)
     {
+        if (EcsSchedulerUtility.ScheduleIfNeeded(
+                world,
+                "BringProjection",
+                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+        {
+            return;
+        }
+
         ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 <#
@@ -197,7 +214,7 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
         for (var i = 0; i < e; i++)
         {
 #>
-            batch<#= i #>.PostTo(actorWorld);
+            batch<#= i #>.PostToOrEnqueue(world, actorWorld, "BringProjection");
 <#
         }
 #>
@@ -298,6 +315,14 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         ProjectionForEach<<#= compG #>, TEvent> forEach)
         where TEvent : struct
     {
+        if (EcsSchedulerUtility.ScheduleIfNeeded(
+                world,
+                "BringProjection",
+                scheduledWorld => Post<TEvent>(scheduledWorld, query, predicate, forEach)))
+        {
+            return;
+        }
+
         ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
@@ -309,7 +334,7 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
                 CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostToOrEnqueue(world, actorWorld, "BringProjection");
         }
         finally
         {
@@ -338,6 +363,15 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         ref TJob job)
         where TJob : struct, IQueryJob<<#= compG #>>
     {
+        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.ScheduleIfNeeded(
+                world,
+                $"PlainQuery<{typeof(TJob).Name}>",
+                scheduledWorld => ForEach(scheduledWorld, query, predicate, ref scheduledJob)))
+        {
+            return;
+        }
+
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -393,6 +427,15 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob<#= c #>x1<<#= compG #>, TEvent0>
     {
+        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.ScheduleIfNeeded(
+                world,
+                "BringProjection",
+                scheduledWorld => Post<TEvent0, TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+        {
+            return;
+        }
+
         ActorWorld actorWorld =
             world.Runtime.Actors;
 
@@ -416,8 +459,10 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
                     ref batch0);
             }
 
-            batch0.PostTo(
-                actorWorld);
+            batch0.PostToOrEnqueue(
+                world,
+                actorWorld,
+                "BringProjection");
         }
         finally
         {
@@ -632,6 +677,14 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
 {
     public static void Post(World world, Query query, ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach)
     {
+        if (EcsSchedulerUtility.ScheduleIfNeeded(
+                world,
+                "BringProjection",
+                scheduledWorld => Post(scheduledWorld, query, predicate, forEach)))
+        {
+            return;
+        }
+
         ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 <#
@@ -660,7 +713,7 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
             for (var i = 0; i < e; i++)
             {
 #>
-            batch<#= i #>.PostTo(actorWorld);
+            batch<#= i #>.PostToOrEnqueue(world, actorWorld, "BringProjection");
 <#
             }
 #>
@@ -685,6 +738,15 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
         ref TJob job)
         where TJob : struct, IProjectionJob<#= c #>x<#= e #><<#= allG #>>
     {
+        TJob scheduledJob = job;
+        if (EcsSchedulerUtility.ScheduleIfNeeded(
+                world,
+                "BringProjection",
+                scheduledWorld => Post<TJob>(scheduledWorld, query, predicate, ref scheduledJob)))
+        {
+            return;
+        }
+
         ActorWorld actorWorld =
             world.Runtime.Actors;
 
@@ -724,8 +786,10 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
             for (var i = 0; i < e; i++)
             {
 #>
-            batch<#= i #>.PostTo(
-                actorWorld);
+            batch<#= i #>.PostToOrEnqueue(
+                world,
+                actorWorld,
+                "BringProjection");
 <#
             }
 #>

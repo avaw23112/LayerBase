@@ -20,6 +20,14 @@ public static class DiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor ECS002_QueryMethodMustBeStatic = new(
+        DiagnosticIds.ECS002,
+        "Query method must be static",
+        "[Query] method '{0}' must be static",
+        ECS,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public static readonly DiagnosticDescriptor ECS003_QueryMethodCannotBeGeneric = new(
         DiagnosticIds.ECS003,
         "Query method cannot be generic",
@@ -80,6 +88,14 @@ public static class DiagnosticDescriptors
         DiagnosticIds.ECS011,
         "Entity parameter can appear at most once",
         "Entity parameter can appear at most once",
+        ECS,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ECS012_QueryInputMustAppearBeforeComponents = new(
+        DiagnosticIds.ECS012,
+        "Query input parameters must appear before ECS components",
+        "Query input parameter '{0}' must appear before Entity/component parameters",
         ECS,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

@@ -88,7 +88,7 @@ public sealed partial class EnemyViewService : IService, LayerBase.DI.Options.IU
 
     [Query]
     [Bring<MoveViewEvent>]
-    private ProjectResult OnUpdateEnemyView(
+    private static ProjectResult OnUpdateEnemyView(
         ref PositionComponent position,
         in  VelocityComponent velocity,
         in  AoiComponent      aoi,

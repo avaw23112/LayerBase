@@ -7,21 +7,16 @@ using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace LayerBase.Generator.Diagnostics;
 
-/// <summary>
-/// ECS Query/Bring 相关分析器。
-/// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class ECSAnalyzer : DiagnosticAnalyzer
 {
-    private const string QueryAttributeName = "LayerBase.ECS.QueryAttribute";
-    private const string BringAttributeName = "LayerBase.ECS.BringAttribute";
-    private const string EntryPointAttributeName = "LayerBase.ECS.EntryPointAttribute";
     private const string IComponentName = "LayerBase.Core.IComponent";
     private const string IActorEventName = "LayerBase.Core.IActorEvent";
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(
             DiagnosticDescriptors.ECS001_QueryMethodTypeMustBePartial,
+            DiagnosticDescriptors.ECS002_QueryMethodMustBeStatic,
             DiagnosticDescriptors.ECS003_QueryMethodCannotBeGeneric,
             DiagnosticDescriptors.ECS004_QueryWithoutBringMustReturnVoid,
             DiagnosticDescriptors.ECS005_QueryWithBringMustReturnProjectResult,
@@ -30,6 +25,7 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.ECS009_BringEventParamMustBeRef,
             DiagnosticDescriptors.ECS010_ComponentParamMustBeRefOrIn,
             DiagnosticDescriptors.ECS011_EntityParamAtMostOnce,
+            DiagnosticDescriptors.ECS012_QueryInputMustAppearBeforeComponents,
             DiagnosticDescriptors.ECS013_ComponentMustImplementIComponent,
             DiagnosticDescriptors.ECS014_BringEventMustImplementIActorEvent,
             DiagnosticDescriptors.ECS020_QueryMethodMustStartWithOn,
@@ -49,7 +45,6 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // 检查是否有 [Query] 属性
         var queryAttribute = methodSymbol.GetAttributes()
                                          .FirstOrDefault(a => a.AttributeClass?.MetadataName == "QueryAttribute");
 
@@ -58,7 +53,6 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // LB-ECS001: 包含 [Query] 方法的类型必须是 partial
         if (methodSymbol.ContainingType is INamedTypeSymbol containingType)
         {
             var classDecl = methodSymbol.DeclaringSyntaxReferences
@@ -73,7 +67,14 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // LB-ECS003: [Query] 方法不能是泛型
+        if (!methodSymbol.IsStatic)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.ECS002_QueryMethodMustBeStatic,
+                methodSymbol.Locations.FirstOrDefault(),
+                methodSymbol.Name));
+        }
+
         if (methodSymbol.IsGenericMethod)
         {
             context.ReportDiagnostic(Diagnostic.Create(
@@ -82,15 +83,13 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
                 methodSymbol.Name));
         }
 
-        // 检查 [Bring] 属性
         var bringAttribute = methodSymbol.GetAttributes()
-                                         .FirstOrDefault(a => a.AttributeClass?.MetadataName == "BringAttribute"
-                                                              || a.AttributeClass?.MetadataName.StartsWith(
+                                         .FirstOrDefault(a => a.AttributeClass?.MetadataName == "BringAttribute" ||
+                                                              a.AttributeClass?.MetadataName.StartsWith(
                                                                   "BringAttribute`") == true);
 
         bool hasBring = bringAttribute != null;
 
-        // LB-ECS004: 无 [Bring] 的 [Query] 方法必须返回 void
         if (!hasBring && !methodSymbol.ReturnsVoid)
         {
             context.ReportDiagnostic(Diagnostic.Create(
@@ -99,11 +98,10 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
                 methodSymbol.Name));
         }
 
-        // LB-ECS005: 有 [Bring] 的 [Query] 方法必须返回 ProjectResult
         if (hasBring)
         {
-            bool returnsProjectResult = methodSymbol.ReturnType?.MetadataName == "ProjectResult"
-                                        && methodSymbol.ReturnType?.ContainingNamespace?.ToDisplayString() ==
+            bool returnsProjectResult = methodSymbol.ReturnType?.MetadataName == "ProjectResult" &&
+                                        methodSymbol.ReturnType?.ContainingNamespace?.ToDisplayString() ==
                                         "LayerBase.ECS";
 
             if (!returnsProjectResult)
@@ -114,9 +112,8 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
                     methodSymbol.Name));
             }
 
-            // LB-ECS006: [Bring] 必须声明至少一个事件类型
-            if (bringAttribute!.ConstructorArguments.Length == 0
-                && bringAttribute.AttributeClass?.TypeArguments.Length == 0)
+            if (bringAttribute!.ConstructorArguments.Length == 0 &&
+                bringAttribute.AttributeClass?.TypeArguments.Length == 0)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.ECS006_BringMustDeclareEventType,
@@ -124,10 +121,12 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // 分析方法参数
         AnalyzeParameters(context, methodSymbol, hasBring);
+        AnalyzeEntryPoint(context, methodSymbol);
+    }
 
-        // LB-ECS020: [Query] 方法必须以 On 开头或指定 [EntryPoint]
+    private static void AnalyzeEntryPoint(SymbolAnalysisContext context, IMethodSymbol methodSymbol)
+    {
         var entryPointAttribute = methodSymbol.GetAttributes()
                                               .FirstOrDefault(a =>
                                                   a.AttributeClass?.MetadataName == "EntryPointAttribute");
@@ -140,7 +139,6 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
                 methodSymbol.Name));
         }
 
-        // LB-ECS024: [EntryPoint] 名称必须是有效的 C# 方法名
         if (entryPointAttribute != null)
         {
             string? name = entryPointAttribute.ConstructorArguments[0].Value as string;
@@ -156,26 +154,25 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeParameters(
         SymbolAnalysisContext context,
-        IMethodSymbol         methodSymbol,
-        bool                  hasBring)
+        IMethodSymbol methodSymbol,
+        bool hasBring)
     {
-        var parameters = methodSymbol.Parameters;
         int entityCount = 0;
-        bool foundNonEntity = false;
+        bool componentStarted = false;
         bool foundBringEvent = false;
 
-        for (int i = 0; i < parameters.Length; i++)
+        foreach (var param in methodSymbol.Parameters)
         {
-            var param = parameters[i];
-            bool isEntity = param.Type.MetadataName == "Entity"
-                            && param.Type.ContainingNamespace?.ToDisplayString() == "Arch.Core";
+            bool isEntity = param.Type.MetadataName == "Entity" &&
+                            param.Type.ContainingNamespace?.ToDisplayString() == "Arch.Core";
 
             if (isEntity)
             {
+                componentStarted = true;
                 entityCount++;
+
                 if (entityCount > 1)
                 {
-                    // LB-ECS011: Entity 参数最多出现一次
                     context.ReportDiagnostic(Diagnostic.Create(
                         DiagnosticDescriptors.ECS011_EntityParamAtMostOnce,
                         param.Locations.FirstOrDefault()));
@@ -184,14 +181,10 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
                 continue;
             }
 
-            foundNonEntity = true;
-
-            // 检查是否是 Bring 事件参数
-            if (hasBring && IsBringEventParam(param, methodSymbol))
+            if (hasBring && IsBringEventParam(param))
             {
                 foundBringEvent = true;
 
-                // LB-ECS009: Bring 事件参数必须是 ref
                 if (param.RefKind != RefKind.Ref)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
@@ -199,11 +192,28 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
                         param.Locations.FirstOrDefault(),
                         param.Name));
                 }
+
+                continue;
             }
-            else
+
+            bool isComponent = ImplementsInterface(param.Type, IComponentName);
+            if (IsInputParameter(param))
             {
-                // 组件参数
-                // LB-ECS010: 组件参数必须是 ref 或 in
+                if (componentStarted)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        DiagnosticDescriptors.ECS012_QueryInputMustAppearBeforeComponents,
+                        param.Locations.FirstOrDefault(),
+                        param.Name));
+                }
+
+                continue;
+            }
+
+            if (isComponent)
+            {
+                componentStarted = true;
+
                 if (param.RefKind != RefKind.Ref && param.RefKind != RefKind.In)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
@@ -212,30 +222,47 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
                         param.Name));
                 }
 
-                // 如果已经遇到 Bring 事件参数，但当前是组件参数，说明顺序错误
                 if (foundBringEvent)
                 {
-                    // LB-ECS008: Bring 事件参数必须在末尾
                     context.ReportDiagnostic(Diagnostic.Create(
                         DiagnosticDescriptors.ECS008_BringEventParamsAtEnd,
                         param.Locations.FirstOrDefault()));
                 }
 
-                // 检查组件类型是否实现 IComponent
-                if (!ImplementsInterface(param.Type, IComponentName))
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        DiagnosticDescriptors.ECS013_ComponentMustImplementIComponent,
-                        param.Locations.FirstOrDefault(),
-                        param.Type.Name));
-                }
+                continue;
             }
+
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.ECS013_ComponentMustImplementIComponent,
+                param.Locations.FirstOrDefault(),
+                param.Type.Name));
         }
     }
 
-    private static bool IsBringEventParam(IParameterSymbol param, IMethodSymbol method)
+    private static bool IsInputParameter(IParameterSymbol param)
     {
-        // 简化检查：如果参数类型实现 IActorEvent，则认为是 Bring 事件参数
+        if (param.RefKind == RefKind.Ref || param.RefKind == RefKind.Out)
+        {
+            return false;
+        }
+
+        if (!param.Type.IsValueType)
+        {
+            return false;
+        }
+
+        if (param.Type.MetadataName == "Entity" &&
+            param.Type.ContainingNamespace?.ToDisplayString() == "Arch.Core")
+        {
+            return false;
+        }
+
+        return !ImplementsInterface(param.Type, IComponentName) &&
+               !ImplementsInterface(param.Type, IActorEventName);
+    }
+
+    private static bool IsBringEventParam(IParameterSymbol param)
+    {
         return ImplementsInterface(param.Type, IActorEventName);
     }
 

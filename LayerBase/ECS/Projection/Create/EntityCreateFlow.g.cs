@@ -258,3 +258,115 @@ public readonly struct EntityCreateFlow8<T0, T1, T2, T3, T4, T5, T6, T7>
     }
 }
 
+public readonly struct EntityCreateFlow9<T0, T1, T2, T3, T4, T5, T6, T7, T8>
+{
+    private readonly World _world;
+    private readonly Entity _entity;
+
+    internal EntityCreateFlow9(World world, Entity entity)
+    {
+        _world = world;
+        _entity = entity;
+    }
+
+    public Entity Entity
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _entity;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EntityCreateFlow9<T0, T1, T2, T3, T4, T5, T6, T7, T8> WithProjectedActor<TActor>(
+        float keepAliveSeconds = 0.2f,
+        ProjectedActorReleasePolicy releasePolicy = ProjectedActorReleasePolicy.ReturnToPool)
+        where TActor : class, IPooledActor, new()
+    {
+        _world.WithProjectedActor<TActor>(_entity, keepAliveSeconds, releasePolicy);
+        return this;
+    }
+}
+
+public readonly struct EntityCreateFlow10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
+{
+    private readonly World _world;
+    private readonly Entity _entity;
+
+    internal EntityCreateFlow10(World world, Entity entity)
+    {
+        _world = world;
+        _entity = entity;
+    }
+
+    public Entity Entity
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _entity;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EntityCreateFlow10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> WithProjectedActor<TActor>(
+        float keepAliveSeconds = 0.2f,
+        ProjectedActorReleasePolicy releasePolicy = ProjectedActorReleasePolicy.ReturnToPool)
+        where TActor : class, IPooledActor, new()
+    {
+        _world.WithProjectedActor<TActor>(_entity, keepAliveSeconds, releasePolicy);
+        return this;
+    }
+}
+
+public readonly struct EntityCreateFlow11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
+{
+    private readonly World _world;
+    private readonly Entity _entity;
+
+    internal EntityCreateFlow11(World world, Entity entity)
+    {
+        _world = world;
+        _entity = entity;
+    }
+
+    public Entity Entity
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _entity;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EntityCreateFlow11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> WithProjectedActor<TActor>(
+        float keepAliveSeconds = 0.2f,
+        ProjectedActorReleasePolicy releasePolicy = ProjectedActorReleasePolicy.ReturnToPool)
+        where TActor : class, IPooledActor, new()
+    {
+        _world.WithProjectedActor<TActor>(_entity, keepAliveSeconds, releasePolicy);
+        return this;
+    }
+}
+
+public readonly struct EntityCreateFlow12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
+{
+    private readonly World _world;
+    private readonly Entity _entity;
+
+    internal EntityCreateFlow12(World world, Entity entity)
+    {
+        _world = world;
+        _entity = entity;
+    }
+
+    public Entity Entity
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _entity;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EntityCreateFlow12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> WithProjectedActor<TActor>(
+        float keepAliveSeconds = 0.2f,
+        ProjectedActorReleasePolicy releasePolicy = ProjectedActorReleasePolicy.ReturnToPool)
+        where TActor : class, IPooledActor, new()
+    {
+        _world.WithProjectedActor<TActor>(_entity, keepAliveSeconds, releasePolicy);
+        return this;
+    }
+}
+
