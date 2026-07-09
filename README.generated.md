@@ -1,8 +1,8 @@
 ﻿# LayerBase
 
-> LayerBase 是一个面向 Unity、Godot 与纯 C# 服务端的游戏业务运行时分层框架，用 `Layer -> Service -> Manager` 建立业务结构，再从这个结构自然扩展出事件、Call、Timer、Actor、ECS、Worker 与 Snap。
+> LayerBase 是一个面向 Unity、Godot 与纯 C# 服务端的游戏业务运行时分层框架，用 `Layer -> Service -> Manager` 建立业务结构，再从这个结构自然扩展出事件、Call、Timer、Actor、ECS、Worker、Snap 与 LayerTool。
 
-本文档是新版结构化 README 草稿，不覆盖原有 `README.md`。当前功能面以仓库中的 `LayerBase` `1.5.7` 为准。
+本文档是新版结构化 README 草稿，不覆盖原有 `README.md`。当前功能面以仓库中的 `LayerBase` `1.5.8` 为准。
 
 ## What is this?
 
@@ -21,7 +21,8 @@ LayerRuntime
       │         ├── Actor: 独立行为对象
       │         ├── ECS: 数据密集批处理
       │         ├── Worker: 后台纯计算
-      │         └── Snap: 显式业务状态快照
+      │         ├── Snap: 显式业务状态快照
+      │         └── LayerTool: 生成式工具对象注册与创建
 ```
 
 也就是说，LayerBase 先回答“业务应该放在哪里”，再回答“业务之间如何通信、如何调度、如何扩展”。
@@ -129,6 +130,7 @@ LayerBase 的功能不是平铺的。每个功能都解决 Layer 结构中的一
 | ECS 批处理结果要变成对象行为 | Projection / `Bring<TEvent>()` | Query 生成事件，投递到投影 Actor 或主线程结果流。 |
 | 业务有 CPU 密集型纯计算 | `WorkerRuntime` | 后台执行 `IWorkerEventJob<TInput,TEvent>`，结果回到事件流。 |
 | Layer / Service / Manager 要保存状态 | `IFullSnap` / `IClipSnap<T>` | 显式写入业务字段，不保存 Runtime 内部队列和线程状态。 |
+| UI / 工具 / 视图对象需要按 key 创建 | `LayerToolRegistry` / `[LayerTool]` | 源生成器生成无反射注册代码，支持 Contract + Key 查询、缓存、外部工厂和诊断报告。 |
 
 ## Quick Start
 
@@ -349,10 +351,13 @@ Pump 阶段大致完成：
 
 当前 README 覆盖的主要功能面：
 
+最近新增的重点能力是 **LayerTool**：它通过 `[LayerTool]` 标记自定义 Attribute，再由源生成器生成直接注册代码，把按 key 创建的工具对象纳入 `LayerRuntime.Tools`。它支持 `[LayerToolFactory]` 静态工厂、`ILayerToolFactory<T>` 外部工厂、public 无参构造三段创建优先级，并提供 entry 查询、缓存管理、诊断报告和 LBTOOL001-LBTOOL013 编译期诊断。
+
 | Area | Current capabilities |
 | --- | --- |
 | Runtime | 多 `LayerRuntime`、`LayerHub`、Build、Pump、Prewarm、Reset、Dispose。 |
 | DI | `IService`、`IServiceCollection`、`[Mount]`、`[OwnerLayer]`、共享字段绑定。 |
+| LayerTool | `[LayerTool]`、`[LayerToolFactory]`、`ILayerToolFactory<T>`、`LayerToolRegistry`、Contract + Key 查询、缓存清理、诊断报告、LBTOOL001-LBTOOL013 analyzer。 |
 | Events | `[Subscribe]`、`[SubscribeFlow]`、`[SubscribeNotify]`、事件元数据、事件分类、诊断符号。 |
 | Post | Normal、Latest、Coalesced、Dirty、波次隔离、数量预算、时间预算、背压策略。 |
 | Threading | owner-thread Runtime API、`PostFromAnyThread` / `TryPostFromAnyThread` any-thread ingress。 |
@@ -410,6 +415,7 @@ dotnet run --project LayerBase.BenchMark/LayerBase.BenchMark.csproj -c Release -
 | --- | --- |
 | `README.md` | 现有完整 README，包含大量中英文说明和历史细节。 |
 | `README.generated.md` | 本文件，结构化 README 草稿，不覆盖原 README。 |
+| `docs/layer-tool.md` | LayerTool 生成式对象注册、外部工厂、Registry 诊断 API 与 analyzer 诊断表。 |
 | `docs/BENCHMARKS.md` | benchmark 数据与解释边界。 |
 | `docs/THREADING.md` | Runtime 线程模型、owner-thread API 与 any-thread API。 |
 | `docs/wiki/Event-System.md` | 事件系统补充文档。 |

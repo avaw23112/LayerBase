@@ -96,7 +96,7 @@ public sealed partial class LayerRuntime : IDisposable
         EventCenter = new EventCenter();
         Actors = new ActorWorld(this);
         Worker = new WorkerRuntime(Math.Max(1, Environment.ProcessorCount - 1));
-        Tools = new LayerToolRegistry();
+        Tools = new LayerToolRegistry(this);
         Services = new WorldServiceRoot(this);
         InitializeEcsWorld();
         LayerHub.Internal_Register(this);

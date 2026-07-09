@@ -593,7 +593,92 @@ private void OnHeavyComputeTask(in ComputeEvent e)
 调用 `LayerHub.GetTopologyMarkdown()` 即可获得一份详细的 Markdown 表格，展示整个系统内各个 Layer 挂载了哪些
 Manager，以及它们具体订阅/派发了什么事件。
 
-### 9. 线程模型 (Threading Model)
+### 9. LayerTool 生成式工具注册
+
+`LayerTool` 用于把 UI 面板、玩法工具、编辑器辅助对象、运行时视图对象等“按 key 创建的对象”纳入 `LayerRuntime.Tools`
+统一管理。它的目标不是做运行时反射容器，而是在编译期通过源生成器发现标记类型，并生成直接的注册代码。
+
+核心能力：
+
+- **无反射注册与创建**：生成代码直接调用 `LayerToolRegistry.Register<TContract, TImplementation>()`，不依赖 `Activator.CreateInstance`、构造函数查找、Attribute 反射或程序集类型扫描。
+- **Contract + Key 查询**：同一个工具族可以通过接口或基类作为 Contract，再用 key 区分具体实现，例如 `runtime.Tools.GetOrCreate<IUiView>("Inventory")`。
+- **创建优先级明确**：优先使用 `[LayerToolFactory] static Create(LayerToolCreateContext)`，其次使用 `Factory = typeof(...)` 指定的 `ILayerToolFactory<T>`，最后才使用 public 无参构造函数。
+- **Runtime 上下文接入**：`LayerToolCreateContext` 可访问 `Registry`、`Runtime`、`GetService<T>()` 和 `GetFactory<T>()`，适合把复杂构造逻辑交给 Service/Factory。
+- **缓存和诊断**：Registry 支持 `GetEntries()`、`GetEntriesByToolId()`、`GetCachedEntries()`、`ClearCache<T>()`、`ClearAllCaches()`、`CreateDiagnosticsReport()`。
+
+示例：
+
+```csharp
+using LayerBase.Tooling;
+
+public interface IUiView
+{
+}
+
+[LayerTool("ui.view", Contract = typeof(IUiView))]
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class UiViewAttribute : Attribute
+{
+    public UiViewAttribute(string key)
+    {
+        Key = key;
+    }
+
+    public string Key { get; }
+    public string? Path { get; set; }
+    public bool Cache { get; set; }
+    public Type? Factory { get; set; }
+    public Type? Layer { get; set; }
+    public Type? Service { get; set; }
+    public Type? Manager { get; set; }
+}
+
+[UiView("Inventory", Path = "UI/Inventory", Cache = true)]
+public sealed class InventoryView : IUiView
+{
+}
+
+public sealed class SettingsService
+{
+}
+
+public sealed class SettingsViewFactory : ILayerToolFactory<SettingsView>
+{
+    public SettingsView Create(LayerToolCreateContext context, LayerToolEntry entry)
+    {
+        return new SettingsView(context.GetService<SettingsService>());
+    }
+}
+
+[UiView("Settings", Factory = typeof(SettingsViewFactory))]
+public sealed class SettingsView : IUiView
+{
+    public SettingsView(SettingsService service)
+    {
+    }
+}
+```
+
+外部工厂类型本身需要能从 Runtime 的服务容器解析；通常在所属 Service 的 `ConfigureServices` 中注册。
+
+启用生成注册：
+
+```csharp
+using var runtime = LayerHub.CreateLayers()
+    .Push(new UiLayer())
+    .UseGeneratedLayerTools()
+    .Build();
+
+IUiView view = runtime.Tools.GetOrCreate<IUiView>("Inventory");
+var report = runtime.Tools.CreateDiagnosticsReport();
+```
+
+Analyzer 会在编译期报告常见错误，例如空 key、Contract 不匹配、重复 key、缺少创建路径、`[LayerToolFactory]`
+签名错误、多个工厂方法、`Cache` / `Path` / `Factory` 属性类型错误，以及外部工厂未实现 `ILayerToolFactory<T>`。
+
+> 详细设计与完整诊断表见 [docs/layer-tool.md](docs/layer-tool.md)。
+
+### 10. 线程模型 (Threading Model)
 
 LayerBase 当前采用**单线程 Runtime 模型**。
 
@@ -618,7 +703,7 @@ LayerBase 当前采用**单线程 Runtime 模型**。
 
 ---
 
-### 10. Runtime 构建生命周期
+### 11. Runtime 构建生命周期
 
 LayerBase 的 Build 阶段大致分为：
 
@@ -645,7 +730,7 @@ LayerBase 的 Build 阶段大致分为：
 
 ---
 
-### 11. ECS 实体组件系统
+### 12. ECS 实体组件系统
 
 LayerBase 内建了一套高性能 ECS 实现（基于 Arch.Core），与事件总线深度集成。ECS 以 **World → Archetype → Chunk → Entity** 四层结构组织数据，采用纯 SOA 内存布局，天然对齐 CPU 缓存行。
 
@@ -748,7 +833,7 @@ this.Query<Position, Velocity>()
 
 ---
 
-### 12. Actor 行为模型
+### 13. Actor 行为模型
 
 Actor 模型为每个实体提供**独立的行为封装**——每个 Actor 拥有自己的邮箱（Mailbox）、生命周期和事件处理器，天然适合建模游戏角色、NPC、子弹等具有独立行为的对象。
 
@@ -906,7 +991,7 @@ var enemies = world.Query()
 
 ---
 
-### 13. Call 请求-响应模式
+### 14. Call 请求-响应模式
 
 `Call` 提供类型安全的同步/异步请求-响应通道，适合需要返回值的场景（如场景切换确认、数据查询）：
 
@@ -973,7 +1058,7 @@ public sealed class QueryPlayerDataHandler
 
 ---
 
-### 14. Timer 定时调度器
+### 15. Timer 定时调度器
 
 `TimerScheduler` 提供基于时间轴的事件调度能力，支持一次性定时和频率门控：
 
@@ -996,7 +1081,7 @@ timer.Tick(deltaTime);
 
 ---
 
-### 15. Job 后台任务调度器
+### 16. Job 后台任务调度器
 
 `JobScheduler` 提供线程池级别的后台任务调度，适合 IO 密集或计算密集的异步工作：
 
@@ -1684,7 +1769,95 @@ private void OnHeavyComputeTask(in ComputeEvent e)
 Call `LayerHub.GetTopologyMarkdown()` to get a detailed Markdown report covering all Layers, Event subscriptions, Call
 routes, and Shared Fields across the system.
 
-### 9. Threading Model
+### 9. LayerTool Generated Tool Registration
+
+`LayerTool` brings key-based runtime tool objects, such as UI panels, gameplay tools, editor helpers, and runtime view
+objects, under `LayerRuntime.Tools`. It is not a runtime reflection container. The source generator discovers marked
+types at compile time and emits direct registration code.
+
+Core capabilities:
+
+- **Reflection-free registration and creation**: generated code calls `LayerToolRegistry.Register<TContract, TImplementation>()` directly, without `Activator.CreateInstance`, constructor lookup, Attribute reflection, or assembly type scanning.
+- **Contract + key lookup**: a tool family can use an interface or base class as its Contract, then use key values to select implementations, such as `runtime.Tools.GetOrCreate<IUiView>("Inventory")`.
+- **Explicit creation priority**: `[LayerToolFactory] static Create(LayerToolCreateContext)` first, external `Factory = typeof(...)` implementing `ILayerToolFactory<T>` second, and public parameterless constructor last.
+- **Runtime context access**: `LayerToolCreateContext` exposes `Registry`, `Runtime`, `GetService<T>()`, and `GetFactory<T>()`.
+- **Cache and diagnostics APIs**: Registry supports `GetEntries()`, `GetEntriesByToolId()`, `GetCachedEntries()`, `ClearCache<T>()`, `ClearAllCaches()`, and `CreateDiagnosticsReport()`.
+
+Example:
+
+```csharp
+using LayerBase.Tooling;
+
+public interface IUiView
+{
+}
+
+[LayerTool("ui.view", Contract = typeof(IUiView))]
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class UiViewAttribute : Attribute
+{
+    public UiViewAttribute(string key)
+    {
+        Key = key;
+    }
+
+    public string Key { get; }
+    public string? Path { get; set; }
+    public bool Cache { get; set; }
+    public Type? Factory { get; set; }
+    public Type? Layer { get; set; }
+    public Type? Service { get; set; }
+    public Type? Manager { get; set; }
+}
+
+[UiView("Inventory", Path = "UI/Inventory", Cache = true)]
+public sealed class InventoryView : IUiView
+{
+}
+
+public sealed class SettingsService
+{
+}
+
+public sealed class SettingsViewFactory : ILayerToolFactory<SettingsView>
+{
+    public SettingsView Create(LayerToolCreateContext context, LayerToolEntry entry)
+    {
+        return new SettingsView(context.GetService<SettingsService>());
+    }
+}
+
+[UiView("Settings", Factory = typeof(SettingsViewFactory))]
+public sealed class SettingsView : IUiView
+{
+    public SettingsView(SettingsService service)
+    {
+    }
+}
+```
+
+External factory types must be resolvable from the Runtime service container, usually by registering them in the owning
+Service's `ConfigureServices`.
+
+Enable generated registration:
+
+```csharp
+using var runtime = LayerHub.CreateLayers()
+    .Push(new UiLayer())
+    .UseGeneratedLayerTools()
+    .Build();
+
+IUiView view = runtime.Tools.GetOrCreate<IUiView>("Inventory");
+var report = runtime.Tools.CreateDiagnosticsReport();
+```
+
+The analyzer reports common mistakes at compile time, including empty keys, contract mismatches, duplicate keys, missing
+creation paths, invalid `[LayerToolFactory]` signatures, multiple factory methods, invalid `Cache` / `Path` / `Factory`
+property types, and external factories that do not implement `ILayerToolFactory<T>`.
+
+See [docs/layer-tool.md](docs/layer-tool.md) for the full contract and diagnostic table.
+
+### 10. Threading Model
 
 LayerBase currently adopts a **single-threaded Runtime model**.
 
@@ -1709,7 +1882,7 @@ usually the main thread).
 > wrong thread is undefined behavior. Concurrent calls to `Dispose` / `Reset` with `PostFromAnyThread` are not
 > recommended.
 
-### 10. Runtime Build Lifecycle
+### 11. Runtime Build Lifecycle
 
 The Build phase of LayerBase is divided into:
 
@@ -1736,7 +1909,7 @@ The Build phase of LayerBase is divided into:
 
 ---
 
-### 11. ECS Entity Component System
+### 12. ECS Entity Component System
 
 LayerBase includes a high-performance ECS implementation (based on Arch.Core) deeply integrated with the event bus. ECS organizes data in a four-layer structure: **World → Archetype → Chunk → Entity**, using pure SOA memory layout that naturally aligns with CPU cache lines.
 
@@ -1839,7 +2012,7 @@ this.Query<Position, Velocity>()
 
 ---
 
-### 12. Actor Behaviour Model
+### 13. Actor Behaviour Model
 
 The Actor model provides **independent behavioral encapsulation** for each entity—each Actor has its own mailbox, lifecycle, and event handlers, naturally suited for modeling game characters, NPCs, bullets, and other objects with autonomous behavior.
 
@@ -1997,7 +2170,7 @@ var enemies = world.Query()
 
 ---
 
-### 13. Call Request-Response Pattern
+### 14. Call Request-Response Pattern
 
 `Call` provides a type-safe synchronous/asynchronous request-response channel, suitable for scenarios requiring return values (e.g., scene transition confirmations, data queries):
 
@@ -2065,7 +2238,7 @@ a sign that you need a more explicit orchestration model rather than widening `C
 
 ---
 
-### 14. Timer Scheduler
+### 15. Timer Scheduler
 
 `TimerScheduler` provides timeline-based event scheduling capabilities, supporting one-time timers and frequency gating:
 
@@ -2088,7 +2261,7 @@ timer.Tick(deltaTime);
 
 ---
 
-### 15. Job Background Task Scheduler
+### 16. Job Background Task Scheduler
 
 `JobScheduler` provides thread-pool-level background task scheduling, suitable for IO-intensive or compute-intensive async work:
 

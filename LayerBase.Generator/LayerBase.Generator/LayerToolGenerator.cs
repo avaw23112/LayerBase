@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -122,14 +123,26 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
                 Diagnostics.AttributeMustInheritAttribute,
                 location,
                 attributeType.ToDisplayString()));
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.AttributeMustInheritSystemAttribute,
+                location,
+                attributeType.ToDisplayString()));
         }
 
+        var toolId = "unknown.tool";
         INamedTypeSymbol? contractType = null;
         string keyProperty = "Key";
         var allowCache = true;
 
         if (attributeData != null)
         {
+            if (attributeData.ConstructorArguments.Length > 0 &&
+                attributeData.ConstructorArguments[0].Value is string constructorToolId &&
+                !string.IsNullOrWhiteSpace(constructorToolId))
+            {
+                toolId = constructorToolId;
+            }
+
             foreach (var argument in attributeData.NamedArguments)
             {
                 switch (argument.Key)
@@ -150,12 +163,25 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
         if (contractType != null && contractType.TypeKind is not TypeKind.Interface and not TypeKind.Class)
         {
             diagnostics.Add(Diagnostic.Create(
-                Diagnostics.ContractMustBeInterfaceOrBaseClass,
+                Diagnostics.ContractMustBeInterfaceOrClass,
                 location,
                 contractType.ToDisplayString()));
         }
 
-        return new ToolAttributeInfo(attributeType, contractType, keyProperty, allowCache, diagnostics.ToImmutable());
+        ValidateAttributeProperty(attributeType, "Cache", SpecialType.System_Boolean, Diagnostics.CachePropertyMustBeBool,
+            diagnostics);
+        ValidateAttributeProperty(attributeType, "Path", SpecialType.System_String, Diagnostics.PathPropertyMustBeString,
+            diagnostics);
+        ValidateAttributeProperty(attributeType, "Factory", null, Diagnostics.FactoryPropertyMustBeType,
+            diagnostics, static type => IsSystemType(type));
+
+        return new ToolAttributeInfo(
+            attributeType,
+            toolId,
+            contractType,
+            keyProperty,
+            allowCache,
+            diagnostics.ToImmutable());
     }
 
     private static ToolRegistration CreateRegistration(
@@ -190,10 +216,31 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
 
         var path = GetStringValue(attribute, "Path");
         var cache = toolInfo.AllowCache && GetBoolValue(attribute, "Cache");
-        var factoryMethod = FindFactoryMethod(implementationType, createContextType);
+        var ownerLayerType = GetTypeValue(attribute, "Layer");
+        var ownerServiceType = GetTypeValue(attribute, "Service");
+        var ownerManagerType = GetTypeValue(attribute, "Manager");
+        var factoryType = GetTypeValue(attribute, "Factory");
+        var factoryMethodSelection = FindFactoryMethod(implementationType, createContextType);
+
+        foreach (var diagnostic in factoryMethodSelection.Diagnostics)
+        {
+            diagnostics.Add(diagnostic);
+        }
+
+        if (factoryType != null && !ImplementsLayerToolFactory(factoryType, implementationType))
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.ExternalFactoryMustImplementInterface,
+                location,
+                factoryType.ToDisplayString(),
+                implementationType.ToDisplayString()));
+            factoryType = null;
+        }
+
         var hasConstructor = HasPublicParameterlessConstructor(implementationType);
 
-        if (factoryMethod == null && !hasConstructor)
+        if (factoryMethodSelection.Method == null && factoryType == null && !hasConstructor &&
+            factoryMethodSelection.Diagnostics.Length == 0)
         {
             diagnostics.Add(Diagnostic.Create(
                 Diagnostics.NoCreationPath,
@@ -204,10 +251,15 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
         return new ToolRegistration(
             contractType,
             implementationType,
+            toolInfo.ToolId,
             key ?? string.Empty,
             path,
             cache,
-            factoryMethod,
+            ownerLayerType,
+            ownerServiceType,
+            ownerManagerType,
+            factoryMethodSelection.Method,
+            factoryType,
             hasConstructor,
             location,
             diagnostics.ToImmutable());
@@ -259,18 +311,23 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
             var implementationName = registration.ImplementationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var path = registration.Path == null ? "null" : $"\"{Escape(registration.Path)}\"";
             var cache = registration.Cache ? "true" : "false";
-            var factory = registration.FactoryMethod == null
-                ? $"static context => new {implementationName}()"
-                : $"static context => {implementationName}.{registration.FactoryMethod.Name}(context)";
+            var ownerLayerType = FormatTypeof(registration.OwnerLayerType);
+            var ownerServiceType = FormatTypeof(registration.OwnerServiceType);
+            var ownerManagerType = FormatTypeof(registration.OwnerManagerType);
+            var factory = CreateFactoryExpression(registration, implementationName);
 
             builder.Append("            registry.Register<")
                    .Append(contractName)
                    .Append(", ")
                    .Append(implementationName)
                    .AppendLine(">(");
+            builder.Append("                toolId: \"").Append(Escape(registration.ToolId)).AppendLine("\",");
             builder.Append("                key: \"").Append(Escape(registration.Key)).AppendLine("\",");
             builder.Append("                path: ").Append(path).AppendLine(",");
             builder.Append("                cache: ").Append(cache).AppendLine(",");
+            builder.Append("                ownerLayerType: ").Append(ownerLayerType).AppendLine(",");
+            builder.Append("                ownerServiceType: ").Append(ownerServiceType).AppendLine(",");
+            builder.Append("                ownerManagerType: ").Append(ownerManagerType).AppendLine(",");
             builder.Append("                factory: ").Append(factory).AppendLine(");");
             builder.AppendLine();
         }
@@ -291,6 +348,29 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
         builder.AppendLine("}");
 
         return builder.ToString();
+    }
+
+    private static string CreateFactoryExpression(ToolRegistration registration, string implementationName)
+    {
+        if (registration.FactoryMethod != null)
+        {
+            return $"static context => {implementationName}.{registration.FactoryMethod.Name}(context)";
+        }
+
+        if (registration.ExternalFactoryType != null)
+        {
+            var factoryName = registration.ExternalFactoryType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return $"static context => context.GetFactory<{factoryName}>().Create(context, context.Registry.GetEntry<{implementationName}>())";
+        }
+
+        return $"static context => new {implementationName}()";
+    }
+
+    private static string FormatTypeof(INamedTypeSymbol? type)
+    {
+        return type == null
+            ? "null"
+            : $"typeof({type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})";
     }
 
     private static ToolAttributeInfo? FindToolAttribute(
@@ -345,42 +425,92 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
         return false;
     }
 
-    private static IMethodSymbol? FindFactoryMethod(
-        INamedTypeSymbol implementationType,
-        INamedTypeSymbol? createContextType)
+    private static INamedTypeSymbol? GetTypeValue(AttributeData attribute, string propertyName)
     {
-        if (createContextType == null)
+        foreach (var argument in attribute.NamedArguments)
         {
-            return null;
-        }
-
-        foreach (var member in implementationType.GetMembers().OfType<IMethodSymbol>())
-        {
-            if (!member.GetAttributes().Any(static attribute =>
-                    attribute.AttributeClass?.ToDisplayString() == LayerToolFactoryAttributeName))
+            if (argument.Key == propertyName && argument.Value.Value is INamedTypeSymbol value)
             {
-                continue;
+                return value;
             }
-
-            if (!member.IsStatic || member.Parameters.Length != 1)
-            {
-                continue;
-            }
-
-            if (!SymbolEqualityComparer.Default.Equals(member.Parameters[0].Type, createContextType))
-            {
-                continue;
-            }
-
-            if (!IsAssignableTo(member.ReturnType, implementationType))
-            {
-                continue;
-            }
-
-            return member;
         }
 
         return null;
+    }
+
+    private static FactoryMethodSelection FindFactoryMethod(
+        INamedTypeSymbol implementationType,
+        INamedTypeSymbol? createContextType)
+    {
+        var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        var methods = implementationType.GetMembers()
+                                        .OfType<IMethodSymbol>()
+                                        .Where(static member => member.GetAttributes().Any(static attribute =>
+                                            attribute.AttributeClass?.ToDisplayString() ==
+                                            LayerToolFactoryAttributeName))
+                                        .ToArray();
+
+        if (methods.Length == 0)
+        {
+            return new FactoryMethodSelection(null, ImmutableArray<Diagnostic>.Empty);
+        }
+
+        if (methods.Length > 1)
+        {
+            foreach (var method in methods)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    Diagnostics.MultipleFactoryMethods,
+                    method.Locations.FirstOrDefault(),
+                    implementationType.ToDisplayString()));
+            }
+
+            return new FactoryMethodSelection(null, diagnostics.ToImmutable());
+        }
+
+        var member = methods[0];
+        if (createContextType == null)
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.FactorySignatureInvalid,
+                member.Locations.FirstOrDefault(),
+                member.ToDisplayString()));
+            return new FactoryMethodSelection(null, diagnostics.ToImmutable());
+        }
+
+        if (!member.IsStatic ||
+            member.Parameters.Length != 1 ||
+            !SymbolEqualityComparer.Default.Equals(member.Parameters[0].Type, createContextType) ||
+            !IsAssignableTo(member.ReturnType, implementationType))
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.FactorySignatureInvalid,
+                member.Locations.FirstOrDefault(),
+                member.ToDisplayString()));
+            return new FactoryMethodSelection(null, diagnostics.ToImmutable());
+        }
+
+        return new FactoryMethodSelection(member, ImmutableArray<Diagnostic>.Empty);
+    }
+
+    private static bool ImplementsLayerToolFactory(INamedTypeSymbol factoryType, INamedTypeSymbol implementationType)
+    {
+        foreach (var type in factoryType.AllInterfaces)
+        {
+            if (type.OriginalDefinition.MetadataName != "ILayerToolFactory`1" ||
+                type.OriginalDefinition.ContainingNamespace.ToDisplayString() != "LayerBase.Tooling")
+            {
+                continue;
+            }
+
+            if (type.TypeArguments.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(type.TypeArguments[0], implementationType))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool HasPublicParameterlessConstructor(INamedTypeSymbol type)
@@ -389,6 +519,38 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
             constructor.Parameters.Length == 0 &&
             !constructor.IsStatic &&
             constructor.DeclaredAccessibility == Accessibility.Public);
+    }
+
+    private static void ValidateAttributeProperty(
+        INamedTypeSymbol attributeType,
+        string propertyName,
+        SpecialType? specialType,
+        DiagnosticDescriptor descriptor,
+        ImmutableArray<Diagnostic>.Builder diagnostics,
+        Func<ITypeSymbol, bool>? customValidator = null)
+    {
+        foreach (var property in attributeType.GetMembers(propertyName).OfType<IPropertySymbol>())
+        {
+            var isValid = specialType.HasValue
+                ? property.Type.SpecialType == specialType.Value
+                : customValidator != null && customValidator(property.Type);
+
+            if (!isValid)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    descriptor,
+                    property.Locations.FirstOrDefault(),
+                    attributeType.ToDisplayString(),
+                    propertyName,
+                    property.Type.ToDisplayString()));
+            }
+        }
+    }
+
+    private static bool IsSystemType(ITypeSymbol type)
+    {
+        var display = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return display == "global::System.Type" || display == "global::System.Type?";
     }
 
     private static bool InheritsFromAttribute(INamedTypeSymbol type)
@@ -440,53 +602,116 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
         public static readonly DiagnosticDescriptor AttributeMustInheritAttribute =
             new(
                 "LBTOOL001",
-                "LayerTool target must inherit Attribute",
+                "LayerTool can only describe Attribute types",
+                "Type '{0}' is marked with LayerToolAttribute but is not an Attribute type",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor AttributeMustInheritSystemAttribute =
+            new(
+                "LBTOOL002",
+                "LayerTool target must inherit System.Attribute",
                 "Type '{0}' is marked with LayerToolAttribute but does not inherit System.Attribute",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
 
-        public static readonly DiagnosticDescriptor ContractMustBeInterfaceOrBaseClass =
+        public static readonly DiagnosticDescriptor ContractMustBeInterfaceOrClass =
             new(
-                "LBTOOL002",
+                "LBTOOL003",
                 "LayerTool contract type is invalid",
-                "LayerTool contract '{0}' must be an interface or base class",
+                "LayerTool contract '{0}' must be an interface or class",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
 
         public static readonly DiagnosticDescriptor TargetMustImplementContract =
             new(
-                "LBTOOL003",
+                "LBTOOL004",
                 "LayerTool target must implement contract",
                 "Type '{0}' is marked as a LayerTool but does not implement contract '{1}'",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
 
-        public static readonly DiagnosticDescriptor NoCreationPath =
+        public static readonly DiagnosticDescriptor KeyCannotBeEmpty =
             new(
-                "LBTOOL004",
-                "LayerTool target has no creation path",
-                "Type '{0}' must have a public parameterless constructor or a valid LayerToolFactory method",
+                "LBTOOL005",
+                "LayerTool key cannot be empty",
+                "Type '{0}' has an empty LayerTool key",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
 
         public static readonly DiagnosticDescriptor DuplicateKey =
             new(
-                "LBTOOL005",
+                "LBTOOL006",
                 "LayerTool key is duplicated",
                 "LayerTool contract '{0}' already has an entry with key '{1}'",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
 
-        public static readonly DiagnosticDescriptor KeyCannotBeEmpty =
+        public static readonly DiagnosticDescriptor NoCreationPath =
             new(
-                "LBTOOL006",
-                "LayerTool key cannot be empty",
-                "Type '{0}' has an empty LayerTool key",
+                "LBTOOL007",
+                "LayerTool target has no creation path",
+                "Type '{0}' must have a public parameterless constructor, a valid LayerToolFactory method, or a valid external factory",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor FactorySignatureInvalid =
+            new(
+                "LBTOOL008",
+                "LayerToolFactory method signature is invalid",
+                "LayerToolFactory method '{0}' must be static, accept LayerToolCreateContext, and return the implementation type",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor MultipleFactoryMethods =
+            new(
+                "LBTOOL009",
+                "Multiple LayerToolFactory methods are not allowed",
+                "Type '{0}' has multiple LayerToolFactory methods",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor CachePropertyMustBeBool =
+            new(
+                "LBTOOL010",
+                "LayerTool Cache property type is invalid",
+                "LayerTool attribute '{0}' property '{1}' must be bool, but was '{2}'",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor PathPropertyMustBeString =
+            new(
+                "LBTOOL011",
+                "LayerTool Path property type is invalid",
+                "LayerTool attribute '{0}' property '{1}' must be string, but was '{2}'",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor FactoryPropertyMustBeType =
+            new(
+                "LBTOOL012",
+                "LayerTool Factory property type is invalid",
+                "LayerTool attribute '{0}' property '{1}' must be System.Type, but was '{2}'",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor ExternalFactoryMustImplementInterface =
+            new(
+                "LBTOOL013",
+                "LayerTool external factory type is invalid",
+                "LayerTool factory '{0}' must implement ILayerToolFactory<{1}>",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -497,12 +722,14 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
     {
         public ToolAttributeInfo(
             INamedTypeSymbol attributeType,
+            string toolId,
             INamedTypeSymbol? contractType,
             string keyProperty,
             bool allowCache,
             ImmutableArray<Diagnostic> diagnostics)
         {
             AttributeType = attributeType;
+            ToolId = toolId;
             ContractType = contractType;
             KeyProperty = keyProperty;
             AllowCache = allowCache;
@@ -510,6 +737,7 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
         }
 
         public INamedTypeSymbol AttributeType { get; }
+        public string ToolId { get; }
         public INamedTypeSymbol? ContractType { get; }
         public string KeyProperty { get; }
         public bool AllowCache { get; }
@@ -522,20 +750,30 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
         public ToolRegistration(
             INamedTypeSymbol contractType,
             INamedTypeSymbol implementationType,
+            string toolId,
             string key,
             string? path,
             bool cache,
+            INamedTypeSymbol? ownerLayerType,
+            INamedTypeSymbol? ownerServiceType,
+            INamedTypeSymbol? ownerManagerType,
             IMethodSymbol? factoryMethod,
+            INamedTypeSymbol? externalFactoryType,
             bool hasConstructor,
             Location? location,
             ImmutableArray<Diagnostic> diagnostics)
         {
             ContractType = contractType;
             ImplementationType = implementationType;
+            ToolId = toolId;
             Key = key;
             Path = path;
             Cache = cache;
+            OwnerLayerType = ownerLayerType;
+            OwnerServiceType = ownerServiceType;
+            OwnerManagerType = ownerManagerType;
             FactoryMethod = factoryMethod;
+            ExternalFactoryType = externalFactoryType;
             HasConstructor = hasConstructor;
             Location = location;
             Diagnostics = diagnostics;
@@ -543,15 +781,24 @@ public sealed class LayerToolGenerator : IIncrementalGenerator
 
         public INamedTypeSymbol ContractType { get; }
         public INamedTypeSymbol ImplementationType { get; }
+        public string ToolId { get; }
         public string Key { get; }
         public string? Path { get; }
         public bool Cache { get; }
+        public INamedTypeSymbol? OwnerLayerType { get; }
+        public INamedTypeSymbol? OwnerServiceType { get; }
+        public INamedTypeSymbol? OwnerManagerType { get; }
         public IMethodSymbol? FactoryMethod { get; }
+        public INamedTypeSymbol? ExternalFactoryType { get; }
         public bool HasConstructor { get; }
         public Location? Location { get; }
         public ImmutableArray<Diagnostic> Diagnostics { get; }
-        public bool IsValid => Diagnostics.IsDefaultOrEmpty && (FactoryMethod != null || HasConstructor);
+        public bool IsValid => Diagnostics.IsDefaultOrEmpty && (FactoryMethod != null || ExternalFactoryType != null || HasConstructor);
     }
+
+    private readonly record struct FactoryMethodSelection(
+        IMethodSymbol? Method,
+        ImmutableArray<Diagnostic> Diagnostics);
 
     private readonly struct ContractKey
     {
