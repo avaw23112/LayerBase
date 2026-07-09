@@ -1,59 +1,144 @@
 ﻿# LayerBase
 
-> LayerBase 是一个面向 Unity、Godot 与纯 C# 服务端的游戏业务运行时框架，用 Layer-Service-Manager、事件系统、Timer、Actor、ECS、Worker 与 Runtime Pump 组织高频、可预测、低分配的游戏逻辑。
+> LayerBase 是一个面向 Unity、Godot 与纯 C# 服务端的游戏业务运行时分层框架，用 `Layer -> Service -> Manager` 建立业务结构，再从这个结构自然扩展出事件、Call、Timer、Actor、ECS、Worker 与 Snap。
+
+本文档是新版结构化 README 草稿，不覆盖原有 `README.md`。当前功能面以仓库中的 `LayerBase` `1.5.7` 为准。
 
 ## What is this?
 
-LayerBase 不是游戏引擎，而是游戏业务层的运行时骨架。它把常见的 Manager 网状引用、随处订阅事件、异步回调散落、实体行为混杂等问题，收束到一个可驱动、可测试、可预热的 Runtime 模型里。
+LayerBase 的核心不是“一个更快的 EventBus”，而是一套游戏业务运行时心智模型：
 
-它适合：
+```text
+LayerRuntime
+ └── LayerChain
+      ├── Layer: 宏观业务边界、执行顺序、系统分区
+      │    ├── Service: 一个业务域的能力聚合
+      │    │    └── Manager / Context: 具体状态与规则
+      │    └── Runtime Capabilities
+      │         ├── Event: 层间广播和有序流转
+      │         ├── Call: 定向请求响应
+      │         ├── Timer / Delay / Post: 帧边界调度
+      │         ├── Actor: 独立行为对象
+      │         ├── ECS: 数据密集批处理
+      │         ├── Worker: 后台纯计算
+      │         └── Snap: 显式业务状态快照
+```
 
-- Unity / Godot 项目中需要独立于引擎生命周期组织业务逻辑的团队。
-- 纯 C# 游戏服务器、战斗服、房间服、仿真服务。
-- 高频事件、帧驱动调度、Actor 行为封装、ECS 批处理同时存在的中大型项目。
-- 想把游戏逻辑从“单例互调”升级到“明确拓扑 + 消息流 + 显式生命周期”的项目。
+也就是说，LayerBase 先回答“业务应该放在哪里”，再回答“业务之间如何通信、如何调度、如何扩展”。
 
 ## Why?
 
-游戏项目规模上来后，常见问题通常不是“没有事件总线”，而是：
+游戏项目变复杂后，痛点通常不是缺某一个工具，而是缺少统一结构：
 
-- 注册时序不可控：`Awake`、`Start`、构造函数里到处订阅，谁先响应变成隐式事实。
-- 模块耦合失控：Manager 互相引用，重构和测试成本持续上升。
-- 高频路径不稳定：委托链、字典查找、临时分配、跨线程回调让性能和抖动难以预测。
-- 数据与行为混在一起：批量数据处理适合 ECS，独立对象行为适合 Actor，但两者常常缺少明确桥接。
+- 单例和 Manager 互调会让依赖关系变成网。
+- 事件到处注册会让执行顺序变成隐式事实。
+- 定时器、异步任务、后台线程、Actor、ECS 各自为政，会让主循环越来越难推理。
+- 快照和恢复如果没有结构边界，很容易退化成“保存一堆对象”。
 
-LayerBase 的核心选择是：用 Runtime Pump 驱动一切，用 Layer 拓扑定义顺序，用 Service/Manager 承载业务，用事件、Call、Timer、Actor、ECS 和 Worker 做明确协作。
+LayerBase 的设计选择是：所有能力都挂回 Runtime 和 Layer 结构。Layer 决定宏观顺序，Service 决定业务归属，Manager 决定具体职责，通信和调度能力围绕这个结构展开。
 
-## Features
+## What It Is Not
 
-| Feature | Description |
-| --- | --- |
-| Layer Runtime | 独立 `LayerRuntime` 实例，包含 Layer 链、事件中心、PostScheduler、Timer、Delay、ActorWorld、ECS World、WorkerRuntime 与服务容器。 |
-| Layer-Service-Manager | 用 Layer 表达宏观顺序和边界，用 Service 聚合业务能力，用 Manager 承载具体逻辑块。 |
-| Synchronous Event Flow | `Send<T>` / `[SubscribeFlow]` 支持按 Layer 顺序同步分发，并可通过 `EventHandledState` 截断流转。 |
-| Post Scheduler | `Post<T>` / `TryPost<T>` 进入帧调度队列，支持波次隔离、每帧数量预算、时间预算、背压策略。 |
-| Event Policies | 支持 Normal、Latest、Coalesced 等投递语义，以及 RejectNew、DropOldest、DropNewest 等背压策略。 |
-| PostFromAnyThread | 后台线程可安全提交事件到 ingress queue，由 owner thread 在下一次 `Pump` 中搬运和分发。 |
-| Call / Request-Response | `[Call]`、`ILayerCallHandler<TRequest,TResponse>` 与 `CallAsync` 提供低分配请求响应路径。 |
-| Timer / Delay | `TimeScheduler`、`DelayPublisher` 与 `this.Delay(...)` 支持 Tick 驱动的一次性和重复定时事件。 |
-| Actor Runtime | `ActorWorld` 管理 Actor 创建、销毁、邮箱投递、生命周期、查询、对象池、Actor Call 与事件流。 |
-| ECS Runtime | 提供 World、Entity、Component、Query、Blueprint、Projection 与 Bring 流，适合批量数据处理。 |
-| Async ECS | 默认同步执行，也可通过 `SetEcsExecutionMode(EcsExecutionMode.Async)` 将 ECS 查询提交到异步调度器。 |
-| ECS to Actor Projection | ECS Query 可通过 `Bring<TEvent>()...Batch().Post()` 生成 Actor 事件，并在主线程 Pump 阶段投递。 |
-| WorkerRuntime | 后台 `IWorkerEventJob<TInput,TEvent>` 执行纯计算任务，完成后把结果事件交回 Runtime Pump。 |
-| Snap | `IFullSnap`、`IClipSnap<T>`、`SnapWriter`、`SnapReader`、数组读写器支持显式业务状态快照。 |
-| Source Generator | 用生成器绑定订阅、Call、Actor 行为、FullSnap 节点、Query Bring 等热路径元数据。 |
-| Prewarm / Diagnostics | 支持预热、事件图检查、循环风险诊断、运行时警告与测试辅助入口。 |
+- LayerBase is not a game engine.
+- LayerBase does not replace Unity, Godot, rendering, physics, networking, or persistence infrastructure.
+- LayerBase does not make all APIs thread-safe. Hot-path Runtime APIs are owner-thread only unless explicitly marked as any-thread.
+- LayerBase does not save a full memory image. Snap is explicit business-state serialization.
+- LayerBase is designed for gameplay/runtime structure, not for hiding architecture decisions.
+
+## Mental Model
+
+### 1. LayerRuntime: one runnable world
+
+`LayerRuntime` 是一个完整运行时实例。它拥有 Layer 链、事件中心、PostScheduler、Timer、Delay、ActorWorld、ECS World、WorkerRuntime、服务容器和 FullSnap Runtime。
+
+它负责：
+
+- 构建拓扑。
+- 驱动每帧 `Pump(deltaTime)`。
+- 管理同步事件、帧调度事件、定时事件、Actor 邮箱、ECS 提交和后台 Worker 结果。
+- 在 Build 后收集可快照对象。
+
+它不负责替代引擎主循环。Unity、Godot 或服务端循环仍然决定什么时候调用 `Pump`。
+
+### 2. Layer: macro boundary, not a folder
+
+Layer 是宏观业务边界，也是执行顺序的基本单位。你可以把它理解成 Runtime 里的“业务车道”：
+
+```text
+InputLayer -> BattleLayer -> SimulationLayer -> ViewLayer -> NetworkLayer
+```
+
+Layer 负责：
+
+- 表达系统级优先级和顺序。
+- 隔离不同业务面。
+- 承载本层 Service。
+- 作为事件流、Call 路由、生命周期和诊断的边界。
+
+Layer 不负责：
+
+- 承担所有具体业务细节。
+- 直接变成巨大 Manager。
+- 替代 Actor 或 ECS 处理大量对象。
+
+LayerBase 当前使用位图进行高频路由，单个 Runtime 的物理 Layer 上限是 64。
+
+### 3. Service: business capability inside a Layer
+
+Service 是 Layer 内的业务能力聚合。例如 `PlayerService`、`InventoryService`、`CombatService`、`MatchSyncService`。
+
+Service 负责：
+
+- 注册和持有本业务域的依赖。
+- 对外暴露粗粒度能力。
+- 挂载 Manager / Context。
+- 参与事件订阅、Call、Delay、Snap 等能力。
+
+Service 不应该变成跨全项目的万能入口。如果某个 Service 同时负责输入、战斗、UI、网络同步，通常说明 Layer 或 Service 边界需要拆分。
+
+### 4. Manager / Context: small stateful rule holders
+
+Manager 或 Context 承载更细的业务状态和规则。例如伤害计算、背包格子状态、匹配房间状态、技能冷却表。
+
+它负责：
+
+- 保存明确归属的状态。
+- 实现具体规则。
+- 通过事件、Call、Service 接口与外部协作。
+- 按需实现 `IFullSnap` 或 `IClipSnap<T>`。
+
+它不负责：
+
+- 跨 Layer 编排完整工作流。
+- 在后台线程直接操作 Runtime。
+- 隐式依赖全局单例。
+
+## Capabilities Grow From Layers
+
+LayerBase 的功能不是平铺的。每个功能都解决 Layer 结构中的一个问题：
+
+| Layer 结构中的问题 | 对应能力 | 说明 |
+| --- | --- | --- |
+| Layer 之间需要有序广播 | `Send<T>` + `[SubscribeFlow]` | 同步沿 Layer 顺序流转，可通过 `EventHandledState` 继续或截断。 |
+| 业务需要延迟到帧边界处理 | `Post<T>` / `TryPost<T>` | 进入 `PostScheduler`，在 `Pump` 中按预算和策略处理。 |
+| 后台线程有结果要回主线程 | `PostFromAnyThread<T>` | 只进入跨线程 ingress queue，由 owner thread 在下一帧搬运。 |
+| 一个 Layer 需要请求另一个 Layer 的结果 | `CallAsync` / `[Call]` / `ILayerCallHandler` | 定向请求响应，避免把双向依赖写成直接引用。 |
+| Service 需要按时间触发业务 | `Timer` / `DelayPublisher` / `this.Delay(...)` | Tick 驱动，和 Runtime Pump 对齐。 |
+| Layer 中有大量独立行为对象 | `ActorWorld` / `IActor` | Actor 有邮箱、生命周期、行为处理器、查询和对象池。 |
+| Layer 中有大批量纯数据更新 | ECS World / Query / Blueprint | Entity / Component / Query 负责数据密集批处理。 |
+| ECS 批处理结果要变成对象行为 | Projection / `Bring<TEvent>()` | Query 生成事件，投递到投影 Actor 或主线程结果流。 |
+| 业务有 CPU 密集型纯计算 | `WorkerRuntime` | 后台执行 `IWorkerEventJob<TInput,TEvent>`，结果回到事件流。 |
+| Layer / Service / Manager 要保存状态 | `IFullSnap` / `IClipSnap<T>` | 显式写入业务字段，不保存 Runtime 内部队列和线程状态。 |
 
 ## Quick Start
 
-安装 NuGet 包：
+安装：
 
 ```bash
 dotnet add package LayerBase --version 1.5.7
 ```
 
-源码引用时，请同时引用核心库、任务库与源生成器：
+源码引用时，核心库、任务库和源生成器应一起接入：
 
 ```xml
 <ItemGroup>
@@ -65,210 +150,234 @@ dotnet add package LayerBase --version 1.5.7
 </ItemGroup>
 ```
 
-最小事件流示例：
+下面的例子展示 LayerBase 的结构，而不是只展示事件 API：
 
 ```csharp
 using LayerBase;
 using LayerBase.Core.Event;
+using LayerBase.DI;
+using LayerBase.DI.Options;
 using LayerBase.Layers;
 
-public readonly struct PlayerSpawned
+public readonly struct DamageCommand
 {
-    public PlayerSpawned(string name, int level)
+    public DamageCommand(int targetId, int amount)
     {
-        Name = name;
-        Level = level;
+        TargetId = targetId;
+        Amount = amount;
     }
 
-    public string Name { get; }
-    public int Level { get; }
+    public int TargetId { get; }
+    public int Amount { get; }
 }
 
-public partial class GameplayLayer : Layer
+public sealed class DamageManager
 {
-    [SubscribeFlow]
-    private EventHandledState OnPlayerSpawned(in PlayerSpawned value)
-    {
-        Console.WriteLine($"{value.Name} spawned at level {value.Level}");
+    public int LastDamage { get; private set; }
 
-        // Continue 表示事件继续流向后续 Layer。
-        // Handled 表示当前 Layer 已处理完毕，后续 Layer 不再接收。
+    public void Apply(int amount)
+    {
+        LastDamage = amount;
+    }
+}
+
+public sealed partial class CombatService : IService
+{
+    [Mount] private DamageManager _damage = null!;
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    public void ApplyDamage(int targetId, int amount)
+    {
+        // Service 聚合业务能力，Manager 承载具体规则和状态。
+        _damage.Apply(amount);
+    }
+}
+
+public sealed partial class CombatLayer : Layer
+{
+    [Mount] private CombatService _combat = null!;
+
+    [SubscribeFlow]
+    private EventHandledState OnDamage(in DamageCommand command)
+    {
+        // Layer 接收有序事件，转交给本层 Service。
+        _combat.ApplyDamage(command.TargetId, command.Amount);
         return EventHandledState.Continue;
     }
 }
 
-LayerHub.Reset();
-
 LayerRuntime runtime = LayerHub.CreateLayers()
-                               .Push(new GameplayLayer())
+                               .Push(new CombatLayer())
                                .Build();
 
-runtime.Send(new PlayerSpawned("Hero", 1));
-```
-
-帧驱动异步 Post 示例：
-
-```csharp
-runtime.Post(new PlayerSpawned("Hero", 2));
-
-// Post 不会立即分发。业务主循环中调用 Pump 后才会处理队列。
+runtime.Send(new DamageCommand(targetId: 1001, amount: 25));
 runtime.Pump(0.016f);
 ```
 
-跨线程提交示例：
-
-```csharp
-new Thread(() =>
-{
-    // 仅提交到跨线程入口队列，不在后台线程执行 handler。
-    runtime.PostFromAnyThread(new PlayerSpawned("WorkerResult", 3));
-}).Start();
-
-// owner thread 在下一帧 Pump 中搬运并派发。
-runtime.Pump(0.016f);
-```
-
-## Core Concepts
+这个最小例子的结构是：
 
 ```text
 LayerRuntime
- ├── Layer Chain
- │    ├── Layer
- │    ├── Service
- │    └── Manager / Context
- ├── Event System
- │    ├── Send: immediate ordered flow
- │    ├── Post: frame-scheduled queue
- │    └── PostFromAnyThread: cross-thread ingress
- ├── Timer / Delay
- ├── ActorWorld
- │    ├── Mailbox
- │    ├── Lifecycle
- │    ├── Query
- │    └── Pool / Call / EventStream
- ├── ECS World
- │    ├── Entity / Component / Query
- │    ├── Blueprint
- │    └── Projection / Bring
- ├── WorkerRuntime
- └── FullSnap Runtime
+ └── CombatLayer
+      └── CombatService
+           └── DamageManager
 ```
 
-### LayerRuntime
+事件只是进入这条结构的方式之一。后续你可以在同一个结构中继续加入 `CallAsync`、`Delay`、`ActorWorld`、ECS Query、Worker Job 和 Snap，而不是把它们散落到项目各处。
 
-`LayerRuntime` 是一切运行时资源的拥有者。它负责构建 Layer 链、安装服务容器、启动 ECS Scheduler 与 Worker、驱动 Pump、释放资源。
+## Structured Usage Patterns
 
-它不负责替代引擎主循环。Unity、Godot 或服务端进程仍然负责决定何时调用 `runtime.Pump(deltaTime)`。
+### Pattern A: layer-to-layer event flow
 
-### Layer
+当一个事件代表“事实已经发生”，并且多个 Layer 需要按顺序观察它，使用 `Send<T>` 或 `Post<T>`。
 
-Layer 是宏观顺序和架构边界。一个 Runtime 最多支持 64 个物理 Layer，这是为了使用位图做高频路由。Layer 适合表达 `Input`、`Battle`、`View`、`Network`、`Persistence` 这类大边界。
+```text
+InputLayer sends MoveCommand
+ -> SimulationLayer updates state
+ -> ViewLayer prepares presentation
+ -> NetworkLayer emits sync packet
+```
 
-Layer 不应该变成万能对象。具体业务应下沉到 Service / Manager。
+同步确定性路径使用 `Send<T>`。需要在帧边界处理、支持预算和背压时使用 `Post<T>`。
 
-### Service / Manager
+### Pattern B: directed request without direct dependency
 
-Service 聚合某个业务域的能力，并通过 DI 挂载 Manager 或其他依赖。Manager 是更小的逻辑块，适合承载伤害计算、背包状态、同步状态、AI 片段等单一职责。
+当一个 Layer 需要另一个 Layer 的返回值，不要直接拿对方对象引用。使用 `CallAsync<TLayer,TRequest,TResponse>`：
 
-Service / Manager 之间优先通过事件、Call 或显式服务接口协作，避免恢复成 Manager 网状互调。
+```text
+UiLayer
+ -> CallAsync<InventoryLayer, QueryItemRequest, QueryItemResponse>
+ -> InventoryLayer handler
+ -> response
+```
 
-### Event System
+这保留了 Layer 边界，也避免了双向硬引用。
 
-事件系统分成同步和帧调度两条路径：
+### Pattern C: time belongs to Runtime
 
-- `Send<T>`：立即沿 Layer 顺序同步流转，适合确定性流程。
-- `Post<T>`：进入 `PostScheduler`，在 `Pump` 中处理，适合跨阶段、延迟到帧边界的消息。
-- `PostFromAnyThread<T>`：后台线程入口，只负责入队，handler 仍在 owner thread 执行。
+业务中的“稍后执行”“每隔一段时间执行”“下一帧再处理”，应进入 Runtime 的时间系统，而不是散落在线程、Task 或引擎协程中。
 
-普通 Runtime API 是 owner-thread only。为了热路径性能，LayerBase 不在每次调用时做线程检查。
+```text
+Service requests Delay
+ -> DelayPublisher stores timer
+ -> Runtime.Pump advances time
+ -> expired event enters PostScheduler
+ -> Layer receives event
+```
 
-### Actor
+### Pattern D: Actor is behavior, ECS is data
 
-Actor 封装独立行为对象。它有自己的 ActorId、邮箱、生命周期、行为处理器，可被查询、池化、延迟投递，也可与 ECS 实体投影绑定。
+Actor 和 ECS 不是互相替代：
 
-Actor 适合角色、NPC、子弹、技能实例、临时交互对象等行为明确的对象。大规模连续数据处理仍应交给 ECS。
+- ECS 适合大批量数据：位置、速度、状态标记、AOI、碰撞候选。
+- Actor 适合独立行为：角色、NPC、子弹、技能实例、对象生命周期。
 
-### ECS
+Projection / Bring 负责把 ECS 批处理结果变成 Actor 可消费的事件：
 
-ECS World 管理 Entity / Component / Query。它适合大批量、数据密集、缓存友好的系统，例如移动、AOI、碰撞候选、状态批处理。
+```text
+ECS Query updates data
+ -> Bring<MoveViewEvent>()
+ -> Runtime drains result
+ -> Actor mailbox receives event
+ -> Actor behaviour runs during Pump
+```
 
-当前仓库保留 Arch 生态依赖，同时包含 LayerBase 自己的 ECS Runtime、Blueprint、Projection、Query Flow 与 Async Scheduler。
+### Pattern E: Worker returns events, not shared state
 
-### WorkerRuntime
+后台 Worker 适合纯计算。它不应该直接操作 Layer、Actor、ECS World 或引擎对象。
 
-`WorkerRuntime` 用于把纯计算任务放到后台线程执行。任务实现 `IWorkerEventJob<TInput,TEvent>`，返回的结果事件会进入 Runtime 的 Post 路径，并在 Pump 阶段回到主线程业务流。
+推荐流向：
 
-它不适合在后台线程直接访问 Layer、Actor、ECS World 或引擎对象。
-
-### Snap
-
-Snap 是显式业务快照，不是 Runtime 内存镜像。
-
-- `IFullSnap`：由 Runtime 构建后收集，参与完整业务快照。
-- `IClipSnap<T>`：由业务主动调用的局部切片快照。
-- `SnapArrayWriter` / `SnapArrayReader`：适合背包、实体列表等数组型状态。
-
-默认不进入 FullSnap 的对象包括 `EcsWorld`、`ActorWorld`、Actor 邮箱、Timer、Delay 内部队列、渲染对象、线程对象和 `Task`。
+```text
+Service submits IWorkerEventJob
+ -> Worker thread computes
+ -> returns TEvent
+ -> Runtime Pump drains Worker events
+ -> normal event subscribers handle result
+```
 
 ## Architecture
 
 ```mermaid
-flowchart LR
-    Engine["Unity / Godot / Server Loop"] --> Pump["LayerRuntime.Pump(deltaTime)"]
-    Pump --> Ingress["PostFromAnyThread Ingress"]
-    Pump --> Timer["Timer / Delay"]
-    Pump --> Post["PostScheduler"]
-    Pump --> Layers["Layer Chain"]
-    Pump --> ECS["ECS Scheduler"]
-    Pump --> Actors["ActorWorld"]
-    Worker["WorkerRuntime"] --> Ingress
-    ECS --> Projection["Projection / Bring Results"]
+flowchart TD
+    Loop["Engine / Server Main Loop"] --> Pump["LayerRuntime.Pump(deltaTime)"]
+    Pump --> Runtime["LayerRuntime"]
+
+    Runtime --> Chain["LayerChain"]
+    Chain --> L1["Layer"]
+    L1 --> Svc["Service"]
+    Svc --> Mgr["Manager / Context"]
+
+    Runtime --> Event["EventCenter + PostScheduler"]
+    Runtime --> Time["Timer / Delay"]
+    Runtime --> Actors["ActorWorld"]
+    Runtime --> Ecs["ECS World + Scheduler"]
+    Runtime --> Worker["WorkerRuntime"]
+    Runtime --> Snap["FullSnap Runtime"]
+
+    Worker --> Event
+    Time --> Event
+    Ecs --> Projection["Projection / Bring"]
     Projection --> Actors
-    Post --> Layers
-    Layers --> Services["Services / Managers"]
-    Services --> Snap["FullSnap / ClipSnap"]
+    Event --> Chain
+    Mgr --> Snap
 ```
 
-典型调用流：
+Build 阶段大致完成：
 
-1. 引擎或服务端主循环调用 `runtime.Pump(deltaTime)`。
-2. Runtime 先搬运跨线程 ingress 与 Worker 结果。
-3. Timer / Delay 到期事件进入 Post 路径。
-4. PostScheduler 按预算和策略处理本帧事件。
-5. Layer 链执行生命周期更新。
-6. ECS Scheduler flush / drain 异步结果。
-7. ActorWorld 按预算处理邮箱、生命周期和固定步长更新。
+1. 创建 `LayerRuntime`。
+2. 推入 Layer 并形成 LayerChain。
+3. 挂载 Service / Manager。
+4. 通过源生成器和构建流程收集订阅、Call、Actor、Snap、Query 元数据。
+5. 初始化 PostScheduler、Timer、Delay、ActorWorld、ECS Scheduler、WorkerRuntime。
+6. 冻结策略表并进入可 Pump 状态。
 
-主要扩展点：
+Pump 阶段大致完成：
 
-- 新 Layer：继承 `Layer` 并放入 `CreateLayers().Push(...)`。
-- 新服务：实现 `IService`，通过 `[Mount]` 或 `RegisterService` 挂载。
-- 新事件：定义 `struct` 事件，使用 `[Subscribe]`、`[SubscribeFlow]`、`[SubscribeDelay]`、`[ActorBehaviour]` 等绑定。
-- 新 Call：使用 `[Call]` 或实现 `ILayerCallHandler<TRequest,TResponse>`。
-- 新 Actor：实现 `IActor`，用 `[ActorBehaviour]`、生命周期接口与对象池接口扩展行为。
-- 新 ECS 流：定义组件和 Query Job，按需使用 `Bring<TEvent>()` 投影到 Actor。
-- 新快照：实现 `IFullSnap` 或 `IClipSnap<T>`，显式写入业务字段。
+1. 搬运 `PostFromAnyThread` ingress。
+2. 搬运 Worker 结果事件。
+3. 推进 Timer / Delay。
+4. 处理 PostScheduler 队列。
+5. 执行 Layer 生命周期。
+6. Flush / Drain ECS 任务结果。
+7. Pump Actor 邮箱与生命周期。
+
+## Latest Function Surface
+
+当前 README 覆盖的主要功能面：
+
+| Area | Current capabilities |
+| --- | --- |
+| Runtime | 多 `LayerRuntime`、`LayerHub`、Build、Pump、Prewarm、Reset、Dispose。 |
+| DI | `IService`、`IServiceCollection`、`[Mount]`、`[OwnerLayer]`、共享字段绑定。 |
+| Events | `[Subscribe]`、`[SubscribeFlow]`、`[SubscribeNotify]`、事件元数据、事件分类、诊断符号。 |
+| Post | Normal、Latest、Coalesced、Dirty、波次隔离、数量预算、时间预算、背压策略。 |
+| Threading | owner-thread Runtime API、`PostFromAnyThread` / `TryPostFromAnyThread` any-thread ingress。 |
+| Call | `[Call]`、`ILayerCallHandler<TRequest,TResponse>`、`CallAsync`、路由冲突和缺失诊断。 |
+| Timer / Delay | `TimeScheduler`、`TimerHandle`、Once、FixedDelay、FixedRate、DelayPublisher。 |
+| Actor | ActorId、ActorWorld、Mailbox、ActorBehaviour、Actor Call、生命周期、Query、Pool、EventStream、Delay。 |
+| ECS | Entity、Component、Query、Blueprint、Bundle、Projection、Bring、Sync / Async scheduler。 |
+| Worker | `WorkerRuntime`、`WorkerHandle`、`WorkerState`、`IWorkerEventJob<TInput,TEvent>`。 |
+| Snap | `IFullSnap`、`IClipSnap<T>`、`SnapDocument`、`SnapWriter`、`SnapReader`、数组读写器。 |
+| Benchmarks | Event fan-out、Call、ActorWorld、PostScheduler、ECS async boundary benchmarks。 |
 
 ## Performance
 
-性能数据必须按测试条件理解，不应把局部 benchmark 当成完整游戏帧表现。
+LayerBase 的性能目标不是一句“高性能”，而是让高频路径在明确约束下低分配、低抖动、可复现。
 
-当前仓库的 benchmark 文档位于 `docs/BENCHMARKS.md`，数据来源标注为 `LayerBase.BenchMark.Compare/bin/Release/net8.0/BenchmarkDotNet.Artifacts/results`，运行方式见 `LayerBase.BenchMark`。
+当前 benchmark 文档位于 `docs/BENCHMARKS.md`。其中明确把 ECS Async benchmark 拆成 SubmitOnly、WarmWorker EndToEnd、ColdWorkerWakeLatency、FrameBatch 和 Bring 等场景，不把它们合并成一个模糊数字。
 
-已记录的代表性数据：
+已记录的代表性结果包括：
 
 | Scenario | Condition | Result |
 | --- | --- | --- |
-| 单事件多订阅者 Notify | 1M Notify calls，1/4/8/16 subscribers | LayerBase 约 1.6582 ns 到 6.1484 ns / Notify。 |
-| 多事件种类批处理 | 32/128/256 event kinds，每类 2 或 3 subscribers | LayerBase 在测试表中相对 MessagePipe 有约 12.8% 到 41.4% 优势，具体随事件种类和订阅者数量变化。 |
-| Request / Response | 100k calls，`LayerBase CallAsync` | 总耗时约 108.15 us，平均约 1.08 ns / Call，0 B 分配。 |
-| ECS Async | Warm worker、cold wake、frame batch、Bring 分场景测试 | 文档明确要求分开报告 SubmitOnly、WarmWorker EndToEnd、ColdWorkerWakeLatency、FrameBatch 与 Bring，不合并成单个 EndToEnd 数字。 |
-
-运行 benchmark：
-
-```bash
-dotnet run --project LayerBase.BenchMark/LayerBase.BenchMark.csproj -c Release -- --filter *
-```
+| Notify fan-out | 1M Notify calls，1/4/8/16 subscribers | LayerBase 约 1.6582 ns 到 6.1484 ns / Notify。 |
+| Multi-event batch | 32/128/256 event kinds，2 或 3 subscribers | 在记录表中相对 MessagePipe 有约 12.8% 到 41.4% 优势。 |
+| Request / Response | 100k `LayerBase CallAsync` calls | 总耗时约 108.15 us，约 1.08 ns / Call，0 B 分配。 |
+| ECS Async | controlled warm-worker scenarios | 证明核心异步查询链在受控场景中低分配、低延迟；不等价于完整游戏帧稳定性。 |
 
 运行测试：
 
@@ -276,65 +385,70 @@ dotnet run --project LayerBase.BenchMark/LayerBase.BenchMark.csproj -c Release -
 dotnet test LayerBase.Test/LayerBase.Test.csproj -c Debug
 ```
 
+运行 benchmark：
+
+```bash
+dotnet run --project LayerBase.BenchMark/LayerBase.BenchMark.csproj -c Release -- --filter *
+```
+
 ## Project Status
 
-当前状态建议标记为 **Alpha / Active Development**。
+当前建议状态：**Alpha / Active Development**。
 
-理由：
+依据：
 
-- 核心模块已具备较完整测试覆盖，包括 Actor、Call、DI、PostScheduler、TimeScheduler、Delay、Snap、Async ECS、Projection、Worker、并发入口和多项回归测试。
-- 版本号当前为 `1.5.7`，并已有 NuGet 打包配置。
-- 代码和文档中仍有大量架构计划、性能优化计划与实验性运行时能力，说明 API 与内部模型仍在快速演进。
-- README、部分示例注释和 benchmark 指南存在历史内容与编码问题，需要继续整理。
+- 核心运行时、事件、DI、Call、Timer、Delay、Actor、ECS、Snap、Worker 已有较多 NUnit 测试和 benchmark 项目。
+- 版本号为 `1.5.7`，具备 NuGet 打包配置。
+- 代码中仍保留大量架构计划、性能优化计划和实验性能力，API 与文档边界还在快速整理。
+- 部分历史文档和示例注释存在编码问题，需要继续清理。
 
-生产项目可以评估引入，但建议先固定版本、封装项目内部适配层，并为自己的关键路径建立 benchmark 与回归测试。
+生产项目可以评估接入，但建议固定版本、在项目内部封装适配层，并为关键路径建立自己的回归测试和 benchmark。
 
 ## Documentation
 
-建议的文档入口：
-
 | Document | Purpose |
 | --- | --- |
-| `README.md` | 现有完整说明，内容较长，包含中英文与大量细节。 |
-| `README.generated.md` | 本文件，新版 README 草稿，不覆盖原文件。 |
-| `docs/BENCHMARKS.md` | 当前 benchmark 解释与数据表。 |
+| `README.md` | 现有完整 README，包含大量中英文说明和历史细节。 |
+| `README.generated.md` | 本文件，结构化 README 草稿，不覆盖原 README。 |
+| `docs/BENCHMARKS.md` | benchmark 数据与解释边界。 |
 | `docs/THREADING.md` | Runtime 线程模型、owner-thread API 与 any-thread API。 |
-| `docs/wiki/Event-System.md` | 事件系统补充说明。 |
+| `docs/wiki/Event-System.md` | 事件系统补充文档。 |
 | `docs/api/simple/context-first.md` | Context-first API 文档。 |
-| `docs/plan/` | 架构设计、优化计划、修复记录与未来方向。 |
 | `LayerBase.Usage/` | 可运行示例。 |
-| `LayerBase.Test/` | NUnit 行为测试与回归测试。 |
+| `LayerBase.Test/` | NUnit 行为测试和回归测试。 |
 | `LayerBase.BenchMark/` | BenchmarkDotNet 性能测试。 |
 
-建议后续整理成：
+建议后续把文档拆成：
 
 ```text
 docs
  ├── architecture.md
+ ├── mental-model.md
  ├── quick-start.md
- ├── api.md
- ├── examples.md
- ├── benchmark.md
+ ├── event-and-call.md
+ ├── actor-and-ecs.md
  ├── threading.md
+ ├── snapshot.md
+ ├── benchmark.md
  └── roadmap.md
 ```
 
 ## Roadmap
 
-短期建议：
+短期：
 
-- 整理现有 README，把入口文档、API 手册、benchmark、设计计划拆分。
+- 把原 README 拆成入口文档、心智模型、API 手册、benchmark 和设计文档。
 - 修复示例与部分文档中的中文编码问题。
-- 明确 `1.5.x` API 稳定边界，标注 experimental API。
-- 为 WorkerRuntime、Async ECS、Snap、Actor Projection 增加更完整的用户文档。
-- 补充 Unity / Godot 集成示例，说明如何在主循环中驱动 `Pump`。
+- 标注 `1.5.x` 中稳定 API 与 experimental API。
+- 补充 Unity / Godot 主循环集成示例。
+- 给 WorkerRuntime、Async ECS、Actor Projection、Snap 各补一篇独立文档。
 
-中期方向：
+中期：
 
-- 继续稳定 Async ECS 的 warm worker、cold wake、frame batch 和 Bring 数据回流模型。
-- 完善 Actor 生命周期预算化 Tick、Actor Call、Actor Query 与对象池文档。
+- 稳定 Async ECS 的 warm worker、cold wake、frame batch、Bring 结果回流模型。
+- 完善 Actor 生命周期预算化 Tick、Actor Query、Actor Call 和对象池文档。
 - 明确 Arch 依赖与自研 ECS 内核之间的长期边界。
-- 建立公开 benchmark 复现流程与版本化结果目录。
+- 建立可复现、版本化的 benchmark 结果目录。
 
 ## License
 

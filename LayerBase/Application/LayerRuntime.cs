@@ -11,6 +11,7 @@ using LayerBase.ECS.Runtime;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
 using LayerBase.Snap;
+using LayerBase.Tooling;
 using LayerBase.Worker;
 
 namespace LayerBase;
@@ -79,6 +80,8 @@ public sealed partial class LayerRuntime : IDisposable
 
     public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
 
+    public LayerToolRegistry Tools { get; }
+
     public bool IsDebugMode { get; internal set; }
     #endregion
 
@@ -93,6 +96,7 @@ public sealed partial class LayerRuntime : IDisposable
         EventCenter = new EventCenter();
         Actors = new ActorWorld(this);
         Worker = new WorkerRuntime(Math.Max(1, Environment.ProcessorCount - 1));
+        Tools = new LayerToolRegistry();
         Services = new WorldServiceRoot(this);
         InitializeEcsWorld();
         LayerHub.Internal_Register(this);
@@ -750,6 +754,7 @@ public sealed partial class LayerRuntime : IDisposable
         private TimeSchedulerOptions _timerOptions = TimeSchedulerOptions.Default;
         private DelayBufferOptions _delayOptions = DelayBufferOptions.Default;
         private FixedUpdateOptions _fixedUpdateOptions = FixedUpdateOptions.Default;
+        private readonly List<Action<LayerToolRegistry>> _toolConfigurators = new();
         private bool _built;
 
         internal LayersBuilder(LayerRuntime runtime) => _runtime = runtime;
@@ -816,11 +821,23 @@ public sealed partial class LayerRuntime : IDisposable
             return SetEcsOptions(new EcsRuntimeOptions(executionMode));
         }
 
+        public LayersBuilder ConfigureTools(Action<LayerToolRegistry> configure)
+        {
+            if (_built) throw new InvalidOperationException("Cannot configure tools after Build has been called.");
+            _toolConfigurators.Add(configure ?? throw new ArgumentNullException(nameof(configure)));
+            return this;
+        }
+
         public LayerRuntime Build()
         {
             if (_built) throw new InvalidOperationException("LayersBuilder.Build can only be called once.");
             if (_layerChain == null) throw new InvalidOperationException("No layers added.");
             _built = true;
+
+            foreach (var configureTools in _toolConfigurators)
+            {
+                configureTools(_runtime.Tools);
+            }
 
             if (_runtime._context == null)
                 _runtime._context = LayerBaseSynchronizationContext.Install();

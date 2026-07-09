@@ -11,6 +11,185 @@ namespace LayerBase.Test;
 [TestFixture]
 public class LayerGeneratorContractTests
 {
+    [Test]
+    public void Layer_tool_generator_emits_registry_for_constructor_and_static_factory()
+    {
+        const string source = """
+                              using LayerBase.Tooling;
+
+                              public interface IUiView
+                              {
+                              }
+
+                              [LayerTool("ui.view", Contract = typeof(IUiView))]
+                              [System.AttributeUsage(System.AttributeTargets.Class)]
+                              public sealed class UiViewAttribute : System.Attribute
+                              {
+                                  public UiViewAttribute(string key)
+                                  {
+                                      Key = key;
+                                  }
+
+                                  public string Key { get; }
+                                  public string? Path { get; set; }
+                                  public bool Cache { get; set; }
+                              }
+
+                              [UiView("Inventory", Path = "UI/Inventory", Cache = true)]
+                              public sealed class InventoryView : IUiView
+                              {
+                                  public InventoryView()
+                                  {
+                                  }
+                              }
+
+                              [UiView("Settings")]
+                              public sealed class SettingsView : IUiView
+                              {
+                                  private SettingsView()
+                                  {
+                                  }
+
+                                  [LayerToolFactory]
+                                  public static SettingsView Create(LayerToolCreateContext context)
+                                  {
+                                      return new SettingsView();
+                                  }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new LayerToolGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        var generated = string.Join(Environment.NewLine, result.GeneratedSources);
+
+        Assert.That(generated, Does.Contain("registry.Register<global::IUiView, global::InventoryView>"));
+        Assert.That(generated, Does.Contain("key: \"Inventory\""));
+        Assert.That(generated, Does.Contain("path: \"UI/Inventory\""));
+        Assert.That(generated, Does.Contain("cache: true"));
+        Assert.That(generated, Does.Contain("factory: static context => new global::InventoryView()"));
+        Assert.That(generated, Does.Contain("factory: static context => global::SettingsView.Create(context)"));
+        Assert.That(generated, Does.Contain("UseGeneratedLayerTools"));
+    }
+
+    [TestCase("LBTOOL003", """
+                           using LayerBase.Tooling;
+
+                           public interface IUiView { }
+
+                           [LayerTool("ui.view", Contract = typeof(IUiView))]
+                           [System.AttributeUsage(System.AttributeTargets.Class)]
+                           public sealed class UiViewAttribute : System.Attribute
+                           {
+                               public UiViewAttribute(string key) { Key = key; }
+                               public string Key { get; }
+                           }
+
+                           [UiView("Inventory")]
+                           public sealed class InventoryView
+                           {
+                               public InventoryView() { }
+                           }
+                           """)]
+    [TestCase("LBTOOL004", """
+                           using LayerBase.Tooling;
+
+                           public interface IUiView { }
+
+                           [LayerTool("ui.view", Contract = typeof(IUiView))]
+                           [System.AttributeUsage(System.AttributeTargets.Class)]
+                           public sealed class UiViewAttribute : System.Attribute
+                           {
+                               public UiViewAttribute(string key) { Key = key; }
+                               public string Key { get; }
+                           }
+
+                           [UiView("Inventory")]
+                           public sealed class InventoryView : IUiView
+                           {
+                               private InventoryView() { }
+                           }
+                           """)]
+    [TestCase("LBTOOL005", """
+                           using LayerBase.Tooling;
+
+                           public interface IUiView { }
+
+                           [LayerTool("ui.view", Contract = typeof(IUiView))]
+                           [System.AttributeUsage(System.AttributeTargets.Class)]
+                           public sealed class UiViewAttribute : System.Attribute
+                           {
+                               public UiViewAttribute(string key) { Key = key; }
+                               public string Key { get; }
+                           }
+
+                           [UiView("Inventory")]
+                           public sealed class InventoryView : IUiView
+                           {
+                               public InventoryView() { }
+                           }
+
+                           [UiView("Inventory")]
+                           public sealed class DuplicateInventoryView : IUiView
+                           {
+                               public DuplicateInventoryView() { }
+                           }
+                           """)]
+    [TestCase("LBTOOL006", """
+                           using LayerBase.Tooling;
+
+                           public interface IUiView { }
+
+                           [LayerTool("ui.view", Contract = typeof(IUiView))]
+                           [System.AttributeUsage(System.AttributeTargets.Class)]
+                           public sealed class UiViewAttribute : System.Attribute
+                           {
+                               public UiViewAttribute(string key) { Key = key; }
+                               public string Key { get; }
+                           }
+
+                           [UiView("")]
+                           public sealed class InventoryView : IUiView
+                           {
+                               public InventoryView() { }
+                           }
+                           """)]
+    [TestCase("LBTOOL001", """
+                           using LayerBase.Tooling;
+
+                           [LayerTool("bad.tool")]
+                           public sealed class NotAnAttribute
+                           {
+                           }
+                           """)]
+    [TestCase("LBTOOL002", """
+                           using LayerBase.Tooling;
+
+                           [LayerTool("bad.tool", Contract = typeof(int))]
+                           [System.AttributeUsage(System.AttributeTargets.Class)]
+                           public sealed class BadToolAttribute : System.Attribute
+                           {
+                               public BadToolAttribute(string key) { Key = key; }
+                               public string Key { get; }
+                           }
+                           """)]
+    public void Layer_tool_generator_reports_expected_diagnostic(string diagnosticId, string source)
+    {
+        var result = RunGenerators(source, new LayerToolGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain(diagnosticId),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
     [TestCase("LBOS001", """
                          using LayerBase.DI;
                          using LayerBase.DI.Options;
@@ -164,13 +343,17 @@ public class LayerGeneratorContractTests
             parseOptions: new CSharpParseOptions(LanguageVersion.Preview));
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        var generatedSources = driver.GetRunResult().Results
+                                     .SelectMany(static result => result.GeneratedSources)
+                                     .Select(static source => source.SourceText.ToString())
+                                     .ToImmutableArray();
         var diagnostics = driver.GetRunResult().Results
                                 .SelectMany(static result => result.Diagnostics)
                                 .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error ||
                                                             diagnostic.Severity == DiagnosticSeverity.Warning)
                                 .ToImmutableArray();
 
-        return new GeneratorTestResult(diagnostics, outputCompilation);
+        return new GeneratorTestResult(diagnostics, outputCompilation, generatedSources);
     }
 
     private static IEnumerable<MetadataReference> GetMetadataReferences()
@@ -194,5 +377,6 @@ public class LayerGeneratorContractTests
     }
 
     private readonly record struct GeneratorTestResult(ImmutableArray<Diagnostic> Diagnostics,
-        Compilation OutputCompilation);
+        Compilation OutputCompilation,
+        ImmutableArray<string> GeneratedSources);
 }
