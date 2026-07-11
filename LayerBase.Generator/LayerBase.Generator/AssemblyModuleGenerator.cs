@@ -16,9 +16,9 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     private const string ModuleIgnoreAttributeName = "LayerBase.Modules.ModuleIgnoreAttribute";
     private const string LayerBaseTypeName = "LayerBase.Layers.Layer";
     private const string ScopeOptionsAttributeName = "LayerBase.Scope.ScopeOptionsAttribute";
-    private const string ScopeAttributeName = "LayerBase.Scope.ScopeAttribute`1";
-    private const string ScopeCallContractAttributeName = "LayerBase.Scope.ScopeCallAttribute`2";
-    private const string ScopeEventContractAttributeName = "LayerBase.Scope.ScopeEventAttribute`1";
+    private const string ScopeAttributeName = "LayerBase.Scope.ScopeAttribute<TScope>";
+    private const string ScopeCallContractAttributeName = "LayerBase.Scope.ScopeCallAttribute<TScope, TResult>";
+    private const string ScopeEventContractAttributeName = "LayerBase.Scope.ScopeEventAttribute<TScope>";
     private const string ScopeCallHandlerAttributeName = "LayerBase.Scope.ScopeCallAttribute";
     private const string ScopeEventHandlerAttributeName = "LayerBase.Scope.ScopeEventAttribute";
     private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
@@ -314,7 +314,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         builder.AppendLine("    {");
         builder.AppendLine($"        public static {module.Name} Instance {{ get; }} = new {module.Name}();");
         builder.AppendLine();
-        builder.AppendLine("        public global::LayerBase.Modules.ModuleManifest Manifest => GeneratedModuleManifest.Value;");
+        builder.AppendLine($"        public global::LayerBase.Modules.ModuleManifest Manifest => Generated{module.Name}Manifest.Value;");
         builder.AppendLine();
         builder.AppendLine("        global::LayerBase.Modules.ModuleManifest global::LayerBase.Modules.ILayerBaseModule.Manifest => Manifest;");
         builder.AppendLine("    }");
@@ -347,7 +347,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             builder.AppendLine("{");
         }
 
-        builder.AppendLine("    internal static class GeneratedModuleManifest");
+        builder.AppendLine($"    internal static class Generated{module.Name}Manifest");
         builder.AppendLine("    {");
         builder.AppendLine("        internal static readonly global::LayerBase.Modules.ModuleManifest Value = new global::LayerBase.Modules.ModuleManifest(");
         AppendLayerContracts(builder, layerContracts);

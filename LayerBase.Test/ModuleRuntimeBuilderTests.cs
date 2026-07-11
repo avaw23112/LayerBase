@@ -38,6 +38,9 @@ public sealed class ModuleRuntimeBuilderTests
         Assert.That(catalog.ScopeIds[typeof(TestScope).TypeHandle], Is.EqualTo(0));
         Assert.That(catalog.ServiceSlots[typeof(TestService).TypeHandle], Is.EqualTo(0));
         Assert.That(catalog.MessageRouteIds[typeof(TestCall).TypeHandle], Is.EqualTo(0));
+        Assert.That(catalog.CallRoutes, Has.Count.EqualTo(1));
+        Assert.That(catalog.EventRoutes, Has.Count.EqualTo(0));
+        Assert.That(catalog.EventHandlerRoutes, Has.Count.EqualTo(0));
     }
 
     [Test]
@@ -68,6 +71,67 @@ public sealed class ModuleRuntimeBuilderTests
         Assert.That(catalog.ServiceSlots[typeof(OtherScopeService).TypeHandle], Is.EqualTo(0));
         Assert.That(catalog.ServiceSlots[typeof(OtherService).TypeHandle], Is.EqualTo(0));
         Assert.That(catalog.ServiceSlots[typeof(TestService).TypeHandle], Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Build_computes_call_routes_with_correct_slots()
+    {
+        using var module = new TestModule(
+            layerContracts: [LayerContract<TestLayer>()],
+            scopeDefinitions: [ScopeDefinition<TestScope>()],
+            messageContracts: [CallContract<TestCall, TestScope, TestResult>()],
+            services:
+            [
+                Service<TestService>(
+                    ownerScope: typeof(TestScope),
+                    ownerLayers: [typeof(TestLayer)])
+            ],
+            handlers:
+            [
+                Handler<TestCall, TestService, TestScope>(ScopeMessageKind.Call)
+            ]);
+
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(module);
+
+        Assert.That(catalog.CallRoutes, Has.Count.EqualTo(1));
+        ScopeCallRoute route = catalog.CallRoutes[0];
+        Assert.That(route.ScopeId, Is.EqualTo(0));
+        Assert.That(route.ModuleSlot, Is.EqualTo(0));
+        Assert.That(route.LocalHandlerId, Is.EqualTo(0));
+        Assert.That(route.ServiceSlot, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Build_computes_event_routes_with_handler_routes()
+    {
+        using var module = new TestModule(
+            layerContracts: [LayerContract<TestLayer>()],
+            scopeDefinitions: [ScopeDefinition<TestScope>()],
+            messageContracts: [EventContract<TestEvent, TestScope>()],
+            services:
+            [
+                Service<TestService>(
+                    ownerScope: typeof(TestScope),
+                    ownerLayers: [typeof(TestLayer)])
+            ],
+            handlers:
+            [
+                Handler<TestEvent, TestService, TestScope>(ScopeMessageKind.Event)
+            ]);
+
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(module);
+
+        Assert.That(catalog.EventRoutes, Has.Count.EqualTo(1));
+        ScopeEventRoute eventRoute = catalog.EventRoutes[0];
+        Assert.That(eventRoute.ScopeId, Is.EqualTo(0));
+        Assert.That(eventRoute.HandlerStart, Is.EqualTo(0));
+        Assert.That(eventRoute.HandlerCount, Is.EqualTo(1));
+
+        Assert.That(catalog.EventHandlerRoutes, Has.Count.EqualTo(1));
+        ScopeEventHandlerRoute handlerRoute = catalog.EventHandlerRoutes[0];
+        Assert.That(handlerRoute.ModuleSlot, Is.EqualTo(0));
+        Assert.That(handlerRoute.LocalHandlerId, Is.EqualTo(0));
+        Assert.That(handlerRoute.ServiceSlot, Is.EqualTo(0));
     }
 
     [Test]
@@ -198,6 +262,15 @@ public sealed class ModuleRuntimeBuilderTests
             ScopeMessageKind.Call);
     }
 
+    private static ScopeMessageContractContribution EventContract<TMessage, TScope>()
+    {
+        return new ScopeMessageContractContribution(
+            typeof(TMessage).TypeHandle,
+            typeof(TScope).TypeHandle,
+            typeof(object).TypeHandle,
+            ScopeMessageKind.Event);
+    }
+
     private static ServiceContribution Service<TService>(
         Type ownerScope,
         Type[] ownerLayers)
@@ -265,6 +338,10 @@ public sealed class ModuleRuntimeBuilderTests
     }
 
     private readonly struct TestResult
+    {
+    }
+
+    private readonly struct TestEvent
     {
     }
 

@@ -216,7 +216,7 @@ public sealed class ScopeRuntime : IDisposable
             return;
         }
 
-        ExecuteInScope(() => PumpInternal(deltaTime));
+        ExecuteInScope(static (r, dt) => r.PumpInternal(dt), deltaTime);
     }
 
     public void Stop()
@@ -358,7 +358,7 @@ public sealed class ScopeRuntime : IDisposable
             while (_workerRunning)
             {
                 float deltaTime = GetWorkerDeltaTime(stopwatch, ref lastTicks);
-                ExecuteInScope(() => PumpInternal(deltaTime));
+                ExecuteInScope(static (r, dt) => r.PumpInternal(dt), deltaTime);
                 SleepWorker();
             }
 
@@ -378,7 +378,7 @@ public sealed class ScopeRuntime : IDisposable
         {
             if (_manualPumps.TryDequeue(out float deltaTime))
             {
-                ExecuteInScope(() => PumpInternal(deltaTime));
+                ExecuteInScope(static (r, dt) => r.PumpInternal(dt), deltaTime);
                 continue;
             }
 
@@ -407,10 +407,33 @@ public sealed class ScopeRuntime : IDisposable
 
     private void ExecuteInScope(Action action)
     {
-        using (ScopeExecution.Enter(this))
+        var token = ScopeExecution.Enter(this);
         using (GetOrCreateContext().EnterScope())
         {
-            action();
+            try
+            {
+                action();
+            }
+            finally
+            {
+                token.Dispose();
+            }
+        }
+    }
+
+    private void ExecuteInScope(Action<ScopeRuntime, float> action, float deltaTime)
+    {
+        var token = ScopeExecution.Enter(this);
+        using (GetOrCreateContext().EnterScope())
+        {
+            try
+            {
+                action(this, deltaTime);
+            }
+            finally
+            {
+                token.Dispose();
+            }
         }
     }
 

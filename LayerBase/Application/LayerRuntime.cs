@@ -10,6 +10,7 @@ using LayerBase.DI;
 using LayerBase.ECS.Runtime;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
+using LayerBase.Modules;
 using LayerBase.Scope;
 using LayerBase.Snap;
 using LayerBase.Tooling;
@@ -35,6 +36,7 @@ public sealed partial class LayerRuntime : IDisposable
     public LayerHubExceptionCallbacks ExceptionCallbacks { get; }
     private readonly LayerRuntimeExceptionSink _exceptionSink;
     private readonly PostIngressQueue _postIngress = new();
+    private Action<Exception>? _completionExceptionHandler;
     #endregion
 
     #region Runtime State - Configuration
@@ -52,6 +54,7 @@ public sealed partial class LayerRuntime : IDisposable
     private ServiceProvider? _worldProvider;
     private FullSnapRuntime? _fullSnap;
     internal DelayPublisherManager? DelayManager { get; private set; }
+    internal List<ILayerBaseModule>? _installedModules;
     #endregion
 
     #region Runtime State - Layer Bindings
@@ -109,6 +112,7 @@ public sealed partial class LayerRuntime : IDisposable
         ExceptionHub = new LayerExceptionHub();
         ExceptionCallbacks = new LayerHubExceptionCallbacks();
         _exceptionSink = new LayerRuntimeExceptionSink(this, ExceptionCallbacks);
+        _completionExceptionHandler = ex => ReportLayerEventError(-1, "System", "Completion", ex);
         _ownerThreadId = Environment.CurrentManagedThreadId;
         LayerHub.Internal_Register(this);
     }
@@ -228,6 +232,16 @@ public sealed partial class LayerRuntime : IDisposable
             return;
         }
 
+        // 如果通过 LayersBuilder.Install() 安装了模块，优先使用模块路径构建 scope host
+        if (_installedModules != null && _installedModules.Count > 0)
+        {
+            if (TryBuildFromInstalledModules())
+            {
+                return;
+            }
+        }
+
+        // 检查生成的 ScopeHostFactory 注册
         RegisterGeneratedScopeHostFactory();
 
         var scopedServices = new List<LayerBase.DI.IService>();
@@ -252,7 +266,44 @@ public sealed partial class LayerRuntime : IDisposable
         }
 
         ScopeHost = ScopeHostFactory.TryCreate(scopedServices, sharedActorWorld: Actors, owningRuntime: this)
-                    ?? ScopeRuntimeHost.Create(ScopeRuntimePlanner.Build(scopedServices), sharedActorWorld: Actors, owningRuntime: this);
+                    ?? ScopeRuntimeHost.Create(ScopeRuntimePlanner.Build(scopedServices), sharedActorWorld: Actors, owningRuntime: this,
+                        postDispatcher: GlobalDispatcherRegistry.PostDispatcher,
+                        callDispatcher: GlobalDispatcherRegistry.CallDispatcher);
+    }
+
+    private bool TryBuildFromInstalledModules()
+    {
+        if (_installedModules == null || _installedModules.Count == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(_installedModules);
+            if (catalog.ScopeDefinitions.Count == 0)
+            {
+                return false;
+            }
+
+            ModuleCallDispatchHandler[]? callDispatchers = ModuleDispatchRegistry.TryGetCallDispatchers(catalog.Modules.Count);
+            ModuleEventDispatchHandler[]? eventDispatchers = ModuleDispatchRegistry.TryGetEventDispatchers(catalog.Modules.Count);
+
+            ScopeHost = ScopeRuntimeHost.CreateFromCatalog(
+                catalog,
+                moduleCallDispatchers: callDispatchers,
+                moduleEventDispatchers: eventDispatchers,
+                sharedActorWorld: Actors,
+                owningRuntime: this,
+                fallbackPostDispatcher: GlobalDispatcherRegistry.PostDispatcher,
+                fallbackCallDispatcher: GlobalDispatcherRegistry.CallDispatcher);
+
+            return ScopeHost != null;
+        }
+        catch (ModuleBuildException)
+        {
+            return false;
+        }
     }
 
     private void RegisterGeneratedScopeHostFactory()
@@ -296,8 +347,7 @@ public sealed partial class LayerRuntime : IDisposable
 
             // Completion drain (only when sync context exists)
             var policy = IsDebugMode ? CompletionExceptionPolicy.Throw : CompletionExceptionPolicy.ReportAndContinue;
-            _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0, policy,
-                ex => ReportLayerEventError(-1, "System", "Completion", ex));
+            _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0, policy, _completionExceptionHandler);
         }
 
         EcsScheduler?.NotifyFrameStart();
@@ -909,6 +959,23 @@ public sealed partial class LayerRuntime : IDisposable
 
             layer.AttachToContext(_runtime);
             _layerChain.AddNode(layer);
+            return this;
+        }
+
+        public LayersBuilder Install(params ILayerBaseModule[] modules)
+        {
+            if (_built) throw new InvalidOperationException("Cannot install modules after Build has been called.");
+            if (modules == null || modules.Length == 0)
+            {
+                ILayerBaseModule[]? discovered = ModuleCatalogRegistry.GetAllModules();
+                if (discovered != null && discovered.Length > 0)
+                {
+                    (_runtime._installedModules ??= new List<ILayerBaseModule>()).AddRange(discovered);
+                }
+                return this;
+            }
+
+            (_runtime._installedModules ??= new List<ILayerBaseModule>()).AddRange(modules);
             return this;
         }
 

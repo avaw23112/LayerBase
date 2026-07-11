@@ -1,3 +1,5 @@
+using LayerBase.Scope;
+
 namespace LayerBase.Modules;
 
 public sealed class ModuleRuntimeCatalog
@@ -13,7 +15,10 @@ public sealed class ModuleRuntimeCatalog
         IReadOnlyList<ScopeHandlerContribution> handlers,
         IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds,
         IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots,
-        IReadOnlyDictionary<RuntimeTypeHandle, int> messageRouteIds)
+        IReadOnlyDictionary<RuntimeTypeHandle, int> messageRouteIds,
+        IReadOnlyList<ScopeCallRoute> callRoutes,
+        IReadOnlyList<ScopeEventRoute> eventRoutes,
+        IReadOnlyList<ScopeEventHandlerRoute> eventHandlerRoutes)
     {
         Modules = modules;
         ModuleSlots = moduleSlots;
@@ -26,6 +31,9 @@ public sealed class ModuleRuntimeCatalog
         ScopeIds = scopeIds;
         ServiceSlots = serviceSlots;
         MessageRouteIds = messageRouteIds;
+        CallRoutes = callRoutes;
+        EventRoutes = eventRoutes;
+        EventHandlerRoutes = eventHandlerRoutes;
     }
 
     public IReadOnlyList<ILayerBaseModule> Modules { get; }
@@ -49,6 +57,12 @@ public sealed class ModuleRuntimeCatalog
     public IReadOnlyDictionary<RuntimeTypeHandle, int> ServiceSlots { get; }
 
     public IReadOnlyDictionary<RuntimeTypeHandle, int> MessageRouteIds { get; }
+
+    public IReadOnlyList<ScopeCallRoute> CallRoutes { get; }
+
+    public IReadOnlyList<ScopeEventRoute> EventRoutes { get; }
+
+    public IReadOnlyList<ScopeEventHandlerRoute> EventHandlerRoutes { get; }
 }
 
 public sealed class ModuleBuildException : InvalidOperationException

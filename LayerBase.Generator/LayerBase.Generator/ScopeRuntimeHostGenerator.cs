@@ -374,7 +374,7 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
             GenerateScopeOptionPartials(spc, partialDefinitions);
         }
 
-        bool shouldGenerateRegistrar = !moduleMode && definitions.Length > 0 && layerTypes.Length > 0;
+        bool shouldGenerateRegistrar = definitions.Length > 0 && layerTypes.Length > 0 && (hasPostDispatcher || hasCallDispatcher);
 
         bool hasGeneratedPlanner = !moduleMode && GeneratePlanner(spc, partialDefinitions, scopedServices);
         if (!hasPostDispatcher && !hasCallDispatcher && !hasGeneratedPlanner)
@@ -400,6 +400,26 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         builder.AppendLine("{");
         builder.AppendLine("    public static class GeneratedScopeRuntimeHostFactory");
         builder.AppendLine("    {");
+
+        if (hasPostDispatcher || hasCallDispatcher)
+        {
+            builder.AppendLine("        static GeneratedScopeRuntimeHostFactory()");
+            builder.AppendLine("        {");
+
+            if (hasPostDispatcher && postDispatcher != "null")
+            {
+                builder.AppendLine("            global::LayerBase.Scope.GlobalDispatcherRegistry.PostDispatcher = global::LayerBase.Scope.GeneratedScopePostDispatcher.Dispatch;");
+            }
+
+            if (hasCallDispatcher && callDispatcher != "null")
+            {
+                builder.AppendLine("            global::LayerBase.Scope.GlobalDispatcherRegistry.CallDispatcher = global::LayerBase.Scope.GeneratedScopeCallDispatcher.Dispatch;");
+            }
+
+            builder.AppendLine("        }");
+            builder.AppendLine();
+        }
+
         builder.AppendLine("        public static global::LayerBase.Scope.ScopeRuntimeHost Create(global::System.Collections.Generic.IReadOnlyList<global::LayerBase.DI.IService> services, global::LayerBase.Scope.ScopeRuntimeOptions? options = null, global::LayerBase.Actor.ActorWorld? sharedActorWorld = null, global::LayerBase.LayerRuntime? owningRuntime = null)");
         builder.AppendLine("        {");
         builder.AppendLine("            if (services == null)");

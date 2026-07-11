@@ -1,3 +1,5 @@
+using LayerBase.Scope;
+
 namespace LayerBase.Modules;
 
 public static class ModuleRuntimeBuilder
@@ -21,16 +23,41 @@ public static class ModuleRuntimeBuilder
         var services = new List<ServiceContribution>();
         var contexts = new List<ContextContribution>();
         var handlers = new List<ScopeHandlerContribution>();
+        var serviceModuleIndex = new Dictionary<RuntimeTypeHandle, int>();
+        var handlerModuleIndex = new Dictionary<RuntimeTypeHandle, Dictionary<int, int>>();
 
-        foreach (ILayerBaseModule module in moduleArray)
+        for (int moduleIdx = 0; moduleIdx < moduleArray.Length; moduleIdx++)
         {
+            ILayerBaseModule module = moduleArray[moduleIdx];
             ModuleManifest manifest = module.Manifest ?? ModuleManifest.Empty;
             AddLayerContracts(layerContracts, manifest.LayerContracts);
             AddScopeDefinitions(scopeDefinitions, manifest.ScopeDefinitions);
             AddMessageContracts(messageContracts, manifest.MessageContracts);
-            services.AddRange(manifest.Services);
-            contexts.AddRange(manifest.Contexts);
-            handlers.AddRange(manifest.Handlers);
+
+            for (int i = 0; i < manifest.Services.Count; i++)
+            {
+                ServiceContribution service = manifest.Services[i];
+                services.Add(service);
+                serviceModuleIndex[service.ServiceType] = moduleIdx;
+            }
+
+            for (int i = 0; i < manifest.Contexts.Count; i++)
+            {
+                contexts.Add(manifest.Contexts[i]);
+            }
+
+            for (int i = 0; i < manifest.Handlers.Count; i++)
+            {
+                ScopeHandlerContribution handler = manifest.Handlers[i];
+                handlers.Add(handler);
+                if (!handlerModuleIndex.TryGetValue(handler.ServiceType, out Dictionary<int, int>? handlerMap))
+                {
+                    handlerMap = new Dictionary<int, int>();
+                    handlerModuleIndex[handler.ServiceType] = handlerMap;
+                }
+
+                handlerMap[handler.ModuleLocalHandlerId] = moduleIdx;
+            }
         }
 
         ValidateServices(layerContracts, scopeDefinitions, services);
@@ -41,6 +68,10 @@ public static class ModuleRuntimeBuilder
         IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds = AllocateScopeIds(scopeDefinitions.Values);
         IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots = AllocateServiceSlots(services);
         IReadOnlyDictionary<RuntimeTypeHandle, int> messageRouteIds = AllocateMessageRouteIds(messageContracts.Values);
+
+        var callRoutes = AllocateCallRoutes(messageContracts, handlers, serviceSlots, serviceModuleIndex, handlerModuleIndex, scopeIds);
+        var eventRoutes = AllocateEventRoutes(messageContracts, handlers, serviceSlots, serviceModuleIndex, handlerModuleIndex, scopeIds);
+        var eventHandlerRoutes = AllocateEventHandlerRoutes(messageContracts, handlers, serviceSlots, serviceModuleIndex, handlerModuleIndex);
 
         return new ModuleRuntimeCatalog(
             moduleArray,
@@ -53,7 +84,156 @@ public static class ModuleRuntimeBuilder
             handlers,
             scopeIds,
             serviceSlots,
-            messageRouteIds);
+            messageRouteIds,
+            callRoutes,
+            eventRoutes,
+            eventHandlerRoutes);
+    }
+
+    private static IReadOnlyList<ScopeCallRoute> AllocateCallRoutes(
+        IReadOnlyDictionary<RuntimeTypeHandle, ScopeMessageContractContribution> messageContracts,
+        IReadOnlyList<ScopeHandlerContribution> handlers,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceModuleIndex,
+        IReadOnlyDictionary<RuntimeTypeHandle, Dictionary<int, int>> handlerModuleIndex,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds)
+    {
+        var routes = new List<ScopeCallRoute>();
+        var sortedContracts = messageContracts.Values
+                                             .Where(static c => c.Kind == ScopeMessageKind.Call)
+                                             .OrderBy(static c => GetTypeName(c.MessageType), StringComparer.Ordinal)
+                                             .ToList();
+
+        for (int i = 0; i < sortedContracts.Count; i++)
+        {
+            ScopeMessageContractContribution contract = sortedContracts[i];
+            ScopeHandlerContribution? handler = handlers.FirstOrDefault(
+                h => h.Kind == ScopeMessageKind.Call && h.MessageType.Equals(contract.MessageType));
+            if (handler == null)
+            {
+                continue;
+            }
+
+            ScopeHandlerContribution resolvedHandler = handler.Value;
+            RuntimeTypeHandle serviceType = resolvedHandler.ServiceType;
+            RuntimeTypeHandle messageType = resolvedHandler.MessageType;
+
+            if (!serviceSlots.TryGetValue(serviceType, out int serviceSlot))
+            {
+                continue;
+            }
+
+            if (!serviceModuleIndex.TryGetValue(serviceType, out int moduleSlotVal))
+            {
+                continue;
+            }
+
+            int localHandlerId = resolvedHandler.ModuleLocalHandlerId;
+            if (!scopeIds.TryGetValue(contract.TargetScopeType, out int scopeId))
+            {
+                continue;
+            }
+
+            routes.Add(new ScopeCallRoute(
+                scopeId,
+                (ushort)moduleSlotVal,
+                (ushort)localHandlerId,
+                serviceSlot));
+        }
+
+        return routes;
+    }
+
+    private static IReadOnlyList<ScopeEventRoute> AllocateEventRoutes(
+        IReadOnlyDictionary<RuntimeTypeHandle, ScopeMessageContractContribution> messageContracts,
+        IReadOnlyList<ScopeHandlerContribution> handlers,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceModuleIndex,
+        IReadOnlyDictionary<RuntimeTypeHandle, Dictionary<int, int>> handlerModuleIndex,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds)
+    {
+        var eventHandlers = handlers
+                            .Where(static h => h.Kind == ScopeMessageKind.Event)
+                            .OrderBy(static h => GetTypeName(h.MessageType), StringComparer.Ordinal)
+                            .ThenBy(static h => GetTypeName(h.ServiceType), StringComparer.Ordinal)
+                            .ToList();
+
+        var eventRoutes = new List<ScopeEventRoute>();
+        int currentStart = 0;
+
+        var eventGroups = messageContracts.Values
+                                          .Where(static c => c.Kind == ScopeMessageKind.Event)
+                                          .OrderBy(static c => GetTypeName(c.MessageType), StringComparer.Ordinal)
+                                          .ToList();
+
+        var eventTypeToHandlers = new Dictionary<RuntimeTypeHandle, int>();
+        for (int i = 0; i < eventHandlers.Count; i++)
+        {
+            RuntimeTypeHandle messageType = eventHandlers[i].MessageType;
+            if (!eventTypeToHandlers.ContainsKey(messageType))
+            {
+                eventTypeToHandlers[messageType] = 0;
+            }
+
+            eventTypeToHandlers[messageType]++;
+        }
+
+        for (int i = 0; i < eventGroups.Count; i++)
+        {
+            ScopeMessageContractContribution contract = eventGroups[i];
+            if (!scopeIds.TryGetValue(contract.TargetScopeType, out int scopeId))
+            {
+                continue;
+            }
+
+            int handlerCount = 0;
+            if (eventTypeToHandlers.TryGetValue(contract.MessageType, out int count))
+            {
+                handlerCount = count;
+            }
+
+            eventRoutes.Add(new ScopeEventRoute(scopeId, currentStart, handlerCount));
+            currentStart += handlerCount;
+        }
+
+        return eventRoutes;
+    }
+
+    private static IReadOnlyList<ScopeEventHandlerRoute> AllocateEventHandlerRoutes(
+        IReadOnlyDictionary<RuntimeTypeHandle, ScopeMessageContractContribution> messageContracts,
+        IReadOnlyList<ScopeHandlerContribution> handlers,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceModuleIndex,
+        IReadOnlyDictionary<RuntimeTypeHandle, Dictionary<int, int>> handlerModuleIndex)
+    {
+        var eventHandlers = handlers
+                            .Where(static h => h.Kind == ScopeMessageKind.Event)
+                            .OrderBy(static h => GetTypeName(h.MessageType), StringComparer.Ordinal)
+                            .ThenBy(static h => GetTypeName(h.ServiceType), StringComparer.Ordinal);
+
+        var routes = new List<ScopeEventHandlerRoute>();
+        foreach (ScopeHandlerContribution handler in eventHandlers)
+        {
+            RuntimeTypeHandle serviceType = handler.ServiceType;
+            if (!serviceSlots.TryGetValue(serviceType, out int serviceSlot))
+            {
+                continue;
+            }
+
+            if (!serviceModuleIndex.TryGetValue(serviceType, out int moduleSlotVal))
+            {
+                continue;
+            }
+
+            int localHandlerId = handler.ModuleLocalHandlerId;
+
+            routes.Add(new ScopeEventHandlerRoute(
+                (ushort)moduleSlotVal,
+                (ushort)localHandlerId,
+                serviceSlot));
+        }
+
+        return routes;
     }
 
     private static IReadOnlyDictionary<ILayerBaseModule, int> AllocateModuleSlots(IReadOnlyList<ILayerBaseModule> modules)
