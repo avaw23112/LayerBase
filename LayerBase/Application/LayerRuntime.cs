@@ -10,6 +10,7 @@ using LayerBase.DI;
 using LayerBase.ECS.Runtime;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
+using LayerBase.Scope;
 using LayerBase.Snap;
 using LayerBase.Tooling;
 using LayerBase.Worker;
@@ -29,6 +30,7 @@ public sealed partial class LayerRuntime : IDisposable
     public EventCenter EventCenter { get; internal set; }
     public ActorWorld Actors { get; }
     public WorkerRuntime Worker { get; }
+    public ScopeRuntimeHost? ScopeHost { get; private set; }
     private readonly PostIngressQueue _postIngress = new();
     #endregion
 
@@ -209,6 +211,67 @@ public sealed partial class LayerRuntime : IDisposable
     {
         _chain?.MarkDelayDirty();
     }
+
+    private void InitializeScopeHost()
+    {
+        if (_chain == null)
+        {
+            return;
+        }
+
+        RegisterGeneratedScopeHostFactory();
+
+        var scopedServices = new List<LayerBase.DI.IService>();
+        var seen = new HashSet<object>(LayerBase.Snap.ReferenceEqualityComparer.Instance);
+        foreach (Layer layer in _chain.GetNodes())
+        {
+            foreach (LayerBase.DI.IService service in layer.GetResolvedServices())
+            {
+                if (!ScopeRuntimePlanner.IsScopedServiceType(service.GetType()) ||
+                    !seen.Add(service))
+                {
+                    continue;
+                }
+
+                scopedServices.Add(service);
+            }
+        }
+
+        if (scopedServices.Count == 0)
+        {
+            return;
+        }
+
+        ScopeHost = ScopeHostFactory.TryCreate(scopedServices)
+                    ?? ScopeRuntimeHost.Create(ScopeRuntimePlanner.Build(scopedServices));
+    }
+
+    private void RegisterGeneratedScopeHostFactory()
+    {
+        foreach (Layer layer in _chain.GetNodes())
+        {
+            if (layer is IScopeHostFactoryRegistrar registrar)
+            {
+                registrar.RegisterScopeHostFactory();
+                return;
+            }
+        }
+    }
+
+    private void EnsurePostSchedulersKnowAllocatedEventTypes()
+    {
+        _scheduler?.BuildPlans(Array.Empty<PostTypePlan>());
+        if (ScopeHost == null)
+        {
+            return;
+        }
+
+        IReadOnlyList<ScopeRuntime> scopes = ScopeHost.Scopes;
+        for (int i = 0; i < scopes.Count; i++)
+        {
+            scopes[i].PostScheduler.BuildPlans(Array.Empty<PostTypePlan>());
+        }
+    }
     #endregion
 
     #region Lifecycle - Pump
@@ -286,6 +349,7 @@ public sealed partial class LayerRuntime : IDisposable
                                   ?? new PostPumpStats(0, 0, 0, 0);
 
         _chain?.Pump(deltaTime);
+        ScopeHost?.Pump(deltaTime);
         EcsScheduler?.FlushSubmissions();
 
         if (_scheduler != null)
@@ -494,6 +558,8 @@ public sealed partial class LayerRuntime : IDisposable
         _postIngress.Clear();
         EcsScheduler.Dispose();
         Worker.Dispose();
+        ScopeHost?.Dispose();
+        ScopeHost = null;
         _chain?.DisposeLayers();
         _chain = null;
         Actors.RuntimeStop();
@@ -850,7 +916,11 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime.InitializeDelay(_delayOptions);
             _runtime.BuildServiceProvider();
             _runtime.Actors.PrepareRuntimeBuild();
+            _runtime.InitializeScopeHost();
+            _layerChain.BuildAutoBindings();
+            _runtime.EnsurePostSchedulersKnowAllocatedEventTypes();
             _layerChain.Build(1024, true);
+            _runtime.ScopeHost?.Start();
             _runtime.Actors.CompleteRuntimeBuild();
             _runtime.BuildFullSnapCache();
             _runtime.PolicyTable.Freeze();

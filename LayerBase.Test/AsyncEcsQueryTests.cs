@@ -45,7 +45,7 @@ public sealed class AsyncEcsQueryTests
     }
 
     [Test]
-    public void AsyncPlainQuery_DoesNotExecuteAtSubmitPointAndExecutesOnWorker()
+    public void AsyncDirectQuery_executes_immediately_at_call_site()
     {
         LayerRuntime runtime = CreateAsyncRuntime();
 
@@ -53,19 +53,11 @@ public sealed class AsyncEcsQueryTests
             new JobPositionComponent { X = 1f, Y = 2f },
             new JobVelocityComponent { X = 3f, Y = 4f });
 
-        using var gate = new ManualResetEventSlim(false);
-        var job = new BlockingMoveJob(gate);
+        var job = new MoveJob();
 
         runtime.EcsWorld
                .Query<JobPositionComponent, JobVelocityComponent>()
                .ForEach(ref job);
-
-        JobPositionComponent before = runtime.EcsWorld.Get<JobPositionComponent>(entity);
-        Assert.That(before.X, Is.EqualTo(1f));
-        Assert.That(before.Y, Is.EqualTo(2f));
-
-        gate.Set();
-        runtime.WaitEcsIdleForTest(TimeSpan.FromSeconds(2));
 
         JobPositionComponent after = runtime.EcsWorld.Get<JobPositionComponent>(entity);
         Assert.That(after.X, Is.EqualTo(4f));
@@ -137,6 +129,19 @@ public sealed class AsyncEcsQueryTests
             ref JobVelocityComponent velocity)
         {
             _gate.Wait();
+            position.X += velocity.X;
+            position.Y += velocity.Y;
+        }
+    }
+
+    private readonly struct MoveJob :
+        IQueryJob<JobPositionComponent, JobVelocityComponent>
+    {
+        public void Execute(
+            Entity entity,
+            ref JobPositionComponent position,
+            ref JobVelocityComponent velocity)
+        {
             position.X += velocity.X;
             position.Y += velocity.Y;
         }

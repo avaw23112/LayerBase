@@ -7,6 +7,9 @@ using LayerBase.ECS.Projection;
 
 namespace LayerBase.ECS.Projection.Flow;
 
+/// <summary>
+/// 确保 ProjectedActorRef 组件类型在首次使用前注册。
+/// </summary>
 internal static class ProjectedActorRefComponentRegistration
 {
     internal static readonly int ComponentId = ProjectedActorRefRegistration.ComponentType.Id;
@@ -17,9 +20,16 @@ public static class ProjectionWorldExtensions
     public static ProjectionQueryFlow0 Query(
         this World world)
     {
+        QueryDescription description = new QueryDescription();
+
+        // ProjectedActorRef：
+        // Projection 热路径必须组件。
+        // 作用：保证进入 ProjectionExecutor 的 chunk 必然拥有 ActorId 缓存。
+        description.WithAll<ProjectedActorRef>();
+
         return new ProjectionQueryFlow0(
-            world.Runtime,
-            world.Runtime.EcsQueryRegistry.GetOrCreate());
+            world,
+            world.Query(in description));
     }
 
 <#
@@ -32,9 +42,18 @@ public static class ProjectionWorldExtensions
     public static ProjectionQueryFlow<#= c #><<#= compG #>> Query<<#= compG #>>(
         this World world)
     {
+        QueryDescription description = new QueryDescription();
+
+        // ProjectedActorRef：
+        // 必须作为 Projection Query 的基础组件。
+        description.WithAll<ProjectedActorRef>();
+
+        // 用户业务组件。
+        description.WithAll<<#= compG #>>();
+
         return new ProjectionQueryFlow<#= c #><<#= compG #>>(
-            world.Runtime,
-            world.Runtime.EcsQueryRegistry.GetOrCreate<<#= compG #>>());
+            world,
+            world.Query(in description));
     }
 
 <#

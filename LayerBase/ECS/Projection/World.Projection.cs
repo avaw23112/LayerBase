@@ -1,4 +1,5 @@
 using LayerBase;
+using LayerBase.Actor;
 using LayerBase.ECS.Projection;
 
 namespace Arch.Core;
@@ -6,6 +7,7 @@ namespace Arch.Core;
 public partial class World
 {
     private readonly ActiveProjectedActorList _activeProjectedActors = new();
+    private ActorWorld? _scopeActors;
 
     internal LayerRuntime Runtime { get; private set; } = null!;
 
@@ -13,6 +15,32 @@ public partial class World
         LayerRuntime runtime)
     {
         Runtime = runtime;
+    }
+
+    internal void BindScopeActors(ActorWorld actors)
+    {
+        _scopeActors = actors ?? throw new ArgumentNullException(nameof(actors));
+    }
+
+    internal bool TryGetRuntime(out LayerRuntime? runtime)
+    {
+        runtime = Runtime;
+        return runtime != null;
+    }
+
+    internal ActorWorld GetActorWorld()
+    {
+        if (_scopeActors != null)
+        {
+            return _scopeActors;
+        }
+
+        if (Runtime != null)
+        {
+            return Runtime.Actors;
+        }
+
+        throw new InvalidOperationException("ECS World is not bound to an ActorWorld.");
     }
 
     internal ref ProjectedActorMeta GetProjectionMeta(
@@ -54,6 +82,6 @@ public partial class World
 
     internal void SweepProjectedActors(int maxCount = 512)
     {
-        _activeProjectedActors.Sweep(this, Runtime.Actors, maxCount);
+        _activeProjectedActors.Sweep(this, GetActorWorld(), maxCount);
     }
 }

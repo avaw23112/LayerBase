@@ -9,6 +9,7 @@ using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.ECS;
 using LayerBase.Event.Delay;
+using LayerBase.Scope;
 using LayerBase.Snap;
 
 namespace LayerBase.Layers;
@@ -61,6 +62,7 @@ public abstract class Layer : Node, IDisposable
     private readonly List<Type> _producedEvents = new();
     // 当 Layer 尚未分配 RouteIndex 时，暂存订阅操作的队列。
     private ConcurrentQueue<Action<Layer>> _pendingOps = new();
+    private static readonly AsyncLocal<EventCenter?> s_autoBindEventCenter = new();
     #endregion
 
     #region Runtime State - Lifecycle
@@ -279,7 +281,20 @@ public abstract class Layer : Node, IDisposable
         foreach (var resolved in _resolvedServices)
         {
             if (resolved.Instance is not IAutoSubscribe auto) continue;
-            auto.AutoBind(this);
+
+            if (resolved.Instance is IService service &&
+                ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+            {
+                using (EnterAutoBindEventCenter(ownerScope.EventCenter))
+                {
+                    auto.AutoBind(this);
+                }
+            }
+            else
+            {
+                auto.AutoBind(this);
+            }
+
             subscribers.Add(auto);
         }
 
@@ -306,6 +321,12 @@ public abstract class Layer : Node, IDisposable
 
         foreach (var resolved in _resolvedServices)
         {
+            if (resolved.Instance is IService scopedService &&
+                ScopeRuntimePlanner.IsScopedServiceType(scopedService.GetType()))
+            {
+                continue;
+            }
+
             if (resolved.Instance is IGeneratedEcsQueryRegistrar registrar)
             {
                 registrar.RegisterGeneratedEcsQueries(OwnerContext!);
@@ -341,6 +362,65 @@ public abstract class Layer : Node, IDisposable
     {
         for (var i = 0; i < _runtimeStops.Count; i++)
             _runtimeStops[i].RuntimeStop();
+    }
+
+    internal IEnumerable<IService> GetResolvedServices()
+    {
+        foreach (var resolved in _resolvedServices)
+        {
+            if (resolved.Instance is IService service)
+            {
+                yield return service;
+            }
+        }
+    }
+
+    private static IDisposable EnterAutoBindEventCenter(EventCenter eventCenter)
+    {
+        EventCenter? previous = s_autoBindEventCenter.Value;
+        s_autoBindEventCenter.Value = eventCenter;
+        return new AutoBindEventCenterScope(previous);
+    }
+
+    private EventCenter GetSubscriptionEventCenter()
+    {
+        return s_autoBindEventCenter.Value
+               ?? OwnerContext?.EventCenter
+               ?? throw new InvalidOperationException("Layer 未附加到 Runtime 上下文。");
+    }
+
+    private EventCenter GetSubscriptionEventCenter(object instance)
+    {
+        if (instance is IService service &&
+            ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        {
+            return ownerScope.EventCenter;
+        }
+
+        return OwnerContext?.EventCenter
+               ?? throw new InvalidOperationException("Layer 未附加到 Runtime 上下文。");
+    }
+
+    private sealed class AutoBindEventCenterScope : IDisposable
+    {
+        private readonly EventCenter? _previous;
+        private bool _disposed;
+
+        public AutoBindEventCenterScope(EventCenter? previous)
+        {
+            _previous = previous;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            s_autoBindEventCenter.Value = _previous;
+        }
     }
     #endregion
 
@@ -435,8 +515,9 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            OwnerContext.EventCenter.SubscribeFlow(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Flow));
+            EventCenter eventCenter = GetSubscriptionEventCenter();
+            eventCenter.SubscribeFlow(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(eventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Flow));
         }
         else
         {
@@ -450,8 +531,9 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            OwnerContext.EventCenter.SubscribeNotify(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Notify));
+            EventCenter eventCenter = GetSubscriptionEventCenter();
+            eventCenter.SubscribeNotify(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(eventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Notify));
         }
         else
         {
@@ -465,8 +547,9 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            OwnerContext.EventCenter.Subscribe(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Subscribe));
+            EventCenter eventCenter = GetSubscriptionEventCenter();
+            eventCenter.Subscribe(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(eventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Subscribe));
         }
         else
         {
@@ -480,8 +563,9 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            OwnerContext.EventCenter.SubscribeAsync(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Async));
+            EventCenter eventCenter = GetSubscriptionEventCenter();
+            eventCenter.SubscribeAsync(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(eventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Async));
         }
         else
         {
@@ -502,9 +586,10 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            OwnerContext.EventCenter.SubscribeParallel(RouteIndex, handler,
+            EventCenter eventCenter = GetSubscriptionEventCenter();
+            eventCenter.SubscribeParallel(RouteIndex, handler,
                 reportError ?? OwnerContext.ReportLayerEventError);
-            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Parallel));
+            _subscriptions.Add(UnsubscribeToken.Rent(eventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Parallel));
         }
         else
         {
@@ -675,6 +760,7 @@ public abstract class Layer : Node, IDisposable
 
     private void BindInterfaceEventHandlers(object instance)
     {
+        EventCenter eventCenter = GetSubscriptionEventCenter(instance);
         foreach (var iface in instance.GetType().GetInterfaces())
         {
             if (!iface.IsGenericType) continue;
@@ -684,15 +770,15 @@ public abstract class Layer : Node, IDisposable
 
             if (genericDefinition == typeof(IEventHandler<>))
             {
-                OwnerContext.EventCenter.SubscribeFlow(RouteIndex, instance, typeArguments[0]);
-                _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Flow));
+                eventCenter.SubscribeFlow(RouteIndex, instance, typeArguments[0]);
+                _subscriptions.Add(UnsubscribeToken.Rent(eventCenter, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Flow));
                 RecordSubscribedEvent(typeArguments[0]);
                 continue;
             }
             if (genericDefinition == typeof(IEventHandlerAsync<>))
             {
-                OwnerContext.EventCenter.SubscribeAsync(RouteIndex, instance, typeArguments[0]);
-                _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Async));
+                eventCenter.SubscribeAsync(RouteIndex, instance, typeArguments[0]);
+                _subscriptions.Add(UnsubscribeToken.Rent(eventCenter, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Async));
                 RecordSubscribedEvent(typeArguments[0]);
             }
         }

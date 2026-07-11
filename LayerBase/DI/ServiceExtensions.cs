@@ -3,6 +3,7 @@ using LayerBase.Actor;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Layers;
+using LayerBase.Scope;
 
 namespace LayerBase.DI;
 
@@ -35,6 +36,11 @@ public static class ServiceExtensions
         in   TValue   value)
         where TValue : struct
     {
+        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        {
+            return ownerScope.EventCenter.Send(value);
+        }
+
         return service
                .GetBinding()
                .EventCenter
@@ -68,6 +74,13 @@ public static class ServiceExtensions
         EventPostPolicy? policy = default)
         where TValue : struct
     {
+        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        {
+            return policy.HasValue
+                ? ownerScope.PostScheduler.TryPost(value, policy.Value)
+                : ownerScope.PostScheduler.TryPost(value);
+        }
+
         var scheduler = service.GetBinding().Runtime.Scheduler;
 
         return policy.HasValue
@@ -93,6 +106,11 @@ public static class ServiceExtensions
     public static PostResult MarkDirty<TValue>(this IService service)
         where TValue : struct
     {
+        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        {
+            return ownerScope.PostScheduler.MarkDirty<TValue>();
+        }
+
         return service
                .GetBinding()
                .Runtime
@@ -132,6 +150,16 @@ public static class ServiceExtensions
         int                capacity     = 0)
         where TValue : struct
     {
+        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        {
+            return ownerScope.PostScheduler.TryPost(
+                value,
+                new EventPostPolicy(
+                    PostDeliveryMode.Latest,
+                    backpressure,
+                    capacity));
+        }
+
         return service
                .GetBinding()
                .Runtime
@@ -176,6 +204,16 @@ public static class ServiceExtensions
         int                capacity     = 0)
         where TValue : struct
     {
+        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        {
+            return ownerScope.PostScheduler.TryPost(
+                value,
+                new EventPostPolicy(
+                    PostDeliveryMode.Coalesced,
+                    backpressure,
+                    capacity));
+        }
+
         return service
                .GetBinding()
                .Runtime
@@ -237,6 +275,18 @@ public static class ServiceExtensions
         TimerCatchUpPolicy? catchUpPolicy     = default)
         where TValue : struct
     {
+        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        {
+            return ownerScope.SchedulePost(
+                value,
+                delaySeconds,
+                expiredPostPolicy,
+                repeatCount,
+                intervalSeconds,
+                repeatMode,
+                catchUpPolicy);
+        }
+
         var binding = service.GetBinding();
         var runtime = binding.Runtime;
         var eventId = EventTypeId<TValue>.Id;

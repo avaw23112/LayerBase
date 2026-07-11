@@ -1,6 +1,7 @@
 using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.DI;
+using LayerBase.Scope;
 
 namespace LayerBase;
 
@@ -18,6 +19,11 @@ public static class ServiceActorExtensions
         if (service == null)
         {
             throw new ArgumentNullException(nameof(service));
+        }
+
+        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        {
+            return ownerScope.Actors;
         }
 
         return ServiceLayerBinder.RequireBinding(service).Runtime.Actors;

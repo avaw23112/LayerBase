@@ -15,10 +15,12 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 {
     private const string QueryAttributeName = "LayerBase.ECS.QueryAttribute";
     private const string BringAttributeName = "LayerBase.ECS.BringAttribute";
+    private const string InputAttributeName = "LayerBase.ECS.InputAttribute";
     private const string EntryPointAttributeName = "LayerBase.ECS.EntryPointAttribute";
     private const string ProjectResultMetadataName = "LayerBase.ECS.ProjectResult";
     private const string EntityMetadataName = "Arch.Core.Entity";
     private const string IComponentMetadataName = "LayerBase.Core.IComponent";
+    private const string IServiceMetadataName = "LayerBase.DI.IService";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -88,6 +90,32 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         foreach (var parameter in methodSymbol.Parameters)
         {
+            if (HasInputAttribute(parameter))
+            {
+                if (parameter.RefKind == RefKind.Ref || parameter.RefKind == RefKind.Out)
+                {
+                    return null;
+                }
+
+                int inputIndex = inputParameters.Count;
+                inputParameters.Add(new QueryInputParameterInfo
+                {
+                    Name = parameter.Name,
+                    Type = parameter.Type,
+                    RefKind = parameter.RefKind,
+                    Index = inputIndex
+                });
+
+                userParameters.Add(new QueryUserParameterInfo
+                {
+                    Kind = QueryUserParameterKind.Input,
+                    Index = inputIndex,
+                    RefKind = parameter.RefKind
+                });
+
+                continue;
+            }
+
             if (IsMetadataType(parameter.Type, EntityMetadataName))
             {
                 if (entityCount > 0 || bringTailStarted)
@@ -294,25 +322,23 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
             sb.AppendLine("{");
         }
 
+        bool isServiceOwner = ImplementsInterface(classSymbol, IServiceMetadataName);
+
         sb.AppendLine($"    {BuildPartialClassDeclaration(classSymbol)}");
         sb.AppendLine("    {");
 
-        sb.AppendLine("        private global::LayerBase.LayerRuntime __Runtime = null!;");
-        foreach (var method in methods)
+        if (!isServiceOwner)
         {
-            sb.AppendLine($"        private int __{method.EntryPointName}QueryId;");
+            sb.AppendLine("        private global::LayerBase.LayerRuntime __Runtime = null!;");
+            sb.AppendLine();
         }
 
-        sb.AppendLine();
         sb.AppendLine("        void global::LayerBase.ECS.IGeneratedEcsQueryRegistrar.RegisterGeneratedEcsQueries(");
         sb.AppendLine("            global::LayerBase.LayerRuntime runtime)");
         sb.AppendLine("        {");
-        sb.AppendLine("            __Runtime = runtime;");
-        sb.AppendLine();
-        foreach (var method in methods)
+        if (!isServiceOwner)
         {
-            string compGeneric = BuildComponentGenericArguments(method);
-            sb.AppendLine($"            __{method.EntryPointName}QueryId = runtime.EcsQueryRegistry.GetOrCreate<{compGeneric}>();");
+            sb.AppendLine("            __Runtime = runtime;");
         }
 
         sb.AppendLine("        }");
@@ -320,7 +346,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         foreach (var method in methods)
         {
-            GenerateMethodSource(sb, method);
+            GenerateMethodSource(sb, method, isServiceOwner);
         }
 
         sb.AppendLine("    }");
@@ -333,7 +359,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         return sb.ToString();
     }
 
-    private static void GenerateMethodSource(StringBuilder sb, QueryMethodInfo method)
+    private static void GenerateMethodSource(StringBuilder sb, QueryMethodInfo method, bool isServiceOwner)
     {
         string entryPoint = method.EntryPointName!;
         string entryParameters = BuildEntryPointParameterList(method);
@@ -343,11 +369,11 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         if (method.BringEventTypes.Length > 0)
         {
-            GenerateBringInvocation(sb, method);
+            GenerateBringInvocation(sb, method, isServiceOwner);
         }
         else
         {
-            GenerateQueryInvocation(sb, method);
+            GenerateQueryInvocation(sb, method, isServiceOwner);
         }
 
         sb.AppendLine("        }");
@@ -357,26 +383,32 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         sb.AppendLine();
     }
 
-    private static void GenerateQueryInvocation(StringBuilder sb, QueryMethodInfo method)
+    private static void GenerateQueryInvocation(StringBuilder sb, QueryMethodInfo method, bool isServiceOwner)
     {
         string compGeneric = BuildComponentGenericArguments(method);
         string inputArgs = BuildInputArgumentList(method);
 
         sb.AppendLine($"            var job = new __{method.EntryPointName}Job({inputArgs});");
         sb.AppendLine();
+        if (isServiceOwner)
+        {
+            sb.AppendLine("            global::LayerBase.ServiceECSExtensions");
+            sb.AppendLine($"                .Query<{compGeneric}>(this)");
+            sb.AppendLine("                .ForEach(ref job);");
+            return;
+        }
+
         sb.AppendLine("            if (__Runtime is null)");
         sb.AppendLine("            {");
         sb.AppendLine("                throw new global::System.InvalidOperationException(\"Generated ECS queries are not registered.\");");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            __Runtime.EcsScheduler");
-        sb.AppendLine($"                .SubmitPlainQuery<__{method.EntryPointName}Job, {compGeneric}>(");
-        sb.AppendLine($"                    __{method.EntryPointName}QueryId,");
-        sb.AppendLine("                    0,");
-        sb.AppendLine("                    in job);");
+        sb.AppendLine("            __Runtime.EcsWorld");
+        sb.AppendLine($"                .Query<{compGeneric}>()");
+        sb.AppendLine("                .ForEach(ref job);");
     }
 
-    private static void GenerateBringInvocation(StringBuilder sb, QueryMethodInfo method)
+    private static void GenerateBringInvocation(StringBuilder sb, QueryMethodInfo method, bool isServiceOwner)
     {
         string compGeneric = BuildComponentGenericArguments(method);
         string eventGeneric = BuildEventGenericArguments(method);
@@ -384,22 +416,22 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         sb.AppendLine($"            var job = new __{method.EntryPointName}Job({inputArgs});");
         sb.AppendLine();
+        if (isServiceOwner)
+        {
+            sb.AppendLine("            global::LayerBase.ServiceECSExtensions");
+            sb.AppendLine($"                .Query<{compGeneric}>(this)");
+            sb.AppendLine($"                .Bring<{eventGeneric}>()");
+            sb.AppendLine("                .ForEach(ref job)");
+            sb.AppendLine("                .Batch()");
+            sb.AppendLine("                .Post();");
+            return;
+        }
+
         sb.AppendLine("            if (__Runtime is null)");
         sb.AppendLine("            {");
         sb.AppendLine("                throw new global::System.InvalidOperationException(\"Generated ECS queries are not registered.\");");
         sb.AppendLine("            }");
         sb.AppendLine();
-
-        if (method.BringEventTypes.Length == 1)
-        {
-            sb.AppendLine("            __Runtime.EcsScheduler");
-            sb.AppendLine($"                .SubmitBringQuery<{eventGeneric}, __{method.EntryPointName}Job, {compGeneric}>(");
-            sb.AppendLine($"                    __{method.EntryPointName}QueryId,");
-            sb.AppendLine("                    0,");
-            sb.AppendLine("                    in job);");
-            return;
-        }
-
         sb.AppendLine("            __Runtime.EcsWorld");
         sb.AppendLine($"                .Query<{compGeneric}>()");
         sb.AppendLine($"                .Bring<{eventGeneric}>()");
@@ -659,6 +691,12 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         }
 
         return !ImplementsInterface(parameter.Type, IComponentMetadataName);
+    }
+
+    private static bool HasInputAttribute(IParameterSymbol parameter)
+    {
+        return parameter.GetAttributes().Any(static attr =>
+            IsAttributeOfMetadataName(attr, InputAttributeName));
     }
 
     private static bool ImplementsInterface(ITypeSymbol type, string interfaceMetadataName)

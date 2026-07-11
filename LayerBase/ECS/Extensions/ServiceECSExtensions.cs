@@ -3,6 +3,8 @@ using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.DI;
 using LayerBase.ECS.Projection.Flow;
+using LayerBase.ECS.Runtime.Query;
+using LayerBase.Scope;
 
 namespace LayerBase;
 
@@ -140,6 +142,38 @@ public static class ServiceECSExtensions
             throw new ArgumentNullException(nameof(service));
         }
 
+        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        {
+            EnsureScopeAccess(ownerScope);
+            return ownerScope.EcsWorld;
+        }
+
         return ServiceLayerBinder.RequireBinding(service).Runtime.EcsWorld;
+    }
+
+    public static EcsQueryRegistry ECSQueryRegistry(this IService service)
+    {
+        if (service == null)
+        {
+            throw new ArgumentNullException(nameof(service));
+        }
+
+        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        {
+            EnsureScopeAccess(ownerScope);
+            return ownerScope.EcsQueryRegistry;
+        }
+
+        return ServiceLayerBinder.RequireBinding(service).Runtime.EcsQueryRegistry;
+    }
+
+    private static void EnsureScopeAccess(ScopeRuntime ownerScope)
+    {
+        ScopeRuntime? currentScope = ScopeExecution.Current.Runtime;
+        if (currentScope != null && !ReferenceEquals(currentScope, ownerScope))
+        {
+            throw new InvalidOperationException(
+                "IService ECS access is restricted to the owner ScopeRuntime.");
+        }
     }
 }

@@ -10,7 +10,6 @@ using LayerBase.Actor;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 using LayerBase.ECS.Runtime;
-using LayerBase.ECS.Runtime.Submission;
 
 namespace LayerBase.ECS.Projection.Flow;
 
@@ -37,7 +36,7 @@ internal static class ProjectionExecutor0
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -61,7 +60,7 @@ internal static class ProjectionExecutor0
         Query query,
         ProjectionPredicate? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -199,7 +198,7 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 <#
         for (var i = 0; i < e; i++)
@@ -342,7 +341,7 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -366,7 +365,7 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         Query query,
         ProjectionPredicate<#= compGP #>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -382,34 +381,6 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         ref TJob job)
         where TJob : struct, IQueryJob<<#= compG #>>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -417,40 +388,6 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<<#= compG #>>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<<#= compG #>>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<#= compGP #>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<<#= compG #>>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -518,7 +455,7 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -772,7 +709,7 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 <#
             for (var i = 0; i < e; i++)
@@ -844,7 +781,7 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();

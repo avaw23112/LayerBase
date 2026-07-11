@@ -2,15 +2,111 @@ using System.Collections.Immutable;
 using LayerBase.Async;
 using LayerBase.DI;
 using LayerBase.Generator;
+using LayerBase.Generator.Diagnostics;
 using LayerBase.Layers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace LayerBase.Test;
 
 [TestFixture]
 public class LayerGeneratorContractTests
 {
+    [Test]
+    public void Query_bring_generator_emits_direct_plain_query_for_services()
+    {
+        const string source = """
+                              using LayerBase.Core;
+                              using LayerBase.DI;
+                              using LayerBase.DI.Options;
+                              using LayerBase.ECS;
+
+                              namespace QueryGeneratorScopeContract;
+
+                              public struct Position : IComponent
+                              {
+                                  public int Value;
+                              }
+
+                              public struct Velocity : IComponent
+                              {
+                                  public int Value;
+                              }
+
+                              public sealed partial class MovementService : IService
+                              {
+                                  [Query]
+                                  private static void OnMove(ref Position position, in Velocity velocity)
+                                  {
+                                      position.Value += velocity.Value;
+                                  }
+
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new QueryBringGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static diagnostic => diagnostic.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("global::LayerBase.ServiceECSExtensions"));
+        Assert.That(generated, Does.Contain(".Query<global::QueryGeneratorScopeContract.Position, global::QueryGeneratorScopeContract.Velocity>(this)"));
+        Assert.That(generated, Does.Contain(".ForEach(ref job);"));
+        Assert.That(generated, Does.Not.Contain("GeneratedEcsQueryExecutor"));
+        Assert.That(generated, Does.Not.Contain("SubmitPlainQuery"));
+        Assert.That(generated, Does.Not.Contain("EcsScheduler"));
+    }
+
+    [Test]
+    public void Ecs_analyzer_should_report_query_input_order_with_valid_diagnostic_id()
+    {
+        const string source = """
+                              using LayerBase.Core;
+                              using LayerBase.ECS;
+
+                              namespace QueryAnalyzerContract;
+
+                              public struct Position : IComponent
+                              {
+                              }
+
+                              public sealed partial class QueryOwner
+                              {
+                                  [Query]
+                                  private static void OnMove(ref Position position, int delta)
+                                  {
+                                  }
+                              }
+                              """;
+
+        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
+        CSharpCompilation compilation = CSharpCompilation.Create(
+            assemblyName: "EcsAnalyzerTests_" + Guid.NewGuid().ToString("N"),
+            syntaxTrees: [syntaxTree],
+            references: GetMetadataReferences(),
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        ImmutableArray<Diagnostic> diagnostics = compilation
+                                                 .WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(
+                                                     new ECSAnalyzer()))
+                                                 .GetAnalyzerDiagnosticsAsync()
+                                                 .GetAwaiter()
+                                                 .GetResult();
+
+        Assert.That(diagnostics.Select(static diagnostic => diagnostic.Id), Does.Not.Contain("AD0001"),
+            string.Join(Environment.NewLine, diagnostics.Select(static diagnostic => diagnostic.ToString())));
+        Assert.That(diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBECS012"),
+            string.Join(Environment.NewLine, diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
     [Test]
     public void Layer_tool_generator_emits_registry_for_constructor_and_static_factory()
     {
@@ -536,6 +632,861 @@ public class LayerGeneratorContractTests
 
         Assert.That(errors, Is.Empty,
             string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+    }
+
+    [Test]
+    public void Partial_service_generator_emits_scope_binding_helper_without_service_base()
+    {
+        const string source = """
+                              using LayerBase.DI;
+
+                              public sealed partial class CombatService : IService
+                              {
+                                  public int ReadScopeId() => OwnerScope.ScopeId;
+
+                                  public int ReadServiceId() => ServiceId;
+
+                                  public LayerBase.Scope.ScopeRef<UiScope> ReadUiScope() => Scope<UiScope>();
+
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+
+                              public sealed class UiScope
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ManagerAutoSubscribeGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("global::LayerBase.Scope.IGeneratedScopeServiceBinding"));
+        Assert.That(generated, Does.Contain("protected global::LayerBase.Scope.ScopeRuntime OwnerScope"));
+        Assert.That(generated, Does.Contain("protected int ServiceId"));
+        Assert.That(generated, Does.Contain("protected global::LayerBase.Scope.ScopeRef<TScope> Scope<TScope>()"));
+    }
+
+    [Test]
+    public void Scope_event_generator_emits_strongly_typed_post_extension()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.Async;
+                              using LayerBase.Async;
+                              using LayerBase.Scope;
+
+                              public sealed class CombatScope
+                              {
+                              }
+
+                              [ScopeEvent<CombatScope>]
+                              public readonly struct SpawnBulletEvent
+                              {
+                                  public SpawnBulletEvent(int bulletId)
+                                  {
+                                      BulletId = bulletId;
+                                  }
+
+                                  public int BulletId { get; }
+                              }
+
+                              public sealed class CombatGateway
+                              {
+                                  public bool Send(ScopeRef<CombatScope> scope)
+                                  {
+                                      return scope.Post(new SpawnBulletEvent(7));
+                                  }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeRefPostGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated,
+            Does.Contain(
+                "public static bool Post(this global::LayerBase.Scope.ScopeRef<global::Game.CombatScope> scope, global::Game.SpawnBulletEvent message)"));
+        Assert.That(generated, Does.Contain("return scope.TryPost("));
+    }
+
+    [Test]
+    public void Scope_event_generator_assigns_ids_by_event_type_order()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.Scope;
+
+                              public sealed class AlphaScope
+                              {
+                              }
+
+                              public sealed class ZuluScope
+                              {
+                              }
+
+                              [ScopeEvent<ZuluScope>]
+                              public readonly struct AlphaEvent
+                              {
+                              }
+
+                              [ScopeEvent<AlphaScope>]
+                              public readonly struct ZuluEvent
+                              {
+                              }
+
+                              public sealed class Gateway
+                              {
+                                  public bool SendAlpha(ScopeRef<ZuluScope> scope)
+                                  {
+                                      return scope.Post(new AlphaEvent());
+                                  }
+
+                                  public bool SendZulu(ScopeRef<AlphaScope> scope)
+                                  {
+                                      return scope.Post(new ZuluEvent());
+                                  }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeRefPostGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated,
+            Does.Contain(
+                "public static bool Post(this global::LayerBase.Scope.ScopeRef<global::Game.ZuluScope> scope, global::Game.AlphaEvent message)" +
+                Environment.NewLine +
+                "        {" +
+                Environment.NewLine +
+                "            return scope.TryPost(0, message);"));
+        Assert.That(generated,
+            Does.Contain(
+                "public static bool Post(this global::LayerBase.Scope.ScopeRef<global::Game.AlphaScope> scope, global::Game.ZuluEvent message)" +
+                Environment.NewLine +
+                "        {" +
+                Environment.NewLine +
+                "            return scope.TryPost(1, message);"));
+    }
+
+    [Test]
+    public void Scope_call_generator_emits_strongly_typed_call_extension()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.Async;
+                              using LayerBase.Scope;
+
+                              public sealed class CombatScope
+                              {
+                              }
+
+                              public readonly struct BulletTickResult
+                              {
+                                  public BulletTickResult(int value)
+                                  {
+                                      Value = value;
+                                  }
+
+                                  public int Value { get; }
+                              }
+
+                              [ScopeCall<CombatScope, BulletTickResult>]
+                              public readonly struct BulletTickCall
+                              {
+                                  public BulletTickCall(float deltaTime)
+                                  {
+                                      DeltaTime = deltaTime;
+                                  }
+
+                                  public float DeltaTime { get; }
+                              }
+
+                              public sealed class CombatGateway
+                              {
+                                  public LBTask<BulletTickResult> Tick(ScopeRef<CombatScope> scope)
+                                  {
+                                      return scope.Call(new BulletTickCall(0.016f));
+                                  }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeRefCallGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated,
+            Does.Contain(
+                "public static global::LayerBase.Async.LBTask<global::Game.BulletTickResult> Call(this global::LayerBase.Scope.ScopeRef<global::Game.CombatScope> scope, global::Game.BulletTickCall message)"));
+        Assert.That(generated,
+            Does.Contain("return scope.CallTask<global::Game.BulletTickResult>("));
+    }
+
+    [Test]
+    public void Scope_call_generator_assigns_ids_by_request_type_order()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.Async;
+                              using LayerBase.Scope;
+
+                              public sealed class AlphaScope
+                              {
+                              }
+
+                              public sealed class ZuluScope
+                              {
+                              }
+
+                              [ScopeCall<ZuluScope, int>]
+                              public readonly struct AlphaCall
+                              {
+                              }
+
+                              [ScopeCall<AlphaScope, int>]
+                              public readonly struct ZuluCall
+                              {
+                              }
+
+                              public sealed class Gateway
+                              {
+                                  public LBTask<int> SendAlpha(ScopeRef<ZuluScope> scope)
+                                  {
+                                      return scope.Call(new AlphaCall());
+                                  }
+
+                                  public LBTask<int> SendZulu(ScopeRef<AlphaScope> scope)
+                                  {
+                                      return scope.Call(new ZuluCall());
+                                  }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeRefCallGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated,
+            Does.Contain(
+                "public static global::LayerBase.Async.LBTask<int> Call(this global::LayerBase.Scope.ScopeRef<global::Game.ZuluScope> scope, global::Game.AlphaCall message)" +
+                Environment.NewLine +
+                "        {" +
+                Environment.NewLine +
+                "            return scope.CallTask<int>(0, message);"));
+        Assert.That(generated,
+            Does.Contain(
+                "public static global::LayerBase.Async.LBTask<int> Call(this global::LayerBase.Scope.ScopeRef<global::Game.AlphaScope> scope, global::Game.ZuluCall message)" +
+                Environment.NewLine +
+                "        {" +
+                Environment.NewLine +
+                "            return scope.CallTask<int>(1, message);"));
+    }
+
+    [Test]
+    public void Scope_call_dispatch_generator_emits_switch_and_private_method_bridge()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.DI;
+                              using LayerBase.Scope;
+
+                              public sealed class CombatScope
+                              {
+                              }
+
+                              public readonly struct BulletTickResult
+                              {
+                                  public BulletTickResult(int value)
+                                  {
+                                      Value = value;
+                                  }
+
+                                  public int Value { get; }
+                              }
+
+                              [ScopeCall<CombatScope, BulletTickResult>]
+                              public readonly struct BulletTickCall
+                              {
+                                  public BulletTickCall(int value)
+                                  {
+                                      Value = value;
+                                  }
+
+                                  public int Value { get; }
+                              }
+
+                              [Scope<CombatScope>]
+                              public sealed partial class CombatService : IService
+                              {
+                                  [ScopeCall]
+                                  private BulletTickResult Tick(BulletTickCall call)
+                                  {
+                                      return new BulletTickResult(call.Value + 1);
+                                  }
+
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeCallDispatchGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("public static void Dispatch(global::LayerBase.Scope.ScopeRuntime scope, global::LayerBase.Scope.ScopeCallMessage message)"));
+        Assert.That(generated, Does.Contain("switch (message.CallId)"));
+        Assert.That(generated, Does.Contain("__LayerBaseScopeCall_"));
+        Assert.That(generated, Does.Contain("((global::LayerBase.Scope.ScopePromise<global::Game.BulletTickResult>)message.Promise).SetResult(result);"));
+    }
+
+    [TestCase("LBSC001", """
+                         namespace Game;
+
+                         using LayerBase.DI;
+                         using LayerBase.Scope;
+
+                         public sealed class CombatScope
+                         {
+                         }
+
+                         public readonly struct BulletTickResult
+                         {
+                         }
+
+                         [ScopeCall<CombatScope, BulletTickResult>]
+                         public readonly struct BulletTickCall
+                         {
+                         }
+
+                         [Scope<CombatScope>]
+                         public sealed partial class CombatService : IService
+                         {
+                             [ScopeCall]
+                             private void Tick(BulletTickCall call)
+                             {
+                             }
+
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+                         """)]
+    [TestCase("LBSC003", """
+                         namespace Game;
+
+                         using LayerBase.DI;
+                         using LayerBase.Scope;
+
+                         public sealed class CombatScope
+                         {
+                         }
+
+                         public readonly struct BulletTickResult
+                         {
+                         }
+
+                         public readonly struct WrongResult
+                         {
+                         }
+
+                         [ScopeCall<CombatScope, BulletTickResult>]
+                         public readonly struct BulletTickCall
+                         {
+                         }
+
+                         [Scope<CombatScope>]
+                         public sealed partial class CombatService : IService
+                         {
+                             [ScopeCall]
+                             private WrongResult Tick(BulletTickCall call)
+                             {
+                                 return default;
+                             }
+
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+                         """)]
+    [TestCase("LBSC004", """
+                         namespace Game;
+
+                         using LayerBase.Scope;
+
+                         public sealed class CombatScope
+                         {
+                         }
+
+                         public readonly struct BulletTickResult
+                         {
+                         }
+
+                         [ScopeCall<CombatScope, BulletTickResult>]
+                         public readonly struct BulletTickCall
+                         {
+                         }
+
+                         [Scope<CombatScope>]
+                         public sealed partial class CombatHandler
+                         {
+                             [ScopeCall]
+                             private BulletTickResult Tick(BulletTickCall call)
+                             {
+                                 return default;
+                             }
+                         }
+                         """)]
+    [TestCase("LBSC005", """
+                         namespace Game;
+
+                         using LayerBase.DI;
+                         using LayerBase.Scope;
+
+                         public sealed class CombatScope
+                         {
+                         }
+
+                         public readonly struct BulletTickResult
+                         {
+                         }
+
+                         public readonly struct BulletTickCall
+                         {
+                         }
+
+                         [Scope<CombatScope>]
+                         public sealed partial class CombatService : IService
+                         {
+                             [ScopeCall]
+                             private BulletTickResult Tick(BulletTickCall call)
+                             {
+                                 return default;
+                             }
+
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+                         """)]
+    public void Scope_call_dispatch_generator_reports_expected_diagnostic(string diagnosticId, string source)
+    {
+        var result = RunGenerators(source, new ScopeCallDispatchGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain(diagnosticId),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Scope_post_dispatch_generator_emits_switch_and_private_method_bridge()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.DI;
+                              using LayerBase.Scope;
+
+                              public sealed class CombatScope
+                              {
+                              }
+
+                              [ScopeEvent<CombatScope>]
+                              public readonly struct SpawnBulletEvent
+                              {
+                                  public SpawnBulletEvent(int bulletId)
+                                  {
+                                      BulletId = bulletId;
+                                  }
+
+                                  public int BulletId { get; }
+                              }
+
+                              [Scope<CombatScope>]
+                              public sealed partial class CombatService : IService
+                              {
+                                  public int LastBulletId { get; private set; }
+
+                                  [ScopeEvent]
+                                  private void Spawn(SpawnBulletEvent message)
+                                  {
+                                      LastBulletId = message.BulletId;
+                                  }
+
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopePostDispatchGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("public static void Dispatch(global::LayerBase.Scope.ScopeRuntime scope, global::LayerBase.Scope.ScopePostMessage message)"));
+        Assert.That(generated, Does.Contain("switch (message.EventId)"));
+        Assert.That(generated, Does.Contain("__LayerBaseScopeEvent_"));
+        Assert.That(generated, Does.Contain(".__LayerBaseScopeEvent_"));
+    }
+
+    [Test]
+    public void Scope_post_dispatch_generator_allows_multiple_handlers_for_same_event_on_one_service()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.DI;
+                              using LayerBase.Scope;
+
+                              public sealed class CombatScope
+                              {
+                              }
+
+                              [ScopeEvent<CombatScope>]
+                              public readonly struct SpawnBulletEvent
+                              {
+                                  public SpawnBulletEvent(int bulletId)
+                                  {
+                                      BulletId = bulletId;
+                                  }
+
+                                  public int BulletId { get; }
+                              }
+
+                              [Scope<CombatScope>]
+                              public sealed partial class CombatService : IService
+                              {
+                                  public int FirstCount { get; private set; }
+                                  public int SecondCount { get; private set; }
+
+                                  [ScopeEvent]
+                                  private void First(SpawnBulletEvent message)
+                                  {
+                                      FirstCount += message.BulletId;
+                                  }
+
+                                  [ScopeEvent]
+                                  private void Second(SpawnBulletEvent message)
+                                  {
+                                      SecondCount += message.BulletId;
+                                  }
+
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopePostDispatchGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("First(message);"));
+        Assert.That(generated, Does.Contain("Second(message);"));
+    }
+
+    [TestCase("LBSE001", """
+                         namespace Game;
+
+                         using LayerBase.DI;
+                         using LayerBase.Scope;
+
+                         public sealed class CombatScope
+                         {
+                         }
+
+                         [ScopeEvent<CombatScope>]
+                         public readonly struct SpawnBulletEvent
+                         {
+                         }
+
+                         [Scope<CombatScope>]
+                         public sealed partial class CombatService : IService
+                         {
+                             [ScopeEvent]
+                             private int Spawn(SpawnBulletEvent message)
+                             {
+                                 return 1;
+                             }
+
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+                         """)]
+    [TestCase("LBSE002", """
+                         namespace Game;
+
+                         using LayerBase.DI;
+                         using LayerBase.Scope;
+
+                         public sealed class CombatScope
+                         {
+                         }
+
+                         [ScopeEvent<CombatScope>]
+                         public readonly struct SpawnBulletEvent
+                         {
+                         }
+
+                         [Scope<CombatScope>]
+                         public sealed class CombatService : IService
+                         {
+                             [ScopeEvent]
+                             private void Spawn(SpawnBulletEvent message)
+                             {
+                             }
+
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+                         """)]
+    [TestCase("LBSE003", """
+                         namespace Game;
+
+                         using LayerBase.Scope;
+
+                         public sealed class CombatScope
+                         {
+                         }
+
+                         [ScopeEvent<CombatScope>]
+                         public readonly struct SpawnBulletEvent
+                         {
+                         }
+
+                         [Scope<CombatScope>]
+                         public sealed partial class CombatHandler
+                         {
+                             [ScopeEvent]
+                             private void Spawn(SpawnBulletEvent message)
+                             {
+                             }
+                         }
+                         """)]
+    [TestCase("LBSE004", """
+                         namespace Game;
+
+                         using LayerBase.DI;
+                         using LayerBase.Scope;
+
+                         public sealed class CombatScope
+                         {
+                         }
+
+                         public readonly struct SpawnBulletEvent
+                         {
+                         }
+
+                         [Scope<CombatScope>]
+                         public sealed partial class CombatService : IService
+                         {
+                             [ScopeEvent]
+                             private void Spawn(SpawnBulletEvent message)
+                             {
+                             }
+
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+                         """)]
+    public void Scope_post_dispatch_generator_reports_expected_diagnostic(string diagnosticId, string source)
+    {
+        var result = RunGenerators(source, new ScopePostDispatchGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain(diagnosticId),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Scope_runtime_host_generator_emits_factory_with_generated_dispatchers()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.DI;
+                              using LayerBase.Scope;
+
+                              [ScopeOptions]
+                              public sealed partial class CombatScope
+                              {
+                              }
+
+                              [ScopeEvent<CombatScope>]
+                              public readonly struct SpawnBulletEvent
+                              {
+                              }
+
+                              public readonly struct BulletTickResult
+                              {
+                              }
+
+                              [ScopeCall<CombatScope, BulletTickResult>]
+                              public readonly struct BulletTickCall
+                              {
+                              }
+
+                              [Scope<CombatScope>]
+                              public sealed partial class CombatService : IService
+                              {
+                                  [ScopeEvent]
+                                  private void Spawn(SpawnBulletEvent message)
+                                  {
+                                  }
+
+                                  [ScopeCall]
+                                  private BulletTickResult Tick(BulletTickCall call)
+                                  {
+                                      return default;
+                                  }
+
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(
+            source,
+            new ScopePostDispatchGenerator(),
+            new ScopeCallDispatchGenerator(),
+            new ScopeRuntimeHostGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("public static global::LayerBase.Scope.ScopeRuntimeHost Create(global::System.Collections.Generic.IReadOnlyList<global::LayerBase.DI.IService> services"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Scope.GeneratedScopeRuntimePlanner.Build(services)"));
+        Assert.That(generated, Does.Contain("scopeTypeResolver: global::LayerBase.Scope.GeneratedScopeRuntimePlanner.TryGetScopeId"));
+        Assert.That(generated, Does.Contain("public static bool TryGetScopeId(global::System.Type scopeType, out int scopeId)"));
+        Assert.That(generated, Does.Contain("__LayerBaseCreateScopeDescriptor"));
+        Assert.That(generated, Does.Contain("partial class CombatScope"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Scope.GeneratedScopePostDispatcher.Dispatch"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Scope.GeneratedScopeCallDispatcher.Dispatch"));
+    }
+
+    [Test]
+    public void Scope_runtime_host_generator_reports_non_partial_scope_options_owner()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.Scope;
+
+                              [ScopeOptions]
+                              public sealed class CombatScope
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeRuntimeHostGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBSD003"),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Scope_runtime_host_generator_reports_scope_attribute_owner_without_iservice()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.Scope;
+
+                              [ScopeOptions]
+                              public sealed partial class CombatScope
+                              {
+                              }
+
+                              [Scope<CombatScope>]
+                              public sealed class CombatSystem
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeRuntimeHostGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBSD004"),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [TestCase("LBSD001", """
+                         namespace Game;
+
+                         using LayerBase.Scope;
+
+                         [ScopeOptions(tickRateHz: -1)]
+                         public sealed class CombatScope
+                         {
+                         }
+                         """)]
+    [TestCase("LBSD002", """
+                         namespace Game;
+
+                         using LayerBase.Scope;
+
+                         [ScopeOptions(clock: ScopeClockMode.FixedRate)]
+                         public sealed class CombatScope
+                         {
+                         }
+                         """)]
+    public void Scope_runtime_host_generator_reports_scope_options_diagnostic(string diagnosticId, string source)
+    {
+        var result = RunGenerators(source, new ScopeRuntimeHostGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain(diagnosticId),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
     }
 
     private static GeneratorTestResult RunGenerators(string source, params IIncrementalGenerator[] generators)

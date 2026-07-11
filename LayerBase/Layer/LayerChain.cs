@@ -101,6 +101,16 @@ internal sealed class LayerChain
             if (node is Layer layer)
             {
                 layer.PrepareBuild();
+            }
+        }
+    }
+
+    internal void BuildAutoBindings()
+    {
+        foreach (var node in _responsibilityChain)
+        {
+            if (node is Layer layer)
+            {
                 layer.BuildAutoBinding();
             }
         }

@@ -7,7 +7,6 @@ using LayerBase.Actor;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 using LayerBase.ECS.Runtime;
-using LayerBase.ECS.Runtime.Submission;
 
 namespace LayerBase.ECS.Projection.Flow;
 
@@ -34,7 +33,7 @@ internal static class ProjectionExecutor0
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -58,7 +57,7 @@ internal static class ProjectionExecutor0
         Query query,
         ProjectionPredicate? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -184,7 +183,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -269,7 +268,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -362,7 +361,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -463,7 +462,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -572,7 +571,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -689,7 +688,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -814,7 +813,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -947,7 +946,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -1088,7 +1087,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -1237,7 +1236,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -1394,7 +1393,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -1551,7 +1550,7 @@ internal static class ProjectionExecutor1<T0>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -1575,7 +1574,7 @@ internal static class ProjectionExecutor1<T0>
         Query query,
         ProjectionPredicate<T0>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -1591,34 +1590,6 @@ internal static class ProjectionExecutor1<T0>
         ref TJob job)
         where TJob : struct, IQueryJob<T0>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -1626,40 +1597,6 @@ internal static class ProjectionExecutor1<T0>
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1722,7 +1659,7 @@ internal static class ProjectionExecutor1<T0>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -1951,7 +1888,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -2001,7 +1938,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -2220,7 +2157,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -2274,7 +2211,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -2512,7 +2449,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -2570,7 +2507,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -2827,7 +2764,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -2889,7 +2826,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -3165,7 +3102,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -3231,7 +3168,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -3526,7 +3463,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -3596,7 +3533,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -3910,7 +3847,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -3984,7 +3921,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -4317,7 +4254,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -4395,7 +4332,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -4747,7 +4684,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -4829,7 +4766,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -5200,7 +5137,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -5286,7 +5223,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -5676,7 +5613,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -5766,7 +5703,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -6167,7 +6104,7 @@ internal static class ProjectionExecutor2<T0, T1>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -6191,7 +6128,7 @@ internal static class ProjectionExecutor2<T0, T1>
         Query query,
         ProjectionPredicate<T0, T1>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -6207,34 +6144,6 @@ internal static class ProjectionExecutor2<T0, T1>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -6242,40 +6151,6 @@ internal static class ProjectionExecutor2<T0, T1>
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -6341,7 +6216,7 @@ internal static class ProjectionExecutor2<T0, T1>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -6577,7 +6452,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -6627,7 +6502,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -6851,7 +6726,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -6905,7 +6780,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -7148,7 +7023,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -7206,7 +7081,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -7468,7 +7343,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -7530,7 +7405,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -7811,7 +7686,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -7877,7 +7752,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -8177,7 +8052,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -8247,7 +8122,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -8566,7 +8441,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -8640,7 +8515,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -8978,7 +8853,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -9056,7 +8931,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -9413,7 +9288,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -9495,7 +9370,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -9871,7 +9746,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -9957,7 +9832,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -10352,7 +10227,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -10442,7 +10317,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -10848,7 +10723,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -10872,7 +10747,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         Query query,
         ProjectionPredicate<T0, T1, T2>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -10888,34 +10763,6 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -10923,40 +10770,6 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1, T2>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1, T2>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1, T2>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1, T2>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -11025,7 +10838,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -11268,7 +11081,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -11318,7 +11131,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -11547,7 +11360,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -11601,7 +11414,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -11849,7 +11662,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -11907,7 +11720,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -12174,7 +11987,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -12236,7 +12049,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -12522,7 +12335,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -12588,7 +12401,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -12893,7 +12706,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -12963,7 +12776,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -13287,7 +13100,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -13361,7 +13174,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -13704,7 +13517,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -13782,7 +13595,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -14144,7 +13957,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -14226,7 +14039,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -14607,7 +14420,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -14693,7 +14506,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -15093,7 +14906,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -15183,7 +14996,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -15594,7 +15407,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -15618,7 +15431,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -15634,34 +15447,6 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -15669,40 +15454,6 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1, T2, T3>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1, T2, T3>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1, T2, T3>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1, T2, T3>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -15774,7 +15525,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -16024,7 +15775,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -16074,7 +15825,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -16308,7 +16059,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -16362,7 +16113,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -16615,7 +16366,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -16673,7 +16424,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -16945,7 +16696,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -17007,7 +16758,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -17298,7 +17049,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -17364,7 +17115,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -17674,7 +17425,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -17744,7 +17495,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -18073,7 +17824,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -18147,7 +17898,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -18495,7 +18246,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -18573,7 +18324,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -18940,7 +18691,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -19022,7 +18773,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -19408,7 +19159,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -19494,7 +19245,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -19899,7 +19650,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -19989,7 +19740,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -20405,7 +20156,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -20429,7 +20180,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -20445,34 +20196,6 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -20480,40 +20203,6 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -20588,7 +20277,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -20845,7 +20534,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -20895,7 +20584,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -21134,7 +20823,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -21188,7 +20877,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -21446,7 +21135,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -21504,7 +21193,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -21781,7 +21470,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -21843,7 +21532,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -22139,7 +21828,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -22205,7 +21894,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -22520,7 +22209,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -22590,7 +22279,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -22924,7 +22613,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -22998,7 +22687,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -23351,7 +23040,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -23429,7 +23118,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -23801,7 +23490,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -23883,7 +23572,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -24274,7 +23963,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -24360,7 +24049,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -24770,7 +24459,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -24860,7 +24549,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -25281,7 +24970,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -25305,7 +24994,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -25321,34 +25010,6 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -25356,40 +25017,6 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -25467,7 +25094,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -25731,7 +25358,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -25781,7 +25408,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -26025,7 +25652,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -26079,7 +25706,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -26342,7 +25969,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -26400,7 +26027,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -26682,7 +26309,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -26744,7 +26371,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -27045,7 +26672,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -27111,7 +26738,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -27431,7 +27058,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -27501,7 +27128,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -27840,7 +27467,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -27914,7 +27541,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -28272,7 +27899,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -28350,7 +27977,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -28727,7 +28354,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -28809,7 +28436,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -29205,7 +28832,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -29291,7 +28918,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -29706,7 +29333,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -29796,7 +29423,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -30222,7 +29849,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -30246,7 +29873,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -30262,34 +29889,6 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -30297,40 +29896,6 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -30411,7 +29976,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -30682,7 +30247,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -30732,7 +30297,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -30981,7 +30546,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -31035,7 +30600,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -31303,7 +30868,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -31361,7 +30926,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -31648,7 +31213,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -31710,7 +31275,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -32016,7 +31581,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -32082,7 +31647,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -32407,7 +31972,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -32477,7 +32042,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -32821,7 +32386,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -32895,7 +32460,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -33258,7 +32823,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -33336,7 +32901,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -33718,7 +33283,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -33800,7 +33365,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -34201,7 +33766,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -34287,7 +33852,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -34707,7 +34272,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -34797,7 +34362,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -35228,7 +34793,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -35252,7 +34817,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -35268,34 +34833,6 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -35303,40 +34840,6 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -35420,7 +34923,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -35698,7 +35201,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -35748,7 +35251,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -36002,7 +35505,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -36056,7 +35559,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -36329,7 +35832,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -36387,7 +35890,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -36679,7 +36182,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -36741,7 +36244,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -37052,7 +36555,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -37118,7 +36621,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -37448,7 +36951,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -37518,7 +37021,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -37867,7 +37370,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -37941,7 +37444,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -38309,7 +37812,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -38387,7 +37890,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -38774,7 +38277,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -38856,7 +38359,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -39262,7 +38765,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -39348,7 +38851,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -39773,7 +39276,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -39863,7 +39366,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -40299,7 +39802,7 @@ internal static class ProjectionExecutor9<T0, T1, T2, T3, T4, T5, T6, T7, T8>
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -40323,7 +39826,7 @@ internal static class ProjectionExecutor9<T0, T1, T2, T3, T4, T5, T6, T7, T8>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -40339,34 +39842,6 @@ internal static class ProjectionExecutor9<T0, T1, T2, T3, T4, T5, T6, T7, T8>
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -40374,40 +39849,6 @@ internal static class ProjectionExecutor9<T0, T1, T2, T3, T4, T5, T6, T7, T8>
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -40494,7 +39935,7 @@ internal static class ProjectionExecutor9<T0, T1, T2, T3, T4, T5, T6, T7, T8>
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -40779,7 +40220,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -40829,7 +40270,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -41088,7 +40529,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -41142,7 +40583,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -41420,7 +40861,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -41478,7 +40919,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -41775,7 +41216,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -41837,7 +41278,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -42153,7 +41594,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -42219,7 +41660,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -42554,7 +41995,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -42624,7 +42065,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -42978,7 +42419,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -43052,7 +42493,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -43425,7 +42866,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -43503,7 +42944,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -43895,7 +43336,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -43977,7 +43418,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -44388,7 +43829,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -44474,7 +43915,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -44904,7 +44345,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -44994,7 +44435,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -45435,7 +44876,7 @@ internal static class ProjectionExecutor10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -45459,7 +44900,7 @@ internal static class ProjectionExecutor10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -45475,34 +44916,6 @@ internal static class ProjectionExecutor10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -45510,40 +44923,6 @@ internal static class ProjectionExecutor10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -45633,7 +45012,7 @@ internal static class ProjectionExecutor10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -45925,7 +45304,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -45975,7 +45354,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -46239,7 +45618,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -46293,7 +45672,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -46576,7 +45955,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -46634,7 +46013,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -46936,7 +46315,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -46998,7 +46377,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -47319,7 +46698,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -47385,7 +46764,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -47725,7 +47104,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -47795,7 +47174,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -48154,7 +47533,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -48228,7 +47607,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -48606,7 +47985,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -48684,7 +48063,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -49081,7 +48460,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -49163,7 +48542,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -49579,7 +48958,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -49665,7 +49044,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -50100,7 +49479,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -50190,7 +49569,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -50636,7 +50015,7 @@ internal static class ProjectionExecutor11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -50660,7 +50039,7 @@ internal static class ProjectionExecutor11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -50676,34 +50055,6 @@ internal static class ProjectionExecutor11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -50711,40 +50062,6 @@ internal static class ProjectionExecutor11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -50837,7 +50154,7 @@ internal static class ProjectionExecutor11<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -51136,7 +50453,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -51186,7 +50503,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -51455,7 +50772,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -51509,7 +50826,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -51797,7 +51114,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -51855,7 +51172,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -52162,7 +51479,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -52224,7 +51541,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -52550,7 +51867,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -52616,7 +51933,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -52961,7 +52278,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -53031,7 +52348,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -53395,7 +52712,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -53469,7 +52786,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -53852,7 +53169,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -53930,7 +53247,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -54332,7 +53649,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -54414,7 +53731,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -54835,7 +54152,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -54921,7 +54238,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -55361,7 +54678,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -55451,7 +54768,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -55902,7 +55219,7 @@ internal static class ProjectionExecutor12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -55926,7 +55243,7 @@ internal static class ProjectionExecutor12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -55942,34 +55259,6 @@ internal static class ProjectionExecutor12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         ref TJob job)
         where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
     {
-        if (EcsSchedulerUtility.RecordPlainQueryIfNeeded(
-                world,
-                query,
-                predicate,
-                in job,
-                PlainQueryExecutorId<TJob>.Id))
-        {
-            return;
-        }
-
-        var scheduledState = (Query: query, Predicate: predicate, Job: job);
-        if (EcsSchedulerUtility.ScheduleIfNeeded(
-                world,
-                "PlainQuery",
-                scheduledState,
-                static (scheduledWorld, state) =>
-                {
-                    TJob scheduledJob = state.Job;
-                    ForEach(
-                        scheduledWorld,
-                        state.Query,
-                        state.Predicate,
-                        ref scheduledJob);
-                }))
-        {
-            return;
-        }
-
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
             CollectForEachChunk(
@@ -55977,40 +55266,6 @@ internal static class ProjectionExecutor12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
                 predicate,
                 ref job);
         }
-    }
-
-    internal static int GetPlainQueryExecutorId<TJob>()
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
-    {
-        return PlainQueryExecutorId<TJob>.Id;
-    }
-
-    private sealed class PlainQueryExecutor<TJob> : IEcsWorkExecutor
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
-    {
-        public string DebugName => "PlainQuery";
-
-        public void Execute(
-            World world,
-            in EcsWorkRecord record,
-            EcsSubmissionBatch batch)
-        {
-            ref TJob scheduledJob = ref batch.JobArena.Get<TJob>(record.JobOffset);
-            var predicate = (ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>?)record.Predicate;
-
-            ForEach(
-                world,
-                record.Query,
-                predicate,
-                ref scheduledJob);
-        }
-    }
-
-    private static class PlainQueryExecutorId<TJob>
-        where TJob : struct, IQueryJob<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
-    {
-        public static readonly int Id =
-            EcsExecutorRegistry.Register(new PlainQueryExecutor<TJob>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -56106,7 +55361,7 @@ internal static class ProjectionExecutor12<T0, T1, T2, T3, T4, T5, T6, T7, T8, T
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -56412,7 +55667,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -56462,7 +55717,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -56736,7 +55991,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -56790,7 +56045,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -57083,7 +56338,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -57141,7 +56396,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -57453,7 +56708,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -57515,7 +56770,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -57846,7 +57101,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -57912,7 +57167,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -58262,7 +57517,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -58332,7 +57587,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -58701,7 +57956,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -58775,7 +58030,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -59163,7 +58418,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -59241,7 +58496,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -59648,7 +58903,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -59730,7 +58985,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -60156,7 +59411,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -60242,7 +59497,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();
@@ -60687,7 +59942,7 @@ where TEvent0 : struct
             return;
         }
 
-        ActorWorld actorWorld = world.Runtime.Actors;
+        ActorWorld actorWorld = world.GetActorWorld();
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -60777,7 +60032,7 @@ where TEvent0 : struct
         }
 
         ActorWorld actorWorld =
-            world.Runtime.Actors;
+            world.GetActorWorld();
 
         long nowTicks =
             Stopwatch.GetTimestamp();

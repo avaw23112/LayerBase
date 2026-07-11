@@ -9,35 +9,45 @@ namespace LayerBase.ECS.Projection.Flow;
 
 public readonly struct ProjectionQueryFlow0
 {
-    private readonly LayerRuntime _runtime;
-    private readonly int _queryId;
+    private readonly World _world;
+    private readonly Query _query;
     private readonly ProjectionPredicate? _predicate;
 
-    internal ProjectionQueryFlow0(LayerRuntime runtime, int queryId, ProjectionPredicate? predicate = null)
+    internal ProjectionQueryFlow0(World world, Query query, ProjectionPredicate? predicate = null)
     {
-        _runtime = runtime;
-        _queryId = queryId;
+        _world = world;
+        _query = query;
         _predicate = predicate;
     }
 
     public ProjectionQueryFlow0 Where(ProjectionPredicate predicate)
     {
-        return new ProjectionQueryFlow0(_runtime, _queryId, predicate);
+        return new ProjectionQueryFlow0(_world, _query, predicate);
     }
 
 <#
     for (var e = 1; e <= EventAmount; e++)
     {
+#>
+<#
         var evtG = EG(e);
+#>
+<#
         var allG = evtG;
+#>
+<#
         var cons = FEC(e);
+#>
+<#
         var suffix = e == 1 ? "" : $"_{e}e";
+#>
+<#
         var dName = EventName(e);
 #>
     public ProjectionBringFlow0<#= suffix #><<#= allG #>> Bring<<#= evtG #>>()
 <#= cons #>
     {
-        return new ProjectionBringFlow0<#= suffix #><<#= allG #>>(_runtime, _queryId, _predicate);
+        return new ProjectionBringFlow0<#= suffix #><<#= allG #>>(_world, _query, _predicate);
     }
 
 <#
@@ -45,52 +55,61 @@ public readonly struct ProjectionQueryFlow0
 #>
     public void TouchProjectedActor()
     {
-        Query query = _runtime.EcsQueryRegistry.Get(_queryId);
-        ProjectionExecutor0.Touch(_runtime.EcsWorld, query, _predicate);
+        ProjectionExecutor0.Touch(_world, _query, _predicate);
     }
 }
 
 <#
     for (var e = 1; e <= EventAmount; e++)
     {
+#>
+<#
         var evtG = EG(e);
+#>
+<#
         var allG = evtG;
+#>
+<#
         var cons = FEC(e);
+#>
+<#
         var suffix = e == 1 ? "" : $"_{e}e";
+#>
+<#
         var dName = EventName(e);
 #>
 public readonly struct ProjectionBringFlow0<#= suffix #><<#= allG #>>
 <#= cons #>
 {
-    private readonly LayerRuntime _runtime;
-    private readonly int _queryId;
+    private readonly World _world;
+    private readonly Query _query;
     private readonly ProjectionPredicate? _predicate;
 
-    internal ProjectionBringFlow0<#= suffix #>(LayerRuntime runtime, int queryId, ProjectionPredicate? predicate)
+    internal ProjectionBringFlow0<#= suffix #>(World world, Query query, ProjectionPredicate? predicate)
     {
-        _runtime = runtime;
-        _queryId = queryId;
+        _world = world;
+        _query = query;
         _predicate = predicate;
     }
 
     public ProjectionPostFlow0<#= suffix #><<#= allG #>> ForEach(<#= dName #><<#= allG #>> forEach)
     {
-        return new ProjectionPostFlow0<#= suffix #><<#= allG #>>(_runtime, _queryId, _predicate, forEach);
+        return new ProjectionPostFlow0<#= suffix #><<#= allG #>>(_world, _query, _predicate, forEach);
     }
 }
 
 public readonly struct ProjectionPostFlow0<#= suffix #><<#= allG #>>
 <#= cons #>
 {
-    private readonly LayerRuntime _runtime;
-    private readonly int _queryId;
+    private readonly World _world;
+    private readonly Query _query;
     private readonly ProjectionPredicate? _predicate;
     private readonly <#= dName #><<#= allG #>> _forEach;
 
-    internal ProjectionPostFlow0<#= suffix #>(LayerRuntime runtime, int queryId, ProjectionPredicate? predicate, <#= dName #><<#= allG #>> forEach)
+    internal ProjectionPostFlow0<#= suffix #>(World world, Query query, ProjectionPredicate? predicate, <#= dName #><<#= allG #>> forEach)
     {
-        _runtime = runtime;
-        _queryId = queryId;
+        _world = world;
+        _query = query;
         _predicate = predicate;
         _forEach = forEach;
     }
@@ -99,18 +118,17 @@ public readonly struct ProjectionPostFlow0<#= suffix #><<#= allG #>>
 
     public void Post()
     {
-        Query query = _runtime.EcsQueryRegistry.Get(_queryId);
 <#
         if (e == 1)
         {
 #>
-        ProjectionExecutor0.Post(_runtime.EcsWorld, query, _predicate, _forEach);
+        ProjectionExecutor0.Post(_world, _query, _predicate, _forEach);
 <#
         }
         else
         {
 #>
-        ProjectionExecutor0_<#= e #>E<<#= evtG #>>.Post(_runtime.EcsWorld, query, _predicate, _forEach);
+        ProjectionExecutor0_<#= e #>E<<#= evtG #>>.Post(_world, _query, _predicate, _forEach);
 <#
         }
 #>
@@ -123,40 +141,54 @@ public readonly struct ProjectionPostFlow0<#= suffix #><<#= allG #>>
 <#
     for (var c = 1; c <= ComponentAmount; c++)
     {
+#>
+<#
         var compG = CG(c);
+#>
+<#
         var compGP = $"<{compG}>";
 #>
 public readonly struct ProjectionQueryFlow<#= c #><<#= compG #>>
 {
-    private readonly LayerRuntime _runtime;
-    private readonly int _queryId;
+    private readonly World _world;
+    private readonly Query _query;
     private readonly ProjectionPredicate<#= compGP #>? _predicate;
 
-    internal ProjectionQueryFlow<#= c #>(LayerRuntime runtime, int queryId, ProjectionPredicate<#= compGP #>? predicate = null)
+    internal ProjectionQueryFlow<#= c #>(World world, Query query, ProjectionPredicate<#= compGP #>? predicate = null)
     {
-        _runtime = runtime;
-        _queryId = queryId;
+        _world = world;
+        _query = query;
         _predicate = predicate;
     }
 
     public ProjectionQueryFlow<#= c #><<#= compG #>> Where(ProjectionPredicate<#= compGP #> predicate)
     {
-        return new ProjectionQueryFlow<#= c #><<#= compG #>>(_runtime, _queryId, predicate);
+        return new ProjectionQueryFlow<#= c #><<#= compG #>>(_world, _query, predicate);
     }
 
 <#
         for (var e = 1; e <= EventAmount; e++)
         {
+#>
+<#
             var evtG = EG(e);
+#>
+<#
             var allG = AG(c, e);
+#>
+<#
             var cons = FEC(e);
+#>
+<#
             var suffix = e == 1 ? "" : $"_{e}e";
+#>
+<#
             var dName = EventName(e);
 #>
     public ProjectionBringFlow<#= c #><#= suffix #><<#= allG #>> Bring<<#= evtG #>>()
 <#= cons #>
     {
-        return new ProjectionBringFlow<#= c #><#= suffix #><<#= allG #>>(_runtime, _queryId, _predicate);
+        return new ProjectionBringFlow<#= c #><#= suffix #><<#= allG #>>(_world, _query, _predicate);
     }
 
 <#
@@ -164,47 +196,57 @@ public readonly struct ProjectionQueryFlow<#= c #><<#= compG #>>
 #>
     public void TouchProjectedActor()
     {
-        Query query = _runtime.EcsQueryRegistry.Get(_queryId);
-        ProjectionExecutor<#= c #><<#= compG #>>.Touch(_runtime.EcsWorld, query, _predicate);
+        ProjectionExecutor<#= c #><<#= compG #>>.Touch(_world, _query, _predicate);
     }
 
     public void ForEach<TJob>(
         ref TJob job)
         where TJob : struct, IQueryJob<<#= compG #>>
     {
-        _runtime.EcsScheduler.SubmitPlainQuery<TJob, <#= compG #>>(
-            _queryId,
+        ProjectionExecutor<#= c #><<#= compG #>>.ForEach(
+            _world,
+            _query,
             _predicate,
-            in job);
+            ref job);
     }
 }
 
 <#
         for (var e = 1; e <= EventAmount; e++)
         {
+#>
+<#
             var evtG = EG(e);
+#>
+<#
             var allG = AG(c, e);
+#>
+<#
             var cons = FEC(e);
+#>
+<#
             var suffix = e == 1 ? "" : $"_{e}e";
+#>
+<#
             var dName = EventName(e);
 #>
 public readonly struct ProjectionBringFlow<#= c #><#= suffix #><<#= allG #>>
 <#= cons #>
 {
-    private readonly LayerRuntime _runtime;
-    private readonly int _queryId;
+    private readonly World _world;
+    private readonly Query _query;
     private readonly ProjectionPredicate<#= compGP #>? _predicate;
 
-    internal ProjectionBringFlow<#= c #><#= suffix #>(LayerRuntime runtime, int queryId, ProjectionPredicate<#= compGP #>? predicate)
+    internal ProjectionBringFlow<#= c #><#= suffix #>(World world, Query query, ProjectionPredicate<#= compGP #>? predicate)
     {
-        _runtime = runtime;
-        _queryId = queryId;
+        _world = world;
+        _query = query;
         _predicate = predicate;
     }
 
     public ProjectionPostFlow<#= c #><#= suffix #><<#= allG #>> ForEach(<#= dName #><<#= allG #>> forEach)
     {
-        return new ProjectionPostFlow<#= c #><#= suffix #><<#= allG #>>(_runtime, _queryId, _predicate, forEach);
+        return new ProjectionPostFlow<#= c #><#= suffix #><<#= allG #>>(_world, _query, _predicate, forEach);
     }
 
     public ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, TJob> ForEach<TJob>(
@@ -212,8 +254,8 @@ public readonly struct ProjectionBringFlow<#= c #><#= suffix #><<#= allG #>>
         where TJob : struct, IProjectionJob<#= c #>x<#= e #><<#= allG #>>
     {
         return new ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, TJob>(
-            _runtime,
-            _queryId,
+            _world,
+            _query,
             _predicate,
             job);
     }
@@ -222,15 +264,15 @@ public readonly struct ProjectionBringFlow<#= c #><#= suffix #><<#= allG #>>
 public readonly struct ProjectionPostFlow<#= c #><#= suffix #><<#= allG #>>
 <#= cons #>
 {
-    private readonly LayerRuntime _runtime;
-    private readonly int _queryId;
+    private readonly World _world;
+    private readonly Query _query;
     private readonly ProjectionPredicate<#= compGP #>? _predicate;
     private readonly <#= dName #><<#= allG #>> _forEach;
 
-    internal ProjectionPostFlow<#= c #><#= suffix #>(LayerRuntime runtime, int queryId, ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach)
+    internal ProjectionPostFlow<#= c #><#= suffix #>(World world, Query query, ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach)
     {
-        _runtime = runtime;
-        _queryId = queryId;
+        _world = world;
+        _query = query;
         _predicate = predicate;
         _forEach = forEach;
     }
@@ -239,18 +281,17 @@ public readonly struct ProjectionPostFlow<#= c #><#= suffix #><<#= allG #>>
 
     public void Post()
     {
-        Query query = _runtime.EcsQueryRegistry.Get(_queryId);
 <#
             if (e == 1)
             {
 #>
-        ProjectionExecutor<#= c #><<#= compG #>>.Post<TEvent0>(_runtime.EcsWorld, query, _predicate, _forEach);
+        ProjectionExecutor<#= c #><<#= compG #>>.Post<TEvent0>(_world, _query, _predicate, _forEach);
 <#
             }
             else
             {
 #>
-        ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>.Post(_runtime.EcsWorld, query, _predicate, _forEach);
+        ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>.Post(_world, _query, _predicate, _forEach);
 <#
             }
 #>
@@ -261,19 +302,32 @@ public readonly struct ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, T
     where TJob : struct, IProjectionJob<#= c #>x<#= e #><<#= allG #>>
 <#= cons #>
 {
-    private readonly LayerRuntime _runtime;
-    private readonly int _queryId;
+    private readonly World _world;
+    private readonly Query _query;
     private readonly ProjectionPredicate<#= compGP #>? _predicate;
     private readonly TJob _job;
 
     internal ProjectionJobPostFlow<#= c #><#= suffix #>(
-        LayerRuntime runtime,
-        int queryId,
+        World world,
+        Query query,
         ProjectionPredicate<#= compGP #>? predicate,
         TJob job)
     {
-        _runtime = runtime;
-        _queryId = queryId;
+        // world 参数作用：
+        // 当前 ECS World。
+
+        // query 参数作用：
+        // 当前 Projection Query。
+
+        // predicate 参数作用：
+        // 可选过滤条件。
+
+        // job 参数作用：
+        // 源生成器生成的 Projection Job。
+        // 它会调用用户写的 [Query] + [Bring] 方法。
+
+        _world = world;
+        _query = query;
         _predicate = predicate;
         _job = job;
     }
@@ -285,16 +339,16 @@ public readonly struct ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, T
 
     public void Post()
     {
-        TJob job = _job;
-        Query query = _runtime.EcsQueryRegistry.Get(_queryId);
+        TJob job =
+            _job;
 
 <#
             if (e == 1)
             {
 #>
         ProjectionExecutor<#= c #><<#= compG #>>.Post<TEvent0, TJob>(
-            _runtime.EcsWorld,
-            query,
+            _world,
+            _query,
             _predicate,
             ref job);
 <#
@@ -303,8 +357,8 @@ public readonly struct ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, T
             {
 #>
         ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>.Post<TJob>(
-            _runtime.EcsWorld,
-            query,
+            _world,
+            _query,
             _predicate,
             ref job);
 <#
@@ -315,5 +369,7 @@ public readonly struct ProjectionJobPostFlow<#= c #><#= suffix #><<#= allG #>, T
 
 <#
         }
+#>
+<#
     }
 #>

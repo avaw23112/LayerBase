@@ -176,4 +176,78 @@ internal partial class LayerTestLayer : Layer
 
 public class QueryGeneratorTest
 {
+    [Test]
+    public void InputAttribute_after_components_should_generate_entrypoint_and_pass_input()
+    {
+        LayerHub.Reset();
+        QueryInputService.DeltaTime = 2f;
+
+        try
+        {
+            LayerRuntime runtime = LayerHub.CreateLayers()
+                                           .Push(new QueryInputLayer())
+                                           .Build();
+
+            Entity entity = runtime.EcsWorld.Create(
+                new QueryInputPosition { X = 1f },
+                new QueryInputVelocity { X = 3f });
+
+            runtime.Pump(0.1f);
+
+            QueryInputPosition position = runtime.EcsWorld.Get<QueryInputPosition>(entity);
+            Assert.That(position.X, Is.EqualTo(7f));
+        }
+        finally
+        {
+            LayerHub.Reset();
+        }
+    }
+}
+
+public readonly struct QueryInputFrame
+{
+    public readonly float DeltaTime;
+
+    public QueryInputFrame(float deltaTime)
+    {
+        DeltaTime = deltaTime;
+    }
+}
+
+public struct QueryInputPosition : IComponent
+{
+    public float X;
+}
+
+public struct QueryInputVelocity : IComponent
+{
+    public float X;
+}
+
+public sealed partial class QueryInputService : IService, LayerBase.DI.Options.IUpdate
+{
+    public static float DeltaTime { get; set; }
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    public void Update()
+    {
+        ApplyInput(new QueryInputFrame(DeltaTime));
+    }
+
+    [Query]
+    private static void OnApplyInput(
+        [Input] QueryInputFrame frame,
+        ref QueryInputPosition position,
+        in QueryInputVelocity velocity)
+    {
+        position.X += velocity.X * frame.DeltaTime;
+    }
+}
+
+internal partial class QueryInputLayer : Layer
+{
+    [Mount] private QueryInputService service;
 }

@@ -96,14 +96,16 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
 
     public void PostToOrEnqueue(World world, ActorWorld actorWorld, string debugName)
     {
-        if (!EcsThreadGuard.TryGetCurrentResultQueue(world.Runtime.Id, out EcsResultQueue? results) ||
+        if (!world.TryGetRuntime(out LayerRuntime? runtime) ||
+            runtime == null ||
+            !EcsThreadGuard.TryGetCurrentResultQueue(runtime.Id, out EcsResultQueue? results) ||
             results == null)
         {
             PostTo(actorWorld);
             return;
         }
 
-        results.Enqueue(new ActorEventBatchResult<TEvent>(debugName, this));
+        results.Enqueue(new ActorEventBatchResult<TEvent>(debugName, this, actorWorld));
         _actorIds = Array.Empty<ActorId>();
         _events = Array.Empty<TEvent>();
         Count = 0;

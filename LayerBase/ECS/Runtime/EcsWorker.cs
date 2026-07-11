@@ -355,49 +355,21 @@ internal sealed class EcsWorker : IDisposable
         _resultQueue.BeginBatch();
         try
         {
-            ReadOnlySpan<EcsSubmissionEntry> entries = batch.AsSpan();
-            for (int i = 0; i < entries.Length; i++)
+            ReadOnlySpan<IEcsWorkItem?> items = batch.AsSpan();
+            for (int i = 0; i < items.Length; i++)
             {
-                EcsSubmissionEntry entry = entries[i];
                 processed++;
 
-                if (entry.IsRecord)
+                IEcsWorkItem? item = items[i];
+                if (item != null)
                 {
-                    EcsWorkRecord record = entry.Record;
-                    ExecuteRecord(batch, in record);
-                }
-                else if (entry.Item != null)
-                {
-                    ExecuteItem(entry.Item);
+                    ExecuteItem(item);
                 }
             }
         }
         finally
         {
             _resultQueue.EndBatch();
-        }
-    }
-
-    private void ExecuteRecord(EcsSubmissionBatch batch, in EcsWorkRecord record)
-    {
-        EcsThreadGuard.EnterExecution(_runtime.Id, _resultQueue);
-
-        try
-        {
-            EcsExecutorRegistry.Execute(
-                record.ExecutorId,
-                _world,
-                in record,
-                batch);
-        }
-        catch (Exception ex)
-        {
-            string debugName = EcsExecutorRegistry.GetDebugName(record.ExecutorId);
-            _resultQueue.Enqueue(new EcsWorkFailedResult(debugName, ex));
-        }
-        finally
-        {
-            EcsThreadGuard.ExitExecution(_runtime.Id);
         }
     }
 

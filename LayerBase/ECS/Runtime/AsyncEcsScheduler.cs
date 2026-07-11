@@ -1,7 +1,6 @@
 using Arch.Core;
 using System.Diagnostics;
 using LayerBase.ECS.Runtime.Submission;
-using ArchQuery = Arch.Core.Query;
 
 namespace LayerBase.ECS.Runtime;
 
@@ -39,23 +38,6 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
         _currentSubmissionBatch.Add(item);
     }
 
-    public void RecordPlainQuery<TJob>(
-        int executorId,
-        ArchQuery query,
-        object? predicate,
-        in TJob job)
-        where TJob : struct
-    {
-        int jobOffset = _currentSubmissionBatch.JobArena.Store(in job);
-        var record = new EcsWorkRecord(
-            executorId,
-            query,
-            predicate,
-            jobOffset);
-
-        _currentSubmissionBatch.AddRecord(in record);
-    }
-
     public EcsDrainStats DrainResults(int maxCount)
     {
         return _resultQueue.DrainToMainThread(_runtime, maxCount);
@@ -86,9 +68,9 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
         return FlushSubmissionsCore();
     }
 
-    public void EnsureCurrentSubmissionCapacityForTest(int entryCapacity, int jobArenaCapacity)
+    public void EnsureCurrentSubmissionCapacityForTest(int entryCapacity)
     {
-        _currentSubmissionBatch.EnsureCapacity(entryCapacity, jobArenaCapacity);
+        _currentSubmissionBatch.EnsureCapacity(entryCapacity);
     }
 
     public void SignalForTest()

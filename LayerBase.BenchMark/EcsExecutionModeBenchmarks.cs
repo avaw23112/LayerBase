@@ -30,7 +30,6 @@ public class EcsSpscBatchBenchmarks
     private EcsSubmissionBatch _batch = null!;
     private EcsSubmissionBatch _recordBatch = null!;
     private NoopEcsWorkItem _workItem = null!;
-    private SmallArenaJob _arenaJob;
     private EcsResultBatch _resultBatch = null!;
     private EcsResultBatch _recordResultBatch = null!;
     private NoopEcsResultItem _resultItem = null!;
@@ -43,7 +42,6 @@ public class EcsSpscBatchBenchmarks
         _batch = new EcsSubmissionBatch(1);
         _recordBatch = new EcsSubmissionBatch(1024);
         _workItem = new NoopEcsWorkItem();
-        _arenaJob = new SmallArenaJob(16);
         _resultBatch = new EcsResultBatch(1);
         _recordResultBatch = new EcsResultBatch(1024);
         _resultItem = new NoopEcsResultItem();
@@ -67,20 +65,6 @@ public class EcsSpscBatchBenchmarks
         for (int i = 0; i < 1024; i++)
         {
             _recordBatch.Add(_workItem);
-        }
-
-        _recordBatch.Clear();
-    }
-
-    [Benchmark(OperationsPerInvoke = 1024, Description = "SubmissionBatch Record WorkRecord - 1024")]
-    [BenchmarkCategory("07.ECS.SPSC", "SubmissionBatchRecord")]
-    public void SubmissionBatch_RecordWorkRecord_1024()
-    {
-        for (int i = 0; i < 1024; i++)
-        {
-            int jobOffset = _recordBatch.JobArena.Store(in _arenaJob);
-            var record = new EcsWorkRecord(0, null!, null, jobOffset);
-            _recordBatch.AddRecord(in record);
         }
 
         _recordBatch.Clear();
@@ -127,15 +111,6 @@ public class EcsSpscBatchBenchmarks
         }
     }
 
-    private readonly struct SmallArenaJob
-    {
-        private readonly int _workIterations;
-
-        public SmallArenaJob(int workIterations)
-        {
-            _workIterations = workIterations;
-        }
-    }
 }
 
 [MemoryDiagnoser]
@@ -192,15 +167,15 @@ public class EcsExecutionModeBenchmarks
                     .ForEach(ref job);
     }
 
-    [IterationSetup(Target = nameof(Async_PlainQuery_SubmitOnly))]
-    public void PrepareAsyncPlainSubmitOnly()
+    [IterationSetup(Target = nameof(Async_PlainQuery_DirectQuery))]
+    public void PrepareAsyncPlainDirectQuery()
     {
         EnsureAsyncSubmitCapacity();
     }
 
-    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async PlainQuery SubmitOnly")]
-    [BenchmarkCategory("07.ECS.ExecutionMode", "PlainQuery", "AsyncSubmit")]
-    public void Async_PlainQuery_SubmitOnly()
+    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async PlainQuery DirectQuery")]
+    [BenchmarkCategory("07.ECS.ExecutionMode", "PlainQuery", "Direct")]
+    public void Async_PlainQuery_DirectQuery()
     {
         for (int i = 0; i < SubmitOperations; i++)
         {
@@ -211,8 +186,8 @@ public class EcsExecutionModeBenchmarks
         }
     }
 
-    [IterationCleanup(Target = nameof(Async_PlainQuery_SubmitOnly))]
-    public void CleanupAsyncPlainSubmitOnly()
+    [IterationCleanup(Target = nameof(Async_PlainQuery_DirectQuery))]
+    public void CleanupAsyncPlainDirectQuery()
     {
         long fence = _asyncRuntime.FlushEcsSubmissionsForTest();
         _asyncRuntime.WaitEcsFenceForTest(fence, IdleTimeout);
@@ -242,9 +217,7 @@ public class EcsExecutionModeBenchmarks
 
     private void EnsureAsyncSubmitCapacity()
     {
-        _asyncScheduler.EnsureCurrentSubmissionCapacityForTest(
-            SubmitOperations,
-            SubmitOperations * Unsafe.SizeOf<MoveWithWorkJob>());
+        _asyncScheduler.EnsureCurrentSubmissionCapacityForTest(SubmitOperations);
     }
 
     private sealed class NoopEcsWorkItem : IEcsWorkItem
@@ -268,9 +241,7 @@ public class EcsAsyncSubmitBoundaryBenchmarks
 
     private SpscRing<EcsSubmissionBatch> _rawRing = null!;
     private EcsSubmissionBatch _batch = null!;
-    private EcsSubmissionBatch _recordBatch = null!;
-    private EcsWorkRecord _record;
-    private MoveWithWorkJob _job;
+    private EcsSubmissionBatch _workItemBatch = null!;
     private LayerRuntime _runtime = null!;
     private AsyncEcsScheduler _scheduler = null!;
     private NoopEcsWorkItem _noopWorkItem = null!;
@@ -283,9 +254,7 @@ public class EcsAsyncSubmitBoundaryBenchmarks
         LayerHub.Reset();
         _rawRing = new SpscRing<EcsSubmissionBatch>(1024);
         _batch = new EcsSubmissionBatch(1);
-        _recordBatch = new EcsSubmissionBatch(1024);
-        _record = new EcsWorkRecord(0, null!, null, 0);
-        _job = new MoveWithWorkJob(0);
+        _workItemBatch = new EcsSubmissionBatch(1024);
         _runtime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async);
         EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_runtime, 1_000);
         _scheduler = (AsyncEcsScheduler)_runtime.EcsWorkScheduler;
@@ -320,42 +289,16 @@ public class EcsAsyncSubmitBoundaryBenchmarks
         _rawRing.TryEnqueue(_batch);
     }
 
-    [Benchmark(OperationsPerInvoke = 1024, Description = "SubmissionBatchAddRecordBenchmark")]
-    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Record", "SubmitOnly")]
-    public void SubmissionBatchAddRecordBenchmark()
+    [Benchmark(OperationsPerInvoke = 1024, Description = "SubmissionBatchAddWorkItemBenchmark")]
+    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "WorkItem", "SubmitOnly")]
+    public void SubmissionBatchAddWorkItemBenchmark()
     {
         for (int i = 0; i < 1024; i++)
         {
-            _recordBatch.AddRecord(in _record);
+            _workItemBatch.Add(_noopWorkItem);
         }
 
-        _recordBatch.Clear();
-    }
-
-    [Benchmark(OperationsPerInvoke = 1024, Description = "JobArenaStoreBenchmark")]
-    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Record", "SubmitOnly")]
-    public void JobArenaStoreBenchmark()
-    {
-        for (int i = 0; i < 1024; i++)
-        {
-            _recordBatch.JobArena.Store(in _job);
-        }
-
-        _recordBatch.Clear();
-    }
-
-    [Benchmark(OperationsPerInvoke = 1024, Description = "RecordPlainQueryOnlyBenchmark")]
-    [BenchmarkCategory("07.ECS.AsyncSubmitBoundary", "Record", "SubmitOnly")]
-    public void RecordPlainQueryOnlyBenchmark()
-    {
-        for (int i = 0; i < 1024; i++)
-        {
-            int jobOffset = _recordBatch.JobArena.Store(in _job);
-            var record = new EcsWorkRecord(0, null!, null, jobOffset);
-            _recordBatch.AddRecord(in record);
-        }
-
-        _recordBatch.Clear();
+        _workItemBatch.Clear();
     }
 
     [IterationSetup(Target = nameof(FlushSubmissionsOnlyBenchmark))]
@@ -510,7 +453,7 @@ public class EcsAsyncSubmitBoundaryBenchmarks
 [RankColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
-public class EcsPlainQuerySubmitHotPathBenchmarks
+public class EcsPlainQueryDirectHotPathBenchmarks
 {
     private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
 
@@ -536,10 +479,10 @@ public class EcsPlainQuerySubmitHotPathBenchmarks
         LayerHub.Reset();
     }
 
-    [Benchmark(Description = "Async PlainQuery SubmitOnly HotPath")]
+    [Benchmark(Description = "Async PlainQuery DirectQuery HotPath")]
     [InvocationCount(1)]
-    [BenchmarkCategory("07.ECS.ExecutionMode", "PlainQuery", "AsyncSubmit", "HotPath")]
-    public void Async_PlainQuery_SubmitOnly_HotPath()
+    [BenchmarkCategory("07.ECS.ExecutionMode", "PlainQuery", "Direct", "HotPath")]
+    public void Async_PlainQuery_DirectQuery_HotPath()
     {
         var job = new MoveWithWorkJob(0);
         _asyncRuntime.EcsWorld
@@ -547,8 +490,8 @@ public class EcsPlainQuerySubmitHotPathBenchmarks
                      .ForEach(ref job);
     }
 
-    [IterationCleanup(Target = nameof(Async_PlainQuery_SubmitOnly_HotPath))]
-    public void CleanupAsyncPlainSubmitOnly()
+    [IterationCleanup(Target = nameof(Async_PlainQuery_DirectQuery_HotPath))]
+    public void CleanupAsyncPlainDirectQuery()
     {
         _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
     }
@@ -559,14 +502,12 @@ public class EcsPlainQuerySubmitHotPathBenchmarks
 [RankColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
-public class EcsPlainQuerySubmitPathBenchmarks
+public class EcsPlainQueryDirectPathBenchmarks
 {
     private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
     private const int SubmitOperations = 1024;
 
     private LayerRuntime _asyncRuntime = null!;
-    private AsyncEcsScheduler _asyncScheduler = null!;
-    private int _plainQueryId;
     private GeneratedPlainQueryBenchService _generatedService = null!;
 
     [Params(0, 8, 32)]
@@ -577,21 +518,14 @@ public class EcsPlainQuerySubmitPathBenchmarks
     {
         LayerHub.Reset();
         _asyncRuntime = EcsBenchmarkWorldFactory.CreateRuntime(EcsExecutionMode.Async);
-        _asyncScheduler = (AsyncEcsScheduler)_asyncRuntime.EcsWorkScheduler;
         EcsBenchmarkWorldFactory.PopulatePlainQueryWorld(_asyncRuntime, 1_000);
-        _plainQueryId = _asyncRuntime.EcsQueryRegistry.GetOrCreate<BenchPosition, BenchVelocity>();
         _generatedService = new GeneratedPlainQueryBenchService();
         ((IGeneratedEcsQueryRegistrar)_generatedService).RegisterGeneratedEcsQueries(_asyncRuntime);
-        PrepareSubmitBatch();
 
         var warmupJob = new MoveWithWorkJob(0);
         _asyncRuntime.EcsWorld
                      .Query<BenchPosition, BenchVelocity>()
                      .ForEach(ref warmupJob);
-        _asyncRuntime.EcsScheduler.SubmitPlainQuery<MoveWithWorkJob, BenchPosition, BenchVelocity>(
-            _plainQueryId,
-            0,
-            in warmupJob);
         _generatedService.GeneratedPlainMove(0);
         _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
     }
@@ -602,23 +536,9 @@ public class EcsPlainQuerySubmitPathBenchmarks
         LayerHub.Reset();
     }
 
-    [IterationSetup(
-        Targets = new[]
-        {
-            nameof(Async_PublicQueryApi_SubmitOnly),
-            nameof(Async_DirectSubmit_SubmitOnly),
-            nameof(Async_GeneratedQuery_SubmitOnly)
-        })]
-    public void PrepareSubmitBatch()
-    {
-        _asyncScheduler.EnsureCurrentSubmissionCapacityForTest(
-            SubmitOperations,
-            SubmitOperations * Unsafe.SizeOf<MoveWithWorkJob>());
-    }
-
-    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async PublicQueryApi SubmitOnly")]
-    [BenchmarkCategory("07.ECS.SubmitPath", "PublicQueryApi", "SubmitOnly")]
-    public void Async_PublicQueryApi_SubmitOnly()
+    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async PublicQueryApi DirectQuery")]
+    [BenchmarkCategory("07.ECS.QueryPath", "PublicQueryApi", "Direct")]
+    public void Async_PublicQueryApi_DirectQuery()
     {
         for (int i = 0; i < SubmitOperations; i++)
         {
@@ -629,46 +549,14 @@ public class EcsPlainQuerySubmitPathBenchmarks
         }
     }
 
-    [IterationCleanup(Target = nameof(Async_PublicQueryApi_SubmitOnly))]
-    public void CleanupPublicQueryApiSubmitOnly()
-    {
-        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
-    }
-
-    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async DirectSubmit SubmitOnly")]
-    [BenchmarkCategory("07.ECS.SubmitPath", "DirectSubmit", "SubmitOnly")]
-    public void Async_DirectSubmit_SubmitOnly()
-    {
-        for (int i = 0; i < SubmitOperations; i++)
-        {
-            var job = new MoveWithWorkJob(WorkIterations);
-            _asyncRuntime.EcsScheduler.SubmitPlainQuery<MoveWithWorkJob, BenchPosition, BenchVelocity>(
-                _plainQueryId,
-                0,
-                in job);
-        }
-    }
-
-    [IterationCleanup(Target = nameof(Async_DirectSubmit_SubmitOnly))]
-    public void CleanupDirectSubmitOnly()
-    {
-        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
-    }
-
-    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async GeneratedQuery SubmitOnly")]
-    [BenchmarkCategory("07.ECS.SubmitPath", "GeneratedQuery", "SubmitOnly")]
-    public void Async_GeneratedQuery_SubmitOnly()
+    [Benchmark(OperationsPerInvoke = SubmitOperations, Description = "Async GeneratedQuery DirectQuery")]
+    [BenchmarkCategory("07.ECS.QueryPath", "GeneratedQuery", "Direct")]
+    public void Async_GeneratedQuery_DirectQuery()
     {
         for (int i = 0; i < SubmitOperations; i++)
         {
             _generatedService.GeneratedPlainMove(WorkIterations);
         }
-    }
-
-    [IterationCleanup(Target = nameof(Async_GeneratedQuery_SubmitOnly))]
-    public void CleanupGeneratedQuerySubmitOnly()
-    {
-        _asyncRuntime.WaitEcsIdleForTest(IdleTimeout);
     }
 }
 
@@ -1014,9 +902,7 @@ public class EcsFrameBatchBenchmarks
 
     private void EnsureFrameSubmitCapacity()
     {
-        _asyncScheduler.EnsureCurrentSubmissionCapacityForTest(
-            QueryCount,
-            QueryCount * Unsafe.SizeOf<MoveWithWorkJob>());
+        _asyncScheduler.EnsureCurrentSubmissionCapacityForTest(QueryCount);
     }
 
     private void WarmWorker()
