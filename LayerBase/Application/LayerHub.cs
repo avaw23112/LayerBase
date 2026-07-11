@@ -7,6 +7,7 @@ using LayerBase.Core.Event;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.Layers;
+using LayerBase.Scope;
 using LayerBase.Tools.Job;
 
 namespace LayerBase;
@@ -302,6 +303,30 @@ public static class LayerHub
         OnLayerEventInfo?.Invoke(info);
     }
 
+    internal static void ReportEmergencyCallbackFailure(Exception exception)
+    {
+        try
+        {
+            Internal_NotifyEvent(new LayerEventInfo(
+                -1,
+                "LayerExceptionHub",
+                "CallbackFailure",
+                exception.Message,
+                LayerEventInfoType.Error,
+                exception));
+        }
+        catch
+        {
+            try
+            {
+                Console.Error.WriteLine(exception);
+            }
+            catch
+            {
+            }
+        }
+    }
+
     public static void InitializeJobScheduler(int workerCount)
     {
         JobSchedulers.ConfigureDefault(workerCount);
@@ -310,9 +335,10 @@ public static class LayerHub
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void ReportLayerEventError(int layerIndex, string source, string eventName, Exception ex)
     {
-        if (s_primaryRuntime != null)
+        LayerRuntime? runtime = TryResolveCurrentRuntime();
+        if (runtime != null)
         {
-            s_primaryRuntime.ReportLayerEventError(layerIndex, source, eventName, ex);
+            runtime.ReportLayerEventError(layerIndex, source, eventName, ex);
         }
         else
         {
@@ -324,9 +350,10 @@ public static class LayerHub
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void ReportLayerEventError(int layerIndex, int sourceId, int eventNameId, Exception ex)
     {
-        if (s_primaryRuntime != null)
+        LayerRuntime? runtime = TryResolveCurrentRuntime();
+        if (runtime != null)
         {
-            s_primaryRuntime.ReportLayerEventError(layerIndex, sourceId, eventNameId, ex);
+            runtime.ReportLayerEventError(layerIndex, sourceId, eventNameId, ex);
         }
         else
         {
@@ -335,6 +362,17 @@ public static class LayerHub
             Internal_NotifyEvent(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error,
                 ex));
         }
+    }
+
+    private static LayerRuntime? TryResolveCurrentRuntime()
+    {
+        ScopeRuntime? scopeRuntime = ScopeExecution.Current.Runtime;
+        if (scopeRuntime?.OwningRuntime != null)
+        {
+            return scopeRuntime.OwningRuntime;
+        }
+
+        return LayerRuntimeExecution.CurrentRuntime;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

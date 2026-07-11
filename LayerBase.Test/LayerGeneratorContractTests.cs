@@ -922,6 +922,8 @@ public class LayerGeneratorContractTests
         const string source = """
                               namespace Game;
 
+                              using LayerBase.Async;
+                              using LayerBase.Async;
                               using LayerBase.DI;
                               using LayerBase.Scope;
 
@@ -954,8 +956,9 @@ public class LayerGeneratorContractTests
                               public sealed partial class CombatService : IService
                               {
                                   [ScopeCall]
-                                  private BulletTickResult Tick(BulletTickCall call)
+                                  private async LBTask<BulletTickResult> Tick(BulletTickCall call)
                                   {
+                                      await LBTask.CompletedTask;
                                       return new BulletTickResult(call.Value + 1);
                                   }
 
@@ -979,7 +982,8 @@ public class LayerGeneratorContractTests
         Assert.That(generated, Does.Contain("public static void Dispatch(global::LayerBase.Scope.ScopeRuntime scope, global::LayerBase.Scope.ScopeCallMessage message)"));
         Assert.That(generated, Does.Contain("switch (message.CallId)"));
         Assert.That(generated, Does.Contain("__LayerBaseScopeCall_"));
-        Assert.That(generated, Does.Contain("((global::LayerBase.Scope.ScopePromise<global::Game.BulletTickResult>)message.Promise).SetResult(result);"));
+        Assert.That(generated, Does.Contain("var task = service.__LayerBaseScopeCall_"));
+        Assert.That(generated, Does.Contain("awaiter.OnCompleted(() =>"));
     }
 
     [TestCase("LBSC001", """
@@ -1015,6 +1019,7 @@ public class LayerGeneratorContractTests
     [TestCase("LBSC003", """
                          namespace Game;
 
+                         using LayerBase.Async;
                          using LayerBase.DI;
                          using LayerBase.Scope;
 
@@ -1039,8 +1044,9 @@ public class LayerGeneratorContractTests
                          public sealed partial class CombatService : IService
                          {
                              [ScopeCall]
-                             private WrongResult Tick(BulletTickCall call)
+                             private async LBTask<WrongResult> Tick(BulletTickCall call)
                              {
+                                 await LBTask.CompletedTask;
                                  return default;
                              }
 
@@ -1050,6 +1056,7 @@ public class LayerGeneratorContractTests
     [TestCase("LBSC004", """
                          namespace Game;
 
+                         using LayerBase.Async;
                          using LayerBase.Scope;
 
                          public sealed class CombatScope
@@ -1069,13 +1076,46 @@ public class LayerGeneratorContractTests
                          public sealed partial class CombatHandler
                          {
                              [ScopeCall]
-                             private BulletTickResult Tick(BulletTickCall call)
+                             private async LBTask<BulletTickResult> Tick(BulletTickCall call)
                              {
+                                 await LBTask.CompletedTask;
                                  return default;
                              }
                          }
                          """)]
     [TestCase("LBSC005", """
+                         namespace Game;
+
+                         using LayerBase.Async;
+                         using LayerBase.DI;
+                         using LayerBase.Scope;
+
+                         public sealed class CombatScope
+                         {
+                         }
+
+                         public readonly struct BulletTickResult
+                         {
+                         }
+
+                         public readonly struct BulletTickCall
+                         {
+                         }
+
+                         [Scope<CombatScope>]
+                         public sealed partial class CombatService : IService
+                         {
+                             [ScopeCall]
+                             private async LBTask<BulletTickResult> Tick(BulletTickCall call)
+                             {
+                                 await LBTask.CompletedTask;
+                                 return default;
+                             }
+
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+                         """)]
+    [TestCase("LBSC006", """
                          namespace Game;
 
                          using LayerBase.DI;
@@ -1089,6 +1129,7 @@ public class LayerGeneratorContractTests
                          {
                          }
 
+                         [ScopeCall<CombatScope, BulletTickResult>]
                          public readonly struct BulletTickCall
                          {
                          }
@@ -1119,6 +1160,7 @@ public class LayerGeneratorContractTests
         const string source = """
                               namespace Game;
 
+                              using LayerBase.Async;
                               using LayerBase.DI;
                               using LayerBase.Scope;
 
@@ -1349,6 +1391,7 @@ public class LayerGeneratorContractTests
         const string source = """
                               namespace Game;
 
+                              using LayerBase.Async;
                               using LayerBase.DI;
                               using LayerBase.Scope;
 
@@ -1380,8 +1423,9 @@ public class LayerGeneratorContractTests
                                   }
 
                                   [ScopeCall]
-                                  private BulletTickResult Tick(BulletTickCall call)
+                                  private async LBTask<BulletTickResult> Tick(BulletTickCall call)
                                   {
+                                      await LBTask.CompletedTask;
                                       return default;
                                   }
 

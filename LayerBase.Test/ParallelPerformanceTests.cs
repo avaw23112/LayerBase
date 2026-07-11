@@ -54,12 +54,29 @@ public class ParallelPerformanceTests
 
         layer.SubscribeParallel((in FaultEvent e) => throw new Exception("Parallel fault"));
 
-        LayerHub.CreateLayers().Push(layer).Build();
+        LayerRuntime runtime = LayerHub.CreateLayers().Push(layer).Build();
         LayerHub.Send(new FaultEvent());
 
-        // Wait for the signal instead of arbitrary sleep
-        var reported = errorOccurred.Wait(2000);
+        var reported = WaitForError(runtime, errorOccurred, TimeSpan.FromSeconds(2));
         Assert.That(reported, Is.True, "Parallel fault signal was never received.");
+
+        static bool WaitForError(
+            LayerRuntime runtime,
+            ManualResetEventSlim signal,
+            TimeSpan timeout)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            while (stopwatch.Elapsed < timeout)
+            {
+                runtime.Pump(0.016f);
+                if (signal.Wait(10))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     [Test]

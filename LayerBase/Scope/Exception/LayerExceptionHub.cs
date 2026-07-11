@@ -9,9 +9,10 @@ namespace LayerBase.Scope;
 public sealed class LayerExceptionHub
 {
     private readonly LockedBoundedRingQueue<LayerExceptionRecord> _queue;
+    private readonly object _overflowGate = new();
     private int _overflowCount;
     private LayerExceptionRecord _lastOverflow;
-    private int _hasLastOverflow;
+    private bool _hasLastOverflow;
 
     public LayerExceptionHub(int capacity = 512)
     {
@@ -28,9 +29,12 @@ public sealed class LayerExceptionHub
             return;
         }
 
-        Interlocked.Increment(ref _overflowCount);
-        _lastOverflow = record;
-        Volatile.Write(ref _hasLastOverflow, 1);
+        lock (_overflowGate)
+        {
+            _overflowCount++;
+            _lastOverflow = record;
+            _hasLastOverflow = true;
+        }
     }
 
     /// <summary>
@@ -40,19 +44,48 @@ public sealed class LayerExceptionHub
     {
         while (_queue.TryDequeue(out LayerExceptionRecord record))
         {
-            sink.OnException(record);
+            try
+            {
+                sink.OnException(record);
+            }
+            catch (Exception exception)
+            {
+                LayerHub.ReportEmergencyCallbackFailure(exception);
+            }
         }
 
-        int overflow = Interlocked.Exchange(ref _overflowCount, 0);
-        if (overflow <= 0)
+        if (!TryTakeOverflow(out int overflow, out LayerExceptionRecord lastOverflow))
         {
             return;
         }
 
-        if (Volatile.Read(ref _hasLastOverflow) == 1)
+        try
         {
-            sink.OnExceptionQueueOverflow(overflow, _lastOverflow);
-            Volatile.Write(ref _hasLastOverflow, 0);
+            sink.OnExceptionQueueOverflow(overflow, lastOverflow);
+        }
+        catch (Exception exception)
+        {
+            LayerHub.ReportEmergencyCallbackFailure(exception);
+        }
+    }
+
+    private bool TryTakeOverflow(out int count, out LayerExceptionRecord record)
+    {
+        lock (_overflowGate)
+        {
+            if (!_hasLastOverflow)
+            {
+                count = 0;
+                record = default;
+                return false;
+            }
+
+            count = _overflowCount;
+            record = _lastOverflow;
+            _overflowCount = 0;
+            _lastOverflow = default;
+            _hasLastOverflow = false;
+            return count > 0;
         }
     }
 }

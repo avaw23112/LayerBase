@@ -3,6 +3,8 @@ using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Layers;
 
+using System.Diagnostics;
+
 namespace EventsTest;
 
 [TestFixture]
@@ -119,18 +121,36 @@ public class EventPipelineTests
         try
         {
             layer.SubscribeParallel((in TestEvent e) => throw new Exception("ParallelBoom"));
-            LayerHub.CreateLayers().Push(layer).Build();
+            LayerRuntime runtime = LayerHub.CreateLayers().Push(layer).Build();
 
             LayerHub.Send(new TestEvent());
-            Assert.That(errorOccurred.Wait(1000), Is.True, "Error signal timeout");
+            Assert.That(WaitForError(runtime, errorOccurred, TimeSpan.FromSeconds(1)), Is.True, "Error signal timeout");
 
             errorOccurred.Reset();
             LayerHub.Send(new TestEvent());
-            Assert.That(errorOccurred.Wait(100), Is.False, "Should have fused");
+            Assert.That(WaitForError(runtime, errorOccurred, TimeSpan.FromMilliseconds(100)), Is.False, "Should have fused");
         }
         finally
         {
             LayerHub.OnLayerEventInfo -= handler;
+        }
+
+        static bool WaitForError(
+            LayerRuntime runtime,
+            ManualResetEventSlim signal,
+            TimeSpan timeout)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            while (stopwatch.Elapsed < timeout)
+            {
+                runtime.Pump(0.016f);
+                if (signal.Wait(10))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 

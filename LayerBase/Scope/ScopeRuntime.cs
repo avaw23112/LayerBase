@@ -26,7 +26,7 @@ public sealed class ScopeRuntime : IDisposable
 {
     private readonly IBoundedQueue<ScopePostMessage> _postInbox;
     private readonly IBoundedQueue<ScopeCallMessage> _callInbox;
-    private readonly IBoundedQueue<Action> _continuations;
+    private readonly IBoundedQueue<LayerContinuation> _continuations;
     private readonly IBoundedQueue<float> _manualPumps;
     private readonly ScopePostDispatcher? _postDispatcher;
     private readonly ScopeCallDispatcher? _callDispatcher;
@@ -84,7 +84,7 @@ public sealed class ScopeRuntime : IDisposable
 
         _postInbox = CreateQueue<ScopePostMessage>(PostInboxKind, options.PostQueueCapacity);
         _callInbox = CreateQueue<ScopeCallMessage>(PostInboxKind, options.CallQueueCapacity);
-        _continuations = CreateQueue<Action>(ContinuationInboxKind, options.ContinuationQueueCapacity);
+        _continuations = CreateQueue<LayerContinuation>(ContinuationInboxKind, options.ContinuationQueueCapacity);
         _manualPumps = CreateQueue<float>(ScopeInboxKind.Locked, options.ContinuationQueueCapacity);
         _postDispatcher = postDispatcher;
         _callDispatcher = callDispatcher;
@@ -268,6 +268,20 @@ public sealed class ScopeRuntime : IDisposable
     public bool TryEnqueueContinuation(Action continuation)
     {
         if (continuation == null)
+        {
+            throw new ArgumentNullException(nameof(continuation));
+        }
+
+        return TryEnqueueContinuation(new LayerContinuation(
+            continuation,
+            serviceId: -1,
+            taskId: -1,
+            trace: ScopeTrace.Empty));
+    }
+
+    public bool TryEnqueueContinuation(in LayerContinuation continuation)
+    {
+        if (continuation.Action == null)
         {
             throw new ArgumentNullException(nameof(continuation));
         }
@@ -498,6 +512,7 @@ public sealed class ScopeRuntime : IDisposable
         LayerExceptionPhase phase,
         LayerQueueKind queueKind,
         int messageId,
+        ScopeTrace trace = default,
         int queueCapacity = 0,
         int queueCount = 0)
     {
@@ -513,13 +528,13 @@ public sealed class ScopeRuntime : IDisposable
             phase: phase,
             queueKind: queueKind,
             messageId: messageId,
-            trace: ScopeTrace.Empty,
+            trace: trace,
             threadId: Environment.CurrentManagedThreadId,
             tick: 0,
             queueCapacity: queueCapacity,
             queueCount: queueCount);
 
-        OwningRuntime.ExceptionHub.Report(record);
+        OwningRuntime.ReportException(in record);
     }
 
     private void ApplyExceptionPolicy(LayerExceptionPhase phase, Exception exception)
@@ -651,15 +666,21 @@ public sealed class ScopeRuntime : IDisposable
 
     private void DrainContinuations()
     {
-        while (_continuations.TryDequeue(out Action continuation))
+        while (_continuations.TryDequeue(out LayerContinuation continuation))
         {
             try
             {
-                continuation();
+                continuation.Action();
             }
             catch (Exception ex)
             {
-                ReportException(ex, serviceId: -1, LayerExceptionPhase.Continuation, LayerQueueKind.ContinuationQueue, messageId: -1);
+                ReportException(
+                    ex,
+                    continuation.ServiceId,
+                    LayerExceptionPhase.Continuation,
+                    LayerQueueKind.ContinuationQueue,
+                    continuation.TaskId,
+                    trace: continuation.Trace);
                 ApplyExceptionPolicy(LayerExceptionPhase.Continuation, ex);
             }
         }

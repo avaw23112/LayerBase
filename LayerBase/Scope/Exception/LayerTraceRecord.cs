@@ -61,6 +61,9 @@ public readonly struct LayerExceptionRecord
     public readonly long Tick;
     public readonly int QueueCapacity;
     public readonly int QueueCount;
+    public readonly int LayerIndex;
+    public readonly string? Source;
+    public readonly string? EventName;
 
     public LayerExceptionRecord(
         Exception exception,
@@ -73,7 +76,10 @@ public readonly struct LayerExceptionRecord
         int threadId,
         long tick,
         int queueCapacity,
-        int queueCount)
+        int queueCount,
+        int layerIndex = -1,
+        string? source = null,
+        string? eventName = null)
     {
         Exception = exception;
         DispatchInfo = ExceptionDispatchInfo.Capture(exception);
@@ -87,6 +93,9 @@ public readonly struct LayerExceptionRecord
         Tick = tick;
         QueueCapacity = queueCapacity;
         QueueCount = queueCount;
+        LayerIndex = layerIndex;
+        Source = source;
+        EventName = eventName;
     }
 }
 

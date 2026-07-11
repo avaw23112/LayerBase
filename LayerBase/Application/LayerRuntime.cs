@@ -33,6 +33,7 @@ public sealed partial class LayerRuntime : IDisposable
     public ScopeRuntimeHost? ScopeHost { get; private set; }
     public LayerExceptionHub ExceptionHub { get; }
     public LayerHubExceptionCallbacks ExceptionCallbacks { get; }
+    private readonly LayerRuntimeExceptionSink _exceptionSink;
     private readonly PostIngressQueue _postIngress = new();
     #endregion
 
@@ -63,6 +64,8 @@ public sealed partial class LayerRuntime : IDisposable
     #region Runtime State - Identification
     // Runtime 的唯一标识符和释放标记。
     private readonly int _id;
+    private readonly int _ownerThreadId;
+    private int _drainingExceptions;
     private bool _disposed;
     #endregion
 
@@ -105,6 +108,8 @@ public sealed partial class LayerRuntime : IDisposable
         InitializeEcsWorld();
         ExceptionHub = new LayerExceptionHub();
         ExceptionCallbacks = new LayerHubExceptionCallbacks();
+        _exceptionSink = new LayerRuntimeExceptionSink(this, ExceptionCallbacks);
+        _ownerThreadId = Environment.CurrentManagedThreadId;
         LayerHub.Internal_Register(this);
     }
 
@@ -283,6 +288,8 @@ public sealed partial class LayerRuntime : IDisposable
     {
         if (_disposed) return;
 
+        using var runtimeScope = LayerRuntimeExecution.Enter(this);
+
         if (_context != null)
         {
             using var scope = _context.EnterScope();
@@ -313,8 +320,7 @@ public sealed partial class LayerRuntime : IDisposable
 
         EcsScheduler?.DrainResults(EcsOptions.MaxResultsDrainPerPump);
 
-        // Drain unified exception queue (main thread)
-        ExceptionHub.DrainAndDispatch(ExceptionCallbacks);
+        TryDrainExceptions();
 
         // 1. Time tick
         _timer?.Tick(deltaTime, _timerSink!);
@@ -412,10 +418,59 @@ public sealed partial class LayerRuntime : IDisposable
         LayerHub.Internal_NotifyEvent(info);
     }
 
+    internal void ReportException(in LayerExceptionRecord record)
+    {
+        ExceptionHub.Report(in record);
+        if (IsOwnerThread)
+        {
+            TryDrainExceptions();
+        }
+    }
+
+    private void TryDrainExceptions()
+    {
+        if (!IsOwnerThread)
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _drainingExceptions, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            ExceptionHub.DrainAndDispatch(_exceptionSink);
+        }
+        finally
+        {
+            Volatile.Write(ref _drainingExceptions, 0);
+        }
+    }
+
+    private bool IsOwnerThread => Environment.CurrentManagedThreadId == _ownerThreadId;
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void ReportLayerEventError(int layerIndex, string source, string eventName, Exception ex)
     {
-        ReportInfo(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
+        var record = new LayerExceptionRecord(
+            exception: ex,
+            scopeId: ScopeExecution.Current.ScopeId,
+            serviceId: -1,
+            phase: LayerExceptionPhase.EventDispatch,
+            queueKind: LayerQueueKind.None,
+            messageId: -1,
+            trace: ScopeTrace.Empty,
+            threadId: Environment.CurrentManagedThreadId,
+            tick: 0,
+            queueCapacity: 0,
+            queueCount: 0,
+            layerIndex: layerIndex,
+            source: source,
+            eventName: eventName);
+
+        ReportException(in record);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -423,7 +478,7 @@ public sealed partial class LayerRuntime : IDisposable
     {
         var source = EventDiagnosticSymbols.Resolve(sourceId);
         var eventName = EventDiagnosticSymbols.Resolve(eventNameId);
-        ReportInfo(new LayerEventInfo(layerIndex, source, eventName, ex.Message, LayerEventInfoType.Error, ex));
+        ReportLayerEventError(layerIndex, source, eventName, ex);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -584,6 +639,7 @@ public sealed partial class LayerRuntime : IDisposable
         DelayManager = null;
         EventCenter.Reset();
         _context?.Dispose();
+        TryDrainExceptions();
         LayerHub.ClearRuntimeCaches(_id);
         LayerHub.Internal_Unregister(this);
     }

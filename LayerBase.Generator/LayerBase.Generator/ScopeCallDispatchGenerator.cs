@@ -80,8 +80,25 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
                     method.Name));
         }
 
-        if (method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is not MethodDeclarationSyntax syntax ||
-            syntax.Parent is not ClassDeclarationSyntax classDeclaration ||
+        if (method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is not MethodDeclarationSyntax syntax)
+        {
+            return ScopeCallHandlerCandidate.Invalid(
+                new ScopeCallDiagnostic(
+                    Diagnostics.InvalidSignature,
+                    method.Locations.FirstOrDefault() ?? Location.None,
+                    method.Name));
+        }
+
+        if (!syntax.Modifiers.Any(SyntaxKind.AsyncKeyword))
+        {
+            return ScopeCallHandlerCandidate.Invalid(
+                new ScopeCallDiagnostic(
+                    Diagnostics.MethodMustBeAsync,
+                    method.Locations.FirstOrDefault() ?? Location.None,
+                    method.Name));
+        }
+
+        if (syntax.Parent is not ClassDeclarationSyntax classDeclaration ||
             !classDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword))
         {
             return ScopeCallHandlerCandidate.Invalid(
@@ -452,7 +469,7 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
             new(
                 "LBSC003",
                 "[ScopeCall] result type mismatch",
-                "Method '{0}' handles '{1}' but returns '{3}'; it must return LBTask<{2}> (or {2} for backward compat) matching the request's ScopeCall attribute",
+                "Method '{0}' handles '{1}' but returns '{3}'; it must return async LBTask<{2}> matching the request's ScopeCall attribute",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -471,6 +488,15 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
                 "LBSC005",
                 "[ScopeCall] request type must declare scope and result",
                 "Type '{0}' is handled by [ScopeCall] but must declare [ScopeCall<TScope, TResult>] so the generator can assign a stable scope call id",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor MethodMustBeAsync =
+            new(
+                "LBSC006",
+                "[ScopeCall] method must be async",
+                "Method '{0}' uses [ScopeCall] and must be declared with the async keyword",
                 Category,
                 DiagnosticSeverity.Error,
                 true);

@@ -538,6 +538,47 @@ public sealed class ScopeRuntimeFoundationTests
     }
 
     [Test]
+    public void WorkerScopes_should_resume_lbtask_awaiters_on_their_own_contexts()
+    {
+        var firstService = new ScopeTaskProbeService();
+        var secondService = new ScopeTaskProbeService();
+        using var first = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 41,
+                name: "FirstWorkerTaskScope",
+                threading: ScopeThreadingMode.Worker,
+                clock: ScopeClockMode.FixedRate,
+                tickRateHz: 120,
+                stopPolicy: ScopeStopPolicy.Drain),
+            new IService[] { firstService });
+        using var second = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 42,
+                name: "SecondWorkerTaskScope",
+                threading: ScopeThreadingMode.Worker,
+                clock: ScopeClockMode.FixedRate,
+                tickRateHz: 120,
+                stopPolicy: ScopeStopPolicy.Drain),
+            new IService[] { secondService });
+
+        int testThreadId = Thread.CurrentThread.ManagedThreadId;
+
+        first.Start();
+        second.Start();
+
+        Assert.That(firstService.CompletedEvent.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(secondService.CompletedEvent.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        first.Stop();
+        second.Stop();
+
+        Assert.That(firstService.ContinuationScopeId, Is.EqualTo(41));
+        Assert.That(secondService.ContinuationScopeId, Is.EqualTo(42));
+        Assert.That(firstService.ContinuationThreadId, Is.Not.EqualTo(testThreadId));
+        Assert.That(secondService.ContinuationThreadId, Is.Not.EqualTo(testThreadId));
+        Assert.That(firstService.ContinuationThreadId, Is.Not.EqualTo(secondService.ContinuationThreadId));
+    }
+
+    [Test]
     public void ScopeRuntimePlanner_should_group_unscoped_services_into_main_scope()
     {
         var service = new PlannerMainService();
@@ -1674,7 +1715,7 @@ internal sealed class RuntimeScopedInterfaceEventService : IService, IEventHandl
     }
 }
 
-public sealed class RuntimeGeneratedDispatchLayer : Layer
+public sealed partial class RuntimeGeneratedDispatchLayer : Layer
 {
     public RuntimeGeneratedDispatchLayer()
     {
@@ -1776,8 +1817,9 @@ public sealed partial class RuntimeGeneratedDispatchService : IService, IUpdate
     }
 
     [ScopeCall]
-    private LBTask<RuntimeGeneratedDispatchResult> OnDispatchCall(RuntimeGeneratedDispatchCall call)
+    private async LBTask<RuntimeGeneratedDispatchResult> OnDispatchCall(RuntimeGeneratedDispatchCall call)
     {
-        return LBTask<RuntimeGeneratedDispatchResult>.FromResult(new RuntimeGeneratedDispatchResult(call.Value + 5));
+        await LBTask.CompletedTask;
+        return new RuntimeGeneratedDispatchResult(call.Value + 5);
     }
 }
