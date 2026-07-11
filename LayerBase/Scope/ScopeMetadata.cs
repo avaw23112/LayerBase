@@ -115,3 +115,8 @@ public static class ScopeDescriptors
         tickRateHz: 0,
         stopPolicy: ScopeStopPolicy.Drain);
 }
+
+[ScopeOptions]
+public sealed partial class MainScope
+{
+}

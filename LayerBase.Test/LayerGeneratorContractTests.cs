@@ -1533,6 +1533,156 @@ public class LayerGeneratorContractTests
             string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
     }
 
+    [Test]
+    public void Assembly_module_generator_emits_manifest_contributions_without_layer_or_scope_partial()
+    {
+        const string source = """
+                              namespace Game.ModuleContract;
+
+                              using LayerBase.Async;
+                              using LayerBase.Core;
+                              using LayerBase.DI;
+                              using LayerBase.DI.Options;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+                              using LayerBase.Scope;
+
+                              [AssemblyModule]
+                              public sealed partial class CombatModule
+                              {
+                              }
+
+                              public sealed class GameplayLayer : Layer
+                              {
+                              }
+
+                              [ScopeOptions(
+                                  threading: ScopeThreadingMode.Worker,
+                                  clock: ScopeClockMode.FixedRate,
+                                  tickRateHz: 60,
+                                  stopPolicy: ScopeStopPolicy.Drain)]
+                              public sealed class CombatScope
+                              {
+                              }
+
+                              public readonly struct DamageResult
+                              {
+                              }
+
+                              [ScopeCall<CombatScope, DamageResult>]
+                              public readonly struct CalculateDamageCall
+                              {
+                              }
+
+                              [ScopeEvent<CombatScope>]
+                              public readonly struct UpsertCombatantEvent
+                              {
+                              }
+
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              [Scope<CombatScope>]
+                              public sealed partial class CombatService : IService
+                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
+
+                                  [ScopeEvent]
+                                  private void OnUpsertCombatant(UpsertCombatantEvent message)
+                                  {
+                                  }
+
+                                  [ScopeCall]
+                                  private async LBTask<DamageResult> OnCalculateDamage(CalculateDamageCall request)
+                                  {
+                                      await LBTask.CompletedTask;
+                                      return default;
+                                  }
+                              }
+
+                              [OwnerService(typeof(CombatService))]
+                              public sealed partial class CombatContext : ILayerContext
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new AssemblyModuleGenerator(), new ScopeRuntimeHostGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("partial class CombatModule : global::LayerBase.Modules.ILayerBaseModule"));
+        Assert.That(generated, Does.Contain("new global::LayerBase.Modules.LayerContractContribution(typeof(global::Game.ModuleContract.GameplayLayer).TypeHandle)"));
+        Assert.That(generated, Does.Contain("new global::LayerBase.Modules.ScopeDefinitionContribution("));
+        Assert.That(generated, Does.Contain("typeof(global::Game.ModuleContract.CombatScope).TypeHandle"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Modules.ScopeMessageKind.Call"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Modules.ScopeMessageKind.Event"));
+        Assert.That(generated, Does.Contain("new global::LayerBase.Modules.ServiceContribution("));
+        Assert.That(generated, Does.Contain("typeof(global::Game.ModuleContract.CombatService).TypeHandle"));
+        Assert.That(generated, Does.Contain("typeof(global::Game.ModuleContract.GameplayLayer).TypeHandle"));
+        Assert.That(generated, Does.Contain("new global::LayerBase.Modules.ContextContribution("));
+        Assert.That(generated, Does.Contain("new global::LayerBase.Modules.ScopeHandlerContribution("));
+        Assert.That(generated, Does.Not.Contain("partial class GameplayLayer"));
+        Assert.That(generated, Does.Not.Contain("partial class CombatScope"));
+    }
+
+    [Test]
+    public void Assembly_module_generator_reports_non_partial_module_owner()
+    {
+        const string source = """
+                              using LayerBase.Modules;
+
+                              namespace Game.ModuleContract;
+
+                              [AssemblyModule]
+                              public sealed class CombatModule
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new AssemblyModuleGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBM001"),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Module_catalog_generator_emits_current_assembly_modules()
+    {
+        const string source = """
+                              using LayerBase.Modules;
+
+                              namespace Game.Bootstrap;
+
+                              [AssemblyModule]
+                              public sealed partial class BootstrapModule
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new AssemblyModuleGenerator(), new ModuleCatalogGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("public static class GeneratedModuleCatalog"));
+        Assert.That(generated, Does.Contain("global::Game.Bootstrap.BootstrapModule.Instance"));
+    }
+
     private static GeneratorTestResult RunGenerators(string source, params IIncrementalGenerator[] generators)
     {
         SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));

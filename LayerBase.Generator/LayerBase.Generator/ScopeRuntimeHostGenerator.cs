@@ -20,6 +20,7 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
     private const string ScopeEventRequestAttributeName = "LayerBase.Scope.ScopeEventAttribute`1";
     private const string ScopeCallRequestAttributeName = "LayerBase.Scope.ScopeCallAttribute`2";
     private const string ScopeAttributeName = "LayerBase.Scope.ScopeAttribute`1";
+    private const string AssemblyModuleAttributeName = "LayerBase.Modules.AssemblyModuleAttribute";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
     private const int ScopeClockModeFixedRate = 1;
 
@@ -93,12 +94,24 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
                                      static (ctx, _) => GetLayerType(ctx))
                                  .Where(static item => item != null)!;
 
+        var assemblyModules = context.SyntaxProvider
+                                     .ForAttributeWithMetadataName(
+                                         AssemblyModuleAttributeName,
+                                         static (_, _) => true,
+                                         static (_, _) => true);
+
         var combined = dispatcherInputs.Combine(scopeInputs)
-                                       .Combine(layerTypes.Collect());
+                                       .Combine(layerTypes.Collect())
+                                       .Combine(assemblyModules.Collect());
 
         context.RegisterSourceOutput(combined, static (spc, source) =>
         {
-            foreach (ScopeDiagnostic? diagnostic in source.Left.Right.Right.Left)
+            var dispatcherInput = source.Left.Left.Left;
+            var scopeInput = source.Left.Left.Right;
+            var collectedLayerTypes = source.Left.Right;
+            bool moduleMode = source.Right.Length > 0;
+
+            foreach (ScopeDiagnostic? diagnostic in scopeInput.Right.Left)
             {
                 if (diagnostic.HasValue)
                 {
@@ -106,7 +119,7 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
                 }
             }
 
-            foreach (ScopeDiagnostic? diagnostic in source.Left.Right.Right.Right)
+            foreach (ScopeDiagnostic? diagnostic in scopeInput.Right.Right)
             {
                 if (diagnostic.HasValue)
                 {
@@ -114,17 +127,18 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
                 }
             }
 
-            bool hasEventHandler = source.Left.Left.Left.Left.Left.Any(static value => value);
-            bool hasCallHandler = source.Left.Left.Left.Right.Any(static value => value);
-            bool hasEventRequest = source.Left.Left.Right.Any(static value => value);
-            bool hasCallRequest = source.Left.Left.Right.Any(static value => value);
+            bool hasEventHandler = dispatcherInput.Left.Left.Left.Any(static value => value);
+            bool hasCallHandler = dispatcherInput.Left.Left.Right.Any(static value => value);
+            bool hasEventRequest = dispatcherInput.Left.Right.Any(static value => value);
+            bool hasCallRequest = dispatcherInput.Right.Any(static value => value);
             Generate(
                 spc,
                 hasEventRequest && hasEventHandler,
                 hasCallRequest && hasCallHandler,
-                source.Left.Right.Left.Left,
-                source.Left.Right.Left.Right,
-                source.Right);
+                scopeInput.Left.Left,
+                scopeInput.Left.Right,
+                collectedLayerTypes,
+                moduleMode);
         });
     }
 
@@ -321,7 +335,8 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         bool hasCallDispatcher,
         ImmutableArray<ScopeOptionsInfo?> nullableDefinitions,
         ImmutableArray<ScopedServiceInfo?> nullableScopedServices,
-        ImmutableArray<LayerTypeInfo> layerTypes)
+        ImmutableArray<LayerTypeInfo> layerTypes,
+        bool moduleMode)
     {
         var definitions = nullableDefinitions
                           .Where(static item => item != null)
@@ -342,7 +357,7 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
 
         foreach (ScopeOptionsInfo definition in definitions)
         {
-            if (!definition.IsPartial)
+            if (!moduleMode && !definition.IsPartial)
             {
                 spc.ReportDiagnostic(Diagnostic.Create(
                     Diagnostics.ScopeOptionsOwnerMustBePartial,
@@ -354,11 +369,14 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         var partialDefinitions = definitions
                                  .Where(static item => item.IsPartial)
                                  .ToImmutableArray();
-        GenerateScopeOptionPartials(spc, partialDefinitions);
+        if (!moduleMode)
+        {
+            GenerateScopeOptionPartials(spc, partialDefinitions);
+        }
 
-        bool shouldGenerateRegistrar = definitions.Length > 0 && layerTypes.Length > 0;
+        bool shouldGenerateRegistrar = !moduleMode && definitions.Length > 0 && layerTypes.Length > 0;
 
-        bool hasGeneratedPlanner = GeneratePlanner(spc, partialDefinitions, scopedServices);
+        bool hasGeneratedPlanner = !moduleMode && GeneratePlanner(spc, partialDefinitions, scopedServices);
         if (!hasPostDispatcher && !hasCallDispatcher && !hasGeneratedPlanner)
         {
             return;
