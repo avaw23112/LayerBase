@@ -2,7 +2,7 @@
 
 internal static class Program
 {
-    private static void Main(string[] args)
+    private static async Task Main(string[] args)
     {
         Console.WriteLine("=== LayerBase Framework Showcase ===\n");
 
@@ -30,8 +30,13 @@ internal static class Program
         ActorRuntimeUsage.Run();
         Console.WriteLine();
 
+        await ScopeUsage.Run();
+        Console.WriteLine();
+
+        EcsQueryUsage.Run();
+        Console.WriteLine();
+
         Console.WriteLine("=== Showcase Finished ===");
-        // 9. 验证生成器逻辑
         GeneratorVerification.Run();
     }
 }

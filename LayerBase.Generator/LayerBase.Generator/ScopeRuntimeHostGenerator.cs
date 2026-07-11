@@ -417,7 +417,10 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
 
         if (shouldGenerateRegistrar)
         {
-            GenerateRegistrar(spc, layerTypes[0]);
+            for (int i = 0; i < layerTypes.Length; i++)
+            {
+                GenerateRegistrar(spc, layerTypes[i]);
+            }
         }
     }
 
