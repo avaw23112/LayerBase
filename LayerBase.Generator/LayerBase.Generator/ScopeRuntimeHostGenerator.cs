@@ -382,7 +382,7 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         builder.AppendLine("{");
         builder.AppendLine("    public static class GeneratedScopeRuntimeHostFactory");
         builder.AppendLine("    {");
-        builder.AppendLine("        public static global::LayerBase.Scope.ScopeRuntimeHost Create(global::System.Collections.Generic.IReadOnlyList<global::LayerBase.DI.IService> services, global::LayerBase.Scope.ScopeRuntimeOptions? options = null)");
+        builder.AppendLine("        public static global::LayerBase.Scope.ScopeRuntimeHost Create(global::System.Collections.Generic.IReadOnlyList<global::LayerBase.DI.IService> services, global::LayerBase.Scope.ScopeRuntimeOptions? options = null, global::LayerBase.Actor.ActorWorld? sharedActorWorld = null, global::LayerBase.LayerRuntime? owningRuntime = null)");
         builder.AppendLine("        {");
         builder.AppendLine("            if (services == null)");
         builder.AppendLine("            {");
@@ -391,19 +391,21 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         builder.AppendLine();
         if (hasGeneratedPlanner)
         {
-            builder.AppendLine("            return Create(global::LayerBase.Scope.GeneratedScopeRuntimePlanner.Build(services), options);");
+            builder.AppendLine("            return Create(global::LayerBase.Scope.GeneratedScopeRuntimePlanner.Build(services), options, sharedActorWorld, owningRuntime);");
         }
         else
         {
-            builder.AppendLine("            return Create(global::LayerBase.Scope.ScopeRuntimePlanner.Build(services), options);");
+            builder.AppendLine("            return Create(global::LayerBase.Scope.ScopeRuntimePlanner.Build(services), options, sharedActorWorld, owningRuntime);");
         }
         builder.AppendLine("        }");
         builder.AppendLine();
-        builder.AppendLine("        public static global::LayerBase.Scope.ScopeRuntimeHost Create(global::System.Collections.Generic.IReadOnlyList<global::LayerBase.Scope.ScopeRuntimePlan> plans, global::LayerBase.Scope.ScopeRuntimeOptions? options = null)");
+        builder.AppendLine("        public static global::LayerBase.Scope.ScopeRuntimeHost Create(global::System.Collections.Generic.IReadOnlyList<global::LayerBase.Scope.ScopeRuntimePlan> plans, global::LayerBase.Scope.ScopeRuntimeOptions? options = null, global::LayerBase.Actor.ActorWorld? sharedActorWorld = null, global::LayerBase.LayerRuntime? owningRuntime = null)");
         builder.AppendLine("        {");
         builder.AppendLine("            return global::LayerBase.Scope.ScopeRuntimeHost.Create(");
         builder.AppendLine("                plans,");
         builder.AppendLine("                options,");
+        builder.AppendLine("                sharedActorWorld,");
+        builder.AppendLine("                owningRuntime,");
         builder.AppendLine($"                postDispatcher: {postDispatcher},");
         builder.AppendLine($"                callDispatcher: {callDispatcher},");
         builder.AppendLine($"                scopeTypeResolver: {scopeTypeResolver});");
@@ -437,8 +439,8 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         builder.AppendLine("        void global::LayerBase.Scope.IScopeHostFactoryRegistrar.RegisterScopeHostFactory()");
         builder.AppendLine("        {");
         builder.AppendLine("            global::LayerBase.Scope.ScopeHostFactory.Register(");
-        builder.AppendLine("                static (services, options) =>");
-        builder.AppendLine("                    global::LayerBase.Scope.GeneratedScopeRuntimeHostFactory.Create(services, options));");
+        builder.AppendLine("                static (services, options, sharedActorWorld, owningRuntime) =>");
+        builder.AppendLine("                    global::LayerBase.Scope.GeneratedScopeRuntimeHostFactory.Create(services, options, sharedActorWorld, owningRuntime));");
         builder.AppendLine("        }");
         builder.AppendLine("    }");
 

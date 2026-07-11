@@ -1,3 +1,5 @@
+using LayerBase.Actor;
+
 namespace LayerBase.Scope;
 
 public sealed class ScopeRuntimeHost : IDisposable
@@ -53,6 +55,8 @@ public sealed class ScopeRuntimeHost : IDisposable
     public static ScopeRuntimeHost Create(
         IReadOnlyList<ScopeRuntimePlan> plans,
         ScopeRuntimeOptions? options = null,
+        ActorWorld? sharedActorWorld = null,
+        LayerRuntime? owningRuntime = null,
         ScopePostDispatcher? postDispatcher = null,
         ScopeCallDispatcher? callDispatcher = null,
         ScopeTypeIdResolver? scopeTypeResolver = null)
@@ -72,6 +76,8 @@ public sealed class ScopeRuntimeHost : IDisposable
                     plan.Descriptor,
                     plan.Services,
                     options,
+                    sharedActorWorld,
+                    owningRuntime,
                     postDispatcher,
                     callDispatcher);
             }

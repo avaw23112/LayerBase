@@ -7,6 +7,7 @@ using LayerBase.Core.DataStruct;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.DI.Options;
+using LayerBase.ECS.Runtime;
 using LayerBase.ECS.Runtime.Query;
 
 namespace LayerBase.Scope;
@@ -43,6 +44,8 @@ public sealed class ScopeRuntime : IDisposable
         ScopeDescriptor descriptor,
         IService[] services,
         ScopeRuntimeOptions? options = null,
+        ActorWorld? sharedActorWorld = null,
+        LayerRuntime? owningRuntime = null,
         ScopePostDispatcher? postDispatcher = null,
         ScopeCallDispatcher? callDispatcher = null)
     {
@@ -66,10 +69,12 @@ public sealed class ScopeRuntime : IDisposable
         EventCenter.PostScheduler = PostScheduler;
         Timer = new TimeScheduler<ITimerAction>(options.TimeSchedulerOptions);
         _timerSink = new ScopeTimerSink(PostScheduler);
-        Actors = new ActorWorld();
+        Actors = sharedActorWorld ?? new ActorWorld();
         EcsWorld = World.Create();
         EcsWorld.BindScopeActors(Actors);
         EcsQueryRegistry = new EcsQueryRegistry(EcsWorld);
+        OwningRuntime = owningRuntime;
+        InitializeEcsScheduler(options);
 
         PostInboxKind = descriptor.Threading == ScopeThreadingMode.Worker
             ? ScopeInboxKind.Locked
@@ -84,6 +89,24 @@ public sealed class ScopeRuntime : IDisposable
         _callDispatcher = callDispatcher;
 
         BindServices();
+    }
+
+    private void InitializeEcsScheduler(ScopeRuntimeOptions options)
+    {
+        EcsRuntimeOptions ecsOptions = options.EcsOptions ?? EcsRuntimeOptions.Default;
+        EcsOptions = ecsOptions;
+
+        if (OwningRuntime == null)
+        {
+            return;
+        }
+
+        EcsScheduler = ecsOptions.ExecutionMode switch
+        {
+            EcsExecutionMode.Sync => new SyncEcsScheduler(OwningRuntime, EcsWorld),
+            EcsExecutionMode.Async => new AsyncEcsScheduler(OwningRuntime, EcsWorld, ecsOptions),
+            _ => null
+        };
     }
 
     public int ScopeId => Descriptor.ScopeId;
@@ -103,6 +126,12 @@ public sealed class ScopeRuntime : IDisposable
     public World EcsWorld { get; }
 
     public EcsQueryRegistry EcsQueryRegistry { get; }
+
+    public IEcsScheduler? EcsScheduler { get; private set; }
+
+    public EcsRuntimeOptions EcsOptions { get; private set; }
+
+    public LayerRuntime? OwningRuntime { get; }
 
     public ScopeInboxKind PostInboxKind { get; }
 
@@ -286,6 +315,7 @@ public sealed class ScopeRuntime : IDisposable
 
         Stop();
         _disposed = true;
+        EcsScheduler?.Dispose();
         _context?.Dispose();
         Timer.Dispose();
         PostScheduler.Dispose();
@@ -378,6 +408,7 @@ public sealed class ScopeRuntime : IDisposable
 
     private void StartScope()
     {
+        EcsScheduler?.Start();
         Actors.PrepareRuntimeBuild();
         StartServices();
         Actors.CompleteRuntimeBuild();
@@ -401,6 +432,7 @@ public sealed class ScopeRuntime : IDisposable
 
         PumpActors(deltaTime);
         EcsWorld.SweepProjectedActors();
+        EcsScheduler?.DrainResults(EcsOptions.MaxResultsDrainPerPump);
         DrainContinuations();
     }
 
@@ -421,6 +453,8 @@ public sealed class ScopeRuntime : IDisposable
 
     private void StopInternal()
     {
+        EcsScheduler?.Stop();
+
         if (Descriptor.StopPolicy == ScopeStopPolicy.Drain)
         {
             DrainPostInbox();

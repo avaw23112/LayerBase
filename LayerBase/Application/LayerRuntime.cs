@@ -242,8 +242,8 @@ public sealed partial class LayerRuntime : IDisposable
             return;
         }
 
-        ScopeHost = ScopeHostFactory.TryCreate(scopedServices)
-                    ?? ScopeRuntimeHost.Create(ScopeRuntimePlanner.Build(scopedServices));
+        ScopeHost = ScopeHostFactory.TryCreate(scopedServices, sharedActorWorld: Actors, owningRuntime: this)
+                    ?? ScopeRuntimeHost.Create(ScopeRuntimePlanner.Build(scopedServices), sharedActorWorld: Actors, owningRuntime: this);
     }
 
     private void RegisterGeneratedScopeHostFactory()
