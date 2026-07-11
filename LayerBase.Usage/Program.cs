@@ -36,6 +36,9 @@ internal static class Program
         EcsQueryUsage.Run();
         Console.WriteLine();
 
+        ExceptionHandlingUsage.Run();
+        Console.WriteLine();
+
         Console.WriteLine("=== Showcase Finished ===");
         GeneratorVerification.Run();
     }

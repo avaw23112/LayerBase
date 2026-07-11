@@ -1776,8 +1776,8 @@ public sealed partial class RuntimeGeneratedDispatchService : IService, IUpdate
     }
 
     [ScopeCall]
-    private RuntimeGeneratedDispatchResult OnDispatchCall(RuntimeGeneratedDispatchCall call)
+    private LBTask<RuntimeGeneratedDispatchResult> OnDispatchCall(RuntimeGeneratedDispatchCall call)
     {
-        return new RuntimeGeneratedDispatchResult(call.Value + 5);
+        return LBTask<RuntimeGeneratedDispatchResult>.FromResult(new RuntimeGeneratedDispatchResult(call.Value + 5));
     }
 }

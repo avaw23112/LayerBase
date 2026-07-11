@@ -32,6 +32,7 @@ public sealed class ScopeRuntime : IDisposable
     private readonly ScopeCallDispatcher? _callDispatcher;
     private readonly ScopeTimerSink _timerSink;
     private readonly EventBuildPolicyTable _policyTable;
+    private readonly LayerExceptionOptions _exceptionOptions = new();
     private LayerBaseSynchronizationContext? _context;
     private ScopeRouteTable? _routes;
     private Thread? _workerThread;
@@ -326,26 +327,35 @@ public sealed class ScopeRuntime : IDisposable
 
     private void WorkerLoop()
     {
-        var stopwatch = Stopwatch.StartNew();
-        long lastTicks = stopwatch.ElapsedTicks;
-
-        ExecuteInScope(StartScope);
-
-        if (Descriptor.Clock == ScopeClockMode.Manual)
+        try
         {
-            RunManualWorkerLoop();
+            var stopwatch = Stopwatch.StartNew();
+            long lastTicks = stopwatch.ElapsedTicks;
+
+            ExecuteInScope(StartScope);
+
+            if (Descriptor.Clock == ScopeClockMode.Manual)
+            {
+                RunManualWorkerLoop();
+                ExecuteInScope(StopInternal);
+                return;
+            }
+
+            while (_workerRunning)
+            {
+                float deltaTime = GetWorkerDeltaTime(stopwatch, ref lastTicks);
+                ExecuteInScope(() => PumpInternal(deltaTime));
+                SleepWorker();
+            }
+
             ExecuteInScope(StopInternal);
-            return;
         }
-
-        while (_workerRunning)
+        catch (Exception ex)
         {
-            float deltaTime = GetWorkerDeltaTime(stopwatch, ref lastTicks);
-            ExecuteInScope(() => PumpInternal(deltaTime));
-            SleepWorker();
+            ReportException(ex, -1, LayerExceptionPhase.WorkerLoop, LayerQueueKind.None, -1);
+            _workerRunning = false;
+            _stopped = true;
         }
-
-        ExecuteInScope(StopInternal);
     }
 
     private void RunManualWorkerLoop()
@@ -399,9 +409,19 @@ public sealed class ScopeRuntime : IDisposable
     {
         for (int i = 0; i < Services.Length; i++)
         {
-            if (Services[i] is IInitializable initializable)
+            if (Services[i] is not IInitializable initializable)
+            {
+                continue;
+            }
+
+            try
             {
                 initializable.Initialize();
+            }
+            catch (Exception ex)
+            {
+                ReportException(ex, serviceId: i, LayerExceptionPhase.ServiceStart, LayerQueueKind.None, messageId: -1);
+                ApplyExceptionPolicy(LayerExceptionPhase.ServiceStart, ex);
             }
         }
     }
@@ -472,6 +492,65 @@ public sealed class ScopeRuntime : IDisposable
         DisposeServices();
     }
 
+    private void ReportException(
+        Exception exception,
+        int serviceId,
+        LayerExceptionPhase phase,
+        LayerQueueKind queueKind,
+        int messageId,
+        int queueCapacity = 0,
+        int queueCount = 0)
+    {
+        if (OwningRuntime == null)
+        {
+            return;
+        }
+
+        var record = new LayerExceptionRecord(
+            exception: exception,
+            scopeId: ScopeId,
+            serviceId: serviceId,
+            phase: phase,
+            queueKind: queueKind,
+            messageId: messageId,
+            trace: ScopeTrace.Empty,
+            threadId: Environment.CurrentManagedThreadId,
+            tick: 0,
+            queueCapacity: queueCapacity,
+            queueCount: queueCount);
+
+        OwningRuntime.ExceptionHub.Report(record);
+    }
+
+    private void ApplyExceptionPolicy(LayerExceptionPhase phase, Exception exception)
+    {
+        LayerExceptionPolicy policy = _exceptionOptions.GetPolicy(phase);
+
+        switch (policy)
+        {
+            case LayerExceptionPolicy.ReportAndContinue:
+                return;
+
+            case LayerExceptionPolicy.StopScope:
+                RequestStop();
+                return;
+
+            case LayerExceptionPolicy.StopRuntime:
+                OwningRuntime?.RequestStop();
+                return;
+
+            case LayerExceptionPolicy.FailFast:
+                Environment.FailFast("LayerBase fatal exception.", exception);
+                return;
+        }
+    }
+
+    private void RequestStop()
+    {
+        _stopped = true;
+        _workerRunning = false;
+    }
+
     private void DisposeServices()
     {
         for (int i = Services.Length - 1; i >= 0; i--)
@@ -531,7 +610,20 @@ public sealed class ScopeRuntime : IDisposable
     {
         while (_postInbox.TryDequeue(out ScopePostMessage message))
         {
-            _postDispatcher?.Invoke(this, message);
+            if (_postDispatcher == null)
+            {
+                continue;
+            }
+
+            try
+            {
+                _postDispatcher(this, message);
+            }
+            catch (Exception ex)
+            {
+                ReportException(ex, serviceId: -1, LayerExceptionPhase.PostDispatch, LayerQueueKind.PostInbox, message.EventId);
+                ApplyExceptionPolicy(LayerExceptionPhase.PostDispatch, ex);
+            }
         }
     }
 
@@ -545,7 +637,15 @@ public sealed class ScopeRuntime : IDisposable
                 continue;
             }
 
-            _callDispatcher(this, message);
+            try
+            {
+                _callDispatcher(this, message);
+            }
+            catch (Exception ex)
+            {
+                ReportException(ex, serviceId: -1, LayerExceptionPhase.CallDispatch, LayerQueueKind.CallInbox, message.CallId);
+                message.Promise.SetException(ex);
+            }
         }
     }
 
@@ -553,7 +653,15 @@ public sealed class ScopeRuntime : IDisposable
     {
         while (_continuations.TryDequeue(out Action continuation))
         {
-            continuation();
+            try
+            {
+                continuation();
+            }
+            catch (Exception ex)
+            {
+                ReportException(ex, serviceId: -1, LayerExceptionPhase.Continuation, LayerQueueKind.ContinuationQueue, messageId: -1);
+                ApplyExceptionPolicy(LayerExceptionPhase.Continuation, ex);
+            }
         }
     }
 

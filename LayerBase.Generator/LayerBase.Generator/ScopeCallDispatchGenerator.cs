@@ -15,6 +15,8 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
     private const string IServiceMetadataName = "LayerBase.DI.IService";
     private const string ScopeCallRequestAttributeName = "LayerBase.Scope.ScopeCallAttribute`2";
     private const string ScopeCallHandlerAttributeName = "LayerBase.Scope.ScopeCallAttribute";
+    private const string LBTaskKindName = "LBTask";
+    private const string LBTaskNamespace = "LayerBase.Async";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -101,6 +103,20 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
 
         ITypeSymbol requestType = method.Parameters[0].Type;
         ITypeSymbol resultType = method.ReturnType;
+
+        // Extract the inner T from LBTask<T> if the handler returns LBTask<T>
+        ITypeSymbol handlerReturnType = method.ReturnType;
+        bool returnsLBTask = false;
+        if (method.ReturnType is INamedTypeSymbol namedReturn &&
+            namedReturn.Arity == 1 &&
+            namedReturn.OriginalDefinition.Name == LBTaskKindName &&
+            namedReturn.OriginalDefinition.ContainingNamespace.ToDisplayString(
+                SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + LBTaskNamespace)
+        {
+            resultType = namedReturn.TypeArguments[0];
+            returnsLBTask = true;
+        }
+
         string bridgeName = "__LayerBaseScopeCall_" + SanitizeIdentifier(
             requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
 
@@ -112,6 +128,7 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
             bridgeName,
             requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             resultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            returnsLBTask,
             method.Locations.FirstOrDefault() ?? Location.None));
     }
 
@@ -223,8 +240,11 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
             builder.AppendLine("    {");
             foreach (ScopeCallHandlerInfo binding in group)
             {
+                string bridgeReturnType = binding.ReturnsLBTask
+                    ? $"global::LayerBase.Async.LBTask<{binding.ResultType}>"
+                    : binding.ResultType;
                 builder.AppendLine(
-                    $"        internal {binding.ResultType} {binding.BridgeName}({binding.RequestType} message)");
+                    $"        internal {bridgeReturnType} {binding.BridgeName}({binding.RequestType} message)");
                 builder.AppendLine("        {");
                 builder.AppendLine($"            return {binding.MethodName}(message);");
                 builder.AppendLine("        }");
@@ -293,8 +313,43 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
             builder.AppendLine($"        private static void Dispatch_{callId}(global::LayerBase.Scope.ScopeRuntime scope, global::LayerBase.Scope.ScopeCallMessage message)");
             builder.AppendLine("        {");
             builder.AppendLine($"            var service = FindService<{binding.ServiceType}>(scope.Services);");
-            builder.AppendLine($"            var result = service.{binding.BridgeName}(({binding.RequestType})message.Payload);");
-            builder.AppendLine($"            ((global::LayerBase.Scope.ScopePromise<{binding.ResultType}>)message.Promise).SetResult(result);");
+
+            if (binding.ReturnsLBTask)
+            {
+                builder.AppendLine($"            var task = service.{binding.BridgeName}(({binding.RequestType})message.Payload);");
+                builder.AppendLine($"            var awaiter = task.GetAwaiter();");
+                builder.AppendLine("            if (awaiter.IsCompleted)");
+                builder.AppendLine("            {");
+                builder.AppendLine("                try");
+                builder.AppendLine("                {");
+                builder.AppendLine($"                    ((global::LayerBase.Scope.ScopePromise<{binding.ResultType}>)message.Promise).SetResult(awaiter.GetResult());");
+                builder.AppendLine("                }");
+                builder.AppendLine("                catch (global::System.Exception exception)");
+                builder.AppendLine("                {");
+                builder.AppendLine("                    message.Promise.SetException(exception);");
+                builder.AppendLine("                }");
+                builder.AppendLine("            }");
+                builder.AppendLine("            else");
+                builder.AppendLine("            {");
+                builder.AppendLine("                awaiter.OnCompleted(() =>");
+                builder.AppendLine("                {");
+                builder.AppendLine("                    try");
+                builder.AppendLine("                    {");
+                builder.AppendLine($"                        ((global::LayerBase.Scope.ScopePromise<{binding.ResultType}>)message.Promise).SetResult(awaiter.GetResult());");
+                builder.AppendLine("                    }");
+                builder.AppendLine("                    catch (global::System.Exception exception)");
+                builder.AppendLine("                    {");
+                builder.AppendLine("                        message.Promise.SetException(exception);");
+                builder.AppendLine("                    }");
+                builder.AppendLine("                });");
+                builder.AppendLine("            }");
+            }
+            else
+            {
+                builder.AppendLine($"            var result = service.{binding.BridgeName}(({binding.RequestType})message.Payload);");
+                builder.AppendLine($"            ((global::LayerBase.Scope.ScopePromise<{binding.ResultType}>)message.Promise).SetResult(result);");
+            }
+
             builder.AppendLine("        }");
             builder.AppendLine();
         }
@@ -367,6 +422,7 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
         string BridgeName,
         string RequestType,
         string ResultType,
+        bool ReturnsLBTask,
         Location Location);
 
 #pragma warning disable RS2008
@@ -396,7 +452,7 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
             new(
                 "LBSC003",
                 "[ScopeCall] result type mismatch",
-                "Method '{0}' handles '{1}' but returns '{3}'; it must return '{2}' from the request's ScopeCall attribute",
+                "Method '{0}' handles '{1}' but returns '{3}'; it must return LBTask<{2}> (or {2} for backward compat) matching the request's ScopeCall attribute",
                 Category,
                 DiagnosticSeverity.Error,
                 true);

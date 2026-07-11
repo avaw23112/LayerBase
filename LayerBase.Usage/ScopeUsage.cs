@@ -115,13 +115,14 @@ public sealed partial class ScopeDataService : IService
     }
 
     [ScopeCall]
-    private DataQueryResult OnDataQuery(DataQuery call)
+    private async LBTask<DataQueryResult> OnDataQuery(DataQuery call)
     {
         _queryCount++;
         return new DataQueryResult(
             queryCount: _queryCount,
             inDataScope: ScopeExecution.Current.ScopeId == 1);
     }
+    
 }
 
 // ───────── Layers ─────────

@@ -31,6 +31,8 @@ public sealed partial class LayerRuntime : IDisposable
     public ActorWorld Actors { get; }
     public WorkerRuntime Worker { get; }
     public ScopeRuntimeHost? ScopeHost { get; private set; }
+    public LayerExceptionHub ExceptionHub { get; }
+    public LayerHubExceptionCallbacks ExceptionCallbacks { get; }
     private readonly PostIngressQueue _postIngress = new();
     #endregion
 
@@ -101,6 +103,8 @@ public sealed partial class LayerRuntime : IDisposable
         Tools = new LayerToolRegistry(this);
         Services = new WorldServiceRoot(this);
         InitializeEcsWorld();
+        ExceptionHub = new LayerExceptionHub();
+        ExceptionCallbacks = new LayerHubExceptionCallbacks();
         LayerHub.Internal_Register(this);
     }
 
@@ -308,6 +312,9 @@ public sealed partial class LayerRuntime : IDisposable
         }
 
         EcsScheduler?.DrainResults(EcsOptions.MaxResultsDrainPerPump);
+
+        // Drain unified exception queue (main thread)
+        ExceptionHub.DrainAndDispatch(ExceptionCallbacks);
 
         // 1. Time tick
         _timer?.Tick(deltaTime, _timerSink!);
@@ -550,6 +557,11 @@ public sealed partial class LayerRuntime : IDisposable
     #endregion
 
     #region Lifecycle - Dispose
+    public void RequestStop()
+    {
+        ScopeHost?.Stop();
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
