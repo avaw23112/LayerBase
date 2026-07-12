@@ -172,14 +172,20 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         foreach (var use in validUses)
         {
             var uniqueKey = $"{use.ProviderType.ToDisplayString()}_{use.LocalKey}";
+
+            var providerAssembly = use.ProviderType.ContainingAssembly;
+            var currentAssembly = compilation.Assembly;
+            bool isCrossAssembly = providerAssembly != null && currentAssembly != null &&
+                                   !SymbolEqualityComparer.Default.Equals(providerAssembly, currentAssembly);
+
             if (publishMap.TryGetValue(uniqueKey, out var publish))
             {
-                if (!IsTypeCompatible(publish.Type, use.Type))
+                if (!IsTypeCompatible(compilation, publish.Type, use.Type))
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, use.Location, use.LocalKey, use.Type.ToDisplayString(), publish.Type.ToDisplayString()));
                 }
             }
-            else
+            else if (!isCrossAssembly)
             {
                 spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OrphanUse, use.Location, use.LocalKey));
             }
@@ -195,25 +201,15 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iLayerContextSymbol));
     }
 
-    private static bool IsTypeCompatible(ITypeSymbol source, ITypeSymbol target)
+    private static bool IsTypeCompatible(Compilation compilation, ITypeSymbol source, ITypeSymbol target)
     {
-        return SymbolEqualityComparer.Default.Equals(source, target) ||
-               target.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, source)) ||
-               source.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, target)) ||
-               InheritsFrom(source, target);
-    }
+        if (SymbolEqualityComparer.Default.Equals(source, target))
+            return true;
 
-    private static bool InheritsFrom(ITypeSymbol source, ITypeSymbol target)
-    {
-        for (var current = source; current != null; current = current.BaseType)
-        {
-            if (SymbolEqualityComparer.Default.Equals(current, target))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        var conversion = compilation.ClassifyConversion(source, target);
+        return conversion.IsImplicit ||
+               conversion.IsIdentity ||
+               conversion.IsBoxing;
     }
 
     private static bool IsPartialType(INamedTypeSymbol typeSymbol)
