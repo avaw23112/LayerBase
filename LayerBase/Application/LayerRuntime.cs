@@ -441,7 +441,7 @@ public sealed partial class LayerRuntime : IDisposable
             ScopeHost?.Pump(deltaTime);
 
             RuntimeFrameBudget actorBudget = default;
-            DrainScopeActorCommands();
+            DrainActorCommands();
             Actors.Pump(
                 deltaTime: deltaTime,
                 fixedDeltaTime: 0f,
@@ -512,7 +512,7 @@ public sealed partial class LayerRuntime : IDisposable
                 ? _fixedUpdateOptions.FixedDeltaTime
                 : 0f;
 
-            DrainScopeActorCommands();
+            DrainActorCommands();
             Actors.Pump(
                 deltaTime: deltaTime,
                 fixedDeltaTime: actorFixedDeltaTime,
@@ -763,7 +763,8 @@ public sealed partial class LayerRuntime : IDisposable
         _disposed = true;
 
         _postIngress.Clear();
-        ClearScopeActorCommands();
+        _actorEventInbox.Clear();
+        _actorLifecycleInbox.Clear();
         EcsScheduler.Dispose();
         Worker.Dispose();
         ScopeHost?.Dispose();

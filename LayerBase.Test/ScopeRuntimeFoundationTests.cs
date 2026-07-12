@@ -632,7 +632,7 @@ public sealed class ScopeRuntimeFoundationTests
         layerRuntime.Actors.Pump(0.016f, 0f, false, ref budget);
         Assert.That(ScopeProjectedActor.Received, Is.Empty);
 
-        Assert.That(layerRuntime.DrainScopeActorCommands(), Is.EqualTo(1));
+        Assert.That(layerRuntime.DrainActorCommands(), Is.EqualTo(1));
         layerRuntime.Actors.Pump(0.016f, 0f, false, ref budget);
 
         Assert.That(ScopeProjectedActor.Received, Has.Count.EqualTo(1));

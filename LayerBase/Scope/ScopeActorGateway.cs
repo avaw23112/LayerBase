@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using LayerBase;
 using LayerBase.Actor;
+using LayerBase.Actor.RuntimeCommands;
 
 namespace LayerBase.Scope;
 
@@ -34,34 +35,45 @@ public sealed class ScopeActorGateway
     public void PostTo<TEvent>(ActorId actorId, in TEvent value)
         where TEvent : struct
     {
-        if (TryEnqueueRuntimeCommand(new RuntimeActorPostCommand<TEvent>(actorId, in value)))
+        if (_runtime == null || !ReferenceEquals(_runtime.Actors, _world))
         {
+            _world.PostTo(actorId, in value);
             return;
         }
 
-        _world.PostTo(actorId, in value);
+        var capturedValue = value;
+        Action<ActorWorld> postAction = world => world.PostTo(actorId, in capturedValue);
+        int payloadHandle = ActorCommandPayloadStorage.Store(postAction);
+        var envelope = new ActorCommandEnvelope(
+            ActorCommandKind.Post,
+            actorId,
+            routeId: 0,
+            payloadHandle: payloadHandle);
+        _runtime.EnqueueActorEvent(envelope);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostToMany<TEvent>(ReadOnlySpan<ActorId> actorIds, in TEvent value)
         where TEvent : struct
     {
-        if (TryEnqueueRuntimeCommand(new RuntimeActorPostManyCommand<TEvent>(actorIds, in value)))
+        if (_runtime == null || !ReferenceEquals(_runtime.Actors, _world))
         {
+            _world.PostToMany(actorIds, in value);
             return;
         }
 
-        _world.PostToMany(actorIds, in value);
-    }
-
-    private bool TryEnqueueRuntimeCommand(IRuntimeActorCommand command)
-    {
-        if (_runtime == null || !ReferenceEquals(_runtime.Actors, _world))
+        for (int i = 0; i < actorIds.Length; i++)
         {
-            return false;
+            var capturedValue = value;
+            ActorId capturedId = actorIds[i];
+            Action<ActorWorld> postAction = world => world.PostTo(capturedId, in capturedValue);
+            int payloadHandle = ActorCommandPayloadStorage.Store(postAction);
+            var envelope = new ActorCommandEnvelope(
+                ActorCommandKind.Post,
+                capturedId,
+                routeId: 0,
+                payloadHandle: payloadHandle);
+            _runtime.EnqueueActorEvent(envelope);
         }
-
-        _runtime.EnqueueScopeActorCommand(command);
-        return true;
     }
 }

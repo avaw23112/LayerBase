@@ -37,7 +37,7 @@ public class SharedFieldFixer : CodeFixProvider
 
         context.RegisterCodeFix(
             CodeAction.Create(
-                "Sync ScopeRead view with [Publish] source",
+                "Sync field type with [Provide] source",
                 c => FixFieldTypeAsync(context.Document, fieldDeclaration, diagnostic, c),
                 nameof(SharedFieldFixer)),
             diagnostic);
@@ -56,7 +56,7 @@ public class SharedFieldFixer : CodeFixProvider
         if (lastQuoteIndex > prevQuoteIndex && prevQuoteIndex != -1)
             targetType = message.Substring(prevQuoteIndex + 1, lastQuoteIndex - prevQuoteIndex - 1);
 
-        var newType = SyntaxFactory.ParseTypeName($"LayerBase.Scope.ScopeRead<{targetType}>");
+        var newType = SyntaxFactory.ParseTypeName(targetType);
         var newField = field.WithDeclaration(field.Declaration.WithType(newType));
 
         var newRoot = root.ReplaceNode(field, newField.WithAdditionalAnnotations(Formatter.Annotation));

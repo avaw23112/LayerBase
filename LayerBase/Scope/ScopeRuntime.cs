@@ -11,6 +11,9 @@ using LayerBase.DI.Options;
 using LayerBase.ECS.Runtime;
 using LayerBase.ECS.Runtime.Query;
 using LayerBase.Event.Delay;
+using LayerBase.Scope.Completion;
+using LayerBase.Scope.Lifecycle;
+using LayerBase.Scope.Queue;
 
 namespace LayerBase.Scope;
 
@@ -26,12 +29,10 @@ public enum ScopeInboxKind
 
 public sealed class ScopeRuntime : IDisposable
 {
-    private readonly IBoundedQueue<ScopePostMessage> _postInbox;
-    private readonly IBoundedQueue<ScopeCallMessage> _callInbox;
-    private readonly IBoundedQueue<LayerContinuation> _continuations;
-    private readonly IBoundedQueue<float> _manualPumps;
-    private readonly Queue<LayerContinuation> _continuationOverflow = new();
-    private readonly object _continuationOverflowGate = new();
+    private readonly IClosableBoundedQueue<ScopePostMessage> _postInbox;
+    private readonly IClosableBoundedQueue<ScopeCallMessage> _callInbox;
+    private readonly ReliableContinuationInbox _continuations;
+    private readonly IClosableBoundedQueue<float> _manualPumps;
     private ScopeContextPlan[] _contextPlans = Array.Empty<ScopeContextPlan>();
     private ScopeServiceProvider? _serviceProvider;
     private ScopeSubscriptionRegistry? _subscriptionRegistry;
@@ -45,11 +46,8 @@ public sealed class ScopeRuntime : IDisposable
     private Thread? _workerThread;
     private readonly ActorWorld _actorWorld;
     private readonly bool _ownsActorWorld;
-    private int _startRequested;
-    private int _stopRequested;
-    private int _stopCleanupCompleted;
-    private volatile bool _stopped;
-    private volatile bool _disposed;
+    private readonly object _lifecycleGate = new();
+    private ScopeRuntimeState _state = ScopeRuntimeState.Created;
     private volatile bool _workerRunning;
 
     public ScopeRuntime(
@@ -94,10 +92,10 @@ public sealed class ScopeRuntime : IDisposable
         PostInboxKind = ScopeInboxKind.Locked;
         ContinuationInboxKind = ScopeInboxKind.Locked;
 
-        _postInbox = CreateQueue<ScopePostMessage>(PostInboxKind, options.PostQueueCapacity);
-        _callInbox = CreateQueue<ScopeCallMessage>(PostInboxKind, options.CallQueueCapacity);
-        _continuations = CreateQueue<LayerContinuation>(ContinuationInboxKind, options.ContinuationQueueCapacity);
-        _manualPumps = CreateQueue<float>(ScopeInboxKind.Locked, options.ContinuationQueueCapacity);
+        _postInbox = new ClosableLockedRingQueue<ScopePostMessage>(options.PostQueueCapacity);
+        _callInbox = new ClosableLockedRingQueue<ScopeCallMessage>(options.CallQueueCapacity);
+        _continuations = new ReliableContinuationInbox(options.ContinuationQueueCapacity);
+        _manualPumps = new ClosableLockedRingQueue<float>(options.ContinuationQueueCapacity);
         _postDispatcher = postDispatcher;
         _callDispatcher = callDispatcher;
 
@@ -136,7 +134,9 @@ public sealed class ScopeRuntime : IDisposable
     internal ScopeServiceProvider ServiceProvider =>
         _serviceProvider ?? throw new InvalidOperationException("Scope service provider is not ready.");
 
-    internal ScopeResourceTable Resources { get; } = new();
+    internal ScopeResourceRegistry ResourceRegistry { get; } = new();
+
+    internal ScopeAwaitRegistry AwaitRegistry { get; } = new();
 
     public EventCenter EventCenter { get; }
 
@@ -166,14 +166,13 @@ public sealed class ScopeRuntime : IDisposable
 
     public int CallInboxCount => _callInbox.Count;
 
-    public int ContinuationCount
+    public int ContinuationCount => _continuations.Count;
+
+    private ScopeRuntimeState State
     {
         get
         {
-            lock (_continuationOverflowGate)
-            {
-                return _continuations.Count + _continuationOverflow.Count;
-            }
+            lock (_lifecycleGate) return _state;
         }
     }
 
@@ -274,12 +273,10 @@ public sealed class ScopeRuntime : IDisposable
     public void Start()
     {
         ThrowIfDisposed();
-        if (Interlocked.CompareExchange(ref _startRequested, 1, 0) != 0)
+        if (!TryTransition(ScopeRuntimeState.Created, ScopeRuntimeState.Starting))
         {
             return;
         }
-
-        _stopped = false;
 
         if (Descriptor.Threading == ScopeThreadingMode.Worker)
         {
@@ -294,18 +291,19 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         ExecuteInScope(StartScope);
+        ForceTransition(ScopeRuntimeState.Running);
     }
 
     public void Pump(float deltaTime)
     {
         ThrowIfDisposed();
-        if (_stopped || Descriptor.Threading == ScopeThreadingMode.Worker)
+        if (State >= ScopeRuntimeState.Stopped || Descriptor.Threading == ScopeThreadingMode.Worker)
         {
-            if (!_stopped &&
+            if (State < ScopeRuntimeState.Stopped &&
                 Descriptor.Threading == ScopeThreadingMode.Worker &&
                 Descriptor.Clock == ScopeClockMode.Manual)
             {
-                if (!_manualPumps.TryEnqueue(deltaTime))
+                if (_manualPumps.TryEnqueue(deltaTime) != QueueEnqueueResult.Accepted)
                 {
                     throw new InvalidOperationException(
                         $"Scope '{Descriptor.Name}' manual pump queue is full.");
@@ -320,18 +318,18 @@ public sealed class ScopeRuntime : IDisposable
 
     public void Stop()
     {
-        if (_disposed)
+        if (State >= ScopeRuntimeState.Disposing)
         {
             return;
         }
 
-        if (Interlocked.Exchange(ref _stopRequested, 1) != 0)
+        if (State >= ScopeRuntimeState.StopRequested)
         {
             JoinWorkerIfNeeded();
             return;
         }
 
-        _stopped = true;
+        ForceTransition(ScopeRuntimeState.StopRequested);
         CloseIngressQueues();
         _workerRunning = false;
 
@@ -355,23 +353,13 @@ public sealed class ScopeRuntime : IDisposable
     public bool TryPost(ScopePostMessage message)
     {
         ThrowIfDisposed();
-        if (_stopped)
-        {
-            return false;
-        }
-
-        return _postInbox.TryEnqueue(message);
+        return _postInbox.TryEnqueue(message) == QueueEnqueueResult.Accepted;
     }
 
     public bool TryCall(ScopeCallMessage message)
     {
         ThrowIfDisposed();
-        if (_stopped)
-        {
-            return false;
-        }
-
-        return _callInbox.TryEnqueue(message);
+        return _callInbox.TryEnqueue(message) == QueueEnqueueResult.Accepted;
     }
 
     public bool TryEnqueueContinuation(Action continuation)
@@ -391,27 +379,9 @@ public sealed class ScopeRuntime : IDisposable
     public bool TryEnqueueContinuation(in LayerContinuation continuation)
     {
         if (continuation.Action == null)
-        {
             throw new ArgumentNullException(nameof(continuation));
-        }
-
         ThrowIfDisposed();
-        if (_stopped)
-        {
-            return false;
-        }
-
-        if (_continuations.TryEnqueue(continuation))
-        {
-            return true;
-        }
-
-        lock (_continuationOverflowGate)
-        {
-            _continuationOverflow.Enqueue(continuation);
-        }
-
-        return true;
+        return _continuations.TryEnqueue(continuation);
     }
 
     public TimerHandle SchedulePost<T>(
@@ -442,15 +412,38 @@ public sealed class ScopeRuntime : IDisposable
 
     public void Dispose()
     {
-        if (_disposed)
+        ScopeRuntimeState previousState;
+        lock (_lifecycleGate)
         {
-            return;
+            if (_state >= ScopeRuntimeState.Disposing)
+            {
+                return;
+            }
+
+            previousState = _state;
+            _state = ScopeRuntimeState.Disposing;
         }
 
-        Stop();
-        _disposed = true;
+        CloseIngressQueues();
+        _workerRunning = false;
+
+        if (Descriptor.Threading == ScopeThreadingMode.Worker && _workerThread != null)
+        {
+            if (!ReferenceEquals(Thread.CurrentThread, _workerThread))
+            {
+                _workerThread.Join();
+                _workerThread = null;
+            }
+        }
+
+        if (previousState < ScopeRuntimeState.Stopped)
+        {
+            ExecuteStopInternalOnce();
+        }
+
         _subscriptionRegistry?.Dispose();
         _subscriptionRegistry = null;
+        AwaitRegistry.Close();
         EcsScheduler?.Dispose();
         _context?.Dispose();
         Timer.Dispose();
@@ -462,6 +455,11 @@ public sealed class ScopeRuntime : IDisposable
         {
             _actorWorld.Dispose();
         }
+
+        if (_state < ScopeRuntimeState.Disposed)
+        {
+            ForceTransition(ScopeRuntimeState.Disposed);
+        }
     }
 
     private void WorkerLoop()
@@ -472,6 +470,7 @@ public sealed class ScopeRuntime : IDisposable
             long lastTicks = stopwatch.ElapsedTicks;
 
             ExecuteInScope(StartScope);
+            ForceTransition(ScopeRuntimeState.Running);
 
             if (Descriptor.Clock == ScopeClockMode.Manual)
             {
@@ -493,8 +492,8 @@ public sealed class ScopeRuntime : IDisposable
         {
             ReportException(ex, -1, LayerExceptionPhase.WorkerLoop, LayerQueueKind.None, -1);
             _workerRunning = false;
-            ExecuteStopInternalOnce();
-            _stopped = true;
+            ForceTransition(ScopeRuntimeState.Faulted);
+            ExecuteInScope(StopInternal);
         }
     }
 
@@ -689,17 +688,17 @@ public sealed class ScopeRuntime : IDisposable
         }
         else
         {
-            _postInbox.Clear();
+            while (_postInbox.TryDequeue(out _)) { }
             FailPendingCalls(CreateScopeStoppedException("stopped before pending call was dispatched."));
             _continuations.Clear();
-            ClearContinuationOverflow();
-            _manualPumps.Clear();
+            while (_manualPumps.TryDequeue(out _)) { }
         }
 
         _subscriptionRegistry?.Dispose();
         _subscriptionRegistry = null;
         DelayManager.Clear();
-        Resources.CloseAndClear();
+        AwaitRegistry.CancelAll(CreateScopeStoppedException("scope is stopping."));
+        ResourceRegistry.CloseAndUnbind();
         DisposeContexts();
         DisposeServices();
     }
@@ -760,9 +759,13 @@ public sealed class ScopeRuntime : IDisposable
 
     private void RequestStop()
     {
-        _stopped = true;
+        if (State >= ScopeRuntimeState.StopRequested)
+        {
+            return;
+        }
+
+        ForceTransition(ScopeRuntimeState.StopRequested);
         _workerRunning = false;
-        Interlocked.Exchange(ref _stopRequested, 1);
 
         if (Descriptor.Threading != ScopeThreadingMode.Worker)
         {
@@ -791,17 +794,29 @@ public sealed class ScopeRuntime : IDisposable
     {
         _postInbox.Close();
         _callInbox.Close();
+        _continuations.Close();
         _manualPumps.Close();
     }
 
     private void ExecuteStopInternalOnce()
     {
-        if (Interlocked.Exchange(ref _stopCleanupCompleted, 1) != 0)
+        lock (_lifecycleGate)
         {
-            return;
+            if (_state >= ScopeRuntimeState.Stopped)
+            {
+                return;
+            }
+
+            if (_state < ScopeRuntimeState.StopRequested)
+            {
+                _state = ScopeRuntimeState.StopRequested;
+            }
+
+            _state = ScopeRuntimeState.Stopping;
         }
 
         ExecuteInScope(StopInternal);
+        ForceTransition(ScopeRuntimeState.Stopped);
     }
 
     private InvalidOperationException CreateScopeStoppedException(string message)
@@ -862,13 +877,6 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         Thread.Sleep(1);
-    }
-
-    private static IBoundedQueue<T> CreateQueue<T>(ScopeInboxKind kind, int capacity)
-    {
-        return kind == ScopeInboxKind.Locked
-            ? new LockedBoundedRingQueue<T>(capacity)
-            : new LocalRingQueue<T>(capacity);
     }
 
     private void BindServices()
@@ -932,11 +940,6 @@ public sealed class ScopeRuntime : IDisposable
     private void RebuildScopeResources()
     {
         ScopeResourceBinder.Bind(this);
-    }
-
-    internal TView GetScopeResource<TView>(int slot, int generation)
-    {
-        return Resources.Get<TView>(this, slot, generation);
     }
 
     private void RebindSubscriptions()
@@ -1111,34 +1114,6 @@ public sealed class ScopeRuntime : IDisposable
         {
             InvokeContinuation(continuation);
         }
-
-        while (TryDequeueContinuationOverflow(out LayerContinuation continuation))
-        {
-            InvokeContinuation(continuation);
-        }
-    }
-
-    private bool TryDequeueContinuationOverflow(out LayerContinuation continuation)
-    {
-        lock (_continuationOverflowGate)
-        {
-            if (_continuationOverflow.Count == 0)
-            {
-                continuation = default;
-                return false;
-            }
-
-            continuation = _continuationOverflow.Dequeue();
-            return true;
-        }
-    }
-
-    private void ClearContinuationOverflow()
-    {
-        lock (_continuationOverflowGate)
-        {
-            _continuationOverflow.Clear();
-        }
     }
 
     private void InvokeContinuation(in LayerContinuation continuation)
@@ -1162,10 +1137,25 @@ public sealed class ScopeRuntime : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
+        if (State >= ScopeRuntimeState.Disposing)
         {
             throw new ObjectDisposedException(nameof(ScopeRuntime));
         }
+    }
+
+    private bool TryTransition(ScopeRuntimeState from, ScopeRuntimeState to)
+    {
+        lock (_lifecycleGate)
+        {
+            if (_state != from) return false;
+            _state = to;
+            return true;
+        }
+    }
+
+    private void ForceTransition(ScopeRuntimeState to)
+    {
+        lock (_lifecycleGate) _state = to;
     }
 
     private sealed class ScopeTimerSink : IExpiredTimerSink<ITimerAction>

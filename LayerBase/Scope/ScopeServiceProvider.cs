@@ -1,12 +1,14 @@
 using System.Reflection;
 using LayerBase.DI;
 using LayerBase.DI.Options;
+using LayerBase.Scope.DI;
 
 namespace LayerBase.Scope;
 
 internal sealed class ScopeServiceProvider : LayerBase.DI.IServiceProvider, IDisposable
 {
     private readonly Dictionary<Type, object> _instances;
+    private readonly object[]? _slotInstances;
     private bool _disposed;
 
     public ScopeServiceProvider(
@@ -23,6 +25,19 @@ internal sealed class ScopeServiceProvider : LayerBase.DI.IServiceProvider, IDis
         for (int i = 0; i < contexts.Count; i++)
         {
             Register(contexts[i].GetType(), contexts[i]);
+        }
+    }
+
+    public ScopeServiceProvider(object[] instances)
+    {
+        _instances = new Dictionary<Type, object>();
+        _slotInstances = instances ?? throw new ArgumentNullException(nameof(instances));
+        for (int i = 0; i < instances.Length; i++)
+        {
+            if (instances[i] != null)
+            {
+                Register(instances[i].GetType(), instances[i]);
+            }
         }
     }
 
@@ -60,6 +75,15 @@ internal sealed class ScopeServiceProvider : LayerBase.DI.IServiceProvider, IDis
         }
 
         return (T)service;
+    }
+
+    public T GetAt<T>(int slot) where T : class
+    {
+        if (_slotInstances != null && (uint)slot < (uint)_slotInstances.Length)
+        {
+            return (T)_slotInstances[slot];
+        }
+        return Get<T>();
     }
 
     public void InjectMembers(object instance)

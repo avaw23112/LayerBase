@@ -18,17 +18,17 @@ internal static class ScopeResourceBinder
             Type type = candidate.GetType();
             foreach (FieldInfo field in GetFields(type))
             {
-                PublishAttribute? publish = field.GetCustomAttribute<PublishAttribute>();
+                ProvideAttribute? provide = field.GetCustomAttribute<ProvideAttribute>();
                 FromAttribute? from = field.GetCustomAttribute<FromAttribute>();
-                if (publish != null && from != null)
+                if (provide != null && from != null)
                 {
                     throw new InvalidOperationException(
-                        $"Scope resource member '{type.FullName}.{field.Name}' cannot declare both [Publish] and [From].");
+                        $"Scope resource member '{type.FullName}.{field.Name}' cannot declare both [Provide] and [From].");
                 }
 
-                if (publish != null)
+                if (provide != null)
                 {
-                    AddPublishedResource(candidate, field, publish, published);
+                    AddPublishedResource(candidate, field, provide, published);
                 }
 
                 if (from != null)
@@ -39,36 +39,24 @@ internal static class ScopeResourceBinder
 
             foreach (PropertyInfo property in GetProperties(type))
             {
-                PublishAttribute? publish = property.GetCustomAttribute<PublishAttribute>();
-                if (publish != null)
+                ProvideAttribute? provide = property.GetCustomAttribute<ProvideAttribute>();
+                if (provide != null)
                 {
-                    AddPublishedResource(candidate, property, publish, published);
+                    AddPublishedResource(candidate, property, provide, published);
                 }
             }
         }
 
-        var ordered = published
-            .OrderBy(static item => item.Key.ProviderType.FullName, StringComparer.Ordinal)
-            .ThenBy(static item => item.Key.LocalKey, StringComparer.Ordinal)
-            .Select(static item => new ScopeResourceEntry(item.Key.ProviderType, item.Key.LocalKey, item.Value.Value))
-            .ToArray();
-        int generation = runtime.Resources.Initialize(ordered);
-        var slots = new Dictionary<(Type ProviderType, string LocalKey), int>();
-        for (int i = 0; i < ordered.Length; i++)
-        {
-            slots[(ordered[i].ProviderType, ordered[i].LocalKey)] = i;
-        }
-
         foreach ((object owner, FieldInfo field, FromAttribute attribute) in consumers)
         {
-            BindConsumer(runtime, generation, slots, published, owner, field, attribute);
+            BindConsumer(published, owner, field, attribute);
         }
     }
 
     private static void AddPublishedResource(
         object owner,
         FieldInfo field,
-        PublishAttribute attribute,
+        ProvideAttribute attribute,
         Dictionary<(Type ProviderType, string LocalKey), PublishedResource> published)
     {
         object? value = field.GetValue(owner);
@@ -78,7 +66,7 @@ internal static class ScopeResourceBinder
     private static void AddPublishedResource(
         object owner,
         PropertyInfo property,
-        PublishAttribute attribute,
+        ProvideAttribute attribute,
         Dictionary<(Type ProviderType, string LocalKey), PublishedResource> published)
     {
         MethodInfo? getter = property.GetMethod;
@@ -98,7 +86,7 @@ internal static class ScopeResourceBinder
         string memberName,
         Type resourceType,
         object? value,
-        PublishAttribute attribute,
+        ProvideAttribute attribute,
         Dictionary<(Type ProviderType, string LocalKey), PublishedResource> published)
     {
         if (value == null)
@@ -119,48 +107,27 @@ internal static class ScopeResourceBinder
     }
 
     private static void BindConsumer(
-        ScopeRuntime runtime,
-        int generation,
-        Dictionary<(Type ProviderType, string LocalKey), int> slots,
         Dictionary<(Type ProviderType, string LocalKey), PublishedResource> published,
         object owner,
         FieldInfo field,
         FromAttribute attribute)
     {
-        if (!field.FieldType.IsGenericType || field.FieldType.GetGenericTypeDefinition() != typeof(ScopeRead<>))
-        {
-            throw new InvalidOperationException(
-                $"Scope resource consumer '{owner.GetType().FullName}.{field.Name}' must use ScopeRead<TView>; direct resource access is not allowed.");
-        }
-
         var key = (attribute.ProviderType, attribute.LocalKey);
-        if (!slots.TryGetValue(key, out int slot) || !published.TryGetValue(key, out PublishedResource resource))
+        if (!published.TryGetValue(key, out PublishedResource resource))
         {
             throw new InvalidOperationException(
                 $"Scope resource consumer '{owner.GetType().FullName}.{field.Name}' could not find a published scope resource " +
                 $"for providerType '{attribute.ProviderType.FullName}' and localKey '{attribute.LocalKey}'.");
         }
 
-        Type viewType = field.FieldType.GetGenericArguments()[0];
-        if (!viewType.IsInstanceOfType(resource.Value))
+        if (!field.FieldType.IsInstanceOfType(resource.Value))
         {
             throw new InvalidOperationException(
                 $"Scope resource consumer '{owner.GetType().FullName}.{field.Name}' cannot read provider '{attribute.ProviderType.FullName}.{attribute.LocalKey}' " +
-                $"as '{viewType.FullName}'.");
+                $"as '{field.FieldType.FullName}'.");
         }
 
-        ConstructorInfo? constructor = field.FieldType.GetConstructor(
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            types: [typeof(ScopeRuntime), typeof(int), typeof(int)],
-            modifiers: null);
-        if (constructor == null)
-        {
-            throw new InvalidOperationException($"ScopeRead constructor for '{field.FieldType.FullName}' could not be resolved.");
-        }
-
-        object reader = constructor.Invoke([runtime, slot, generation]);
-        field.SetValue(owner, reader);
+        field.SetValue(owner, resource.Value);
     }
 
     private static IEnumerable<FieldInfo> GetFields(Type type)

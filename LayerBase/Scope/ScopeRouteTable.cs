@@ -1,3 +1,4 @@
+using System.Threading;
 using LayerBase.Async;
 
 namespace LayerBase.Scope;
@@ -10,7 +11,10 @@ public sealed class ScopeRouteTable : IDisposable
     private readonly ScopeRuntime?[] _scopes;
     private readonly IReadOnlyDictionary<Type, int>? _scopeIdsByType;
     private readonly ScopeTypeIdResolver? _scopeIdResolver;
-    private readonly int _generation;
+
+    // High 32 bits: RouteTable Generation
+    // Low 32 bits: (reserved)
+    private long _cachedEntry;
     private bool _disposed;
 
     public ScopeRouteTable(
@@ -23,7 +27,8 @@ public sealed class ScopeRouteTable : IDisposable
             throw new ArgumentNullException(nameof(scopes));
         }
 
-        _generation = Interlocked.Increment(ref s_generationCounter);
+        int generation = Interlocked.Increment(ref s_generationCounter);
+        Interlocked.Exchange(ref _cachedEntry, PackEntry(generation, 0));
         int maxScopeId = -1;
         for (int i = 0; i < scopes.Count; i++)
         {
@@ -64,7 +69,14 @@ public sealed class ScopeRouteTable : IDisposable
         }
     }
 
-    public int Generation => _generation;
+    public int Generation
+    {
+        get
+        {
+            UnpackEntry(Volatile.Read(ref _cachedEntry), out int generation, out _);
+            return generation;
+        }
+    }
 
     public bool TryGetScope(int scopeId, out ScopeRuntime scope)
     {
@@ -87,7 +99,8 @@ public sealed class ScopeRouteTable : IDisposable
     public ScopeRef<TScope> GetScopeRef<TScope>()
     {
         ThrowIfDisposed();
-        if (!ScopeTypeRouteCache<TScope>.TryGet(_generation, out int targetScopeId))
+        UnpackEntry(Volatile.Read(ref _cachedEntry), out int generation, out _);
+        if (!ScopeTypeRouteCache<TScope>.TryGet(generation, out int targetScopeId))
         {
             if (!TryGetScopeId(typeof(TScope), out targetScopeId))
             {
@@ -95,7 +108,7 @@ public sealed class ScopeRouteTable : IDisposable
                     $"Scope type '{typeof(TScope).FullName}' is not registered.");
             }
 
-            ScopeTypeRouteCache<TScope>.Set(_generation, targetScopeId);
+            ScopeTypeRouteCache<TScope>.Set(generation, targetScopeId);
         }
 
         return new ScopeRef<TScope>(this, targetScopeId);
@@ -104,7 +117,8 @@ public sealed class ScopeRouteTable : IDisposable
     public bool TryGetScopeId<TScope>(out int scopeId)
     {
         ThrowIfDisposed();
-        if (ScopeTypeRouteCache<TScope>.TryGet(_generation, out scopeId))
+        UnpackEntry(Volatile.Read(ref _cachedEntry), out int generation, out _);
+        if (ScopeTypeRouteCache<TScope>.TryGet(generation, out scopeId))
         {
             return true;
         }
@@ -112,7 +126,7 @@ public sealed class ScopeRouteTable : IDisposable
         bool found = TryGetScopeId(typeof(TScope), out scopeId);
         if (found)
         {
-            ScopeTypeRouteCache<TScope>.Set(_generation, scopeId);
+            ScopeTypeRouteCache<TScope>.Set(generation, scopeId);
         }
 
         return found;
@@ -135,6 +149,17 @@ public sealed class ScopeRouteTable : IDisposable
     public void Dispose()
     {
         _disposed = true;
+    }
+
+    private static long PackEntry(int generation, int scopeId)
+    {
+        return ((long)generation << 32) | (uint)scopeId;
+    }
+
+    private static void UnpackEntry(long entry, out int generation, out int scopeId)
+    {
+        generation = (int)(entry >> 32);
+        scopeId = (int)(entry & 0xFFFFFFFF);
     }
 
     private bool TryGetScopeId(Type scopeType, out int scopeId)

@@ -1,5 +1,6 @@
 using LayerBase.DI;
 using LayerBase.Scope;
+using LayerBase.Scope.Resources;
 
 namespace LayerBase.Test;
 
@@ -7,7 +8,7 @@ namespace LayerBase.Test;
 public sealed class ScopeResourceBindingTests
 {
     [Test]
-    public void Same_scope_publish_and_from_bind_scope_read_capability()
+    public void Same_scope_provide_and_from_bind_direct_resource()
     {
         using var runtime = new ScopeRuntime(
             ScopeDescriptors.Main,
@@ -35,20 +36,22 @@ public sealed class ScopeResourceBindingTests
     }
 
     [Test]
-    public void From_requires_scope_read_and_rejects_direct_resource_access()
+    public void From_binds_direct_resource_type_successfully()
     {
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => new ScopeRuntime(
+        using var runtime = new ScopeRuntime(
             ScopeDescriptors.Main,
             new IService[]
             {
                 new ScopeResourcePublisherService(),
                 new DirectResourceConsumerService()
-            }).SetContexts([
-                new PlayerStorageContext(),
-                new DirectConsumerContext()
-            ]))!;
+            });
+        runtime.SetContexts([
+            new PlayerStorageContext(),
+            new DirectConsumerContext()
+        ]);
 
-        Assert.That(ex.Message, Does.Contain("ScopeRead"));
+        var consumer = runtime.Contexts.OfType<DirectConsumerContext>().Single();
+        Assert.That(consumer.HasResource, Is.True);
     }
 
     [Test]
@@ -75,7 +78,7 @@ public sealed class ScopeResourceBindingTests
     }
 
     [Test]
-    public void Scope_read_rejects_access_outside_owner_scope()
+    public void Access_outside_owner_scope_throws()
     {
         using var runtime = new ScopeRuntime(
             ScopeDescriptors.Main,
@@ -96,7 +99,7 @@ public sealed class ScopeResourceBindingTests
     }
 
     [Test]
-    public void Scope_read_rejects_access_after_scope_stops()
+    public void Resource_is_unbound_after_scope_stops()
     {
         var runtime = new ScopeRuntime(
             ScopeDescriptors.Main,
@@ -113,16 +116,13 @@ public sealed class ScopeResourceBindingTests
         var consumer = runtime.Contexts.OfType<PlayerQueryContext>().Single();
         runtime.Stop();
 
-        using (ScopeExecution.Enter(runtime))
-        {
-            Assert.Throws<ScopeResourceClosedException>(() => consumer.Count());
-        }
+        Assert.That(consumer.HasResource, Is.False);
 
         runtime.Dispose();
     }
 
     [Test]
-    public void Duplicate_publishers_in_same_scope_fail_build()
+    public void Duplicate_providers_in_same_scope_fail_build()
     {
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => new ScopeRuntime(
             ScopeDescriptors.Main,
@@ -139,7 +139,7 @@ public sealed class ScopeResourceBindingTests
     }
 
     [Test]
-    public void Missing_publisher_fails_build()
+    public void Missing_provider_fails_build()
     {
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => new ScopeRuntime(
             ScopeDescriptors.Main,
@@ -198,7 +198,7 @@ public sealed class ScopeResourceBindingTests
 
     private sealed class PlayerStorageContext : ILayerContext
     {
-        [Publish("players")]
+        [Provide("players")]
         private readonly List<int> _players = new();
 
         public void Add(int playerId)
@@ -207,37 +207,61 @@ public sealed class ScopeResourceBindingTests
         }
     }
 
-    private sealed class PlayerQueryContext : ILayerContext
+    private sealed class PlayerQueryContext : ILayerContext, IScopeObjectBindingAccessor, IDisposable
     {
+        public ScopeObjectBinding? __ScopeObjectBinding { get; set; }
+
         [From(typeof(PlayerStorageContext), "players")]
-        private ScopeRead<IReadOnlyList<int>> _players = default!;
+        private IReadOnlyList<int>? _players;
+
+        public bool HasResource => _players != null;
 
         public int Count()
         {
-            return _players.Value.Count;
+            RequireAccess();
+            return _players?.Count ?? 0;
         }
 
         public bool Contains(int playerId)
         {
-            return _players.Value.Contains(playerId);
+            RequireAccess();
+            return _players?.Contains(playerId) ?? false;
+        }
+
+        public void Dispose()
+        {
+            _players = null;
+        }
+
+        private void RequireAccess()
+        {
+            if (__ScopeObjectBinding == null)
+                return;
+            if (!ReferenceEquals(ScopeExecution.Current.Runtime, __ScopeObjectBinding.Scope))
+                throw new InvalidOperationException(
+                    $"Scope '{__ScopeObjectBinding.Scope.Descriptor.Name}' local API must be called from its owner scope execution context.");
         }
     }
 
-    private sealed class DirectConsumerContext : ILayerContext
+    private sealed class DirectConsumerContext : ILayerContext, IScopeObjectBindingAccessor
     {
+        public ScopeObjectBinding? __ScopeObjectBinding { get; set; }
+
         [From(typeof(PlayerStorageContext), "players")]
-        private IReadOnlyList<int> _players = default!;
+        private IReadOnlyList<int>? _players;
+
+        public bool HasResource => _players != null;
     }
 
     private sealed class DuplicatePublisherContext : ILayerContext
     {
-        [Publish("duplicate")]
+        [Provide("duplicate")]
         private readonly Dictionary<int, int> _state = new();
     }
 
     private sealed class MissingPublisherConsumerContext : ILayerContext
     {
         [From(typeof(PlayerStorageContext), "missing")]
-        private ScopeRead<IReadOnlyList<int>> _players = default!;
+        private IReadOnlyList<int>? _players;
     }
 }

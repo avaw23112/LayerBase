@@ -1,9 +1,9 @@
 namespace LayerBase.DI;
 
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-public sealed class PublishAttribute : Attribute
+public sealed class ProvideAttribute : Attribute
 {
-    public PublishAttribute(string localKey)
+    public ProvideAttribute(string localKey)
     {
         if (string.IsNullOrWhiteSpace(localKey))
         {

@@ -1,88 +1,58 @@
-using System.Collections.Concurrent;
+using System;
 using LayerBase.Actor;
+using LayerBase.Actor.RuntimeCommands;
+using LayerBase.ECS.Projection;
 
 namespace LayerBase;
 
-internal interface IRuntimeActorCommand
-{
-    void Execute(ActorWorld world);
-}
-
-internal readonly struct RuntimeActorPostCommand<TEvent> : IRuntimeActorCommand
-    where TEvent : struct
-{
-    private readonly ActorId _actorId;
-    private readonly TEvent _value;
-
-    public RuntimeActorPostCommand(ActorId actorId, in TEvent value)
-    {
-        _actorId = actorId;
-        _value = value;
-    }
-
-    public void Execute(ActorWorld world)
-    {
-        world.PostTo(_actorId, in _value);
-    }
-}
-
-internal readonly struct RuntimeActorPostManyCommand<TEvent> : IRuntimeActorCommand
-    where TEvent : struct
-{
-    private readonly ActorId[] _actorIds;
-    private readonly TEvent _value;
-
-    public RuntimeActorPostManyCommand(ReadOnlySpan<ActorId> actorIds, in TEvent value)
-    {
-        _actorIds = actorIds.ToArray();
-        _value = value;
-    }
-
-    public void Execute(ActorWorld world)
-    {
-        world.PostToMany(_actorIds, in _value);
-    }
-}
-
 public sealed partial class LayerRuntime
 {
-    private readonly ConcurrentQueue<IRuntimeActorCommand> _scopeActorCommands = new();
+    private readonly ActorEventInbox _actorEventInbox = new(256);
+    private readonly ActorLifecycleInbox _actorLifecycleInbox = new(128);
 
-    internal void EnqueueScopeActorCommand(IRuntimeActorCommand command)
-    {
-        if (command == null)
-        {
-            throw new ArgumentNullException(nameof(command));
-        }
+    internal ActorEventInbox ActorEventInbox => _actorEventInbox;
+    internal ActorLifecycleInbox ActorLifecycleInbox => _actorLifecycleInbox;
 
-        if (_disposed)
-        {
-            return;
-        }
-
-        _scopeActorCommands.Enqueue(command);
-    }
-
-    internal int DrainScopeActorCommands(int maxCount = 0)
+    internal int DrainActorCommands(int maxEvents = 0, int maxLifecycle = 0)
     {
         int drained = 0;
-        while (_scopeActorCommands.TryDequeue(out IRuntimeActorCommand? command))
-        {
-            command.Execute(Actors);
-            drained++;
-            if (maxCount > 0 && drained >= maxCount)
-            {
-                break;
-            }
-        }
-
+        drained += _actorLifecycleInbox.Drain(ProcessLifecycleCommand, maxLifecycle);
+        drained += _actorEventInbox.Drain(ProcessEventCommand, maxEvents);
         return drained;
     }
 
-    private void ClearScopeActorCommands()
+    private void ProcessLifecycleCommand(ActorCommandEnvelope command)
     {
-        while (_scopeActorCommands.TryDequeue(out _))
+        switch (command.Kind)
         {
+            case ActorCommandKind.Disable:
+                Actors.DisableProjectedActor(command.ActorId);
+                break;
+            case ActorCommandKind.Release:
+                Actors.ReleaseProjectedActor(command.ActorId, ProjectedActorReleasePolicy.ReturnToPool);
+                break;
         }
+    }
+
+    private void ProcessEventCommand(ActorCommandEnvelope command)
+    {
+        if (command.Kind != ActorCommandKind.Post)
+            return;
+
+        Action<ActorWorld>? postAction = ActorCommandPayloadStorage.Retrieve<Action<ActorWorld>>(command.PayloadHandle);
+        postAction?.Invoke(Actors);
+        ActorCommandPayloadStorage.Free(command.PayloadHandle);
+    }
+
+    internal bool EnqueueActorEvent(ActorCommandEnvelope envelope)
+    {
+        if (_disposed) return false;
+        return _actorEventInbox.TryEnqueue(envelope);
+    }
+
+    internal bool EnqueueActorLifecycle(ActorCommandEnvelope envelope)
+    {
+        if (_disposed) return false;
+        return _actorLifecycleInbox.TryEnqueue(envelope);
     }
 }

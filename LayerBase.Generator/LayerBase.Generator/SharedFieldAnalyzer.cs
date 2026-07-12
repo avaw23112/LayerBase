@@ -10,13 +10,13 @@ namespace LayerBase.Generator;
 [Generator(LanguageNames.CSharp)]
 public sealed class SharedFieldAnalyzer : IIncrementalGenerator
 {
-    private const string PublishAttributeName = "LayerBase.DI.PublishAttribute";
+    private const string ProvideAttributeName = "LayerBase.DI.ProvideAttribute";
     private const string FromAttributeName = "LayerBase.DI.FromAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var publishMembers = context.SyntaxProvider.ForAttributeWithMetadataName(
-            PublishAttributeName,
+            ProvideAttributeName,
             static (node, _) => node is FieldDeclarationSyntax or PropertyDeclarationSyntax,
             static (ctx, _) => GetPublishInfo(ctx));
 
@@ -81,7 +81,8 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             localKey!,
             isPublish: false,
             fieldSymbol.Locations.FirstOrDefault() ?? Location.None,
-            IsLocalKeyLiteral(attr, argumentIndex: 1));
+            IsLocalKeyLiteral(attr, argumentIndex: 1),
+            fieldSymbol.IsReadOnly);
     }
 
     private static bool IsLocalKeyLiteral(AttributeData attr, int argumentIndex)
@@ -104,7 +105,16 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
 
         var iServiceSymbol = compilation.GetTypeByMetadataName("LayerBase.DI.IService");
         var iLayerContextSymbol = compilation.GetTypeByMetadataName("LayerBase.DI.ILayerContext");
-        var scopeReadSymbol = compilation.GetTypeByMetadataName("LayerBase.Scope.ScopeRead`1");
+
+        var checkedTypes = new HashSet<string>();
+        foreach (var item in allValidFields)
+        {
+            var typeKey = item.ContainingType.ToDisplayString();
+            if (checkedTypes.Add(typeKey) && !IsPartialType(item.ContainingType))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeNotPartial, item.Location, item.ContainingType.ToDisplayString()));
+            }
+        }
 
         foreach (var item in allValidFields)
         {
@@ -116,6 +126,22 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             if (iServiceSymbol != null && iLayerContextSymbol != null && !IsValidOwner(item.ContainingType, iServiceSymbol, iLayerContextSymbol))
             {
                 spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidOwnerType, item.Location, item.ContainingType.ToDisplayString()));
+            }
+        }
+
+        foreach (var publish in validPublishes)
+        {
+            if (publish.Type.IsValueType)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ProvideValueType, publish.Location, publish.Name, publish.Type.ToDisplayString()));
+            }
+        }
+
+        foreach (var use in validUses)
+        {
+            if (use.IsReadOnly)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.FromFieldReadonly, use.Location, use.Name));
             }
         }
 
@@ -133,20 +159,24 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             }
         }
 
+        var publishMemberKeys = new HashSet<string>(validPublishes.Select(p => $"{p.ContainingType.ToDisplayString()}_{p.Name}"));
         foreach (var use in validUses)
         {
-            if (!TryGetScopeReadViewType(use.Type, scopeReadSymbol, out ITypeSymbol? viewType))
+            var key = $"{use.ContainingType.ToDisplayString()}_{use.Name}";
+            if (publishMemberKeys.Contains(key))
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.FromRequiresScopeRead, use.Location, use.LocalKey, use.Type.ToDisplayString()));
-                continue;
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MemberHasBothAttributes, use.Location, use.Name));
             }
+        }
 
+        foreach (var use in validUses)
+        {
             var uniqueKey = $"{use.ProviderType.ToDisplayString()}_{use.LocalKey}";
             if (publishMap.TryGetValue(uniqueKey, out var publish))
             {
-                if (!IsTypeCompatible(publish.Type, viewType))
+                if (!IsTypeCompatible(publish.Type, use.Type))
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, use.Location, use.LocalKey, viewType.ToDisplayString(), publish.Type.ToDisplayString()));
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, use.Location, use.LocalKey, use.Type.ToDisplayString(), publish.Type.ToDisplayString()));
                 }
             }
             else
@@ -163,21 +193,6 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iServiceSymbol) ||
             SymbolEqualityComparer.Default.Equals(i, iLayerContextSymbol) ||
             SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iLayerContextSymbol));
-    }
-
-    private static bool TryGetScopeReadViewType(ITypeSymbol type, INamedTypeSymbol? scopeReadSymbol, out ITypeSymbol viewType)
-    {
-        if (scopeReadSymbol != null &&
-            type is INamedTypeSymbol named &&
-            named.IsGenericType &&
-            SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, scopeReadSymbol))
-        {
-            viewType = named.TypeArguments[0];
-            return true;
-        }
-
-        viewType = type;
-        return false;
     }
 
     private static bool IsTypeCompatible(ITypeSymbol source, ITypeSymbol target)
@@ -201,10 +216,24 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         return false;
     }
 
+    private static bool IsPartialType(INamedTypeSymbol typeSymbol)
+    {
+        foreach (var syntaxRef in typeSymbol.DeclaringSyntaxReferences)
+        {
+            if (syntaxRef.GetSyntax() is TypeDeclarationSyntax typeDecl &&
+                typeDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private sealed class ResourceInfo
     {
         public ResourceInfo(INamedTypeSymbol containingType, string name, ITypeSymbol type, ITypeSymbol providerType,
-                            string localKey, bool isPublish, Location? location, bool isLocalKeyLiteral)
+                            string localKey, bool isPublish, Location? location, bool isLocalKeyLiteral,
+                            bool isReadOnly = false)
         {
             ContainingType = containingType;
             Name = name;
@@ -214,6 +243,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             IsPublish = isPublish;
             Location = location;
             IsLocalKeyLiteral = isLocalKeyLiteral;
+            IsReadOnly = isReadOnly;
         }
 
         public INamedTypeSymbol ContainingType { get; }
@@ -224,14 +254,15 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public bool IsPublish { get; }
         public Location? Location { get; }
         public bool IsLocalKeyLiteral { get; }
+        public bool IsReadOnly { get; }
     }
 
     private static class Diagnostics
     {
         public static readonly DiagnosticDescriptor PublishConflict = new(
             "LBG401",
-            "Scope resource Publish conflict",
-            "LocalKey '{0}' is published by multiple owners: {1} and {2}. Scope resource keys must be unique within their provider type.",
+            "Scope resource Provide conflict",
+            "LocalKey '{0}' is provided by multiple owners: {1} and {2}. Scope resource keys must be unique within their provider type.",
             "Usage",
             DiagnosticSeverity.Error,
             true);
@@ -239,7 +270,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public static readonly DiagnosticDescriptor TypeMismatch = new(
             "LBG402",
             "Scope resource type mismatch",
-            "LocalKey '{0}' is consumed as '{1}' but published as '{2}'. ScopeRead<TView> view type must be compatible with the published resource.",
+            "LocalKey '{0}' is consumed as '{1}' but provided as '{2}'. The [From] field type must be compatible with the provided resource type.",
             "Usage",
             DiagnosticSeverity.Error,
             true);
@@ -247,7 +278,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public static readonly DiagnosticDescriptor OrphanUse = new(
             "LBG403",
             "Orphan scope resource From",
-            "LocalKey '{0}' is consumed via [From] but no [Publish] provider was found in this compilation.",
+            "LocalKey '{0}' is consumed via [From] but no [Provide] provider was found in this compilation.",
             "Usage",
             DiagnosticSeverity.Error,
             true);
@@ -255,7 +286,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public static readonly DiagnosticDescriptor InvalidOwnerType = new(
             "LBG404",
             "Invalid scope resource owner type",
-            "Scope resource owner '{0}' is invalid. Only IService or ILayerContext types can declare [Publish] or [From].",
+            "Scope resource owner '{0}' is invalid. Only IService or ILayerContext types can declare [Provide] or [From].",
             "Usage",
             DiagnosticSeverity.Error,
             true);
@@ -268,10 +299,34 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             DiagnosticSeverity.Warning,
             true);
 
-        public static readonly DiagnosticDescriptor FromRequiresScopeRead = new(
+        public static readonly DiagnosticDescriptor FromFieldReadonly = new(
             "LBG406",
-            "From requires ScopeRead",
-            "LocalKey '{0}' is consumed as '{1}'. [From] fields must use ScopeRead<TView>.",
+            "From field is readonly",
+            "Field '{0}' with [From] attribute must not be readonly.",
+            "Usage",
+            DiagnosticSeverity.Error,
+            true);
+
+        public static readonly DiagnosticDescriptor ProvideValueType = new(
+            "LBG409",
+            "Provide member is value type",
+            "Member '{0}' with [Provide] attribute has value type '{1}'. Scope resources must be reference types.",
+            "Usage",
+            DiagnosticSeverity.Error,
+            true);
+
+        public static readonly DiagnosticDescriptor TypeNotPartial = new(
+            "LBG410",
+            "Type must be partial",
+            "Type '{0}' must be declared as partial when using [Provide] or [From] attributes.",
+            "Usage",
+            DiagnosticSeverity.Error,
+            true);
+
+        public static readonly DiagnosticDescriptor MemberHasBothAttributes = new(
+            "LBG411",
+            "Member has both Provide and From",
+            "Member '{0}' cannot have both [Provide] and [From] attributes.",
             "Usage",
             DiagnosticSeverity.Error,
             true);

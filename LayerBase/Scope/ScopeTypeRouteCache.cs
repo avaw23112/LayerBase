@@ -2,14 +2,16 @@ namespace LayerBase.Scope;
 
 internal static class ScopeTypeRouteCache<TScope>
 {
-    private static int s_generation;
-    private static int s_scopeId;
+    // High 32 bits: RouteTable Generation
+    // Low 32 bits: ScopeId
+    private static long s_cachedEntry;
 
     public static bool TryGet(int generation, out int scopeId)
     {
-        if (Volatile.Read(ref s_generation) == generation)
+        long entry = Volatile.Read(ref s_cachedEntry);
+        if ((int)(entry >> 32) == generation)
         {
-            scopeId = Volatile.Read(ref s_scopeId);
+            scopeId = (int)(entry & 0xFFFFFFFF);
             return true;
         }
 
@@ -19,7 +21,7 @@ internal static class ScopeTypeRouteCache<TScope>
 
     public static void Set(int generation, int scopeId)
     {
-        Volatile.Write(ref s_scopeId, scopeId);
-        Volatile.Write(ref s_generation, generation);
+        long entry = ((long)generation << 32) | (uint)scopeId;
+        Interlocked.Exchange(ref s_cachedEntry, entry);
     }
 }
