@@ -856,7 +856,9 @@ public abstract class Layer : Node, IDisposable
     /// </summary>
     private sealed class UnsubscribeToken : IDisposable
     {
+        private const int MaxPoolSize = 1024;
         private static readonly ConcurrentBag<UnsubscribeToken> Pool = new();
+        private static int s_poolCount;
         private EventCenter? _center;
         private int _layerIndex;
         private object? _handler;
@@ -888,12 +890,27 @@ public abstract class Layer : Node, IDisposable
             _center = null;
             _handler = null;
             _eventType = null;
-            Pool.Add(this);
+            if (Interlocked.Increment(ref s_poolCount) <= MaxPoolSize)
+            {
+                Pool.Add(this);
+            }
+            else
+            {
+                Interlocked.Decrement(ref s_poolCount);
+            }
         }
 
         public static UnsubscribeToken Rent(EventCenter c, int l, object handler, Type eventType, UnsubscribeKind kind)
         {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeToken();
+            if (Pool.TryTake(out var t))
+            {
+                Interlocked.Decrement(ref s_poolCount);
+            }
+            else
+            {
+                t = new UnsubscribeToken();
+            }
+
             t._center = c;
             t._layerIndex = l;
             t._handler = handler;

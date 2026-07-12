@@ -169,11 +169,6 @@ public static class ServiceECSExtensions
 
     private static void EnsureScopeAccess(ScopeRuntime ownerScope)
     {
-        ScopeRuntime? currentScope = ScopeExecution.Current.Runtime;
-        if (currentScope != null && !ReferenceEquals(currentScope, ownerScope))
-        {
-            throw new InvalidOperationException(
-                "IService ECS access is restricted to the owner ScopeRuntime.");
-        }
+        ownerScope.RequireAccess("IService.ECS");
     }
 }

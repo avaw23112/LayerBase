@@ -20,12 +20,14 @@ public static class ServiceActorExtensions
 
         if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
+            scopeBinding.Scope.RequireAccess("IService.Actors");
             return scopeBinding.Scope.Actors;
         }
 
         ServiceLayerBinding? binding = ServiceLayerBinder.GetBinding(service);
         if (binding?.Scope != null)
         {
+            binding.Scope.RequireAccess("IService.Actors");
             return binding.Scope.Actors;
         }
 
@@ -56,12 +58,14 @@ public static class ServiceActorExtensions
     {
         if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
+            scopeBinding.Scope.RequireAccess("IService.ActorWorld");
             return scopeBinding.Scope.Actors.InnerWorld;
         }
 
         ServiceLayerBinding? binding = ServiceLayerBinder.GetBinding(service);
         if (binding?.Scope != null)
         {
+            binding.Scope.RequireAccess("IService.ActorWorld");
             return binding.Scope.Actors.InnerWorld;
         }
 

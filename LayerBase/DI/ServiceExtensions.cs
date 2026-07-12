@@ -21,6 +21,7 @@ public static class ServiceExtensions
         if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
             ownerScope = scopeBinding.Scope;
+            ownerScope.RequireAccess("IService");
             return true;
         }
 
@@ -28,11 +29,19 @@ public static class ServiceExtensions
         if (binding?.Scope != null)
         {
             ownerScope = binding.Scope;
+            ownerScope.RequireAccess("IService");
             return true;
         }
 
         ownerScope = null!;
         return false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ScopeRuntime RequireScopeAccess(ScopeObjectBinding binding, string apiName)
+    {
+        binding.Scope.RequireAccess(apiName);
+        return binding.Scope;
     }
 
     /// <summary>
@@ -351,7 +360,8 @@ public static class ServiceExtensions
     {
         if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.GetOrCreateDelayPublisher<TValue>()
+            RequireScopeAccess(scopeBinding, "IService.Delay")
+                .GetOrCreateDelayPublisher<TValue>()
                 .Publish(value, ttl, contractId);
             return;
         }
@@ -370,7 +380,8 @@ public static class ServiceExtensions
     {
         if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.Actors.PostTo(actorId, in value);
+            RequireScopeAccess(scopeBinding, "IService.PostTo")
+                .Actors.PostTo(actorId, in value);
             return;
         }
 
@@ -385,6 +396,13 @@ public static class ServiceExtensions
         in TEvent             value)
         where TEvent : struct
     {
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
+        {
+            RequireScopeAccess(scopeBinding, "IService.PostToMany")
+                .Actors.PostToMany(actorIds, in value);
+            return;
+        }
+
         service
             .GetBinding()
             .Runtime.PostToMany(actorIds, in value);
@@ -397,7 +415,8 @@ public static class ServiceExtensions
     {
         if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.RegisterSubscribeFlow(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            RequireScopeAccess(scopeBinding, "IService.SubscribeFlow")
+                .RegisterSubscribeFlow(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
             return;
         }
 
@@ -411,7 +430,8 @@ public static class ServiceExtensions
     {
         if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.RegisterSubscribeAsync(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            RequireScopeAccess(scopeBinding, "IService.SubscribeAsync")
+                .RegisterSubscribeAsync(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
             return;
         }
 
@@ -425,7 +445,8 @@ public static class ServiceExtensions
     {
         if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.RegisterSubscribe(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            RequireScopeAccess(scopeBinding, "IService.Subscribe")
+                .RegisterSubscribe(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
             return;
         }
 
@@ -439,7 +460,8 @@ public static class ServiceExtensions
     {
         if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.RegisterSubscribeParallel(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            RequireScopeAccess(scopeBinding, "IService.SubscribeParallel")
+                .RegisterSubscribeParallel(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
             return;
         }
 
@@ -462,7 +484,8 @@ public static class ServiceExtensions
     {
         if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
-            return scopeBinding.Scope.ServiceProvider.Get<T>();
+            return RequireScopeAccess(scopeBinding, "IService.GetService")
+                .ServiceProvider.Get<T>();
         }
 
         var binding = service.GetBinding();
@@ -481,6 +504,13 @@ public static class LayerContextExtensions
     private static ServiceLayerBinding GetBinding(this ILayerContext context)
     {
         return ServiceLayerBinder.RequireBinding(context);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ScopeRuntime RequireScopeAccess(ScopeObjectBinding binding, string apiName)
+    {
+        binding.Scope.RequireAccess(apiName);
+        return binding.Scope;
     }
 
     /// <summary>
@@ -506,7 +536,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? binding))
         {
-            return binding.Scope.EventCenter.Send(value);
+            return RequireScopeAccess(binding, "ILayerContext.Send")
+                .EventCenter.Send(value);
         }
 
         return context
@@ -544,8 +575,8 @@ public static class LayerContextExtensions
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
             return policy.HasValue
-                ? scopeBinding.Scope.PostScheduler.TryPost(value, policy.Value)
-                : scopeBinding.Scope.PostScheduler.TryPost(value);
+                ? RequireScopeAccess(scopeBinding, "ILayerContext.Post").PostScheduler.TryPost(value, policy.Value)
+                : RequireScopeAccess(scopeBinding, "ILayerContext.Post").PostScheduler.TryPost(value);
         }
 
         ServiceLayerBinding binding = context.GetBinding();
@@ -574,7 +605,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            return scopeBinding.Scope.PostScheduler.MarkDirty<TValue>();
+            return RequireScopeAccess(scopeBinding, "ILayerContext.MarkDirty")
+                .PostScheduler.MarkDirty<TValue>();
         }
 
         ServiceLayerBinding binding = context.GetBinding();
@@ -613,7 +645,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            return scopeBinding.Scope.PostScheduler.TryPost(
+            return RequireScopeAccess(scopeBinding, "ILayerContext.PostLatest")
+                .PostScheduler.TryPost(
                 value,
                 new EventPostPolicy(
                     PostDeliveryMode.Latest,
@@ -662,7 +695,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            return scopeBinding.Scope.PostScheduler.TryPost(
+            return RequireScopeAccess(scopeBinding, "ILayerContext.PostCoalesced")
+                .PostScheduler.TryPost(
                 value,
                 new EventPostPolicy(
                     PostDeliveryMode.Coalesced,
@@ -696,7 +730,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            return scopeBinding.Scope.SchedulePost(
+            return RequireScopeAccess(scopeBinding, "ILayerContext.SchedulePost")
+                .SchedulePost(
                 value,
                 delaySeconds,
                 expiredPostPolicy,
@@ -746,7 +781,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.GetOrCreateDelayPublisher<TValue>()
+            RequireScopeAccess(scopeBinding, "ILayerContext.Delay")
+                .GetOrCreateDelayPublisher<TValue>()
                 .Publish(value, ttl, contractId);
             return;
         }
@@ -765,7 +801,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.Actors.PostTo(actorId, in value);
+            RequireScopeAccess(scopeBinding, "ILayerContext.PostTo")
+                .Actors.PostTo(actorId, in value);
             return;
         }
 
@@ -782,7 +819,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.Actors.PostToMany(actorIds, in value);
+            RequireScopeAccess(scopeBinding, "ILayerContext.PostToMany")
+                .Actors.PostToMany(actorIds, in value);
             return;
         }
 
@@ -798,7 +836,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.RegisterSubscribeFlow(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            RequireScopeAccess(scopeBinding, "ILayerContext.SubscribeFlow")
+                .RegisterSubscribeFlow(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
             return;
         }
 
@@ -812,7 +851,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.RegisterSubscribeAsync(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            RequireScopeAccess(scopeBinding, "ILayerContext.SubscribeAsync")
+                .RegisterSubscribeAsync(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
             return;
         }
 
@@ -826,7 +866,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.RegisterSubscribe(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            RequireScopeAccess(scopeBinding, "ILayerContext.Subscribe")
+                .RegisterSubscribe(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
             return;
         }
 
@@ -840,7 +881,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            scopeBinding.Scope.RegisterSubscribeParallel(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            RequireScopeAccess(scopeBinding, "ILayerContext.SubscribeParallel")
+                .RegisterSubscribeParallel(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
             return;
         }
 
@@ -869,7 +911,8 @@ public static class LayerContextExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
-            return scopeBinding.Scope.ServiceProvider.Get<T>();
+            return RequireScopeAccess(scopeBinding, "ILayerContext.GetService")
+                .ServiceProvider.Get<T>();
         }
 
         var binding = context.GetBinding();

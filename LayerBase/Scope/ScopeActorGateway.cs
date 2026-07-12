@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using LayerBase;
 using LayerBase.Actor;
 
 namespace LayerBase.Scope;
@@ -33,6 +34,11 @@ public sealed class ScopeActorGateway
     public void PostTo<TEvent>(ActorId actorId, in TEvent value)
         where TEvent : struct
     {
+        if (TryEnqueueRuntimeCommand(new RuntimeActorPostCommand<TEvent>(actorId, in value)))
+        {
+            return;
+        }
+
         _world.PostTo(actorId, in value);
     }
 
@@ -40,6 +46,22 @@ public sealed class ScopeActorGateway
     public void PostToMany<TEvent>(ReadOnlySpan<ActorId> actorIds, in TEvent value)
         where TEvent : struct
     {
+        if (TryEnqueueRuntimeCommand(new RuntimeActorPostManyCommand<TEvent>(actorIds, in value)))
+        {
+            return;
+        }
+
         _world.PostToMany(actorIds, in value);
+    }
+
+    private bool TryEnqueueRuntimeCommand(IRuntimeActorCommand command)
+    {
+        if (_runtime == null || !ReferenceEquals(_runtime.Actors, _world))
+        {
+            return false;
+        }
+
+        _runtime.EnqueueScopeActorCommand(command);
+        return true;
     }
 }

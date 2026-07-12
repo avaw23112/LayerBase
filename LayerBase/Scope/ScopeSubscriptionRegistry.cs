@@ -194,6 +194,7 @@ internal sealed class ScopeSubscriptionRegistry : IDisposable
 
     private sealed class ScopeUnsubscribeToken : IDisposable
     {
+        private const int MaxPoolSize = 1024;
         private static readonly Stack<ScopeUnsubscribeToken> Pool = new();
         private static readonly object PoolLock = new();
 
@@ -236,7 +237,10 @@ internal sealed class ScopeSubscriptionRegistry : IDisposable
 
             lock (PoolLock)
             {
-                Pool.Push(this);
+                if (Pool.Count < MaxPoolSize)
+                {
+                    Pool.Push(this);
+                }
             }
         }
 

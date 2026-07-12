@@ -175,6 +175,7 @@ public sealed class EventPrewarmGenerator : IIncrementalGenerator
         foreach (var type in eventTypes)
         {
             var typeName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            builder.AppendLine($"                EventCenter.RegisterEventType<{typeName}>();");
             builder.AppendLine($"                center.PrewarmEvent<{typeName}>(in options);");
         }
 

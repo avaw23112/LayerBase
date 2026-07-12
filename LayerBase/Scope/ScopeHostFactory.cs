@@ -19,6 +19,11 @@ public static class ScopeHostFactory
         s_factory = factory;
     }
 
+    public static void Reset()
+    {
+        s_factory = null;
+    }
+
     public static ScopeRuntimeHost? TryCreate(
         IReadOnlyList<IService> services,
         ScopeRuntimeOptions? options = null,

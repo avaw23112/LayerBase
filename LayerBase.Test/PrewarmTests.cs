@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using LayerBase.Core.Event;
+using LayerBase.Core.EventHandler;
 using LayerBase.Layers;
 using System;
 
@@ -44,6 +45,19 @@ public partial class PrewarmTests
     {
         // 验证手动调用 PrewarmEvent 不报错。
         Assert.DoesNotThrow(() => _runtime.EventCenter.PrewarmEvent<TestEvent>(LayerPrewarmOptions.Default));
+    }
+
+    [Test]
+    public void RegisterEventType_should_enable_non_generic_subscription_path()
+    {
+        EventCenter.RegisterEventType<ManualPrewarmEvent>();
+        int received = 0;
+        EventNotifyDelegate<ManualPrewarmEvent> handler = (in ManualPrewarmEvent value) => received = value.Value;
+
+        _runtime.EventCenter.Subscribe(0, handler, typeof(ManualPrewarmEvent));
+        _runtime.EventCenter.Send(new ManualPrewarmEvent { Value = 17 });
+
+        Assert.That(received, Is.EqualTo(17));
     }
 }
 

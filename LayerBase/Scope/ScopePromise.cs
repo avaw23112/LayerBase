@@ -124,8 +124,7 @@ public sealed class ScopePromise<TResult> : IScopePromise
 
         if (!_continuationScope.TryEnqueueContinuation(continuation))
         {
-            throw new InvalidOperationException(
-                $"Scope '{_continuationScope.Descriptor.Name}' continuation queue is full.");
+            continuation();
         }
     }
 

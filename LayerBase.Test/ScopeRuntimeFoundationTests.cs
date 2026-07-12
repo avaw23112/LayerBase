@@ -13,7 +13,9 @@ using LayerBase.Layers;
 using LayerBase.Modules;
 using LayerBase.Scope;
 using ActorBehaviourAttribute = LayerBase.Actor.ActorBehaviourAttribute;
+using ActorId = LayerBase.Actor.ActorId;
 using IPooledActor = LayerBase.Actor.IPooledActor;
+using RuntimeFrameBudget = LayerBase.Actor.RuntimeFrameBudget;
 
 namespace LayerBase.Test;
 
@@ -132,8 +134,34 @@ public sealed class ScopeRuntimeFoundationTests
                 stopPolicy: ScopeStopPolicy.Drain),
             new IService[] { service });
 
-        Assert.That(service.ECSWorld(), Is.SameAs(runtime.EcsWorld));
-        Assert.That(service.ECSQueryRegistry(), Is.SameAs(runtime.EcsQueryRegistry));
+        using (ScopeExecution.Enter(runtime))
+        {
+            Assert.That(service.ECSWorld(), Is.SameAs(runtime.EcsWorld));
+            Assert.That(service.ECSQueryRegistry(), Is.SameAs(runtime.EcsQueryRegistry));
+        }
+    }
+
+    [Test]
+    public void IService_local_scope_access_should_reject_calls_outside_owner_scope()
+    {
+        var service = new ScopeProbeService();
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 44,
+                name: "GuardedEcsScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            new IService[] { service });
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => service.ECSWorld())!;
+        Assert.That(ex.Message, Does.Contain("owner scope execution context"));
+
+        using (ScopeExecution.Enter(runtime))
+        {
+            Assert.That(service.ECSWorld(), Is.SameAs(runtime.EcsWorld));
+        }
     }
 
     [Test]
@@ -154,7 +182,10 @@ public sealed class ScopeRuntimeFoundationTests
         Entity entity = runtime.EcsWorld.Create(new ScopeProbeComponent { Value = 7 });
         var job = new ScopeIncrementJob(5);
 
-        service.Query<ScopeProbeComponent>().ForEach(ref job);
+        using (ScopeExecution.Enter(runtime))
+        {
+            service.Query<ScopeProbeComponent>().ForEach(ref job);
+        }
 
         Assert.That(runtime.EcsWorld.Get<ScopeProbeComponent>(entity).Value, Is.EqualTo(12));
     }
@@ -176,9 +207,13 @@ public sealed class ScopeRuntimeFoundationTests
 
         runtime.Start();
 
-        Assert.That(service.Actors(), Is.SameAs(runtime.Actors));
+        using (ScopeExecution.Enter(runtime))
+        {
+            Assert.That(service.Actors(), Is.SameAs(runtime.Actors));
 
-        service.PostProjectedEvent(9);
+            service.PostProjectedEvent(9);
+        }
+
         Assert.That(ScopeProjectedActor.Received, Is.Empty);
 
         runtime.Pump(0.016f);
@@ -205,7 +240,7 @@ public sealed class ScopeRuntimeFoundationTests
                 Assert.That(scope.ScopeId, Is.EqualTo(ScopeDescriptors.Main.ScopeId));
             });
 
-        Assert.That(runtime.PostInboxKind, Is.EqualTo(ScopeInboxKind.Local));
+        Assert.That(runtime.PostInboxKind, Is.EqualTo(ScopeInboxKind.Locked));
         Assert.That(runtime.TryPost(new ScopePostMessage(12, "payload")), Is.True);
         Assert.That(dispatchCount, Is.EqualTo(0));
 
@@ -471,7 +506,7 @@ public sealed class ScopeRuntimeFoundationTests
     }
 
     [Test]
-    public void ScopeRuntime_continuation_queue_should_be_locked_for_cross_scope_completion()
+    public void ScopeRuntime_inbox_queues_should_be_locked_for_cross_scope_ingress()
     {
         using var runtime = new ScopeRuntime(
             new ScopeDescriptor(
@@ -483,8 +518,138 @@ public sealed class ScopeRuntimeFoundationTests
                 stopPolicy: ScopeStopPolicy.Drain),
             Array.Empty<IService>());
 
-        Assert.That(runtime.PostInboxKind, Is.EqualTo(ScopeInboxKind.Local));
+        Assert.That(runtime.PostInboxKind, Is.EqualTo(ScopeInboxKind.Locked));
         Assert.That(runtime.ContinuationInboxKind, Is.EqualTo(ScopeInboxKind.Locked));
+    }
+
+    [Test]
+    public void ScopeRuntime_drop_stop_policy_should_complete_pending_calls_with_exception()
+    {
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 6,
+                name: "DropCallScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drop),
+            Array.Empty<IService>(),
+            callDispatcher: (_, message) => message.Promise.SetException(
+                new InvalidOperationException("Call should have been dropped before dispatch.")));
+        using var routes = new ScopeRouteTable(new[] { runtime });
+
+        ScopePromise<int> promise = routes.GetScopeRef<CombatScopeMarker>(6).Call<int>(1, "pending");
+
+        Assert.That(promise.IsCompleted, Is.False);
+
+        runtime.Stop();
+
+        Assert.That(promise.IsCompleted, Is.True);
+        Assert.Throws<InvalidOperationException>(() => promise.GetResult());
+        Assert.That(runtime.CallInboxCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ScopePromise_should_run_continuation_inline_when_owner_queue_is_full()
+    {
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 24,
+                name: "ContinuationFallbackScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            new ScopeRuntimeOptions(continuationQueueCapacity: 1));
+        var promise = new ScopePromise<int>(runtime);
+        int result = 0;
+
+        Assert.That(runtime.TryEnqueueContinuation(() => { }), Is.True);
+
+        promise.OnCompleted(() => result = promise.GetResult());
+
+        Assert.DoesNotThrow(() => promise.SetResult(42));
+        Assert.That(result, Is.EqualTo(42));
+        Assert.That(promise.IsCompleted, Is.True);
+    }
+
+    [Test]
+    public void ScopeRuntime_should_not_dispose_shared_actor_world()
+    {
+        var sharedWorld = new LayerBase.Actor.ActorWorld();
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 22,
+                name: "SharedActorScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            sharedActorWorld: sharedWorld);
+
+        runtime.Start();
+        runtime.Dispose();
+
+        Assert.DoesNotThrow(() => sharedWorld.CreateActor<ScopeProjectedActor>());
+        sharedWorld.Dispose();
+    }
+
+    [Test]
+    public void ScopeActorGateway_should_route_shared_actor_posts_through_runtime_owner_queue()
+    {
+        ScopeProjectedActor.Reset();
+        using var layerRuntime = new LayerRuntime(7001);
+        ScopeProjectedActor actor = layerRuntime.Actors.CreateActor<ScopeProjectedActor>();
+        ActorId actorId = LayerBase.Actor.ActorExtensions.GetActorId(actor);
+        using var scope = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 25,
+                name: "SharedActorPostScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            sharedActorWorld: layerRuntime.Actors,
+            owningRuntime: layerRuntime);
+
+        scope.Actors.PostTo(actorId, new ScopeProjectedEvent(17));
+
+        RuntimeFrameBudget budget = default;
+        layerRuntime.Actors.Pump(0.016f, 0f, false, ref budget);
+        Assert.That(ScopeProjectedActor.Received, Is.Empty);
+
+        Assert.That(layerRuntime.DrainScopeActorCommands(), Is.EqualTo(1));
+        layerRuntime.Actors.Pump(0.016f, 0f, false, ref budget);
+
+        Assert.That(ScopeProjectedActor.Received, Has.Count.EqualTo(1));
+        Assert.That(ScopeProjectedActor.Received[0].Value, Is.EqualTo(17));
+    }
+
+    [Test]
+    public void ScopeRuntime_worker_loop_exception_should_dispose_services()
+    {
+        var service = new ThrowingWorkerLifecycleService();
+        var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 23,
+                name: "ThrowingWorkerScope",
+                threading: ScopeThreadingMode.Worker,
+                clock: ScopeClockMode.FixedRate,
+                tickRateHz: 120,
+                stopPolicy: ScopeStopPolicy.Drain),
+            new IService[] { service });
+
+        runtime.Start();
+
+        Assert.That(service.Thrown.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        runtime.Dispose();
+
+        Assert.That(service.Disposed.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(service.DisposeScopeId, Is.EqualTo(23));
     }
 
     [Test]
@@ -945,8 +1110,12 @@ public sealed class ScopeRuntimeFoundationTests
         var context = scope.Contexts[0] as ScopeCatalogOwnedContext;
         Assert.That(context, Is.Not.Null);
         Assert.That(context!.OwnerService, Is.SameAs(scope.Services[0]));
-        Assert.That(context.ECSWorld(), Is.SameAs(scope.EcsWorld));
-        Assert.That(context.Actors(), Is.SameAs(scope.Actors));
+
+        using (ScopeExecution.Enter(scope))
+        {
+            Assert.That(context.ECSWorld(), Is.SameAs(scope.EcsWorld));
+            Assert.That(context.Actors(), Is.SameAs(scope.Actors));
+        }
 
         ScopeObjectBinding binding = ScopeObjectBinder.Require(context);
         Assert.That(binding.Scope, Is.SameAs(scope));
@@ -998,8 +1167,12 @@ public sealed class ScopeRuntimeFoundationTests
 
         Assert.That(service.MountedContext, Is.SameAs(context));
         Assert.That(context.MountedService, Is.SameAs(service));
-        Assert.That(service.ResolveContextThroughScope(), Is.SameAs(context));
-        Assert.That(context.GetService<ScopeCatalogMountedService>(), Is.SameAs(service));
+
+        using (ScopeExecution.Enter(scope))
+        {
+            Assert.That(service.ResolveContextThroughScope(), Is.SameAs(context));
+            Assert.That(context.GetService<ScopeCatalogMountedService>(), Is.SameAs(service));
+        }
     }
 
     [Test]
@@ -1266,6 +1439,34 @@ public sealed class ScopeRuntimeFoundationTests
     }
 
     [Test]
+    public void Scope_type_route_resolution_should_not_reuse_stale_scope_id_for_reused_runtime_id()
+    {
+        LayerHub.Reset();
+        try
+        {
+            var firstLayer = new RuntimeScopedLayer();
+            LayerHub.CreateLayers()
+                    .Push(firstLayer)
+                    .Build();
+
+            Assert.That(firstLayer.ScopedService.ResolveCombatScopeId(), Is.EqualTo(1));
+
+            LayerHub.Reset();
+
+            var secondLayer = new RuntimePlainLayer();
+            LayerHub.CreateLayers()
+                    .Push(secondLayer)
+                    .Build();
+
+            Assert.That(secondLayer.Service.ResolveCombatScopeId(), Is.EqualTo(-1));
+        }
+        finally
+        {
+            LayerHub.Reset();
+        }
+    }
+
+    [Test]
     public void LayerRuntime_scoped_service_query_should_use_owner_scope_ecs_world()
     {
         LayerHub.Reset();
@@ -1276,15 +1477,26 @@ public sealed class ScopeRuntimeFoundationTests
                                            .Push(layer)
                                            .Build();
 
-            Assert.That(layer.ScopedService.ECSWorld(), Is.SameAs(runtime.ScopeHost!.Scopes[1].EcsWorld));
-            Assert.That(layer.ScopedService.ECSWorld(), Is.Not.SameAs(runtime.EcsWorld));
+            ScopeRuntime ownerScope = ScopeObjectBinder.Require(layer.ScopedService).Scope;
 
-            Entity scopedEntity = layer.ScopedService.ECSWorld().Create(new ScopeProbeComponent { Value = 3 });
+            Entity scopedEntity;
+            using (ScopeExecution.Enter(ownerScope))
+            {
+                Assert.That(layer.ScopedService.ECSWorld(), Is.SameAs(runtime.ScopeHost!.Scopes[1].EcsWorld));
+                Assert.That(layer.ScopedService.ECSWorld(), Is.Not.SameAs(runtime.EcsWorld));
+
+                scopedEntity = layer.ScopedService.ECSWorld().Create(new ScopeProbeComponent { Value = 3 });
+            }
+
             Entity mainEntity = runtime.EcsWorld.Create(new ScopeProbeComponent { Value = 30 });
 
             runtime.Pump(0.016f);
 
-            Assert.That(layer.ScopedService.ECSWorld().Get<ScopeProbeComponent>(scopedEntity).Value, Is.EqualTo(8));
+            using (ScopeExecution.Enter(ownerScope))
+            {
+                Assert.That(layer.ScopedService.ECSWorld().Get<ScopeProbeComponent>(scopedEntity).Value, Is.EqualTo(8));
+            }
+
             Assert.That(runtime.EcsWorld.Get<ScopeProbeComponent>(mainEntity).Value, Is.EqualTo(30));
         }
         finally
@@ -1350,7 +1562,12 @@ public sealed class ScopeRuntimeFoundationTests
                                            .Push(layer)
                                            .Build();
 
-            layer.EventService.PostScopedSignal(5);
+            ScopeRuntime ownerScope = ScopeObjectBinder.Require(layer.EventService).Scope;
+            using (ScopeExecution.Enter(ownerScope))
+            {
+                layer.EventService.PostScopedSignal(5);
+            }
+
             runtime.Scheduler.Pump();
             Assert.That(layer.EventService.Total, Is.EqualTo(0));
 
@@ -1374,7 +1591,11 @@ public sealed class ScopeRuntimeFoundationTests
                                            .Push(layer)
                                            .Build();
 
-            layer.EventService.ScheduleScopedSignal(9, 0.05f);
+            ScopeRuntime ownerScope = ScopeObjectBinder.Require(layer.EventService).Scope;
+            using (ScopeExecution.Enter(ownerScope))
+            {
+                layer.EventService.ScheduleScopedSignal(9, 0.05f);
+            }
 
             runtime.Pump(0.016f);
             Assert.That(layer.EventService.Total, Is.EqualTo(0));
@@ -1691,6 +1912,38 @@ public sealed class ScopeRuntimeFoundationTests
         }
     }
 
+    private sealed class ThrowingWorkerLifecycleService : IService, IUpdate, IDisposable
+    {
+        private int _throwCount;
+
+        public ManualResetEventSlim Thrown { get; } = new();
+
+        public ManualResetEventSlim Disposed { get; } = new();
+
+        public int DisposeScopeId { get; private set; } = -1;
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+
+        public void Update()
+        {
+            if (Interlocked.Exchange(ref _throwCount, 1) != 0)
+            {
+                return;
+            }
+
+            Thrown.Set();
+            throw new InvalidOperationException("worker loop test exception");
+        }
+
+        public void Dispose()
+        {
+            DisposeScopeId = ScopeExecution.Current.ScopeId;
+            Disposed.Set();
+        }
+    }
+
     private sealed class ScopeTaskProbeService : IService, IUpdate
     {
         private bool _started;
@@ -1861,6 +2114,31 @@ public sealed class ScopeRuntimeFoundationTests
         public RuntimeScopedService ScopedService { get; }
     }
 
+    private sealed class RuntimePlainLayer : Layer
+    {
+        public RuntimePlainLayer()
+        {
+            Service = new RuntimePlainService();
+            RegisterService(typeof(RuntimePlainService), Service);
+        }
+
+        public RuntimePlainService Service { get; }
+    }
+
+    private sealed class RuntimePlainService : IService
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+
+        public int ResolveCombatScopeId()
+        {
+            return LayerBase.Scope.Extensions.ScopeExtensions
+                            .Scope<RuntimeScopedCombatScope>(this)
+                            .TargetScopeId;
+        }
+    }
+
     [ScopeOptions]
     private sealed class RuntimeScopedCombatScope
     {
@@ -1889,6 +2167,13 @@ public sealed class ScopeRuntimeFoundationTests
             UpdateScopeId = ScopeExecution.Current.ScopeId;
             var job = new ScopeIncrementJob(5);
             this.Query<ScopeProbeComponent>().ForEach(ref job);
+        }
+
+        public int ResolveCombatScopeId()
+        {
+            return LayerBase.Scope.Extensions.ScopeExtensions
+                            .Scope<RuntimeScopedCombatScope>(this)
+                            .TargetScopeId;
         }
 
         void IServiceScopeBinding.BindScope(ScopeRuntime ownerScope, int serviceId)
@@ -1952,6 +2237,7 @@ public sealed class ScopeRuntimeFoundationTests
     private sealed class CombatScopeMarker
     {
     }
+
 }
 
 internal sealed class ScopeActorProjectionService : IService

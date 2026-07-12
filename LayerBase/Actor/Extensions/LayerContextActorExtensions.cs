@@ -16,12 +16,14 @@ public static class LayerContextActorExtensions
 
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
+            scopeBinding.Scope.RequireAccess("ILayerContext.Actors");
             return scopeBinding.Scope.Actors;
         }
 
         ServiceLayerBinding binding = ServiceLayerBinder.RequireBinding(context);
         if (binding.Scope != null)
         {
+            binding.Scope.RequireAccess("ILayerContext.Actors");
             return binding.Scope.Actors;
         }
 
@@ -32,12 +34,14 @@ public static class LayerContextActorExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
+            scopeBinding.Scope.RequireAccess("ILayerContext.ActorWorld");
             return scopeBinding.Scope.Actors.InnerWorld;
         }
 
         ServiceLayerBinding binding = ServiceLayerBinder.RequireBinding(context);
         if (binding.Scope != null)
         {
+            binding.Scope.RequireAccess("ILayerContext.ActorWorld");
             return binding.Scope.Actors.InnerWorld;
         }
 
@@ -75,6 +79,7 @@ public static class LayerContextActorExtensions
     {
         if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
         {
+            scopeBinding.Scope.RequireAccess("ILayerContext.PostActor");
             scopeBinding.Scope.Actors.PostTo(actorId, in message);
             return;
         }

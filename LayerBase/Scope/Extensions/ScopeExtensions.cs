@@ -45,26 +45,16 @@ public static class ScopeExtensions
 /// </summary>
 internal static class ScopeTypeRouteCache<TScope>
 {
-    private static int s_lastRuntimeId = -1;
-    private static int s_lastRuntimeVersion;
-    private static int s_cachedScopeId = -1;
-
     public static int Resolve(LayerRuntime runtime)
     {
-        int runtimeId = runtime.Id;
-        if (runtimeId == s_lastRuntimeId)
-        {
-            return s_cachedScopeId;
-        }
-
         if (runtime.ScopeHost == null)
             return -1;
+
         if (runtime.ScopeHost.Routes.TryGetScopeId<TScope>(out int scopeId))
         {
-            s_lastRuntimeId = runtimeId;
-            s_cachedScopeId = scopeId;
             return scopeId;
         }
+
         return -1;
     }
 }

@@ -73,4 +73,42 @@ public class LBTaskExtensionTests
 
         Assert.ThrowsAsync<OperationCanceledException>(async () => await task);
     }
+
+    [Test]
+    public void SynchronizationContext_send_should_complete_when_disposed_before_update()
+    {
+        using var started = new ManualResetEventSlim(false);
+        using var completed = new ManualResetEventSlim(false);
+        using var context = LayerBaseSynchronizationContext.Install();
+        Exception? observed = null;
+
+        var thread = new Thread(() =>
+        {
+            started.Set();
+            try
+            {
+                context.Send(static _ => { }, null);
+            }
+            catch (Exception ex)
+            {
+                observed = ex;
+            }
+            finally
+            {
+                completed.Set();
+            }
+        })
+        {
+            IsBackground = true
+        };
+
+        thread.Start();
+        Assert.That(started.Wait(TimeSpan.FromSeconds(1)), Is.True);
+        Thread.Sleep(50);
+
+        context.Dispose();
+
+        Assert.That(completed.Wait(TimeSpan.FromSeconds(1)), Is.True);
+        Assert.That(observed, Is.TypeOf<ObjectDisposedException>());
+    }
 }

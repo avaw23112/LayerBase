@@ -14,12 +14,21 @@ namespace LayerBase.Core.Event;
 /// </summary>
 public sealed class EventCenter
 {
+    private static readonly ConcurrentDictionary<Type, EventBucketRegistration> s_registeredEventTypes = new();
     private readonly ConcurrentDictionary<int, Action> _bucketCacheResetters = new();
     private readonly ConcurrentDictionary<int, IEventBucketNonGeneric> _eventBuckets = new();
     private readonly object _lock = new();
     private int _isResetting;
 
     internal PostScheduler? PostScheduler { get; set; }
+
+    public static void RegisterEventType<TEvent>()
+        where TEvent : struct
+    {
+        s_registeredEventTypes[typeof(TEvent)] = new EventBucketRegistration(
+            EventTypeId<TEvent>.Id,
+            static center => new EventBucket<TEvent>(center));
+    }
 
     internal void SubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
@@ -92,7 +101,7 @@ public sealed class EventCenter
         GetBucket<T>().Remove(layerIndex, handleDelegate);
     }
 
-    #region Non-generic subscription path (IL2CPP-safe)
+    #region Non-generic subscription path
 
     internal void SubscribeFlow(int layerIndex, object handler, Type eventType)
     {
@@ -196,6 +205,8 @@ public sealed class EventCenter
     public void PrewarmEvent<TEvent>(in LayerPrewarmOptions options)
         where TEvent : struct
     {
+        RegisterEventType<TEvent>();
+
         // 1. 预热 EventTypeId
         if ((options.Targets & LayerPrewarmTargets.EventTypeId) != 0)
         {
@@ -240,6 +251,11 @@ public sealed class EventCenter
     private IEventBucketNonGeneric GetBucket(Type eventType)
     {
         var typeId = GetEventTypeId(eventType);
+        if (s_registeredEventTypes.TryGetValue(eventType, out EventBucketRegistration registration))
+        {
+            return _eventBuckets.GetOrAdd(typeId, _ => registration.CreateBucket(this));
+        }
+
         return _eventBuckets.GetOrAdd(typeId, _ =>
         {
             var bucketType = typeof(EventBucket<>).MakeGenericType(eventType);
@@ -249,9 +265,32 @@ public sealed class EventCenter
 
     private static int GetEventTypeId(Type eventType)
     {
+        if (s_registeredEventTypes.TryGetValue(eventType, out EventBucketRegistration registration))
+        {
+            return registration.TypeId;
+        }
+
         var idType = typeof(EventTypeId<>).MakeGenericType(eventType);
         var idField = idType.GetField("Id", BindingFlags.Public | BindingFlags.Static);
         return (int)idField!.GetValue(null)!;
+    }
+
+    private readonly struct EventBucketRegistration
+    {
+        private readonly Func<EventCenter, IEventBucketNonGeneric> _factory;
+
+        public EventBucketRegistration(int typeId, Func<EventCenter, IEventBucketNonGeneric> factory)
+        {
+            TypeId = typeId;
+            _factory = factory;
+        }
+
+        public int TypeId { get; }
+
+        public IEventBucketNonGeneric CreateBucket(EventCenter center)
+        {
+            return _factory(center);
+        }
     }
 
     private static class BucketCache<T> where T : struct

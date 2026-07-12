@@ -154,11 +154,6 @@ public static class LayerContextECSExtensions
 
     private static void EnsureScopeAccess(ScopeRuntime ownerScope)
     {
-        ScopeRuntime? currentScope = ScopeExecution.Current.Runtime;
-        if (currentScope != null && !ReferenceEquals(currentScope, ownerScope))
-        {
-            throw new InvalidOperationException(
-                "ILayerContext ECS access is restricted to the owner ScopeRuntime.");
-        }
+        ownerScope.RequireAccess("ILayerContext.ECS");
     }
 }

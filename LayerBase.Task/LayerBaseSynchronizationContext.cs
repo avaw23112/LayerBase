@@ -4,7 +4,7 @@ using System.Diagnostics;
 namespace LayerBase.Async;
 
 /// <summary>
-///     SynchronizationContext that captures continuations and replays them on the main thread via Update().
+///     SynchronizationContext that captures continuations and replays them on the installing thread via Update().
 /// </summary>
 public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IArchMainThreadPump, IDisposable
 {
@@ -55,7 +55,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             {
                 work.Invoke();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 throw;
             }
@@ -96,8 +96,10 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             _frameWork.Clear();
         }
 
-        while (_queue.TryDequeue(out _))
+        ObjectDisposedException disposed = new(nameof(LayerBaseSynchronizationContext));
+        while (_queue.TryDequeue(out WorkItem work))
         {
+            work.CancelOnDispose(disposed);
         }
     }
 
@@ -127,17 +129,20 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         _queue.Enqueue(new WorkItem(static payload =>
         {
             var work = (SendWorkItem)payload!;
+            if (!work.TryStart()) return;
+
+            Exception? error = null;
             try
             {
                 work.Callback(work.State);
             }
             catch (Exception ex)
             {
-                work.Error = ex;
+                error = ex;
             }
             finally
             {
-                work.Gate.Set();
+                work.Complete(error);
             }
         }, sendWork));
         gate.Wait();
@@ -181,6 +186,14 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         {
             _callback(_state);
         }
+
+        public void CancelOnDispose(Exception error)
+        {
+            if (_state is SendWorkItem sendWork)
+            {
+                sendWork.TryCancel(error);
+            }
+        }
     }
 
     private sealed class SendWorkItem
@@ -189,12 +202,39 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         public readonly ManualResetEventSlim Gate;
         public readonly object? State;
         public Exception? Error;
+        private int _state;
 
         public SendWorkItem(SendOrPostCallback callback, object? state, ManualResetEventSlim gate)
         {
             Callback = callback;
             State = state;
             Gate = gate;
+        }
+
+        public bool TryStart()
+        {
+            return Interlocked.CompareExchange(ref _state, 1, 0) == 0;
+        }
+
+        public void Complete(Exception? error)
+        {
+            if (error != null)
+            {
+                Error = error;
+            }
+
+            Volatile.Write(ref _state, 2);
+            Gate.Set();
+        }
+
+        public bool TryCancel(Exception error)
+        {
+            if (Interlocked.CompareExchange(ref _state, 2, 0) != 0)
+                return false;
+
+            Error = error;
+            Gate.Set();
+            return true;
         }
     }
 
