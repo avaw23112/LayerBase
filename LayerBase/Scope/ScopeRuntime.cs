@@ -679,7 +679,10 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         PumpActors(deltaTime);
-        EcsWorld.SweepProjectedActors();
+        if (_ownsActorWorld)
+        {
+            EcsWorld.SweepProjectedActors();
+        }
         EcsScheduler?.DrainResults(EcsOptions.MaxResultsDrainPerPump);
         DrainContinuations();
     }
