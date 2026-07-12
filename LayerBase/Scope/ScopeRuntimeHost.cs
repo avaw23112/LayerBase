@@ -85,6 +85,7 @@ public sealed class ScopeRuntimeHost : IDisposable
                     owningRuntime,
                     postDispatcher,
                     callDispatcher);
+                scopes[i].FinalizeScopeBuild();
             }
 
             IReadOnlyDictionary<Type, int>? scopeTypeRoutes = scopeTypeResolver == null
@@ -190,6 +191,11 @@ public sealed class ScopeRuntimeHost : IDisposable
                     ScopeServicePlan servicePlan = scopePlan.Services[serviceIndex];
                     servicePlan.BindingInitializer?.Invoke(servicePlan.Instance, scope, servicePlan.ServiceSlot);
                 }
+            }
+
+            for (int i = 0; i < scopePlans.Length; i++)
+            {
+                scopes[i].FinalizeScopeBuild();
             }
 
             IReadOnlyDictionary<Type, int>? scopeTypeRoutes = scopeTypeResolver == null

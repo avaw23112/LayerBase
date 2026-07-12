@@ -60,11 +60,13 @@ public sealed partial class LayerRuntime
 
     internal bool EnqueueActorEvent(ActorCommandEnvelope envelope)
     {
+        if (_disposed) return false;
         return _actorEventInbox.TryEnqueue(envelope);
     }
 
     internal bool EnqueueActorLifecycle(ActorCommandEnvelope envelope)
     {
+        if (_disposed) return false;
         return _actorLifecycleInbox.TryEnqueue(envelope);
     }
 
@@ -73,5 +75,10 @@ public sealed partial class LayerRuntime
         _actorEventInbox.Clear();
         _actorLifecycleInbox.Clear();
         ActorPayloads.Clear();
+    }
+
+    internal void DrainLifecycleInbox()
+    {
+        _actorLifecycleInbox.Drain(ProcessLifecycleCommand, 0);
     }
 }

@@ -49,7 +49,10 @@ public sealed class ScopeActorGateway
             actorId,
             routeId: 0,
             payloadHandle: payloadHandle);
-        _runtime.EnqueueActorEvent(envelope);
+        if (!_runtime.EnqueueActorEvent(envelope))
+        {
+            _runtime.ActorPayloads.Free(payloadHandle);
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -73,7 +76,10 @@ public sealed class ScopeActorGateway
                 capturedId,
                 routeId: 0,
                 payloadHandle: payloadHandle);
-            _runtime.EnqueueActorEvent(envelope);
+            if (!_runtime.EnqueueActorEvent(envelope))
+            {
+                _runtime.ActorPayloads.Free(payloadHandle);
+            }
         }
     }
 }

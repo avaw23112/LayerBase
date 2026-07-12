@@ -763,11 +763,12 @@ public sealed partial class LayerRuntime : IDisposable
         _disposed = true;
 
         _postIngress.Clear();
-        CloseActorInboxes();
         EcsScheduler.Dispose();
         Worker.Dispose();
         ScopeHost?.Dispose();
         ScopeHost = null;
+        DrainLifecycleInbox();
+        CloseActorInboxes();
         _chain?.DisposeLayers();
         _chain = null;
         Actors.RuntimeStop();

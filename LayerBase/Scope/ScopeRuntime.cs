@@ -49,7 +49,9 @@ public sealed class ScopeRuntime : IDisposable
     private readonly object _lifecycleGate = new();
     private ScopeRuntimeState _state = ScopeRuntimeState.Created;
     private volatile bool _workerRunning;
+    private int _stopCleanupStarted;
     private int _stopCleanupCompleted;
+    private ManualResetEventSlim? _workerStartedSignal;
 
     public ScopeRuntime(
         ScopeDescriptor descriptor,
@@ -101,9 +103,6 @@ public sealed class ScopeRuntime : IDisposable
         _callDispatcher = callDispatcher;
 
         BindServices();
-        RebuildServiceProvider();
-        RebuildScopeResources();
-        RebindSubscriptions();
     }
 
     private void InitializeEcsScheduler(ScopeRuntimeOptions options)
@@ -228,6 +227,11 @@ public sealed class ScopeRuntime : IDisposable
                 instance: contexts[i]);
         }
         BindContexts();
+        FinalizeScopeBuild();
+    }
+
+    internal void FinalizeScopeBuild()
+    {
         RebuildServiceProvider();
         RebuildScopeResources();
         RebindSubscriptions();
@@ -266,9 +270,6 @@ public sealed class ScopeRuntime : IDisposable
 
         Contexts = contexts;
         BindContexts();
-        RebuildServiceProvider();
-        RebuildScopeResources();
-        RebindSubscriptions();
     }
 
     public void Start()
@@ -282,12 +283,14 @@ public sealed class ScopeRuntime : IDisposable
         if (Descriptor.Threading == ScopeThreadingMode.Worker)
         {
             _workerRunning = true;
-            _workerThread = new Thread(WorkerLoop)
+            _workerStartedSignal = new ManualResetEventSlim(false);
+            var thread = new Thread(WorkerLoop)
             {
                 IsBackground = true,
                 Name = $"LayerBase.Scope.{Descriptor.Name}"
             };
-            _workerThread.Start();
+            thread.Start();
+            _workerThread = thread;
             return;
         }
 
@@ -319,36 +322,37 @@ public sealed class ScopeRuntime : IDisposable
 
     public void Stop()
     {
-        if (State >= ScopeRuntimeState.Disposing)
-        {
-            return;
-        }
-
-        if (State >= ScopeRuntimeState.StopRequested)
-        {
-            JoinWorkerIfNeeded();
-            return;
-        }
+        bool shouldStop = false;
+        Thread? threadToJoin = null;
 
         lock (_lifecycleGate)
         {
+            if (_state >= ScopeRuntimeState.Disposing) return;
             if (_state >= ScopeRuntimeState.StopRequested)
             {
-                JoinWorkerIfNeeded();
-                return;
+                threadToJoin = _workerThread;
             }
-
-            if (_state == ScopeRuntimeState.Created ||
-                _state == ScopeRuntimeState.Starting ||
-                _state == ScopeRuntimeState.Running)
+            else if (_state == ScopeRuntimeState.Created ||
+                     _state == ScopeRuntimeState.Starting ||
+                     _state == ScopeRuntimeState.Running)
             {
                 _state = ScopeRuntimeState.StopRequested;
-            }
-            else
-            {
-                return;
+                shouldStop = true;
+                threadToJoin = _workerThread;
             }
         }
+
+        if (!shouldStop && threadToJoin != null)
+        {
+            if (!ReferenceEquals(Thread.CurrentThread, threadToJoin))
+            {
+                WaitForWorkerStartup();
+                threadToJoin.Join();
+            }
+            return;
+        }
+
+        if (!shouldStop) return;
 
         CloseIngressQueues();
         _workerRunning = false;
@@ -361,9 +365,10 @@ public sealed class ScopeRuntime : IDisposable
             }
             else
             {
-                JoinWorkerIfNeeded();
+                WaitForWorkerStartup();
+                _workerThread.Join();
+                _workerThread = null;
             }
-
             return;
         }
 
@@ -373,12 +378,14 @@ public sealed class ScopeRuntime : IDisposable
     public bool TryPost(ScopePostMessage message)
     {
         ThrowIfDisposed();
+        if (State >= ScopeRuntimeState.StopRequested) return false;
         return _postInbox.TryEnqueue(message) == QueueEnqueueResult.Accepted;
     }
 
     public bool TryCall(ScopeCallMessage message)
     {
         ThrowIfDisposed();
+        if (State >= ScopeRuntimeState.StopRequested) return false;
         return _callInbox.TryEnqueue(message) == QueueEnqueueResult.Accepted;
     }
 
@@ -432,37 +439,40 @@ public sealed class ScopeRuntime : IDisposable
 
     public void Dispose()
     {
+        Thread? threadToJoin = null;
         lock (_lifecycleGate)
         {
-            if (_state >= ScopeRuntimeState.Disposing)
-            {
-                return;
-            }
-
+            if (_state >= ScopeRuntimeState.Disposing) return;
             _state = ScopeRuntimeState.Disposing;
+            threadToJoin = _workerThread;
         }
 
         CloseIngressQueues();
         _workerRunning = false;
 
-        if (Descriptor.Threading == ScopeThreadingMode.Worker && _workerThread != null)
+        if (Descriptor.Threading == ScopeThreadingMode.Worker && threadToJoin != null)
         {
-            if (!ReferenceEquals(Thread.CurrentThread, _workerThread))
+            if (!ReferenceEquals(Thread.CurrentThread, threadToJoin))
             {
-                _workerThread.Join();
-                _workerThread = null;
+                WaitForWorkerStartup();
+                threadToJoin.Join();
             }
         }
 
-        if (Interlocked.Exchange(ref _stopCleanupCompleted, 1) == 0)
+        if (Interlocked.Exchange(ref _stopCleanupStarted, 1) == 0)
         {
-            ExecuteInScope(StopInternal);
+            try
+            {
+                ExecuteInScope(StopInternal);
+            }
+            catch
+            {
+                // Best-effort cleanup continues
+            }
+            Interlocked.Exchange(ref _stopCleanupCompleted, 1);
         }
 
-        lock (_lifecycleGate)
-        {
-            _state = ScopeRuntimeState.Stopped;
-        }
+        lock (_lifecycleGate) { _state = ScopeRuntimeState.Stopped; }
 
         _subscriptionRegistry?.Dispose();
         _subscriptionRegistry = null;
@@ -474,15 +484,9 @@ public sealed class ScopeRuntime : IDisposable
         DelayManager.Clear();
         EventCenter.Reset();
         EcsWorld.Dispose();
-        if (_ownsActorWorld)
-        {
-            _actorWorld.Dispose();
-        }
+        if (_ownsActorWorld) _actorWorld.Dispose();
 
-        lock (_lifecycleGate)
-        {
-            _state = ScopeRuntimeState.Disposed;
-        }
+        lock (_lifecycleGate) { _state = ScopeRuntimeState.Disposed; }
     }
 
     private void WorkerLoop()
@@ -494,6 +498,7 @@ public sealed class ScopeRuntime : IDisposable
 
             ExecuteInScope(StartScope);
             TryTransition(ScopeRuntimeState.Starting, ScopeRuntimeState.Running);
+            _workerStartedSignal?.Set();
 
             if (Descriptor.Clock == ScopeClockMode.Manual)
             {
@@ -513,6 +518,7 @@ public sealed class ScopeRuntime : IDisposable
         }
         catch (Exception ex)
         {
+            _workerStartedSignal?.Set();
             ReportException(ex, -1, LayerExceptionPhase.WorkerLoop, LayerQueueKind.None, -1);
             _workerRunning = false;
             ExecuteStopInternalOnce();
@@ -700,29 +706,34 @@ public sealed class ScopeRuntime : IDisposable
 
     private void StopInternal()
     {
-        EcsScheduler?.Stop();
+        try { EcsScheduler?.Stop(); } catch { }
 
         if (Descriptor.StopPolicy == ScopeStopPolicy.Drain)
         {
-            DrainPostInbox();
-            DrainCallInbox();
-            DrainContinuations();
+            try { DrainPostInbox(); } catch { }
+            try { DrainCallInbox(); } catch { }
         }
         else
         {
-            while (_postInbox.TryDequeue(out _)) { }
-            FailPendingCalls(CreateScopeStoppedException("stopped before pending call was dispatched."));
-            DrainContinuations();
-            while (_manualPumps.TryDequeue(out _)) { }
+            try { while (_postInbox.TryDequeue(out _)) { } } catch { }
+            try { FailPendingCalls(CreateScopeStoppedException("stopped before pending call was dispatched.")); } catch { }
+            try { while (_manualPumps.TryDequeue(out _)) { } } catch { }
         }
 
-        _subscriptionRegistry?.Dispose();
+        try { AwaitRegistry.CancelAll(CreateScopeStoppedException("scope is stopping.")); } catch { }
+
+        try { DrainContinuations(); } catch { }
+
+        try { _continuations.Close(); } catch { }
+
+        try { DrainContinuations(); } catch { }
+
+        try { _subscriptionRegistry?.Dispose(); } catch { }
         _subscriptionRegistry = null;
-        DelayManager.Clear();
-        AwaitRegistry.CancelAll(CreateScopeStoppedException("scope is stopping."));
-        ResourceRegistry.CloseAndUnbind();
-        DisposeContexts();
-        DisposeServices();
+        try { DelayManager.Clear(); } catch { }
+        try { ResourceRegistry.CloseAndUnbind(); } catch { }
+        try { DisposeContexts(); } catch { }
+        try { DisposeServices(); } catch { }
     }
 
     private void ReportException(
@@ -781,31 +792,36 @@ public sealed class ScopeRuntime : IDisposable
 
     private void RequestStop()
     {
+        bool shouldStop = false;
         lock (_lifecycleGate)
         {
-            if (_state >= ScopeRuntimeState.StopRequested)
-            {
-                return;
-            }
-
+            if (_state >= ScopeRuntimeState.StopRequested) return;
             if (_state == ScopeRuntimeState.Created ||
                 _state == ScopeRuntimeState.Starting ||
                 _state == ScopeRuntimeState.Running)
             {
                 _state = ScopeRuntimeState.StopRequested;
+                shouldStop = true;
             }
-            else
-            {
-                return;
-            }
+            else return;
         }
 
+        if (!shouldStop) return;
+
+        CloseIngressQueues();
         _workerRunning = false;
 
-        if (Descriptor.Threading != ScopeThreadingMode.Worker)
+        if (Descriptor.Threading == ScopeThreadingMode.Worker)
         {
-            ExecuteStopInternalOnce();
+            return;
         }
+
+        ExecuteStopInternalOnce();
+    }
+
+    private void WaitForWorkerStartup()
+    {
+        _workerStartedSignal?.Wait();
     }
 
     private void JoinWorkerIfNeeded()
@@ -821,6 +837,7 @@ public sealed class ScopeRuntime : IDisposable
             return;
         }
 
+        WaitForWorkerStartup();
         workerThread.Join();
         _workerThread = null;
     }
@@ -835,7 +852,7 @@ public sealed class ScopeRuntime : IDisposable
 
     private void ExecuteStopInternalOnce()
     {
-        if (Interlocked.Exchange(ref _stopCleanupCompleted, 1) != 0)
+        if (Interlocked.Exchange(ref _stopCleanupStarted, 1) != 0)
         {
             return;
         }
@@ -843,19 +860,14 @@ public sealed class ScopeRuntime : IDisposable
         lock (_lifecycleGate)
         {
             if (_state < ScopeRuntimeState.StopRequested)
-            {
                 _state = ScopeRuntimeState.StopRequested;
-            }
-
             _state = ScopeRuntimeState.Stopping;
         }
 
         ExecuteInScope(StopInternal);
+        Interlocked.Exchange(ref _stopCleanupCompleted, 1);
 
-        lock (_lifecycleGate)
-        {
-            _state = ScopeRuntimeState.Stopped;
-        }
+        lock (_lifecycleGate) { _state = ScopeRuntimeState.Stopped; }
     }
 
     private InvalidOperationException CreateScopeStoppedException(string message)
