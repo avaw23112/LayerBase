@@ -55,6 +55,7 @@ public sealed partial class LayerRuntime : IDisposable
     private FullSnapRuntime? _fullSnap;
     internal DelayPublisherManager? DelayManager { get; private set; }
     internal List<ILayerBaseModule>? _installedModules;
+    internal bool _moduleMode;
     #endregion
 
     #region Runtime State - Layer Bindings
@@ -220,6 +221,22 @@ public sealed partial class LayerRuntime : IDisposable
         return Interlocked.Increment(ref _layerIndexCounter) - 1;
     }
 
+    internal IReadOnlyDictionary<RuntimeTypeHandle, int> GetLayerTypeIndexMap()
+    {
+        var map = new Dictionary<RuntimeTypeHandle, int>();
+        if (_chain == null)
+        {
+            return map;
+        }
+
+        foreach (Layer layer in _chain.GetNodes())
+        {
+            map[layer.GetType().TypeHandle] = layer.RouteIndex;
+        }
+
+        return map;
+    }
+
     internal void MarkDelayDirty()
     {
         _chain?.MarkDelayDirty();
@@ -241,7 +258,6 @@ public sealed partial class LayerRuntime : IDisposable
             }
         }
 
-        // 检查生成的 ScopeHostFactory 注册
         RegisterGeneratedScopeHostFactory();
 
         var scopedServices = new List<LayerBase.DI.IService>();
@@ -266,9 +282,7 @@ public sealed partial class LayerRuntime : IDisposable
         }
 
         ScopeHost = ScopeHostFactory.TryCreate(scopedServices, sharedActorWorld: Actors, owningRuntime: this)
-                    ?? ScopeRuntimeHost.Create(ScopeRuntimePlanner.Build(scopedServices), sharedActorWorld: Actors, owningRuntime: this,
-                        postDispatcher: GlobalDispatcherRegistry.PostDispatcher,
-                        callDispatcher: GlobalDispatcherRegistry.CallDispatcher);
+                    ?? ScopeRuntimeHost.Create(ScopeRuntimePlanner.Build(scopedServices), sharedActorWorld: Actors, owningRuntime: this);
     }
 
     private bool TryBuildFromInstalledModules()
@@ -286,23 +300,77 @@ public sealed partial class LayerRuntime : IDisposable
                 return false;
             }
 
+            ScopeCompositionPlan plan = ScopeCompositionBuilder.Build(this, catalog);
             ModuleCallDispatchHandler[]? callDispatchers = ModuleDispatchRegistry.TryGetCallDispatchers(catalog.Modules.Count);
             ModuleEventDispatchHandler[]? eventDispatchers = ModuleDispatchRegistry.TryGetEventDispatchers(catalog.Modules.Count);
 
-            ScopeHost = ScopeRuntimeHost.CreateFromCatalog(
-                catalog,
+            ScopeHost = ScopeRuntimeHost.Create(
+                this,
+                plan,
                 moduleCallDispatchers: callDispatchers,
-                moduleEventDispatchers: eventDispatchers,
-                sharedActorWorld: Actors,
-                owningRuntime: this,
-                fallbackPostDispatcher: GlobalDispatcherRegistry.PostDispatcher,
-                fallbackCallDispatcher: GlobalDispatcherRegistry.CallDispatcher);
+                moduleEventDispatchers: eventDispatchers);
+
+            ApplyLayerServiceHandles(catalog);
+
+            if (ScopeHost != null)
+            {
+                _moduleMode = true;
+            }
 
             return ScopeHost != null;
         }
         catch (ModuleBuildException)
         {
             return false;
+        }
+    }
+
+    private void ApplyLayerServiceHandles(ModuleRuntimeCatalog catalog)
+    {
+        if (_chain == null)
+        {
+            return;
+        }
+
+        var handlesByLayerType = new Dictionary<Type, List<LayerServiceHandle>>();
+        for (int i = 0; i < catalog.Services.Count; i++)
+        {
+            ServiceContribution service = catalog.Services[i];
+            if (!catalog.ScopeIds.TryGetValue(service.OwnerScopeType, out int scopeId) ||
+                !catalog.ServiceSlots.TryGetValue(service.ServiceType, out int serviceSlot))
+            {
+                continue;
+            }
+
+            LayerServiceHandle handle = new(service.ServiceType, scopeId, serviceSlot);
+            for (int j = 0; j < service.OwnerLayerTypes.Length; j++)
+            {
+                Type? layerType = Type.GetTypeFromHandle(service.OwnerLayerTypes[j]);
+                if (layerType == null)
+                {
+                    continue;
+                }
+
+                if (!handlesByLayerType.TryGetValue(layerType, out List<LayerServiceHandle>? handles))
+                {
+                    handles = new List<LayerServiceHandle>();
+                    handlesByLayerType[layerType] = handles;
+                }
+
+                handles.Add(handle);
+            }
+        }
+
+        foreach (Layer layer in _chain.GetNodes())
+        {
+            if (handlesByLayerType.TryGetValue(layer.GetType(), out List<LayerServiceHandle>? handles))
+            {
+                layer.SetServiceHandles(handles.ToArray());
+            }
+            else
+            {
+                layer.SetServiceHandles(Array.Empty<LayerServiceHandle>());
+            }
         }
     }
 
@@ -363,6 +431,26 @@ public sealed partial class LayerRuntime : IDisposable
 
     private void PumpCore(float deltaTime)
     {
+        if (_moduleMode)
+        {
+            if (_scheduler != null)
+            {
+                Worker.DrainEventsTo(_scheduler, _scheduler.Options.MaxIngressPostsPerPump);
+            }
+
+            ScopeHost?.Pump(deltaTime);
+
+            RuntimeFrameBudget actorBudget = default;
+            Actors.Pump(
+                deltaTime: deltaTime,
+                fixedDeltaTime: 0f,
+                pumpFixedUpdate: false,
+                budget: ref actorBudget);
+
+            TryDrainExceptions();
+            return;
+        }
+
         if (_scheduler != null)
         {
             Worker.DrainEventsTo(_scheduler, _scheduler.Options.MaxIngressPostsPerPump);

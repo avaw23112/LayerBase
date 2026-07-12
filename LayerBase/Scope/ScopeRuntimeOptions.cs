@@ -1,5 +1,6 @@
 using LayerBase.Core.Event;
 using LayerBase.ECS.Runtime;
+using LayerBase.Event.Delay;
 
 namespace LayerBase.Scope;
 
@@ -13,6 +14,7 @@ public sealed class ScopeRuntimeOptions
         int continuationQueueCapacity = DefaultQueueCapacity,
         PostSchedulerOptions? postSchedulerOptions = null,
         TimeSchedulerOptions? timeSchedulerOptions = null,
+        DelayBufferOptions? delayBufferOptions = null,
         EcsRuntimeOptions? ecsOptions = null)
     {
         if (postQueueCapacity <= 0)
@@ -35,6 +37,7 @@ public sealed class ScopeRuntimeOptions
         ContinuationQueueCapacity = continuationQueueCapacity;
         PostSchedulerOptions = postSchedulerOptions ?? PostSchedulerOptions.Default;
         TimeSchedulerOptions = timeSchedulerOptions ?? TimeSchedulerOptions.Default;
+        DelayBufferOptions = delayBufferOptions ?? DelayBufferOptions.Default;
         EcsOptions = ecsOptions;
     }
 
@@ -47,6 +50,8 @@ public sealed class ScopeRuntimeOptions
     public PostSchedulerOptions PostSchedulerOptions { get; }
 
     public TimeSchedulerOptions TimeSchedulerOptions { get; }
+
+    public DelayBufferOptions DelayBufferOptions { get; }
 
     public EcsRuntimeOptions? EcsOptions { get; }
 

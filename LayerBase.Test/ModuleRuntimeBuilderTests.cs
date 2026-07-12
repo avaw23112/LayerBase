@@ -35,7 +35,7 @@ public sealed class ModuleRuntimeBuilderTests
         Assert.That(catalog.Services, Has.Count.EqualTo(1));
         Assert.That(catalog.Handlers, Has.Count.EqualTo(1));
         Assert.That(catalog.ModuleSlots[module], Is.EqualTo(0));
-        Assert.That(catalog.ScopeIds[typeof(TestScope).TypeHandle], Is.EqualTo(0));
+        Assert.That(catalog.ScopeIds[typeof(TestScope).TypeHandle], Is.EqualTo(1));
         Assert.That(catalog.ServiceSlots[typeof(TestService).TypeHandle], Is.EqualTo(0));
         Assert.That(catalog.MessageRouteIds[typeof(TestCall).TypeHandle], Is.EqualTo(0));
         Assert.That(catalog.CallRoutes, Has.Count.EqualTo(1));
@@ -95,7 +95,7 @@ public sealed class ModuleRuntimeBuilderTests
 
         Assert.That(catalog.CallRoutes, Has.Count.EqualTo(1));
         ScopeCallRoute route = catalog.CallRoutes[0];
-        Assert.That(route.ScopeId, Is.EqualTo(0));
+        Assert.That(route.ScopeId, Is.EqualTo(1));
         Assert.That(route.ModuleSlot, Is.EqualTo(0));
         Assert.That(route.LocalHandlerId, Is.EqualTo(0));
         Assert.That(route.ServiceSlot, Is.EqualTo(0));
@@ -123,7 +123,7 @@ public sealed class ModuleRuntimeBuilderTests
 
         Assert.That(catalog.EventRoutes, Has.Count.EqualTo(1));
         ScopeEventRoute eventRoute = catalog.EventRoutes[0];
-        Assert.That(eventRoute.ScopeId, Is.EqualTo(0));
+        Assert.That(eventRoute.ScopeId, Is.EqualTo(1));
         Assert.That(eventRoute.HandlerStart, Is.EqualTo(0));
         Assert.That(eventRoute.HandlerCount, Is.EqualTo(1));
 

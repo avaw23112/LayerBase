@@ -1,14 +1,9 @@
-using System;
 using System.Collections.Generic;
 using LayerBase.Actor;
 using LayerBase.DI;
 
 namespace LayerBase.Scope;
 
-/// <summary>
-/// 由源生成器在编译期填充的 ScopeRuntimeHost 工厂注册表。
-/// 替代原先的运行时反射方案，通过 Layer is 检测注册，IL2CPP/AOT 友好。
-/// </summary>
 public static class ScopeHostFactory
 {
     public delegate ScopeRuntimeHost? FactoryDelegate(

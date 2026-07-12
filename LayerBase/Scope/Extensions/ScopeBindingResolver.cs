@@ -10,20 +10,13 @@ internal static class ScopeBindingResolver
 {
     public static LayerRuntime ResolveRuntime(object obj)
     {
-        if (obj is ILayerBindingAccessor accessor &&
-            accessor.__LayerBaseBinding is ServiceLayerBinding binding &&
-            binding.Layer != null)
+        if (ScopeObjectBinder.TryGet(obj, out ScopeObjectBinding? binding) &&
+            binding.Runtime != null)
         {
-            return binding.Layer.OwnerContext
-                ?? throw new InvalidOperationException(
-                    $"'{obj.GetType().FullName}' is bound to a Layer that is not attached to any runtime.");
+            return binding.Runtime;
         }
 
-        // Fallback: use ServiceLayerBinder (uses ConditionalWeakTable internally)
-        var layer = ServiceLayerBinder.RequireBinding(obj).Layer;
-        return layer.OwnerContext
-            ?? throw new InvalidOperationException(
-                $"'{obj.GetType().FullName}' is not attached to any runtime.");
+        return ServiceLayerBinder.RequireBinding(obj).Runtime;
     }
 }
 

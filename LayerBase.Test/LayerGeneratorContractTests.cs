@@ -669,9 +669,10 @@ public class LayerGeneratorContractTests
             string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
 
         string generated = string.Join(Environment.NewLine, result.GeneratedSources);
-        Assert.That(generated, Does.Contain("global::LayerBase.Scope.IGeneratedScopeServiceBinding"));
+        Assert.That(generated, Does.Contain("global::LayerBase.Scope.IScopeObjectBindingAccessor"));
+        Assert.That(generated, Does.Contain("private global::LayerBase.Scope.ScopeObjectBinding? __scopeObjectBinding;"));
         Assert.That(generated, Does.Contain("protected global::LayerBase.Scope.ScopeRuntime OwnerScope"));
-        Assert.That(generated, Does.Contain("protected int ServiceId"));
+        Assert.That(generated, Does.Contain("protected int ServiceId => __scopeObjectBinding?.ServiceSlot ?? -1;"));
         Assert.That(generated, Does.Contain("protected global::LayerBase.Scope.ScopeRef<TScope> Scope<TScope>()"));
     }
 

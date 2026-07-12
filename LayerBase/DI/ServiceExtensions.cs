@@ -15,6 +15,26 @@ public static class ServiceExtensions
         return ServiceLayerBinder.RequireBinding(service);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryGetOwnerScope(this IService service, out ScopeRuntime ownerScope)
+    {
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
+        {
+            ownerScope = scopeBinding.Scope;
+            return true;
+        }
+
+        ServiceLayerBinding? binding = ServiceLayerBinder.GetBinding(service);
+        if (binding?.Scope != null)
+        {
+            ownerScope = binding.Scope;
+            return true;
+        }
+
+        ownerScope = null!;
+        return false;
+    }
+
     /// <summary>
     /// 同步发送事件。
     /// </summary>
@@ -36,7 +56,7 @@ public static class ServiceExtensions
         in   TValue   value)
         where TValue : struct
     {
-        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        if (service.TryGetOwnerScope(out ScopeRuntime ownerScope))
         {
             return ownerScope.EventCenter.Send(value);
         }
@@ -74,7 +94,7 @@ public static class ServiceExtensions
         EventPostPolicy? policy = default)
         where TValue : struct
     {
-        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        if (service.TryGetOwnerScope(out ScopeRuntime ownerScope))
         {
             return policy.HasValue
                 ? ownerScope.PostScheduler.TryPost(value, policy.Value)
@@ -106,7 +126,7 @@ public static class ServiceExtensions
     public static PostResult MarkDirty<TValue>(this IService service)
         where TValue : struct
     {
-        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        if (service.TryGetOwnerScope(out ScopeRuntime ownerScope))
         {
             return ownerScope.PostScheduler.MarkDirty<TValue>();
         }
@@ -150,7 +170,7 @@ public static class ServiceExtensions
         int                capacity     = 0)
         where TValue : struct
     {
-        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        if (service.TryGetOwnerScope(out ScopeRuntime ownerScope))
         {
             return ownerScope.PostScheduler.TryPost(
                 value,
@@ -204,7 +224,7 @@ public static class ServiceExtensions
         int                capacity     = 0)
         where TValue : struct
     {
-        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        if (service.TryGetOwnerScope(out ScopeRuntime ownerScope))
         {
             return ownerScope.PostScheduler.TryPost(
                 value,
@@ -275,7 +295,7 @@ public static class ServiceExtensions
         TimerCatchUpPolicy? catchUpPolicy     = default)
         where TValue : struct
     {
-        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        if (service.TryGetOwnerScope(out ScopeRuntime ownerScope))
         {
             return ownerScope.SchedulePost(
                 value,
@@ -329,6 +349,13 @@ public static class ServiceExtensions
         int           contractId = 0)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.GetOrCreateDelayPublisher<TValue>()
+                .Publish(value, ttl, contractId);
+            return;
+        }
+
         ServiceLayerBinder
             .RequireLayer(service.GetBinding())
             .SubscribeDelay<TValue>()
@@ -341,6 +368,12 @@ public static class ServiceExtensions
         in TEvent     value)
         where TEvent : struct
     {
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.Actors.PostTo(actorId, in value);
+            return;
+        }
+
          service
                .GetBinding()
                .Runtime.PostTo(actorId, in value);
@@ -362,6 +395,12 @@ public static class ServiceExtensions
         EventHandleDelegate<TValue> handler)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.RegisterSubscribeFlow(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            return;
+        }
+
         ServiceLayerBinder.RequireLayer(service.GetBinding()).SubscribeFlow(handler);
     }
 
@@ -370,6 +409,12 @@ public static class ServiceExtensions
         EventHandleDelegateAsync<TValue> handler)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.RegisterSubscribeAsync(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            return;
+        }
+
         ServiceLayerBinder.RequireLayer(service.GetBinding()).SubscribeAsync(handler);
     }
 
@@ -378,6 +423,12 @@ public static class ServiceExtensions
         EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.RegisterSubscribe(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            return;
+        }
+
         ServiceLayerBinder.RequireLayer(service.GetBinding()).Subscribe(handler);
     }
 
@@ -386,6 +437,12 @@ public static class ServiceExtensions
         EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.RegisterSubscribeParallel(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            return;
+        }
+
         var binding = service.GetBinding();
 
         ServiceLayerBinder.RequireLayer(binding).SubscribeParallel(
@@ -403,6 +460,11 @@ public static class ServiceExtensions
     public static T GetService<T>(this IService service)
         where T : class
     {
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
+        {
+            return scopeBinding.Scope.ServiceProvider.Get<T>();
+        }
+
         var binding = service.GetBinding();
         if (binding.Layer != null)
         {
@@ -442,6 +504,11 @@ public static class LayerContextExtensions
         in   TValue        value)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? binding))
+        {
+            return binding.Scope.EventCenter.Send(value);
+        }
+
         return context
                .GetBinding()
                .EventCenter
@@ -474,7 +541,15 @@ public static class LayerContextExtensions
         EventPostPolicy?   policy = default)
         where TValue : struct
     {
-        var scheduler = context.GetBinding().Runtime.Scheduler;
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            return policy.HasValue
+                ? scopeBinding.Scope.PostScheduler.TryPost(value, policy.Value)
+                : scopeBinding.Scope.PostScheduler.TryPost(value);
+        }
+
+        ServiceLayerBinding binding = context.GetBinding();
+        PostScheduler scheduler = binding.Scope?.PostScheduler ?? binding.Runtime.Scheduler;
 
         return policy.HasValue
             ? scheduler.TryPost(value, policy.Value)
@@ -497,11 +572,14 @@ public static class LayerContextExtensions
     public static PostResult MarkDirty<TValue>(this ILayerContext context)
         where TValue : struct
     {
-        return context
-               .GetBinding()
-               .Runtime
-               .Scheduler
-               .MarkDirty<TValue>();
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            return scopeBinding.Scope.PostScheduler.MarkDirty<TValue>();
+        }
+
+        ServiceLayerBinding binding = context.GetBinding();
+        PostScheduler scheduler = binding.Scope?.PostScheduler ?? binding.Runtime.Scheduler;
+        return scheduler.MarkDirty<TValue>();
     }
 
     /// <summary>
@@ -533,16 +611,24 @@ public static class LayerContextExtensions
         int                capacity     = 0)
         where TValue : struct
     {
-        return context
-               .GetBinding()
-               .Runtime
-               .Scheduler
-               .TryPost(
-                   value,
-                   new EventPostPolicy(
-                       PostDeliveryMode.Latest,
-                       backpressure,
-                       capacity));
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            return scopeBinding.Scope.PostScheduler.TryPost(
+                value,
+                new EventPostPolicy(
+                    PostDeliveryMode.Latest,
+                    backpressure,
+                    capacity));
+        }
+
+        ServiceLayerBinding binding = context.GetBinding();
+        PostScheduler scheduler = binding.Scope?.PostScheduler ?? binding.Runtime.Scheduler;
+        return scheduler.TryPost(
+            value,
+            new EventPostPolicy(
+                PostDeliveryMode.Latest,
+                backpressure,
+                capacity));
     }
 
     /// <summary>
@@ -574,16 +660,24 @@ public static class LayerContextExtensions
         int                capacity     = 0)
         where TValue : struct
     {
-        return context
-               .GetBinding()
-               .Runtime
-               .Scheduler
-               .TryPost(
-                   value,
-                   new EventPostPolicy(
-                       PostDeliveryMode.Coalesced,
-                       backpressure,
-                       capacity));
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            return scopeBinding.Scope.PostScheduler.TryPost(
+                value,
+                new EventPostPolicy(
+                    PostDeliveryMode.Coalesced,
+                    backpressure,
+                    capacity));
+        }
+
+        ServiceLayerBinding binding = context.GetBinding();
+        PostScheduler scheduler = binding.Scope?.PostScheduler ?? binding.Runtime.Scheduler;
+        return scheduler.TryPost(
+            value,
+            new EventPostPolicy(
+                PostDeliveryMode.Coalesced,
+                backpressure,
+                capacity));
     }
 
     /// <summary>
@@ -600,7 +694,31 @@ public static class LayerContextExtensions
         TimerCatchUpPolicy? catchUpPolicy     = default)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            return scopeBinding.Scope.SchedulePost(
+                value,
+                delaySeconds,
+                expiredPostPolicy,
+                repeatCount,
+                intervalSeconds,
+                repeatMode,
+                catchUpPolicy);
+        }
+
         var binding = context.GetBinding();
+        if (binding.Scope != null)
+        {
+            return binding.Scope.SchedulePost(
+                value,
+                delaySeconds,
+                expiredPostPolicy,
+                repeatCount,
+                intervalSeconds,
+                repeatMode,
+                catchUpPolicy);
+        }
+
         var runtime = binding.Runtime;
         var eventId = EventTypeId<TValue>.Id;
         var timerPolicy = runtime.PolicyTable.GetTimerPolicy(eventId);
@@ -626,6 +744,13 @@ public static class LayerContextExtensions
         int                contractId = 0)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.GetOrCreateDelayPublisher<TValue>()
+                .Publish(value, ttl, contractId);
+            return;
+        }
+
         ServiceLayerBinder
             .RequireLayer(context.GetBinding())
             .SubscribeDelay<TValue>()
@@ -638,6 +763,12 @@ public static class LayerContextExtensions
         in TEvent          value)
         where TEvent : struct
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.Actors.PostTo(actorId, in value);
+            return;
+        }
+
          context
                .GetBinding()
                .Runtime.PostTo(actorId, in value);
@@ -649,6 +780,12 @@ public static class LayerContextExtensions
         in TEvent             value)
         where TEvent : struct
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.Actors.PostToMany(actorIds, in value);
+            return;
+        }
+
         context
             .GetBinding()
             .Runtime.PostToMany(actorIds, in value);
@@ -659,6 +796,12 @@ public static class LayerContextExtensions
         EventHandleDelegate<TValue> handler)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.RegisterSubscribeFlow(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            return;
+        }
+
         ServiceLayerBinder.RequireLayer(context.GetBinding()).SubscribeFlow(handler);
     }
 
@@ -667,6 +810,12 @@ public static class LayerContextExtensions
         EventHandleDelegateAsync<TValue> handler)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.RegisterSubscribeAsync(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            return;
+        }
+
         ServiceLayerBinder.RequireLayer(context.GetBinding()).SubscribeAsync(handler);
     }
 
@@ -675,6 +824,12 @@ public static class LayerContextExtensions
         EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.RegisterSubscribe(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            return;
+        }
+
         ServiceLayerBinder.RequireLayer(context.GetBinding()).Subscribe(handler);
     }
 
@@ -683,6 +838,12 @@ public static class LayerContextExtensions
         EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.RegisterSubscribeParallel(scopeBinding.Membership, scopeBinding.ServiceSlot, handler);
+            return;
+        }
+
         var binding = context.GetBinding();
 
         ServiceLayerBinder.RequireLayer(binding).SubscribeParallel(
@@ -706,6 +867,11 @@ public static class LayerContextExtensions
     public static T GetService<T>(this ILayerContext context)
         where T : class
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            return scopeBinding.Scope.ServiceProvider.Get<T>();
+        }
+
         var binding = context.GetBinding();
         if (binding.Layer != null)
         {

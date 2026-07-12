@@ -158,10 +158,10 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
             var implementsLayerContext = group.Any(m => m.ImplementsLayerContext);
             var implementsService = group.Any(m => m.ImplementsService);
             var emitsBindingAccessor = group.Any(m => m.EmitsBindingAccessor);
-            var emitsGeneratedScopeBinding = implementsService && isPartial;
+            var emitsScopeObjectBindingAccessor = emitsBindingAccessor && isPartial;
 
             if (allHandlers.Count == 0 && allDelayProps.Count == 0 && allDiagnostics.Count == 0 &&
-                !emitsGeneratedScopeBinding)
+                !emitsScopeObjectBindingAccessor)
                 continue;
 
             foreach (var diagnostic in allDiagnostics)
@@ -206,9 +206,10 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
 
             var interfaces = new List<string>();
             if (implementsLayerContext) interfaces.Add("global::LayerBase.DI.IInternalLayerContext");
-            if (emitsBindingAccessor) interfaces.Add("global::LayerBase.DI.ILayerBindingAccessor");
-            if (emitsGeneratedScopeBinding) interfaces.Add("global::LayerBase.Scope.IGeneratedScopeServiceBinding");
+            if (emitsScopeObjectBindingAccessor) interfaces.Add("global::LayerBase.Scope.IScopeObjectBindingAccessor");
             if (allHandlers.Count > 0 || allDelayProps.Count > 0) interfaces.Add("global::LayerBase.DI.IAutoSubscribe");
+            if (emitsScopeObjectBindingAccessor && (allHandlers.Count > 0 || allDelayProps.Count > 0))
+                interfaces.Add("global::LayerBase.Scope.IAutoScopeSubscribe");
             var interfaceDecl = interfaces.Count > 0 ? " : " + string.Join(", ", interfaces) : "";
 
             sb.AppendLine($"    partial class {first.ClassName}{interfaceDecl}");
@@ -221,37 +222,68 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
                     "        int global::LayerBase.DI.IInternalLayerContext.LayerIndex { get => __routeIndex; set => __routeIndex = value; }");
             }
 
-            if (emitsBindingAccessor)
+            if (emitsScopeObjectBindingAccessor)
             {
                 if (implementsLayerContext)
                     sb.AppendLine();
-                sb.AppendLine("        private object? __layerBaseBinding;");
+                sb.AppendLine("        private global::LayerBase.Scope.ScopeObjectBinding? __scopeObjectBinding;");
                 sb.AppendLine(
-                    "        object? global::LayerBase.DI.ILayerBindingAccessor.__LayerBaseBinding { get => __layerBaseBinding; set => __layerBaseBinding = value; }");
+                    "        global::LayerBase.Scope.ScopeObjectBinding? global::LayerBase.Scope.IScopeObjectBindingAccessor.__ScopeObjectBinding { get => __scopeObjectBinding; set => __scopeObjectBinding = value; }");
             }
 
-            if (emitsGeneratedScopeBinding)
+            if (implementsService && emitsScopeObjectBindingAccessor)
             {
-                if (implementsLayerContext || emitsBindingAccessor)
+                if (implementsLayerContext || emitsScopeObjectBindingAccessor)
                     sb.AppendLine();
-                sb.AppendLine("        protected global::LayerBase.Scope.ScopeRuntime OwnerScope { get; private set; } = null!;");
+                sb.AppendLine("        protected global::LayerBase.Scope.ScopeRuntime OwnerScope");
+                sb.AppendLine("        {");
+                sb.AppendLine("            get");
+                sb.AppendLine("            {");
+                sb.AppendLine("                global::LayerBase.Scope.ScopeObjectBinding? binding = __scopeObjectBinding;");
+                sb.AppendLine("                if (binding == null)");
+                sb.AppendLine("                {");
+                sb.AppendLine("                    throw new global::LayerBase.Scope.UnboundScopeObjectException(typeof(" + first.ClassName + "));");
+                sb.AppendLine("                }");
                 sb.AppendLine();
-                sb.AppendLine("        protected int ServiceId { get; private set; } = -1;");
+                sb.AppendLine("                return binding.Scope;");
+                sb.AppendLine("            }");
+                sb.AppendLine("        }");
+                sb.AppendLine();
+                sb.AppendLine("        protected int ServiceId => __scopeObjectBinding?.ServiceSlot ?? -1;");
                 sb.AppendLine();
                 sb.AppendLine("        protected global::LayerBase.Scope.ScopeRef<TScope> Scope<TScope>()");
                 sb.AppendLine("        {");
                 sb.AppendLine("            return OwnerScope.GetScopeRef<TScope>();");
                 sb.AppendLine("        }");
-                sb.AppendLine();
-                sb.AppendLine("        void global::LayerBase.Scope.IGeneratedScopeServiceBinding.BindScope(global::LayerBase.Scope.ScopeRuntime ownerScope, int serviceId)");
-                sb.AppendLine("        {");
-                sb.AppendLine("            OwnerScope = ownerScope ?? throw new global::System.ArgumentNullException(nameof(ownerScope));");
-                sb.AppendLine("            ServiceId = serviceId;");
-                sb.AppendLine("        }");
             }
 
             if (allHandlers.Count > 0 || allDelayProps.Count > 0)
             {
+                if (emitsScopeObjectBindingAccessor)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine(
+                        "        void global::LayerBase.Scope.IAutoScopeSubscribe.Bind(in global::LayerBase.Scope.ScopeSubscriptionContext context)");
+                    sb.AppendLine("        {");
+                    foreach (var h in allHandlers)
+                    {
+                        var reg = h.Attr.Contains("Async")                                  ? "SubscribeAsync" :
+                            h.Attr.Contains("Parallel")                                     ? "SubscribeParallel" :
+                            h.Attr.Contains("Notify")                                       ? "SubscribeNotify" :
+                            h.Attr == "SubscribeFlow" || h.Attr == "SubscribeFlowAttribute" ? "SubscribeFlow" : "Subscribe";
+
+                        sb.AppendLine($"            context.{reg}<{h.Evt}>(this.{h.Name});");
+                    }
+
+                    foreach (var p in allDelayProps)
+                    {
+                        var parts = p.Split('|');
+                        sb.AppendLine($"            this.{parts[0]} = context.SubscribeDelay<{parts[1]}>();");
+                    }
+
+                    sb.AppendLine("        }");
+                }
+
                 sb.AppendLine();
                 sb.AppendLine(
                     "        void global::LayerBase.DI.IAutoSubscribe.AutoBind(global::LayerBase.Layers.Layer layer)");

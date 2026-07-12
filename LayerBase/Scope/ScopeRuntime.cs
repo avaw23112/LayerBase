@@ -5,10 +5,12 @@ using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.Core.DataStruct;
 using LayerBase.Core.Event;
+using LayerBase.Core.EventHandler;
 using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.ECS.Runtime;
 using LayerBase.ECS.Runtime.Query;
+using LayerBase.Event.Delay;
 
 namespace LayerBase.Scope;
 
@@ -28,6 +30,9 @@ public sealed class ScopeRuntime : IDisposable
     private readonly IBoundedQueue<ScopeCallMessage> _callInbox;
     private readonly IBoundedQueue<LayerContinuation> _continuations;
     private readonly IBoundedQueue<float> _manualPumps;
+    private ScopeContextPlan[] _contextPlans = Array.Empty<ScopeContextPlan>();
+    private ScopeServiceProvider? _serviceProvider;
+    private ScopeSubscriptionRegistry? _subscriptionRegistry;
     private readonly ScopePostDispatcher? _postDispatcher;
     private readonly ScopeCallDispatcher? _callDispatcher;
     private readonly ScopeTimerSink _timerSink;
@@ -36,6 +41,7 @@ public sealed class ScopeRuntime : IDisposable
     private LayerBaseSynchronizationContext? _context;
     private ScopeRouteTable? _routes;
     private Thread? _workerThread;
+    private readonly ActorWorld _actorWorld;
     private volatile bool _started;
     private volatile bool _stopped;
     private volatile bool _disposed;
@@ -70,9 +76,11 @@ public sealed class ScopeRuntime : IDisposable
         EventCenter.PostScheduler = PostScheduler;
         Timer = new TimeScheduler<ITimerAction>(options.TimeSchedulerOptions);
         _timerSink = new ScopeTimerSink(PostScheduler);
-        Actors = sharedActorWorld ?? new ActorWorld();
+        DelayManager = DelayPublisherManager.Create(options.DelayBufferOptions, _policyTable);
+        _actorWorld = sharedActorWorld ?? new ActorWorld();
+        Actors = new ScopeActorGateway(owningRuntime, _actorWorld, descriptor.ScopeId);
         EcsWorld = World.Create();
-        EcsWorld.BindScopeActors(Actors);
+        EcsWorld.BindScopeActors(_actorWorld);
         EcsQueryRegistry = new EcsQueryRegistry(EcsWorld);
         OwningRuntime = owningRuntime;
         InitializeEcsScheduler(options);
@@ -90,6 +98,8 @@ public sealed class ScopeRuntime : IDisposable
         _callDispatcher = callDispatcher;
 
         BindServices();
+        RebuildServiceProvider();
+        RebindSubscriptions();
     }
 
     private void InitializeEcsScheduler(ScopeRuntimeOptions options)
@@ -116,13 +126,20 @@ public sealed class ScopeRuntime : IDisposable
 
     public IService[] Services { get; }
 
+    public ILayerContext[] Contexts { get; private set; } = Array.Empty<ILayerContext>();
+
+    internal ScopeServiceProvider ServiceProvider =>
+        _serviceProvider ?? throw new InvalidOperationException("Scope service provider is not ready.");
+
     public EventCenter EventCenter { get; }
 
     public PostScheduler PostScheduler { get; }
 
     public TimeScheduler<ITimerAction> Timer { get; }
 
-    public ActorWorld Actors { get; }
+    internal DelayPublisherManager DelayManager { get; }
+
+    public ScopeActorGateway Actors { get; }
 
     public World EcsWorld { get; }
 
@@ -169,6 +186,60 @@ public sealed class ScopeRuntime : IDisposable
     internal void BindRoutes(ScopeRouteTable routes)
     {
         _routes = routes ?? throw new ArgumentNullException(nameof(routes));
+    }
+
+    internal void SetContexts(ILayerContext[] contexts)
+    {
+        Contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
+        _contextPlans = new ScopeContextPlan[contexts.Length];
+        for (int i = 0; i < contexts.Length; i++)
+        {
+            _contextPlans[i] = new ScopeContextPlan(
+                contextSlot: i,
+                contextType: contexts[i].GetType(),
+                ownerServiceSlot: -1,
+                instance: contexts[i]);
+        }
+        BindContexts();
+        RebuildServiceProvider();
+        RebindSubscriptions();
+    }
+
+    internal void UpdateServiceBindings(IReadOnlyList<ScopeServicePlan> servicePlans)
+    {
+        if (servicePlans == null) return;
+        for (int i = 0; i < servicePlans.Count; i++)
+        {
+            ScopeServicePlan plan = servicePlans[i];
+            if (plan.Membership.Start < 0) continue;
+            if ((uint)plan.ServiceSlot >= (uint)Services.Length) continue;
+
+            ScopeObjectBinding existing = ScopeObjectBinder.Require(Services[plan.ServiceSlot]);
+            ScopeObjectBinder.Attach(
+                Services[plan.ServiceSlot],
+                new ScopeObjectBinding(
+                    runtime: existing.Runtime,
+                    scope: this,
+                    serviceSlot: plan.ServiceSlot,
+                    contextSlot: existing.ContextSlot,
+                    membership: plan.Membership,
+                    kind: existing.Kind));
+        }
+    }
+
+    internal void SetContexts(ScopeContextPlan[] contextPlans)
+    {
+        _contextPlans = contextPlans ?? throw new ArgumentNullException(nameof(contextPlans));
+        var contexts = new ILayerContext[_contextPlans.Length];
+        for (int i = 0; i < _contextPlans.Length; i++)
+        {
+            contexts[i] = _contextPlans[i].Instance;
+        }
+
+        Contexts = contexts;
+        BindContexts();
+        RebuildServiceProvider();
+        RebindSubscriptions();
     }
 
     public void Start()
@@ -330,13 +401,16 @@ public sealed class ScopeRuntime : IDisposable
 
         Stop();
         _disposed = true;
+        _subscriptionRegistry?.Dispose();
+        _subscriptionRegistry = null;
         EcsScheduler?.Dispose();
         _context?.Dispose();
         Timer.Dispose();
         PostScheduler.Dispose();
+        DelayManager.Clear();
         EventCenter.Reset();
         EcsWorld.Dispose();
-        Actors.Dispose();
+        _actorWorld.Dispose();
     }
 
     private void WorkerLoop()
@@ -463,18 +537,41 @@ public sealed class ScopeRuntime : IDisposable
         }
     }
 
+    private void StartContexts()
+    {
+        for (int i = 0; i < Contexts.Length; i++)
+        {
+            if (Contexts[i] is not IInitializable initializable)
+            {
+                continue;
+            }
+
+            try
+            {
+                initializable.Initialize();
+            }
+            catch (Exception ex)
+            {
+                ReportException(ex, serviceId: -1, LayerExceptionPhase.ServiceStart, LayerQueueKind.None, messageId: -1);
+                ApplyExceptionPolicy(LayerExceptionPhase.ServiceStart, ex);
+            }
+        }
+    }
+
     private void StartScope()
     {
         EcsScheduler?.Start();
-        Actors.PrepareRuntimeBuild();
+        _actorWorld.PrepareRuntimeBuild();
         StartServices();
-        Actors.CompleteRuntimeBuild();
+        StartContexts();
+        _actorWorld.CompleteRuntimeBuild();
     }
 
     private void PumpInternal(float deltaTime)
     {
         _context?.Update();
         Timer.Tick(deltaTime, _timerSink);
+        DelayManager.Tick(deltaTime);
         DrainPostInbox();
         DrainCallInbox();
         PostScheduler.Pump();
@@ -482,6 +579,14 @@ public sealed class ScopeRuntime : IDisposable
         for (int i = 0; i < Services.Length; i++)
         {
             if (Services[i] is LayerBase.DI.Options.IUpdate update)
+            {
+                update.Update();
+            }
+        }
+
+        for (int i = 0; i < Contexts.Length; i++)
+        {
+            if (Contexts[i] is LayerBase.DI.Options.IUpdate update)
             {
                 update.Update();
             }
@@ -501,7 +606,7 @@ public sealed class ScopeRuntime : IDisposable
             deadlineTicks: 0);
         bool pumpFixedUpdate = Descriptor.Clock == ScopeClockMode.FixedRate;
 
-        Actors.Pump(
+        _actorWorld.Pump(
             deltaTime: deltaTime,
             fixedDeltaTime: pumpFixedUpdate ? deltaTime : 0f,
             pumpFixedUpdate: pumpFixedUpdate,
@@ -526,6 +631,10 @@ public sealed class ScopeRuntime : IDisposable
             _manualPumps.Clear();
         }
 
+        _subscriptionRegistry?.Dispose();
+        _subscriptionRegistry = null;
+        DelayManager.Clear();
+        DisposeContexts();
         DisposeServices();
     }
 
@@ -591,6 +700,9 @@ public sealed class ScopeRuntime : IDisposable
 
     private void DisposeServices()
     {
+        _serviceProvider?.Dispose();
+        _serviceProvider = null;
+
         for (int i = Services.Length - 1; i >= 0; i--)
         {
             IService service = Services[i];
@@ -599,7 +711,21 @@ public sealed class ScopeRuntime : IDisposable
                 disposable.Dispose();
             }
 
-            ScopeServiceOwnerRegistry.Unbind(service);
+            ScopeObjectBinder.Detach(service);
+        }
+    }
+
+    private void DisposeContexts()
+    {
+        for (int i = Contexts.Length - 1; i >= 0; i--)
+        {
+            ILayerContext context = Contexts[i];
+            if (context is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+
+            ScopeObjectBinder.Detach(context);
         }
     }
 
@@ -631,17 +757,185 @@ public sealed class ScopeRuntime : IDisposable
         for (int i = 0; i < Services.Length; i++)
         {
             IService service = Services[i];
-            ScopeServiceOwnerRegistry.Bind(service, this);
+            ScopeObjectBinder.Attach(
+                service,
+                new ScopeObjectBinding(
+                    runtime: OwningRuntime,
+                    scope: this,
+                    serviceSlot: i,
+                    contextSlot: -1,
+                    membership: LayerMembership.Empty,
+                    kind: ScopeObjectKind.Service));
 
-            if (service is IGeneratedScopeServiceBinding generatedBinding)
-            {
-                generatedBinding.BindScope(this, i);
-            }
-            else if (service is IServiceScopeBinding binding)
+            if (service is IServiceScopeBinding binding)
             {
                 binding.BindScope(this, i);
             }
         }
+    }
+
+    private void BindContexts()
+    {
+        if (OwningRuntime == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < Contexts.Length; i++)
+        {
+            ScopeContextPlan contextPlan = i < _contextPlans.Length
+                ? _contextPlans[i]
+                : new ScopeContextPlan(i, Contexts[i].GetType(), -1, Contexts[i]);
+
+            ScopeObjectBinder.Attach(
+                Contexts[i],
+                new ScopeObjectBinding(
+                    runtime: OwningRuntime,
+                    scope: this,
+                    serviceSlot: contextPlan.OwnerServiceSlot,
+                    contextSlot: contextPlan.ContextSlot,
+                    membership: contextPlan.Membership,
+                    kind: ScopeObjectKind.Context));
+        }
+    }
+
+    private void RebuildServiceProvider()
+    {
+        _serviceProvider?.Dispose();
+        _serviceProvider = new ScopeServiceProvider(Services, Contexts);
+
+        for (int i = 0; i < Services.Length; i++)
+        {
+            _serviceProvider.InjectMembers(Services[i]);
+        }
+
+        for (int i = 0; i < Contexts.Length; i++)
+        {
+            _serviceProvider.InjectMembers(Contexts[i]);
+        }
+    }
+
+    private void RebindSubscriptions()
+    {
+        _subscriptionRegistry?.Dispose();
+        _subscriptionRegistry = new ScopeSubscriptionRegistry(this);
+
+        BindGeneratedSubscriptions(Services);
+        BindGeneratedSubscriptions(Contexts);
+    }
+
+    private void BindGeneratedSubscriptions(IEnumerable<object> candidates)
+    {
+        foreach (object candidate in candidates)
+        {
+            ScopeObjectBinding binding = ScopeObjectBinder.Require(candidate);
+
+            if (candidate is IAutoScopeSubscribe autoScopeSubscribe)
+            {
+                autoScopeSubscribe.Bind(new ScopeSubscriptionContext(
+                    this,
+                    binding.Membership,
+                    binding.ServiceSlot));
+            }
+
+            if (candidate is IAutoSubscribe)
+            {
+                continue;
+            }
+
+            BindInterfaceEventHandlers(candidate, binding);
+        }
+    }
+
+    private void BindInterfaceEventHandlers(object instance, ScopeObjectBinding binding)
+    {
+        for (int i = 0; i < instance.GetType().GetInterfaces().Length; i++)
+        {
+            Type iface = instance.GetType().GetInterfaces()[i];
+            if (!iface.IsGenericType)
+            {
+                continue;
+            }
+
+            Type genericDefinition = iface.GetGenericTypeDefinition();
+            Type[] typeArguments = iface.GetGenericArguments();
+            if (typeArguments.Length != 1 || !typeArguments[0].IsValueType)
+            {
+                continue;
+            }
+
+            if (genericDefinition == typeof(IEventHandler<>))
+            {
+                _subscriptionRegistry!.SubscribeFlow(binding, instance, typeArguments[0]);
+                continue;
+            }
+
+            if (genericDefinition == typeof(IEventHandlerAsync<>))
+            {
+                _subscriptionRegistry!.SubscribeAsync(binding, instance, typeArguments[0]);
+            }
+        }
+    }
+
+    internal void RegisterSubscribeFlow<T>(
+        LayerMembership membership,
+        int serviceSlot,
+        EventHandleDelegate<T> handler)
+        where T : struct
+    {
+        _subscriptionRegistry!.SubscribeFlow(membership, serviceSlot, handler);
+    }
+
+    internal void RegisterSubscribeAsync<T>(
+        LayerMembership membership,
+        int serviceSlot,
+        EventHandleDelegateAsync<T> handler)
+        where T : struct
+    {
+        _subscriptionRegistry!.SubscribeAsync(membership, serviceSlot, handler);
+    }
+
+    internal void RegisterSubscribeNotify<T>(
+        LayerMembership membership,
+        int serviceSlot,
+        EventNotifyDelegate<T> handler)
+        where T : struct
+    {
+        _subscriptionRegistry!.SubscribeNotify(membership, serviceSlot, handler);
+    }
+
+    internal void RegisterSubscribe<T>(
+        LayerMembership membership,
+        int serviceSlot,
+        EventNotifyDelegate<T> handler)
+        where T : struct
+    {
+        _subscriptionRegistry!.Subscribe(membership, serviceSlot, handler);
+    }
+
+    internal void RegisterSubscribeParallel<T>(
+        LayerMembership membership,
+        int serviceSlot,
+        EventNotifyDelegate<T> handler)
+        where T : struct
+    {
+        Action<int, int, int, Exception>? reportError = null;
+        if (OwningRuntime != null)
+        {
+            reportError = OwningRuntime.ReportLayerEventError;
+        }
+
+        _subscriptionRegistry!.SubscribeParallel(
+            membership,
+            serviceSlot,
+            handler,
+            reportError);
+    }
+
+    internal IDelayPublisher<T> GetOrCreateDelayPublisher<T>()
+        where T : struct
+    {
+        return _subscriptionRegistry!.GetOrCreateDelayPublisher<T>();
     }
 
     private void DrainPostInbox()

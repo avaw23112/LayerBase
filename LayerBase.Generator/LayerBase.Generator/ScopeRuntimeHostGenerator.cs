@@ -405,17 +405,6 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         {
             builder.AppendLine("        static GeneratedScopeRuntimeHostFactory()");
             builder.AppendLine("        {");
-
-            if (hasPostDispatcher && postDispatcher != "null")
-            {
-                builder.AppendLine("            global::LayerBase.Scope.GlobalDispatcherRegistry.PostDispatcher = global::LayerBase.Scope.GeneratedScopePostDispatcher.Dispatch;");
-            }
-
-            if (hasCallDispatcher && callDispatcher != "null")
-            {
-                builder.AppendLine("            global::LayerBase.Scope.GlobalDispatcherRegistry.CallDispatcher = global::LayerBase.Scope.GeneratedScopeCallDispatcher.Dispatch;");
-            }
-
             builder.AppendLine("        }");
             builder.AppendLine();
         }

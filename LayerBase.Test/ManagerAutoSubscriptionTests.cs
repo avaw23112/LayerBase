@@ -2,6 +2,7 @@
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Layers;
+using LayerBase.Scope;
 
 namespace EventsTest;
 
@@ -144,20 +145,18 @@ public partial class ManagerAutoSubscriptionTests
         var manager = layer.GetService<TestManagerC>();
 
         Assert.That(manager, Is.InstanceOf<IInternalLayerContext>());
-        Assert.That(manager, Is.InstanceOf<ILayerBindingAccessor>());
-        Assert.That(((ILayerBindingAccessor)manager).__LayerBaseBinding, Is.Not.Null);
+        Assert.That(manager, Is.InstanceOf<IScopeObjectBindingAccessor>());
 
-        Assert.That(bindableService, Is.InstanceOf<ILayerBindingAccessor>());
-        Assert.That(((ILayerBindingAccessor)bindableService).__LayerBaseBinding, Is.Not.Null);
+        Assert.That(bindableService, Is.InstanceOf<IScopeObjectBindingAccessor>());
     }
 
     [Test]
-    public void Plain_layer_context_without_subscribe_should_not_generate_binding_accessor()
+    public void Plain_partial_layer_context_should_emit_scope_binding_accessor()
     {
         var context = new PlainLayerContextOnly();
 
-        Assert.That(context, Is.Not.InstanceOf<IInternalLayerContext>());
-        Assert.That(context, Is.Not.InstanceOf<ILayerBindingAccessor>());
+        Assert.That(context, Is.InstanceOf<IInternalLayerContext>());
+        Assert.That(context, Is.InstanceOf<IScopeObjectBindingAccessor>());
     }
 
     private class GameLayer : Layer

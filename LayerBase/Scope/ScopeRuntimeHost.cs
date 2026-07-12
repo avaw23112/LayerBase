@@ -12,13 +12,10 @@ public sealed class ScopeRuntimeHost : IDisposable
 
     private ScopeRuntimeHost(
         ScopeRuntime[] scopes,
-        IReadOnlyList<ScopeRuntimePlan> plans,
+        IReadOnlyDictionary<Type, int>? scopeTypeRoutes,
         ScopeTypeIdResolver? scopeTypeResolver)
     {
         _scopes = scopes;
-        IReadOnlyDictionary<Type, int>? scopeTypeRoutes = scopeTypeResolver == null
-            ? CreateScopeTypeRoutes(plans)
-            : null;
         _routes = new ScopeRouteTable(scopes, scopeTypeRoutes, scopeTypeResolver);
         for (int i = 0; i < scopes.Length; i++)
         {
@@ -90,7 +87,115 @@ public sealed class ScopeRuntimeHost : IDisposable
                     callDispatcher);
             }
 
-            return new ScopeRuntimeHost(scopes, plans, scopeTypeResolver);
+            IReadOnlyDictionary<Type, int>? scopeTypeRoutes = scopeTypeResolver == null
+                ? CreateScopeTypeRoutes(plans)
+                : null;
+            return new ScopeRuntimeHost(scopes, scopeTypeRoutes, scopeTypeResolver);
+        }
+        catch
+        {
+            for (int i = 0; i < scopes.Length; i++)
+            {
+                scopes[i]?.Dispose();
+            }
+
+            throw;
+        }
+    }
+
+    public static ScopeRuntimeHost Create(
+        LayerRuntime runtime,
+        ScopeCompositionPlan plan,
+        ModuleCallDispatchHandler[]? moduleCallDispatchers = null,
+        ModuleEventDispatchHandler[]? moduleEventDispatchers = null,
+        ScopeRuntimeOptions? options = null,
+        ActorWorld? sharedActorWorld = null,
+        ScopePostDispatcher? fallbackPostDispatcher = null,
+        ScopeCallDispatcher? fallbackCallDispatcher = null,
+        ScopeTypeIdResolver? scopeTypeResolver = null)
+    {
+        if (runtime == null)
+        {
+            throw new ArgumentNullException(nameof(runtime));
+        }
+
+        return Create(
+            plan,
+            moduleCallDispatchers,
+            moduleEventDispatchers,
+            options,
+            sharedActorWorld ?? runtime.Actors,
+            runtime,
+            fallbackPostDispatcher,
+            fallbackCallDispatcher,
+            scopeTypeResolver);
+    }
+
+    public static ScopeRuntimeHost Create(
+        ScopeCompositionPlan plan,
+        ModuleCallDispatchHandler[]? moduleCallDispatchers = null,
+        ModuleEventDispatchHandler[]? moduleEventDispatchers = null,
+        ScopeRuntimeOptions? options = null,
+        ActorWorld? sharedActorWorld = null,
+        LayerRuntime? owningRuntime = null,
+        ScopePostDispatcher? fallbackPostDispatcher = null,
+        ScopeCallDispatcher? fallbackCallDispatcher = null,
+        ScopeTypeIdResolver? scopeTypeResolver = null)
+    {
+        if (plan == null)
+        {
+            throw new ArgumentNullException(nameof(plan));
+        }
+
+        moduleCallDispatchers ??= Array.Empty<ModuleCallDispatchHandler>();
+        moduleEventDispatchers ??= Array.Empty<ModuleEventDispatchHandler>();
+
+        ScopeCallDispatcher? callDispatcher = CreateModuleCallDispatcher(
+            plan.CallRoutes, moduleCallDispatchers) ?? fallbackCallDispatcher;
+        ScopePostDispatcher? postDispatcher = CreateModuleEventDispatcher(
+            plan.EventRoutes, plan.EventHandlerRoutes, moduleEventDispatchers) ?? fallbackPostDispatcher;
+
+        ScopePlan[] scopePlans = plan.Scopes;
+        var scopes = new ScopeRuntime[scopePlans.Length];
+
+        try
+        {
+            for (int i = 0; i < scopePlans.Length; i++)
+            {
+                ScopePlan scopePlan = scopePlans[i] ?? throw new ArgumentException("Scope plan list cannot contain null.", nameof(plan));
+                IService[] services = ResolveServices(scopePlan.Services);
+                scopes[i] = new ScopeRuntime(
+                    scopePlan.Descriptor,
+                    services,
+                    options,
+                    sharedActorWorld,
+                    owningRuntime,
+                    postDispatcher: i == 0 ? null : postDispatcher,
+                    callDispatcher: i == 0 ? null : callDispatcher);
+
+                scopes[i].UpdateServiceBindings(scopePlan.Services);
+            }
+
+            for (int i = 0; i < scopePlans.Length; i++)
+            {
+                scopes[i].SetContexts(scopePlans[i].Contexts.ToArray());
+            }
+
+            for (int i = 0; i < scopePlans.Length; i++)
+            {
+                ScopePlan scopePlan = scopePlans[i];
+                ScopeRuntime scope = scopes[i];
+                for (int serviceIndex = 0; serviceIndex < scopePlan.Services.Length; serviceIndex++)
+                {
+                    ScopeServicePlan servicePlan = scopePlan.Services[serviceIndex];
+                    servicePlan.BindingInitializer?.Invoke(servicePlan.Instance, scope, servicePlan.ServiceSlot);
+                }
+            }
+
+            IReadOnlyDictionary<Type, int>? scopeTypeRoutes = scopeTypeResolver == null
+                ? CreateScopeTypeRoutes(scopePlans)
+                : null;
+            return new ScopeRuntimeHost(scopes, scopeTypeRoutes, scopeTypeResolver);
         }
         catch
         {
@@ -118,102 +223,16 @@ public sealed class ScopeRuntimeHost : IDisposable
             throw new ArgumentNullException(nameof(catalog));
         }
 
-        IReadOnlyDictionary<RuntimeTypeHandle, ScopeDefinitionContribution> scopeDefs = catalog.ScopeDefinitions;
-        IReadOnlyList<ServiceContribution> services = catalog.Services;
-        IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds = catalog.ScopeIds;
-        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots = catalog.ServiceSlots;
-
-        int maxScopeId = scopeDefs.Count > 0
-            ? scopeDefs.Values.Max(d => scopeIds.TryGetValue(d.ScopeType, out int id) ? id : -1)
-            : -1;
-
-        var scopeServiceLists = new List<IService>[maxScopeId + 1];
-        for (int i = 0; i < scopeServiceLists.Length; i++)
-        {
-            scopeServiceLists[i] = new List<IService>();
-        }
-
-        for (int i = 0; i < services.Count; i++)
-        {
-            ServiceContribution service = services[i];
-            if (!scopeIds.TryGetValue(service.OwnerScopeType, out int scopeId))
-            {
-                continue;
-            }
-
-            IService? instance = service.Factory?.Invoke();
-            if (instance == null)
-            {
-                continue;
-            }
-
-            scopeServiceLists[scopeId].Add(instance);
-        }
-
-        IReadOnlyList<ScopeCallRoute> callRoutes = catalog.CallRoutes;
-        IReadOnlyList<ScopeEventRoute> eventRoutes = catalog.EventRoutes;
-        IReadOnlyList<ScopeEventHandlerRoute> eventHandlerRoutes = catalog.EventHandlerRoutes;
-        moduleCallDispatchers ??= Array.Empty<ModuleCallDispatchHandler>();
-        moduleEventDispatchers ??= Array.Empty<ModuleEventDispatchHandler>();
-
-        ScopeCallDispatcher? callDispatcher = CreateModuleCallDispatcher(
-            callRoutes, moduleCallDispatchers) ?? fallbackCallDispatcher;
-        ScopePostDispatcher? postDispatcher = CreateModuleEventDispatcher(
-            eventRoutes, eventHandlerRoutes, moduleEventDispatchers) ?? fallbackPostDispatcher;
-
-        var plans = new List<ScopeRuntimePlan>(scopeDefs.Count + 1);
-        plans.Add(new ScopeRuntimePlan(ScopeDescriptors.Main, null, Array.Empty<IService>()));
-
-        foreach (ScopeDefinitionContribution def in scopeDefs.Values.OrderBy(
-            static d => GetTypeName(d.ScopeType), StringComparer.Ordinal))
-        {
-            if (!scopeIds.TryGetValue(def.ScopeType, out int sid))
-            {
-                continue;
-            }
-
-            IService[] scopeServices = sid < scopeServiceLists.Length
-                ? scopeServiceLists[sid].ToArray()
-                : Array.Empty<IService>();
-
-            ScopeDescriptor descriptor = new(
-                sid + 1,
-                GetTypeName(def.ScopeType),
-                def.Threading,
-                def.Clock,
-                def.TickRateHz,
-                def.StopPolicy);
-
-            plans.Add(new ScopeRuntimePlan(descriptor, Type.GetTypeFromHandle(def.ScopeType), scopeServices));
-        }
-
-        var scopes = new ScopeRuntime[plans.Count];
-        try
-        {
-            for (int i = 0; i < plans.Count; i++)
-            {
-                ScopeRuntimePlan plan = plans[i];
-                scopes[i] = new ScopeRuntime(
-                    plan.Descriptor,
-                    plan.Services,
-                    options,
-                    sharedActorWorld,
-                    owningRuntime,
-                    postDispatcher: i == 0 ? null : postDispatcher,
-                    callDispatcher: i == 0 ? null : callDispatcher);
-            }
-
-            return new ScopeRuntimeHost(scopes, plans, scopeTypeResolver: null);
-        }
-        catch
-        {
-            for (int i = 0; i < scopes.Length; i++)
-            {
-                scopes[i]?.Dispose();
-            }
-
-            throw;
-        }
+        ScopeCompositionPlan plan = ScopeCompositionBuilder.Build(catalog);
+        return Create(
+            plan,
+            moduleCallDispatchers,
+            moduleEventDispatchers,
+            options,
+            sharedActorWorld,
+            owningRuntime,
+            fallbackPostDispatcher,
+            fallbackCallDispatcher);
     }
 
     private static ScopeCallDispatcher? CreateModuleCallDispatcher(
@@ -315,6 +334,39 @@ public sealed class ScopeRuntimeHost : IDisposable
         }
 
         return routes;
+    }
+
+    private static IReadOnlyDictionary<Type, int> CreateScopeTypeRoutes(IReadOnlyList<ScopePlan> plans)
+    {
+        var routes = new Dictionary<Type, int>();
+        for (int i = 0; i < plans.Count; i++)
+        {
+            ScopePlan plan = plans[i];
+            if (plan.ScopeType != null)
+            {
+                routes.Add(plan.ScopeType, plan.Descriptor.ScopeId);
+            }
+        }
+
+        return routes;
+    }
+
+    private static IService[] ResolveServices(IReadOnlyList<ScopeServicePlan> servicePlans)
+    {
+        if (servicePlans.Count == 0)
+        {
+            return Array.Empty<IService>();
+        }
+
+        int maxSlot = servicePlans.Max(static plan => plan.ServiceSlot);
+        var services = new IService[maxSlot + 1];
+        for (int i = 0; i < servicePlans.Count; i++)
+        {
+            ScopeServicePlan servicePlan = servicePlans[i];
+            services[servicePlan.ServiceSlot] = servicePlan.Instance;
+        }
+
+        return services;
     }
 
     public void Start()

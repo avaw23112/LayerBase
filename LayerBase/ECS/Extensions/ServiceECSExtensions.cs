@@ -142,10 +142,10 @@ public static class ServiceECSExtensions
             throw new ArgumentNullException(nameof(service));
         }
 
-        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? binding))
         {
-            EnsureScopeAccess(ownerScope);
-            return ownerScope.EcsWorld;
+            EnsureScopeAccess(binding.Scope);
+            return binding.Scope.EcsWorld;
         }
 
         return ServiceLayerBinder.RequireBinding(service).Runtime.EcsWorld;
@@ -158,10 +158,10 @@ public static class ServiceECSExtensions
             throw new ArgumentNullException(nameof(service));
         }
 
-        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? binding))
         {
-            EnsureScopeAccess(ownerScope);
-            return ownerScope.EcsQueryRegistry;
+            EnsureScopeAccess(binding.Scope);
+            return binding.Scope.EcsQueryRegistry;
         }
 
         return ServiceLayerBinder.RequireBinding(service).Runtime.EcsQueryRegistry;

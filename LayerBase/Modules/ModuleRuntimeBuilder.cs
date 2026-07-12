@@ -250,9 +250,11 @@ public static class ModuleRuntimeBuilder
     private static IReadOnlyDictionary<RuntimeTypeHandle, int> AllocateScopeIds(
         IEnumerable<ScopeDefinitionContribution> scopeDefinitions)
     {
+        int nextScopeId = 1;
+
         return scopeDefinitions
                .OrderBy(static scope => GetTypeName(scope.ScopeType), StringComparer.Ordinal)
-               .Select(static (scope, index) => new { scope.ScopeType, ScopeId = index })
+               .Select(scope => new { scope.ScopeType, ScopeId = nextScopeId++ })
                .ToDictionary(static item => item.ScopeType, static item => item.ScopeId);
     }
 

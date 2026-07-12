@@ -3,6 +3,7 @@ using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.DI;
 using LayerBase.ECS.Projection.Flow;
+using LayerBase.Scope;
 
 namespace LayerBase;
 
@@ -141,6 +142,23 @@ public static class LayerContextECSExtensions
             throw new ArgumentNullException(nameof(ILayerContext));
         }
 
-        return ServiceLayerBinder.RequireBinding(ILayerContext).Runtime.EcsWorld;
+        if (ScopeObjectBinder.TryGet(ILayerContext, out ScopeObjectBinding? scopeBinding))
+        {
+            EnsureScopeAccess(scopeBinding.Scope);
+            return scopeBinding.Scope.EcsWorld;
+        }
+
+        ServiceLayerBinding binding = ServiceLayerBinder.RequireBinding(ILayerContext);
+        return binding.Scope?.EcsWorld ?? binding.Runtime.EcsWorld;
+    }
+
+    private static void EnsureScopeAccess(ScopeRuntime ownerScope)
+    {
+        ScopeRuntime? currentScope = ScopeExecution.Current.Runtime;
+        if (currentScope != null && !ReferenceEquals(currentScope, ownerScope))
+        {
+            throw new InvalidOperationException(
+                "ILayerContext ECS access is restricted to the owner ScopeRuntime.");
+        }
     }
 }

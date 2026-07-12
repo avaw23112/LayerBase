@@ -8,25 +8,29 @@ namespace LayerBase;
 public static class ServiceActorExtensions
 {
     /// <summary>
-    /// Gets the <see cref="ActorWorld"/> bound to the current service.
-    ///
-    /// Advanced API:
-    /// Prefer the context-first actor facade APIs in normal business code. Access <see cref="ActorWorld"/>
-    /// directly only when doing batch actor operations, framework integration, or low-level tuning.
+    /// Gets the <see cref="ScopeActorGateway"/> bound to the current service
+    /// for posting messages to actors.
     /// </summary>
-    public static ActorWorld Actors(this IService service)
+    public static ScopeActorGateway Actors(this IService service)
     {
         if (service == null)
         {
             throw new ArgumentNullException(nameof(service));
         }
 
-        if (ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
         {
-            return ownerScope.Actors;
+            return scopeBinding.Scope.Actors;
         }
 
-        return ServiceLayerBinder.RequireBinding(service).Runtime.Actors;
+        ServiceLayerBinding? binding = ServiceLayerBinder.GetBinding(service);
+        if (binding?.Scope != null)
+        {
+            return binding.Scope.Actors;
+        }
+
+        return new ScopeActorGateway(
+            (binding?.Runtime ?? ServiceLayerBinder.RequireBinding(service).Runtime).Actors);
     }
 
     public static LBTask<TResponse> AskActor<TRequest, TResponse>(
@@ -37,12 +41,30 @@ public static class ServiceActorExtensions
         where TRequest : struct
         where TResponse : struct
     {
-        return service.Actors().Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
+        ActorWorld world = ResolveActorWorld(service);
+        return world.Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
     }
 
     public static TActor CreateActor<TActor>(this IService service, bool usePool = false)
         where TActor : class, IActor, new()
     {
-        return service.Actors().CreateActor<TActor>(usePool);
+        ActorWorld world = ResolveActorWorld(service);
+        return world.CreateActor<TActor>(usePool);
+    }
+
+    private static ActorWorld ResolveActorWorld(IService service)
+    {
+        if (ScopeObjectBinder.TryGet(service, out ScopeObjectBinding? scopeBinding))
+        {
+            return scopeBinding.Scope.Actors.InnerWorld;
+        }
+
+        ServiceLayerBinding? binding = ServiceLayerBinder.GetBinding(service);
+        if (binding?.Scope != null)
+        {
+            return binding.Scope.Actors.InnerWorld;
+        }
+
+        return binding?.Runtime.Actors ?? ServiceLayerBinder.RequireBinding(service).Runtime.Actors;
     }
 }

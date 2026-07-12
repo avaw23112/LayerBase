@@ -3,6 +3,7 @@ using LayerBase.Actor;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Layers;
+using LayerBase.Scope;
 
 namespace LayerBase.DI;
 
@@ -42,6 +43,12 @@ internal sealed class ServiceLayerBinding
     public readonly Layer? Layer;
 
     /// <summary>
+    /// 当前对象所属 Scope。
+    /// 为 null 表示对象仍处于旧 Runtime/Layer 路径。
+    /// </summary>
+    public readonly ScopeRuntime? Scope;
+
+    /// <summary>
     /// 当前对象所属 Runtime。
     /// Post、SchedulePost 等需要访问 Scheduler、Timer、PolicyTable。
     /// </summary>
@@ -77,14 +84,16 @@ internal sealed class ServiceLayerBinding
         int          runtimeId,
         int          layerIndex,
         Layer?       layer,
-        LayerRuntime runtime)
+        LayerRuntime runtime,
+        ScopeRuntime? scope = null)
     {
         Version = version;
         RuntimeId = runtimeId;
         LayerIndex = layerIndex;
         Layer = layer;
+        Scope = scope;
         Runtime = runtime;
-        EventCenter = runtime.EventCenter;
+        EventCenter = scope?.EventCenter ?? runtime.EventCenter;
     }
 }
 

@@ -14,6 +14,25 @@ using LayerBase.Snap;
 
 namespace LayerBase.Layers;
 
+internal readonly struct LayerServiceHandle
+{
+    public LayerServiceHandle(
+        RuntimeTypeHandle serviceType,
+        int scopeId,
+        int serviceSlot)
+    {
+        ServiceType = serviceType;
+        ScopeId = scopeId;
+        ServiceSlot = serviceSlot;
+    }
+
+    public RuntimeTypeHandle ServiceType { get; }
+
+    public int ScopeId { get; }
+
+    public int ServiceSlot { get; }
+}
+
 /// <summary>
 /// 逻辑分层（Layer）的基类。Layer 是事件路由、服务管理和逻辑执行的基本单元。
 /// 每个 Layer 拥有自己的服务容器、事件订阅、延迟发布器和调用路由表。
@@ -62,7 +81,7 @@ public abstract class Layer : Node, IDisposable
     private readonly List<Type> _producedEvents = new();
     // 当 Layer 尚未分配 RouteIndex 时，暂存订阅操作的队列。
     private ConcurrentQueue<Action<Layer>> _pendingOps = new();
-    private static readonly AsyncLocal<EventCenter?> s_autoBindEventCenter = new();
+    
     #endregion
 
     #region Runtime State - Lifecycle
@@ -105,6 +124,8 @@ public abstract class Layer : Node, IDisposable
 
     /// <summary>已注册的所有调用处理器。</summary>
     public IReadOnlyList<(Type Req, Type Resp, Type Handler)> CallHandlers => _callHandlers;
+
+    internal LayerServiceHandle[] ServiceHandles { get; private set; } = Array.Empty<LayerServiceHandle>();
 
     /// <summary>该 Layer 生产（发送/发布）的事件类型列表。</summary>
     public IReadOnlyList<Type> ProducedEvents => _producedEvents;
@@ -175,6 +196,7 @@ public abstract class Layer : Node, IDisposable
         _resolvedServices.Clear();
         _serviceProvider?.Dispose();
         _serviceProvider = null;
+        ServiceHandles = Array.Empty<LayerServiceHandle>();
         DetachFromContext();
     }
 
@@ -242,6 +264,7 @@ public abstract class Layer : Node, IDisposable
         _sharedFields.Clear();
         _subscribedEvents.Clear();
         _registeredServiceTypes.Clear();
+        ServiceHandles = Array.Empty<LayerServiceHandle>();
 
         foreach (var registration in _manualServices)
         {
@@ -282,18 +305,13 @@ public abstract class Layer : Node, IDisposable
         {
             if (resolved.Instance is not IAutoSubscribe auto) continue;
 
-            if (resolved.Instance is IService service &&
-                ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+            if (ScopeObjectBinder.TryGet(resolved.Instance, out _))
             {
-                using (EnterAutoBindEventCenter(ownerScope.EventCenter))
-                {
-                    auto.AutoBind(this);
-                }
+                subscribers.Add(auto);
+                continue;
             }
-            else
-            {
-                auto.AutoBind(this);
-            }
+
+            auto.AutoBind(this);
 
             subscribers.Add(auto);
         }
@@ -301,6 +319,7 @@ public abstract class Layer : Node, IDisposable
         foreach (var resolved in _resolvedServices)
         {
             if (resolved.Instance is IAutoSubscribe) continue;
+            if (ScopeObjectBinder.TryGet(resolved.Instance, out _)) continue;
             BindInterfaceEventHandlers(resolved.Instance);
         }
 
@@ -375,54 +394,28 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
-    private static IDisposable EnterAutoBindEventCenter(EventCenter eventCenter)
-    {
-        EventCenter? previous = s_autoBindEventCenter.Value;
-        s_autoBindEventCenter.Value = eventCenter;
-        return new AutoBindEventCenterScope(previous);
-    }
-
     private EventCenter GetSubscriptionEventCenter()
     {
-        return s_autoBindEventCenter.Value
-               ?? OwnerContext?.EventCenter
+        return OwnerContext?.EventCenter
                ?? throw new InvalidOperationException("Layer 未附加到 Runtime 上下文。");
     }
 
     private EventCenter GetSubscriptionEventCenter(object instance)
     {
-        if (instance is IService service &&
-            ScopeServiceOwnerRegistry.TryGet(service, out ScopeRuntime ownerScope))
+        if (ScopeObjectBinder.TryGet(instance, out ScopeObjectBinding? scopeBinding))
         {
-            return ownerScope.EventCenter;
+            return scopeBinding.Scope.EventCenter;
         }
 
         return OwnerContext?.EventCenter
                ?? throw new InvalidOperationException("Layer 未附加到 Runtime 上下文。");
     }
-
-    private sealed class AutoBindEventCenterScope : IDisposable
-    {
-        private readonly EventCenter? _previous;
-        private bool _disposed;
-
-        public AutoBindEventCenterScope(EventCenter? previous)
-        {
-            _previous = previous;
-        }
-
-        public void Dispose()
-        {
-            if (_disposed)
-            {
-                return;
-            }
-
-            _disposed = true;
-            s_autoBindEventCenter.Value = _previous;
-        }
-    }
     #endregion
+
+    internal void SetServiceHandles(LayerServiceHandle[] handles)
+    {
+        ServiceHandles = handles ?? throw new ArgumentNullException(nameof(handles));
+    }
 
     #region Lifecycle - Pump
     /// <summary>每帧推进服务更新。子类可重写此方法添加自定义更新逻辑。</summary>

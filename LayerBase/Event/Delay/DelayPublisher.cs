@@ -13,19 +13,34 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
     private int _publisherId = -1;
     private bool _deactivated;
     private readonly DelayPublisherManager _manager;
+    private readonly Action? _markDirty;
     private readonly object _lock = new();
 
     public DelayPublisher(DelayPublisherManager manager, Layer owner)
+        : this(manager, owner, () => owner.OwnerContext?.MarkDelayDirty())
+    {
+    }
+
+    internal DelayPublisher(DelayPublisherManager manager)
+        : this(manager, null, null)
+    {
+    }
+
+    private DelayPublisher(
+        DelayPublisherManager manager,
+        Layer? owner,
+        Action? markDirty)
     {
         _manager = manager;
         Owner = owner;
+        _markDirty = markDirty;
     }
 
     public int PublisherId => _publisherId;
 
     internal void SetId(int id) => _publisherId = id;
 
-    public Layer Owner { get; }
+    public Layer? Owner { get; }
 
     public bool HasValue
     {
@@ -100,7 +115,7 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
             oldHandle = _timerHandle;
         }
 
-        if (wasEmpty) Owner.OwnerContext?.MarkDelayDirty();
+        if (wasEmpty) _markDirty?.Invoke();
 
         if (finalContractId != 0)
         {
@@ -162,6 +177,6 @@ internal sealed class DelayPublisher<T> : IDelayPublisher<T>, IDelayPublisherInt
         _value = default;
         _timerHandle = DelayTimerHandle.Invalid;
         ContractId = 0;
-        if (wasActive) Owner.OwnerContext?.MarkDelayDirty();
+        if (wasActive) _markDirty?.Invoke();
     }
 }

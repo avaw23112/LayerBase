@@ -1,27 +1,47 @@
 using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.DI;
+using LayerBase.Scope;
 
 namespace LayerBase;
 
 public static class LayerContextActorExtensions
 {
-    /// <summary>
-    /// Gets the <see cref="ActorWorld"/> bound to the current context.
-    ///
-    /// Advanced API:
-    /// Prefer <c>CreateActor</c>, <c>CreatePooledActor</c>, <c>PostActor</c>, <c>Ask</c>, and <c>DestroyActor</c>
-    /// in normal business code. Access <see cref="ActorWorld"/> directly only when doing batch actor operations,
-    /// framework integration, or low-level tuning.
-    /// </summary>
-    public static ActorWorld Actors(this ILayerContext context)
+    public static ScopeActorGateway Actors(this ILayerContext context)
     {
         if (context == null)
         {
             throw new ArgumentNullException(nameof(context));
         }
 
-        return ServiceLayerBinder.RequireBinding(context).Runtime.Actors;
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            return scopeBinding.Scope.Actors;
+        }
+
+        ServiceLayerBinding binding = ServiceLayerBinder.RequireBinding(context);
+        if (binding.Scope != null)
+        {
+            return binding.Scope.Actors;
+        }
+
+        return new ScopeActorGateway(binding.Runtime.Actors);
+    }
+
+    private static ActorWorld ResolveActorWorld(ILayerContext context)
+    {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            return scopeBinding.Scope.Actors.InnerWorld;
+        }
+
+        ServiceLayerBinding binding = ServiceLayerBinder.RequireBinding(context);
+        if (binding.Scope != null)
+        {
+            return binding.Scope.Actors.InnerWorld;
+        }
+
+        return binding.Runtime.Actors;
     }
 
     public static LBTask<TResponse> Ask<TRequest, TResponse>(
@@ -43,7 +63,8 @@ public static class LayerContextActorExtensions
         where TRequest : struct
         where TResponse : struct
     {
-        return context.Actors().Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
+        ActorWorld world = ResolveActorWorld(context);
+        return world.Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
     }
 
     public static void PostActor<TMessage>(
@@ -52,6 +73,12 @@ public static class LayerContextActorExtensions
         in TMessage        message)
         where TMessage : struct
     {
+        if (ScopeObjectBinder.TryGet(context, out ScopeObjectBinding? scopeBinding))
+        {
+            scopeBinding.Scope.Actors.PostTo(actorId, in message);
+            return;
+        }
+
         ServiceLayerBinder.RequireBinding(context).Runtime.PostTo(actorId, in message);
     }
 
@@ -59,24 +86,28 @@ public static class LayerContextActorExtensions
         this ILayerContext context,
         ActorId            actorId)
     {
-        context.Actors().DestroyActor(actorId);
+        ActorWorld world = ResolveActorWorld(context);
+        world.DestroyActor(actorId);
     }
 
     public static TActor CreateActor<TActor>(this ILayerContext context)
         where TActor : class, IActor, new()
     {
-        return context.Actors().CreateActor<TActor>(usePool: false);
+        ActorWorld world = ResolveActorWorld(context);
+        return world.CreateActor<TActor>(usePool: false);
     }
 
     public static TActor CreatePooledActor<TActor>(this ILayerContext context)
         where TActor : class, IActor, new()
     {
-        return context.Actors().CreateActor<TActor>(usePool: true);
+        ActorWorld world = ResolveActorWorld(context);
+        return world.CreateActor<TActor>(usePool: true);
     }
 
     public static TActor CreateActor<TActor>(this ILayerContext context, bool usePool)
         where TActor : class, IActor, new()
     {
-        return context.Actors().CreateActor<TActor>(usePool);
+        ActorWorld world = ResolveActorWorld(context);
+        return world.CreateActor<TActor>(usePool);
     }
 }

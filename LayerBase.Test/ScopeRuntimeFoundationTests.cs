@@ -10,6 +10,7 @@ using LayerBase.ECS.Projection;
 using LayerBase.ECS.Projection.Flow;
 using LayerBase.ECS.Runtime;
 using LayerBase.Layers;
+using LayerBase.Modules;
 using LayerBase.Scope;
 using ActorBehaviourAttribute = LayerBase.Actor.ActorBehaviourAttribute;
 using IPooledActor = LayerBase.Actor.IPooledActor;
@@ -683,6 +684,404 @@ public sealed class ScopeRuntimeFoundationTests
     }
 
     [Test]
+    public void ScopeRuntimeHost_create_from_catalog_should_preserve_catalog_scope_ids()
+    {
+        using var module = new ScopeCatalogTestModule(
+            scopeDefinitions:
+            [
+                new ScopeDefinitionContribution(
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    ScopeThreadingMode.Inline,
+                    ScopeClockMode.EngineDriven,
+                    0,
+                    ScopeStopPolicy.Drain)
+            ],
+            messageContracts:
+            [
+                new ScopeMessageContractContribution(
+                    typeof(ScopeCatalogCall).TypeHandle,
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    typeof(int).TypeHandle,
+                    ScopeMessageKind.Call)
+            ],
+            services:
+            [
+                new ServiceContribution(
+                    typeof(ScopeCatalogZuluService).TypeHandle,
+                    Array.Empty<RuntimeTypeHandle>(),
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    static () => new ScopeCatalogZuluService(),
+                    static (_, _, _) => { },
+                    moduleLocalServiceId: 0),
+                new ServiceContribution(
+                    typeof(ScopeCatalogAlphaService).TypeHandle,
+                    Array.Empty<RuntimeTypeHandle>(),
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    static () => new ScopeCatalogAlphaService(),
+                    static (_, _, _) => { },
+                    moduleLocalServiceId: 1)
+            ],
+            handlers:
+            [
+                new ScopeHandlerContribution(
+                    typeof(ScopeCatalogCall).TypeHandle,
+                    typeof(ScopeCatalogAlphaService).TypeHandle,
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    moduleLocalHandlerId: 0,
+                    ScopeMessageKind.Call)
+            ]);
+
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(module);
+
+        using var host = ScopeRuntimeHost.CreateFromCatalog(
+            catalog,
+            moduleCallDispatchers:
+            [
+                static (scope, _, serviceSlot, message) =>
+                {
+                    ((ScopePromise<int>)message.Promise).SetResult(
+                        scope.Services[serviceSlot] is ScopeCatalogAlphaService ? 1 : -1);
+                }
+            ]);
+
+        ScopeCallRoute route = catalog.CallRoutes[0];
+
+        Assert.That(route.ScopeId, Is.EqualTo(1));
+        Assert.That(host.TryGetScope(route.ScopeId, out ScopeRuntime scope), Is.True);
+        Assert.That(scope.Descriptor.Name, Is.EqualTo(nameof(ScopeCatalogCombatScope)));
+        Assert.That(scope.Services[0], Is.TypeOf<ScopeCatalogAlphaService>());
+        Assert.That(scope.Services[1], Is.TypeOf<ScopeCatalogZuluService>());
+    }
+
+    [Test]
+    public void ScopeCompositionBuilder_build_should_materialize_scope_services_contexts_and_routes()
+    {
+        using var module = new ScopeCatalogTestModule(
+            scopeDefinitions:
+            [
+                new ScopeDefinitionContribution(
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    ScopeThreadingMode.Inline,
+                    ScopeClockMode.EngineDriven,
+                    0,
+                    ScopeStopPolicy.Drain)
+            ],
+            messageContracts:
+            [
+                new ScopeMessageContractContribution(
+                    typeof(ScopeCatalogCall).TypeHandle,
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    typeof(int).TypeHandle,
+                    ScopeMessageKind.Call)
+            ],
+            services:
+            [
+                new ServiceContribution(
+                    typeof(ScopeCatalogZuluService).TypeHandle,
+                    Array.Empty<RuntimeTypeHandle>(),
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    static () => new ScopeCatalogZuluService(),
+                    static (_, _, _) => { },
+                    moduleLocalServiceId: 0),
+                new ServiceContribution(
+                    typeof(ScopeCatalogAlphaService).TypeHandle,
+                    Array.Empty<RuntimeTypeHandle>(),
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    static () => new ScopeCatalogAlphaService(),
+                    static (_, _, _) => { },
+                    moduleLocalServiceId: 1)
+            ],
+            contexts:
+            [
+                new ContextContribution(
+                    typeof(ScopeCatalogOwnedContext).TypeHandle,
+                    typeof(ScopeCatalogAlphaService).TypeHandle,
+                    static ownerService => new ScopeCatalogOwnedContext((ScopeCatalogAlphaService)ownerService),
+                    moduleLocalContextId: 0)
+            ],
+            handlers:
+            [
+                new ScopeHandlerContribution(
+                    typeof(ScopeCatalogCall).TypeHandle,
+                    typeof(ScopeCatalogAlphaService).TypeHandle,
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    moduleLocalHandlerId: 0,
+                    ScopeMessageKind.Call)
+            ]);
+
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(module);
+        using var runtime = new LayerRuntime(702);
+
+        ScopeCompositionPlan plan = ScopeCompositionBuilder.Build(runtime, catalog);
+
+        Assert.That(plan.Scopes, Has.Length.EqualTo(2));
+        Assert.That(plan.Scopes[0].Descriptor.ScopeId, Is.EqualTo(0));
+        Assert.That(plan.Scopes[1].Descriptor.ScopeId, Is.EqualTo(1));
+        Assert.That(plan.Scopes[1].Descriptor.Name, Is.EqualTo(nameof(ScopeCatalogCombatScope)));
+        Assert.That(plan.Scopes[1].Services, Has.Length.EqualTo(2));
+        Assert.That(plan.Scopes[1].Services[0].ServiceSlot, Is.EqualTo(0));
+        Assert.That(plan.Scopes[1].Services[0].Instance, Is.TypeOf<ScopeCatalogAlphaService>());
+        Assert.That(plan.Scopes[1].Services[1].ServiceSlot, Is.EqualTo(1));
+        Assert.That(plan.Scopes[1].Services[1].Instance, Is.TypeOf<ScopeCatalogZuluService>());
+        Assert.That(plan.Scopes[1].Contexts, Has.Length.EqualTo(1));
+        Assert.That(plan.Scopes[1].Contexts[0].ContextSlot, Is.EqualTo(0));
+        Assert.That(plan.Scopes[1].Contexts[0].Instance, Is.TypeOf<ScopeCatalogOwnedContext>());
+        Assert.That(plan.CallRoutes, Has.Length.EqualTo(1));
+        Assert.That(plan.CallRoutes[0].ScopeId, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ScopeRuntimeHost_create_from_composition_plan_should_preserve_catalog_scope_ids()
+    {
+        using var module = new ScopeCatalogTestModule(
+            scopeDefinitions:
+            [
+                new ScopeDefinitionContribution(
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    ScopeThreadingMode.Inline,
+                    ScopeClockMode.EngineDriven,
+                    0,
+                    ScopeStopPolicy.Drain)
+            ],
+            messageContracts:
+            [
+                new ScopeMessageContractContribution(
+                    typeof(ScopeCatalogCall).TypeHandle,
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    typeof(int).TypeHandle,
+                    ScopeMessageKind.Call)
+            ],
+            services:
+            [
+                new ServiceContribution(
+                    typeof(ScopeCatalogZuluService).TypeHandle,
+                    Array.Empty<RuntimeTypeHandle>(),
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    static () => new ScopeCatalogZuluService(),
+                    static (_, _, _) => { },
+                    moduleLocalServiceId: 0),
+                new ServiceContribution(
+                    typeof(ScopeCatalogAlphaService).TypeHandle,
+                    Array.Empty<RuntimeTypeHandle>(),
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    static () => new ScopeCatalogAlphaService(),
+                    static (_, _, _) => { },
+                    moduleLocalServiceId: 1)
+            ],
+            handlers:
+            [
+                new ScopeHandlerContribution(
+                    typeof(ScopeCatalogCall).TypeHandle,
+                    typeof(ScopeCatalogAlphaService).TypeHandle,
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    moduleLocalHandlerId: 0,
+                    ScopeMessageKind.Call)
+            ]);
+
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(module);
+        using var runtime = new LayerRuntime(703);
+        ScopeCompositionPlan plan = ScopeCompositionBuilder.Build(runtime, catalog);
+
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            plan,
+            moduleCallDispatchers:
+            [
+                static (scope, _, serviceSlot, message) =>
+                {
+                    ((ScopePromise<int>)message.Promise).SetResult(
+                        scope.Services[serviceSlot] is ScopeCatalogAlphaService ? 1 : -1);
+                }
+            ]);
+
+        ScopeCallRoute route = plan.CallRoutes[0];
+
+        Assert.That(route.ScopeId, Is.EqualTo(1));
+        Assert.That(host.TryGetScope(route.ScopeId, out ScopeRuntime scope), Is.True);
+        Assert.That(scope.Descriptor.Name, Is.EqualTo(nameof(ScopeCatalogCombatScope)));
+        Assert.That(scope.Services[0], Is.TypeOf<ScopeCatalogAlphaService>());
+        Assert.That(scope.Services[1], Is.TypeOf<ScopeCatalogZuluService>());
+    }
+
+    [Test]
+    public void ScopeRuntimeHost_create_from_catalog_should_instantiate_contexts_and_bind_scope_resources()
+    {
+        using var module = new ScopeCatalogTestModule(
+            scopeDefinitions:
+            [
+                new ScopeDefinitionContribution(
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    ScopeThreadingMode.Inline,
+                    ScopeClockMode.EngineDriven,
+                    0,
+                    ScopeStopPolicy.Drain)
+            ],
+            services:
+            [
+                new ServiceContribution(
+                    typeof(ScopeCatalogAlphaService).TypeHandle,
+                    Array.Empty<RuntimeTypeHandle>(),
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    static () => new ScopeCatalogAlphaService(),
+                    static (_, _, _) => { },
+                    moduleLocalServiceId: 0)
+            ],
+            contexts:
+            [
+                new ContextContribution(
+                    typeof(ScopeCatalogOwnedContext).TypeHandle,
+                    typeof(ScopeCatalogAlphaService).TypeHandle,
+                    static ownerService => new ScopeCatalogOwnedContext((ScopeCatalogAlphaService)ownerService),
+                    moduleLocalContextId: 0)
+            ]);
+
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(module);
+        using var runtime = new LayerRuntime(701);
+        using var host = ScopeRuntimeHost.CreateFromCatalog(catalog, owningRuntime: runtime);
+
+        Assert.That(host.TryGetScope(1, out ScopeRuntime scope), Is.True);
+        Assert.That(scope.Contexts, Has.Length.EqualTo(1));
+
+        var context = scope.Contexts[0] as ScopeCatalogOwnedContext;
+        Assert.That(context, Is.Not.Null);
+        Assert.That(context!.OwnerService, Is.SameAs(scope.Services[0]));
+        Assert.That(context.ECSWorld(), Is.SameAs(scope.EcsWorld));
+        Assert.That(context.Actors(), Is.SameAs(scope.Actors));
+
+        ScopeObjectBinding binding = ScopeObjectBinder.Require(context);
+        Assert.That(binding.Scope, Is.SameAs(scope));
+        Assert.That(binding.ServiceSlot, Is.EqualTo(0));
+        Assert.That(binding.ContextSlot, Is.EqualTo(0));
+        Assert.That(binding.Kind, Is.EqualTo(ScopeObjectKind.Context));
+    }
+
+    [Test]
+    public void ScopeRuntimeHost_create_from_catalog_should_resolve_scope_provider_and_mount_contexts()
+    {
+        using var module = new ScopeCatalogTestModule(
+            scopeDefinitions:
+            [
+                new ScopeDefinitionContribution(
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    ScopeThreadingMode.Inline,
+                    ScopeClockMode.EngineDriven,
+                    0,
+                    ScopeStopPolicy.Drain)
+            ],
+            services:
+            [
+                new ServiceContribution(
+                    typeof(ScopeCatalogMountedService).TypeHandle,
+                    Array.Empty<RuntimeTypeHandle>(),
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    static () => new ScopeCatalogMountedService(),
+                    static (_, _, _) => { },
+                    moduleLocalServiceId: 0)
+            ],
+            contexts:
+            [
+                new ContextContribution(
+                    typeof(ScopeCatalogMountContext).TypeHandle,
+                    typeof(ScopeCatalogMountedService).TypeHandle,
+                    static _ => new ScopeCatalogMountContext(),
+                    moduleLocalContextId: 0)
+            ]);
+
+        using var runtime = new LayerRuntime(704);
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(module);
+        using var host = ScopeRuntimeHost.CreateFromCatalog(catalog, owningRuntime: runtime);
+
+        Assert.That(host.TryGetScope(1, out ScopeRuntime scope), Is.True);
+
+        var service = (ScopeCatalogMountedService)scope.Services[0];
+        var context = (ScopeCatalogMountContext)scope.Contexts[0];
+
+        Assert.That(service.MountedContext, Is.SameAs(context));
+        Assert.That(context.MountedService, Is.SameAs(service));
+        Assert.That(service.ResolveContextThroughScope(), Is.SameAs(context));
+        Assert.That(context.GetService<ScopeCatalogMountedService>(), Is.SameAs(service));
+    }
+
+    [Test]
+    public void ScopeRuntimeHost_create_from_catalog_should_run_service_binding_initializer()
+    {
+        using var module = new ScopeCatalogTestModule(
+            scopeDefinitions:
+            [
+                new ScopeDefinitionContribution(
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    ScopeThreadingMode.Inline,
+                    ScopeClockMode.EngineDriven,
+                    0,
+                    ScopeStopPolicy.Drain)
+            ],
+            services:
+            [
+                new ServiceContribution(
+                    typeof(ScopeCatalogInitializerService).TypeHandle,
+                    Array.Empty<RuntimeTypeHandle>(),
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    static () => new ScopeCatalogInitializerService(),
+                    static (service, ownerScope, serviceSlot) =>
+                    {
+                        ((ScopeCatalogInitializerService)service).Capture(ownerScope, serviceSlot);
+                    },
+                    moduleLocalServiceId: 0)
+            ]);
+
+        using var runtime = new LayerRuntime(705);
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(module);
+        using var host = ScopeRuntimeHost.CreateFromCatalog(catalog, owningRuntime: runtime);
+
+        var service = (ScopeCatalogInitializerService)host.Scopes[1].Services[0];
+
+        Assert.That(service.BoundScopeId, Is.EqualTo(1));
+        Assert.That(service.BoundServiceSlot, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void LayerRuntime_build_from_modules_should_project_owner_layers_to_service_handles()
+    {
+        LayerHub.Reset();
+
+        using var module = new ScopeCatalogTestModule(
+            layerContracts:
+            [
+                new LayerContractContribution(typeof(ScopeCatalogOwnerLayer).TypeHandle)
+            ],
+            scopeDefinitions:
+            [
+                new ScopeDefinitionContribution(
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    ScopeThreadingMode.Inline,
+                    ScopeClockMode.EngineDriven,
+                    0,
+                    ScopeStopPolicy.Drain)
+            ],
+            services:
+            [
+                new ServiceContribution(
+                    typeof(ScopeCatalogAlphaService).TypeHandle,
+                    [typeof(ScopeCatalogOwnerLayer).TypeHandle],
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    static () => new ScopeCatalogAlphaService(),
+                    static (_, _, _) => { },
+                    moduleLocalServiceId: 0)
+            ]);
+
+        var layer = new ScopeCatalogOwnerLayer();
+        using LayerRuntime runtime = LayerHub.CreateLayers()
+            .Push(layer)
+            .Install(module)
+            .Build();
+
+        Assert.That(layer.ServiceHandles, Has.Length.EqualTo(1));
+        Assert.That(Type.GetTypeFromHandle(layer.ServiceHandles[0].ServiceType), Is.EqualTo(typeof(ScopeCatalogAlphaService)));
+        Assert.That(layer.ServiceHandles[0].ScopeId, Is.EqualTo(1));
+        Assert.That(layer.ServiceHandles[0].ServiceSlot, Is.EqualTo(0));
+    }
+
+    [Test]
     public void ScopeRuntimeHost_start_pump_stop_should_drive_inline_scopes_in_scope_execution()
     {
         var main = new HostMainService();
@@ -810,7 +1209,7 @@ public sealed class ScopeRuntimeFoundationTests
     }
 
     [Test]
-    public void ScopeRuntime_should_bind_generated_scope_service_binding()
+    public void ScopeRuntime_should_bind_generated_scope_object_accessor()
     {
         var main = new HostGeneratedBindingRoutingService();
         var ui = new HostUiService();
@@ -1423,14 +1822,15 @@ public sealed class ScopeRuntimeFoundationTests
         }
     }
 
-    private sealed class HostGeneratedBindingRoutingService : IService, IUpdate, IGeneratedScopeServiceBinding
+    private sealed class HostGeneratedBindingRoutingService : IService, IUpdate, IScopeObjectBindingAccessor
     {
-        private ScopeRuntime? _ownerScope;
         private bool _posted;
 
-        public int OwnerScopeId => _ownerScope!.ScopeId;
+        public ScopeObjectBinding? __ScopeObjectBinding { get; set; }
 
-        public int BoundServiceId { get; private set; } = -1;
+        public int OwnerScopeId => __ScopeObjectBinding!.Scope.ScopeId;
+
+        public int BoundServiceId => __ScopeObjectBinding?.ServiceSlot ?? -1;
 
         public bool PostAccepted { get; private set; }
 
@@ -1446,13 +1846,7 @@ public sealed class ScopeRuntimeFoundationTests
             }
 
             _posted = true;
-            PostAccepted = _ownerScope!.GetScopeRef<HostUiScope>().TryPost(654, "from-generated-binding");
-        }
-
-        void IGeneratedScopeServiceBinding.BindScope(ScopeRuntime ownerScope, int serviceId)
-        {
-            _ownerScope = ownerScope;
-            BoundServiceId = serviceId;
+            PostAccepted = __ScopeObjectBinding!.Scope.GetScopeRef<HostUiScope>().TryPost(654, "from-generated-binding");
         }
     }
 
@@ -1587,6 +1981,108 @@ internal sealed class ScopeActorProjectionService : IService
                 output = new ScopeProjectedEvent(component.Value);
             })
             .Post();
+    }
+}
+
+internal sealed class ScopeCatalogTestModule : ILayerBaseModule, IDisposable
+{
+    public ScopeCatalogTestModule(
+        IReadOnlyList<LayerContractContribution>? layerContracts = null,
+        IReadOnlyList<ScopeDefinitionContribution>? scopeDefinitions = null,
+        IReadOnlyList<ScopeMessageContractContribution>? messageContracts = null,
+        IReadOnlyList<ServiceContribution>? services = null,
+        IReadOnlyList<ContextContribution>? contexts = null,
+        IReadOnlyList<ScopeHandlerContribution>? handlers = null)
+    {
+        Manifest = new ModuleManifest(
+            layerContracts ?? Array.Empty<LayerContractContribution>(),
+            scopeDefinitions ?? Array.Empty<ScopeDefinitionContribution>(),
+            messageContracts ?? Array.Empty<ScopeMessageContractContribution>(),
+            services ?? Array.Empty<ServiceContribution>(),
+            contexts ?? Array.Empty<ContextContribution>(),
+            handlers ?? Array.Empty<ScopeHandlerContribution>());
+    }
+
+    public ModuleManifest Manifest { get; }
+
+    public void Dispose()
+    {
+    }
+}
+
+internal sealed class ScopeCatalogCombatScope
+{
+}
+
+internal sealed class ScopeCatalogOwnerLayer : Layer
+{
+}
+
+internal readonly struct ScopeCatalogCall
+{
+}
+
+internal sealed class ScopeCatalogAlphaService : IService
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+internal sealed class ScopeCatalogZuluService : IService
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+internal sealed class ScopeCatalogOwnedContext : ILayerContext
+{
+    public ScopeCatalogOwnedContext(ScopeCatalogAlphaService ownerService)
+    {
+        OwnerService = ownerService;
+    }
+
+    public ScopeCatalogAlphaService OwnerService { get; }
+}
+
+internal sealed class ScopeCatalogMountedService : IService
+{
+    [Mount] private ScopeCatalogMountContext _context = null!;
+
+    public ScopeCatalogMountContext MountedContext => _context;
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    public ScopeCatalogMountContext ResolveContextThroughScope()
+    {
+        return this.GetService<ScopeCatalogMountContext>();
+    }
+}
+
+internal sealed class ScopeCatalogMountContext : ILayerContext
+{
+    [Mount] private ScopeCatalogMountedService _service = null!;
+
+    public ScopeCatalogMountedService MountedService => _service;
+}
+
+internal sealed class ScopeCatalogInitializerService : IService
+{
+    public int BoundScopeId { get; private set; } = -1;
+
+    public int BoundServiceSlot { get; private set; } = -1;
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    public void Capture(ScopeRuntime scope, int serviceSlot)
+    {
+        BoundScopeId = scope.ScopeId;
+        BoundServiceSlot = serviceSlot;
     }
 }
 

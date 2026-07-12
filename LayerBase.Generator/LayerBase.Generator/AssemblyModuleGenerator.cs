@@ -403,10 +403,6 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             string bindMethod = GetServiceBindingName(service.TypeName);
             builder.AppendLine($"        internal static void {bindMethod}(global::LayerBase.DI.IService service, global::LayerBase.Scope.ScopeRuntime ownerScope, int serviceSlot)");
             builder.AppendLine("        {");
-            builder.AppendLine("            if (service is global::LayerBase.Scope.IGeneratedScopeServiceBinding binding)");
-            builder.AppendLine("            {");
-            builder.AppendLine("                binding.BindScope(ownerScope, serviceSlot);");
-            builder.AppendLine("            }");
             builder.AppendLine("        }");
             builder.AppendLine();
         }
