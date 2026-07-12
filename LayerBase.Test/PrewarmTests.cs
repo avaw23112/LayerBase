@@ -59,6 +59,26 @@ public partial class PrewarmTests
 
         Assert.That(received, Is.EqualTo(17));
     }
+
+    [Test]
+    public void Non_generic_subscription_reflection_fallback_should_be_observable_once_per_event_type()
+    {
+        int callbackCount = 0;
+        Type? fallbackType = null;
+        _runtime.EventCenter.OnReflectionFallback += type =>
+        {
+            callbackCount++;
+            fallbackType = type;
+        };
+        EventNotifyDelegate<UnregisteredFallbackEvent> handler = (in UnregisteredFallbackEvent _) => { };
+
+        _runtime.EventCenter.Subscribe(0, handler, typeof(UnregisteredFallbackEvent));
+        _runtime.EventCenter.Subscribe(1, handler, typeof(UnregisteredFallbackEvent));
+
+        Assert.That(_runtime.EventCenter.ReflectionFallbackCount, Is.EqualTo(1));
+        Assert.That(callbackCount, Is.EqualTo(1));
+        Assert.That(fallbackType, Is.EqualTo(typeof(UnregisteredFallbackEvent)));
+    }
 }
 
 public partial class TestLayer : Layer
@@ -76,6 +96,11 @@ public struct TestEvent
 
 [PrewarmEvent]
 public struct ManualPrewarmEvent
+{
+    public int Value;
+}
+
+public struct UnregisteredFallbackEvent
 {
     public int Value;
 }

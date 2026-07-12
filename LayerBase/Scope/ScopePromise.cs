@@ -124,7 +124,7 @@ public sealed class ScopePromise<TResult> : IScopePromise
 
         if (!_continuationScope.TryEnqueueContinuation(continuation))
         {
-            continuation();
+            throw new InvalidOperationException("ScopePromise continuation could not be scheduled on its owner scope.");
         }
     }
 

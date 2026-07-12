@@ -117,7 +117,7 @@ internal sealed class LayerChain
     }
 
     /// <summary>
-    /// 完整构建阶段：绑定共享字段、执行生命周期构建、PostBuild 和 RuntimeStart。
+    /// 完整构建阶段：执行生命周期构建、PostBuild 和 RuntimeStart。
     /// </summary>
     internal void Build(int eventStateSlabSize, bool releaseMode)
     {
@@ -125,9 +125,6 @@ internal sealed class LayerChain
         foreach (var node in _responsibilityChain)
             if (node is Layer layer)
                 builtLayers.Add(layer);
-
-        SharedFieldBinder.Bind(
-            builtLayers.SelectMany(static layer => layer.GetSharedFieldParticipants(true)));
 
         _logicActiveMask = 0;
         _hasDelayMask = 0;

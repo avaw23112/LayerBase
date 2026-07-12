@@ -17,10 +17,16 @@ public sealed class EventCenter
     private static readonly ConcurrentDictionary<Type, EventBucketRegistration> s_registeredEventTypes = new();
     private readonly ConcurrentDictionary<int, Action> _bucketCacheResetters = new();
     private readonly ConcurrentDictionary<int, IEventBucketNonGeneric> _eventBuckets = new();
+    private readonly ConcurrentDictionary<Type, byte> _reflectionFallbackTypes = new();
     private readonly object _lock = new();
     private int _isResetting;
+    private int _reflectionFallbackCount;
 
     internal PostScheduler? PostScheduler { get; set; }
+
+    public int ReflectionFallbackCount => Volatile.Read(ref _reflectionFallbackCount);
+
+    public event Action<Type>? OnReflectionFallback;
 
     public static void RegisterEventType<TEvent>()
         where TEvent : struct
@@ -258,6 +264,7 @@ public sealed class EventCenter
 
         return _eventBuckets.GetOrAdd(typeId, _ =>
         {
+            RecordReflectionFallback(eventType);
             var bucketType = typeof(EventBucket<>).MakeGenericType(eventType);
             return (IEventBucketNonGeneric)Activator.CreateInstance(bucketType, this);
         });
@@ -273,6 +280,17 @@ public sealed class EventCenter
         var idType = typeof(EventTypeId<>).MakeGenericType(eventType);
         var idField = idType.GetField("Id", BindingFlags.Public | BindingFlags.Static);
         return (int)idField!.GetValue(null)!;
+    }
+
+    private void RecordReflectionFallback(Type eventType)
+    {
+        if (!_reflectionFallbackTypes.TryAdd(eventType, 0))
+        {
+            return;
+        }
+
+        Interlocked.Increment(ref _reflectionFallbackCount);
+        OnReflectionFallback?.Invoke(eventType);
     }
 
     private readonly struct EventBucketRegistration

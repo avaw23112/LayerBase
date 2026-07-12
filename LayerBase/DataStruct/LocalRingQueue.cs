@@ -6,10 +6,13 @@ public sealed class LocalRingQueue<T> : IBoundedQueue<T>
     private int _head;
     private int _tail;
     private int _count;
+    private bool _closed;
 
     public int Count => _count;
 
     public int Capacity => _buffer.Length;
+
+    public bool IsClosed => _closed;
 
     public LocalRingQueue(int capacity)
     {
@@ -23,6 +26,11 @@ public sealed class LocalRingQueue<T> : IBoundedQueue<T>
 
     public bool TryEnqueue(T item)
     {
+        if (_closed)
+        {
+            return false;
+        }
+
         if (_count == _buffer.Length)
         {
             return false;
@@ -47,6 +55,11 @@ public sealed class LocalRingQueue<T> : IBoundedQueue<T>
         _head = (_head + 1) % _buffer.Length;
         _count--;
         return true;
+    }
+
+    public void Close()
+    {
+        _closed = true;
     }
 
     public void Clear()

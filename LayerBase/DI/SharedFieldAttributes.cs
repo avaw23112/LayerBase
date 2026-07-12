@@ -1,37 +1,36 @@
-﻿namespace LayerBase.DI;
+namespace LayerBase.DI;
 
-public struct GlobalScope
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public sealed class PublishAttribute : Attribute
 {
-}
-
-[AttributeUsage(AttributeTargets.Field)]
-public sealed class ProvideAttribute : Attribute
-{
-    public ProvideAttribute(Type ownerType, string localKey)
+    public PublishAttribute(string localKey)
     {
         if (string.IsNullOrWhiteSpace(localKey))
-            throw new ArgumentException("Shared field localKey cannot be null or whitespace.", nameof(localKey));
+        {
+            throw new ArgumentException("Scope resource localKey cannot be null or whitespace.", nameof(localKey));
+        }
 
-        OwnerType = ownerType ?? throw new ArgumentNullException(nameof(ownerType));
         LocalKey = localKey;
     }
 
-    public Type OwnerType { get; }
     public string LocalKey { get; }
 }
 
 [AttributeUsage(AttributeTargets.Field)]
 public sealed class FromAttribute : Attribute
 {
-    public FromAttribute(Type ownerType, string localKey)
+    public FromAttribute(Type providerType, string localKey)
     {
         if (string.IsNullOrWhiteSpace(localKey))
-            throw new ArgumentException("Shared field localKey cannot be null or whitespace.", nameof(localKey));
+        {
+            throw new ArgumentException("Scope resource localKey cannot be null or whitespace.", nameof(localKey));
+        }
 
-        OwnerType = ownerType ?? throw new ArgumentNullException(nameof(ownerType));
+        ProviderType = providerType ?? throw new ArgumentNullException(nameof(providerType));
         LocalKey = localKey;
     }
 
-    public Type OwnerType { get; }
+    public Type ProviderType { get; }
+
     public string LocalKey { get; }
 }

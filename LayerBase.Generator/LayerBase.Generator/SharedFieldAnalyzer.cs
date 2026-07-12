@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -10,170 +10,208 @@ namespace LayerBase.Generator;
 [Generator(LanguageNames.CSharp)]
 public sealed class SharedFieldAnalyzer : IIncrementalGenerator
 {
-    private const string ProvideAttributeName = "LayerBase.DI.ProvideAttribute";
+    private const string PublishAttributeName = "LayerBase.DI.PublishAttribute";
     private const string FromAttributeName = "LayerBase.DI.FromAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var provideFields = context.SyntaxProvider.ForAttributeWithMetadataName(
-            ProvideAttributeName,
-            static (node, _) => node is FieldDeclarationSyntax,
-            static (ctx,  _) => GetFieldInfo(ctx, true));
+        var publishMembers = context.SyntaxProvider.ForAttributeWithMetadataName(
+            PublishAttributeName,
+            static (node, _) => node is FieldDeclarationSyntax or PropertyDeclarationSyntax,
+            static (ctx, _) => GetPublishInfo(ctx));
 
-        var useFields = context.SyntaxProvider.ForAttributeWithMetadataName(
+        var fromFields = context.SyntaxProvider.ForAttributeWithMetadataName(
             FromAttributeName,
             static (node, _) => node is FieldDeclarationSyntax,
-            static (ctx,  _) => GetFieldInfo(ctx, false));
+            static (ctx, _) => GetFromInfo(ctx));
 
-        var allFields = provideFields.Collect().Combine(useFields.Collect());
+        var allFields = publishMembers.Collect().Combine(fromFields.Collect());
         var compilationAndFields = context.CompilationProvider.Combine(allFields);
 
         context.RegisterSourceOutput(compilationAndFields,
             static (spc, pair) => Analyze(spc, pair.Left, pair.Right.Left, pair.Right.Right));
     }
 
-    private static FieldInfo? GetFieldInfo(GeneratorAttributeSyntaxContext ctx, bool isProvide)
+    private static ResourceInfo? GetPublishInfo(GeneratorAttributeSyntaxContext ctx)
+    {
+        var attr = ctx.Attributes[0];
+        if (attr.ConstructorArguments.Length < 1) return null;
+
+        var localKey = attr.ConstructorArguments[0].Value as string;
+        if (string.IsNullOrEmpty(localKey)) return null;
+
+        var symbol = ctx.TargetSymbol;
+        var type = symbol switch
+        {
+            IFieldSymbol field => field.Type,
+            IPropertySymbol property => property.Type,
+            _ => null
+        };
+
+        if (type == null) return null;
+
+        return new ResourceInfo(
+            symbol.ContainingType,
+            symbol.Name,
+            type,
+            symbol.ContainingType,
+            localKey!,
+            isPublish: true,
+            symbol.Locations.FirstOrDefault() ?? Location.None,
+            IsLocalKeyLiteral(attr, argumentIndex: 0));
+    }
+
+    private static ResourceInfo? GetFromInfo(GeneratorAttributeSyntaxContext ctx)
     {
         var fieldSymbol = (IFieldSymbol)ctx.TargetSymbol;
         var attr = ctx.Attributes[0];
 
         if (attr.ConstructorArguments.Length < 2) return null;
 
-        var ownerType = attr.ConstructorArguments[0].Value as ITypeSymbol;
+        var providerType = attr.ConstructorArguments[0].Value as ITypeSymbol;
         var localKey = attr.ConstructorArguments[1].Value as string;
 
-        if (ownerType == null || string.IsNullOrEmpty(localKey)) return null;
+        if (providerType == null || string.IsNullOrEmpty(localKey)) return null;
 
-        var syntax = attr.ApplicationSyntaxReference?.GetSyntax() as AttributeSyntax;
-        bool isLiteral = syntax != null && syntax.ArgumentList != null && syntax.ArgumentList.Arguments.Count > 1 &&
-                         syntax.ArgumentList.Arguments[1].Expression.IsKind(SyntaxKind.StringLiteralExpression);
-
-        return new FieldInfo(
+        return new ResourceInfo(
             fieldSymbol.ContainingType,
             fieldSymbol.Name,
             fieldSymbol.Type,
-            ownerType,
-            localKey,
-            isProvide,
+            providerType,
+            localKey!,
+            isPublish: false,
             fieldSymbol.Locations.FirstOrDefault() ?? Location.None,
-            isLiteral);
+            IsLocalKeyLiteral(attr, argumentIndex: 1));
     }
 
-    private static void Analyze(SourceProductionContext    spc, Compilation compilation,
-                                ImmutableArray<FieldInfo?> provides,
-                                ImmutableArray<FieldInfo?> uses)
+    private static bool IsLocalKeyLiteral(AttributeData attr, int argumentIndex)
     {
-        var validProvides = provides.Where(p => p != null).Select(p => p!).ToImmutableArray();
+        var syntax = attr.ApplicationSyntaxReference?.GetSyntax() as AttributeSyntax;
+        return syntax?.ArgumentList != null &&
+               syntax.ArgumentList.Arguments.Count > argumentIndex &&
+               syntax.ArgumentList.Arguments[argumentIndex].Expression.IsKind(SyntaxKind.StringLiteralExpression);
+    }
+
+    private static void Analyze(
+        SourceProductionContext spc,
+        Compilation compilation,
+        ImmutableArray<ResourceInfo?> publishes,
+        ImmutableArray<ResourceInfo?> uses)
+    {
+        var validPublishes = publishes.Where(p => p != null).Select(p => p!).ToImmutableArray();
         var validUses = uses.Where(p => p != null).Select(p => p!).ToImmutableArray();
-        var allValidFields = validProvides.Concat(validUses);
+        var allValidFields = validPublishes.Concat(validUses);
 
-        var layerSymbol = compilation.GetTypeByMetadataName("LayerBase.Layers.Layer");
         var iServiceSymbol = compilation.GetTypeByMetadataName("LayerBase.DI.IService");
-        var globalScopeSymbol = compilation.GetTypeByMetadataName("LayerBase.DI.GlobalScope");
+        var iLayerContextSymbol = compilation.GetTypeByMetadataName("LayerBase.DI.ILayerContext");
+        var scopeReadSymbol = compilation.GetTypeByMetadataName("LayerBase.Scope.ScopeRead`1");
 
-        foreach (var f in allValidFields)
+        foreach (var item in allValidFields)
         {
-            if (f.IsLocalKeyLiteral)
+            if (item.IsLocalKeyLiteral)
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LiteralKeyWarning, f.Location, f.LocalKey));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LiteralKeyWarning, item.Location, item.LocalKey));
             }
 
-            if (layerSymbol != null && iServiceSymbol != null && globalScopeSymbol != null)
+            if (iServiceSymbol != null && iLayerContextSymbol != null && !IsValidOwner(item.ContainingType, iServiceSymbol, iLayerContextSymbol))
             {
-                bool isValidOwner = SymbolEqualityComparer.Default.Equals(f.OwnerType, globalScopeSymbol) ||
-                                    InheritsFrom(f.OwnerType, layerSymbol) ||
-                                    f.OwnerType.AllInterfaces.Any(i =>
-                                        SymbolEqualityComparer.Default.Equals(i, iServiceSymbol) ||
-                                        SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iServiceSymbol));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidOwnerType, item.Location, item.ContainingType.ToDisplayString()));
+            }
+        }
 
-                if (!isValidOwner)
+        var publishMap = new Dictionary<string, ResourceInfo>();
+        foreach (var publish in validPublishes)
+        {
+            var uniqueKey = $"{publish.ProviderType.ToDisplayString()}_{publish.LocalKey}";
+            if (publishMap.TryGetValue(uniqueKey, out var existing))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.PublishConflict, publish.Location, publish.LocalKey, existing.ContainingType.Name, publish.ContainingType.Name));
+            }
+            else
+            {
+                publishMap[uniqueKey] = publish;
+            }
+        }
+
+        foreach (var use in validUses)
+        {
+            if (!TryGetScopeReadViewType(use.Type, scopeReadSymbol, out ITypeSymbol? viewType))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.FromRequiresScopeRead, use.Location, use.LocalKey, use.Type.ToDisplayString()));
+                continue;
+            }
+
+            var uniqueKey = $"{use.ProviderType.ToDisplayString()}_{use.LocalKey}";
+            if (publishMap.TryGetValue(uniqueKey, out var publish))
+            {
+                if (!IsTypeCompatible(publish.Type, viewType))
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidOwnerType, f.Location,
-                        f.OwnerType.ToDisplayString()));
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, use.Location, use.LocalKey, viewType.ToDisplayString(), publish.Type.ToDisplayString()));
                 }
             }
-        }
-
-        // 1. Check for Provide conflicts
-        var provideMap = new Dictionary<string, FieldInfo>();
-        foreach (var p in validProvides)
-        {
-            var uniqueKey = $"{p.OwnerType.ToDisplayString()}_{p.LocalKey}";
-
-            if (provideMap.TryGetValue(uniqueKey, out var existing))
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ProvideConflict, p.Location, p.LocalKey,
-                    existing.ContainingType.Name, p.ContainingType.Name));
-            else
-                provideMap[uniqueKey] = p;
-        }
-
-        // 2. Check for Use matches and type compatibility
-        foreach (var f in validUses)
-        {
-            var uniqueKey = $"{f.OwnerType.ToDisplayString()}_{f.LocalKey}";
-            if (provideMap.TryGetValue(uniqueKey, out var p))
-            {
-                if (!IsTypeCompatible(p.Type, f.Type))
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, f.Location, f.LocalKey,
-                        f.Type.Name, p.Type.Name));
-            }
             else
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OrphanUse, f.Location, f.LocalKey));
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OrphanUse, use.Location, use.LocalKey));
             }
         }
+    }
+
+    private static bool IsValidOwner(INamedTypeSymbol type, INamedTypeSymbol iServiceSymbol, INamedTypeSymbol iLayerContextSymbol)
+    {
+        return type.AllInterfaces.Any(i =>
+            SymbolEqualityComparer.Default.Equals(i, iServiceSymbol) ||
+            SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iServiceSymbol) ||
+            SymbolEqualityComparer.Default.Equals(i, iLayerContextSymbol) ||
+            SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iLayerContextSymbol));
+    }
+
+    private static bool TryGetScopeReadViewType(ITypeSymbol type, INamedTypeSymbol? scopeReadSymbol, out ITypeSymbol viewType)
+    {
+        if (scopeReadSymbol != null &&
+            type is INamedTypeSymbol named &&
+            named.IsGenericType &&
+            SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, scopeReadSymbol))
+        {
+            viewType = named.TypeArguments[0];
+            return true;
+        }
+
+        viewType = type;
+        return false;
     }
 
     private static bool IsTypeCompatible(ITypeSymbol source, ITypeSymbol target)
     {
-        // Enforce ReadOnly projection for all Use usages.
-        // Block common writable collections:
-        if (target is INamedTypeSymbol namedTarget && namedTarget.IsGenericType)
-        {
-            var name = namedTarget.ConstructUnboundGenericType().ToDisplayString();
-            if (name.Contains("ICollection<") ||
-                name.Contains("IList<") ||
-                name.Contains("IDictionary<") ||
-                name.Contains("ISet<") ||
-                name.Contains("System.Collections.Generic.List<") ||
-                name.Contains("System.Collections.Generic.Dictionary<") ||
-                name.Contains("System.Collections.Generic.Queue<") ||
-                name.Contains("System.Collections.Generic.Stack<") ||
-                name.Contains("System.Collections.Generic.HashSet<") ||
-                name.Contains("System.Collections.Generic.LinkedList<"))
-                return false;
-        }
-
-        if (target.ToDisplayString() == "System.Collections.ICollection" ||
-            target.ToDisplayString() == "System.Collections.IList" ||
-            target.ToDisplayString() == "System.Collections.IDictionary")
-            return false;
-
-        // Check compatibility
         return SymbolEqualityComparer.Default.Equals(source, target) ||
                target.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, source)) ||
+               source.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, target)) ||
                InheritsFrom(source, target);
     }
 
     private static bool InheritsFrom(ITypeSymbol source, ITypeSymbol target)
     {
         for (var current = source; current != null; current = current.BaseType)
+        {
             if (SymbolEqualityComparer.Default.Equals(current, target))
+            {
                 return true;
+            }
+        }
+
         return false;
     }
 
-    private sealed class FieldInfo
+    private sealed class ResourceInfo
     {
-        public FieldInfo(INamedTypeSymbol containingType, string name,      ITypeSymbol type, ITypeSymbol ownerType,
-                         string           localKey,       bool   isProvide, Location? location, bool isLocalKeyLiteral)
+        public ResourceInfo(INamedTypeSymbol containingType, string name, ITypeSymbol type, ITypeSymbol providerType,
+                            string localKey, bool isPublish, Location? location, bool isLocalKeyLiteral)
         {
             ContainingType = containingType;
             Name = name;
             Type = type;
-            OwnerType = ownerType;
+            ProviderType = providerType;
             LocalKey = localKey;
-            IsProvide = isProvide;
+            IsPublish = isPublish;
             Location = location;
             IsLocalKeyLiteral = isLocalKeyLiteral;
         }
@@ -181,43 +219,43 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public INamedTypeSymbol ContainingType { get; }
         public string Name { get; }
         public ITypeSymbol Type { get; }
-        public ITypeSymbol OwnerType { get; }
+        public ITypeSymbol ProviderType { get; }
         public string LocalKey { get; }
-        public bool IsProvide { get; }
+        public bool IsPublish { get; }
         public Location? Location { get; }
         public bool IsLocalKeyLiteral { get; }
     }
 
     private static class Diagnostics
     {
-        public static readonly DiagnosticDescriptor ProvideConflict = new(
+        public static readonly DiagnosticDescriptor PublishConflict = new(
             "LBG401",
-            "Shared field Provide conflict",
-            "LocalKey '{0}' is published by multiple owners: {1} and {2}. Shared keys must be unique within their OwnerType.",
+            "Scope resource Publish conflict",
+            "LocalKey '{0}' is published by multiple owners: {1} and {2}. Scope resource keys must be unique within their provider type.",
             "Usage",
             DiagnosticSeverity.Error,
             true);
 
         public static readonly DiagnosticDescriptor TypeMismatch = new(
             "LBG402",
-            "Shared field type mismatch",
-            "LocalKey '{0}' is consumed as '{1}' but published as '{2}'. Types must be compatible, and [From] only allows read-only projections.",
+            "Scope resource type mismatch",
+            "LocalKey '{0}' is consumed as '{1}' but published as '{2}'. ScopeRead<TView> view type must be compatible with the published resource.",
             "Usage",
             DiagnosticSeverity.Error,
             true);
 
         public static readonly DiagnosticDescriptor OrphanUse = new(
             "LBG403",
-            "Orphan Shared field From",
-            "LocalKey '{0}' is consumed via [From] but no [Provide] provider was found in this compilation.",
+            "Orphan scope resource From",
+            "LocalKey '{0}' is consumed via [From] but no [Publish] provider was found in this compilation.",
             "Usage",
             DiagnosticSeverity.Error,
             true);
 
         public static readonly DiagnosticDescriptor InvalidOwnerType = new(
             "LBG404",
-            "Invalid Owner Type",
-            "OwnerType '{0}' is invalid. Only Layer, Service, or GlobalScope are allowed as OwnerType.",
+            "Invalid scope resource owner type",
+            "Scope resource owner '{0}' is invalid. Only IService or ILayerContext types can declare [Publish] or [From].",
             "Usage",
             DiagnosticSeverity.Error,
             true);
@@ -225,9 +263,17 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public static readonly DiagnosticDescriptor LiteralKeyWarning = new(
             "LBG405",
             "Literal LocalKey Usage",
-            "LocalKey '{0}' is a string literal. It is recommended to use constants for shared field keys to avoid typos.",
+            "LocalKey '{0}' is a string literal. It is recommended to use constants for scope resource keys to avoid typos.",
             "Usage",
             DiagnosticSeverity.Warning,
+            true);
+
+        public static readonly DiagnosticDescriptor FromRequiresScopeRead = new(
+            "LBG406",
+            "From requires ScopeRead",
+            "LocalKey '{0}' is consumed as '{1}'. [From] fields must use ScopeRead<TView>.",
+            "Usage",
+            DiagnosticSeverity.Error,
             true);
     }
 }

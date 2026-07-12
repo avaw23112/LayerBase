@@ -30,6 +30,8 @@ public sealed class ScopeRuntime : IDisposable
     private readonly IBoundedQueue<ScopeCallMessage> _callInbox;
     private readonly IBoundedQueue<LayerContinuation> _continuations;
     private readonly IBoundedQueue<float> _manualPumps;
+    private readonly Queue<LayerContinuation> _continuationOverflow = new();
+    private readonly object _continuationOverflowGate = new();
     private ScopeContextPlan[] _contextPlans = Array.Empty<ScopeContextPlan>();
     private ScopeServiceProvider? _serviceProvider;
     private ScopeSubscriptionRegistry? _subscriptionRegistry;
@@ -101,6 +103,7 @@ public sealed class ScopeRuntime : IDisposable
 
         BindServices();
         RebuildServiceProvider();
+        RebuildScopeResources();
         RebindSubscriptions();
     }
 
@@ -133,6 +136,8 @@ public sealed class ScopeRuntime : IDisposable
     internal ScopeServiceProvider ServiceProvider =>
         _serviceProvider ?? throw new InvalidOperationException("Scope service provider is not ready.");
 
+    internal ScopeResourceTable Resources { get; } = new();
+
     public EventCenter EventCenter { get; }
 
     public PostScheduler PostScheduler { get; }
@@ -161,7 +166,16 @@ public sealed class ScopeRuntime : IDisposable
 
     public int CallInboxCount => _callInbox.Count;
 
-    public int ContinuationCount => _continuations.Count;
+    public int ContinuationCount
+    {
+        get
+        {
+            lock (_continuationOverflowGate)
+            {
+                return _continuations.Count + _continuationOverflow.Count;
+            }
+        }
+    }
 
     internal void RequireAccess(string apiName)
     {
@@ -215,6 +229,7 @@ public sealed class ScopeRuntime : IDisposable
         }
         BindContexts();
         RebuildServiceProvider();
+        RebuildScopeResources();
         RebindSubscriptions();
     }
 
@@ -252,6 +267,7 @@ public sealed class ScopeRuntime : IDisposable
         Contexts = contexts;
         BindContexts();
         RebuildServiceProvider();
+        RebuildScopeResources();
         RebindSubscriptions();
     }
 
@@ -316,6 +332,7 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         _stopped = true;
+        CloseIngressQueues();
         _workerRunning = false;
 
         if (Descriptor.Threading == ScopeThreadingMode.Worker && _workerThread != null)
@@ -384,7 +401,17 @@ public sealed class ScopeRuntime : IDisposable
             return false;
         }
 
-        return _continuations.TryEnqueue(continuation);
+        if (_continuations.TryEnqueue(continuation))
+        {
+            return true;
+        }
+
+        lock (_continuationOverflowGate)
+        {
+            _continuationOverflow.Enqueue(continuation);
+        }
+
+        return true;
     }
 
     public TimerHandle SchedulePost<T>(
@@ -665,12 +692,14 @@ public sealed class ScopeRuntime : IDisposable
             _postInbox.Clear();
             FailPendingCalls(CreateScopeStoppedException("stopped before pending call was dispatched."));
             _continuations.Clear();
+            ClearContinuationOverflow();
             _manualPumps.Clear();
         }
 
         _subscriptionRegistry?.Dispose();
         _subscriptionRegistry = null;
         DelayManager.Clear();
+        Resources.CloseAndClear();
         DisposeContexts();
         DisposeServices();
     }
@@ -756,6 +785,13 @@ public sealed class ScopeRuntime : IDisposable
 
         workerThread.Join();
         _workerThread = null;
+    }
+
+    private void CloseIngressQueues()
+    {
+        _postInbox.Close();
+        _callInbox.Close();
+        _manualPumps.Close();
     }
 
     private void ExecuteStopInternalOnce()
@@ -859,11 +895,6 @@ public sealed class ScopeRuntime : IDisposable
 
     private void BindContexts()
     {
-        if (OwningRuntime == null)
-        {
-            return;
-        }
-
         for (int i = 0; i < Contexts.Length; i++)
         {
             ScopeContextPlan contextPlan = i < _contextPlans.Length
@@ -896,6 +927,16 @@ public sealed class ScopeRuntime : IDisposable
         {
             _serviceProvider.InjectMembers(Contexts[i]);
         }
+    }
+
+    private void RebuildScopeResources()
+    {
+        ScopeResourceBinder.Bind(this);
+    }
+
+    internal TView GetScopeResource<TView>(int slot, int generation)
+    {
+        return Resources.Get<TView>(this, slot, generation);
     }
 
     private void RebindSubscriptions()
@@ -1068,21 +1109,54 @@ public sealed class ScopeRuntime : IDisposable
     {
         while (_continuations.TryDequeue(out LayerContinuation continuation))
         {
-            try
+            InvokeContinuation(continuation);
+        }
+
+        while (TryDequeueContinuationOverflow(out LayerContinuation continuation))
+        {
+            InvokeContinuation(continuation);
+        }
+    }
+
+    private bool TryDequeueContinuationOverflow(out LayerContinuation continuation)
+    {
+        lock (_continuationOverflowGate)
+        {
+            if (_continuationOverflow.Count == 0)
             {
-                continuation.Action();
+                continuation = default;
+                return false;
             }
-            catch (Exception ex)
-            {
-                ReportException(
-                    ex,
-                    continuation.ServiceId,
-                    LayerExceptionPhase.Continuation,
-                    LayerQueueKind.ContinuationQueue,
-                    continuation.TaskId,
-                    trace: continuation.Trace);
-                ApplyExceptionPolicy(LayerExceptionPhase.Continuation, ex);
-            }
+
+            continuation = _continuationOverflow.Dequeue();
+            return true;
+        }
+    }
+
+    private void ClearContinuationOverflow()
+    {
+        lock (_continuationOverflowGate)
+        {
+            _continuationOverflow.Clear();
+        }
+    }
+
+    private void InvokeContinuation(in LayerContinuation continuation)
+    {
+        try
+        {
+            continuation.Action();
+        }
+        catch (Exception ex)
+        {
+            ReportException(
+                ex,
+                continuation.ServiceId,
+                LayerExceptionPhase.Continuation,
+                LayerQueueKind.ContinuationQueue,
+                continuation.TaskId,
+                trace: continuation.Trace);
+            ApplyExceptionPolicy(LayerExceptionPhase.Continuation, ex);
         }
     }
 

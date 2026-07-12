@@ -672,10 +672,6 @@ public abstract class Layer : Node, IDisposable
         _producedEvents.Add(eventType);
     }
 
-    internal void RecordSharedField(Type ownerType, string key, Type fieldType, bool isProvider)
-    {
-        _sharedFields.Add((ownerType, key, fieldType, isProvider));
-    }
     #endregion
 
     #region Internal - Call Route Resolution
@@ -708,17 +704,7 @@ public abstract class Layer : Node, IDisposable
     }
     #endregion
 
-    #region Internal - Shared Field & Snap
-    internal IEnumerable<SharedFieldBinder.Participant> GetSharedFieldParticipants(bool includeGlobalScope)
-    {
-        if (includeGlobalScope)
-            yield return new SharedFieldBinder.Participant(this, this, 0);
-        foreach (var service in _activeServices)
-            yield return new SharedFieldBinder.Participant(service.Service, this, service.ScopeId);
-        foreach (var resolved in _resolvedServices)
-            yield return new SharedFieldBinder.Participant(resolved.Instance, this, resolved.Descriptor.RegistrationScopeId);
-    }
-
+    #region Internal - Snap
     internal IEnumerable<IGeneratedFullSnapNode> GetFullSnapNodes()
     {
         var visited = new HashSet<object>(ObjectReferenceComparer.Instance);

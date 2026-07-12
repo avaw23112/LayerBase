@@ -6,9 +6,11 @@ public delegate bool ScopeTypeIdResolver(Type scopeType, out int scopeId);
 
 public sealed class ScopeRouteTable : IDisposable
 {
+    private static int s_generationCounter;
     private readonly ScopeRuntime?[] _scopes;
     private readonly IReadOnlyDictionary<Type, int>? _scopeIdsByType;
     private readonly ScopeTypeIdResolver? _scopeIdResolver;
+    private readonly int _generation;
     private bool _disposed;
 
     public ScopeRouteTable(
@@ -21,6 +23,7 @@ public sealed class ScopeRouteTable : IDisposable
             throw new ArgumentNullException(nameof(scopes));
         }
 
+        _generation = Interlocked.Increment(ref s_generationCounter);
         int maxScopeId = -1;
         for (int i = 0; i < scopes.Count; i++)
         {
@@ -61,6 +64,8 @@ public sealed class ScopeRouteTable : IDisposable
         }
     }
 
+    public int Generation => _generation;
+
     public bool TryGetScope(int scopeId, out ScopeRuntime scope)
     {
         if ((uint)scopeId < (uint)_scopes.Length && _scopes[scopeId] != null)
@@ -82,10 +87,15 @@ public sealed class ScopeRouteTable : IDisposable
     public ScopeRef<TScope> GetScopeRef<TScope>()
     {
         ThrowIfDisposed();
-        if (!TryGetScopeId(typeof(TScope), out int targetScopeId))
+        if (!ScopeTypeRouteCache<TScope>.TryGet(_generation, out int targetScopeId))
         {
-            throw new InvalidOperationException(
-                $"Scope type '{typeof(TScope).FullName}' is not registered.");
+            if (!TryGetScopeId(typeof(TScope), out targetScopeId))
+            {
+                throw new InvalidOperationException(
+                    $"Scope type '{typeof(TScope).FullName}' is not registered.");
+            }
+
+            ScopeTypeRouteCache<TScope>.Set(_generation, targetScopeId);
         }
 
         return new ScopeRef<TScope>(this, targetScopeId);
@@ -94,7 +104,18 @@ public sealed class ScopeRouteTable : IDisposable
     public bool TryGetScopeId<TScope>(out int scopeId)
     {
         ThrowIfDisposed();
-        return TryGetScopeId(typeof(TScope), out scopeId);
+        if (ScopeTypeRouteCache<TScope>.TryGet(_generation, out scopeId))
+        {
+            return true;
+        }
+
+        bool found = TryGetScopeId(typeof(TScope), out scopeId);
+        if (found)
+        {
+            ScopeTypeRouteCache<TScope>.Set(_generation, scopeId);
+        }
+
+        return found;
     }
 
     public bool TryPost(int targetScopeId, ScopePostMessage message)

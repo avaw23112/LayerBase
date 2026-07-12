@@ -7,8 +7,20 @@ public sealed class LockedBoundedRingQueue<T> : IBoundedQueue<T>
     private int _head;
     private int _tail;
     private int _count;
+    private bool _closed;
 
     public int Capacity => _buffer.Length;
+
+    public bool IsClosed
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _closed;
+            }
+        }
+    }
 
     public int Count
     {
@@ -35,6 +47,11 @@ public sealed class LockedBoundedRingQueue<T> : IBoundedQueue<T>
     {
         lock (_gate)
         {
+            if (_closed)
+            {
+                return false;
+            }
+
             if (_count == _buffer.Length)
             {
                 return false;
@@ -62,6 +79,14 @@ public sealed class LockedBoundedRingQueue<T> : IBoundedQueue<T>
             _head = (_head + 1) % _buffer.Length;
             _count--;
             return true;
+        }
+    }
+
+    public void Close()
+    {
+        lock (_gate)
+        {
+            _closed = true;
         }
     }
 

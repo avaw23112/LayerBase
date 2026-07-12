@@ -35,14 +35,9 @@ public class SharedFieldFixer : CodeFixProvider
                                    .OfType<FieldDeclarationSyntax>().FirstOrDefault();
         if (fieldDeclaration == null) return;
 
-        // Extract the expected type from the diagnostic message if possible, or we could just leave it to the user.
-        // But better: our analyzer reported the target type in the diagnostic properties (if we had set them).
-        // Since we didn't set properties yet, I'll update the analyzer to include them, 
-        // but for now, I'll just provide a generic "Sync type with Public source" action.
-
         context.RegisterCodeFix(
             CodeAction.Create(
-                "Sync type with [Provide] source",
+                "Sync ScopeRead view with [Publish] source",
                 c => FixFieldTypeAsync(context.Document, fieldDeclaration, diagnostic, c),
                 nameof(SharedFieldFixer)),
             diagnostic);
@@ -54,10 +49,6 @@ public class SharedFieldFixer : CodeFixProvider
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
         if (root == null) return document;
 
-        // In a real implementation, we would use the diagnostic's properties to get the exact type name.
-        // For this demo, let's assume we can parse it from the message or we need to update Analyzer.
-        // I will just change the type to a placeholder if I can't find it, 
-        // but let's try to extract it from the message: "Key 'x' is consumed as 'A' but published as 'B'"
         var message = diagnostic.GetMessage();
         var targetType = "object";
         var lastQuoteIndex = message.LastIndexOf('\'');
@@ -65,7 +56,7 @@ public class SharedFieldFixer : CodeFixProvider
         if (lastQuoteIndex > prevQuoteIndex && prevQuoteIndex != -1)
             targetType = message.Substring(prevQuoteIndex + 1, lastQuoteIndex - prevQuoteIndex - 1);
 
-        var newType = SyntaxFactory.ParseTypeName(targetType);
+        var newType = SyntaxFactory.ParseTypeName($"LayerBase.Scope.ScopeRead<{targetType}>");
         var newField = field.WithDeclaration(field.Declaration.WithType(newType));
 
         var newRoot = root.ReplaceNode(field, newField.WithAdditionalAnnotations(Formatter.Annotation));

@@ -550,7 +550,7 @@ public sealed class ScopeRuntimeFoundationTests
     }
 
     [Test]
-    public void ScopePromise_should_run_continuation_inline_when_owner_queue_is_full()
+    public void ScopePromise_should_keep_continuation_on_owner_scope_when_primary_queue_is_full()
     {
         using var runtime = new ScopeRuntime(
             new ScopeDescriptor(
@@ -564,14 +564,25 @@ public sealed class ScopeRuntimeFoundationTests
             new ScopeRuntimeOptions(continuationQueueCapacity: 1));
         var promise = new ScopePromise<int>(runtime);
         int result = 0;
+        int continuationScopeId = -1;
 
         Assert.That(runtime.TryEnqueueContinuation(() => { }), Is.True);
 
-        promise.OnCompleted(() => result = promise.GetResult());
+        promise.OnCompleted(() =>
+        {
+            continuationScopeId = ScopeExecution.Current.ScopeId;
+            result = promise.GetResult();
+        });
 
         Assert.DoesNotThrow(() => promise.SetResult(42));
-        Assert.That(result, Is.EqualTo(42));
         Assert.That(promise.IsCompleted, Is.True);
+        Assert.That(result, Is.EqualTo(0));
+        Assert.That(continuationScopeId, Is.EqualTo(-1));
+
+        runtime.Pump(0.016f);
+
+        Assert.That(result, Is.EqualTo(42));
+        Assert.That(continuationScopeId, Is.EqualTo(24));
     }
 
     [Test]
