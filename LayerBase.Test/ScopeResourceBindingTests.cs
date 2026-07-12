@@ -196,7 +196,7 @@ public sealed class ScopeResourceBindingTests
         }
     }
 
-    private sealed class PlayerStorageContext : ILayerContext
+    private sealed partial class PlayerStorageContext : ILayerContext
     {
         [Provide("players")]
         private readonly List<int> _players = new();
@@ -207,7 +207,7 @@ public sealed class ScopeResourceBindingTests
         }
     }
 
-    private sealed class PlayerQueryContext : ILayerContext, IScopeObjectBindingAccessor, IDisposable
+    private sealed partial class PlayerQueryContext : ILayerContext, IScopeObjectBindingAccessor, IDisposable
     {
         public ScopeObjectBinding? __ScopeObjectBinding { get; set; }
 
@@ -243,7 +243,7 @@ public sealed class ScopeResourceBindingTests
         }
     }
 
-    private sealed class DirectConsumerContext : ILayerContext, IScopeObjectBindingAccessor
+    private sealed partial class DirectConsumerContext : ILayerContext, IScopeObjectBindingAccessor
     {
         public ScopeObjectBinding? __ScopeObjectBinding { get; set; }
 
@@ -253,15 +253,17 @@ public sealed class ScopeResourceBindingTests
         public bool HasResource => _players != null;
     }
 
-    private sealed class DuplicatePublisherContext : ILayerContext
+    private sealed partial class DuplicatePublisherContext : ILayerContext
     {
         [Provide("duplicate")]
         private readonly Dictionary<int, int> _state = new();
     }
 
-    private sealed class MissingPublisherConsumerContext : ILayerContext
+#pragma warning disable LBG403
+    private sealed partial class MissingPublisherConsumerContext : ILayerContext
     {
         [From(typeof(PlayerStorageContext), "missing")]
         private IReadOnlyList<int>? _players;
     }
+#pragma warning restore LBG403
 }

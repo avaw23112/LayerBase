@@ -170,8 +170,8 @@ public sealed class ScopeRuntimeHost : IDisposable
                     options,
                     sharedActorWorld,
                     owningRuntime,
-                    postDispatcher: i == 0 ? null : postDispatcher,
-                    callDispatcher: i == 0 ? null : callDispatcher);
+                    postDispatcher: postDispatcher,
+                    callDispatcher: callDispatcher);
 
                 scopes[i].UpdateServiceBindings(scopePlan.Services);
             }

@@ -3,9 +3,6 @@ using System.Diagnostics;
 
 namespace LayerBase.Async;
 
-/// <summary>
-///     SynchronizationContext that captures continuations and replays them on the installing thread via Update().
-/// </summary>
 public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IArchMainThreadPump, IDisposable
 {
     private readonly List<FrameWorkItem> _frameWork = new();
@@ -20,7 +17,6 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         _mainThreadId = mainThreadId;
     }
 
-    /// <summary>Run queued work and frame-delayed work; call once per frame on the main thread.</summary>
     public void Update(
         int                       maxItems        = 0,
         CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
@@ -28,7 +24,6 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     {
         if (_disposed) return;
 
-        // Drain completion queue first as per design
         CompletionQueue.Drain(maxItems, exceptionPolicy, reportException);
 
         lock (_lock)
@@ -90,13 +85,18 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
     public void Dispose()
     {
-        _disposed = true;
+        ObjectDisposedException disposed;
         lock (_lock)
         {
+            _disposed = true;
+            for (int i = 0; i < _frameWork.Count; i++)
+            {
+                _frameWork[i].Work.CancelOnDispose(new ObjectDisposedException(nameof(LayerBaseSynchronizationContext)));
+            }
             _frameWork.Clear();
+            disposed = new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
         }
 
-        ObjectDisposedException disposed = new(nameof(LayerBaseSynchronizationContext));
         while (_queue.TryDequeue(out WorkItem work))
         {
             work.CancelOnDispose(disposed);
@@ -108,16 +108,18 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         return new LayerBaseSynchronizationContext(Thread.CurrentThread.ManagedThreadId);
     }
 
-
     public override void Post(SendOrPostCallback d, object? state)
     {
-        if (_disposed) return;
-        _queue.Enqueue(new WorkItem(d, state));
+        var item = new WorkItem(d, state);
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _queue.Enqueue(item);
+        }
     }
 
     public override void Send(SendOrPostCallback d, object? state)
     {
-        if (_disposed) return;
         if (Thread.CurrentThread.ManagedThreadId == _mainThreadId)
         {
             d(state);
@@ -126,7 +128,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
         using var gate = new ManualResetEventSlim(false);
         var sendWork = new SendWorkItem(d, state, gate);
-        _queue.Enqueue(new WorkItem(static payload =>
+        var item = new WorkItem(static payload =>
         {
             var work = (SendWorkItem)payload!;
             if (!work.TryStart()) return;
@@ -144,12 +146,24 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             {
                 work.Complete(error);
             }
-        }, sendWork));
+        }, sendWork);
+
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                sendWork.TryCancel(new ObjectDisposedException(nameof(LayerBaseSynchronizationContext)));
+                gate.Wait();
+                if (sendWork.Error != null) throw sendWork.Error;
+                return;
+            }
+            _queue.Enqueue(item);
+        }
+
         gate.Wait();
         if (sendWork.Error != null) throw sendWork.Error;
     }
 
-    /// <summary>Schedule an action after the specified number of frames.</summary>
     internal void ScheduleInFrames(Action action, int frames)
     {
         ScheduleInFrames(static state => ((Action)state!).Invoke(), action, frames);
@@ -157,16 +171,21 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
     internal void ScheduleInFrames(SendOrPostCallback callback, object? state, int frames)
     {
-        if (_disposed) return;
         var workItem = new WorkItem(callback, state);
-        if (frames <= 0)
-        {
-            _queue.Enqueue(workItem);
-            return;
-        }
-
         lock (_lock)
         {
+            if (_disposed)
+            {
+                workItem.CancelOnDispose(new ObjectDisposedException(nameof(LayerBaseSynchronizationContext)));
+                return;
+            }
+
+            if (frames <= 0)
+            {
+                _queue.Enqueue(workItem);
+                return;
+            }
+
             _frameWork.Add(new FrameWorkItem(frames, workItem));
         }
     }

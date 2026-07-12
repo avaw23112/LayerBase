@@ -3,24 +3,25 @@ using System.Collections.Generic;
 
 namespace LayerBase.Actor.RuntimeCommands;
 
-internal static class ActorCommandPayloadStorage
+internal sealed class ActorCommandPayloadStorage
 {
-    private static readonly Dictionary<int, object> _store = new();
-    private static int _nextHandle;
+    private readonly Dictionary<int, object> _store = new();
+    private int _nextHandle;
+    private readonly object _gate = new();
 
-    public static int Store<T>(T payload)
+    public int Store<T>(T payload)
     {
         int handle = System.Threading.Interlocked.Increment(ref _nextHandle);
-        lock (_store)
+        lock (_gate)
         {
             _store[handle] = payload!;
         }
         return handle;
     }
 
-    public static T Retrieve<T>(int handle)
+    public T Retrieve<T>(int handle)
     {
-        lock (_store)
+        lock (_gate)
         {
             if (_store.TryGetValue(handle, out object? value))
             {
@@ -30,19 +31,27 @@ internal static class ActorCommandPayloadStorage
         }
     }
 
-    public static void Free(int handle)
+    public void Free(int handle)
     {
-        lock (_store)
+        lock (_gate)
         {
             _store.Remove(handle);
         }
     }
 
-    public static void Clear()
+    public void Clear()
     {
-        lock (_store)
+        lock (_gate)
         {
             _store.Clear();
+        }
+    }
+
+    public int Count
+    {
+        get
+        {
+            lock (_gate) return _store.Count;
         }
     }
 }

@@ -1,8 +1,10 @@
-﻿using LayerBase.DI;
+﻿using LayerBase;
+using LayerBase.DI;
 using LayerBase.Layers;
+using LayerBase.Scope;
+using LayerBase.Scope;
 
-namespace LayerBase.Usage;
-
+[Scope<MainScope>]
 public sealed partial class SharedInventoryService : IService
 {
     public void ConfigureServices(IServiceCollection services)
@@ -12,6 +14,7 @@ public sealed partial class SharedInventoryService : IService
     }
 }
 
+[Scope<MainScope>]
 public sealed partial class SharedStatePublisherService : IService
 {
     public void ConfigureServices(IServiceCollection services)
@@ -20,6 +23,7 @@ public sealed partial class SharedStatePublisherService : IService
     }
 }
 
+[Scope<MainScope>]
 public sealed partial class SharedStateReaderService : IService
 {
     public void ConfigureServices(IServiceCollection services)

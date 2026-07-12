@@ -9,6 +9,5 @@ internal enum ScopeRuntimeState
     Stopping = 4,
     Stopped = 5,
     Disposing = 6,
-    Disposed = 7,
-    Faulted = 8
+    Disposed = 7
 }

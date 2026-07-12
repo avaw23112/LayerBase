@@ -10,6 +10,7 @@ internal sealed class ScopeResourceRegistry
 {
     private readonly Dictionary<int, object> _exports = new();
     private readonly List<IGeneratedScopeResourceConsumer> _consumers = new();
+    private readonly List<Action> _unbindActions = new();
     private bool _closed;
 
     public void Initialize(
@@ -51,6 +52,12 @@ internal sealed class ScopeResourceRegistry
         }
     }
 
+    public void TrackUnbindAction(Action unbind)
+    {
+        if (unbind == null) throw new ArgumentNullException(nameof(unbind));
+        _unbindActions.Add(unbind);
+    }
+
     public void CloseAndUnbind()
     {
         _closed = true;
@@ -59,6 +66,19 @@ internal sealed class ScopeResourceRegistry
             _consumers[i].UnbindScopeResources();
         }
         _consumers.Clear();
+
+        for (int i = 0; i < _unbindActions.Count; i++)
+        {
+            try
+            {
+                _unbindActions[i]();
+            }
+            catch
+            {
+            }
+        }
+        _unbindActions.Clear();
+
         _exports.Clear();
     }
 

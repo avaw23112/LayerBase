@@ -49,7 +49,7 @@ internal static class ScopeResourceBinder
 
         foreach ((object owner, FieldInfo field, FromAttribute attribute) in consumers)
         {
-            BindConsumer(published, owner, field, attribute);
+            BindConsumer(runtime, published, owner, field, attribute);
         }
     }
 
@@ -107,6 +107,7 @@ internal static class ScopeResourceBinder
     }
 
     private static void BindConsumer(
+        ScopeRuntime runtime,
         Dictionary<(Type ProviderType, string LocalKey), PublishedResource> published,
         object owner,
         FieldInfo field,
@@ -128,6 +129,14 @@ internal static class ScopeResourceBinder
         }
 
         field.SetValue(owner, resource.Value);
+
+        if (!field.FieldType.IsValueType)
+        {
+            runtime.ResourceRegistry.TrackUnbindAction(() =>
+            {
+                field.SetValue(owner, null);
+            });
+        }
     }
 
     private static IEnumerable<FieldInfo> GetFields(Type type)

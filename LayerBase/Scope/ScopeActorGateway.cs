@@ -43,7 +43,7 @@ public sealed class ScopeActorGateway
 
         var capturedValue = value;
         Action<ActorWorld> postAction = world => world.PostTo(actorId, in capturedValue);
-        int payloadHandle = ActorCommandPayloadStorage.Store(postAction);
+        int payloadHandle = _runtime.ActorPayloads.Store(postAction);
         var envelope = new ActorCommandEnvelope(
             ActorCommandKind.Post,
             actorId,
@@ -67,7 +67,7 @@ public sealed class ScopeActorGateway
             var capturedValue = value;
             ActorId capturedId = actorIds[i];
             Action<ActorWorld> postAction = world => world.PostTo(capturedId, in capturedValue);
-            int payloadHandle = ActorCommandPayloadStorage.Store(postAction);
+            int payloadHandle = _runtime.ActorPayloads.Store(postAction);
             var envelope = new ActorCommandEnvelope(
                 ActorCommandKind.Post,
                 capturedId,

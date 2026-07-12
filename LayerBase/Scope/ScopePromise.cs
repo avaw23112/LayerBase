@@ -1,8 +1,10 @@
+using System;
 using System.Runtime.CompilerServices;
+using LayerBase.Scope.Completion;
 
 namespace LayerBase.Scope;
 
-public sealed class ScopePromise<TResult> : IScopePromise
+public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
 {
     private readonly object _gate = new();
     private readonly ScopeRuntime? _continuationScope;
@@ -10,10 +12,20 @@ public sealed class ScopePromise<TResult> : IScopePromise
     private TResult? _result;
     private Exception? _exception;
     private Action? _continuation;
+    private bool _cancelled;
 
     internal ScopePromise(ScopeRuntime? continuationScope)
     {
         _continuationScope = continuationScope;
+        if (continuationScope != null)
+        {
+            if (!continuationScope.AwaitRegistry.TryRegister(this))
+            {
+                _completed = true;
+                _cancelled = true;
+                _exception = new InvalidOperationException("Scope is shutting down, call cannot be registered.");
+            }
+        }
     }
 
     public bool IsCompleted
@@ -25,6 +37,46 @@ public sealed class ScopePromise<TResult> : IScopePromise
                 return _completed;
             }
         }
+    }
+
+    bool IScopePromiseControl.IsCompleted
+    {
+        get
+        {
+            lock (_gate) return _completed;
+        }
+    }
+
+    bool IScopePromiseControl.IsCancelled
+    {
+        get
+        {
+            lock (_gate) return _cancelled;
+        }
+    }
+
+    bool IScopePromiseControl.TrySetResult(object? result)
+    {
+        if (result is TResult typed)
+        {
+            Complete(typed, null);
+            return true;
+        }
+
+        if (result == null && default(TResult) == null)
+        {
+            Complete(default, null);
+            return true;
+        }
+
+        return false;
+    }
+
+    bool IScopePromiseControl.TrySetException(Exception exception)
+    {
+        if (exception == null) return false;
+        Complete(default, exception);
+        return true;
     }
 
     public void OnCompleted(Action continuation)
@@ -67,6 +119,11 @@ public sealed class ScopePromise<TResult> : IScopePromise
                 throw new InvalidOperationException("Scope call has not completed.");
             }
 
+            if (_cancelled)
+            {
+                throw new InvalidOperationException("Scope call was cancelled.");
+            }
+
             if (_exception != null)
             {
                 throw _exception;
@@ -102,10 +159,16 @@ public sealed class ScopePromise<TResult> : IScopePromise
             }
 
             _completed = true;
+            _cancelled = false;
             _result = result;
             _exception = exception;
             continuation = _continuation;
             _continuation = null;
+        }
+
+        if (_continuationScope != null)
+        {
+            _continuationScope.AwaitRegistry.Unregister(this);
         }
 
         if (continuation != null)
@@ -124,6 +187,7 @@ public sealed class ScopePromise<TResult> : IScopePromise
 
         if (!_continuationScope.TryEnqueueContinuation(continuation))
         {
+            _continuationScope.AwaitRegistry.Unregister(this);
             throw new InvalidOperationException("ScopePromise continuation could not be scheduled on its owner scope.");
         }
     }
