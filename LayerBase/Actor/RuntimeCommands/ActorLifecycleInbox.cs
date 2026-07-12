@@ -42,4 +42,9 @@ internal sealed class ActorLifecycleInbox
     {
         while (_queue.TryDequeue(out _)) { }
     }
+
+    public void Close()
+    {
+        _queue.Close();
+    }
 }

@@ -148,6 +148,40 @@ public sealed class ScopeResourceBindingTests
         Assert.That(ex.Message, Does.Contain("could not find a published scope resource"));
     }
 
+    [Test]
+    public void Generated_scope_resources_bind_with_local_slots_across_multiple_providers_and_consumers()
+    {
+        var providerA = new GeneratedResourceProviderA();
+        var providerB = new GeneratedResourceProviderB();
+        var consumerA = new GeneratedResourceConsumerA();
+        var consumerB = new GeneratedResourceConsumerB();
+
+        Assert.That(providerA, Is.InstanceOf<IGeneratedScopeResourcePublisher>());
+        Assert.That(providerB, Is.InstanceOf<IGeneratedScopeResourcePublisher>());
+        Assert.That(consumerA, Is.InstanceOf<IGeneratedScopeResourceConsumer>());
+        Assert.That(consumerB, Is.InstanceOf<IGeneratedScopeResourceConsumer>());
+
+        using var runtime = new ScopeRuntime(
+            ScopeDescriptors.Main,
+            new IService[]
+            {
+                providerA,
+                providerB,
+                consumerA,
+                consumerB
+            });
+        runtime.SetContexts(Array.Empty<ILayerContext>());
+
+        Assert.That(consumerA.SecondFromA, Is.EqualTo(new[] { 10, 20 }));
+        Assert.That(consumerA.ValuesFromB, Is.EqualTo(new[] { 7, 9 }));
+        Assert.That(consumerB.FirstFromA, Is.EqualTo(new[] { 1, 2, 3 }));
+
+        runtime.Stop();
+
+        Assert.That(consumerA.HasBindings, Is.False);
+        Assert.That(consumerB.HasBindings, Is.False);
+    }
+
     private sealed class ScopeResourcePublisherService : IService
     {
         public void ConfigureServices(IServiceCollection services)
@@ -266,4 +300,60 @@ public sealed class ScopeResourceBindingTests
         private IReadOnlyList<int>? _players;
     }
 #pragma warning restore LBG403
+}
+
+internal sealed partial class GeneratedResourceProviderA : IService
+{
+    [Provide("first")]
+    private readonly List<int> _first = new() { 1, 2, 3 };
+
+    [Provide("second")]
+    private readonly List<int> _second = new() { 10, 20 };
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+internal sealed partial class GeneratedResourceProviderB : IService
+{
+    [Provide("values")]
+    private readonly int[] _values = { 7, 9 };
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+internal sealed partial class GeneratedResourceConsumerA : IService
+{
+    [From(typeof(GeneratedResourceProviderA), "second")]
+    private IReadOnlyList<int>? _secondFromA;
+
+    [From(typeof(GeneratedResourceProviderB), "values")]
+    private IReadOnlyList<int>? _valuesFromB;
+
+    public IReadOnlyList<int> SecondFromA => _secondFromA ?? Array.Empty<int>();
+
+    public IReadOnlyList<int> ValuesFromB => _valuesFromB ?? Array.Empty<int>();
+
+    public bool HasBindings => _secondFromA != null || _valuesFromB != null;
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+internal sealed partial class GeneratedResourceConsumerB : IService
+{
+    [From(typeof(GeneratedResourceProviderA), "first")]
+    private IReadOnlyList<int>? _firstFromA;
+
+    public IReadOnlyList<int> FirstFromA => _firstFromA ?? Array.Empty<int>();
+
+    public bool HasBindings => _firstFromA != null;
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
 }

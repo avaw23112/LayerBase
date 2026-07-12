@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Threading;
 using Arch.Core;
 using LayerBase.Actor;
@@ -14,6 +15,7 @@ using LayerBase.Event.Delay;
 using LayerBase.Scope.Completion;
 using LayerBase.Scope.Lifecycle;
 using LayerBase.Scope.Queue;
+using LayerBase.Scope.Resources;
 
 namespace LayerBase.Scope;
 
@@ -52,6 +54,8 @@ public sealed class ScopeRuntime : IDisposable
     private int _stopCleanupStarted;
     private int _stopCleanupCompleted;
     private ManualResetEventSlim? _workerStartedSignal;
+    private ManualResetEventSlim? _workerLaunchSignal;
+    private int _workerLaunchSucceeded;
 
     public ScopeRuntime(
         ScopeDescriptor descriptor,
@@ -284,13 +288,30 @@ public sealed class ScopeRuntime : IDisposable
         {
             _workerRunning = true;
             _workerStartedSignal = new ManualResetEventSlim(false);
+            var launchSignal = new ManualResetEventSlim(false);
             var thread = new Thread(WorkerLoop)
             {
                 IsBackground = true,
                 Name = $"LayerBase.Scope.{Descriptor.Name}"
             };
-            thread.Start();
-            _workerThread = thread;
+
+            lock (_lifecycleGate)
+            {
+                _workerThread = thread;
+                _workerLaunchSignal = launchSignal;
+                _workerLaunchSucceeded = 0;
+            }
+
+            try
+            {
+                thread.Start();
+                Interlocked.Exchange(ref _workerLaunchSucceeded, 1);
+            }
+            finally
+            {
+                launchSignal.Set();
+            }
+
             return;
         }
 
@@ -346,28 +367,25 @@ public sealed class ScopeRuntime : IDisposable
         {
             if (!ReferenceEquals(Thread.CurrentThread, threadToJoin))
             {
-                WaitForWorkerStartup();
-                threadToJoin.Join();
+                JoinWorkerIfNeeded(threadToJoin);
             }
             return;
         }
 
         if (!shouldStop) return;
 
-        CloseIngressQueues();
+        CloseBusinessIngress();
         _workerRunning = false;
 
-        if (Descriptor.Threading == ScopeThreadingMode.Worker && _workerThread != null)
+        if (Descriptor.Threading == ScopeThreadingMode.Worker && threadToJoin != null)
         {
-            if (ReferenceEquals(Thread.CurrentThread, _workerThread))
+            if (ReferenceEquals(Thread.CurrentThread, threadToJoin))
             {
                 ExecuteStopInternalOnce();
             }
             else
             {
-                WaitForWorkerStartup();
-                _workerThread.Join();
-                _workerThread = null;
+                JoinWorkerIfNeeded(threadToJoin);
             }
             return;
         }
@@ -407,7 +425,6 @@ public sealed class ScopeRuntime : IDisposable
     {
         if (continuation.Action == null)
             throw new ArgumentNullException(nameof(continuation));
-        ThrowIfDisposed();
         return _continuations.TryEnqueue(continuation);
     }
 
@@ -447,15 +464,14 @@ public sealed class ScopeRuntime : IDisposable
             threadToJoin = _workerThread;
         }
 
-        CloseIngressQueues();
+        CloseBusinessIngress();
         _workerRunning = false;
 
         if (Descriptor.Threading == ScopeThreadingMode.Worker && threadToJoin != null)
         {
             if (!ReferenceEquals(Thread.CurrentThread, threadToJoin))
             {
-                WaitForWorkerStartup();
-                threadToJoin.Join();
+                JoinWorkerIfNeeded(threadToJoin);
             }
         }
 
@@ -679,10 +695,7 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         PumpActors(deltaTime);
-        if (_ownsActorWorld)
-        {
-            EcsWorld.SweepProjectedActors();
-        }
+        EcsWorld.SweepProjectedActors();
         EcsScheduler?.DrainResults(EcsOptions.MaxResultsDrainPerPump);
         DrainContinuations();
     }
@@ -727,7 +740,7 @@ public sealed class ScopeRuntime : IDisposable
 
         try { DrainContinuations(); } catch { }
 
-        try { _continuations.Close(); } catch { }
+        try { CloseCompletionIngress(); } catch { }
 
         try { DrainContinuations(); } catch { }
 
@@ -811,7 +824,7 @@ public sealed class ScopeRuntime : IDisposable
 
         if (!shouldStop) return;
 
-        CloseIngressQueues();
+        CloseBusinessIngress();
         _workerRunning = false;
 
         if (Descriptor.Threading == ScopeThreadingMode.Worker)
@@ -827,10 +840,14 @@ public sealed class ScopeRuntime : IDisposable
         _workerStartedSignal?.Wait();
     }
 
-    private void JoinWorkerIfNeeded()
+    private void WaitForWorkerLaunch()
     {
-        Thread? workerThread = _workerThread;
-        if (Descriptor.Threading != ScopeThreadingMode.Worker || workerThread == null)
+        _workerLaunchSignal?.Wait();
+    }
+
+    private void JoinWorkerIfNeeded(Thread workerThread)
+    {
+        if (Descriptor.Threading != ScopeThreadingMode.Worker)
         {
             return;
         }
@@ -840,17 +857,38 @@ public sealed class ScopeRuntime : IDisposable
             return;
         }
 
-        WaitForWorkerStartup();
+        WaitForWorkerLaunch();
+        if (Volatile.Read(ref _workerLaunchSucceeded) == 0)
+        {
+            return;
+        }
+
         workerThread.Join();
-        _workerThread = null;
+        lock (_lifecycleGate)
+        {
+            if (ReferenceEquals(_workerThread, workerThread))
+            {
+                _workerThread = null;
+            }
+        }
     }
 
     private void CloseIngressQueues()
     {
+        CloseBusinessIngress();
+        CloseCompletionIngress();
+    }
+
+    private void CloseBusinessIngress()
+    {
         _postInbox.Close();
         _callInbox.Close();
-        _continuations.Close();
         _manualPumps.Close();
+    }
+
+    private void CloseCompletionIngress()
+    {
+        _continuations.Close();
     }
 
     private void ExecuteStopInternalOnce()
@@ -894,12 +932,21 @@ public sealed class ScopeRuntime : IDisposable
         for (int i = Services.Length - 1; i >= 0; i--)
         {
             IService service = Services[i];
-            if (service is IDisposable disposable)
+            try
             {
-                disposable.Dispose();
+                if (service is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
             }
-
-            ScopeObjectBinder.Detach(service);
+            catch (Exception ex)
+            {
+                ReportException(ex, i, LayerExceptionPhase.ServiceDispose, LayerQueueKind.None, -1);
+            }
+            finally
+            {
+                ScopeObjectBinder.Detach(service);
+            }
         }
     }
 
@@ -908,12 +955,21 @@ public sealed class ScopeRuntime : IDisposable
         for (int i = Contexts.Length - 1; i >= 0; i--)
         {
             ILayerContext context = Contexts[i];
-            if (context is IDisposable disposable)
+            try
             {
-                disposable.Dispose();
+                if (context is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
             }
-
-            ScopeObjectBinder.Detach(context);
+            catch (Exception ex)
+            {
+                ReportException(ex, -1, LayerExceptionPhase.ServiceDispose, LayerQueueKind.None, -1);
+            }
+            finally
+            {
+                ScopeObjectBinder.Detach(context);
+            }
         }
     }
 
@@ -993,7 +1049,81 @@ public sealed class ScopeRuntime : IDisposable
 
     private void RebuildScopeResources()
     {
-        ScopeResourceBinder.Bind(this);
+        object[] candidates = Services.Cast<object>().Concat(Contexts).ToArray();
+        var generatedPublishers = candidates.OfType<IGeneratedScopeResourcePublisher>().ToArray();
+        var generatedConsumers = candidates.OfType<IGeneratedScopeResourceConsumer>().ToArray();
+        bool hasGeneratedResources = generatedPublishers.Length > 0 || generatedConsumers.Length > 0;
+
+        if (hasGeneratedResources)
+        {
+            var contributions = LoadGeneratedScopeResourceContributions(candidates);
+            hasGeneratedResources = contributions.Exports.Length > 0 || contributions.Imports.Length > 0;
+            if (hasGeneratedResources)
+            {
+                ResourceRegistry.Initialize(
+                    generatedPublishers,
+                    generatedConsumers,
+                    contributions.Exports,
+                    contributions.Imports);
+            }
+        }
+
+        ScopeResourceBinder.Bind(this, skipGeneratedResources: hasGeneratedResources);
+    }
+
+    private static GeneratedScopeResourceContributions LoadGeneratedScopeResourceContributions(
+        IReadOnlyList<object> candidates)
+    {
+        var exports = new List<ScopeResourceExportContribution>();
+        var imports = new List<ScopeResourceImportContribution>();
+        var visitedAssemblies = new HashSet<Assembly>();
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            Assembly assembly = candidates[i].GetType().Assembly;
+            if (!visitedAssemblies.Add(assembly))
+            {
+                continue;
+            }
+
+            Type? contributionType = assembly.GetType("GeneratedScopeResourceContributions", throwOnError: false);
+            if (contributionType == null)
+            {
+                continue;
+            }
+
+            MethodInfo? getExports = contributionType.GetMethod(
+                "GetExports",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (getExports?.Invoke(null, null) is ScopeResourceExportContribution[] assemblyExports)
+            {
+                exports.AddRange(assemblyExports);
+            }
+
+            MethodInfo? getImports = contributionType.GetMethod(
+                "GetImports",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (getImports?.Invoke(null, null) is ScopeResourceImportContribution[] assemblyImports)
+            {
+                imports.AddRange(assemblyImports);
+            }
+        }
+
+        return new GeneratedScopeResourceContributions(exports.ToArray(), imports.ToArray());
+    }
+
+    private readonly struct GeneratedScopeResourceContributions
+    {
+        public GeneratedScopeResourceContributions(
+            ScopeResourceExportContribution[] exports,
+            ScopeResourceImportContribution[] imports)
+        {
+            Exports = exports;
+            Imports = imports;
+        }
+
+        public ScopeResourceExportContribution[] Exports { get; }
+        public ScopeResourceImportContribution[] Imports { get; }
     }
 
     private void RebindSubscriptions()

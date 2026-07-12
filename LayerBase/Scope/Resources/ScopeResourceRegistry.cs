@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
-using LayerBase.DI;
 using LayerBase.Scope.Resources;
 
 namespace LayerBase.Scope;
 
 internal sealed class ScopeResourceRegistry
 {
-    private readonly Dictionary<int, object> _exports = new();
+    private readonly Dictionary<int, object> _exportsById = new();
+    private readonly Dictionary<(RuntimeTypeHandle ProviderType, string LocalKey), PublishedExport> _exportsByKey = new();
     private readonly List<IGeneratedScopeResourceConsumer> _consumers = new();
     private readonly List<Action> _unbindActions = new();
     private bool _closed;
@@ -16,7 +15,8 @@ internal sealed class ScopeResourceRegistry
     public void Initialize(
         IReadOnlyList<IGeneratedScopeResourcePublisher> publishers,
         IReadOnlyList<IGeneratedScopeResourceConsumer> consumers,
-        ScopeResourceExportContribution[] exportContributions)
+        ScopeResourceExportContribution[] exportContributions,
+        ScopeResourceImportContribution[] importContributions)
     {
         if (_closed)
             throw new InvalidOperationException("Scope resource registry is already closed.");
@@ -24,30 +24,74 @@ internal sealed class ScopeResourceRegistry
         _consumers.Clear();
         _consumers.AddRange(consumers);
 
-        _exports.Clear();
+        _exportsById.Clear();
+        _exportsByKey.Clear();
+
         for (int i = 0; i < publishers.Count; i++)
         {
+            IGeneratedScopeResourcePublisher publisher = publishers[i];
+            RuntimeTypeHandle publisherType = publisher.GetType().TypeHandle;
+
             for (int j = 0; j < exportContributions.Length; j++)
             {
-                if (exportContributions[j].ProviderType.Equals(publishers[i].GetType().TypeHandle))
+                ScopeResourceExportContribution export = exportContributions[j];
+                if (!export.ProviderType.Equals(publisherType))
                 {
-                    object value = publishers[i].GetPublishedResource(exportContributions[j].ExportId);
-                    if (value == null)
-                        throw new InvalidOperationException(
-                            $"Scope resource provider '{publishers[i].GetType().FullName}' returned null for export id {exportContributions[j].ExportId}.");
-                    _exports[exportContributions[j].ExportId] = value;
+                    continue;
                 }
+
+                object value = publisher.GetPublishedResource(export.ProviderLocalSlot);
+                if (value == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Scope resource provider '{publisher.GetType().FullName}' returned null for export id {export.ExportId}.");
+                }
+
+                var key = (export.ProviderType, export.LocalKey);
+                if (_exportsByKey.ContainsKey(key))
+                {
+                    Type? providerType = Type.GetTypeFromHandle(export.ProviderType);
+                    throw new InvalidOperationException(
+                        $"Scope resource provider conflict for providerType '{providerType?.FullName ?? "<unknown>"}' and localKey '{export.LocalKey}'.");
+                }
+
+                _exportsById[export.ExportId] = value;
+                _exportsByKey[key] = new PublishedExport(export, value);
             }
         }
 
-        foreach (var consumer in _consumers)
+        for (int consumerIndex = 0; consumerIndex < _consumers.Count; consumerIndex++)
         {
-            foreach (var import in FindImports(consumer.GetType(), exportContributions))
+            IGeneratedScopeResourceConsumer consumer = _consumers[consumerIndex];
+            RuntimeTypeHandle consumerType = consumer.GetType().TypeHandle;
+
+            for (int importIndex = 0; importIndex < importContributions.Length; importIndex++)
             {
-                if (_exports.TryGetValue(import.ExportId, out object? resource))
+                ScopeResourceImportContribution import = importContributions[importIndex];
+                if (!import.ConsumerType.Equals(consumerType))
                 {
-                    consumer.BindScopeResource(import.ExportId, resource);
+                    continue;
                 }
+
+                var key = (import.ProviderType, import.LocalKey);
+                if (!_exportsByKey.TryGetValue(key, out PublishedExport export))
+                {
+                    Type? providerType = Type.GetTypeFromHandle(import.ProviderType);
+                    throw new InvalidOperationException(
+                        $"Scope resource consumer '{consumer.GetType().FullName}' could not find a published scope resource " +
+                        $"for providerType '{providerType?.FullName ?? "<unknown>"}' and localKey '{import.LocalKey}'.");
+                }
+
+                Type? requestedType = Type.GetTypeFromHandle(import.RequestedResourceType);
+                if (requestedType != null && !requestedType.IsInstanceOfType(export.Value))
+                {
+                    Type? providerType = Type.GetTypeFromHandle(import.ProviderType);
+                    throw new InvalidOperationException(
+                        $"Scope resource consumer '{consumer.GetType().FullName}' cannot read provider '{providerType?.FullName ?? "<unknown>"}.{import.LocalKey}' " +
+                        $"as '{requestedType.FullName}'.");
+                }
+
+                consumer.BindScopeResource(import.ConsumerLocalSlot, export.Value);
             }
         }
     }
@@ -61,10 +105,18 @@ internal sealed class ScopeResourceRegistry
     public void CloseAndUnbind()
     {
         _closed = true;
+
         for (int i = 0; i < _consumers.Count; i++)
         {
-            _consumers[i].UnbindScopeResources();
+            try
+            {
+                _consumers[i].UnbindScopeResources();
+            }
+            catch
+            {
+            }
         }
+
         _consumers.Clear();
 
         for (int i = 0; i < _unbindActions.Count; i++)
@@ -77,41 +129,21 @@ internal sealed class ScopeResourceRegistry
             {
             }
         }
+
         _unbindActions.Clear();
-
-        _exports.Clear();
+        _exportsById.Clear();
+        _exportsByKey.Clear();
     }
 
-    private static ScopeResourceExportContribution[] FindImports(
-        Type consumerType,
-        ScopeResourceExportContribution[] exports)
+    private readonly struct PublishedExport
     {
-        var matching = new List<ScopeResourceExportContribution>();
-        foreach (var export in exports)
+        public PublishedExport(ScopeResourceExportContribution contribution, object value)
         {
-            Type providerType = Type.GetTypeFromHandle(export.ProviderType);
-            if (providerType != null && HasConsumerImport(consumerType, providerType, export.LocalKey))
-            {
-                matching.Add(export);
-            }
+            Contribution = contribution;
+            Value = value;
         }
-        return matching.ToArray();
-    }
 
-    private static bool HasConsumerImport(Type consumerType, Type providerType, string localKey)
-    {
-        foreach (var field in consumerType.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic))
-        {
-            var from = field.GetCustomAttribute<FromAttribute>();
-            if (from != null && from.ProviderType == providerType && from.LocalKey == localKey)
-                return true;
-        }
-        foreach (var prop in consumerType.GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic))
-        {
-            var from = prop.GetCustomAttribute<FromAttribute>();
-            if (from != null && from.ProviderType == providerType && from.LocalKey == localKey)
-                return true;
-        }
-        return false;
+        public ScopeResourceExportContribution Contribution { get; }
+        public object Value { get; }
     }
 }

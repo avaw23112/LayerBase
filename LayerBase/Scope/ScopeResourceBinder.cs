@@ -1,11 +1,12 @@
 using System.Reflection;
 using LayerBase.DI;
+using LayerBase.Scope.Resources;
 
 namespace LayerBase.Scope;
 
 internal static class ScopeResourceBinder
 {
-    public static void Bind(ScopeRuntime runtime)
+    public static void Bind(ScopeRuntime runtime, bool skipGeneratedResources = false)
     {
         if (runtime == null) throw new ArgumentNullException(nameof(runtime));
 
@@ -15,6 +16,13 @@ internal static class ScopeResourceBinder
 
         foreach (object candidate in candidates)
         {
+            if (skipGeneratedResources &&
+                (candidate is IGeneratedScopeResourcePublisher ||
+                 candidate is IGeneratedScopeResourceConsumer))
+            {
+                continue;
+            }
+
             Type type = candidate.GetType();
             foreach (FieldInfo field in GetFields(type))
             {

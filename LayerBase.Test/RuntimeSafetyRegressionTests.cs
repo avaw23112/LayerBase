@@ -1,4 +1,6 @@
 using LayerBase;
+using LayerBase.Actor;
+using LayerBase.Actor.RuntimeCommands;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.DI;
@@ -380,6 +382,26 @@ public partial class RuntimeSafetyRegressionTests
 
         Assert.Throws<ObjectDisposedException>(() =>
             publisher.Publish(new DelayOverflowRegressionEvent { Value = 1 }, 1));
+    }
+
+    [Test]
+    public void Actor_event_inbox_rejects_enqueue_after_runtime_closes_actor_inboxes()
+    {
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new EmptyRegressionLayer())
+                              .Build();
+        int payload = runtime.ActorPayloads.Store((Action<ActorWorld>)(_ => { }));
+
+        runtime.CloseActorInboxes();
+
+        bool accepted = runtime.EnqueueActorEvent(new ActorCommandEnvelope(
+            ActorCommandKind.Post,
+            ActorId.Invalid,
+            routeId: 0,
+            payload));
+
+        Assert.That(accepted, Is.False);
+        Assert.That(runtime.ActorPayloads.Count, Is.EqualTo(0));
     }
 
     private sealed class EmptyRegressionLayer : Layer

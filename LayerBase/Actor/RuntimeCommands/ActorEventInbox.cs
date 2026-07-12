@@ -43,4 +43,9 @@ internal sealed class ActorEventInbox
     {
         while (_queue.TryDequeue(out _)) { }
     }
+
+    public void Close()
+    {
+        _queue.Close();
+    }
 }

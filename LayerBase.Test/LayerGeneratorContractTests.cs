@@ -108,6 +108,54 @@ public class LayerGeneratorContractTests
     }
 
     [Test]
+    public void Shared_field_analyzer_validates_cross_assembly_provider_metadata()
+    {
+        const string providerSource = """
+                                      namespace ProviderLib;
+
+                                      using System.Collections.Generic;
+                                      using LayerBase.DI;
+
+                                      public sealed partial class InventoryProvider : IService
+                                      {
+                                          [Provide("items")]
+                                          private readonly List<int> _items = new();
+
+                                          public void ConfigureServices(IServiceCollection services) { }
+                                      }
+                                      """;
+        const string consumerSource = """
+                                      namespace ConsumerLib;
+
+                                      using System.Collections.Generic;
+                                      using LayerBase.DI;
+                                      using ProviderLib;
+
+                                      public sealed partial class InventoryConsumer : IService
+                                      {
+                                          [From(typeof(InventoryProvider), "missing")]
+                                          private IReadOnlyList<int>? _missing;
+
+                                          [From(typeof(InventoryProvider), "items")]
+                                          private Dictionary<int, int>? _wrongType;
+
+                                          public void ConfigureServices(IServiceCollection services) { }
+                                      }
+                                      """;
+
+        MetadataReference providerReference = CompileReferenceAssembly(providerSource, new ScopeResourceGenerator());
+        var result = RunGeneratorsWithReferences(
+            consumerSource,
+            [providerReference],
+            new SharedFieldAnalyzer());
+
+        string diagnostics = string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString()));
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Not.Contain("AD0001"), diagnostics);
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBG403"), diagnostics);
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBG402"), diagnostics);
+    }
+
+    [Test]
     public void Layer_tool_generator_emits_registry_for_constructor_and_static_factory()
     {
         const string source = """
@@ -1535,6 +1583,47 @@ public class LayerGeneratorContractTests
     }
 
     [Test]
+    public void Scope_resource_generator_emits_compilable_partial_type_declarations()
+    {
+        const string source = """
+                              namespace Game.Resources;
+
+                              using System.Collections.Generic;
+                              using LayerBase.DI;
+                              using LayerBase.Scope;
+
+                              public sealed partial class InventoryService
+                              {
+                                  [Provide("items")]
+                                  private readonly List<int> _items = new();
+                              }
+
+                              public sealed partial class InventoryQuery
+                              {
+                                  [From(typeof(InventoryService), "items")]
+                                  private IReadOnlyList<int>? _items;
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeResourceGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("namespace Game.Resources"));
+        Assert.That(generated, Does.Contain("public sealed partial class InventoryService"));
+        Assert.That(generated, Does.Not.Contain("partial class global::"));
+    }
+
+    [Test]
     public void Assembly_module_generator_emits_manifest_contributions_without_layer_or_scope_partial()
     {
         const string source = """
@@ -1686,11 +1775,19 @@ public class LayerGeneratorContractTests
 
     private static GeneratorTestResult RunGenerators(string source, params IIncrementalGenerator[] generators)
     {
+        return RunGeneratorsWithReferences(source, Array.Empty<MetadataReference>(), generators);
+    }
+
+    private static GeneratorTestResult RunGeneratorsWithReferences(
+        string source,
+        IEnumerable<MetadataReference> additionalReferences,
+        params IIncrementalGenerator[] generators)
+    {
         SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
         CSharpCompilation compilation = CSharpCompilation.Create(
             assemblyName: "LayerGeneratorTests_" + Guid.NewGuid().ToString("N"),
             syntaxTrees: [syntaxTree],
-            references: GetMetadataReferences(),
+            references: GetMetadataReferences().Concat(additionalReferences),
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
@@ -1709,6 +1806,34 @@ public class LayerGeneratorContractTests
                                 .ToImmutableArray();
 
         return new GeneratorTestResult(diagnostics, outputCompilation, generatedSources);
+    }
+
+    private static MetadataReference CompileReferenceAssembly(
+        string source,
+        params IIncrementalGenerator[] generators)
+    {
+        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
+        CSharpCompilation compilation = CSharpCompilation.Create(
+            assemblyName: "LayerGeneratorReference_" + Guid.NewGuid().ToString("N"),
+            syntaxTrees: [syntaxTree],
+            references: GetMetadataReferences(),
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        Compilation outputCompilation = compilation;
+        if (generators.Length > 0)
+        {
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(
+                generators.Select(static generator => generator.AsSourceGenerator()).ToArray(),
+                parseOptions: new CSharpParseOptions(LanguageVersion.Preview));
+            driver.RunGeneratorsAndUpdateCompilation(compilation, out outputCompilation, out _);
+        }
+
+        using var stream = new MemoryStream();
+        var emitResult = outputCompilation.Emit(stream);
+        Assert.That(emitResult.Success, Is.True,
+            string.Join(Environment.NewLine, emitResult.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        return MetadataReference.CreateFromImage(stream.ToArray());
     }
 
     private static IEnumerable<MetadataReference> GetMetadataReferences()

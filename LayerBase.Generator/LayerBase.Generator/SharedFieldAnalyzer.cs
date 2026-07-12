@@ -12,17 +12,18 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
 {
     private const string ProvideAttributeName = "LayerBase.DI.ProvideAttribute";
     private const string FromAttributeName = "LayerBase.DI.FromAttribute";
+    private const string ScopeResourceExportManifestAttributeName = "LayerBase.Scope.Resources.ScopeResourceExportManifestAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var publishMembers = context.SyntaxProvider.ForAttributeWithMetadataName(
             ProvideAttributeName,
-            static (node, _) => node is FieldDeclarationSyntax or PropertyDeclarationSyntax,
+            static (node, _) => node is VariableDeclaratorSyntax or PropertyDeclarationSyntax,
             static (ctx, _) => GetPublishInfo(ctx));
 
         var fromFields = context.SyntaxProvider.ForAttributeWithMetadataName(
             FromAttributeName,
-            static (node, _) => node is FieldDeclarationSyntax,
+            static (node, _) => node is VariableDeclaratorSyntax,
             static (ctx, _) => GetFromInfo(ctx));
 
         var allFields = publishMembers.Collect().Combine(fromFields.Collect());
@@ -173,11 +174,6 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         {
             var uniqueKey = $"{use.ProviderType.ToDisplayString()}_{use.LocalKey}";
 
-            var providerAssembly = use.ProviderType.ContainingAssembly;
-            var currentAssembly = compilation.Assembly;
-            bool isCrossAssembly = providerAssembly != null && currentAssembly != null &&
-                                   !SymbolEqualityComparer.Default.Equals(providerAssembly, currentAssembly);
-
             if (publishMap.TryGetValue(uniqueKey, out var publish))
             {
                 if (!IsTypeCompatible(compilation, publish.Type, use.Type))
@@ -185,11 +181,89 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
                     spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, use.Location, use.LocalKey, use.Type.ToDisplayString(), publish.Type.ToDisplayString()));
                 }
             }
-            else if (!isCrossAssembly)
+            else if (TryFindReferencedPublish(use.ProviderType, use.LocalKey, out var referencedPublishType))
+            {
+                if (!IsTypeCompatible(compilation, referencedPublishType!, use.Type))
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeMismatch, use.Location, use.LocalKey, use.Type.ToDisplayString(), referencedPublishType!.ToDisplayString()));
+                }
+            }
+            else
             {
                 spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OrphanUse, use.Location, use.LocalKey));
             }
         }
+    }
+
+    private static bool TryFindReferencedPublish(
+        ITypeSymbol providerType,
+        string localKey,
+        out ITypeSymbol? publishedType)
+    {
+        foreach (ISymbol member in providerType.GetMembers())
+        {
+            ITypeSymbol? memberType = member switch
+            {
+                IFieldSymbol field => field.Type,
+                IPropertySymbol property => property.Type,
+                _ => null
+            };
+
+            if (memberType == null)
+            {
+                continue;
+            }
+
+            foreach (AttributeData attribute in member.GetAttributes())
+            {
+                if (IsProvideAttribute(attribute) &&
+                    attribute.ConstructorArguments.Length >= 1 &&
+                    attribute.ConstructorArguments[0].Value as string == localKey)
+                {
+                    publishedType = memberType;
+                    return true;
+                }
+            }
+        }
+
+        if (providerType.ContainingAssembly != null)
+        {
+            foreach (AttributeData attribute in providerType.ContainingAssembly.GetAttributes())
+            {
+                if (!IsScopeResourceManifestAttribute(attribute) ||
+                    attribute.ConstructorArguments.Length < 3)
+                {
+                    continue;
+                }
+
+                if (attribute.ConstructorArguments[0].Value is ITypeSymbol manifestProviderType &&
+                    attribute.ConstructorArguments[1].Value is ITypeSymbol manifestResourceType &&
+                    attribute.ConstructorArguments[2].Value as string == localKey &&
+                    SymbolEqualityComparer.Default.Equals(manifestProviderType, providerType))
+                {
+                    publishedType = manifestResourceType;
+                    return true;
+                }
+            }
+        }
+
+        publishedType = null;
+        return false;
+    }
+
+    private static bool IsProvideAttribute(AttributeData attribute)
+    {
+        string? metadataName = attribute.AttributeClass?.ToDisplayString();
+        string? originalName = attribute.AttributeClass?.OriginalDefinition.ToDisplayString();
+        return metadataName == ProvideAttributeName || originalName == ProvideAttributeName;
+    }
+
+    private static bool IsScopeResourceManifestAttribute(AttributeData attribute)
+    {
+        string? metadataName = attribute.AttributeClass?.ToDisplayString();
+        string? originalName = attribute.AttributeClass?.OriginalDefinition.ToDisplayString();
+        return metadataName == ScopeResourceExportManifestAttributeName ||
+               originalName == ScopeResourceExportManifestAttributeName;
     }
 
     private static bool IsValidOwner(INamedTypeSymbol type, INamedTypeSymbol iServiceSymbol, INamedTypeSymbol iLayerContextSymbol)

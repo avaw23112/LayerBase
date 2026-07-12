@@ -14,6 +14,7 @@ using LayerBase.Modules;
 using LayerBase.Scope;
 using ActorBehaviourAttribute = LayerBase.Actor.ActorBehaviourAttribute;
 using ActorId = LayerBase.Actor.ActorId;
+using ActorWorld = LayerBase.Actor.ActorWorld;
 using IPooledActor = LayerBase.Actor.IPooledActor;
 using RuntimeFrameBudget = LayerBase.Actor.RuntimeFrameBudget;
 
@@ -221,6 +222,49 @@ public sealed class ScopeRuntimeFoundationTests
         Assert.That(ScopeProjectedActor.Received, Has.Count.EqualTo(1));
         Assert.That(ScopeProjectedActor.Received[0].Value, Is.EqualTo(9));
         Assert.That(runtime.EcsWorld.GetProjectionMeta(service.Entity).ActorId.IsValid, Is.True);
+    }
+
+    [Test]
+    public void ScopeRuntime_with_shared_actor_world_should_sweep_its_local_projected_actors()
+    {
+        ProjectionProbeActor.Received.Clear();
+        ProjectionProbeActor.RentCount = 0;
+        ProjectionProbeActor.ReturnCount = 0;
+        const int actorTypeId = 702;
+
+        ProjectedActorTypeRegistry.RegisterGenerated(
+            actorTypeId,
+            typeof(ProjectionProbeActor),
+            static actorWorld => actorWorld.CreateProjectedActor<ProjectionProbeActor>());
+
+        using var actorWorld = new ActorWorld();
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 18,
+                name: "SharedActorProjectionScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            sharedActorWorld: actorWorld);
+
+        runtime.Start();
+        Entity entity = runtime.EcsWorld.Create(new ScopeProjectedComponent(), new ProjectedActorRef());
+        runtime.EcsWorld.WithProjectedActor(
+            entity,
+            actorTypeId,
+            ProjectedActorTime.SecondsToTicks(0.01f),
+            ProjectedActorReleasePolicy.ReturnToPool);
+
+        runtime.EcsWorld.Query<ScopeProjectedComponent>().TouchProjectedActor();
+        Assert.That(runtime.EcsWorld.GetProjectionMeta(entity).ActorId.IsValid, Is.True);
+
+        Thread.Sleep(30);
+        runtime.Pump(0.016f);
+
+        Assert.That(runtime.EcsWorld.GetProjectionMeta(entity).ActorId.IsValid, Is.False);
+        Assert.That(ProjectionProbeActor.ReturnCount, Is.EqualTo(1));
     }
 
     [Test]
@@ -503,6 +547,134 @@ public sealed class ScopeRuntimeFoundationTests
         runtime.Pump(0.016f);
 
         Assert.That(scopeId, Is.EqualTo(7));
+    }
+
+    [Test]
+    public void ScopeRuntime_stop_should_cancel_pending_promises_before_closing_continuations()
+    {
+        using var main = new ScopeRuntime(ScopeDescriptors.Main, Array.Empty<IService>());
+        using var target = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1,
+                name: "TargetScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>());
+        using var routes = new ScopeRouteTable(new[] { main, target });
+
+        ScopePromise<int> first;
+        ScopePromise<int> second;
+        bool firstContinuationRan = false;
+        bool secondContinuationRan = false;
+        bool firstObservedStop = false;
+        bool secondObservedStop = false;
+
+        using (ScopeExecution.Enter(main))
+        {
+            first = routes.GetScopeRef<CombatScopeMarker>(1).Call<int>(1, "first");
+            second = routes.GetScopeRef<CombatScopeMarker>(1).Call<int>(1, "second");
+
+            first.OnCompleted(() =>
+            {
+                firstContinuationRan = true;
+                try
+                {
+                    _ = first.GetResult();
+                }
+                catch (InvalidOperationException)
+                {
+                    firstObservedStop = true;
+                }
+            });
+
+            second.OnCompleted(() =>
+            {
+                secondContinuationRan = true;
+                try
+                {
+                    _ = second.GetResult();
+                }
+                catch (InvalidOperationException)
+                {
+                    secondObservedStop = true;
+                }
+            });
+        }
+
+        main.Stop();
+
+        Assert.That(first.IsCompleted, Is.True);
+        Assert.That(second.IsCompleted, Is.True);
+        Assert.That(firstContinuationRan, Is.True);
+        Assert.That(secondContinuationRan, Is.True);
+        Assert.That(firstObservedStop, Is.True);
+        Assert.That(secondObservedStop, Is.True);
+    }
+
+    [Test]
+    public void ScopeRuntime_stop_should_dispose_and_detach_remaining_services_when_one_dispose_throws()
+    {
+        var first = new DisposeTrackingScopeService();
+        var throwing = new ThrowingDisposeScopeService();
+        var second = new DisposeTrackingScopeService();
+
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 31,
+                name: "ServiceDisposeScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            new IService[] { first, throwing, second });
+
+        Assert.That(ScopeObjectBinder.Get(first), Is.Not.Null);
+        Assert.That(ScopeObjectBinder.Get(throwing), Is.Not.Null);
+        Assert.That(ScopeObjectBinder.Get(second), Is.Not.Null);
+
+        runtime.Stop();
+
+        Assert.That(first.DisposeCount, Is.EqualTo(1));
+        Assert.That(throwing.DisposeCount, Is.EqualTo(1));
+        Assert.That(second.DisposeCount, Is.EqualTo(1));
+        Assert.That(ScopeObjectBinder.Get(first), Is.Null);
+        Assert.That(ScopeObjectBinder.Get(throwing), Is.Null);
+        Assert.That(ScopeObjectBinder.Get(second), Is.Null);
+    }
+
+    [Test]
+    public void ScopeRuntime_stop_should_dispose_and_detach_remaining_contexts_when_one_dispose_throws()
+    {
+        var first = new DisposeTrackingScopeContext();
+        var throwing = new ThrowingDisposeScopeContext();
+        var second = new DisposeTrackingScopeContext();
+
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 32,
+                name: "ContextDisposeScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>());
+
+        runtime.SetContexts(new ILayerContext[] { first, throwing, second });
+
+        Assert.That(ScopeObjectBinder.Get(first), Is.Not.Null);
+        Assert.That(ScopeObjectBinder.Get(throwing), Is.Not.Null);
+        Assert.That(ScopeObjectBinder.Get(second), Is.Not.Null);
+
+        runtime.Stop();
+
+        Assert.That(first.DisposeCount, Is.EqualTo(1));
+        Assert.That(throwing.DisposeCount, Is.EqualTo(1));
+        Assert.That(second.DisposeCount, Is.EqualTo(1));
+        Assert.That(ScopeObjectBinder.Get(first), Is.Null);
+        Assert.That(ScopeObjectBinder.Get(throwing), Is.Null);
+        Assert.That(ScopeObjectBinder.Get(second), Is.Null);
     }
 
     [Test]
@@ -1844,6 +2016,48 @@ public sealed class ScopeRuntimeFoundationTests
         {
             OwnerScope = ownerScope;
             ServiceId = serviceId;
+        }
+    }
+
+    private class DisposeTrackingScopeService : IService, IDisposable
+    {
+        public int DisposeCount { get; protected set; }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+
+        public virtual void Dispose()
+        {
+            DisposeCount++;
+        }
+    }
+
+    private sealed class ThrowingDisposeScopeService : DisposeTrackingScopeService
+    {
+        public override void Dispose()
+        {
+            DisposeCount++;
+            throw new InvalidOperationException("expected dispose failure");
+        }
+    }
+
+    private class DisposeTrackingScopeContext : ILayerContext, IDisposable
+    {
+        public int DisposeCount { get; protected set; }
+
+        public virtual void Dispose()
+        {
+            DisposeCount++;
+        }
+    }
+
+    private sealed class ThrowingDisposeScopeContext : DisposeTrackingScopeContext
+    {
+        public override void Dispose()
+        {
+            DisposeCount++;
+            throw new InvalidOperationException("expected context dispose failure");
         }
     }
 

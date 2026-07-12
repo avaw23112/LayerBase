@@ -46,7 +46,14 @@ internal sealed class ScopeAwaitRegistry
 
         foreach (var promise in pending)
         {
-            promise.TrySetException(reason);
+            try
+            {
+                promise.TrySetException(reason);
+            }
+            catch
+            {
+                // Continue cancelling the rest of the registry; individual continuations are best-effort during shutdown.
+            }
         }
     }
 
