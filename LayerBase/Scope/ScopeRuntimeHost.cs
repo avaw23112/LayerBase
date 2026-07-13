@@ -476,18 +476,13 @@ public sealed class ScopeRuntimeHost : IDisposable
             return;
         }
 
-        try
+        for (int i = _scopes.Length - 1; i >= 0; i--)
         {
-            for (int i = _scopes.Length - 1; i >= 0; i--)
-            {
-                _scopes[i].Dispose();
-            }
+            _scopes[i].Dispose();
         }
-        finally
-        {
-            _routes.Dispose();
-            _disposed = true;
-        }
+
+        _routes.Dispose();
+        _disposed = true;
     }
 
     private void ThrowIfDisposed()

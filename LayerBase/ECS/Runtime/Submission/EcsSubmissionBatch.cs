@@ -45,4 +45,18 @@ internal sealed class EcsSubmissionBatch
         _count = 0;
         Sequence = 0;
     }
+
+    public void CancelPendingItems()
+    {
+        for (int i = 0; i < _count; i++)
+        {
+            IEcsWorkItem? item = _items[i];
+            if (item is IPooledEcsWorkItem pooled)
+            {
+                pooled.ReturnToPool();
+            }
+        }
+
+        Clear();
+    }
 }

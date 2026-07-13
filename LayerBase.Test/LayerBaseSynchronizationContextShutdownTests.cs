@@ -39,6 +39,37 @@ public class LayerBaseSynchronizationContextShutdownTests
     }
 
     [Test]
+    public void Completion_queue_close_must_not_cancel_items_while_channel_lock_is_held()
+    {
+        var queue = new MainThreadCompletionQueue();
+
+        queue.Enqueue(
+            static () => { },
+            error =>
+            {
+                Task enqueue = Task.Run(() =>
+                    Assert.Throws<ObjectDisposedException>(() =>
+                        queue.Enqueue(static () => { })));
+
+                Assert.That(enqueue.Wait(TimeSpan.FromMilliseconds(250)), Is.True,
+                    "CancelOnClose ran while the completion queue lock was held.");
+            });
+
+        queue.Close(new ObjectDisposedException("test"));
+    }
+
+    [Test]
+    public void Update_must_not_wrap_work_in_catch_rethrow()
+    {
+        string source = File.ReadAllText(FindRepositoryFile(
+            "LayerBase.Task",
+            "LayerBaseSynchronizationContext.cs"));
+
+        Assert.That(source, Does.Not.Contain("catch (Exception)\r\n            {\r\n                throw;\r\n            }"));
+        Assert.That(source, Does.Not.Contain("catch (Exception)\n            {\n                throw;\n            }"));
+    }
+
+    [Test]
     public void Context_dispose_must_cancel_already_accepted_completion_items()
     {
         var context = LayerBaseSynchronizationContext.Install();
@@ -212,5 +243,23 @@ public class LayerBaseSynchronizationContextShutdownTests
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(property, Is.Not.Null);
         return (MainThreadCompletionQueue)property!.GetValue(context)!;
+    }
+
+    private static string FindRepositoryFile(params string[] parts)
+    {
+        DirectoryInfo? current = new(TestContext.CurrentContext.TestDirectory);
+        while (current != null)
+        {
+            string candidate = Path.Combine(new[] { current.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            current = current.Parent;
+        }
+
+        Assert.Fail("Could not locate repository file.");
+        return string.Empty;
     }
 }

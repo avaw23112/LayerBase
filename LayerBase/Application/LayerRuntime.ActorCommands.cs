@@ -81,9 +81,8 @@ public sealed partial class LayerRuntime
     internal void CloseActorInboxes()
     {
         _actorEventInbox.Close();
-        _actorLifecycleInbox.Close();
+        _actorLifecycleInbox.CloseAndDrain(ProcessLifecycleCommand);
         _actorEventInbox.Clear();
-        _actorLifecycleInbox.Clear();
         ActorPayloads.Clear();
     }
 

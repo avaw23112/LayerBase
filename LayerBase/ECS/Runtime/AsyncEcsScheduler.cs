@@ -119,8 +119,15 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
     {
         FlushSubmissions();
         _worker.Stop();
-        _currentSubmissionBatch.Clear();
-        _workQueue.Clear();
+        _currentSubmissionBatch.CancelPendingItems();
+
+        List<EcsSubmissionBatch> pending = _workQueue.DetachAll();
+        for (int i = 0; i < pending.Count; i++)
+        {
+            EcsSubmissionBatch batch = pending[i];
+            batch.CancelPendingItems();
+            _submissionBatchPool.Return(batch);
+        }
     }
 
     public void WaitIdleForTest(TimeSpan timeout)

@@ -49,15 +49,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         var processed = 0;
         while (_queue.TryDequeue(out var work))
         {
-            try
-            {
-                work.Invoke();
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-
+            work.Invoke();
             processed++;
             if (maxItems > 0 && processed >= maxItems)
                 break;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace LayerBase.Async;
 
@@ -55,13 +56,33 @@ public sealed class MainThreadCompletionQueue
     {
         if (error == null) throw new ArgumentNullException(nameof(error));
 
+        MainThreadCompletionItem[] pending = CloseAndDetach(error);
+
+        for (int i = 0; i < pending.Length; i++)
+        {
+            pending[i].CancelOnClose(error);
+        }
+    }
+
+    public MainThreadCompletionItem[] CloseAndDetach(ObjectDisposedException error)
+    {
+        if (error == null) throw new ArgumentNullException(nameof(error));
+
         lock (_gate)
         {
             _closed ??= error;
+            if (_queue.IsEmpty)
+            {
+                return Array.Empty<MainThreadCompletionItem>();
+            }
+
+            var pending = new List<MainThreadCompletionItem>();
             while (_queue.TryDequeue(out MainThreadCompletionItem item))
             {
-                item.CancelOnClose(error);
+                pending.Add(item);
             }
+
+            return pending.ToArray();
         }
     }
 

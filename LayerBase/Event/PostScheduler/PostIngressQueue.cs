@@ -44,8 +44,10 @@ internal readonly struct PostIngressDrainResult
 /// </summary>
 internal sealed class PostIngressQueue
 {
+    private readonly object _gate = new();
     private int _capacity;
     private int _count;
+    private bool _closed;
 
     public PostIngressQueue(int capacity = 65536)
     {
@@ -80,28 +82,30 @@ internal sealed class PostIngressQueue
     public bool Enqueue<T>(in T value, EventPostPolicy? policy)
         where T : struct
     {
-        while (true)
+        lock (_gate)
         {
-            int current = Volatile.Read(ref _count);
-            int capacity = Volatile.Read(ref _capacity);
-            if (current >= capacity)
+            if (_closed)
             {
                 return false;
             }
 
-            if (Interlocked.CompareExchange(ref _count, current + 1, current) == current)
+            if (_count >= _capacity)
             {
-                break;
+                return false;
             }
-        }
 
-        _queue.Enqueue(new IngressPostItem<T>(value, policy));
-        return true;
+            _queue.Enqueue(new IngressPostItem<T>(value, policy));
+            _count++;
+            return true;
+        }
     }
 
     public void SetCapacity(int capacity)
     {
-        Volatile.Write(ref _capacity, capacity <= 0 ? 65536 : capacity);
+        lock (_gate)
+        {
+            _capacity = capacity <= 0 ? 65536 : capacity;
+        }
     }
 
     /// <summary>
@@ -131,7 +135,14 @@ internal sealed class PostIngressQueue
         while ((maxCount <= 0 || drained < maxCount) &&
                _queue.TryDequeue(out var item))
         {
-            Interlocked.Decrement(ref _count);
+            lock (_gate)
+            {
+                if (_count > 0)
+                {
+                    _count--;
+                }
+            }
+
             var result = item.PostTo(scheduler);
             if (!result.IsSuccess)
             {
@@ -150,14 +161,14 @@ internal sealed class PostIngressQueue
     /// </summary>
     public void Clear()
     {
-        while (_queue.TryDequeue(out _))
+        lock (_gate)
         {
-            Interlocked.Decrement(ref _count);
-        }
+            _closed = true;
+            while (_queue.TryDequeue(out _))
+            {
+            }
 
-        if (Volatile.Read(ref _count) < 0)
-        {
-            Interlocked.Exchange(ref _count, 0);
+            _count = 0;
         }
     }
 }

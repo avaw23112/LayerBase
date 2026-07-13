@@ -207,4 +207,16 @@ public class PostFromAnyThreadTests
         Assert.That(ingress.Enqueue(new TestEvent { Value = 1 }, null), Is.True);
         Assert.That(ingress.Enqueue(new TestEvent { Value = 2 }, null), Is.False);
     }
+
+    [Test]
+    public void PostIngressQueue_Clear_Must_Close_And_Reject_New_Posts()
+    {
+        var ingress = new PostIngressQueue(capacity: 2);
+
+        Assert.That(ingress.Enqueue(new TestEvent { Value = 1 }, null), Is.True);
+
+        ingress.Clear();
+
+        Assert.That(ingress.Enqueue(new TestEvent { Value = 2 }, null), Is.False);
+    }
 }

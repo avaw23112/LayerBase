@@ -8,11 +8,13 @@ internal sealed class ActorLifecycleInbox
     private readonly LockedBoundedRingQueue<ActorCommandEnvelope> _fastLane;
     private readonly Queue<ActorCommandEnvelope> _overflow = new();
     private readonly object _gate = new();
+    private readonly int _overflowCapacity;
     private bool _closed;
 
     public ActorLifecycleInbox(int capacity)
     {
         _fastLane = new LockedBoundedRingQueue<ActorCommandEnvelope>(Math.Max(16, capacity));
+        _overflowCapacity = _fastLane.Capacity;
     }
 
     public int Count
@@ -26,7 +28,17 @@ internal sealed class ActorLifecycleInbox
         }
     }
 
-    public bool IsFull => false;
+    public bool IsFull
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _fastLane.Count >= _fastLane.Capacity &&
+                       _overflow.Count >= _overflowCapacity;
+            }
+        }
+    }
 
     public int OverflowCount
     {
@@ -51,6 +63,11 @@ internal sealed class ActorLifecycleInbox
             if (_fastLane.TryEnqueue(envelope))
             {
                 return ControlEnqueueResult.AcceptedFast;
+            }
+
+            if (_overflow.Count >= _overflowCapacity)
+            {
+                return ControlEnqueueResult.Failed;
             }
 
             _overflow.Enqueue(envelope);
@@ -91,6 +108,23 @@ internal sealed class ActorLifecycleInbox
         return drained;
     }
 
+    public int CloseAndDrain(Action<ActorCommandEnvelope> action)
+    {
+        ActorCommandEnvelope[] pending;
+        lock (_gate)
+        {
+            _closed = true;
+            pending = DetachAllNoLock();
+        }
+
+        for (int i = 0; i < pending.Length; i++)
+        {
+            action(pending[i]);
+        }
+
+        return pending.Length;
+    }
+
     public void Clear()
     {
         lock (_gate)
@@ -106,5 +140,28 @@ internal sealed class ActorLifecycleInbox
         {
             _closed = true;
         }
+    }
+
+    private ActorCommandEnvelope[] DetachAllNoLock()
+    {
+        int count = _fastLane.Count + _overflow.Count;
+        if (count == 0)
+        {
+            return Array.Empty<ActorCommandEnvelope>();
+        }
+
+        ActorCommandEnvelope[] pending = new ActorCommandEnvelope[count];
+        int index = 0;
+        while (_fastLane.TryDequeue(out ActorCommandEnvelope envelope))
+        {
+            pending[index++] = envelope;
+        }
+
+        while (_overflow.Count > 0)
+        {
+            pending[index++] = _overflow.Dequeue();
+        }
+
+        return pending;
     }
 }

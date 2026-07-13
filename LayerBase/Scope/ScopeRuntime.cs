@@ -533,24 +533,45 @@ public sealed class ScopeRuntime : IDisposable
             return;
         }
 
-        if (Volatile.Read(ref _stopCleanupStarted) != 0)
+        try
         {
-            WaitForStopCleanup();
+            if (Volatile.Read(ref _stopCleanupStarted) != 0)
+            {
+                WaitForStopCleanup();
+            }
+
+            _subscriptionRegistry?.Dispose();
+            _subscriptionRegistry = null;
+            AwaitRegistry.Close();
+            EcsScheduler?.Dispose();
+            _context?.Dispose();
+            Timer.Dispose();
+            PostScheduler.Dispose();
+            DelayManager.Clear();
+            EventCenter.Reset();
+            EcsWorld.Dispose();
+            if (_ownsActorWorld) _actorWorld.Dispose();
+
+            ManualResetEventSlim? workerStartedSignal;
+            ManualResetEventSlim? workerLaunchSignal;
+            lock (_lifecycleGate)
+            {
+                _state = ScopeRuntimeState.Disposed;
+                workerStartedSignal = _workerStartedSignal;
+                workerLaunchSignal = _workerLaunchSignal;
+                _workerStartedSignal = null;
+                _workerLaunchSignal = null;
+            }
+
+            workerStartedSignal?.Dispose();
+            workerLaunchSignal?.Dispose();
+            _stopCleanupFinished.Dispose();
         }
-
-        _subscriptionRegistry?.Dispose();
-        _subscriptionRegistry = null;
-        AwaitRegistry.Close();
-        EcsScheduler?.Dispose();
-        _context?.Dispose();
-        Timer.Dispose();
-        PostScheduler.Dispose();
-        DelayManager.Clear();
-        EventCenter.Reset();
-        EcsWorld.Dispose();
-        if (_ownsActorWorld) _actorWorld.Dispose();
-
-        lock (_lifecycleGate) { _state = ScopeRuntimeState.Disposed; }
+        catch
+        {
+            Volatile.Write(ref _disposeInfrastructureStarted, 0);
+            throw;
+        }
     }
 
     private void WorkerLoop()
@@ -788,9 +809,26 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         PumpActors(deltaTime);
-        EcsWorld.SweepProjectedActors();
+        ScheduleProjectedActorSweep();
         EcsScheduler?.DrainResults(EcsOptions.MaxResultsDrainPerPump);
         DrainContinuations();
+    }
+
+    private void ScheduleProjectedActorSweep()
+    {
+        if (EcsScheduler is not IEcsWorkScheduler workScheduler ||
+            workScheduler.Mode == EcsExecutionMode.Sync ||
+            workScheduler.IsSchedulerThread)
+        {
+            EcsWorld.SweepProjectedActors();
+            return;
+        }
+
+        workScheduler.Schedule(PooledEcsWorkItem<object?>.Rent(
+            "SweepProjectedActors",
+            null,
+            static (world, _) => world.SweepProjectedActors()));
+        workScheduler.FlushSubmissions();
     }
 
     private void PumpActors(float deltaTime)
@@ -815,34 +853,39 @@ public sealed class ScopeRuntime : IDisposable
 
     private void StopInternal()
     {
-        try { EcsScheduler?.Stop(); } catch { }
+        EcsScheduler?.Stop();
 
         if (Descriptor.StopPolicy == ScopeStopPolicy.Drain)
         {
-            try { DrainPostInbox(); } catch { }
-            try { DrainCallInbox(); } catch { }
+            DrainPostInbox();
+            DrainCallInbox();
         }
         else
         {
-            try { while (_postInbox.TryDequeue(out _)) { } } catch { }
-            try { FailPendingCalls(CreateScopeStoppedException("stopped before pending call was dispatched.")); } catch { }
-            try { while (_manualPumps.TryDequeue(out _)) { } } catch { }
+            while (_postInbox.TryDequeue(out _))
+            {
+            }
+
+            FailPendingCalls(CreateScopeStoppedException("stopped before pending call was dispatched."));
+            while (_manualPumps.TryDequeue(out _))
+            {
+            }
         }
 
-        try { AwaitRegistry.CancelAll(CreateScopeStoppedException("scope is stopping.")); } catch { }
+        AwaitRegistry.CancelAll(CreateScopeStoppedException("scope is stopping."));
 
-        try { DrainContinuations(); } catch { }
+        DrainContinuations();
 
-        try { CloseCompletionIngress(); } catch { }
+        CloseCompletionIngress();
 
-        try { DrainContinuations(); } catch { }
+        DrainContinuations();
 
-        try { Timer.CloseAndClear(); } catch { }
-        try { PostScheduler.CloseAndClear(); } catch { }
+        Timer.CloseAndClear();
+        PostScheduler.CloseAndClear();
 
-        try { _subscriptionRegistry?.Dispose(); } catch { }
+        _subscriptionRegistry?.Dispose();
         _subscriptionRegistry = null;
-        try { DelayManager.Clear(); } catch { }
+        DelayManager.Clear();
         try
         {
             ResourceRegistry.CloseAndUnbind((exception, _) =>
@@ -852,8 +895,9 @@ public sealed class ScopeRuntime : IDisposable
         {
             ReportException(ex, -1, LayerExceptionPhase.ResourceUnbind, LayerQueueKind.None, -1);
         }
-        try { DisposeContexts(); } catch { }
-        try { DisposeServices(); } catch { }
+
+        DisposeContexts();
+        DisposeServices();
     }
 
     private void ReportException(

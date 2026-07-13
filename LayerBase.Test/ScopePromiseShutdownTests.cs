@@ -52,6 +52,40 @@ public sealed class ScopePromiseShutdownTests
     }
 
     [Test]
+    public void Continuation_drain_must_not_execute_callback_while_channel_lock_is_held()
+    {
+        var inbox = new ReliableContinuationInbox(capacity: 1);
+
+        Assert.That(inbox.TryEnqueue(new LayerContinuation(
+            () =>
+            {
+                Task<bool> enqueue = Task.Run(() =>
+                    inbox.TryEnqueue(new LayerContinuation(static () => { }, -1, -1, ScopeTrace.Empty)));
+
+                Assert.That(enqueue.Wait(TimeSpan.FromMilliseconds(250)), Is.True,
+                    "Continuation callback ran while the channel lock was held.");
+                Assert.That(enqueue.Result, Is.True);
+            },
+            serviceId: -1,
+            taskId: -1,
+            trace: ScopeTrace.Empty)), Is.True);
+
+        inbox.Drain(continuation => continuation.Action());
+    }
+
+    [Test]
+    public void Continuation_overflow_must_be_bounded()
+    {
+        var inbox = new ReliableContinuationInbox(capacity: 1);
+        var continuation = new LayerContinuation(static () => { }, -1, -1, ScopeTrace.Empty);
+
+        Assert.That(inbox.TryEnqueue(continuation), Is.True);
+        Assert.That(inbox.TryEnqueue(continuation), Is.True);
+        Assert.That(inbox.TryEnqueue(continuation), Is.False);
+        Assert.That(inbox.Count, Is.EqualTo(2));
+    }
+
+    [Test]
     public void Scope_stop_must_cancel_pending_promise_and_run_registered_continuation()
     {
         using var runtime = new ScopeRuntime(
@@ -151,7 +185,7 @@ public sealed class ScopePromiseShutdownTests
     }
 
     [Test]
-    public void OnCompleted_after_scope_stop_must_not_throw_when_promise_was_cancelled_before_registration()
+    public void OnCompleted_after_scope_stop_must_abandon_continuation_without_running_it()
     {
         using var runtime = new ScopeRuntime(
             new ScopeDescriptor(
@@ -169,7 +203,7 @@ public sealed class ScopePromiseShutdownTests
 
         Assert.DoesNotThrow(() =>
             promise.OnCompleted(() => Interlocked.Exchange(ref continuationRan, 1)));
-        Assert.That(continuationRan, Is.EqualTo(1));
+        Assert.That(continuationRan, Is.EqualTo(0));
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => promise.GetResult())!;
         Assert.That(ex.Message, Does.Contain("scope is stopping"));
     }

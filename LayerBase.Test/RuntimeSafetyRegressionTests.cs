@@ -9,6 +9,7 @@ using LayerBase.Event.Delay;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 using NUnit.Framework;
+using System.Reflection;
 
 namespace EventsTest;
 
@@ -402,6 +403,67 @@ public partial class RuntimeSafetyRegressionTests
 
         Assert.That(accepted, Is.False);
         Assert.That(runtime.ActorPayloads.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Actor_payload_storage_rejects_type_mismatch_with_clear_error()
+    {
+        var store = new ActorCommandPayloadStorage();
+        int handle = store.Store("payload");
+
+        var error = Assert.Throws<InvalidOperationException>(() => store.Retrieve<int>(handle));
+
+        Assert.That(error!.Message, Does.Contain("Payload handle"));
+        Assert.That(error.Message, Does.Contain(typeof(string).FullName!));
+        Assert.That(error.Message, Does.Contain(typeof(int).FullName!));
+        Assert.That(store.Retrieve<string>(handle), Is.EqualTo("payload"));
+    }
+
+    [Test]
+    public void Actor_payload_storage_must_not_reuse_live_handle_after_counter_wrap()
+    {
+        var store = new ActorCommandPayloadStorage();
+        int firstHandle = store.Store("first");
+        SetPayloadNextHandle(store, firstHandle - 1);
+
+        int secondHandle = store.Store("second");
+
+        Assert.That(secondHandle, Is.Not.EqualTo(firstHandle));
+        Assert.That(store.Retrieve<string>(firstHandle), Is.EqualTo("first"));
+        Assert.That(store.Retrieve<string>(secondHandle), Is.EqualTo("second"));
+        Assert.That(store.Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Actor_lifecycle_inbox_must_bound_overflow()
+    {
+        var inbox = new ActorLifecycleInbox(1);
+
+        for (int i = 0; i < 16; i++)
+        {
+            Assert.That(inbox.TryEnqueue(default), Is.EqualTo(ControlEnqueueResult.AcceptedFast));
+        }
+
+        Assert.That(inbox.TryEnqueue(default), Is.EqualTo(ControlEnqueueResult.AcceptedOverflow));
+
+        for (int i = 1; i < 16; i++)
+        {
+            Assert.That(inbox.TryEnqueue(default), Is.EqualTo(ControlEnqueueResult.AcceptedOverflow));
+        }
+
+        ControlEnqueueResult rejected = inbox.TryEnqueue(default);
+        Assert.That(rejected, Is.EqualTo(ControlEnqueueResult.Failed));
+        Assert.That(inbox.Count, Is.EqualTo(32));
+        Assert.That(inbox.IsFull, Is.True);
+    }
+
+    private static void SetPayloadNextHandle(ActorCommandPayloadStorage store, int value)
+    {
+        var field = typeof(ActorCommandPayloadStorage).GetField(
+            "_nextHandle",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null);
+        field!.SetValue(store, value);
     }
 
     private sealed class EmptyRegressionLayer : Layer

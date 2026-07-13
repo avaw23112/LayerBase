@@ -196,19 +196,28 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
 
         if (!_continuationScope.TryEnqueueContinuation(continuation))
         {
-            try
-            {
-                continuation();
-            }
-            finally
-            {
-                _continuationScope.AwaitRegistry.Unregister(this);
-            }
-
+            AbandonIfSuccessful();
+            _continuationScope.AwaitRegistry.Unregister(this);
             return;
         }
 
         _continuationScope.AwaitRegistry.Unregister(this);
+    }
+
+    private void AbandonIfSuccessful()
+    {
+        lock (_gate)
+        {
+            if (_cancelled || _exception != null)
+            {
+                return;
+            }
+
+            _cancelled = true;
+            _result = default;
+            _exception = new InvalidOperationException(
+                "Scope continuation channel is closed; call continuation was abandoned.");
+        }
     }
 
     public readonly struct Awaiter : INotifyCompletion

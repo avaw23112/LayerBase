@@ -132,6 +132,37 @@ public sealed class AsyncEcsQueryTests
     }
 
     [Test]
+    public void AsyncScheduler_Stop_must_return_queued_pooled_work_when_worker_was_not_started()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        using World world = World.Create();
+        var scheduler = new AsyncEcsScheduler(runtime, world, EcsRuntimeOptions.Default);
+        var item = new ReturnCountingWorkItem();
+
+        scheduler.Schedule(item);
+        scheduler.FlushSubmissionsForTest();
+        scheduler.Stop();
+
+        Assert.That(item.ReturnCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ScopeRuntime_async_ecs_pump_must_submit_projected_actor_sweep_as_work()
+    {
+        string root = FindRepositoryRoot();
+        string source = File.ReadAllText(Path.Combine(root, "LayerBase", "Scope", "ScopeRuntime.cs"));
+        int pumpStart = source.IndexOf("private void PumpInternal", StringComparison.Ordinal);
+        int pumpEnd = source.IndexOf("private void ScheduleProjectedActorSweep", StringComparison.Ordinal);
+        Assert.That(pumpStart, Is.GreaterThanOrEqualTo(0));
+        Assert.That(pumpEnd, Is.GreaterThan(pumpStart));
+        string pumpInternal = source.Substring(pumpStart, pumpEnd - pumpStart);
+
+        Assert.That(source, Does.Contain("ScheduleProjectedActorSweep"));
+        Assert.That(source, Does.Contain("PooledEcsWorkItem<object?>.Rent"));
+        Assert.That(pumpInternal, Does.Not.Contain("EcsWorld.SweepProjectedActors();"));
+    }
+
+    [Test]
     public void AsyncProjectedActor_sweep_must_return_actor_on_runtime_owner_thread()
     {
         int ownerThreadId = Environment.CurrentManagedThreadId;
@@ -211,6 +242,22 @@ public sealed class AsyncEcsQueryTests
                        .Push(new AsyncEcsTestLayer())
                        .SetEcsExecutionMode(EcsExecutionMode.Async)
                        .Build();
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? current = new(TestContext.CurrentContext.TestDirectory);
+        while (current != null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "LayerBase.sln")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root.");
     }
 
     private readonly struct BlockingMoveJob :
@@ -319,6 +366,23 @@ public sealed class AsyncEcsQueryTests
         public void Execute(World world, EcsResultQueue results)
         {
             _execute();
+        }
+    }
+
+    private sealed class ReturnCountingWorkItem : IEcsWorkItem, IPooledEcsWorkItem
+    {
+        public int ReturnCount { get; private set; }
+
+        public string DebugName => nameof(ReturnCountingWorkItem);
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+            Assert.Fail("Queued work should not execute when the worker was never started.");
+        }
+
+        public void ReturnToPool()
+        {
+            ReturnCount++;
         }
     }
 }

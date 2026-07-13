@@ -85,6 +85,24 @@ public sealed class ScopeLifecycleConcurrencyTests
     }
 
     [Test]
+    public void Dispose_must_release_internal_wait_handles()
+    {
+        var service = new CountingDisposeService();
+        using var scope = CreateWorkerScope(service, 1221);
+
+        scope.Start();
+        var stopCleanupFinished = ReadWaitHandle(scope, "_stopCleanupFinished");
+        var workerStartedSignal = ReadWaitHandle(scope, "_workerStartedSignal");
+        var workerLaunchSignal = ReadWaitHandle(scope, "_workerLaunchSignal");
+
+        scope.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => stopCleanupFinished.Wait(0));
+        Assert.Throws<ObjectDisposedException>(() => workerStartedSignal.Wait(0));
+        Assert.Throws<ObjectDisposedException>(() => workerLaunchSignal.Wait(0));
+    }
+
+    [Test]
     public void Inline_request_stop_from_non_owner_thread_must_defer_cleanup_until_owner_pump()
     {
         var service = new CountingDisposeService();
@@ -210,6 +228,48 @@ public sealed class ScopeLifecycleConcurrencyTests
     }
 
     [Test]
+    public void Scope_stop_internal_must_not_silently_swallow_framework_cleanup_exceptions()
+    {
+        string source = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "LayerBase", "Scope", "ScopeRuntime.cs"));
+        int start = source.IndexOf("private void StopInternal()", StringComparison.Ordinal);
+        int end = source.IndexOf("private void ReportException", StringComparison.Ordinal);
+
+        Assert.That(start, Is.GreaterThanOrEqualTo(0));
+        Assert.That(end, Is.GreaterThan(start));
+        Assert.That(source.Substring(start, end - start), Does.Not.Contain("catch { }"));
+    }
+
+    [Test]
+    public void Dispose_infrastructure_must_reset_started_flag_when_cleanup_throws()
+    {
+        string source = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "LayerBase", "Scope", "ScopeRuntime.cs"));
+        int start = source.IndexOf("private void DisposeInfrastructureOnce()", StringComparison.Ordinal);
+        int end = source.IndexOf("private void WorkerLoop()", StringComparison.Ordinal);
+
+        Assert.That(start, Is.GreaterThanOrEqualTo(0));
+        Assert.That(end, Is.GreaterThan(start));
+        string method = source.Substring(start, end - start);
+
+        Assert.That(method, Does.Contain("Volatile.Write(ref _disposeInfrastructureStarted, 0);"));
+        Assert.That(method, Does.Contain("throw;"));
+    }
+
+    [Test]
+    public void Scope_runtime_host_dispose_must_not_mark_disposed_from_finally()
+    {
+        string source = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "LayerBase", "Scope", "ScopeRuntimeHost.cs"));
+        int start = source.IndexOf("public void Dispose()", StringComparison.Ordinal);
+        int end = source.IndexOf("private void ThrowIfDisposed()", StringComparison.Ordinal);
+
+        Assert.That(start, Is.GreaterThanOrEqualTo(0));
+        Assert.That(end, Is.GreaterThan(start));
+        string method = source.Substring(start, end - start);
+
+        Assert.That(method, Does.Not.Contain("finally"));
+        Assert.That(method, Does.Contain("_disposed = true;"));
+    }
+
+    [Test]
     public void RequestStop_inside_handler_must_defer_service_disposal_until_handler_returns()
     {
         var service = new ScopeLifecycleRequestStopHandlerService();
@@ -327,6 +387,30 @@ public sealed class ScopeLifecycleConcurrencyTests
             "_workerThread",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         return (Thread?)field!.GetValue(scope);
+    }
+
+    private static ManualResetEventSlim ReadWaitHandle(ScopeRuntime scope, string fieldName)
+    {
+        var field = typeof(ScopeRuntime).GetField(
+            fieldName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        return (ManualResetEventSlim)field!.GetValue(scope)!;
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? current = new(TestContext.CurrentContext.TestDirectory);
+        while (current != null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "LayerBase.sln")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root.");
     }
 
     private static ScopeRuntime CreateWorkerScope(IService service, int iteration)

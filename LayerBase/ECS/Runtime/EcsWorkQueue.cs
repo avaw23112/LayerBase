@@ -73,4 +73,29 @@ internal sealed class EcsWorkQueue
         Volatile.Write(ref _pendingBatches, 0);
         Volatile.Write(ref _completedSequence, 0);
     }
+
+    public List<EcsSubmissionBatch> DetachAll()
+    {
+        var batches = new List<EcsSubmissionBatch>();
+
+        while (_ring.TryDequeue(out EcsSubmissionBatch? batch))
+        {
+            if (batch != null)
+            {
+                batches.Add(batch);
+            }
+        }
+
+        lock (_overflowLock)
+        {
+            while (_overflow.Count > 0)
+            {
+                batches.Add(_overflow.Dequeue());
+            }
+        }
+
+        Volatile.Write(ref _pendingBatches, 0);
+        Volatile.Write(ref _completedSequence, 0);
+        return batches;
+    }
 }

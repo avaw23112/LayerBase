@@ -101,6 +101,32 @@ public sealed class ScopeResourceStrictValidationTests
         Assert.That(exception.Message, Does.Contain("does not implement"));
     }
 
+    [Test]
+    public void Registry_initialize_rolls_back_consumers_when_later_bind_fails()
+    {
+        var registry = new ScopeResourceRegistry();
+        var provider = new ResourceProvider();
+        var first = new ResourceConsumer();
+        var second = new ThrowingResourceConsumer();
+        var plan = new ScopeResourcePlan(
+            new[] { new ScopeResourceExportPlan(providerObjectSlot: 0, providerLocalSlot: 0, exportSlot: 0) },
+            new[]
+            {
+                new ScopeResourceImportPlan(consumerObjectSlot: 1, consumerLocalSlot: 0, exportSlot: 0),
+                new ScopeResourceImportPlan(consumerObjectSlot: 2, consumerLocalSlot: 0, exportSlot: 0)
+            });
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            registry.Initialize(new object[] { provider, first, second }, plan))!;
+
+        Assert.That(exception.Message, Does.Contain("bind failed"));
+        Assert.That(first.BindCount, Is.EqualTo(1));
+        Assert.That(first.UnbindCount, Is.EqualTo(1));
+
+        registry.CloseAndUnbind();
+        Assert.That(first.UnbindCount, Is.EqualTo(1));
+    }
+
     private sealed class ResourceProvider : IGeneratedScopeResourcePublisher
     {
         public object GetPublishedResource(int exportId)
@@ -109,10 +135,27 @@ public sealed class ScopeResourceStrictValidationTests
         }
     }
 
-    private sealed class ResourceConsumer : IGeneratedScopeResourceConsumer
+    private class ResourceConsumer : IGeneratedScopeResourceConsumer
+    {
+        public int BindCount { get; private set; }
+        public int UnbindCount { get; private set; }
+
+        public void BindScopeResource(int importId, object resource)
+        {
+            BindCount++;
+        }
+
+        public virtual void UnbindScopeResources()
+        {
+            UnbindCount++;
+        }
+    }
+
+    private sealed class ThrowingResourceConsumer : IGeneratedScopeResourceConsumer
     {
         public void BindScopeResource(int importId, object resource)
         {
+            throw new InvalidOperationException("bind failed");
         }
 
         public void UnbindScopeResources()
