@@ -100,4 +100,53 @@ public sealed class ScopePromiseShutdownTests
         Assert.That(continuationRan, Is.EqualTo(1));
         Assert.That(promise.GetResult(), Is.EqualTo(42));
     }
+
+    [Test]
+    public void GetResult_exception_must_unregister_promise()
+    {
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1222,
+                name: "PromiseExceptionScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>());
+        var promise = new ScopePromise<int>(runtime);
+
+        promise.SetException(new InvalidOperationException("boom"));
+
+        Assert.That(runtime.AwaitRegistry.PendingCount, Is.EqualTo(1));
+        Assert.Throws<InvalidOperationException>(() => promise.GetResult());
+        Assert.That(runtime.AwaitRegistry.PendingCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void CancelAll_must_keep_completed_promise_registered_until_continuation_is_queued()
+    {
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1223,
+                name: "PromiseCancelAllCompletedScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>());
+        var promise = new ScopePromise<int>(runtime);
+        int continuationRan = 0;
+
+        promise.SetResult(42);
+        runtime.AwaitRegistry.CancelAll(new InvalidOperationException("scope is stopping."));
+
+        Assert.That(runtime.AwaitRegistry.PendingCount, Is.EqualTo(1));
+
+        promise.OnCompleted(() => Interlocked.Exchange(ref continuationRan, 1));
+
+        Assert.That(runtime.AwaitRegistry.PendingCount, Is.EqualTo(0));
+        runtime.Pump(0);
+        Assert.That(continuationRan, Is.EqualTo(1));
+        Assert.That(promise.GetResult(), Is.EqualTo(42));
+    }
 }

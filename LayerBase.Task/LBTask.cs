@@ -110,7 +110,7 @@ public readonly struct LBTask
                 action();
                 if (ctx != null)
                 {
-                    ctx.CompletionQueue.Enqueue(() => src.SetResult());
+                    EnqueueCompletion(ctx, src, () => src.SetResult());
                 }
                 else
                 {
@@ -121,7 +121,7 @@ public readonly struct LBTask
             {
                 if (ctx != null)
                 {
-                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
+                    EnqueueCompletion(ctx, src, () => src.SetException(ex));
                 }
                 else
                 {
@@ -150,7 +150,7 @@ public readonly struct LBTask
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
+                    if (ctx != null) EnqueueCompletion(ctx, src, () => src.SetCanceled(cancellationToken));
                     else src.SetCanceled(cancellationToken);
                     return;
                 }
@@ -159,7 +159,7 @@ public readonly struct LBTask
 
                 if (ctx != null)
                 {
-                    ctx.CompletionQueue.Enqueue(() => src.SetResult());
+                    EnqueueCompletion(ctx, src, () => src.SetResult());
                 }
                 else
                 {
@@ -168,14 +168,14 @@ public readonly struct LBTask
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
             {
-                if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
+                if (ctx != null) EnqueueCompletion(ctx, src, () => src.SetCanceled(cancellationToken));
                 else src.SetCanceled(cancellationToken);
             }
             catch (Exception ex)
             {
                 if (ctx != null)
                 {
-                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
+                    EnqueueCompletion(ctx, src, () => src.SetException(ex));
                 }
                 else
                 {
@@ -205,7 +205,7 @@ public readonly struct LBTask
                 var result = func();
                 if (ctx != null)
                 {
-                    ctx.CompletionQueue.Enqueue(() => src.SetResult(result));
+                    EnqueueCompletion(ctx, src, () => src.SetResult(result));
                 }
                 else
                 {
@@ -216,7 +216,7 @@ public readonly struct LBTask
             {
                 if (ctx != null)
                 {
-                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
+                    EnqueueCompletion(ctx, src, () => src.SetException(ex));
                 }
                 else
                 {
@@ -246,7 +246,7 @@ public readonly struct LBTask
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
+                    if (ctx != null) EnqueueCompletion(ctx, src, () => src.SetCanceled(cancellationToken));
                     else src.SetCanceled(cancellationToken);
                     return;
                 }
@@ -255,7 +255,7 @@ public readonly struct LBTask
 
                 if (ctx != null)
                 {
-                    ctx.CompletionQueue.Enqueue(() => src.SetResult(result));
+                    EnqueueCompletion(ctx, src, () => src.SetResult(result));
                 }
                 else
                 {
@@ -264,14 +264,14 @@ public readonly struct LBTask
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
             {
-                if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
+                if (ctx != null) EnqueueCompletion(ctx, src, () => src.SetCanceled(cancellationToken));
                 else src.SetCanceled(cancellationToken);
             }
             catch (Exception ex)
             {
                 if (ctx != null)
                 {
-                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
+                    EnqueueCompletion(ctx, src, () => src.SetException(ex));
                 }
                 else
                 {
@@ -294,8 +294,24 @@ public readonly struct LBTask
         if (ctx == null) return CompletedTask;
 
         var src = LBTaskSource.Rent(ctx);
-        ctx.CompletionQueue.Enqueue(() => src.SetResult());
+        EnqueueCompletion(ctx, src, () => src.SetResult());
         return new LBTask(src);
+    }
+
+    private static void EnqueueCompletion(
+        LayerBaseSynchronizationContext context,
+        LBTaskSource source,
+        Action complete)
+    {
+        context.CompletionQueue.Enqueue(complete, _ => source.SetCanceled(default));
+    }
+
+    private static void EnqueueCompletion<TResult>(
+        LayerBaseSynchronizationContext context,
+        LBTaskSource<TResult> source,
+        Action complete)
+    {
+        context.CompletionQueue.Enqueue(complete, _ => source.SetCanceled(default));
     }
 
     private sealed class DelayWorkItem

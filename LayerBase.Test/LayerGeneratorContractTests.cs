@@ -614,6 +614,23 @@ public class LayerGeneratorContractTests
                          {
                          }
                          """)]
+    [TestCase("LBG414", """
+                         using LayerBase.DI;
+                         using LayerBase.DI.Options;
+
+                         public sealed partial class Outer
+                         {
+                             public sealed partial class NestedService : IService
+                             {
+                                 [Mount] private NestedContext _context = null!;
+                                 public void ConfigureServices(IServiceCollection services) { }
+                             }
+
+                             public sealed partial class NestedContext : ILayerContext
+                             {
+                             }
+                         }
+                         """)]
     public void Layer_service_generator_reports_expected_diagnostic(string diagnosticId, string source)
     {
         var result = RunGenerators(source, new LayerServiceGenerator());

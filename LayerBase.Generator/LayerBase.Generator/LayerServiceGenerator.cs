@@ -144,6 +144,13 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                         info.Symbol.Locations.FirstOrDefault(),
                         info.Symbol.ToDisplayString()));
                 }
+                else if (GeneratorOwnerDiagnostics.IsNestedType(info.Symbol))
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        GeneratorOwnerDiagnostics.NestedMountOwnerNotSupported,
+                        info.Symbol.Locations.FirstOrDefault(),
+                        info.Symbol.ToDisplayString()));
+                }
                 else if (!IsPartial(info.Symbol))
                 {
                     var diagnostic = isLayer ? Diagnostics.MountLayerMustBePartial : Diagnostics.MountServiceMustBePartial;

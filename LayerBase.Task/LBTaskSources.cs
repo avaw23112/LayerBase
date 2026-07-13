@@ -137,9 +137,18 @@ internal sealed class LBTaskSource : ILBTaskSource
     {
         var ctx = _context;
         if (ctx != null)
-            ctx.Post(static state => ((Action)state!).Invoke(), continuation);
-        else
-            ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
+        {
+            try
+            {
+                ctx.Post(static state => ((Action)state!).Invoke(), continuation);
+                return;
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
     }
 }
 
@@ -269,9 +278,18 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
     {
         var ctx = _context;
         if (ctx != null)
-            ctx.Post(static state => ((Action)state!).Invoke(), continuation);
-        else
-            ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
+        {
+            try
+            {
+                ctx.Post(static state => ((Action)state!).Invoke(), continuation);
+                return;
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
     }
 
     private void Release()

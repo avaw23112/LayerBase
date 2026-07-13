@@ -6,15 +6,22 @@ namespace LayerBase.Async;
 public readonly struct MainThreadCompletionItem
 {
     private readonly Action _complete;
+    private readonly Action<Exception>? _cancelOnClose;
 
-    public MainThreadCompletionItem(Action complete)
+    public MainThreadCompletionItem(Action complete, Action<Exception>? cancelOnClose = null)
     {
         _complete = complete ?? throw new ArgumentNullException(nameof(complete));
+        _cancelOnClose = cancelOnClose;
     }
 
     public void Complete()
     {
         _complete();
+    }
+
+    public void CancelOnClose(Exception error)
+    {
+        _cancelOnClose?.Invoke(error);
     }
 }
 
@@ -38,6 +45,12 @@ public sealed class MainThreadCompletionQueue
         Enqueue(new MainThreadCompletionItem(action));
     }
 
+    public void Enqueue(Action action, Action<Exception> cancelOnClose)
+    {
+        if (cancelOnClose == null) throw new ArgumentNullException(nameof(cancelOnClose));
+        Enqueue(new MainThreadCompletionItem(action, cancelOnClose));
+    }
+
     public void Close(ObjectDisposedException error)
     {
         if (error == null) throw new ArgumentNullException(nameof(error));
@@ -45,6 +58,10 @@ public sealed class MainThreadCompletionQueue
         lock (_gate)
         {
             _closed ??= error;
+            while (_queue.TryDequeue(out MainThreadCompletionItem item))
+            {
+                item.CancelOnClose(error);
+            }
         }
     }
 

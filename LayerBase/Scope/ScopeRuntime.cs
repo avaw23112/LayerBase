@@ -62,6 +62,8 @@ public sealed class ScopeRuntime : IDisposable
     private bool _cleanupClaimed;
     private int _executionDepth;
     private int _ownerThreadId = -1;
+    private int _disposeRequested;
+    private int _disposeInfrastructureStarted;
 
     public ScopeRuntime(
         ScopeDescriptor descriptor,
@@ -290,15 +292,9 @@ public sealed class ScopeRuntime : IDisposable
     public void Start()
     {
         ThrowIfDisposed();
-        if (!TryTransition(ScopeRuntimeState.Created, ScopeRuntimeState.Starting))
-        {
-            return;
-        }
 
         if (Descriptor.Threading == ScopeThreadingMode.Worker)
         {
-            _workerRunning = true;
-            _workerStartedSignal = new ManualResetEventSlim(false);
             var launchSignal = new ManualResetEventSlim(false);
             var thread = new Thread(WorkerLoop)
             {
@@ -308,21 +304,41 @@ public sealed class ScopeRuntime : IDisposable
 
             lock (_lifecycleGate)
             {
+                if (_state != ScopeRuntimeState.Created)
+                {
+                    return;
+                }
+
+                _state = ScopeRuntimeState.Starting;
+                _workerRunning = true;
+                _workerStartedSignal = new ManualResetEventSlim(false);
                 _workerThread = thread;
                 _workerLaunchSignal = launchSignal;
                 _workerLaunchSucceeded = 0;
+
+                try
+                {
+                    thread.Start();
+                    Interlocked.Exchange(ref _workerLaunchSucceeded, 1);
+                }
+                catch
+                {
+                    _workerRunning = false;
+                    _workerThread = null;
+                    _state = ScopeRuntimeState.Faulted;
+                    throw;
+                }
+                finally
+                {
+                    launchSignal.Set();
+                }
             }
 
-            try
-            {
-                thread.Start();
-                Interlocked.Exchange(ref _workerLaunchSucceeded, 1);
-            }
-            finally
-            {
-                launchSignal.Set();
-            }
+            return;
+        }
 
+        if (!TryTransition(ScopeRuntimeState.Created, ScopeRuntimeState.Starting))
+        {
             return;
         }
 
@@ -449,11 +465,23 @@ public sealed class ScopeRuntime : IDisposable
 
     public void Dispose()
     {
+        Interlocked.Exchange(ref _disposeRequested, 1);
+
+        if (ShouldDeferDisposeToOwnerSafePoint())
+        {
+            RequestStop();
+            return;
+        }
+
         Thread? threadToJoin = null;
         lock (_lifecycleGate)
         {
-            if (IsDisposingOrDisposed(_state)) return;
-            _state = ScopeRuntimeState.Disposing;
+            if (_state == ScopeRuntimeState.Disposed) return;
+            if (_state != ScopeRuntimeState.Disposing)
+            {
+                _state = ScopeRuntimeState.Disposing;
+            }
+
             threadToJoin = _workerThread;
         }
 
@@ -469,6 +497,31 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         ExecuteStopInternalOnce();
+
+        DisposeInfrastructureOnce();
+    }
+
+    private void DisposeInfrastructureIfRequested()
+    {
+        if (Volatile.Read(ref _disposeRequested) == 0)
+        {
+            return;
+        }
+
+        DisposeInfrastructureOnce();
+    }
+
+    private void DisposeInfrastructureOnce()
+    {
+        if (Interlocked.Exchange(ref _disposeInfrastructureStarted, 1) != 0)
+        {
+            return;
+        }
+
+        if (Volatile.Read(ref _stopCleanupStarted) != 0)
+        {
+            WaitForStopCleanup();
+        }
 
         _subscriptionRegistry?.Dispose();
         _subscriptionRegistry = null;
@@ -578,6 +631,7 @@ public sealed class ScopeRuntime : IDisposable
             if (EndOwnerExecution())
             {
                 ExecuteStopInternalOnce();
+                DisposeInfrastructureIfRequested();
             }
         }
     }
@@ -605,6 +659,7 @@ public sealed class ScopeRuntime : IDisposable
             if (EndOwnerExecution())
             {
                 ExecuteStopInternalOnce();
+                DisposeInfrastructureIfRequested();
             }
         }
     }
@@ -960,6 +1015,26 @@ public sealed class ScopeRuntime : IDisposable
             }
 
             return TryClaimDeferredCleanupNoLock();
+        }
+    }
+
+    private bool ShouldDeferDisposeToOwnerSafePoint()
+    {
+        lock (_lifecycleGate)
+        {
+            if (_state == ScopeRuntimeState.Disposed)
+            {
+                return false;
+            }
+
+            if (_executionDepth > 0 && CanCurrentThreadRunOwnerCleanupNoLock())
+            {
+                return true;
+            }
+
+            return Descriptor.Threading == ScopeThreadingMode.Inline &&
+                _ownerThreadId != -1 &&
+                _ownerThreadId != Environment.CurrentManagedThreadId;
         }
     }
 

@@ -407,6 +407,19 @@ public sealed class ScopeRuntimeHost : IDisposable
         }
     }
 
+    public void RequestStop()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        for (int i = _scopes.Length - 1; i >= 0; i--)
+        {
+            _scopes[i].RequestStop();
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)

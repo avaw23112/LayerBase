@@ -41,14 +41,16 @@ internal sealed class ScopeAwaitRegistry
         {
             _closed = true;
             pending = new List<IScopePromiseControl>(_promises);
-            _promises.Clear();
         }
 
         foreach (var promise in pending)
         {
             try
             {
-                promise.TrySetException(reason);
+                if (promise.TrySetException(reason))
+                {
+                    Unregister(promise);
+                }
             }
             catch
             {

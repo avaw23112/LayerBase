@@ -13,6 +13,15 @@ internal static class GeneratorOwnerDiagnostics
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor NestedMountOwnerNotSupported = new(
+        id: "LBG414",
+        title: "Nested mount owner is not supported",
+        messageFormat:
+            "Type '{0}' is nested. [Mount] requires a top-level non-generic partial owner.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public static bool HasGenericContainingType(INamedTypeSymbol type)
     {
         for (INamedTypeSymbol? current = type; current != null; current = current.ContainingType)
@@ -24,5 +33,10 @@ internal static class GeneratorOwnerDiagnostics
         }
 
         return false;
+    }
+
+    public static bool IsNestedType(INamedTypeSymbol type)
+    {
+        return type.ContainingType != null;
     }
 }

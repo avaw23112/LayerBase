@@ -59,14 +59,12 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
     {
         if (result is TResult typed)
         {
-            Complete(typed, null);
-            return true;
+            return Complete(typed, null);
         }
 
         if (result == null && default(TResult) == null)
         {
-            Complete(default, null);
-            return true;
+            return Complete(default, null);
         }
 
         return false;
@@ -75,8 +73,7 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
     bool IScopePromiseControl.TrySetException(Exception exception)
     {
         if (exception == null) return false;
-        Complete(default, exception);
-        return true;
+        return Complete(default, exception);
     }
 
     public void OnCompleted(Action continuation)
@@ -112,34 +109,45 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
 
     public TResult GetResult()
     {
-        TResult result;
-        lock (_gate)
+        bool unregister = false;
+        try
         {
-            if (!_completed)
+            TResult result;
+            lock (_gate)
             {
-                throw new InvalidOperationException("Scope call has not completed.");
+                if (!_completed)
+                {
+                    throw new InvalidOperationException("Scope call has not completed.");
+                }
+
+                unregister = true;
+                if (_cancelled)
+                {
+                    throw new InvalidOperationException("Scope call was cancelled.");
+                }
+
+                if (_exception != null)
+                {
+                    throw _exception;
+                }
+
+                result = _result!;
             }
 
-            if (_cancelled)
-            {
-                throw new InvalidOperationException("Scope call was cancelled.");
-            }
-
-            if (_exception != null)
-            {
-                throw _exception;
-            }
-
-            result = _result!;
+            return result;
         }
-
-        _continuationScope?.AwaitRegistry.Unregister(this);
-        return result;
+        finally
+        {
+            if (unregister)
+            {
+                _continuationScope?.AwaitRegistry.Unregister(this);
+            }
+        }
     }
 
     public void SetResult(TResult result)
     {
-        Complete(result, null);
+        _ = Complete(result, null);
     }
 
     public void SetException(Exception exception)
@@ -149,17 +157,17 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
             throw new ArgumentNullException(nameof(exception));
         }
 
-        Complete(default, exception);
+        _ = Complete(default, exception);
     }
 
-    private void Complete(TResult? result, Exception? exception)
+    private bool Complete(TResult? result, Exception? exception)
     {
         Action? continuation;
         lock (_gate)
         {
             if (_completed)
             {
-                return;
+                return false;
             }
 
             _completed = true;
@@ -174,6 +182,8 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
         {
             ScheduleContinuation(continuation);
         }
+
+        return true;
     }
 
     private void ScheduleContinuation(Action continuation)

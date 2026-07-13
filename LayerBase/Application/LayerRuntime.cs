@@ -746,7 +746,7 @@ public sealed partial class LayerRuntime : IDisposable
     #region Lifecycle - Dispose
     public void RequestStop()
     {
-        ScopeHost?.Stop();
+        ScopeHost?.RequestStop();
     }
 
     public void Dispose()
