@@ -1,7 +1,4 @@
-using System.Reflection;
 using LayerBase.DI;
-using LayerBase.DI.Options;
-using LayerBase.Scope.DI;
 
 namespace LayerBase.Scope;
 
@@ -84,50 +81,6 @@ internal sealed class ScopeServiceProvider : LayerBase.DI.IServiceProvider, IDis
             return (T)_slotInstances[slot];
         }
         return Get<T>();
-    }
-
-    public void InjectMembers(object instance)
-    {
-        ThrowIfDisposed();
-
-        if (instance == null)
-        {
-            throw new ArgumentNullException(nameof(instance));
-        }
-
-        const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-
-        foreach (FieldInfo field in instance.GetType().GetFields(Flags))
-        {
-            MountAttribute? mount = field.GetCustomAttribute<MountAttribute>();
-            if (mount == null)
-            {
-                continue;
-            }
-
-            Type targetType = mount.ImplementationType ?? field.FieldType;
-            object? dependency = GetService(targetType);
-            if (dependency != null)
-            {
-                field.SetValue(instance, dependency);
-            }
-        }
-
-        foreach (PropertyInfo property in instance.GetType().GetProperties(Flags))
-        {
-            MountAttribute? mount = property.GetCustomAttribute<MountAttribute>();
-            if (mount == null || !property.CanWrite)
-            {
-                continue;
-            }
-
-            Type targetType = mount.ImplementationType ?? property.PropertyType;
-            object? dependency = GetService(targetType);
-            if (dependency != null)
-            {
-                property.SetValue(instance, dependency);
-            }
-        }
     }
 
     public void Dispose()

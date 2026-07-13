@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using Arch.Core;
 using LayerBase.Actor;
@@ -13,6 +13,7 @@ using LayerBase.ECS.Runtime;
 using LayerBase.ECS.Runtime.Query;
 using LayerBase.Event.Delay;
 using LayerBase.Scope.Completion;
+using LayerBase.Scope.DI;
 using LayerBase.Scope.Lifecycle;
 using LayerBase.Scope.Queue;
 using LayerBase.Scope.Resources;
@@ -53,6 +54,7 @@ public sealed class ScopeRuntime : IDisposable
     private volatile bool _workerRunning;
     private int _stopCleanupStarted;
     private int _stopCleanupCompleted;
+    private readonly ManualResetEventSlim _stopCleanupFinished = new(false);
     private ManualResetEventSlim? _workerStartedSignal;
     private ManualResetEventSlim? _workerLaunchSignal;
     private int _workerLaunchSucceeded;
@@ -91,7 +93,7 @@ public sealed class ScopeRuntime : IDisposable
         _ownsActorWorld = sharedActorWorld == null;
         Actors = new ScopeActorGateway(owningRuntime, _actorWorld, descriptor.ScopeId);
         EcsWorld = World.Create();
-        EcsWorld.BindScopeActors(_actorWorld);
+        EcsWorld.BindScopeActors(_actorWorld, Actors);
         EcsQueryRegistry = new EcsQueryRegistry(EcsWorld);
         OwningRuntime = owningRuntime;
         InitializeEcsScheduler(options);
@@ -475,18 +477,7 @@ public sealed class ScopeRuntime : IDisposable
             }
         }
 
-        if (Interlocked.Exchange(ref _stopCleanupStarted, 1) == 0)
-        {
-            try
-            {
-                ExecuteInScope(StopInternal);
-            }
-            catch
-            {
-                // Best-effort cleanup continues
-            }
-            Interlocked.Exchange(ref _stopCleanupCompleted, 1);
-        }
+        ExecuteStopInternalOnce();
 
         lock (_lifecycleGate) { _state = ScopeRuntimeState.Stopped; }
 
@@ -895,20 +886,43 @@ public sealed class ScopeRuntime : IDisposable
     {
         if (Interlocked.Exchange(ref _stopCleanupStarted, 1) != 0)
         {
+            WaitForStopCleanup();
             return;
         }
 
-        lock (_lifecycleGate)
+        try
         {
-            if (_state < ScopeRuntimeState.StopRequested)
-                _state = ScopeRuntimeState.StopRequested;
-            _state = ScopeRuntimeState.Stopping;
+            lock (_lifecycleGate)
+            {
+                if (_state < ScopeRuntimeState.StopRequested)
+                    _state = ScopeRuntimeState.StopRequested;
+                if (_state < ScopeRuntimeState.Disposing)
+                    _state = ScopeRuntimeState.Stopping;
+            }
+
+            ExecuteInScope(StopInternal);
+
+            lock (_lifecycleGate)
+            {
+                if (_state < ScopeRuntimeState.Disposing)
+                    _state = ScopeRuntimeState.Stopped;
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _stopCleanupCompleted, 1);
+            _stopCleanupFinished.Set();
+        }
+    }
+
+    private void WaitForStopCleanup()
+    {
+        if (Volatile.Read(ref _stopCleanupCompleted) != 0)
+        {
+            return;
         }
 
-        ExecuteInScope(StopInternal);
-        Interlocked.Exchange(ref _stopCleanupCompleted, 1);
-
-        lock (_lifecycleGate) { _state = ScopeRuntimeState.Stopped; }
+        _stopCleanupFinished.Wait();
     }
 
     private InvalidOperationException CreateScopeStoppedException(string message)
@@ -1038,13 +1052,71 @@ public sealed class ScopeRuntime : IDisposable
 
         for (int i = 0; i < Services.Length; i++)
         {
-            _serviceProvider.InjectMembers(Services[i]);
+            if (Services[i] is IGeneratedScopeMount mount)
+            {
+                mount.Mount(new ScopeMountContext(this, i, -1));
+            }
         }
 
         for (int i = 0; i < Contexts.Length; i++)
         {
-            _serviceProvider.InjectMembers(Contexts[i]);
+            if (Contexts[i] is IGeneratedScopeMount mount)
+            {
+                ScopeContextPlan contextPlan = i < _contextPlans.Length
+                    ? _contextPlans[i]
+                    : new ScopeContextPlan(i, Contexts[i].GetType(), -1, Contexts[i]);
+                mount.Mount(new ScopeMountContext(this, contextPlan.OwnerServiceSlot, contextPlan.ContextSlot));
+            }
         }
+    }
+
+    internal T GetServiceAt<T>(int slot) where T : class
+    {
+        if ((uint)slot >= (uint)Services.Length)
+        {
+            throw new InvalidOperationException($"Scope service slot out of range: {slot}.");
+        }
+
+        return (T)Services[slot];
+    }
+
+    internal T GetMountedObject<T>(int serviceSlot, int contextSlot) where T : class
+    {
+        if (contextSlot >= 0 && serviceSlot >= 0 && (uint)serviceSlot < (uint)Services.Length &&
+            Services[serviceSlot] is T ownerService)
+        {
+            return ownerService;
+        }
+
+        if (serviceSlot >= 0)
+        {
+            for (int i = 0; i < _contextPlans.Length; i++)
+            {
+                ScopeContextPlan contextPlan = _contextPlans[i];
+                if (contextPlan.OwnerServiceSlot == serviceSlot && contextPlan.Instance is T ownedContext)
+                {
+                    return ownedContext;
+                }
+            }
+        }
+
+        for (int i = 0; i < Services.Length; i++)
+        {
+            if (Services[i] is T service)
+            {
+                return service;
+            }
+        }
+
+        for (int i = 0; i < Contexts.Length; i++)
+        {
+            if (Contexts[i] is T context)
+            {
+                return context;
+            }
+        }
+
+        throw new InvalidOperationException($"Scope mount dependency not registered: {typeof(T)}.");
     }
 
     private void RebuildScopeResources()
@@ -1052,13 +1124,11 @@ public sealed class ScopeRuntime : IDisposable
         object[] candidates = Services.Cast<object>().Concat(Contexts).ToArray();
         var generatedPublishers = candidates.OfType<IGeneratedScopeResourcePublisher>().ToArray();
         var generatedConsumers = candidates.OfType<IGeneratedScopeResourceConsumer>().ToArray();
-        bool hasGeneratedResources = generatedPublishers.Length > 0 || generatedConsumers.Length > 0;
-
-        if (hasGeneratedResources)
+        if (generatedPublishers.Length > 0 || generatedConsumers.Length > 0)
         {
-            var contributions = LoadGeneratedScopeResourceContributions(candidates);
-            hasGeneratedResources = contributions.Exports.Length > 0 || contributions.Imports.Length > 0;
-            if (hasGeneratedResources)
+            EnsureGeneratedScopeResourcesRegistered(candidates);
+            var contributions = ScopeResourceContributionRegistry.CollectFor(candidates);
+            if (contributions.Exports.Length > 0 || contributions.Imports.Length > 0)
             {
                 ResourceRegistry.Initialize(
                     generatedPublishers,
@@ -1067,63 +1137,21 @@ public sealed class ScopeRuntime : IDisposable
                     contributions.Imports);
             }
         }
-
-        ScopeResourceBinder.Bind(this, skipGeneratedResources: hasGeneratedResources);
     }
 
-    private static GeneratedScopeResourceContributions LoadGeneratedScopeResourceContributions(
+    private static void EnsureGeneratedScopeResourcesRegistered(
         IReadOnlyList<object> candidates)
     {
-        var exports = new List<ScopeResourceExportContribution>();
-        var imports = new List<ScopeResourceImportContribution>();
-        var visitedAssemblies = new HashSet<Assembly>();
-
         for (int i = 0; i < candidates.Count; i++)
         {
-            Assembly assembly = candidates[i].GetType().Assembly;
-            if (!visitedAssemblies.Add(assembly))
+            if (candidates[i] is not IGeneratedScopeResourcePublisher &&
+                candidates[i] is not IGeneratedScopeResourceConsumer)
             {
                 continue;
             }
 
-            Type? contributionType = assembly.GetType("GeneratedScopeResourceContributions", throwOnError: false);
-            if (contributionType == null)
-            {
-                continue;
-            }
-
-            MethodInfo? getExports = contributionType.GetMethod(
-                "GetExports",
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            if (getExports?.Invoke(null, null) is ScopeResourceExportContribution[] assemblyExports)
-            {
-                exports.AddRange(assemblyExports);
-            }
-
-            MethodInfo? getImports = contributionType.GetMethod(
-                "GetImports",
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            if (getImports?.Invoke(null, null) is ScopeResourceImportContribution[] assemblyImports)
-            {
-                imports.AddRange(assemblyImports);
-            }
+            RuntimeHelpers.RunClassConstructor(candidates[i].GetType().TypeHandle);
         }
-
-        return new GeneratedScopeResourceContributions(exports.ToArray(), imports.ToArray());
-    }
-
-    private readonly struct GeneratedScopeResourceContributions
-    {
-        public GeneratedScopeResourceContributions(
-            ScopeResourceExportContribution[] exports,
-            ScopeResourceImportContribution[] imports)
-        {
-            Exports = exports;
-            Imports = imports;
-        }
-
-        public ScopeResourceExportContribution[] Exports { get; }
-        public ScopeResourceImportContribution[] Imports { get; }
     }
 
     private void RebindSubscriptions()
@@ -1149,42 +1177,7 @@ public sealed class ScopeRuntime : IDisposable
                     binding.ServiceSlot));
             }
 
-            if (candidate is IAutoSubscribe)
-            {
-                continue;
-            }
-
-            BindInterfaceEventHandlers(candidate, binding);
-        }
-    }
-
-    private void BindInterfaceEventHandlers(object instance, ScopeObjectBinding binding)
-    {
-        for (int i = 0; i < instance.GetType().GetInterfaces().Length; i++)
-        {
-            Type iface = instance.GetType().GetInterfaces()[i];
-            if (!iface.IsGenericType)
-            {
-                continue;
-            }
-
-            Type genericDefinition = iface.GetGenericTypeDefinition();
-            Type[] typeArguments = iface.GetGenericArguments();
-            if (typeArguments.Length != 1 || !typeArguments[0].IsValueType)
-            {
-                continue;
-            }
-
-            if (genericDefinition == typeof(IEventHandler<>))
-            {
-                _subscriptionRegistry!.SubscribeFlow(binding, instance, typeArguments[0]);
-                continue;
-            }
-
-            if (genericDefinition == typeof(IEventHandlerAsync<>))
-            {
-                _subscriptionRegistry!.SubscribeAsync(binding, instance, typeArguments[0]);
-            }
+            _ = binding;
         }
     }
 

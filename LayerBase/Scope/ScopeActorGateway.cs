@@ -2,10 +2,11 @@ using System.Runtime.CompilerServices;
 using LayerBase;
 using LayerBase.Actor;
 using LayerBase.Actor.RuntimeCommands;
+using LayerBase.ECS.Projection;
 
 namespace LayerBase.Scope;
 
-public sealed class ScopeActorGateway
+public sealed class ScopeActorGateway : IProjectedActorLifecycleSink
 {
     private readonly LayerRuntime? _runtime;
     private readonly ActorWorld _world;
@@ -30,6 +31,36 @@ public sealed class ScopeActorGateway
     internal LayerRuntime? Runtime => _runtime;
 
     public int ScopeId => _scopeId;
+
+    bool IProjectedActorLifecycleSink.TryDisableProjectedActor(ActorId actorId)
+    {
+        if (_runtime == null || !ReferenceEquals(_runtime.Actors, _world))
+        {
+            return _world.DisableProjectedActor(actorId);
+        }
+
+        return _runtime.EnqueueActorLifecycle(new ActorCommandEnvelope(
+            ActorCommandKind.Disable,
+            actorId,
+            routeId: 0,
+            payloadHandle: 0));
+    }
+
+    bool IProjectedActorLifecycleSink.TryReleaseProjectedActor(
+        ActorId actorId,
+        ProjectedActorReleasePolicy releasePolicy)
+    {
+        if (_runtime == null || !ReferenceEquals(_runtime.Actors, _world))
+        {
+            return _world.ReleaseProjectedActor(actorId, releasePolicy);
+        }
+
+        return _runtime.EnqueueActorLifecycle(new ActorCommandEnvelope(
+            ActorCommandKind.Release,
+            actorId,
+            routeId: (int)releasePolicy,
+            payloadHandle: 0));
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostTo<TEvent>(ActorId actorId, in TEvent value)

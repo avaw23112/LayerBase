@@ -145,14 +145,6 @@ public sealed class ModuleCatalogGenerator : IIncrementalGenerator
         builder.AppendLine("{");
         builder.AppendLine("    public static class GeneratedModuleCatalog");
         builder.AppendLine("    {");
-        builder.AppendLine("        private static bool s_registered;");
-        builder.AppendLine();
-        builder.AppendLine("        static GeneratedModuleCatalog()");
-        builder.AppendLine("        {");
-        builder.AppendLine("            global::LayerBase.Scope.ModuleCatalogRegistry.Register(Create());");
-        builder.AppendLine("            s_registered = true;");
-        builder.AppendLine("        }");
-        builder.AppendLine();
         builder.AppendLine("        public static global::LayerBase.Modules.ILayerBaseModule[] Create()");
         builder.AppendLine("        {");
         builder.AppendLine("            return new global::LayerBase.Modules.ILayerBaseModule[]");

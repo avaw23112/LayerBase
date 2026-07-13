@@ -1,6 +1,6 @@
 namespace LayerBase.Scope.DI;
 
-internal interface IGeneratedScopeMount
+public interface IGeneratedScopeMount
 {
     void Mount(in ScopeMountContext context);
 }

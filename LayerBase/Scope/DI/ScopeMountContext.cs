@@ -2,17 +2,26 @@ using System;
 
 namespace LayerBase.Scope.DI;
 
-internal readonly struct ScopeMountContext
+public readonly struct ScopeMountContext
 {
-    private readonly object[] _instances;
+    private readonly ScopeRuntime _scope;
+    private readonly int _serviceSlot;
+    private readonly int _contextSlot;
 
-    internal ScopeMountContext(object[] instances)
+    internal ScopeMountContext(ScopeRuntime scope, int serviceSlot, int contextSlot)
     {
-        _instances = instances ?? throw new ArgumentNullException(nameof(instances));
+        _scope = scope ?? throw new ArgumentNullException(nameof(scope));
+        _serviceSlot = serviceSlot;
+        _contextSlot = contextSlot;
     }
 
     public T GetAt<T>(int slot) where T : class
     {
-        return (T)_instances[slot];
+        return _scope.GetServiceAt<T>(slot);
+    }
+
+    public T Get<T>() where T : class
+    {
+        return _scope.GetMountedObject<T>(_serviceSlot, _contextSlot);
     }
 }

@@ -1,6 +1,5 @@
 using LayerBase;
 using LayerBase.Core.Event;
-using LayerBase.Core.EventHandler;
 using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.Layers;
@@ -111,10 +110,11 @@ public readonly struct OwnerServiceDamageEvent
 }
 
 [OwnerService(typeof(OwnerServiceEventModule))]
-public sealed class OwnerServiceEventHandler : IEventHandler<OwnerServiceDamageEvent>
+public sealed partial class OwnerServiceEventHandler : ILayerContext
 {
     public static int TotalDamage { get; set; }
 
+    [Subscribe]
     public void Deal(in OwnerServiceDamageEvent @event)
     {
         TotalDamage += @event.Value;

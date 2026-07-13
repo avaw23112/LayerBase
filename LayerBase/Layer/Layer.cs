@@ -316,13 +316,6 @@ public abstract class Layer : Node, IDisposable
             subscribers.Add(auto);
         }
 
-        foreach (var resolved in _resolvedServices)
-        {
-            if (resolved.Instance is IAutoSubscribe) continue;
-            if (ScopeObjectBinder.TryGet(resolved.Instance, out _)) continue;
-            BindInterfaceEventHandlers(resolved.Instance);
-        }
-
         DiscoveredSubscribers = subscribers;
         var ops = Interlocked.Exchange(ref _pendingOps, new ConcurrentQueue<Action<Layer>>());
         if (ops != null)
@@ -441,13 +434,13 @@ public abstract class Layer : Node, IDisposable
 
     #region Public API - Service Management
     /// <summary>手动注册一个服务到当前 Layer，自动推断服务类型。</summary>
-    public void RegisterService(IService service)
+    internal void RegisterService(IService service)
     {
         RegisterService(service.GetType(), service);
     }
 
     /// <summary>手动注册一个服务到当前 Layer，并指定其暴露的服务类型。必须在 Build 之前调用。</summary>
-    public void RegisterService(Type serviceType, IService service)
+    internal void RegisterService(Type serviceType, IService service)
     {
         if (service == null) throw new ArgumentNullException(nameof(service));
         if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
@@ -470,7 +463,7 @@ public abstract class Layer : Node, IDisposable
     }
 
     /// <summary>从当前 Layer 的服务容器解析指定类型的服务实例。</summary>
-    public T GetService<T>() where T : class
+    internal T GetService<T>() where T : class
     {
         return _serviceProvider?.Get<T>() ?? throw new InvalidOperationException("Layer 尚未构建。");
     }
@@ -479,7 +472,7 @@ public abstract class Layer : Node, IDisposable
     #region Public API - Event Send / Post
     /// <summary>同步发送事件到事件中心（立即派发）。</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EventHandledState Send<T>(in T value) where T : struct
+    internal EventHandledState Send<T>(in T value) where T : struct
     {
         if (OwnerContext == null) throw new InvalidOperationException("Layer 未附加到 Runtime 上下文。");
         return OwnerContext.EventCenter.Send(value);
@@ -487,14 +480,14 @@ public abstract class Layer : Node, IDisposable
 
     /// <summary>投递事件到调度队列（异步派发）。</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Post<T>(in T value) where T : struct
+    internal void Post<T>(in T value) where T : struct
     {
         _ = TryPost(value);
     }
 
     /// <summary>尝试投递事件到调度队列，返回投递结果。</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    internal PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
         if (OwnerContext == null) return PostResult.Failure();
         return OwnerContext.TryPost(value, policy);
@@ -659,14 +652,14 @@ public abstract class Layer : Node, IDisposable
 
     #region Public API - Metadata Recording
     /// <summary>记录当前 Layer 订阅的事件类型。</summary>
-    public void RecordSubscribedEvent(Type eventType)
+    internal void RecordSubscribedEvent(Type eventType)
     {
         if (eventType == null) throw new ArgumentNullException(nameof(eventType));
         _subscribedEvents.Add(eventType);
     }
 
     /// <summary>记录当前 Layer 生产的事件类型。</summary>
-    public void RecordProducedEvent(Type eventType)
+    internal void RecordProducedEvent(Type eventType)
     {
         if (eventType == null) throw new ArgumentNullException(nameof(eventType));
         _producedEvents.Add(eventType);
@@ -735,32 +728,6 @@ public abstract class Layer : Node, IDisposable
         if (!boundInstances.Add(candidate)) return;
         if (candidate is IAutoCallBinder autoCallBinder)
             autoCallBinder.AutoBindCalls(this);
-    }
-
-    private void BindInterfaceEventHandlers(object instance)
-    {
-        EventCenter eventCenter = GetSubscriptionEventCenter(instance);
-        foreach (var iface in instance.GetType().GetInterfaces())
-        {
-            if (!iface.IsGenericType) continue;
-            var genericDefinition = iface.GetGenericTypeDefinition();
-            var typeArguments = iface.GetGenericArguments();
-            if (typeArguments.Length != 1 || !typeArguments[0].IsValueType) continue;
-
-            if (genericDefinition == typeof(IEventHandler<>))
-            {
-                eventCenter.SubscribeFlow(RouteIndex, instance, typeArguments[0]);
-                _subscriptions.Add(UnsubscribeToken.Rent(eventCenter, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Flow));
-                RecordSubscribedEvent(typeArguments[0]);
-                continue;
-            }
-            if (genericDefinition == typeof(IEventHandlerAsync<>))
-            {
-                eventCenter.SubscribeAsync(RouteIndex, instance, typeArguments[0]);
-                _subscriptions.Add(UnsubscribeToken.Rent(eventCenter, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Async));
-                RecordSubscribedEvent(typeArguments[0]);
-            }
-        }
     }
 
     private void AddActiveService(RegisteredService registration)

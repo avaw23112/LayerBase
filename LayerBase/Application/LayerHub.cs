@@ -137,7 +137,6 @@ public static class LayerHub
             s_runtimeIdCounter = 0;
 
             foreach (var resetter in s_cacheResetters) resetter();
-            ScopeHostFactory.Reset();
             ServiceLayerBinder.Reset();
             LayerServiceRegistry.Reset();
             EventIdentityRegistry.Reset();

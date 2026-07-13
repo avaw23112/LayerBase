@@ -8,6 +8,7 @@ public partial class World
 {
     private readonly ActiveProjectedActorList _activeProjectedActors = new();
     private ActorWorld? _scopeActors;
+    private IProjectedActorLifecycleSink? _projectedActorLifecycleSink;
 
     internal LayerRuntime Runtime { get; private set; } = null!;
 
@@ -15,11 +16,20 @@ public partial class World
         LayerRuntime runtime)
     {
         Runtime = runtime;
+        _projectedActorLifecycleSink = new ActorWorldProjectedActorLifecycleSink(runtime.Actors);
     }
 
     internal void BindScopeActors(ActorWorld actors)
     {
+        BindScopeActors(actors, new ActorWorldProjectedActorLifecycleSink(actors));
+    }
+
+    internal void BindScopeActors(
+        ActorWorld actors,
+        IProjectedActorLifecycleSink lifecycleSink)
+    {
         _scopeActors = actors ?? throw new ArgumentNullException(nameof(actors));
+        _projectedActorLifecycleSink = lifecycleSink ?? throw new ArgumentNullException(nameof(lifecycleSink));
     }
 
     internal bool TryGetRuntime(out LayerRuntime? runtime)
@@ -41,6 +51,17 @@ public partial class World
         }
 
         throw new InvalidOperationException("ECS World is not bound to an ActorWorld.");
+    }
+
+    private IProjectedActorLifecycleSink GetProjectedActorLifecycleSink()
+    {
+        if (_projectedActorLifecycleSink != null)
+        {
+            return _projectedActorLifecycleSink;
+        }
+
+        _projectedActorLifecycleSink = new ActorWorldProjectedActorLifecycleSink(GetActorWorld());
+        return _projectedActorLifecycleSink;
     }
 
     internal ref ProjectedActorMeta GetProjectionMeta(
@@ -82,6 +103,6 @@ public partial class World
 
     internal void SweepProjectedActors(int maxCount = 512)
     {
-        _activeProjectedActors.Sweep(this, GetActorWorld(), maxCount);
+        _activeProjectedActors.Sweep(this, GetProjectedActorLifecycleSink(), maxCount);
     }
 }

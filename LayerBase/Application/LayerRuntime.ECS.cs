@@ -8,11 +8,11 @@ namespace LayerBase;
 
 public sealed partial class LayerRuntime
 {
-    public World EcsWorld { get; private set; } = null!;
+    internal World EcsWorld { get; private set; } = null!;
 
-    public EcsQueryRegistry EcsQueryRegistry { get; private set; } = null!;
+    internal EcsQueryRegistry EcsQueryRegistry { get; private set; } = null!;
 
-    public IEcsScheduler EcsScheduler { get; private set; } = null!;
+    internal IEcsScheduler EcsScheduler { get; private set; } = null!;
 
     public EcsRuntimeOptions EcsOptions { get; private set; }
 

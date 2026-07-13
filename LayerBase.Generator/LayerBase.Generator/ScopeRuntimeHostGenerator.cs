@@ -466,11 +466,11 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
 
         builder.AppendLine($"    {layer.Accessibility} partial class {layer.TypeName} : global::LayerBase.Scope.IScopeHostFactoryRegistrar");
         builder.AppendLine("    {");
-        builder.AppendLine("        void global::LayerBase.Scope.IScopeHostFactoryRegistrar.RegisterScopeHostFactory()");
+        builder.AppendLine("        global::LayerBase.Scope.ScopeHostFactoryDelegate global::LayerBase.Scope.IScopeHostFactoryRegistrar.CreateScopeHostFactory()");
         builder.AppendLine("        {");
-        builder.AppendLine("            global::LayerBase.Scope.ScopeHostFactory.Register(");
+        builder.AppendLine("            return ");
         builder.AppendLine("                static (services, options, sharedActorWorld, owningRuntime) =>");
-        builder.AppendLine("                    global::LayerBase.Scope.GeneratedScopeRuntimeHostFactory.Create(services, options, sharedActorWorld, owningRuntime));");
+        builder.AppendLine("                    global::LayerBase.Scope.GeneratedScopeRuntimeHostFactory.Create(services, options, sharedActorWorld, owningRuntime);");
         builder.AppendLine("        }");
         builder.AppendLine("    }");
 

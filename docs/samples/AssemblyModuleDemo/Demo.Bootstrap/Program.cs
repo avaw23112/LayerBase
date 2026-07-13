@@ -36,8 +36,8 @@ internal static class Program
         }
 
         // 读取已发现的模块
-        var modules = ModuleCatalogRegistry.GetAllModules();
-        if (modules == null || modules.Length == 0)
+        var modules = GeneratedModuleCatalog.Create();
+        if (modules.Length == 0)
         {
             Console.WriteLine("  [WARN] 未发现模块");
             return;
@@ -77,7 +77,7 @@ internal static class Program
         var layer = new CombatLayer();
         using var runtime = LayerHub.CreateLayers()
             .Push(layer)
-            .Install()  // 自动从 ModuleCatalogRegistry 载入已发现的模块
+            .Install(modules)
             .Build();
 
         Console.WriteLine($"  [OK] LayerRuntime 创建完成");

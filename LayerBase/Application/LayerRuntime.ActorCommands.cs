@@ -30,7 +30,9 @@ public sealed partial class LayerRuntime
                 Actors.DisableProjectedActor(command.ActorId);
                 break;
             case ActorCommandKind.Release:
-                Actors.ReleaseProjectedActor(command.ActorId, ProjectedActorReleasePolicy.ReturnToPool);
+                Actors.ReleaseProjectedActor(
+                    command.ActorId,
+                    (ProjectedActorReleasePolicy)command.RouteId);
                 break;
         }
     }

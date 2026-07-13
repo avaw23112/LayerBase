@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Arch.Core;
-using LayerBase.Actor;
 
 namespace LayerBase.ECS.Projection;
 
@@ -45,9 +44,9 @@ internal sealed class ActiveProjectedActorList
     /// 注意：这里限制的是检查数量，不是退场数量。
     /// </summary>
     public void Sweep(
-        World      world,
-        ActorWorld actorWorld,
-        int        maxCount = 512)
+        World                        world,
+        IProjectedActorLifecycleSink lifecycleSink,
+        int                          maxCount = 512)
     {
         if (_count == 0 || maxCount <= 0)
         {
@@ -97,17 +96,7 @@ internal sealed class ActiveProjectedActorList
             }
 
             // 到期处理 - 需要获取 pooledActor 以调用生命周期方法
-            if (!actorWorld.TryGetPooledActor(
-                    meta.ActorId,
-                    out IPooledActor pooledActor))
-            {
-                ProjectedActorBindingUtility.Clear(world, entity, ref meta);
-                actorRef.ClearActor();
-                RemoveAt(world, index, ref meta);
-                continue;
-            }
-
-            RetireProjectedActor(world, actorWorld, entity, ref meta, ref actorRef, pooledActor);
+            RetireProjectedActor(world, lifecycleSink, entity, ref meta, ref actorRef);
         }
 
         if (_count == 0)
@@ -123,17 +112,23 @@ internal sealed class ActiveProjectedActorList
     /// 根据 RetirePolicy 处理到期的 ProjectedActor。
     /// </summary>
     private void RetireProjectedActor(
-        World                  world,
-        ActorWorld             actorWorld,
-        Entity                 entity,
-        ref ProjectedActorMeta meta,
-        ref ProjectedActorRef  actorRef,
-        IPooledActor           pooledActor)
+        World                        world,
+        IProjectedActorLifecycleSink lifecycleSink,
+        Entity                       entity,
+        ref ProjectedActorMeta       meta,
+        ref ProjectedActorRef        actorRef)
     {
         switch (meta.RetirePolicy)
         {
             case ProjectedActorRetirePolicy.Disable:
-                actorWorld.DisableProjectedActor(meta.ActorId);
+                if (!lifecycleSink.TryDisableProjectedActor(meta.ActorId))
+                {
+                    ProjectedActorBindingUtility.Clear(world, entity, ref meta);
+                    actorRef.ClearActor();
+                    RemoveAt(world, meta.ActiveListIndex, ref meta);
+                    return;
+                }
+
                 meta.State = ProjectedActorState.Disabled;
 
                 // ExpireAtTicks 参数作用：
@@ -144,7 +139,7 @@ internal sealed class ActiveProjectedActorList
                 return;
 
             case ProjectedActorRetirePolicy.ReturnToPool:
-                actorWorld.ReleaseProjectedActor(
+                lifecycleSink.TryReleaseProjectedActor(
                     meta.ActorId,
                     ProjectedActorReleasePolicy.ReturnToPool);
 
@@ -154,7 +149,7 @@ internal sealed class ActiveProjectedActorList
                 return;
 
             case ProjectedActorRetirePolicy.DestroyImmediately:
-                actorWorld.ReleaseProjectedActor(
+                lifecycleSink.TryReleaseProjectedActor(
                     meta.ActorId,
                     ProjectedActorReleasePolicy.DestroyImmediately);
 
@@ -164,7 +159,7 @@ internal sealed class ActiveProjectedActorList
                 return;
 
             case ProjectedActorRetirePolicy.DetachAndLetActorFinish:
-                actorWorld.ReleaseProjectedActor(
+                lifecycleSink.TryReleaseProjectedActor(
                     meta.ActorId,
                     ProjectedActorReleasePolicy.DetachAndLetActorFinish);
 

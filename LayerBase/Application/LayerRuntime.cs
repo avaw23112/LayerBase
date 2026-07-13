@@ -28,7 +28,7 @@ public sealed partial class LayerRuntime : IDisposable
     #region External Dependencies
     // 核心子系统，在构造时创建，贯穿 Runtime 生命周期。
     internal WorldServiceRoot Services { get; }
-    public EventCenter EventCenter { get; internal set; }
+    internal EventCenter EventCenter { get; set; }
     public ActorWorld Actors { get; }
     public WorkerRuntime Worker { get; }
     public ScopeRuntimeHost? ScopeHost { get; private set; }
@@ -80,14 +80,14 @@ public sealed partial class LayerRuntime : IDisposable
     #region Properties
     public int Id => _id;
 
-    public LayerBase.DI.IServiceProvider ServiceProvider =>
+    internal LayerBase.DI.IServiceProvider ServiceProvider =>
         _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
 
-    public T GetService<T>() where T : class => ServiceProvider.Get<T>();
+    internal T GetService<T>() where T : class => ServiceProvider.Get<T>();
 
-    public PostScheduler Scheduler => _scheduler ?? throw new InvalidOperationException("Runtime not built.");
+    internal PostScheduler Scheduler => _scheduler ?? throw new InvalidOperationException("Runtime not built.");
 
-    public TimeScheduler<ITimerAction> Timer => _timer ?? throw new InvalidOperationException("Runtime not built.");
+    internal TimeScheduler<ITimerAction> Timer => _timer ?? throw new InvalidOperationException("Runtime not built.");
 
     public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
 
@@ -258,7 +258,7 @@ public sealed partial class LayerRuntime : IDisposable
             }
         }
 
-        RegisterGeneratedScopeHostFactory();
+        ScopeHostFactoryDelegate? generatedScopeHostFactory = CreateGeneratedScopeHostFactory();
 
         var scopedServices = new List<LayerBase.DI.IService>();
         var seen = new HashSet<object>(LayerBase.Snap.ReferenceEqualityComparer.Instance);
@@ -281,7 +281,7 @@ public sealed partial class LayerRuntime : IDisposable
             return;
         }
 
-        ScopeHost = ScopeHostFactory.TryCreate(scopedServices, sharedActorWorld: Actors, owningRuntime: this)
+        ScopeHost = generatedScopeHostFactory?.Invoke(scopedServices, null, Actors, this)
                     ?? ScopeRuntimeHost.Create(ScopeRuntimePlanner.Build(scopedServices), sharedActorWorld: Actors, owningRuntime: this);
     }
 
@@ -292,37 +292,25 @@ public sealed partial class LayerRuntime : IDisposable
             return false;
         }
 
-        try
-        {
-            ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(_installedModules);
-            if (catalog.ScopeDefinitions.Count == 0)
-            {
-                return false;
-            }
-
-            ScopeCompositionPlan plan = ScopeCompositionBuilder.Build(this, catalog);
-            ModuleCallDispatchHandler[]? callDispatchers = ModuleDispatchRegistry.TryGetCallDispatchers(catalog.Modules.Count);
-            ModuleEventDispatchHandler[]? eventDispatchers = ModuleDispatchRegistry.TryGetEventDispatchers(catalog.Modules.Count);
-
-            ScopeHost = ScopeRuntimeHost.Create(
-                this,
-                plan,
-                moduleCallDispatchers: callDispatchers,
-                moduleEventDispatchers: eventDispatchers);
-
-            ApplyLayerServiceHandles(catalog);
-
-            if (ScopeHost != null)
-            {
-                _moduleMode = true;
-            }
-
-            return ScopeHost != null;
-        }
-        catch (ModuleBuildException)
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(_installedModules);
+        if (catalog.ScopeDefinitions.Count == 0)
         {
             return false;
         }
+
+        ScopeCompositionPlan plan = ScopeCompositionBuilder.Build(this, catalog);
+        ScopeHost = ScopeRuntimeHost.Create(
+            this,
+            plan);
+
+        ApplyLayerServiceHandles(catalog);
+
+        if (ScopeHost != null)
+        {
+            _moduleMode = true;
+        }
+
+        return ScopeHost != null;
     }
 
     private void ApplyLayerServiceHandles(ModuleRuntimeCatalog catalog)
@@ -374,16 +362,17 @@ public sealed partial class LayerRuntime : IDisposable
         }
     }
 
-    private void RegisterGeneratedScopeHostFactory()
+    private ScopeHostFactoryDelegate? CreateGeneratedScopeHostFactory()
     {
         foreach (Layer layer in _chain.GetNodes())
         {
             if (layer is IScopeHostFactoryRegistrar registrar)
             {
-                registrar.RegisterScopeHostFactory();
-                return;
+                return registrar.CreateScopeHostFactory();
             }
         }
+
+        return null;
     }
 
     private void EnsurePostSchedulersKnowAllocatedEventTypes()
@@ -628,19 +617,19 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Send<T>(in T value) where T : struct
+    internal void Send<T>(in T value) where T : struct
     {
         EventCenter.Send(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Post<T>(in T value) where T : struct
+    internal void Post<T>(in T value) where T : struct
     {
         _ = TryPost(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    internal PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
         return policy.HasValue
             ? Scheduler.TryPost(value, policy.Value)
@@ -648,24 +637,24 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void MarkDirty<T>() where T : struct
+    internal void MarkDirty<T>() where T : struct
     {
         Scheduler.MarkDirty<T>();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostLatest<T>(in T value) where T : struct
+    internal void PostLatest<T>(in T value) where T : struct
     {
         Scheduler.TryPostLatest(value);
     }
 
-    public void PostFromAnyThread<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    internal void PostFromAnyThread<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
         if (_disposed) return;
         _postIngress.Enqueue(value, policy);
     }
 
-    public bool TryPostFromAnyThread<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    internal bool TryPostFromAnyThread<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
         if (_disposed) return false;
         _postIngress.Enqueue(value, policy);
@@ -673,12 +662,12 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostCoalesced<T>(in T value) where T : struct
+    internal void PostCoalesced<T>(in T value) where T : struct
     {
         Scheduler.TryPostCoalesced(value);
     }
 
-    public TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
+    internal TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
     {
         var eventId = EventTypeId<T>.Id;
         var timerPolicy = _policyTable?.GetTimerPolicy(eventId);
@@ -1059,11 +1048,6 @@ public sealed partial class LayerRuntime : IDisposable
             if (_built) throw new InvalidOperationException("Cannot install modules after Build has been called.");
             if (modules == null || modules.Length == 0)
             {
-                ILayerBaseModule[]? discovered = ModuleCatalogRegistry.GetAllModules();
-                if (discovered != null && discovered.Length > 0)
-                {
-                    (_runtime._installedModules ??= new List<ILayerBaseModule>()).AddRange(discovered);
-                }
                 return this;
             }
 

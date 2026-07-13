@@ -5,7 +5,7 @@ using LayerBase.Scope.Resources;
 namespace LayerBase.Test;
 
 [TestFixture]
-public sealed class ScopeResourceBindingTests
+public sealed partial class ScopeResourceBindingTests
 {
     [Test]
     public void Same_scope_provide_and_from_bind_direct_resource()

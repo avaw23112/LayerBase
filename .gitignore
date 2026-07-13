@@ -1103,4 +1103,5 @@ tmp_build_test.log,verbosity
 *.DotSettings.user
 codex/tmp/
 codex/work/
+/.superpowers/
 /*.nuget

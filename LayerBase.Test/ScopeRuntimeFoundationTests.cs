@@ -2,7 +2,6 @@ using Arch.Core;
 using LayerBase.Async;
 using LayerBase.Core.DataStruct;
 using LayerBase.Core.Event;
-using LayerBase.Core.EventHandler;
 using LayerBase.Core;
 using LayerBase.DI;
 using LayerBase.DI.Options;
@@ -2557,7 +2556,7 @@ internal sealed class ScopeCatalogOwnedContext : ILayerContext
     public ScopeCatalogAlphaService OwnerService { get; }
 }
 
-internal sealed class ScopeCatalogMountedService : IService
+internal sealed partial class ScopeCatalogMountedService : IService
 {
     [Mount] private ScopeCatalogMountContext _context = null!;
 
@@ -2573,7 +2572,7 @@ internal sealed class ScopeCatalogMountedService : IService
     }
 }
 
-internal sealed class ScopeCatalogMountContext : ILayerContext
+internal sealed partial class ScopeCatalogMountContext : ILayerContext
 {
     [Mount] private ScopeCatalogMountedService _service = null!;
 
@@ -2708,7 +2707,7 @@ internal sealed partial class RuntimeScopedEventService : IService
 }
 
 [Scope<RuntimeScopedEventScope>]
-internal sealed class RuntimeScopedInterfaceEventService : IService, IEventHandler<RuntimeScopedSignalEvent>
+internal sealed partial class RuntimeScopedInterfaceEventService : IService
 {
     public int Total { get; private set; }
 
@@ -2716,6 +2715,7 @@ internal sealed class RuntimeScopedInterfaceEventService : IService, IEventHandl
     {
     }
 
+    [Subscribe]
     public void Deal(in RuntimeScopedSignalEvent value)
     {
         Total += value.Value;
