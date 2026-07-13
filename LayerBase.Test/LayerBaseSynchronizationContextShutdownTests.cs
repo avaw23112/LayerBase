@@ -4,6 +4,7 @@ using LayerBase.Async;
 using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.Scope;
+using LayerBase.Scope.Lifecycle;
 
 namespace EventsTest;
 
@@ -285,6 +286,105 @@ public class LayerBaseSynchronizationContextShutdownTests
     }
 
     [Test]
+    public void Completion_after_initial_closing_drain_must_not_be_dropped()
+    {
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        var context = LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
+        LBTaskCompletionSource source;
+        LBTask task;
+        int continuationThreadId = -1;
+
+        using (context.EnterScope())
+        {
+            source = new LBTaskCompletionSource();
+            task = source.Task;
+            task.GetAwaiter().OnCompleted(() =>
+            {
+                continuationThreadId = Environment.CurrentManagedThreadId;
+            });
+        }
+
+        using var allowCompletion = new ManualResetEventSlim(false);
+        Task worker = Task.Run(() =>
+        {
+            allowCompletion.Wait();
+            source.SetResult();
+        });
+
+        context.BeginClose(new ObjectDisposedException("test"));
+        context.DrainClosingOperations();
+
+        allowCompletion.Set();
+
+        Assert.That(worker.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        context.FinalizeClose();
+
+        Assert.That(continuationThreadId, Is.EqualTo(ownerThreadId));
+        Assert.That(task.GetAwaiter().IsCompleted, Is.True);
+        Assert.That(context.PendingOperationCount, Is.EqualTo(0));
+        Assert.That(context.PendingSourceCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Context_must_not_finalize_while_accepted_source_is_pending()
+    {
+        var context = LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
+        LBTaskCompletionSource source;
+
+        using (context.EnterScope())
+        {
+            source = new LBTaskCompletionSource();
+            _ = source.Task;
+        }
+
+        context.BeginClose(new ObjectDisposedException("test"));
+
+        Assert.That(context.PendingSourceCount, Is.EqualTo(1));
+        Assert.Throws<InvalidOperationException>(() => context.FinalizeClose());
+
+        source.SetException(new OperationCanceledException());
+        context.DrainClosingOperations();
+        context.FinalizeClose();
+
+        Assert.That(context.PendingSourceCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Context_dispose_from_non_owner_must_not_run_continuations_on_disposer()
+    {
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        var context = LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
+        LBTask task;
+
+        using (context.EnterScope())
+        {
+            task = LBTask.NextFrame(context);
+        }
+
+        int continuationThreadId = -1;
+        task.GetAwaiter().OnCompleted(() =>
+        {
+            continuationThreadId = Environment.CurrentManagedThreadId;
+        });
+
+        int disposerThreadId = -1;
+        Task dispose = Task.Run(() =>
+        {
+            disposerThreadId = Environment.CurrentManagedThreadId;
+            Assert.Throws<InvalidOperationException>(() => context.Dispose());
+        });
+
+        Assert.That(dispose.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(continuationThreadId, Is.EqualTo(-1));
+
+        context.Dispose();
+
+        Assert.That(continuationThreadId, Is.EqualTo(ownerThreadId));
+        Assert.That(continuationThreadId, Is.Not.EqualTo(disposerThreadId));
+    }
+
+    [Test]
     public void Context_close_must_release_all_registered_task_sources()
     {
         var context = LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
@@ -332,6 +432,34 @@ public class LayerBaseSynchronizationContextShutdownTests
 
         Assert.That(service.ContinuationCompletedBeforeDispose, Is.True);
         Assert.That(service.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Throwing_closing_continuation_must_not_abort_scope_cleanup()
+    {
+        var first = new DisposeProbeService();
+        var throwing = new ThrowingCancellationContinuationService();
+        var last = new DisposeProbeService();
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1302,
+                name: "ThrowingClosingContinuationScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            new IService[] { first, throwing, last });
+
+        runtime.Start();
+
+        Assert.DoesNotThrow(runtime.Stop);
+
+        Assert.That(first.DisposeCount, Is.EqualTo(1));
+        Assert.That(throwing.DisposeCount, Is.EqualTo(1));
+        Assert.That(last.DisposeCount, Is.EqualTo(1));
+        Assert.That(runtime.StateForTest, Is.EqualTo(ScopeRuntimeState.Stopped));
+        Assert.That(runtime.ContextForTest!.IsFinalized, Is.True);
+        Assert.That(runtime.ExceptionCountForTest, Is.EqualTo(1));
     }
 
     [Test]
@@ -395,7 +523,13 @@ public class LayerBaseSynchronizationContextShutdownTests
             Task disposer = Task.Run(() =>
             {
                 start.Wait();
-                context.Dispose();
+                try
+                {
+                    context.Dispose();
+                }
+                catch (InvalidOperationException)
+                {
+                }
             });
 
             start.Set();
@@ -465,6 +599,53 @@ public class LayerBaseSynchronizationContextShutdownTests
         public void Dispose()
         {
             ContinuationCompletedBeforeDispose = _continuationCompleted;
+            DisposeCount++;
+        }
+    }
+
+    private sealed class DisposeProbeService : IService, IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+
+        public void Dispose()
+        {
+            DisposeCount++;
+        }
+    }
+
+    private sealed class ThrowingCancellationContinuationService : IService, IInitializable, IDisposable
+    {
+        private LBTask _task;
+
+        public int DisposeCount { get; private set; }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+
+        public void Initialize()
+        {
+            _task = LBTask.NextFrame();
+            _task.GetAwaiter().OnCompleted(() =>
+            {
+                try
+                {
+                    _task.GetAwaiter().GetResult();
+                }
+                catch (OperationCanceledException)
+                {
+                }
+
+                throw new InvalidOperationException("closing continuation failure");
+            });
+        }
+
+        public void Dispose()
+        {
             DisposeCount++;
         }
     }

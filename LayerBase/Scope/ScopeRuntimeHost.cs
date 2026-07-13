@@ -315,9 +315,29 @@ public sealed class ScopeRuntimeHost : IDisposable
         IReadOnlyList<ScopeEventHandlerRoute> eventHandlerRoutes,
         IReadOnlyList<ModuleEventDispatchHandler> moduleEventDispatchers)
     {
-        if (eventRoutes.Count == 0 || moduleEventDispatchers.Count == 0)
+        if (eventRoutes.Count == 0)
         {
             return null;
+        }
+
+        bool hasEventHandlers = false;
+        for (int i = 0; i < eventRoutes.Count; i++)
+        {
+            if (eventRoutes[i].HandlerCount > 0)
+            {
+                hasEventHandlers = true;
+                break;
+            }
+        }
+
+        if (!hasEventHandlers)
+        {
+            return null;
+        }
+
+        if (moduleEventDispatchers.Count == 0)
+        {
+            throw new InvalidOperationException("Scope module event dispatcher is not configured.");
         }
 
         var eventRoutesCopy = eventRoutes;
@@ -329,25 +349,32 @@ public sealed class ScopeRuntimeHost : IDisposable
             int eventId = message.EventId;
             if ((uint)eventId >= (uint)eventRoutesCopy.Count)
             {
-                return;
+                throw new InvalidOperationException($"Scope event route id {eventId} is outside route table length {eventRoutesCopy.Count}.");
             }
 
             ScopeEventRoute route = eventRoutesCopy[eventId];
+            if (route.HandlerStart < 0 || route.HandlerCount < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Scope event route {eventId} has invalid handler range start {route.HandlerStart}, count {route.HandlerCount}.");
+            }
+
             int handlerStart = route.HandlerStart;
             int handlerEnd = handlerStart + route.HandlerCount;
+            if (handlerEnd < handlerStart || handlerEnd > handlerRoutesCopy.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Scope event route {eventId} references handler range [{handlerStart}, {handlerEnd}) outside handler route table length {handlerRoutesCopy.Count}.");
+            }
 
             for (int i = handlerStart; i < handlerEnd; i++)
             {
-                if ((uint)i >= (uint)handlerRoutesCopy.Count)
-                {
-                    break;
-                }
-
                 ScopeEventHandlerRoute handlerRoute = handlerRoutesCopy[i];
                 ushort moduleSlot = handlerRoute.ModuleSlot;
                 if (moduleSlot >= dispatchersCopy.Count)
                 {
-                    continue;
+                    throw new InvalidOperationException(
+                        $"Scope event handler route {i} references module slot {moduleSlot} outside event dispatcher table length {dispatchersCopy.Count}.");
                 }
 
                 ModuleEventDispatchHandler dispatcher = dispatchersCopy[moduleSlot];
@@ -428,9 +455,29 @@ public sealed class ScopeRuntimeHost : IDisposable
     public void Start()
     {
         ThrowIfDisposed();
-        for (int i = 0; i < _scopes.Length; i++)
+        int started = 0;
+        try
         {
-            _scopes[i].Start();
+            for (int i = 0; i < _scopes.Length; i++)
+            {
+                _scopes[i].Start();
+                started++;
+            }
+        }
+        catch
+        {
+            for (int i = started - 1; i >= 0; i--)
+            {
+                try
+                {
+                    _scopes[i].Stop();
+                }
+                catch
+                {
+                }
+            }
+
+            throw;
         }
     }
 
@@ -476,13 +523,34 @@ public sealed class ScopeRuntimeHost : IDisposable
             return;
         }
 
+        List<Exception>? exceptions = null;
         for (int i = _scopes.Length - 1; i >= 0; i--)
         {
-            _scopes[i].Dispose();
+            try
+            {
+                _scopes[i].Dispose();
+            }
+            catch (Exception ex)
+            {
+                (exceptions ??= new List<Exception>()).Add(ex);
+            }
         }
 
-        _routes.Dispose();
+        try
+        {
+            _routes.Dispose();
+        }
+        catch (Exception ex)
+        {
+            (exceptions ??= new List<Exception>()).Add(ex);
+        }
+
         _disposed = true;
+
+        if (exceptions is { Count: > 0 })
+        {
+            throw new AggregateException("One or more scopes failed during host disposal.", exceptions);
+        }
     }
 
     private void ThrowIfDisposed()

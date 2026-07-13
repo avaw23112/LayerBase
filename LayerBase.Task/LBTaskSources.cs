@@ -33,6 +33,7 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
     private SynchronizationContext? _context;
 
     private Action? _continuation;
+    private LayerBaseSynchronizationContext? _registeredContext;
     private Exception? _exception;
     private int _consumed;
     private int _released; // 0 = in use, 1 = released
@@ -129,10 +130,24 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
         src._exception = null;
         src._canceledToken = default;
         src._context = context;
+        src._registeredContext = null;
         src._status = 0;
         src._consumed = 0;
         src._released = 0;
         src._version = NextVersion(src._version);
+        if (context is LayerBaseSynchronizationContext lbContext)
+        {
+            if (!lbContext.TryRegisterSource())
+            {
+                src._status = 1;
+                src._exception = new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
+            }
+            else
+            {
+                src._registeredContext = lbContext;
+            }
+        }
+
         return src;
     }
 
@@ -150,6 +165,7 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
 
         var cont = Interlocked.Exchange(ref _continuation, null);
         if (cont != null) Schedule(cont);
+        UnregisterContextSource();
     }
 
     public void CancelOnDispose(Exception error)
@@ -199,6 +215,12 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
 
         ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
     }
+
+    private void UnregisterContextSource()
+    {
+        var context = Interlocked.Exchange(ref _registeredContext, null);
+        context?.UnregisterSource();
+    }
 }
 
 internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancellable
@@ -208,6 +230,7 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
     private SynchronizationContext? _context;
 
     private Action? _continuation;
+    private LayerBaseSynchronizationContext? _registeredContext;
     private int _consumed;
     private Exception? _exception;
     private int _released; // 0 = in use, 1 = released
@@ -312,10 +335,24 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
         src._canceledToken = default;
         src._result = default!;
         src._context = context;
+        src._registeredContext = null;
         src._status = 0;
         src._consumed = 0;
         src._released = 0;
         src._version = NextVersion(src._version);
+        if (context is LayerBaseSynchronizationContext lbContext)
+        {
+            if (!lbContext.TryRegisterSource())
+            {
+                src._status = 1;
+                src._exception = new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
+            }
+            else
+            {
+                src._registeredContext = lbContext;
+            }
+        }
+
         return src;
     }
 
@@ -338,6 +375,7 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
 
         var cont = Interlocked.Exchange(ref _continuation, null);
         if (cont != null) Schedule(cont);
+        UnregisterContextSource();
     }
 
     private void Schedule(Action continuation)
@@ -391,6 +429,12 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
     private void Release()
     {
         Pool.Return(this);
+    }
+
+    private void UnregisterContextSource()
+    {
+        var context = Interlocked.Exchange(ref _registeredContext, null);
+        context?.UnregisterSource();
     }
 }
 

@@ -812,28 +812,53 @@ public sealed partial class LayerRuntime : IDisposable
     {
         if (_disposed) return;
 
-        _postIngress.Clear();
-        ScopeHost?.Dispose();
-        ScopeHost = null;
-        EcsScheduler.Dispose();
-        Worker.Dispose();
         _disposed = true;
-        CloseActorInboxes();
-        _chain?.DisposeLayers();
-        _chain = null;
-        Actors.RuntimeStop();
-        Actors.Dispose();
-        EcsWorld.Dispose();
-        Services.Dispose();
-        _scheduler?.Dispose();
-        _timer?.Dispose();
-        DelayManager?.Clear();
-        DelayManager = null;
-        EventCenter.Reset();
-        _context?.Dispose();
-        TryDrainExceptions();
-        LayerHub.ClearRuntimeCaches(_id);
-        LayerHub.Internal_Unregister(this);
+        List<Exception>? exceptions = null;
+
+        void Capture(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                (exceptions ??= new List<Exception>()).Add(ex);
+            }
+        }
+
+        try
+        {
+            Capture(_postIngress.Clear);
+            Capture(() => ScopeHost?.Dispose());
+            ScopeHost = null;
+            Capture(EcsScheduler.Dispose);
+            Capture(Worker.Dispose);
+            Capture(CloseActorInboxes);
+            Capture(() => _chain?.DisposeLayers());
+            _chain = null;
+            Capture(Actors.RuntimeStop);
+            Capture(Actors.Dispose);
+            Capture(EcsWorld.Dispose);
+            Capture(Services.Dispose);
+            Capture(() => _scheduler?.Dispose());
+            Capture(() => _timer?.Dispose());
+            Capture(() => DelayManager?.Clear());
+            DelayManager = null;
+            Capture(EventCenter.Reset);
+            Capture(() => _context?.Dispose());
+            Capture(TryDrainExceptions);
+        }
+        finally
+        {
+            LayerHub.ClearRuntimeCaches(_id);
+            LayerHub.Internal_Unregister(this);
+        }
+
+        if (exceptions is { Count: > 0 })
+        {
+            throw new AggregateException("One or more runtime components failed during disposal.", exceptions);
+        }
     }
     #endregion
 

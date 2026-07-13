@@ -10,6 +10,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     private readonly int _mainThreadId;
     private readonly ConcurrentQueue<WorkItem> _queue = new();
     private readonly Queue<WorkItem> _closingQueue = new();
+    private int _pendingSourceCount;
     internal MainThreadCompletionQueue CompletionQueue { get; } = new();
     private bool _disposed;
     private bool _finalized;
@@ -30,6 +31,16 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             {
                 return _frameWork.Count + _queue.Count + _closingQueue.Count;
             }
+        }
+    }
+
+    internal int PendingSourceCount => Volatile.Read(ref _pendingSourceCount);
+
+    internal bool IsFinalized
+    {
+        get
+        {
+            lock (_lock) return _finalized;
         }
     }
 
@@ -93,9 +104,37 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
     public void Dispose()
     {
-        BeginClose(new ObjectDisposedException(nameof(LayerBaseSynchronizationContext)));
+        var disposed = new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
+        if (Thread.CurrentThread.ManagedThreadId != _mainThreadId)
+        {
+            BeginClose(disposed);
+            throw new InvalidOperationException(
+                "LayerBaseSynchronizationContext can only be disposed by its owner thread.");
+        }
+
+        BeginClose(disposed);
         DrainClosingOperations();
-        FinalizeClose();
+        if (PendingSourceCount == 0)
+        {
+            FinalizeClose();
+        }
+    }
+
+    public void DisposeFromRuntime(
+        CompletionExceptionPolicy exceptionPolicy,
+        Action<Exception>? reportException)
+    {
+        var disposed = new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
+        BeginClose(disposed);
+        if (Thread.CurrentThread.ManagedThreadId == _mainThreadId)
+        {
+            DrainClosingOperations(exceptionPolicy, reportException);
+        }
+
+        if (PendingSourceCount == 0 && PendingOperationCount == 0)
+        {
+            FinalizeClose();
+        }
     }
 
     public void BeginClose(Exception reason)
@@ -135,6 +174,15 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
     public void DrainClosingOperations()
     {
+        DrainClosingOperations(
+            CompletionExceptionPolicy.Throw,
+            null);
+    }
+
+    public void DrainClosingOperations(
+        CompletionExceptionPolicy exceptionPolicy,
+        Action<Exception>? reportException)
+    {
         while (true)
         {
             WorkItem work;
@@ -148,17 +196,38 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
                 work = _closingQueue.Dequeue();
             }
 
-            work.Invoke();
+            try
+            {
+                work.Invoke();
+            }
+            catch (Exception ex)
+            {
+                reportException?.Invoke(ex);
+                if (exceptionPolicy == CompletionExceptionPolicy.Throw)
+                {
+                    throw;
+                }
+            }
         }
     }
 
     public void FinalizeClose()
     {
+        DrainClosingOperations();
+
         lock (_lock)
         {
+            if (Volatile.Read(ref _pendingSourceCount) != 0 ||
+                _closingQueue.Count != 0 ||
+                _queue.Count != 0 ||
+                _frameWork.Count != 0)
+            {
+                throw new InvalidOperationException(
+                    "LayerBaseSynchronizationContext cannot finalize while accepted operations are pending.");
+            }
+
             _disposed = true;
             _finalized = true;
-            _closingQueue.Clear();
         }
     }
 
@@ -263,6 +332,30 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
             _closingQueue.Enqueue(workItem);
             return true;
+        }
+    }
+
+    internal bool TryRegisterSource()
+    {
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                return false;
+            }
+
+            _pendingSourceCount++;
+            return true;
+        }
+    }
+
+    internal void UnregisterSource()
+    {
+        int remaining = Interlocked.Decrement(ref _pendingSourceCount);
+        if (remaining < 0)
+        {
+            Interlocked.Exchange(ref _pendingSourceCount, 0);
+            throw new InvalidOperationException("LayerBaseSynchronizationContext source registry underflow.");
         }
     }
 

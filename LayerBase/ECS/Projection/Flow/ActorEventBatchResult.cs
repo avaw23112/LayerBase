@@ -25,6 +25,13 @@ internal sealed class ActorEventBatchResult<TEvent> : IEcsResultItem, IDisposabl
     {
         try
         {
+            if (ReferenceEquals(runtime.Actors, _actorWorld) &&
+                !runtime.IsOwnerThreadForActorWorld)
+            {
+                _batch.PostToRuntimeOwner(runtime);
+                return;
+            }
+
             _batch.PostTo(_actorWorld);
         }
         finally

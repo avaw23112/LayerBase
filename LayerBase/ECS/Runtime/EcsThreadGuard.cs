@@ -4,25 +4,25 @@ namespace LayerBase.ECS.Runtime;
 
 internal static class EcsThreadGuard
 {
-    private static readonly ConcurrentDictionary<int, int> RuntimeThreads = new();
+    private static readonly ConcurrentDictionary<int, int> SchedulerThreads = new();
     [ThreadStatic]
     private static int _currentRuntimeId;
     [ThreadStatic]
     private static EcsResultQueue? _currentResultQueue;
 
-    public static void Bind(int runtimeId, int threadId)
+    public static void Bind(int schedulerId, int threadId)
     {
-        RuntimeThreads[runtimeId] = threadId;
+        SchedulerThreads[schedulerId] = threadId;
     }
 
-    public static void Unbind(int runtimeId)
+    public static void Unbind(int schedulerId)
     {
-        RuntimeThreads.TryRemove(runtimeId, out _);
+        SchedulerThreads.TryRemove(schedulerId, out _);
     }
 
-    public static bool IsEcsThread(int runtimeId)
+    public static bool IsEcsThread(int schedulerId)
     {
-        return RuntimeThreads.TryGetValue(runtimeId, out int threadId) &&
+        return SchedulerThreads.TryGetValue(schedulerId, out int threadId) &&
                threadId == Environment.CurrentManagedThreadId;
     }
 

@@ -9,6 +9,17 @@ using LayerBase.Event.EventMetaData;
 
 namespace LayerBase.Core.Event;
 
+public sealed class EventCenterFrozenTypeException : InvalidOperationException
+{
+    public EventCenterFrozenTypeException(Type eventType)
+        : base($"EventCenter is frozen; event type '{eventType.FullName}' was not prewarmed.")
+    {
+        EventType = eventType;
+    }
+
+    public Type EventType { get; }
+}
+
 /// <summary>
 /// 全局事件中心，负责事件的订阅管理及同步派发。
 /// </summary>
@@ -26,6 +37,10 @@ public sealed class EventCenter
     internal PostScheduler? PostScheduler { get; set; }
 
     public int ReflectionFallbackCount => Volatile.Read(ref _reflectionFallbackCount);
+
+    internal int BucketCountForTest => _eventBuckets.Count;
+
+    internal bool IsFrozen => Volatile.Read(ref _frozen) != 0;
 
     public event Action<Type>? OnReflectionFallback;
 
@@ -263,9 +278,17 @@ public sealed class EventCenter
 
     private void ThrowIfFrozen()
     {
-        if (Volatile.Read(ref _frozen) != 0)
+        if (IsFrozen)
         {
             throw new InvalidOperationException("EventCenter is frozen; direct subscription changes are not allowed.");
+        }
+    }
+
+    private void ThrowIfFrozenEventType(Type eventType)
+    {
+        if (IsFrozen)
+        {
+            throw new EventCenterFrozenTypeException(eventType);
         }
     }
 
@@ -278,6 +301,7 @@ public sealed class EventCenter
     public void PrewarmEvent<TEvent>(in LayerPrewarmOptions options)
         where TEvent : struct
     {
+        ThrowIfFrozen();
         RegisterEventType<TEvent>();
 
         // 1. 预热 EventTypeId
@@ -318,9 +342,27 @@ public sealed class EventCenter
             : null;
         if (cached is EventBucket<T> typedCached) return typedCached;
 
-        var bucket = (EventBucket<T>)_eventBuckets.GetOrAdd(typeId, _ => new EventBucket<T>(this));
-        StoreFastBucket(typeId, bucket);
-        return bucket;
+        if (_eventBuckets.TryGetValue(typeId, out IEventBucketNonGeneric? existing))
+        {
+            StoreFastBucket(typeId, existing);
+            return (EventBucket<T>)existing;
+        }
+
+        lock (_lock)
+        {
+            if (_eventBuckets.TryGetValue(typeId, out existing))
+            {
+                StoreFastBucket(typeId, existing);
+                return (EventBucket<T>)existing;
+            }
+
+            ThrowIfFrozenEventType(typeof(T));
+
+            var bucket = new EventBucket<T>(this);
+            _eventBuckets[typeId] = bucket;
+            StoreFastBucket(typeId, bucket);
+            return bucket;
+        }
     }
 
     private IEventBucketNonGeneric GetBucket(Type eventType)
@@ -331,22 +373,39 @@ public sealed class EventCenter
             : null;
         if (cached != null) return cached;
 
-        IEventBucketNonGeneric bucket;
-        if (s_registeredEventTypes.TryGetValue(eventType, out EventBucketRegistration registration))
+        if (_eventBuckets.TryGetValue(typeId, out IEventBucketNonGeneric? existing))
         {
-            bucket = _eventBuckets.GetOrAdd(typeId, _ => registration.CreateBucket(this));
+            StoreFastBucket(typeId, existing);
+            return existing;
+        }
+
+        lock (_lock)
+        {
+            if (_eventBuckets.TryGetValue(typeId, out existing))
+            {
+                StoreFastBucket(typeId, existing);
+                return existing;
+            }
+
+            ThrowIfFrozenEventType(eventType);
+
+            IEventBucketNonGeneric bucket;
+            if (s_registeredEventTypes.TryGetValue(eventType, out EventBucketRegistration registration))
+            {
+                bucket = registration.CreateBucket(this);
+            }
+            else
+            {
+                RecordReflectionFallback(eventType);
+                var bucketType = typeof(EventBucket<>).MakeGenericType(eventType);
+                bucket = (IEventBucketNonGeneric)(Activator.CreateInstance(bucketType, this)
+                    ?? throw new InvalidOperationException($"Unable to create event bucket for '{eventType.FullName}'."));
+            }
+
+            _eventBuckets[typeId] = bucket;
             StoreFastBucket(typeId, bucket);
             return bucket;
         }
-
-        bucket = _eventBuckets.GetOrAdd(typeId, _ =>
-        {
-            RecordReflectionFallback(eventType);
-            var bucketType = typeof(EventBucket<>).MakeGenericType(eventType);
-            return (IEventBucketNonGeneric)Activator.CreateInstance(bucketType, this);
-        });
-        StoreFastBucket(typeId, bucket);
-        return bucket;
     }
 
     private void StoreFastBucket(int typeId, IEventBucketNonGeneric bucket)
@@ -570,6 +629,11 @@ public sealed class EventCenter
 
         public void MarkDirty()
         {
+            if (Owner?.IsFrozen == true)
+            {
+                return;
+            }
+
             Volatile.Write(ref _isDirty, 1);
         }
 
@@ -1106,6 +1170,8 @@ public sealed class EventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private EventHandledState DispatchSingleSync(in T value)
         {
+            if (IsFaultDisabled(_faultTable.SyncFaults, 0)) return EventHandledState.Continue;
+
             try
             {
                 return _singleSyncHandler(in value);
@@ -1127,6 +1193,8 @@ public sealed class EventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private EventHandledState DispatchSingleNotifySafe(in T value)
         {
+            if (IsFaultDisabled(_faultTable.SubscribeFaults, 0)) return EventHandledState.Continue;
+
             try
             {
                 _singleSubscribeHandler(in value);
@@ -1191,6 +1259,7 @@ public sealed class EventCenter
         {
             if (start >= end) return;
             ref var hBase = ref GetArrayDataRef(_subscribeHandlers);
+            var faults = _faultTable.SubscribeFaults;
             var i = start;
             var currentIndex = start;
             try
@@ -1198,19 +1267,19 @@ public sealed class EventCenter
                 for (; i <= end - 4; i += 4)
                 {
                     currentIndex = i;
-                    Unsafe.Add(ref hBase, i)(in value);
+                    if (!IsFaultDisabled(faults, i)) Unsafe.Add(ref hBase, i)(in value);
                     currentIndex = i + 1;
-                    Unsafe.Add(ref hBase, i + 1)(in value);
+                    if (!IsFaultDisabled(faults, i + 1)) Unsafe.Add(ref hBase, i + 1)(in value);
                     currentIndex = i + 2;
-                    Unsafe.Add(ref hBase, i + 2)(in value);
+                    if (!IsFaultDisabled(faults, i + 2)) Unsafe.Add(ref hBase, i + 2)(in value);
                     currentIndex = i + 3;
-                    Unsafe.Add(ref hBase, i + 3)(in value);
+                    if (!IsFaultDisabled(faults, i + 3)) Unsafe.Add(ref hBase, i + 3)(in value);
                 }
 
                 for (; i < end; i++)
                 {
                     currentIndex = i;
-                    Unsafe.Add(ref hBase, i)(in value);
+                    if (!IsFaultDisabled(faults, i)) Unsafe.Add(ref hBase, i)(in value);
                 }
             }
             catch (Exception e)
@@ -1224,6 +1293,7 @@ public sealed class EventCenter
         {
             if (start >= end) return EventHandledState.Continue;
             ref var hBase = ref GetArrayDataRef(_syncHandlers);
+            var faults = _faultTable.SyncFaults;
             var combinedState = 0;
             var i = start;
             var currentIndex = start;
@@ -1232,16 +1302,16 @@ public sealed class EventCenter
                 for (; i <= end - 4; i += 4)
                 {
                     currentIndex = i;
-                    var r1 = Unsafe.Add(ref hBase, i)(in value);
+                    var r1 = IsFaultDisabled(faults, i) ? EventHandledState.Continue : Unsafe.Add(ref hBase, i)(in value);
                     if (r1 == EventHandledState.Handled) return EventHandledState.Handled;
                     currentIndex = i + 1;
-                    var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
+                    var r2 = IsFaultDisabled(faults, i + 1) ? EventHandledState.Continue : Unsafe.Add(ref hBase, i + 1)(in value);
                     if (r2 == EventHandledState.Handled) return EventHandledState.Handled;
                     currentIndex = i + 2;
-                    var r3 = Unsafe.Add(ref hBase, i + 2)(in value);
+                    var r3 = IsFaultDisabled(faults, i + 2) ? EventHandledState.Continue : Unsafe.Add(ref hBase, i + 2)(in value);
                     if (r3 == EventHandledState.Handled) return EventHandledState.Handled;
                     currentIndex = i + 3;
-                    var r4 = Unsafe.Add(ref hBase, i + 3)(in value);
+                    var r4 = IsFaultDisabled(faults, i + 3) ? EventHandledState.Continue : Unsafe.Add(ref hBase, i + 3)(in value);
                     if (r4 == EventHandledState.Handled) return EventHandledState.Handled;
                     combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4;
                 }
@@ -1249,7 +1319,7 @@ public sealed class EventCenter
                 for (; i < end; i++)
                 {
                     currentIndex = i;
-                    var state = Unsafe.Add(ref hBase, i)(in value);
+                    var state = IsFaultDisabled(faults, i) ? EventHandledState.Continue : Unsafe.Add(ref hBase, i)(in value);
                     if (state == EventHandledState.Handled) return EventHandledState.Handled;
                     combinedState |= (int)state;
                 }
@@ -1269,7 +1339,18 @@ public sealed class EventCenter
             var hs = _asyncHandlers;
             var ft = _faultTable;
             for (var i = start; i < end; i++)
+            {
+                if (IsFaultDisabled(ft.AsyncFaults, i)) continue;
                 AsyncFaultContext<T>.Observe(this, ft, FaultKind.Async, i, in value, hs[i](value));
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool IsFaultDisabled(FaultSlot[] faults, int index)
+        {
+            return (uint)index < (uint)faults.Length &&
+                   faults[index].Circuit != null &&
+                   faults[index].Circuit.IsDisabled;
         }
 
         internal void HandleFault(FaultKind kind, int index, in T value, Exception e)

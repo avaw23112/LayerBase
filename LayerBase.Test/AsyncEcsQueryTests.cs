@@ -11,6 +11,8 @@ namespace LayerBase.Test;
 [TestFixture]
 public sealed class AsyncEcsQueryTests
 {
+    private const int DeferredActorTypeId = 9701;
+
     [SetUp]
     public void SetUp()
     {
@@ -280,12 +282,152 @@ public sealed class AsyncEcsQueryTests
         Assert.That(rentThreadIds, Has.All.EqualTo(ownerThreadId));
     }
 
+    [Test]
+    public void Async_projection_ensure_must_create_actor_only_on_runtime_owner()
+    {
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        LayerRuntime runtime = CreateAsyncRuntime();
+        RegisterDeferredJobProbeActor();
+
+        Entity entity = CreateDeferredProjectedEntity(runtime);
+
+        using var gate = new ManualResetEventSlim(true);
+        var job = new BlockingBringJob(gate);
+        runtime.EcsWorld
+               .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
+               .Bring<JobMoveViewEvent>()
+               .ForEach(ref job)
+               .Batch()
+               .Post();
+
+        runtime.WaitEcsIdleForTest(TimeSpan.FromSeconds(2));
+        Assert.That(JobProbeActor.RentThreadIds, Is.Empty);
+
+        runtime.Pump(0.016f);
+
+        int[] rentThreadIds;
+        lock (JobProbeActor.RentThreadIds)
+        {
+            rentThreadIds = JobProbeActor.RentThreadIds.ToArray();
+        }
+
+        Assert.That(runtime.EcsWorld.ProjectionIntentCountForTest, Is.EqualTo(1));
+        Assert.That(runtime.EcsWorld.Get<ProjectedActorRef>(entity).ActorId.IsValid, Is.True);
+        Assert.That(rentThreadIds, Is.Not.Empty);
+        Assert.That(rentThreadIds, Has.All.EqualTo(ownerThreadId));
+    }
+
+    [Test]
+    public void Async_projection_worker_must_never_enter_actor_world()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        RegisterDeferredJobProbeActor();
+        _ = CreateDeferredProjectedEntity(runtime);
+
+        using var gate = new ManualResetEventSlim(true);
+        var job = new BlockingBringJob(gate);
+        runtime.EcsWorld
+               .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
+               .Bring<JobMoveViewEvent>()
+               .ForEach(ref job)
+               .Batch()
+               .Post();
+
+        runtime.WaitEcsIdleForTest(TimeSpan.FromSeconds(2));
+
+        Assert.That(JobProbeActor.RentThreadIds, Is.Empty);
+        Assert.That(runtime.EcsWorld.ProjectionIntentCountForTest, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Projection_result_for_destroyed_entity_must_release_created_actor()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        RegisterDeferredJobProbeActor();
+        Entity entity = CreateDeferredProjectedEntity(runtime);
+
+        using var gate = new ManualResetEventSlim(true);
+        var job = new BlockingBringJob(gate);
+        runtime.EcsWorld
+               .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
+               .Bring<JobMoveViewEvent>()
+               .ForEach(ref job)
+               .Batch()
+               .Post();
+
+        runtime.WaitEcsIdleForTest(TimeSpan.FromSeconds(2));
+        runtime.EcsWorld.Destroy(entity);
+        runtime.Pump(0.016f);
+
+        Assert.That(JobProbeActor.RentCount, Is.EqualTo(0));
+        Assert.That(runtime.EcsWorld.ActiveProjectedActorCountForTest, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Pure_ecs_entity_must_not_generate_projection_intents()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        Entity entity = runtime.EcsWorld.Create(
+            new JobPositionComponent { X = 1f, Y = 2f },
+            new JobVelocityComponent { X = 3f, Y = 4f });
+
+        var job = new MoveJob();
+        runtime.EcsWorld
+               .Query<JobPositionComponent, JobVelocityComponent>()
+               .ForEach(ref job);
+
+        JobPositionComponent after = runtime.EcsWorld.Get<JobPositionComponent>(entity);
+        Assert.That(after.X, Is.EqualTo(4f));
+        Assert.That(after.Y, Is.EqualTo(6f));
+        Assert.That(runtime.EcsWorld.ProjectionIntentCountForTest, Is.EqualTo(0));
+    }
+
     private static LayerRuntime CreateAsyncRuntime()
     {
         return LayerHub.CreateLayers()
                        .Push(new AsyncEcsTestLayer())
                        .SetEcsExecutionMode(EcsExecutionMode.Async)
                        .Build();
+    }
+
+    private static void RegisterDeferredJobProbeActor()
+    {
+        ProjectedActorTypeRegistry.RegisterGenerated(
+            DeferredActorTypeId,
+            typeof(JobProbeActor),
+            static actorWorld => actorWorld.CreateProjectedActor<JobProbeActor>(),
+            new ProjectedActorOptions(
+                ProjectedActorRetirePolicy.ReturnToPool,
+                ProjectedActorCreatePolicy.Lazy,
+                ProjectedActorTime.SecondsToTicks(0.5f),
+                ProjectedActorTime.SecondsToTicks(0.1f)));
+    }
+
+    private static Entity CreateDeferredProjectedEntity(LayerRuntime runtime)
+    {
+        long keepAliveTicks = ProjectedActorTime.SecondsToTicks(0.5f);
+        Entity entity = runtime.EcsWorld.Create(
+            new JobPositionComponent { X = 1f, Y = 2f },
+            new JobVelocityComponent { X = 3f, Y = 4f },
+            new JobAoiComponent { IsVisible = true },
+            new ProjectedActorRef(
+                DeferredActorTypeId,
+                keepAliveTicks,
+                ProjectedActorReleasePolicy.ReturnToPool));
+
+        ref ProjectedActorMeta meta = ref runtime.EcsWorld.GetProjectionMeta(entity);
+        var options = new ProjectedActorOptions(
+            ProjectedActorRetirePolicy.ReturnToPool,
+            ProjectedActorCreatePolicy.Lazy,
+            keepAliveTicks,
+            ProjectedActorTime.SecondsToTicks(0.1f));
+        meta = ProjectedActorMeta.None;
+        meta.MarkProjected(
+            DeferredActorTypeId,
+            keepAliveTicks,
+            ProjectedActorReleasePolicy.ReturnToPool,
+            in options);
+        return entity;
     }
 
     private static string FindRepositoryRoot()

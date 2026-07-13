@@ -6,12 +6,15 @@ namespace LayerBase.ECS.Runtime;
 
 internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
 {
+    private static int s_nextSchedulerId;
+
     private readonly LayerRuntime _runtime;
     private readonly World _world;
     private readonly EcsSubmissionBatchPool _submissionBatchPool;
     private readonly EcsWorkQueue _workQueue;
     private readonly EcsResultQueue _resultQueue = new();
     private readonly EcsWorker _worker;
+    private readonly int _schedulerId;
     private EcsSubmissionBatch _currentSubmissionBatch;
     private long _nextSequence;
     private int _stopped;
@@ -20,15 +23,16 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
     {
         _runtime = runtime;
         _world = world;
+        _schedulerId = Interlocked.Increment(ref s_nextSchedulerId);
         _submissionBatchPool = new EcsSubmissionBatchPool(initialBatchCapacity: 16);
         _currentSubmissionBatch = _submissionBatchPool.Rent();
         _workQueue = new EcsWorkQueue();
-        _worker = new EcsWorker(runtime, world, _workQueue, _resultQueue, _submissionBatchPool, options);
+        _worker = new EcsWorker(runtime, world, _schedulerId, _workQueue, _resultQueue, _submissionBatchPool, options);
     }
 
     public EcsExecutionMode Mode => EcsExecutionMode.Async;
 
-    public bool IsSchedulerThread => EcsThreadGuard.IsEcsThread(_runtime.Id);
+    public bool IsSchedulerThread => EcsThreadGuard.IsEcsThread(_schedulerId);
 
     internal LayerRuntime Runtime => _runtime;
 

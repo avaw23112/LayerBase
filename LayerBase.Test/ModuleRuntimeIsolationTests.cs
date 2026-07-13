@@ -178,6 +178,70 @@ public sealed class ModuleRuntimeIsolationTests
         Assert.That(ex.Code, Is.EqualTo(ModuleBuildErrorCodes.HandlerScopeMismatch));
     }
 
+    [Test]
+    public void Missing_module_event_dispatcher_must_not_be_noop()
+    {
+        ScopeCompositionPlan plan = CreatePlanWithEventRoutes(
+            [new ScopeEventRoute(2010, 0, 1)],
+            [new ScopeEventHandlerRoute(0, 0, 0)]);
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+            ScopeRuntimeHost.Create(plan, moduleEventDispatchers: Array.Empty<ModuleEventDispatchHandler>()))!;
+
+        Assert.That(ex.Message, Does.Contain("event dispatcher"));
+    }
+
+    [Test]
+    public void Module_event_route_out_of_range_must_surface_plan_error()
+    {
+        using ScopeRuntimeHost host = ScopeRuntimeHost.Create(
+            CreatePlanWithEventRoutes(
+                [new ScopeEventRoute(2011, 0, 1)],
+                [new ScopeEventHandlerRoute(0, 0, 0)]),
+            moduleEventDispatchers: [static (_, _, _, _) => { }]);
+
+        host.Start();
+
+        Assert.That(host.TryPost(2011, new ScopePostMessage(99, new object())), Is.True);
+        host.Pump(0);
+
+        Assert.That(host.Scopes[0].ExceptionCountForTest, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Module_event_handler_route_out_of_range_must_surface_plan_error()
+    {
+        using ScopeRuntimeHost host = ScopeRuntimeHost.Create(
+            CreatePlanWithEventRoutes(
+                [new ScopeEventRoute(2012, 0, 1)],
+                []),
+            moduleEventDispatchers: [static (_, _, _, _) => { }]);
+
+        host.Start();
+
+        Assert.That(host.TryPost(2012, new ScopePostMessage(0, new object())), Is.True);
+        host.Pump(0);
+
+        Assert.That(host.Scopes[0].ExceptionCountForTest, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Module_event_handler_module_slot_out_of_range_must_surface_plan_error()
+    {
+        using ScopeRuntimeHost host = ScopeRuntimeHost.Create(
+            CreatePlanWithEventRoutes(
+                [new ScopeEventRoute(2013, 0, 1)],
+                [new ScopeEventHandlerRoute(1, 0, 0)]),
+            moduleEventDispatchers: [static (_, _, _, _) => { }]);
+
+        host.Start();
+
+        Assert.That(host.TryPost(2013, new ScopePostMessage(0, new object())), Is.True);
+        host.Pump(0);
+
+        Assert.That(host.Scopes[0].ExceptionCountForTest, Is.EqualTo(1));
+    }
+
     private static LayerContractContribution LayerContract<TLayer>()
     {
         return new LayerContractContribution(typeof(TLayer).TypeHandle);
@@ -224,6 +288,31 @@ public sealed class ModuleRuntimeIsolationTests
             typeof(TScope).TypeHandle,
             moduleLocalHandlerId: 0,
             kind);
+    }
+
+    private static ScopeCompositionPlan CreatePlanWithEventRoutes(
+        ScopeEventRoute[] eventRoutes,
+        ScopeEventHandlerRoute[] eventHandlerRoutes)
+    {
+        var descriptor = new ScopeDescriptor(
+            scopeId: eventRoutes.Length == 0 ? 2010 : eventRoutes[0].ScopeId,
+            name: "MalformedModuleRouteScope",
+            threading: ScopeThreadingMode.Inline,
+            clock: ScopeClockMode.EngineDriven,
+            tickRateHz: 0,
+            stopPolicy: ScopeStopPolicy.Drain);
+
+        var scopePlan = new ScopePlan(
+            descriptor,
+            typeof(IsolationScope),
+            [new ScopeServicePlan(0, typeof(IsolationService), new IsolationService(), null)],
+            Array.Empty<ScopeContextPlan>());
+
+        return new ScopeCompositionPlan(
+            [scopePlan],
+            Array.Empty<ScopeCallRoute>(),
+            eventRoutes,
+            eventHandlerRoutes);
     }
 
     private static string FindRepositoryRoot()

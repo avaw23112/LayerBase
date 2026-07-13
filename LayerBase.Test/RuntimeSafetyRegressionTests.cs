@@ -50,6 +50,16 @@ public partial struct FrozenRegressionEvent
     public int Value;
 }
 
+public partial struct NeverPrewarmedFrozenEvent
+{
+    public int Value;
+}
+
+public partial struct FrozenFaultEvent
+{
+    public int Value;
+}
+
 public partial struct LatestThrowingPayloadEvent
 {
     public object? Value;
@@ -254,6 +264,55 @@ public partial class RuntimeSafetyRegressionTests
     }
 
     [Test]
+    public void Frozen_send_of_unregistered_event_must_not_create_bucket()
+    {
+        var center = new EventCenter();
+        center.Freeze();
+
+        int before = center.BucketCountForTest;
+
+        Assert.Throws<EventCenterFrozenTypeException>(
+            () => center.Send(new NeverPrewarmedFrozenEvent { Value = 1 }));
+
+        Assert.That(center.BucketCountForTest, Is.EqualTo(before));
+    }
+
+    [Test]
+    public void Prewarm_after_freeze_must_throw()
+    {
+        var center = new EventCenter();
+        center.Freeze();
+
+        Assert.Throws<InvalidOperationException>(
+            () => center.PrewarmEvent<FrozenRegressionEvent>(
+                new LayerPrewarmOptions(LayerPrewarmTargets.All)));
+    }
+
+    [Test]
+    public void Handler_fault_after_freeze_must_not_rebuild_during_next_send()
+    {
+        var center = new EventCenter();
+        int invokeCount = 0;
+
+        center.Subscribe<FrozenFaultEvent>(0, (in FrozenFaultEvent _) =>
+        {
+            invokeCount++;
+            throw new InvalidOperationException("expected");
+        });
+
+        center.PrewarmEvent<FrozenFaultEvent>(LayerPrewarmOptions.Default);
+        center.Freeze();
+
+        int rebuilds = center.GetRebuildCount<FrozenFaultEvent>();
+
+        center.Send(new FrozenFaultEvent { Value = 1 });
+        center.Send(new FrozenFaultEvent { Value = 2 });
+
+        Assert.That(invokeCount, Is.EqualTo(1));
+        Assert.That(center.GetRebuildCount<FrozenFaultEvent>(), Is.EqualTo(rebuilds));
+    }
+
+    [Test]
     public void Long_timer_cancel_does_not_promote_reused_slot_from_stale_heap_entry()
     {
         var scheduler = new TimeScheduler<int>(new TimeSchedulerOptions(
@@ -382,6 +441,22 @@ public partial class RuntimeSafetyRegressionTests
 
         Assert.That(secondPublisher.TryGet(out var value), Is.True);
         Assert.That(value.Value, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Runtime_dispose_must_unregister_even_when_user_runtime_stop_reports_error()
+    {
+        var throwingLayer = new EmptyRegressionLayer();
+        throwingLayer.RegisterService(new ThrowingRuntimeStopService());
+        LayerRuntime runtime = LayerHub.CreateLayers().Push(throwingLayer).Build();
+        int runtimeId = runtime.Id;
+
+        AggregateException error = Assert.Throws<AggregateException>(() => runtime.Dispose())!;
+        Assert.That(error.Flatten().InnerExceptions, Has.One.Message.Contains("runtime stop failure"));
+
+        LayerRuntime next = LayerHub.CreateLayers().Push(new EmptyRegressionLayer()).Build();
+
+        Assert.That(next.Id, Is.EqualTo(runtimeId));
     }
 
     [Test]
@@ -856,6 +931,61 @@ public partial class RuntimeSafetyRegressionTests
         }
     }
 
+    [Test]
+    public void Scope_TryPost_without_dispatcher_must_reject_before_enqueue()
+    {
+        using var scope = new ScopeRuntime(
+            ScopeDescriptors.Main,
+            Array.Empty<IService>(),
+            postDispatcher: null);
+
+        scope.Start();
+
+        bool accepted = scope.TryPost(new ScopePostMessage(
+            eventId: 1,
+            payload: new object()));
+
+        Assert.That(accepted, Is.False);
+        Assert.That(scope.PostInboxCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Scope_service_provider_must_reject_ambiguous_interface_binding()
+    {
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            new ScopeServiceProvider(new object[]
+            {
+                new FirstStorage(),
+                new SecondStorage()
+            }))!;
+
+        Assert.That(error.Message, Does.Contain(nameof(IStorage)));
+        Assert.That(error.Message, Does.Contain(nameof(FirstStorage)));
+        Assert.That(error.Message, Does.Contain(nameof(SecondStorage)));
+    }
+
+    [Test]
+    public void Scope_build_must_reject_out_of_range_service_slot()
+    {
+        var service = new FirstStorage();
+        using var scope = new ScopeRuntime(
+            ScopeDescriptors.Main,
+            new IService[] { service });
+
+        var plans = new[]
+        {
+            new ScopeServicePlan(
+                serviceSlot: 10,
+                serviceType: typeof(FirstStorage),
+                instance: service,
+                bindingInitializer: null,
+                membership: new LayerMembership(0, 1))
+        };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            scope.UpdateServiceBindings(plans));
+    }
+
     private static void AssertMethodGroupDoesNotContainDisposedPrecheck(string source, string signature)
     {
         int start = source.IndexOf(signature, StringComparison.Ordinal);
@@ -917,6 +1047,19 @@ public partial class RuntimeSafetyRegressionTests
         public void Dispose()
         {
             Interlocked.Increment(ref DisposeCount);
+        }
+    }
+
+    private sealed partial class ThrowingRuntimeStopService : IService, IRuntimeStop
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddSingleton<ThrowingRuntimeStopService>(this);
+        }
+
+        public void RuntimeStop()
+        {
+            throw new InvalidOperationException("runtime stop failure");
         }
     }
 
@@ -993,6 +1136,24 @@ public partial class RuntimeSafetyRegressionTests
 
     private sealed class SecondPaddingService
     {
+    }
+
+    private interface IStorage
+    {
+    }
+
+    private sealed class FirstStorage : IService, IStorage
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+    }
+
+    private sealed class SecondStorage : IService, IStorage
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
     }
 
     private sealed class TerminalCountingWorkItem : IEcsWorkItem

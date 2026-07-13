@@ -8,6 +8,7 @@ internal sealed class EcsWorker : IDisposable
 {
     private readonly LayerRuntime _runtime;
     private readonly World _world;
+    private readonly int _schedulerId;
     private readonly EcsWorkQueue _workQueue;
     private readonly EcsResultQueue _resultQueue;
     private readonly EcsSubmissionBatchPool _submissionBatchPool;
@@ -29,6 +30,7 @@ internal sealed class EcsWorker : IDisposable
     public EcsWorker(
         LayerRuntime runtime,
         World world,
+        int schedulerId,
         EcsWorkQueue workQueue,
         EcsResultQueue resultQueue,
         EcsSubmissionBatchPool submissionBatchPool,
@@ -36,6 +38,7 @@ internal sealed class EcsWorker : IDisposable
     {
         _runtime = runtime;
         _world = world;
+        _schedulerId = schedulerId;
         _workQueue = workQueue;
         _resultQueue = resultQueue;
         _submissionBatchPool = submissionBatchPool;
@@ -143,7 +146,7 @@ internal sealed class EcsWorker : IDisposable
 
     private void Run()
     {
-        EcsThreadGuard.Bind(_runtime.Id, Environment.CurrentManagedThreadId);
+        EcsThreadGuard.Bind(_schedulerId, Environment.CurrentManagedThreadId);
         long startTicks = Stopwatch.GetTimestamp();
         Volatile.Write(ref _lastWorkTicks, startTicks);
         Volatile.Write(ref _lastSubmitTicks, startTicks);
@@ -163,7 +166,7 @@ internal sealed class EcsWorker : IDisposable
         }
         finally
         {
-            EcsThreadGuard.Unbind(_runtime.Id);
+            EcsThreadGuard.Unbind(_schedulerId);
         }
     }
 

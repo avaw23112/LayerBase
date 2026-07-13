@@ -110,6 +110,15 @@ internal sealed class ScopeCompletionPort
         }
     }
 
+    public void CloseAndReleaseAll()
+    {
+        lock (_gate)
+        {
+            _closed = true;
+            _pending.Clear();
+        }
+    }
+
     public bool TryDequeue(out LayerContinuation continuation)
     {
         return _ready.TryDequeue(out continuation);

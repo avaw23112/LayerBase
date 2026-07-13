@@ -6,12 +6,11 @@ internal static class EcsSchedulerUtility
 {
     public static bool ScheduleIfNeeded(World world, string debugName, Action<World> execute)
     {
-        if (world.Runtime == null)
+        if (!world.TryGetEcsWorkScheduler(out IEcsWorkScheduler? scheduler) ||
+            scheduler == null)
         {
             return false;
         }
-
-        var scheduler = (IEcsWorkScheduler)world.Runtime.EcsScheduler;
 
         if (scheduler.Mode != EcsExecutionMode.Async || scheduler.IsSchedulerThread)
         {
@@ -31,12 +30,11 @@ internal static class EcsSchedulerUtility
         in TState state,
         Action<World, TState> execute)
     {
-        if (world.Runtime == null)
+        if (!world.TryGetEcsWorkScheduler(out IEcsWorkScheduler? scheduler) ||
+            scheduler == null)
         {
             return false;
         }
-
-        var scheduler = (IEcsWorkScheduler)world.Runtime.EcsScheduler;
 
         if (scheduler.Mode != EcsExecutionMode.Async || scheduler.IsSchedulerThread)
         {

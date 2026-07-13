@@ -197,8 +197,82 @@ public sealed class ScopePromiseShutdownTests
         first.SetResult(7);
         runtime.Pump(0);
 
-        Assert.That(runtime.CompletionPort.PendingCount, Is.EqualTo(0));
         Assert.That(first.GetResult(), Is.EqualTo(7));
+        Assert.That(runtime.CompletionPort.PendingCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Completed_before_OnCompleted_must_keep_reserved_slot()
+    {
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1228,
+                name: "PromiseLateContinuationReservationScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            new ScopeRuntimeOptions(
+                continuationQueueCapacity: 1,
+                completionQueueCapacity: 1));
+
+        var first = new ScopePromise<int>(runtime);
+        first.SetResult(42);
+
+        var second = new ScopePromise<int>(runtime);
+
+        Assert.Throws<ScopeBackpressureException>(() => second.RequireAccepted());
+        Assert.That(runtime.CompletionPort.PendingCount, Is.EqualTo(1));
+
+        int continuationCount = 0;
+        int continuationThreadId = -1;
+
+        first.OnCompleted(() =>
+        {
+            continuationThreadId = Environment.CurrentManagedThreadId;
+            continuationCount++;
+        });
+
+        runtime.Pump(0);
+
+        Assert.That(continuationCount, Is.EqualTo(1));
+        Assert.That(continuationThreadId, Is.EqualTo(ownerThreadId));
+        Assert.That(first.GetResult(), Is.EqualTo(42));
+        Assert.That(runtime.CompletionPort.PendingCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Scope_stop_must_release_await_registry_references()
+    {
+        const int count = 64;
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1229,
+                name: "PromiseStopReleaseScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            new ScopeRuntimeOptions(completionQueueCapacity: count));
+
+        var promises = new List<ScopePromise<int>>(count);
+        for (int i = 0; i < count; i++)
+        {
+            var promise = new ScopePromise<int>(runtime);
+            promise.SetResult(i);
+            promises.Add(promise);
+        }
+
+        Assert.That(runtime.AwaitRegistry.PendingCount, Is.EqualTo(count));
+        Assert.That(runtime.CompletionPort.PendingCount, Is.EqualTo(count));
+
+        runtime.Stop();
+
+        Assert.That(runtime.AwaitRegistry.PendingCount, Is.EqualTo(0));
+        Assert.That(runtime.CompletionPort.PendingCount, Is.EqualTo(0));
     }
 
     [Test]

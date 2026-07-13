@@ -11,6 +11,8 @@ internal sealed class ActiveProjectedActorList
     private int _count;
     private int _sweepCursor;
 
+    internal int CountForTest => _count;
+
     public void Add(
         Entity                 entity,
         ref ProjectedActorMeta meta)

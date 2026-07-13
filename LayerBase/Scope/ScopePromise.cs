@@ -214,10 +214,6 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
         {
             ScheduleContinuation(continuation);
         }
-        else
-        {
-            _continuationScope?.CompletionPort.Release(this);
-        }
 
         return true;
     }

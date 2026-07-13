@@ -1,4 +1,7 @@
 using LayerBase.DI;
+using LayerBase.DI.Options;
+using LayerBase.Scope.DI;
+using LayerBase.Scope.Resources;
 namespace LayerBase.Scope;
 
 internal sealed class ScopeServiceProvider : LayerBase.DI.IServiceProvider, IDisposable
@@ -85,7 +88,7 @@ internal sealed class ScopeServiceProvider : LayerBase.DI.IServiceProvider, IDis
 
         for (int i = 0; i < instanceTypes.Length; i++)
         {
-            AddLookup(entries, instanceTypes[i], i);
+            AddLookup(entries, instanceTypes, instanceTypes[i], i);
         }
 
         for (int i = 0; i < instanceTypes.Length; i++)
@@ -94,31 +97,59 @@ internal sealed class ScopeServiceProvider : LayerBase.DI.IServiceProvider, IDis
             Type? baseType = type.BaseType;
             while (baseType != null && baseType != typeof(object))
             {
-                AddLookup(entries, baseType, i);
+                AddLookup(entries, instanceTypes, baseType, i);
                 baseType = baseType.BaseType;
             }
 
             Type[] interfaces = type.GetInterfaces();
             for (int j = 0; j < interfaces.Length; j++)
             {
-                AddLookup(entries, interfaces[j], i);
+                AddLookup(entries, instanceTypes, interfaces[j], i);
             }
         }
 
         return entries.ToArray();
     }
 
-    private static void AddLookup(List<ScopeServiceLookupEntry> entries, Type type, int slot)
+    private static void AddLookup(List<ScopeServiceLookupEntry> entries, Type[] instanceTypes, Type type, int slot)
     {
         for (int i = 0; i < entries.Count; i++)
         {
             if (entries[i].Type == type)
             {
+                if (entries[i].Slot != slot && IsAmbiguousServiceContract(type))
+                {
+                    Type first = instanceTypes[entries[i].Slot];
+                    Type second = instanceTypes[slot];
+                    throw new InvalidOperationException(
+                        $"Scope service contract '{type.FullName}' is ambiguous between '{first.FullName}' and '{second.FullName}'.");
+                }
+
                 return;
             }
         }
 
         entries.Add(new ScopeServiceLookupEntry(type, slot));
+    }
+
+    private static bool IsAmbiguousServiceContract(Type type)
+    {
+        if (!type.IsInterface)
+        {
+            return false;
+        }
+
+        return type != typeof(IService) &&
+               type != typeof(IInitializable) &&
+               type != typeof(IDisposable) &&
+               type != typeof(ILayerContext) &&
+               type != typeof(IScopeObjectBindingAccessor) &&
+               type != typeof(IGeneratedScopeMount) &&
+               type != typeof(IGeneratedScopeMountMetadata) &&
+               type != typeof(IGeneratedScopeResourcePublisher) &&
+               type != typeof(IGeneratedScopeResourceConsumer) &&
+               type != typeof(IGeneratedScopeResourceExportMetadata) &&
+               type != typeof(IGeneratedScopeResourceImportMetadata);
     }
 
     private void ThrowIfDisposed()

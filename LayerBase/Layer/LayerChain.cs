@@ -81,13 +81,42 @@ internal sealed class LayerChain
     /// </summary>
     internal void DisposeLayers()
     {
-        foreach (var node in _responsibilityChain)
-            if (node is Layer layer)
-                layer.RunRuntimeStop();
+        List<Exception>? exceptions = null;
 
         foreach (var node in _responsibilityChain)
+        {
             if (node is Layer layer)
-                layer.Dispose();
+            {
+                try
+                {
+                    layer.RunRuntimeStop();
+                }
+                catch (Exception ex)
+                {
+                    (exceptions ??= new List<Exception>()).Add(ex);
+                }
+            }
+        }
+
+        foreach (var node in _responsibilityChain)
+        {
+            if (node is Layer layer)
+            {
+                try
+                {
+                    layer.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    (exceptions ??= new List<Exception>()).Add(ex);
+                }
+            }
+        }
+
+        if (exceptions is { Count: > 0 })
+        {
+            throw new AggregateException("One or more layers failed during disposal.", exceptions);
+        }
     }
 
     /// <summary>

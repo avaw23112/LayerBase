@@ -3,6 +3,8 @@ using System.Runtime.CompilerServices;
 using Arch.Core;
 using LayerBase;
 using LayerBase.Actor;
+using LayerBase.ECS.Projection.Flow;
+using LayerBase.ECS.Runtime;
 
 namespace LayerBase.ECS.Projection;
 
@@ -16,7 +18,7 @@ internal static class ProjectedActorBinding
         ref ProjectedActorMeta meta,
         long                   nowTicks)
     {
-        if (ShouldDeferActorWorldAccess(world, actorWorld))
+        if (TryDeferProjectedActorEnsure(world, actorWorld, entity, meta.ActorTypeId))
         {
             return ActorId.Invalid;
         }
@@ -44,7 +46,7 @@ internal static class ProjectedActorBinding
         ref ProjectedActorRef  actorRef,
         long                   nowTicks)
     {
-        if (ShouldDeferActorWorldAccess(world, actorWorld))
+        if (TryDeferProjectedActorEnsure(world, actorWorld, entity, meta.ActorTypeId))
         {
             actorRef.ClearActor();
             return ActorId.Invalid;
@@ -74,7 +76,7 @@ internal static class ProjectedActorBinding
         ref ProjectedActorRef actorRef,
         long                  nowTicks)
     {
-        if (ShouldDeferActorWorldAccess(world, actorWorld))
+        if (TryDeferProjectedActorEnsure(world, actorWorld, entity, actorRef.ActorTypeId))
         {
             actorRef.ClearActor();
             return ActorId.Invalid;
@@ -318,10 +320,39 @@ internal static class ProjectedActorBinding
         World world,
         ActorWorld actorWorld)
     {
-        return world.TryGetRuntime(out LayerRuntime? runtime) &&
+        return world.EcsExecutionMode == EcsExecutionMode.Async &&
+               world.TryGetRuntime(out LayerRuntime? runtime) &&
                runtime != null &&
                ReferenceEquals(runtime.Actors, actorWorld) &&
                !runtime.IsOwnerThreadForActorWorld;
+    }
+
+    private static bool TryDeferProjectedActorEnsure(
+        World world,
+        ActorWorld actorWorld,
+        Entity entity,
+        int actorTypeId)
+    {
+        if (!ShouldDeferActorWorldAccess(world, actorWorld))
+        {
+            return false;
+        }
+
+        if (world.TryGetRuntime(out LayerRuntime? runtime) &&
+            runtime != null &&
+            EcsThreadGuard.TryGetCurrentResultQueue(runtime.Id, out EcsResultQueue? results) &&
+            results != null)
+        {
+            world.TrackProjectionIntentForTest();
+            _ = results.Enqueue(new ProjectedActorEnsureResult(
+                "ProjectedActorEnsure",
+                world,
+                actorWorld,
+                entity,
+                actorTypeId));
+        }
+
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

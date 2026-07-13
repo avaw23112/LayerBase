@@ -65,6 +65,7 @@ public sealed class ScopeRuntime : IDisposable
     private int _ownerThreadId = -1;
     private int _disposeRequested;
     private int _disposeInfrastructureStarted;
+    private int _exceptionCountForTest;
     private bool _compositionApplied;
 
     public ScopeRuntime(
@@ -136,6 +137,12 @@ public sealed class ScopeRuntime : IDisposable
             EcsExecutionMode.Async => new AsyncEcsScheduler(OwningRuntime, EcsWorld, ecsOptions),
             _ => null
         };
+
+        EcsWorld.BindRuntimeOwner(OwningRuntime);
+        if (EcsScheduler is IEcsWorkScheduler workScheduler)
+        {
+            EcsWorld.BindEcsScheduler(workScheduler);
+        }
     }
 
     public int ScopeId => Descriptor.ScopeId;
@@ -192,6 +199,12 @@ public sealed class ScopeRuntime : IDisposable
             lock (_lifecycleGate) return _state;
         }
     }
+
+    internal ScopeRuntimeState StateForTest => State;
+
+    internal LayerBaseSynchronizationContext? ContextForTest => _context;
+
+    internal int ExceptionCountForTest => Volatile.Read(ref _exceptionCountForTest);
 
     internal void RequireAccess(string apiName)
     {
@@ -264,8 +277,13 @@ public sealed class ScopeRuntime : IDisposable
         for (int i = 0; i < servicePlans.Count; i++)
         {
             ScopeServicePlan plan = servicePlans[i];
+            if ((uint)plan.ServiceSlot >= (uint)Services.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Scope service plan references service slot {plan.ServiceSlot}, but scope '{Descriptor.Name}' has {Services.Length} services.");
+            }
+
             if (plan.Membership.Start < 0) continue;
-            if ((uint)plan.ServiceSlot >= (uint)Services.Length) continue;
 
             ScopeObjectBinding existing = ScopeObjectBinder.Require(Services[plan.ServiceSlot]);
             ScopeObjectBinder.Attach(
@@ -438,7 +456,9 @@ public sealed class ScopeRuntime : IDisposable
     public bool TryPost(ScopePostMessage message)
     {
         ThrowIfDisposed();
-        if (!AcceptsBusinessIngress(State)) return false;
+        ScopeRuntimeState state = State;
+        if (!AcceptsBusinessIngress(state)) return false;
+        if (_postDispatcher == null && state != ScopeRuntimeState.Created) return false;
         return _postInbox.TryEnqueue(message) == QueueEnqueueResult.Accepted;
     }
 
@@ -565,32 +585,58 @@ public sealed class ScopeRuntime : IDisposable
             WaitForStopCleanup();
         }
 
-        _subscriptionRegistry?.Dispose();
+        List<Exception>? exceptions = null;
+
+        void Capture(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                (exceptions ??= new List<Exception>()).Add(ex);
+            }
+        }
+
+        Capture(() => _subscriptionRegistry?.Dispose());
         _subscriptionRegistry = null;
-        AwaitRegistry.Close();
-        EcsScheduler?.Dispose();
-        _context?.Dispose();
-        Timer.Dispose();
-        PostScheduler.Dispose();
-        DelayManager.Clear();
-        EventCenter.Reset();
-        EcsWorld.Dispose();
-        if (_ownsActorWorld) _actorWorld.Dispose();
+        Capture(AwaitRegistry.Close);
+        Capture(() => EcsScheduler?.Dispose());
+        Capture(() => _context?.DisposeFromRuntime(
+            CompletionExceptionPolicy.ReportAndContinue,
+            ex => ReportException(ex, -1, LayerExceptionPhase.Continuation, LayerQueueKind.ContinuationQueue, -1)));
+        Capture(Timer.Dispose);
+        Capture(PostScheduler.Dispose);
+        Capture(DelayManager.Clear);
+        Capture(EventCenter.Reset);
+        Capture(EcsWorld.Dispose);
+        if (_ownsActorWorld)
+        {
+            Capture(_actorWorld.Dispose);
+        }
 
         ManualResetEventSlim? workerStartedSignal;
         ManualResetEventSlim? workerLaunchSignal;
         lock (_lifecycleGate)
         {
-            _state = ScopeRuntimeState.Disposed;
+            _state = exceptions is { Count: > 0 }
+                ? ScopeRuntimeState.Faulted
+                : ScopeRuntimeState.Disposed;
             workerStartedSignal = _workerStartedSignal;
             workerLaunchSignal = _workerLaunchSignal;
             _workerStartedSignal = null;
             _workerLaunchSignal = null;
         }
 
-        workerStartedSignal?.Dispose();
-        workerLaunchSignal?.Dispose();
-        _stopCleanupFinished.Dispose();
+        Capture(() => workerStartedSignal?.Dispose());
+        Capture(() => workerLaunchSignal?.Dispose());
+        Capture(_stopCleanupFinished.Dispose);
+
+        if (exceptions is { Count: > 0 })
+        {
+            throw new AggregateException("One or more scope infrastructure components failed during disposal.", exceptions);
+        }
     }
 
     private void WorkerLoop()
@@ -895,6 +941,9 @@ public sealed class ScopeRuntime : IDisposable
 
         DrainContinuations();
 
+        AwaitRegistry.Close();
+        _completionPort.CloseAndReleaseAll();
+
         CloseCompletionIngress();
 
         DrainContinuations();
@@ -911,7 +960,13 @@ public sealed class ScopeRuntime : IDisposable
         if (_context != null)
         {
             _context.BeginClose(new ObjectDisposedException(nameof(ScopeRuntime)));
-            _context.DrainClosingOperations();
+            _context.DrainClosingOperations(
+                CompletionExceptionPolicy.ReportAndContinue,
+                exception =>
+                {
+                    ReportException(exception, -1, LayerExceptionPhase.Continuation, LayerQueueKind.ContinuationQueue, -1);
+                    ApplyExceptionPolicy(LayerExceptionPhase.Continuation, exception);
+                });
         }
 
         DisposeContexts();
@@ -930,6 +985,8 @@ public sealed class ScopeRuntime : IDisposable
         int queueCapacity = 0,
         int queueCount = 0)
     {
+        Interlocked.Increment(ref _exceptionCountForTest);
+
         if (OwningRuntime == null)
         {
             return;

@@ -1,6 +1,7 @@
 using LayerBase;
 using LayerBase.Actor;
 using LayerBase.Actor.RuntimeCommands;
+using LayerBase.ECS.Runtime;
 using LayerBase.ECS.Projection;
 
 namespace Arch.Core;
@@ -10,6 +11,8 @@ public partial class World
     private readonly ActiveProjectedActorList _activeProjectedActors = new();
     private ActorWorld? _scopeActors;
     private IProjectedActorLifecycleSink? _projectedActorLifecycleSink;
+    private IEcsWorkScheduler? _ecsScheduler;
+    private int _projectionIntentCountForTest;
 
     internal LayerRuntime Runtime { get; private set; } = null!;
 
@@ -18,6 +21,18 @@ public partial class World
     {
         Runtime = runtime;
         _projectedActorLifecycleSink = new LayerRuntimeProjectedActorLifecycleSink(runtime);
+    }
+
+    internal void BindRuntimeOwner(
+        LayerRuntime runtime)
+    {
+        Runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+    }
+
+    internal void BindEcsScheduler(
+        IEcsWorkScheduler scheduler)
+    {
+        _ecsScheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
     }
 
     internal void BindScopeActors(ActorWorld actors)
@@ -39,13 +54,37 @@ public partial class World
         return runtime != null;
     }
 
+    internal bool TryGetEcsWorkScheduler(out IEcsWorkScheduler? scheduler)
+    {
+        scheduler = _ecsScheduler;
+        if (scheduler != null)
+        {
+            return true;
+        }
+
+        scheduler = Runtime?.EcsWorkScheduler;
+        return scheduler != null;
+    }
+
+    internal EcsExecutionMode EcsExecutionMode =>
+        _ecsScheduler?.Mode ?? Runtime?.EcsOptions.ExecutionMode ?? EcsExecutionMode.Sync;
+
+    internal int ProjectionIntentCountForTest => _projectionIntentCountForTest;
+
+    internal int ActiveProjectedActorCountForTest => _activeProjectedActors.CountForTest;
+
+    internal void TrackProjectionIntentForTest()
+    {
+        _projectionIntentCountForTest++;
+    }
+
     internal bool ShouldPrebindProjectedActorOnMark
     {
         get
         {
             return Runtime != null &&
                    Runtime.IsOwnerThreadForActorWorld &&
-                   Runtime.EcsOptions.ExecutionMode == LayerBase.ECS.Runtime.EcsExecutionMode.Async;
+                   EcsExecutionMode == LayerBase.ECS.Runtime.EcsExecutionMode.Async;
         }
     }
 
