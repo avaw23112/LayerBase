@@ -19,6 +19,7 @@ public sealed class EventCenter
     private readonly ConcurrentDictionary<Type, byte> _reflectionFallbackTypes = new();
     private readonly object _lock = new();
     private IEventBucketNonGeneric?[] _bucketFastCache = new IEventBucketNonGeneric?[64];
+    private int _frozen;
     private int _isResetting;
     private int _reflectionFallbackCount;
 
@@ -38,72 +39,86 @@ public sealed class EventCenter
 
     internal void SubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().Add(layerIndex, handler);
     }
 
     internal void SubscribeAsync<T>(int layerIndex, IEventHandlerAsync<T> handler) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().Add(layerIndex, handler);
     }
 
     internal void SubscribeFlow<T>(int layerIndex, EventHandleDelegate<T> handleDelegate) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().Add(layerIndex, handleDelegate);
     }
 
     internal void SubscribeAsync<T>(int layerIndex, EventHandleDelegateAsync<T> handleDelegate) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().Add(layerIndex, handleDelegate);
     }
 
     internal void SubscribeParallel<T>(int layerIndex, EventNotifyDelegate<T> handleDelegate,
                                        Action<int, int, int, Exception> reportError) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().AddParallel(layerIndex, handleDelegate, reportError);
     }
 
     internal void SubscribeNotify<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().AddNotify(layerIndex, handler);
     }
 
     internal void Subscribe<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().AddSubscribe(layerIndex, handler);
     }
 
     internal void UnsubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().Remove(layerIndex, handler);
     }
 
     internal void UnsubscribeAsync<T>(int layerIndex, IEventHandlerAsync<T> handler) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().Remove(layerIndex, handler);
     }
 
     internal void UnsubscribeNotify<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().RemoveNotify(layerIndex, handler);
     }
 
     internal void UnsubscribeParallel<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().RemoveParallel(layerIndex, handler);
     }
 
     internal void Unsubscribe<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().RemoveSubscribe(layerIndex, handler);
     }
 
     internal void UnsubscribeFlow<T>(int layerIndex, EventHandleDelegate<T> handleDelegate) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().Remove(layerIndex, handleDelegate);
     }
 
     internal void UnsubscribeAsync<T>(int layerIndex, EventHandleDelegateAsync<T> handleDelegate) where T : struct
     {
+        ThrowIfFrozen();
         GetBucket<T>().Remove(layerIndex, handleDelegate);
     }
 
@@ -111,52 +126,62 @@ public sealed class EventCenter
 
     internal void SubscribeFlow(int layerIndex, object handler, Type eventType)
     {
+        ThrowIfFrozen();
         GetBucket(eventType).AddFlow(layerIndex, handler);
     }
 
     internal void SubscribeAsync(int layerIndex, object handler, Type eventType)
     {
+        ThrowIfFrozen();
         GetBucket(eventType).AddAsync(layerIndex, handler);
     }
 
     internal void SubscribeNotify(int layerIndex, object handler, Type eventType)
     {
+        ThrowIfFrozen();
         GetBucket(eventType).AddNotify(layerIndex, handler);
     }
 
     internal void Subscribe(int layerIndex, object handler, Type eventType)
     {
+        ThrowIfFrozen();
         GetBucket(eventType).AddSubscribe(layerIndex, handler);
     }
 
     internal void SubscribeParallel(int layerIndex, object handler, Type eventType,
                                      Action<int, int, int, Exception> reportError)
     {
+        ThrowIfFrozen();
         GetBucket(eventType).AddParallel(layerIndex, handler, reportError);
     }
 
     internal void UnsubscribeFlow(int layerIndex, object handler, Type eventType)
     {
+        ThrowIfFrozen();
         GetBucket(eventType).RemoveFlow(layerIndex, handler);
     }
 
     internal void UnsubscribeAsync(int layerIndex, object handler, Type eventType)
     {
+        ThrowIfFrozen();
         GetBucket(eventType).RemoveAsync(layerIndex, handler);
     }
 
     internal void UnsubscribeNotify(int layerIndex, object handler, Type eventType)
     {
+        ThrowIfFrozen();
         GetBucket(eventType).RemoveNotify(layerIndex, handler);
     }
 
     internal void Unsubscribe(int layerIndex, object handler, Type eventType)
     {
+        ThrowIfFrozen();
         GetBucket(eventType).RemoveSubscribe(layerIndex, handler);
     }
 
     internal void UnsubscribeParallel(int layerIndex, object handler, Type eventType)
     {
+        ThrowIfFrozen();
         GetBucket(eventType).RemoveParallel(layerIndex, handler);
     }
 
@@ -199,9 +224,49 @@ public sealed class EventCenter
                     b.Dispose();
             _eventBuckets.Clear();
             Array.Clear(_bucketFastCache, 0, _bucketFastCache.Length);
+            Volatile.Write(ref _frozen, 0);
         }
 
         Volatile.Write(ref _isResetting, 0);
+    }
+
+    public void Freeze()
+    {
+        lock (_lock)
+        {
+            foreach (IEventBucketNonGeneric bucket in _eventBuckets.Values)
+            {
+                bucket.PrewarmDispatchTable();
+            }
+
+            Volatile.Write(ref _frozen, 1);
+        }
+    }
+
+    internal int GetRebuildCount<TEvent>()
+        where TEvent : struct
+    {
+        int typeId = EventTypeId<TEvent>.Id;
+        IEventBucketNonGeneric? cached = (uint)typeId < (uint)_bucketFastCache.Length
+            ? Volatile.Read(ref _bucketFastCache[typeId])
+            : null;
+
+        if (cached != null)
+        {
+            return cached.RebuildCount;
+        }
+
+        return _eventBuckets.TryGetValue(typeId, out IEventBucketNonGeneric? bucket)
+            ? bucket.RebuildCount
+            : 0;
+    }
+
+    private void ThrowIfFrozen()
+    {
+        if (Volatile.Read(ref _frozen) != 0)
+        {
+            throw new InvalidOperationException("EventCenter is frozen; direct subscription changes are not allowed.");
+        }
     }
 
     /// <summary>
@@ -363,6 +428,7 @@ public sealed class EventCenter
         public readonly EventCenter? Owner;
         private bool _disposed;
         private int _isDirty;
+        private int _rebuildCount;
 
         private HandlerBucket<T>?[] _buckets = Array.Empty<HandlerBucket<T>>();
 
@@ -402,6 +468,8 @@ public sealed class EventCenter
         {
             Owner = center;
         }
+
+        public int RebuildCount => Volatile.Read(ref _rebuildCount);
 
         /// <summary>
         /// 预热当前事件类型的派发表。
@@ -522,6 +590,7 @@ public sealed class EventCenter
         private void Rebuild()
         {
             if (_disposed) return;
+            Interlocked.Increment(ref _rebuildCount);
 
             int totalSync = 0, totalAsync = 0, totalParallel = 0, totalNotify = 0, totalSubscribe = 0;
             ulong newMask = 0,
@@ -797,54 +866,63 @@ public sealed class EventCenter
 
         public void Add(int layerIndex, IEventHandler<T> h)
         {
+            Owner?.ThrowIfFrozen();
             GetOrCreate(layerIndex).Add(h);
             MarkDirty();
         }
 
         public void Add(int layerIndex, IEventHandlerAsync<T> h)
         {
+            Owner?.ThrowIfFrozen();
             GetOrCreate(layerIndex).Add(h);
             MarkDirty();
         }
 
         public void AddNotify(int layerIndex, EventNotifyDelegate<T> h)
         {
+            Owner?.ThrowIfFrozen();
             GetOrCreate(layerIndex).AddNotify(h);
             MarkDirty();
         }
 
         public void AddSubscribe(int layerIndex, EventNotifyDelegate<T> h)
         {
+            Owner?.ThrowIfFrozen();
             GetOrCreate(layerIndex).AddSubscribe(h);
             MarkDirty();
         }
 
         public void AddParallel(int layerIndex, IEventHandler<T> h, Action<int, int, int, Exception> re)
         {
+            Owner?.ThrowIfFrozen();
             GetOrCreate(layerIndex).AddParallel(h, re);
             MarkDirty();
         }
 
         public void AddParallel(int layerIndex, EventNotifyDelegate<T> h, Action<int, int, int, Exception> re)
         {
+            Owner?.ThrowIfFrozen();
             GetOrCreate(layerIndex).AddParallel(h, re);
             MarkDirty();
         }
 
         public void Add(int layerIndex, EventHandleDelegate<T> h)
         {
+            Owner?.ThrowIfFrozen();
             GetOrCreate(layerIndex).Add(h);
             MarkDirty();
         }
 
         public void Add(int layerIndex, EventHandleDelegateAsync<T> h)
         {
+            Owner?.ThrowIfFrozen();
             GetOrCreate(layerIndex).Add(h);
             MarkDirty();
         }
 
         public void Remove(int layerIndex, IEventHandler<T> h)
         {
+            Owner?.ThrowIfFrozen();
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
             {
                 _buckets[layerIndex]!.Remove(h);
@@ -854,6 +932,7 @@ public sealed class EventCenter
 
         public void Remove(int layerIndex, IEventHandlerAsync<T> h)
         {
+            Owner?.ThrowIfFrozen();
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
             {
                 _buckets[layerIndex]!.Remove(h);
@@ -863,6 +942,7 @@ public sealed class EventCenter
 
         public void RemoveParallel(int layerIndex, EventNotifyDelegate<T> h)
         {
+            Owner?.ThrowIfFrozen();
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
             {
                 _buckets[layerIndex]!.RemoveParallel(h);
@@ -872,6 +952,7 @@ public sealed class EventCenter
 
         public void RemoveParallel(int layerIndex, IEventHandler<T> h)
         {
+            Owner?.ThrowIfFrozen();
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
             {
                 _buckets[layerIndex]!.RemoveParallel(h);
@@ -881,6 +962,7 @@ public sealed class EventCenter
 
         public void RemoveNotify(int layerIndex, EventNotifyDelegate<T> h)
         {
+            Owner?.ThrowIfFrozen();
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
             {
                 _buckets[layerIndex]!.RemoveNotify(h);
@@ -890,6 +972,7 @@ public sealed class EventCenter
 
         public void RemoveSubscribe(int layerIndex, EventNotifyDelegate<T> h)
         {
+            Owner?.ThrowIfFrozen();
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
             {
                 _buckets[layerIndex]!.RemoveSubscribe(h);
@@ -899,6 +982,7 @@ public sealed class EventCenter
 
         public void Remove(int layerIndex, EventHandleDelegate<T> h)
         {
+            Owner?.ThrowIfFrozen();
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
             {
                 _buckets[layerIndex]!.Remove(h);
@@ -908,6 +992,7 @@ public sealed class EventCenter
 
         public void Remove(int layerIndex, EventHandleDelegateAsync<T> h)
         {
+            Owner?.ThrowIfFrozen();
             if (layerIndex >= 0 && layerIndex < _buckets.Length && _buckets[layerIndex] != null)
             {
                 _buckets[layerIndex]!.Remove(h);

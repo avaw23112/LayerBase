@@ -13,6 +13,8 @@ internal sealed class EcsResultBatch
 
     public int Count => _count;
 
+    public int Capacity => _items.Length;
+
     public int RemainingCount => _count - _readIndex;
 
     public void Add(IEcsResultItem item)
@@ -25,6 +27,14 @@ internal sealed class EcsResultBatch
 
         _items[index] = item;
         _count = index + 1;
+    }
+
+    public void EnsureCapacity(int capacity)
+    {
+        if (capacity > _items.Length)
+        {
+            Array.Resize(ref _items, capacity);
+        }
     }
 
     public bool TryDequeue(out IEcsResultItem? item)

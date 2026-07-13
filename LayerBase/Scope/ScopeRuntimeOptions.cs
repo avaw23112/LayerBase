@@ -12,6 +12,7 @@ public sealed class ScopeRuntimeOptions
         int postQueueCapacity = DefaultQueueCapacity,
         int callQueueCapacity = DefaultQueueCapacity,
         int continuationQueueCapacity = DefaultQueueCapacity,
+        int completionQueueCapacity = DefaultQueueCapacity,
         PostSchedulerOptions? postSchedulerOptions = null,
         TimeSchedulerOptions? timeSchedulerOptions = null,
         DelayBufferOptions? delayBufferOptions = null,
@@ -32,9 +33,15 @@ public sealed class ScopeRuntimeOptions
             throw new ArgumentOutOfRangeException(nameof(continuationQueueCapacity));
         }
 
+        if (completionQueueCapacity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(completionQueueCapacity));
+        }
+
         PostQueueCapacity = postQueueCapacity;
         CallQueueCapacity = callQueueCapacity;
         ContinuationQueueCapacity = continuationQueueCapacity;
+        CompletionQueueCapacity = completionQueueCapacity;
         PostSchedulerOptions = postSchedulerOptions ?? PostSchedulerOptions.Default;
         TimeSchedulerOptions = timeSchedulerOptions ?? TimeSchedulerOptions.Default;
         DelayBufferOptions = delayBufferOptions ?? DelayBufferOptions.Default;
@@ -46,6 +53,8 @@ public sealed class ScopeRuntimeOptions
     public int CallQueueCapacity { get; }
 
     public int ContinuationQueueCapacity { get; }
+
+    public int CompletionQueueCapacity { get; }
 
     public PostSchedulerOptions PostSchedulerOptions { get; }
 

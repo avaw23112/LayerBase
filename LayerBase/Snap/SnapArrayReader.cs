@@ -5,17 +5,28 @@ namespace LayerBase.Snap;
 public readonly struct SnapArrayReader
 {
     private readonly JsonArray _array;
+    private readonly SnapDecodeLimits _limits;
     private readonly string _path;
 
     public int Count => _array.Count;
 
     public int Version { get; }
 
-    internal SnapArrayReader(JsonArray array, int version, string path)
+    internal SnapArrayReader(
+        JsonArray array,
+        int version,
+        string path,
+        SnapDecodeLimits? limits = null)
     {
         _array = array ?? throw new ArgumentNullException(nameof(array));
+        _limits = limits ?? SnapDecodeLimits.Default;
         Version = version;
         _path = path ?? throw new ArgumentNullException(nameof(path));
+        if (_array.Count > _limits.MaxArrayItems)
+        {
+            throw new SnapLimitExceededException(
+                $"Snap array '{_path}' has {_array.Count} items, exceeding limit {_limits.MaxArrayItems}.");
+        }
     }
 
     public SnapReader ReadObject(int index)
@@ -24,7 +35,7 @@ public readonly struct SnapArrayReader
 
         if (node is JsonObject obj)
         {
-            return new SnapReader(obj, Version, BuildPath(index));
+            return new SnapReader(obj, Version, BuildPath(index), _limits);
         }
 
         throw new SnapFormatException($"Array element '{BuildPath(index)}' is not a JSON object.");
@@ -49,6 +60,7 @@ public readonly struct SnapArrayReader
             throw new SnapFormatException($"Array element '{BuildPath(index)}' cannot be null.");
         }
 
+        ValidateStringLength(value, BuildPath(index));
         return value;
     }
 
@@ -131,6 +143,11 @@ public readonly struct SnapArrayReader
         try
         {
             value = node.GetValue<TValue>();
+            if (value is string text)
+            {
+                ValidateStringLength(text, BuildPath(index));
+            }
+
             return true;
         }
         catch
@@ -151,5 +168,14 @@ public readonly struct SnapArrayReader
     private string BuildPath(int index)
     {
         return $"{_path}[{index}]";
+    }
+
+    private void ValidateStringLength(string value, string path)
+    {
+        if (value.Length > _limits.MaxStringChars)
+        {
+            throw new SnapLimitExceededException(
+                $"Snap string '{path}' has {value.Length} characters, exceeding limit {_limits.MaxStringChars}.");
+        }
     }
 }

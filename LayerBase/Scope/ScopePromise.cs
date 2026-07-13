@@ -13,14 +13,27 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
     private Exception? _exception;
     private Action? _continuation;
     private bool _cancelled;
+    private bool _accepted = true;
 
     internal ScopePromise(ScopeRuntime? continuationScope)
     {
         _continuationScope = continuationScope;
         if (continuationScope != null)
         {
+            if (!continuationScope.CompletionPort.TryReserve(this))
+            {
+                _accepted = false;
+                _completed = true;
+                _cancelled = true;
+                _exception = new ScopeBackpressureException(
+                    $"Scope '{continuationScope.Descriptor.Name}' completion capacity is exhausted.");
+                return;
+            }
+
             if (!continuationScope.AwaitRegistry.TryRegister(this))
             {
+                continuationScope.CompletionPort.Release(this);
+                _accepted = false;
                 _completed = true;
                 _cancelled = true;
                 _exception = new InvalidOperationException("Scope is shutting down, call cannot be registered.");
@@ -107,6 +120,24 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
         return new Awaiter(this);
     }
 
+    public void RequireAccepted()
+    {
+        if (_accepted)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (_exception != null)
+            {
+                throw _exception;
+            }
+        }
+
+        throw new ScopeBackpressureException("Scope call was rejected before acceptance.");
+    }
+
     public TResult GetResult()
     {
         bool unregister = false;
@@ -140,6 +171,7 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
         {
             if (unregister)
             {
+                _continuationScope?.CompletionPort.Release(this);
                 _continuationScope?.AwaitRegistry.Unregister(this);
             }
         }
@@ -182,6 +214,10 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
         {
             ScheduleContinuation(continuation);
         }
+        else
+        {
+            _continuationScope?.CompletionPort.Release(this);
+        }
 
         return true;
     }
@@ -194,25 +230,22 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
             return;
         }
 
-        if (!_continuationScope.TryEnqueueContinuation(continuation))
+        if (!_continuationScope.CompletionPort.TryPublishCompleted(this, continuation))
         {
-            if (!_continuationScope.IsContinuationIngressClosed &&
-                _continuationScope.IsOwnerThreadForContinuations)
+            if (!_continuationScope.CompletionPort.TryReserve(this) ||
+                !_continuationScope.CompletionPort.TryPublishCompleted(this, continuation))
             {
-                continuation();
+                TrySetSchedulingFailure();
+                _continuationScope.CompletionPort.Release(this);
                 _continuationScope.AwaitRegistry.Unregister(this);
                 return;
             }
-
-            AbandonIfSuccessful();
-            _continuationScope.AwaitRegistry.Unregister(this);
-            return;
         }
 
         _continuationScope.AwaitRegistry.Unregister(this);
     }
 
-    private void AbandonIfSuccessful()
+    private void TrySetSchedulingFailure()
     {
         lock (_gate)
         {
@@ -224,7 +257,7 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
             _cancelled = true;
             _result = default;
             _exception = new InvalidOperationException(
-                "Scope continuation channel is closed; call continuation was abandoned.");
+                "Scope completion port rejected a reserved continuation.");
         }
     }
 

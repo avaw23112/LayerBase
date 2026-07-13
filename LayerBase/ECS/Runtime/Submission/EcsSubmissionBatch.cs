@@ -15,6 +15,8 @@ internal sealed class EcsSubmissionBatch
 
     public int Count => _count;
 
+    public int Capacity => _items.Length;
+
     public long Sequence { get; set; }
 
     public void Add(IEcsWorkItem item)

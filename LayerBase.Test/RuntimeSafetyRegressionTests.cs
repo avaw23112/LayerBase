@@ -12,9 +12,11 @@ using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 using LayerBase.Scope;
 using LayerBase.Scope.Resources;
+using LayerBase.Snap;
 using NUnit.Framework;
 using Arch.Core;
 using System.Reflection;
+using System.Text.Json.Nodes;
 
 namespace EventsTest;
 
@@ -39,6 +41,11 @@ public partial struct InitDelayRegressionEvent
 }
 
 public partial struct DelayOverflowRegressionEvent
+{
+    public int Value;
+}
+
+public partial struct FrozenRegressionEvent
 {
     public int Value;
 }
@@ -496,6 +503,89 @@ public partial class RuntimeSafetyRegressionTests
     }
 
     [Test]
+    [Category("Concurrency")]
+    public void Ecs_work_queue_close_race_must_terminalize_every_accepted_batch()
+    {
+        const int attempts = 1000;
+
+        for (int attempt = 0; attempt < attempts; attempt++)
+        {
+            var queue = new EcsWorkQueue(ringCapacity: 1, overflowCapacity: 0);
+            var batch = new EcsSubmissionBatch(1) { Sequence = 1 };
+            var item = new TerminalCountingWorkItem();
+            batch.Add(item);
+
+            using var start = new ManualResetEventSlim(false);
+            bool accepted = false;
+
+            Task producer = Task.Run(() =>
+            {
+                start.Wait();
+                accepted = queue.TryEnqueue(batch);
+            });
+
+            Task closer = Task.Run(() =>
+            {
+                start.Wait();
+                queue.Close();
+            });
+
+            start.Set();
+
+            Assert.That(Task.WaitAll(new[] { producer, closer }, TimeSpan.FromSeconds(2)), Is.True);
+
+            List<EcsSubmissionBatch> pending = queue.DetachAll();
+            foreach (EcsSubmissionBatch detached in pending)
+            {
+                detached.CancelPendingItems();
+            }
+
+            Assert.That(
+                item.ExecuteCount + item.CancelCount,
+                Is.EqualTo(accepted ? 1 : 0),
+                $"Attempt {attempt}");
+        }
+    }
+
+    [Test]
+    [Category("Concurrency")]
+    public void Ecs_queue_close_must_wait_for_inflight_producer_before_detach()
+    {
+        var queue = new EcsWorkQueue(ringCapacity: 1, overflowCapacity: 0);
+        using var producerEntered = new ManualResetEventSlim(false);
+        using var allowProducer = new ManualResetEventSlim(false);
+
+        queue.AfterProducerAcceptedForTest = () =>
+        {
+            producerEntered.Set();
+            allowProducer.Wait();
+        };
+
+        var batch = new EcsSubmissionBatch(1);
+        batch.Add(new TerminalCountingWorkItem());
+
+        Task<bool> producer = Task.Run(() => queue.TryEnqueue(batch));
+
+        Assert.That(producerEntered.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        Task<List<EcsSubmissionBatch>> close = Task.Run(() =>
+        {
+            queue.Close();
+            return queue.DetachAll();
+        });
+
+        Assert.That(close.Wait(TimeSpan.FromMilliseconds(100)), Is.False,
+            "Close detached before inflight producer completed.");
+
+        allowProducer.Set();
+
+        Assert.That(producer.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(close.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(producer.Result, Is.True);
+        Assert.That(close.Result, Has.Count.EqualTo(1));
+    }
+
+    [Test]
     public void Ecs_result_queue_must_bound_overflow_and_dispose_rejected_items()
     {
         var queue = new EcsResultQueue(ringCapacity: 1, overflowCapacity: 0, batchCapacity: 1);
@@ -513,6 +603,47 @@ public partial class RuntimeSafetyRegressionTests
     }
 
     [Test]
+    [Category("Concurrency")]
+    public void Ecs_result_queue_close_race_must_apply_or_dispose_every_accepted_result()
+    {
+        const int attempts = 1000;
+
+        for (int attempt = 0; attempt < attempts; attempt++)
+        {
+            var queue = new EcsResultQueue(ringCapacity: 1, overflowCapacity: 0, batchCapacity: 1);
+            var item = new TerminalCountingResultItem();
+            using var start = new ManualResetEventSlim(false);
+            bool accepted = false;
+
+            Task producer = Task.Run(() =>
+            {
+                start.Wait();
+                accepted = queue.Enqueue(item);
+            });
+
+            Task closer = Task.Run(() =>
+            {
+                start.Wait();
+                queue.Close();
+            });
+
+            start.Set();
+
+            Assert.That(Task.WaitAll(new[] { producer, closer }, TimeSpan.FromSeconds(2)), Is.True);
+
+            queue.Clear();
+
+            int terminalCount = item.ApplyCount + item.DisposeCount;
+            Assert.That(terminalCount, Is.EqualTo(1), $"Attempt {attempt}");
+            if (!accepted)
+            {
+                Assert.That(item.ApplyCount, Is.EqualTo(0), $"Attempt {attempt}");
+                Assert.That(item.DisposeCount, Is.EqualTo(1), $"Attempt {attempt}");
+            }
+        }
+    }
+
+    [Test]
     public void Ecs_submission_batch_pool_must_bound_retained_batches()
     {
         var pool = new EcsSubmissionBatchPool(initialBatchCapacity: 1, maxRetained: 1);
@@ -523,6 +654,132 @@ public partial class RuntimeSafetyRegressionTests
         pool.Return(second);
 
         Assert.That(pool.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Submission_pool_must_not_retain_oversized_batch()
+    {
+        var pool = new EcsSubmissionBatchPool(
+            initialBatchCapacity: 16,
+            maxRetained: 8,
+            maxRetainedItemCapacity: 256);
+
+        EcsSubmissionBatch large = pool.Rent();
+        large.EnsureCapacity(1_000_000);
+
+        pool.Return(large);
+
+        Assert.That(pool.Count, Is.EqualTo(0));
+
+        EcsSubmissionBatch next = pool.Rent();
+        Assert.That(next.Capacity, Is.LessThanOrEqualTo(256));
+    }
+
+    [Test]
+    public void Result_pool_must_not_retain_oversized_batch()
+    {
+        var pool = new EcsResultBatchPool(
+            initialCapacity: 16,
+            maxRetained: 8,
+            maxRetainedItemCapacity: 256);
+
+        EcsResultBatch large = pool.Rent();
+        large.EnsureCapacity(1_000_000);
+
+        pool.Return(large);
+
+        Assert.That(pool.Count, Is.EqualTo(0));
+
+        EcsResultBatch next = pool.Rent();
+        Assert.That(next.Capacity, Is.LessThanOrEqualTo(256));
+    }
+
+    [Test]
+    public void Snap_decode_must_reject_input_over_character_limit()
+    {
+        var limits = new SnapDecodeLimits { MaxInputChars = 32 };
+        string json = new string(' ', 33);
+
+        Assert.Throws<SnapLimitExceededException>(() =>
+            JsonSnapCodec.DecodeFromString(json, limits: limits));
+    }
+
+    [Test]
+    public void Snap_decode_must_reject_too_many_sections()
+    {
+        var document = new SnapDocument
+        {
+            Sections = Enumerable.Range(0, 11)
+                .ToDictionary(
+                    i => $"S{i}",
+                    i => new SnapSection
+                    {
+                        Key = $"S{i}",
+                        Data = new JsonObject()
+                    })
+        };
+
+        string json = JsonSnapCodec.EncodeToString(document);
+
+        Assert.Throws<SnapLimitExceededException>(() =>
+            JsonSnapCodec.DecodeFromString(json, limits: new SnapDecodeLimits { MaxSections = 10 }));
+    }
+
+    [Test]
+    public void Snap_reader_must_reject_array_over_item_limit()
+    {
+        var data = new JsonObject
+        {
+            ["items"] = new JsonArray(1, 2, 3)
+        };
+
+        var reader = new SnapReader(data, version: 1, limits: new SnapDecodeLimits { MaxArrayItems = 2 });
+
+        Assert.Throws<SnapLimitExceededException>(() => reader.ReadArray("items"));
+    }
+
+    [Test]
+    public void Snap_reader_must_reject_string_over_length_limit()
+    {
+        var data = new JsonObject
+        {
+            ["name"] = new string('x', 5)
+        };
+
+        var reader = new SnapReader(data, version: 1, limits: new SnapDecodeLimits { MaxStringChars = 4 });
+
+        Assert.Throws<SnapLimitExceededException>(() => reader.ReadString("name"));
+    }
+
+    [Test]
+    public void EventCenter_direct_subscription_after_freeze_must_throw()
+    {
+        var center = new EventCenter();
+        center.SubscribeNotify<FrozenRegressionEvent>(0, static (in FrozenRegressionEvent _) => { });
+
+        center.Freeze();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            center.SubscribeNotify<FrozenRegressionEvent>(0, static (in FrozenRegressionEvent _) => { }));
+    }
+
+    [Test]
+    public void EventCenter_frozen_dispatch_must_not_rebuild_bucket()
+    {
+        var center = new EventCenter();
+        center.SubscribeNotify<FrozenRegressionEvent>(0, static (in FrozenRegressionEvent _) => { });
+        center.PrewarmEvent<FrozenRegressionEvent>(
+            new LayerPrewarmOptions(LayerPrewarmTargets.All));
+        center.Freeze();
+
+        int rebuilds = center.GetRebuildCount<FrozenRegressionEvent>();
+
+        for (int i = 0; i < 10000; i++)
+        {
+            center.Send(new FrozenRegressionEvent { Value = i });
+        }
+
+        Assert.That(center.GetRebuildCount<FrozenRegressionEvent>(), Is.EqualTo(rebuilds));
     }
 
     [Test]
@@ -563,6 +820,40 @@ public partial class RuntimeSafetyRegressionTests
         Assert.Throws<InvalidOperationException>(() => runtime.SetContexts(Array.Empty<ILayerContext>()));
         Assert.Throws<InvalidOperationException>(() => runtime.SetResourcePlan(ScopeResourcePlan.Empty));
         Assert.Throws<InvalidOperationException>(() => runtime.UpdateServiceBindings(Array.Empty<ScopeServicePlan>()));
+    }
+
+    [Test]
+    public void Scope_service_lookup_must_not_use_static_slot_cache()
+    {
+        string source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "LayerBase",
+            "Scope",
+            "ScopeServiceProvider.cs"));
+
+        Assert.That(source, Does.Not.Contain("ScopeServiceSlotCache"));
+        Assert.That(source, Does.Not.Contain("static int s_slot"));
+    }
+
+    [Test]
+    public void Scope_service_lookup_must_not_share_slot_cache_between_runtimes()
+    {
+        using var first = new ScopeServiceProvider(new object[]
+        {
+            new FirstPaddingService(),
+            new SharedContractService(1)
+        });
+        using var second = new ScopeServiceProvider(new object[]
+        {
+            new SharedContractService(2),
+            new SecondPaddingService()
+        });
+
+        for (int i = 0; i < 10000; i++)
+        {
+            Assert.That(first.Get<ISharedContract>().Value, Is.EqualTo(1));
+            Assert.That(second.Get<ISharedContract>().Value, Is.EqualTo(2));
+        }
     }
 
     private static void AssertMethodGroupDoesNotContainDisposedPrecheck(string source, string signature)
@@ -678,6 +969,65 @@ public partial class RuntimeSafetyRegressionTests
         public void Dispose()
         {
             DisposeCount++;
+        }
+    }
+
+    private interface ISharedContract
+    {
+        int Value { get; }
+    }
+
+    private sealed class SharedContractService : ISharedContract
+    {
+        public SharedContractService(int value)
+        {
+            Value = value;
+        }
+
+        public int Value { get; }
+    }
+
+    private sealed class FirstPaddingService
+    {
+    }
+
+    private sealed class SecondPaddingService
+    {
+    }
+
+    private sealed class TerminalCountingWorkItem : IEcsWorkItem
+    {
+        public int ExecuteCount;
+        public int CancelCount;
+
+        public string DebugName => nameof(TerminalCountingWorkItem);
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+            Interlocked.Increment(ref ExecuteCount);
+        }
+
+        public void Cancel(Exception reason)
+        {
+            Interlocked.Increment(ref CancelCount);
+        }
+    }
+
+    private sealed class TerminalCountingResultItem : IEcsResultItem, IDisposable
+    {
+        public int ApplyCount;
+        public int DisposeCount;
+
+        public string DebugName => nameof(TerminalCountingResultItem);
+
+        public void Apply(LayerRuntime runtime)
+        {
+            Interlocked.Increment(ref ApplyCount);
+        }
+
+        public void Dispose()
+        {
+            Interlocked.Increment(ref DisposeCount);
         }
     }
 }

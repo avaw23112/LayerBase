@@ -13,6 +13,10 @@ namespace LayerBase.Core.Event;
 /// </summary>
 internal interface IEventBucketNonGeneric
 {
+    int RebuildCount { get; }
+
+    void PrewarmDispatchTable();
+
     void AddFlow(int layerIndex, object handler);
     void AddAsync(int layerIndex, object handler);
     void AddNotify(int layerIndex, object handler);

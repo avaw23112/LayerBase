@@ -16,6 +16,8 @@ internal sealed class EcsWorkQueue
     private long _completedSequence;
     private bool _closed;
 
+    internal Action? AfterProducerAcceptedForTest;
+
     public EcsWorkQueue(
         int ringCapacity = DefaultRingCapacity,
         int overflowCapacity = DefaultOverflowCapacity)
@@ -39,17 +41,16 @@ internal sealed class EcsWorkQueue
             {
                 return false;
             }
-        }
 
-        if (_ring.TryEnqueue(batch))
-        {
-            Interlocked.Increment(ref _pendingBatches);
-            return true;
-        }
+            AfterProducerAcceptedForTest?.Invoke();
 
-        lock (_overflowLock)
-        {
-            if (_closed || _overflow.Count >= _overflowCapacity)
+            if (_ring.TryEnqueue(batch))
+            {
+                Interlocked.Increment(ref _pendingBatches);
+                return true;
+            }
+
+            if (_overflow.Count >= _overflowCapacity)
             {
                 return false;
             }
@@ -99,12 +100,12 @@ internal sealed class EcsWorkQueue
 
     public void Clear()
     {
-        while (_ring.TryDequeue(out _))
-        {
-        }
-
         lock (_overflowLock)
         {
+            while (_ring.TryDequeue(out _))
+            {
+            }
+
             _overflow.Clear();
         }
 
@@ -116,20 +117,20 @@ internal sealed class EcsWorkQueue
         var batches = new List<EcsSubmissionBatch>();
         long maxSequence = 0;
 
-        while (_ring.TryDequeue(out EcsSubmissionBatch? batch))
-        {
-            if (batch != null)
-            {
-                batches.Add(batch);
-                if (batch.Sequence > maxSequence)
-                {
-                    maxSequence = batch.Sequence;
-                }
-            }
-        }
-
         lock (_overflowLock)
         {
+            while (_ring.TryDequeue(out EcsSubmissionBatch? batch))
+            {
+                if (batch != null)
+                {
+                    batches.Add(batch);
+                    if (batch.Sequence > maxSequence)
+                    {
+                        maxSequence = batch.Sequence;
+                    }
+                }
+            }
+
             while (_overflow.Count > 0)
             {
                 EcsSubmissionBatch batch = _overflow.Dequeue();

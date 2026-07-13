@@ -9,8 +9,10 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     private readonly object _lock = new();
     private readonly int _mainThreadId;
     private readonly ConcurrentQueue<WorkItem> _queue = new();
+    private readonly Queue<WorkItem> _closingQueue = new();
     internal MainThreadCompletionQueue CompletionQueue { get; } = new();
     private bool _disposed;
+    private bool _finalized;
 
     private LayerBaseSynchronizationContext(int mainThreadId, bool allowThreadPoolFallbackOnDispose)
     {
@@ -19,6 +21,17 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     }
 
     internal bool AllowThreadPoolFallbackOnDispose { get; }
+
+    internal int PendingOperationCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _frameWork.Count + _queue.Count + _closingQueue.Count;
+            }
+        }
+    }
 
     public void Update(
         int                       maxItems        = 0,
@@ -80,24 +93,72 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
     public void Dispose()
     {
+        BeginClose(new ObjectDisposedException(nameof(LayerBaseSynchronizationContext)));
+        DrainClosingOperations();
+        FinalizeClose();
+    }
+
+    public void BeginClose(Exception reason)
+    {
         var disposed = new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
         List<FrameWorkItem> frameWork;
+        List<WorkItem> queued = new();
         lock (_lock)
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             _disposed = true;
             frameWork = new List<FrameWorkItem>(_frameWork);
             _frameWork.Clear();
+
+            while (_queue.TryDequeue(out WorkItem work))
+            {
+                queued.Add(work);
+            }
         }
 
         for (int i = 0; i < frameWork.Count; i++)
         {
-            frameWork[i].Work.CancelOnDispose(disposed);
+            frameWork[i].Work.CancelOnDispose(reason ?? disposed);
+        }
+
+        for (int i = 0; i < queued.Count; i++)
+        {
+            queued[i].CancelOnDispose(reason ?? disposed);
         }
 
         CompletionQueue.Close(disposed);
-        while (_queue.TryDequeue(out WorkItem work))
+    }
+
+    public void DrainClosingOperations()
+    {
+        while (true)
         {
-            work.CancelOnDispose(disposed);
+            WorkItem work;
+            lock (_lock)
+            {
+                if (_closingQueue.Count == 0)
+                {
+                    return;
+                }
+
+                work = _closingQueue.Dequeue();
+            }
+
+            work.Invoke();
+        }
+    }
+
+    public void FinalizeClose()
+    {
+        lock (_lock)
+        {
+            _disposed = true;
+            _finalized = true;
+            _closingQueue.Clear();
         }
     }
 
@@ -171,6 +232,46 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     internal void ScheduleInFrames(SendOrPostCallback callback, object? state, int frames)
     {
         var workItem = new WorkItem(callback, state);
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
+            }
+
+            if (frames <= 0)
+            {
+                _queue.Enqueue(workItem);
+                return;
+            }
+
+            _frameWork.Add(new FrameWorkItem(frames, workItem));
+        }
+    }
+
+    internal bool TryScheduleClosingContinuation(Action continuation)
+    {
+        if (continuation == null) throw new ArgumentNullException(nameof(continuation));
+
+        var workItem = new WorkItem(static state => ((Action)state!).Invoke(), continuation);
+        lock (_lock)
+        {
+            if (!_disposed || _finalized)
+            {
+                return false;
+            }
+
+            _closingQueue.Enqueue(workItem);
+            return true;
+        }
+    }
+
+    internal void ScheduleForTest(Action invoke, Action<Exception> cancel, int frames)
+    {
+        if (invoke == null) throw new ArgumentNullException(nameof(invoke));
+        if (cancel == null) throw new ArgumentNullException(nameof(cancel));
+
+        var workItem = new WorkItem(static state => ((TestWorkItem)state!).Invoke(), new TestWorkItem(invoke, cancel));
         lock (_lock)
         {
             if (_disposed)
@@ -266,6 +367,28 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             Error = error;
             Gate.Set();
             return true;
+        }
+    }
+
+    private sealed class TestWorkItem : IContextDisposeCancellable
+    {
+        private readonly Action _invoke;
+        private readonly Action<Exception> _cancel;
+
+        public TestWorkItem(Action invoke, Action<Exception> cancel)
+        {
+            _invoke = invoke;
+            _cancel = cancel;
+        }
+
+        public void Invoke()
+        {
+            _invoke();
+        }
+
+        public void CancelOnDispose(Exception error)
+        {
+            _cancel(error);
         }
     }
 

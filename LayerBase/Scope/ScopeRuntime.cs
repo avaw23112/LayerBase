@@ -34,6 +34,7 @@ public sealed class ScopeRuntime : IDisposable
     private readonly IClosableBoundedQueue<ScopePostMessage> _postInbox;
     private readonly IClosableBoundedQueue<ScopeCallMessage> _callInbox;
     private readonly ReliableContinuationInbox _continuations;
+    private readonly ScopeCompletionPort _completionPort;
     private readonly IClosableBoundedQueue<float> _manualPumps;
     private ScopeContextPlan[] _contextPlans = Array.Empty<ScopeContextPlan>();
     private ScopeServiceProvider? _serviceProvider;
@@ -111,6 +112,7 @@ public sealed class ScopeRuntime : IDisposable
         _postInbox = new ClosableLockedRingQueue<ScopePostMessage>(options.PostQueueCapacity);
         _callInbox = new ClosableLockedRingQueue<ScopeCallMessage>(options.CallQueueCapacity);
         _continuations = new ReliableContinuationInbox(options.ContinuationQueueCapacity);
+        _completionPort = new ScopeCompletionPort(options.CompletionQueueCapacity);
         _manualPumps = new ClosableLockedRingQueue<float>(options.ContinuationQueueCapacity);
         _postDispatcher = postDispatcher;
         _callDispatcher = callDispatcher;
@@ -150,6 +152,8 @@ public sealed class ScopeRuntime : IDisposable
     internal ScopeResourceRegistry ResourceRegistry { get; } = new();
 
     internal ScopeAwaitRegistry AwaitRegistry { get; } = new();
+
+    internal ScopeCompletionPort CompletionPort => _completionPort;
 
     public EventCenter EventCenter { get; }
 
@@ -904,8 +908,16 @@ public sealed class ScopeRuntime : IDisposable
         ResourceRegistry.CloseAndUnbind((exception, _) =>
             ReportException(exception, -1, LayerExceptionPhase.ResourceUnbind, LayerQueueKind.None, -1));
 
+        if (_context != null)
+        {
+            _context.BeginClose(new ObjectDisposedException(nameof(ScopeRuntime)));
+            _context.DrainClosingOperations();
+        }
+
         DisposeContexts();
         DisposeServices();
+
+        _context?.FinalizeClose();
     }
 
     private void ReportException(
@@ -1047,6 +1059,7 @@ public sealed class ScopeRuntime : IDisposable
     private void CloseCompletionIngress()
     {
         _continuations.Close();
+        _completionPort.CloseForNewReservations();
     }
 
     private void ExecuteStopInternalOnce()
@@ -1685,9 +1698,26 @@ public sealed class ScopeRuntime : IDisposable
 
     private void DrainContinuations()
     {
-        while (_continuations.TryDequeue(out LayerContinuation continuation))
+        while (true)
         {
-            InvokeContinuation(continuation);
+            bool drained = false;
+
+            while (_completionPort.TryDequeue(out LayerContinuation completion))
+            {
+                InvokeContinuation(completion);
+                drained = true;
+            }
+
+            while (_continuations.TryDequeue(out LayerContinuation continuation))
+            {
+                InvokeContinuation(continuation);
+                drained = true;
+            }
+
+            if (!drained)
+            {
+                break;
+            }
         }
     }
 

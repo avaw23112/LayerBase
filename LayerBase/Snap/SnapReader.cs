@@ -5,13 +5,19 @@ namespace LayerBase.Snap;
 public readonly struct SnapReader
 {
     private readonly JsonObject _data;
+    private readonly SnapDecodeLimits _limits;
     private readonly string _path;
 
     public int Version { get; }
 
-    internal SnapReader(JsonObject data, int version, string path = "$")
+    internal SnapReader(
+        JsonObject data,
+        int version,
+        string path = "$",
+        SnapDecodeLimits? limits = null)
     {
         _data = data ?? throw new ArgumentNullException(nameof(data));
+        _limits = limits ?? SnapDecodeLimits.Default;
         Version = version;
         _path = path ?? throw new ArgumentNullException(nameof(path));
     }
@@ -35,6 +41,7 @@ public readonly struct SnapReader
             throw new SnapFormatException($"Field '{BuildPath(key)}' cannot be null.");
         }
 
+        ValidateStringLength(value, BuildPath(key));
         return value;
     }
 
@@ -90,7 +97,7 @@ public readonly struct SnapReader
 
         if (node is JsonObject obj)
         {
-            return new SnapReader(obj, Version, BuildPath(key));
+            return new SnapReader(obj, Version, BuildPath(key), _limits);
         }
 
         throw new SnapFormatException($"Field '{BuildPath(key)}' is not a JSON object.");
@@ -102,7 +109,13 @@ public readonly struct SnapReader
 
         if (node is JsonArray array)
         {
-            return new SnapArrayReader(array, Version, BuildPath(key));
+            if (array.Count > _limits.MaxArrayItems)
+            {
+                throw new SnapLimitExceededException(
+                    $"Snap array '{BuildPath(key)}' has {array.Count} items, exceeding limit {_limits.MaxArrayItems}.");
+            }
+
+            return new SnapArrayReader(array, Version, BuildPath(key), _limits);
         }
 
         throw new SnapFormatException($"Field '{BuildPath(key)}' is not a JSON array.");
@@ -141,6 +154,11 @@ public readonly struct SnapReader
         try
         {
             value = node.GetValue<T>();
+            if (value is string text)
+            {
+                ValidateStringLength(text, BuildPath(key));
+            }
+
             return true;
         }
         catch
@@ -167,5 +185,14 @@ public readonly struct SnapReader
     private string BuildPath(string key)
     {
         return $"{_path}.{key}";
+    }
+
+    private void ValidateStringLength(string value, string path)
+    {
+        if (value.Length > _limits.MaxStringChars)
+        {
+            throw new SnapLimitExceededException(
+                $"Snap string '{path}' has {value.Length} characters, exceeding limit {_limits.MaxStringChars}.");
+        }
     }
 }

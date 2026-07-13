@@ -1,5 +1,9 @@
 using System.Reflection;
+using LayerBase;
 using LayerBase.Async;
+using LayerBase.DI;
+using LayerBase.DI.Options;
+using LayerBase.Scope;
 
 namespace EventsTest;
 
@@ -239,26 +243,166 @@ public class LayerBaseSynchronizationContextShutdownTests
     }
 
     [Test]
-    public void Scope_bound_context_must_complete_continuation_after_dispose_without_dropping_it()
+    public void Context_bound_task_completed_after_close_must_not_resume_on_completing_thread()
     {
+        int ownerThreadId = Environment.CurrentManagedThreadId;
         var context = LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
         LBTaskCompletionSource source;
         LBTask task;
-        int continuationRan = 0;
+        int completionThreadId = -1;
+        int continuationThreadId = -1;
         using (context.EnterScope())
         {
             source = new LBTaskCompletionSource();
             task = source.Task;
-            task.GetAwaiter().OnCompleted(() => Interlocked.Exchange(ref continuationRan, 1));
+            task.GetAwaiter().OnCompleted(() =>
+            {
+                continuationThreadId = Environment.CurrentManagedThreadId;
+            });
         }
 
-        context.Dispose();
-        source.SetResult();
+        using var start = new ManualResetEventSlim(false);
+        Task worker = Task.Run(() =>
+        {
+            completionThreadId = Environment.CurrentManagedThreadId;
+            start.Wait();
+            source.SetResult();
+        });
 
-        Assert.That(
-            SpinWait.SpinUntil(() => Volatile.Read(ref continuationRan) == 1, TimeSpan.FromSeconds(1)),
-            Is.True);
+        context.BeginClose(new ObjectDisposedException("test"));
+        start.Set();
+
+        Assert.That(worker.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(continuationThreadId, Is.EqualTo(-1),
+            "Completing worker must not resume owner continuation.");
+
+        context.DrainClosingOperations();
+
+        Assert.That(continuationThreadId, Is.EqualTo(ownerThreadId));
+        Assert.That(continuationThreadId, Is.Not.EqualTo(completionThreadId));
         Assert.That(task.GetAwaiter().IsCompleted, Is.True);
+        context.FinalizeClose();
+    }
+
+    [Test]
+    public void Context_close_must_release_all_registered_task_sources()
+    {
+        var context = LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
+        var tasks = new List<LBTask>();
+
+        using (context.EnterScope())
+        {
+            for (int i = 0; i < 1024; i++)
+            {
+                tasks.Add(LBTask.NextFrame(context));
+            }
+        }
+
+        context.BeginClose(new ObjectDisposedException("test"));
+        context.DrainClosingOperations();
+        context.FinalizeClose();
+
+        Assert.That(context.PendingOperationCount, Is.EqualTo(0));
+
+        foreach (LBTask task in tasks)
+        {
+            Assert.That(task.GetAwaiter().IsCompleted, Is.True);
+            Assert.Throws<OperationCanceledException>(() => task.GetAwaiter().GetResult());
+        }
+    }
+
+    [Test]
+    public void Scope_stop_must_finish_context_cancellation_before_service_dispose()
+    {
+        var service = new AsyncDisposeOrderProbe();
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1301,
+                name: "ContextDisposeOrderScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            new IService[] { service });
+
+        runtime.Start();
+        runtime.Pump(0);
+
+        runtime.Stop();
+
+        Assert.That(service.ContinuationCompletedBeforeDispose, Is.True);
+        Assert.That(service.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    [Category("Concurrency")]
+    public void Frame_ingress_must_accept_concurrent_producers_without_loss()
+    {
+        var context = LayerBaseSynchronizationContext.Install();
+        const int producerCount = 8;
+        const int perProducer = 1000;
+        int executed = 0;
+
+        Task[] producers = Enumerable.Range(0, producerCount)
+            .Select(_ => Task.Run(() =>
+            {
+                for (int i = 0; i < perProducer; i++)
+                {
+                    context.ScheduleInFrames(() => Interlocked.Increment(ref executed), frames: 1);
+                }
+            }))
+            .ToArray();
+
+        Assert.That(Task.WaitAll(producers, TimeSpan.FromSeconds(5)), Is.True);
+
+        context.Update();
+        context.Update();
+
+        Assert.That(executed, Is.EqualTo(producerCount * perProducer));
+    }
+
+    [Test]
+    [Category("Concurrency")]
+    public void Context_schedule_dispose_race_must_terminalize_every_accepted_work()
+    {
+        const int attempts = 1000;
+
+        for (int attempt = 0; attempt < attempts; attempt++)
+        {
+            var context = LayerBaseSynchronizationContext.Install();
+            int accepted = 0;
+            int executed = 0;
+            int cancelled = 0;
+
+            using var start = new ManualResetEventSlim(false);
+
+            Task producer = Task.Run(() =>
+            {
+                start.Wait();
+                try
+                {
+                    context.ScheduleForTest(
+                        invoke: () => Interlocked.Increment(ref executed),
+                        cancel: _ => Interlocked.Increment(ref cancelled),
+                        frames: 1);
+                    Interlocked.Increment(ref accepted);
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            });
+
+            Task disposer = Task.Run(() =>
+            {
+                start.Wait();
+                context.Dispose();
+            });
+
+            start.Set();
+
+            Assert.That(Task.WaitAll(new[] { producer, disposer }, TimeSpan.FromSeconds(2)), Is.True);
+            Assert.That(executed + cancelled, Is.EqualTo(accepted), $"Attempt {attempt}");
+        }
     }
 
     private static MainThreadCompletionQueue GetCompletionQueue(LayerBaseSynchronizationContext context)
@@ -286,5 +430,42 @@ public class LayerBaseSynchronizationContextShutdownTests
 
         Assert.Fail("Could not locate repository file.");
         return string.Empty;
+    }
+
+    private sealed class AsyncDisposeOrderProbe : IService, IInitializable, IDisposable
+    {
+        private LBTask _task;
+        private bool _continuationCompleted;
+
+        public bool ContinuationCompletedBeforeDispose { get; private set; }
+
+        public int DisposeCount { get; private set; }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+
+        public void Initialize()
+        {
+            _task = LBTask.NextFrame();
+            _task.GetAwaiter().OnCompleted(() =>
+            {
+                try
+                {
+                    _task.GetAwaiter().GetResult();
+                }
+                catch (OperationCanceledException)
+                {
+                }
+
+                _continuationCompleted = true;
+            });
+        }
+
+        public void Dispose()
+        {
+            ContinuationCompletedBeforeDispose = _continuationCompleted;
+            DisposeCount++;
+        }
     }
 }

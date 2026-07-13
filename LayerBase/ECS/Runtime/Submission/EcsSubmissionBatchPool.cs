@@ -6,13 +6,18 @@ internal sealed class EcsSubmissionBatchPool
 {
     private readonly ConcurrentBag<EcsSubmissionBatch> _pool = new();
     private readonly int _initialBatchCapacity;
+    private readonly int _maxRetainedItemCapacity;
     private readonly int _maxRetained;
     private int _count;
 
-    public EcsSubmissionBatchPool(int initialBatchCapacity, int maxRetained = 1024)
+    public EcsSubmissionBatchPool(
+        int initialBatchCapacity,
+        int maxRetained = 1024,
+        int maxRetainedItemCapacity = 4096)
     {
         _initialBatchCapacity = Math.Max(1, initialBatchCapacity);
         _maxRetained = Math.Max(0, maxRetained);
+        _maxRetainedItemCapacity = Math.Max(_initialBatchCapacity, maxRetainedItemCapacity);
     }
 
     public int Count => Volatile.Read(ref _count);
@@ -31,7 +36,7 @@ internal sealed class EcsSubmissionBatchPool
     public void Return(EcsSubmissionBatch batch)
     {
         batch.Clear();
-        if (_maxRetained == 0)
+        if (_maxRetained == 0 || batch.Capacity > _maxRetainedItemCapacity)
         {
             return;
         }

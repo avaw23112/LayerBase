@@ -188,9 +188,10 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
             }
             catch (ObjectDisposedException)
             {
-                if (ctx is LayerBaseSynchronizationContext { AllowThreadPoolFallbackOnDispose: false })
+                if (ctx is LayerBaseSynchronizationContext lbContext &&
+                    !lbContext.AllowThreadPoolFallbackOnDispose)
                 {
-                    continuation();
+                    _ = lbContext.TryScheduleClosingContinuation(continuation);
                     return;
                 }
             }
@@ -351,9 +352,10 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
             }
             catch (ObjectDisposedException)
             {
-                if (ctx is LayerBaseSynchronizationContext { AllowThreadPoolFallbackOnDispose: false })
+                if (ctx is LayerBaseSynchronizationContext lbContext &&
+                    !lbContext.AllowThreadPoolFallbackOnDispose)
                 {
-                    continuation();
+                    _ = lbContext.TryScheduleClosingContinuation(continuation);
                     return;
                 }
             }

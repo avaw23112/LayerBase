@@ -136,12 +136,13 @@ public sealed class ScopePromiseShutdownTests
     }
 
     [Test]
-    public void Promise_continuation_queue_full_must_not_drop_completed_continuation()
+    public void ScopePromise_completed_from_worker_must_resume_only_on_origin_owner()
     {
+        int ownerThreadId = Environment.CurrentManagedThreadId;
         using var runtime = new ScopeRuntime(
             new ScopeDescriptor(
                 scopeId: 1225,
-                name: "PromiseContinuationFullScope",
+                name: "PromiseWorkerCompletionScope",
                 threading: ScopeThreadingMode.Inline,
                 clock: ScopeClockMode.EngineDriven,
                 tickRateHz: 0,
@@ -149,17 +150,102 @@ public sealed class ScopePromiseShutdownTests
             Array.Empty<IService>(),
             new ScopeRuntimeOptions(continuationQueueCapacity: 1));
         var promise = new ScopePromise<int>(runtime);
+        int continuationThreadId = -1;
         int continuationRan = 0;
 
-        Assert.That(runtime.TryEnqueueContinuation(static () => { }), Is.True);
-        Assert.That(runtime.TryEnqueueContinuation(static () => { }), Is.True);
+        promise.OnCompleted(() =>
+        {
+            continuationThreadId = Environment.CurrentManagedThreadId;
+            Interlocked.Increment(ref continuationRan);
+        });
 
-        promise.SetResult(42);
-        promise.OnCompleted(() => Interlocked.Exchange(ref continuationRan, 1));
+        Task worker = Task.Run(() => promise.SetResult(42));
+
+        Assert.That(worker.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(Volatile.Read(ref continuationRan), Is.EqualTo(0),
+            "Target worker must not execute origin continuation.");
 
         runtime.Pump(0);
-        Assert.That(Volatile.Read(ref continuationRan), Is.EqualTo(1));
+        Assert.That(continuationRan, Is.EqualTo(1));
+        Assert.That(continuationThreadId, Is.EqualTo(ownerThreadId));
         Assert.That(promise.GetResult(), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void Completion_capacity_exhaustion_must_reject_call_before_acceptance()
+    {
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1226,
+                name: "PromiseCompletionCapacityScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            new ScopeRuntimeOptions(
+                continuationQueueCapacity: 1,
+                completionQueueCapacity: 1));
+
+        var first = new ScopePromise<int>(runtime);
+        var second = new ScopePromise<int>(runtime);
+
+        Assert.That(runtime.CompletionPort.PendingCount, Is.EqualTo(1));
+        Assert.Throws<ScopeBackpressureException>(() => second.RequireAccepted());
+        Assert.That(runtime.CompletionPort.PendingCount, Is.EqualTo(1));
+
+        first.SetResult(7);
+        runtime.Pump(0);
+
+        Assert.That(runtime.CompletionPort.PendingCount, Is.EqualTo(0));
+        Assert.That(first.GetResult(), Is.EqualTo(7));
+    }
+
+    [Test]
+    [Category("Concurrency")]
+    public void Completion_close_race_must_give_every_accepted_promise_one_terminal_state()
+    {
+        const int attempts = 1000;
+
+        for (int attempt = 0; attempt < attempts; attempt++)
+        {
+            using var runtime = new ScopeRuntime(
+                new ScopeDescriptor(
+                    scopeId: 1227,
+                    name: "PromiseCompletionCloseRaceScope",
+                    threading: ScopeThreadingMode.Inline,
+                    clock: ScopeClockMode.EngineDriven,
+                    tickRateHz: 0,
+                    stopPolicy: ScopeStopPolicy.Drain),
+                Array.Empty<IService>(),
+                new ScopeRuntimeOptions(completionQueueCapacity: 1));
+
+            var promise = new ScopePromise<int>(runtime);
+            int continuationCount = 0;
+
+            promise.OnCompleted(() => Interlocked.Increment(ref continuationCount));
+
+            using var start = new ManualResetEventSlim(false);
+            Task complete = Task.Run(() =>
+            {
+                start.Wait();
+                promise.SetResult(42);
+            });
+            Task stop = Task.Run(() =>
+            {
+                start.Wait();
+                runtime.RequestStop();
+            });
+
+            start.Set();
+
+            Assert.That(Task.WaitAll(new[] { complete, stop }, TimeSpan.FromSeconds(2)), Is.True);
+
+            runtime.Pump(0);
+
+            Assert.That(continuationCount, Is.EqualTo(1), $"Attempt {attempt}");
+            Assert.That(runtime.CompletionPort.PendingCount, Is.EqualTo(0), $"Attempt {attempt}");
+        }
     }
 
     [Test]

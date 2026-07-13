@@ -17,6 +17,8 @@ internal sealed class EcsResultQueue
     private EcsResultBatch? _drainBatch;
     private bool _closed;
 
+    internal Action? AfterProducerAcceptedForTest;
+
     public EcsResultQueue(
         int ringCapacity = DefaultRingCapacity,
         int overflowCapacity = DefaultOverflowCapacity,
@@ -79,20 +81,22 @@ internal sealed class EcsResultQueue
 
     private bool Publish(EcsResultBatch batch)
     {
-        if (IsClosed)
-        {
-            _batchPool.Return(batch, disposeItems: true);
-            return false;
-        }
-
-        if (_ring.TryEnqueue(batch))
-        {
-            return true;
-        }
-
         lock (_overflowLock)
         {
-            if (_closed || _overflow.Count >= _overflowCapacity)
+            if (_closed)
+            {
+                _batchPool.Return(batch, disposeItems: true);
+                return false;
+            }
+
+            AfterProducerAcceptedForTest?.Invoke();
+
+            if (_ring.TryEnqueue(batch))
+            {
+                return true;
+            }
+
+            if (_overflow.Count >= _overflowCapacity)
             {
                 _batchPool.Return(batch, disposeItems: true);
                 return false;
@@ -197,13 +201,13 @@ internal sealed class EcsResultQueue
 
     private bool TryDequeueBatch(out EcsResultBatch? batch)
     {
-        if (_ring.TryDequeue(out batch))
-        {
-            return true;
-        }
-
         lock (_overflowLock)
         {
+            if (_ring.TryDequeue(out batch))
+            {
+                return true;
+            }
+
             if (_overflow.Count == 0)
             {
                 batch = null;

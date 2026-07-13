@@ -6,13 +6,18 @@ internal sealed class EcsResultBatchPool
 {
     private readonly ConcurrentBag<EcsResultBatch> _pool = new();
     private readonly int _initialCapacity;
+    private readonly int _maxRetainedItemCapacity;
     private readonly int _maxRetained;
     private int _count;
 
-    public EcsResultBatchPool(int initialCapacity, int maxRetained = 1024)
+    public EcsResultBatchPool(
+        int initialCapacity,
+        int maxRetained = 1024,
+        int maxRetainedItemCapacity = 4096)
     {
         _initialCapacity = Math.Max(1, initialCapacity);
         _maxRetained = Math.Max(0, maxRetained);
+        _maxRetainedItemCapacity = Math.Max(_initialCapacity, maxRetainedItemCapacity);
     }
 
     public int Count => Volatile.Read(ref _count);
@@ -31,7 +36,7 @@ internal sealed class EcsResultBatchPool
     public void Return(EcsResultBatch batch, bool disposeItems = false)
     {
         batch.Clear(disposeItems);
-        if (_maxRetained == 0)
+        if (_maxRetained == 0 || batch.Capacity > _maxRetainedItemCapacity)
         {
             return;
         }

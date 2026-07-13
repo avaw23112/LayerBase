@@ -1,23 +1,17 @@
-using System.Threading;
 using LayerBase.DI;
-
 namespace LayerBase.Scope;
 
 internal sealed class ScopeServiceProvider : LayerBase.DI.IServiceProvider, IDisposable
 {
-    private static int s_generation;
-
     private readonly object[] _instances;
     private readonly Type[] _instanceTypes;
     private readonly ScopeServiceLookupEntry[] _lookup;
-    private readonly int _generation;
     private bool _disposed;
 
     public ScopeServiceProvider(object[] instances)
     {
         _instances = instances ?? throw new ArgumentNullException(nameof(instances));
         _instanceTypes = new Type[instances.Length];
-        _generation = Interlocked.Increment(ref s_generation);
 
         for (int i = 0; i < instances.Length; i++)
         {
@@ -45,18 +39,12 @@ internal sealed class ScopeServiceProvider : LayerBase.DI.IServiceProvider, IDis
     {
         ThrowIfDisposed();
 
-        if (ScopeServiceSlotCache<T>.TryGet(_generation, _instances, out T? cached))
-        {
-            return cached;
-        }
-
         int slot = ResolveSlot(typeof(T));
         if (slot < 0)
         {
             throw new InvalidOperationException($"Scope service not registered: {typeof(T)}");
         }
 
-        ScopeServiceSlotCache<T>.Store(_generation, slot);
         return (T)_instances[slot];
     }
 
@@ -153,31 +141,4 @@ internal readonly struct ScopeServiceLookupEntry
     public Type Type { get; }
 
     public int Slot { get; }
-}
-
-internal static class ScopeServiceSlotCache<T>
-{
-    private static int s_generation;
-    private static int s_slot = -1;
-
-    public static bool TryGet(int generation, object[] instances, out T value)
-    {
-        int slot = Volatile.Read(ref s_slot);
-        if (Volatile.Read(ref s_generation) == generation &&
-            (uint)slot < (uint)instances.Length &&
-            instances[slot] is T typed)
-        {
-            value = typed;
-            return true;
-        }
-
-        value = default!;
-        return false;
-    }
-
-    public static void Store(int generation, int slot)
-    {
-        Volatile.Write(ref s_slot, slot);
-        Volatile.Write(ref s_generation, generation);
-    }
 }
