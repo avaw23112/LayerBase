@@ -5,10 +5,15 @@ using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.DI;
 using LayerBase.DI.Options;
+using LayerBase.ECS.Runtime;
+using LayerBase.ECS.Runtime.Submission;
 using LayerBase.Event.Delay;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
+using LayerBase.Scope;
+using LayerBase.Scope.Resources;
 using NUnit.Framework;
+using Arch.Core;
 using System.Reflection;
 
 namespace EventsTest;
@@ -457,6 +462,138 @@ public partial class RuntimeSafetyRegressionTests
         Assert.That(inbox.IsFull, Is.True);
     }
 
+    [Test]
+    public void Ecs_work_queue_must_bound_overflow_and_reject_after_close()
+    {
+        var queue = new EcsWorkQueue(ringCapacity: 1, overflowCapacity: 1);
+
+        Assert.That(queue.TryEnqueue(new EcsSubmissionBatch(1) { Sequence = 1 }), Is.True);
+        Assert.That(queue.TryEnqueue(new EcsSubmissionBatch(1) { Sequence = 2 }), Is.True);
+        Assert.That(queue.TryEnqueue(new EcsSubmissionBatch(1) { Sequence = 3 }), Is.False);
+        Assert.That(queue.Count, Is.EqualTo(2));
+
+        queue.Close();
+        Assert.That(queue.TryEnqueue(new EcsSubmissionBatch(1) { Sequence = 4 }), Is.False);
+        Assert.That(queue.Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Ecs_work_queue_completed_sequence_must_be_terminal_and_monotonic()
+    {
+        var queue = new EcsWorkQueue(ringCapacity: 1, overflowCapacity: 1);
+        Assert.That(queue.TryEnqueue(new EcsSubmissionBatch(1) { Sequence = 1 }), Is.True);
+        Assert.That(queue.TryDequeue(out EcsSubmissionBatch? batch), Is.True);
+        queue.MarkCompleted(batch!.Sequence);
+
+        queue.Clear();
+        Assert.That(queue.CompletedSequence, Is.EqualTo(1));
+
+        Assert.That(queue.TryEnqueue(new EcsSubmissionBatch(1) { Sequence = 2 }), Is.True);
+        List<EcsSubmissionBatch> detached = queue.DetachAll();
+        Assert.That(detached, Has.Count.EqualTo(1));
+        Assert.That(queue.CompletedSequence, Is.EqualTo(2));
+        Assert.That(queue.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Ecs_result_queue_must_bound_overflow_and_dispose_rejected_items()
+    {
+        var queue = new EcsResultQueue(ringCapacity: 1, overflowCapacity: 0, batchCapacity: 1);
+        var accepted = new DisposableResultItem();
+        var rejected = new DisposableResultItem();
+        var closed = new DisposableResultItem();
+
+        Assert.That(queue.Enqueue(accepted), Is.True);
+        Assert.That(queue.Enqueue(rejected), Is.False);
+        Assert.That(rejected.DisposeCount, Is.EqualTo(1));
+
+        queue.Close();
+        Assert.That(queue.Enqueue(closed), Is.False);
+        Assert.That(closed.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Ecs_submission_batch_pool_must_bound_retained_batches()
+    {
+        var pool = new EcsSubmissionBatchPool(initialBatchCapacity: 1, maxRetained: 1);
+        var first = new EcsSubmissionBatch(1);
+        var second = new EcsSubmissionBatch(1);
+
+        pool.Return(first);
+        pool.Return(second);
+
+        Assert.That(pool.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Ecs_result_batch_pool_must_bound_retained_batches()
+    {
+        var pool = new EcsResultBatchPool(initialCapacity: 1, maxRetained: 1);
+        var first = new EcsResultBatch(1);
+        var second = new EcsResultBatch(1);
+
+        pool.Return(first);
+        pool.Return(second);
+
+        Assert.That(pool.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Actor_command_enqueue_must_use_channel_close_as_authority()
+    {
+        string source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "LayerBase",
+            "Application",
+            "LayerRuntime.ActorCommands.cs"));
+
+        AssertMethodGroupDoesNotContainDisposedPrecheck(source, "internal bool EnqueueActorEvent");
+    }
+
+    [Test]
+    public void Scope_composition_must_be_one_shot_after_finalize()
+    {
+        using var runtime = new ScopeRuntime(
+            ScopeDescriptors.Main,
+            Array.Empty<IService>());
+
+        runtime.SetContexts(Array.Empty<ILayerContext>());
+
+        Assert.Throws<InvalidOperationException>(() => runtime.FinalizeScopeBuild());
+        Assert.Throws<InvalidOperationException>(() => runtime.SetContexts(Array.Empty<ILayerContext>()));
+        Assert.Throws<InvalidOperationException>(() => runtime.SetResourcePlan(ScopeResourcePlan.Empty));
+        Assert.Throws<InvalidOperationException>(() => runtime.UpdateServiceBindings(Array.Empty<ScopeServicePlan>()));
+    }
+
+    private static void AssertMethodGroupDoesNotContainDisposedPrecheck(string source, string signature)
+    {
+        int start = source.IndexOf(signature, StringComparison.Ordinal);
+        int end = source.IndexOf("internal bool IsOwnerThreadForActorWorld", StringComparison.Ordinal);
+
+        Assert.That(start, Is.GreaterThanOrEqualTo(0));
+        Assert.That(end, Is.GreaterThan(start));
+        string methodGroup = source.Substring(start, end - start);
+
+        Assert.That(methodGroup, Does.Not.Contain("_disposed"));
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? current = new(TestContext.CurrentContext.TestDirectory);
+        while (current != null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "LayerBase.sln")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        Assert.Fail("Could not locate repository root.");
+        return string.Empty;
+    }
+
     private static void SetPayloadNextHandle(ActorCommandPayloadStorage store, int value)
     {
         var field = typeof(ActorCommandPayloadStorage).GetField(
@@ -525,6 +662,22 @@ public partial class RuntimeSafetyRegressionTests
         {
             Values.Add(payload);
             return true;
+        }
+    }
+
+    private sealed class DisposableResultItem : IEcsResultItem, IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public string DebugName => nameof(DisposableResultItem);
+
+        public void Apply(LayerRuntime runtime)
+        {
+        }
+
+        public void Dispose()
+        {
+            DisposeCount++;
         }
     }
 }

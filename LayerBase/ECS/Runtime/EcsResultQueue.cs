@@ -4,25 +4,49 @@ namespace LayerBase.ECS.Runtime;
 
 internal sealed class EcsResultQueue
 {
-    private readonly EcsResultBatchPool _batchPool = new(initialCapacity: 16);
-    private readonly SpscRing<EcsResultBatch> _ring = new(4_096);
-    private readonly Queue<EcsResultBatch> _overflow = new();
+    private const int DefaultRingCapacity = 4096;
+    private const int DefaultOverflowCapacity = 4096;
+    private const int DefaultBatchCapacity = 16;
+
+    private readonly EcsResultBatchPool _batchPool;
+    private readonly SpscRing<EcsResultBatch> _ring;
+    private readonly Queue<EcsResultBatch> _overflow;
     private readonly object _overflowLock = new();
+    private readonly int _overflowCapacity;
     private EcsResultBatch? _producerBatch;
     private EcsResultBatch? _drainBatch;
+    private bool _closed;
 
-    public void Enqueue(IEcsResultItem item)
+    public EcsResultQueue(
+        int ringCapacity = DefaultRingCapacity,
+        int overflowCapacity = DefaultOverflowCapacity,
+        int batchCapacity = DefaultBatchCapacity)
     {
+        _batchPool = new EcsResultBatchPool(initialCapacity: batchCapacity);
+        _ring = new SpscRing<EcsResultBatch>(ringCapacity);
+        _overflowCapacity = Math.Max(0, overflowCapacity);
+        _overflow = new Queue<EcsResultBatch>(_overflowCapacity);
+    }
+
+    public bool Enqueue(IEcsResultItem item)
+    {
+        if (item == null) throw new ArgumentNullException(nameof(item));
+        if (IsClosed)
+        {
+            DisposeResultItem(item);
+            return false;
+        }
+
         EcsResultBatch? batch = _producerBatch;
         if (batch != null)
         {
             batch.Add(item);
-            return;
+            return true;
         }
 
         batch = _batchPool.Rent();
         batch.Add(item);
-        Publish(batch);
+        return Publish(batch);
     }
 
     public void BeginBatch()
@@ -50,19 +74,32 @@ internal sealed class EcsResultQueue
             return;
         }
 
-        Publish(batch);
+        _ = Publish(batch);
     }
 
-    private void Publish(EcsResultBatch batch)
+    private bool Publish(EcsResultBatch batch)
     {
+        if (IsClosed)
+        {
+            _batchPool.Return(batch, disposeItems: true);
+            return false;
+        }
+
         if (_ring.TryEnqueue(batch))
         {
-            return;
+            return true;
         }
 
         lock (_overflowLock)
         {
+            if (_closed || _overflow.Count >= _overflowCapacity)
+            {
+                _batchPool.Return(batch, disposeItems: true);
+                return false;
+            }
+
             _overflow.Enqueue(batch);
+            return true;
         }
     }
 
@@ -118,6 +155,14 @@ internal sealed class EcsResultQueue
         }
     }
 
+    public void Close()
+    {
+        lock (_overflowLock)
+        {
+            _closed = true;
+        }
+    }
+
     private bool TryDequeueItem(out IEcsResultItem? item)
     {
         while (true)
@@ -167,6 +212,22 @@ internal sealed class EcsResultQueue
 
             batch = _overflow.Dequeue();
             return true;
+        }
+    }
+
+    private bool IsClosed
+    {
+        get
+        {
+            lock (_overflowLock) return _closed;
+        }
+    }
+
+    private static void DisposeResultItem(IEcsResultItem item)
+    {
+        if (item is IDisposable disposable)
+        {
+            disposable.Dispose();
         }
     }
 }

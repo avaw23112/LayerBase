@@ -100,6 +100,10 @@ public class EcsSpscBatchBenchmarks
         public void Execute(World world, EcsResultQueue results)
         {
         }
+
+        public void Cancel(Exception reason)
+        {
+        }
     }
 
     private sealed class NoopEcsResultItem : IEcsResultItem
@@ -225,6 +229,10 @@ public class EcsExecutionModeBenchmarks
         public string DebugName => "Noop";
 
         public void Execute(World world, EcsResultQueue results)
+        {
+        }
+
+        public void Cancel(Exception reason)
         {
         }
     }
@@ -426,6 +434,10 @@ public class EcsAsyncSubmitBoundaryBenchmarks
         public void Execute(World world, EcsResultQueue results)
         {
         }
+
+        public void Cancel(Exception reason)
+        {
+        }
     }
 
     private sealed class WakeProbeEcsWorkItem : IEcsWorkItem
@@ -444,6 +456,10 @@ public class EcsAsyncSubmitBoundaryBenchmarks
         public void Execute(World world, EcsResultQueue results)
         {
             Volatile.Write(ref _startedTimestamp, Stopwatch.GetTimestamp());
+        }
+
+        public void Cancel(Exception reason)
+        {
         }
     }
 }
@@ -718,6 +734,10 @@ public class EcsAsyncBringBenchmarks
         public void Execute(World world, EcsResultQueue results)
         {
         }
+
+        public void Cancel(Exception reason)
+        {
+        }
     }
 }
 
@@ -931,6 +951,10 @@ public class EcsFrameBatchBenchmarks
         public void Execute(World world, EcsResultQueue results)
         {
         }
+
+        public void Cancel(Exception reason)
+        {
+        }
     }
 }
 
@@ -1088,6 +1112,10 @@ public class EcsIdlePolicyComparisonBenchmarks
         public void Execute(World world, EcsResultQueue results)
         {
         }
+
+        public void Cancel(Exception reason)
+        {
+        }
     }
 
     private sealed class WakeProbeEcsWorkItem : IEcsWorkItem
@@ -1106,6 +1134,10 @@ public class EcsIdlePolicyComparisonBenchmarks
         public void Execute(World world, EcsResultQueue results)
         {
             Volatile.Write(ref _startedTimestamp, Stopwatch.GetTimestamp());
+        }
+
+        public void Cancel(Exception reason)
+        {
         }
     }
 }
@@ -1274,6 +1306,10 @@ public class EcsFrameLoopTailLatencyBenchmarks
         public void Execute(World world, EcsResultQueue results)
         {
             Volatile.Write(ref _startedTimestamp, Stopwatch.GetTimestamp());
+        }
+
+        public void Cancel(Exception reason)
+        {
         }
     }
 }

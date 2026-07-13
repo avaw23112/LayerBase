@@ -124,6 +124,30 @@ public class LayerBaseSynchronizationContextShutdownTests
     }
 
     [Test]
+    public void Context_dispose_must_not_cancel_frame_work_while_lock_is_held()
+    {
+        string source = File.ReadAllText(FindRepositoryFile(
+            "LayerBase.Task",
+            "LayerBaseSynchronizationContext.cs"));
+        int start = source.IndexOf("public void Dispose()", StringComparison.Ordinal);
+        int end = source.IndexOf("public static LayerBaseSynchronizationContext Install", StringComparison.Ordinal);
+
+        Assert.That(start, Is.GreaterThanOrEqualTo(0));
+        Assert.That(end, Is.GreaterThan(start));
+        string method = source.Substring(start, end - start);
+        int lockStart = method.IndexOf("lock (_lock)", StringComparison.Ordinal);
+        int clear = method.IndexOf("_frameWork.Clear();", lockStart, StringComparison.Ordinal);
+        int lockEnd = method.IndexOf("}", clear, StringComparison.Ordinal);
+
+        Assert.That(lockStart, Is.GreaterThanOrEqualTo(0));
+        Assert.That(clear, Is.GreaterThan(lockStart));
+        Assert.That(lockEnd, Is.GreaterThan(clear));
+        string lockedSection = method.Substring(lockStart, lockEnd - lockStart);
+
+        Assert.That(lockedSection, Does.Not.Contain("CancelOnDispose"));
+    }
+
+    [Test]
     public void Context_dispose_must_cancel_run_on_main_thread_task()
     {
         var context = LayerBaseSynchronizationContext.Install();
@@ -215,7 +239,7 @@ public class LayerBaseSynchronizationContextShutdownTests
     }
 
     [Test]
-    public void Scope_bound_context_must_not_run_continuation_on_threadpool_after_dispose()
+    public void Scope_bound_context_must_complete_continuation_after_dispose_without_dropping_it()
     {
         var context = LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
         LBTaskCompletionSource source;
@@ -231,8 +255,9 @@ public class LayerBaseSynchronizationContextShutdownTests
         context.Dispose();
         source.SetResult();
 
-        Thread.Sleep(100);
-        Assert.That(Volatile.Read(ref continuationRan), Is.EqualTo(0));
+        Assert.That(
+            SpinWait.SpinUntil(() => Volatile.Read(ref continuationRan) == 1, TimeSpan.FromSeconds(1)),
+            Is.True);
         Assert.That(task.GetAwaiter().IsCompleted, Is.True);
     }
 

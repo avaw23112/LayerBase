@@ -196,6 +196,14 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
 
         if (!_continuationScope.TryEnqueueContinuation(continuation))
         {
+            if (!_continuationScope.IsContinuationIngressClosed &&
+                _continuationScope.IsOwnerThreadForContinuations)
+            {
+                continuation();
+                _continuationScope.AwaitRegistry.Unregister(this);
+                return;
+            }
+
             AbandonIfSuccessful();
             _continuationScope.AwaitRegistry.Unregister(this);
             return;

@@ -81,14 +81,17 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     public void Dispose()
     {
         var disposed = new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
+        List<FrameWorkItem> frameWork;
         lock (_lock)
         {
             _disposed = true;
-            for (int i = 0; i < _frameWork.Count; i++)
-            {
-                _frameWork[i].Work.CancelOnDispose(disposed);
-            }
+            frameWork = new List<FrameWorkItem>(_frameWork);
             _frameWork.Clear();
+        }
+
+        for (int i = 0; i < frameWork.Count; i++)
+        {
+            frameWork[i].Work.CancelOnDispose(disposed);
         }
 
         CompletionQueue.Close(disposed);

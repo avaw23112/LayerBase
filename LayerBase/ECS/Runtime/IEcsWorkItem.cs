@@ -7,4 +7,6 @@ internal interface IEcsWorkItem
     string DebugName { get; }
 
     void Execute(World world, EcsResultQueue results);
+
+    void Cancel(Exception reason);
 }

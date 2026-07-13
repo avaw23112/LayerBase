@@ -102,7 +102,7 @@ public sealed class ScopeResourceStrictValidationTests
     }
 
     [Test]
-    public void Registry_initialize_rolls_back_consumers_when_later_bind_fails()
+    public void Registry_initialize_must_not_rollback_consumers_when_later_bind_fails()
     {
         var registry = new ScopeResourceRegistry();
         var provider = new ResourceProvider();
@@ -121,10 +121,21 @@ public sealed class ScopeResourceStrictValidationTests
 
         Assert.That(exception.Message, Does.Contain("bind failed"));
         Assert.That(first.BindCount, Is.EqualTo(1));
-        Assert.That(first.UnbindCount, Is.EqualTo(1));
+        Assert.That(first.UnbindCount, Is.EqualTo(0));
 
         registry.CloseAndUnbind();
-        Assert.That(first.UnbindCount, Is.EqualTo(1));
+        Assert.That(first.UnbindCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Registry_initialize_must_not_reintroduce_business_rollback_path()
+    {
+        string root = FindRepositoryRoot();
+        string source = File.ReadAllText(Path.Combine(root, "LayerBase", "Scope", "Resources", "ScopeResourceRegistry.cs"));
+
+        Assert.That(source, Does.Not.Contain("RollbackBoundConsumers"));
+        Assert.That(source, Does.Not.Contain("catch\n            {\n            }"));
+        Assert.That(source, Does.Not.Contain("catch\r\n            {\r\n            }"));
     }
 
     private sealed class ResourceProvider : IGeneratedScopeResourcePublisher
@@ -161,5 +172,21 @@ public sealed class ScopeResourceStrictValidationTests
         public void UnbindScopeResources()
         {
         }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? current = new(TestContext.CurrentContext.TestDirectory);
+        while (current != null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "LayerBase.sln")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root.");
     }
 }

@@ -190,6 +190,7 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
             {
                 if (ctx is LayerBaseSynchronizationContext { AllowThreadPoolFallbackOnDispose: false })
                 {
+                    continuation();
                     return;
                 }
             }
@@ -352,6 +353,7 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
             {
                 if (ctx is LayerBaseSynchronizationContext { AllowThreadPoolFallbackOnDispose: false })
                 {
+                    continuation();
                     return;
                 }
             }

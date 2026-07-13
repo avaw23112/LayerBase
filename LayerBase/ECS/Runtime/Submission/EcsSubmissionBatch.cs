@@ -2,6 +2,9 @@ namespace LayerBase.ECS.Runtime.Submission;
 
 internal sealed class EcsSubmissionBatch
 {
+    private static readonly OperationCanceledException s_cancelled =
+        new("ECS work was cancelled before execution.");
+
     private IEcsWorkItem?[] _items;
     private int _count;
 
@@ -46,15 +49,12 @@ internal sealed class EcsSubmissionBatch
         Sequence = 0;
     }
 
-    public void CancelPendingItems()
+    public void CancelPendingItems(Exception? reason = null)
     {
+        reason ??= s_cancelled;
         for (int i = 0; i < _count; i++)
         {
-            IEcsWorkItem? item = _items[i];
-            if (item is IPooledEcsWorkItem pooled)
-            {
-                pooled.ReturnToPool();
-            }
+            _items[i]?.Cancel(reason);
         }
 
         Clear();

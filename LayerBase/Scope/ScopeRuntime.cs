@@ -64,6 +64,7 @@ public sealed class ScopeRuntime : IDisposable
     private int _ownerThreadId = -1;
     private int _disposeRequested;
     private int _disposeInfrastructureStarted;
+    private bool _compositionApplied;
 
     public ScopeRuntime(
         ScopeDescriptor descriptor,
@@ -228,6 +229,7 @@ public sealed class ScopeRuntime : IDisposable
 
     internal void SetContexts(ILayerContext[] contexts)
     {
+        EnsureCompositionCanMutate(nameof(SetContexts));
         Contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         _contextPlans = new ScopeContextPlan[contexts.Length];
         for (int i = 0; i < contexts.Length; i++)
@@ -244,6 +246,8 @@ public sealed class ScopeRuntime : IDisposable
 
     internal void FinalizeScopeBuild()
     {
+        EnsureCompositionCanMutate(nameof(FinalizeScopeBuild));
+        _compositionApplied = true;
         RebuildServiceProvider();
         RebuildScopeResources();
         RebindSubscriptions();
@@ -251,6 +255,7 @@ public sealed class ScopeRuntime : IDisposable
 
     internal void UpdateServiceBindings(IReadOnlyList<ScopeServicePlan> servicePlans)
     {
+        EnsureCompositionCanMutate(nameof(UpdateServiceBindings));
         if (servicePlans == null) return;
         for (int i = 0; i < servicePlans.Count; i++)
         {
@@ -273,6 +278,7 @@ public sealed class ScopeRuntime : IDisposable
 
     internal void SetContexts(ScopeContextPlan[] contextPlans)
     {
+        EnsureCompositionCanMutate(nameof(SetContexts));
         _contextPlans = contextPlans ?? throw new ArgumentNullException(nameof(contextPlans));
         var contexts = new ILayerContext[_contextPlans.Length];
         for (int i = 0; i < _contextPlans.Length; i++)
@@ -286,7 +292,17 @@ public sealed class ScopeRuntime : IDisposable
 
     internal void SetResourcePlan(ScopeResourcePlan resourcePlan)
     {
+        EnsureCompositionCanMutate(nameof(SetResourcePlan));
         _resourcePlan = resourcePlan ?? throw new ArgumentNullException(nameof(resourcePlan));
+    }
+
+    private void EnsureCompositionCanMutate(string apiName)
+    {
+        if (_compositionApplied)
+        {
+            throw new InvalidOperationException(
+                $"Scope '{Descriptor.Name}' composition has already been applied; '{apiName}' cannot rebuild it.");
+        }
     }
 
     public void Start()
@@ -450,6 +466,13 @@ public sealed class ScopeRuntime : IDisposable
         return _continuations.TryEnqueue(continuation);
     }
 
+    internal bool IsOwnerThreadForContinuations =>
+        Descriptor.Threading == ScopeThreadingMode.Worker
+            ? ReferenceEquals(Thread.CurrentThread, _workerThread)
+            : _ownerThreadId == -1 || _ownerThreadId == Environment.CurrentManagedThreadId;
+
+    internal bool IsContinuationIngressClosed => _continuations.IsClosed;
+
     public TimerHandle SchedulePost<T>(
         in T value,
         float delaySeconds,
@@ -533,45 +556,37 @@ public sealed class ScopeRuntime : IDisposable
             return;
         }
 
-        try
+        if (Volatile.Read(ref _stopCleanupStarted) != 0)
         {
-            if (Volatile.Read(ref _stopCleanupStarted) != 0)
-            {
-                WaitForStopCleanup();
-            }
-
-            _subscriptionRegistry?.Dispose();
-            _subscriptionRegistry = null;
-            AwaitRegistry.Close();
-            EcsScheduler?.Dispose();
-            _context?.Dispose();
-            Timer.Dispose();
-            PostScheduler.Dispose();
-            DelayManager.Clear();
-            EventCenter.Reset();
-            EcsWorld.Dispose();
-            if (_ownsActorWorld) _actorWorld.Dispose();
-
-            ManualResetEventSlim? workerStartedSignal;
-            ManualResetEventSlim? workerLaunchSignal;
-            lock (_lifecycleGate)
-            {
-                _state = ScopeRuntimeState.Disposed;
-                workerStartedSignal = _workerStartedSignal;
-                workerLaunchSignal = _workerLaunchSignal;
-                _workerStartedSignal = null;
-                _workerLaunchSignal = null;
-            }
-
-            workerStartedSignal?.Dispose();
-            workerLaunchSignal?.Dispose();
-            _stopCleanupFinished.Dispose();
+            WaitForStopCleanup();
         }
-        catch
+
+        _subscriptionRegistry?.Dispose();
+        _subscriptionRegistry = null;
+        AwaitRegistry.Close();
+        EcsScheduler?.Dispose();
+        _context?.Dispose();
+        Timer.Dispose();
+        PostScheduler.Dispose();
+        DelayManager.Clear();
+        EventCenter.Reset();
+        EcsWorld.Dispose();
+        if (_ownsActorWorld) _actorWorld.Dispose();
+
+        ManualResetEventSlim? workerStartedSignal;
+        ManualResetEventSlim? workerLaunchSignal;
+        lock (_lifecycleGate)
         {
-            Volatile.Write(ref _disposeInfrastructureStarted, 0);
-            throw;
+            _state = ScopeRuntimeState.Disposed;
+            workerStartedSignal = _workerStartedSignal;
+            workerLaunchSignal = _workerLaunchSignal;
+            _workerStartedSignal = null;
+            _workerLaunchSignal = null;
         }
+
+        workerStartedSignal?.Dispose();
+        workerLaunchSignal?.Dispose();
+        _stopCleanupFinished.Dispose();
     }
 
     private void WorkerLoop()
@@ -886,15 +901,8 @@ public sealed class ScopeRuntime : IDisposable
         _subscriptionRegistry?.Dispose();
         _subscriptionRegistry = null;
         DelayManager.Clear();
-        try
-        {
-            ResourceRegistry.CloseAndUnbind((exception, _) =>
-                ReportException(exception, -1, LayerExceptionPhase.ResourceUnbind, LayerQueueKind.None, -1));
-        }
-        catch (Exception ex)
-        {
-            ReportException(ex, -1, LayerExceptionPhase.ResourceUnbind, LayerQueueKind.None, -1);
-        }
+        ResourceRegistry.CloseAndUnbind((exception, _) =>
+            ReportException(exception, -1, LayerExceptionPhase.ResourceUnbind, LayerQueueKind.None, -1));
 
         DisposeContexts();
         DisposeServices();

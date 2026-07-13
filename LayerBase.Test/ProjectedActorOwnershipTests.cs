@@ -113,6 +113,89 @@ public sealed class ProjectedActorOwnershipTests
         Assert.That(actorRef.ActorId, Is.EqualTo(actorId));
     }
 
+    [Test]
+    public void Projected_actor_release_must_retain_binding_when_lifecycle_queue_is_full()
+    {
+        using var actorWorld = new ActorWorld();
+        using var world = World.Create();
+        var sink = new FullProjectedActorLifecycleSink();
+        world.BindScopeActors(actorWorld, sink);
+        var actorId = new ActorId(1, 2, 3);
+        Entity entity = world.Create(new ProjectedActorRef(actorId, ActorTypeId, 1, ProjectedActorReleasePolicy.ReturnToPool));
+        ref ProjectedActorMeta meta = ref world.GetProjectionMeta(entity);
+        meta.MarkProjected(ActorTypeId, 1, ProjectedActorReleasePolicy.ReturnToPool);
+        meta.BindActor(actorId);
+        meta.RetirePolicy = ProjectedActorRetirePolicy.ReturnToPool;
+        world.AddActiveProjectedActor(entity, ref meta);
+        ref ProjectedActorRef actorRef = ref world.Get<ProjectedActorRef>(entity);
+        actorRef.ExpireAtTicks = 0;
+
+        world.SweepProjectedActors(1);
+
+        Assert.That(sink.ReleaseAttempts, Is.EqualTo(1));
+        Assert.That(meta.ActorId, Is.EqualTo(actorId));
+        Assert.That(meta.ActiveListIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(actorRef.ActorId, Is.EqualTo(actorId));
+    }
+
+    [Test]
+    public void Projected_actor_sweep_must_advance_past_retry_actor_when_lifecycle_queue_is_full()
+    {
+        using var actorWorld = new ActorWorld();
+        using var world = World.Create();
+        var sink = new FullProjectedActorLifecycleSink();
+        world.BindScopeActors(actorWorld, sink);
+        var firstActorId = new ActorId(1, 2, 3);
+        var secondActorId = new ActorId(1, 2, 4);
+        AddExpiredProjectedActor(world, firstActorId, ProjectedActorRetirePolicy.ReturnToPool);
+        AddExpiredProjectedActor(world, secondActorId, ProjectedActorRetirePolicy.ReturnToPool);
+
+        world.SweepProjectedActors(2);
+
+        Assert.That(sink.ReleaseActorIds, Does.Contain(firstActorId));
+        Assert.That(sink.ReleaseActorIds, Does.Contain(secondActorId));
+    }
+
+    [Test]
+    public void Projected_actor_disable_must_retain_binding_when_lifecycle_queue_is_full()
+    {
+        using var actorWorld = new ActorWorld();
+        using var world = World.Create();
+        var sink = new FullProjectedActorLifecycleSink();
+        world.BindScopeActors(actorWorld, sink);
+        var actorId = new ActorId(1, 2, 3);
+        Entity entity = world.Create(new ProjectedActorRef(actorId, ActorTypeId, 1, ProjectedActorReleasePolicy.ReturnToPool));
+        ref ProjectedActorMeta meta = ref world.GetProjectionMeta(entity);
+        meta.MarkProjected(ActorTypeId, 1, ProjectedActorReleasePolicy.ReturnToPool);
+        meta.BindActor(actorId);
+        meta.RetirePolicy = ProjectedActorRetirePolicy.Disable;
+        world.AddActiveProjectedActor(entity, ref meta);
+        ref ProjectedActorRef actorRef = ref world.Get<ProjectedActorRef>(entity);
+        actorRef.ExpireAtTicks = 0;
+
+        world.SweepProjectedActors(1);
+
+        Assert.That(sink.DisableAttempts, Is.EqualTo(1));
+        Assert.That(meta.ActorId, Is.EqualTo(actorId));
+        Assert.That(meta.ActiveListIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(actorRef.ActorId, Is.EqualTo(actorId));
+    }
+
+    private static void AddExpiredProjectedActor(
+        World                      world,
+        ActorId                    actorId,
+        ProjectedActorRetirePolicy retirePolicy)
+    {
+        Entity entity = world.Create(new ProjectedActorRef(actorId, ActorTypeId, 1, ProjectedActorReleasePolicy.ReturnToPool));
+        ref ProjectedActorMeta meta = ref world.GetProjectionMeta(entity);
+        meta.MarkProjected(ActorTypeId, 1, ProjectedActorReleasePolicy.ReturnToPool);
+        meta.BindActor(actorId);
+        meta.RetirePolicy = retirePolicy;
+        world.AddActiveProjectedActor(entity, ref meta);
+        ref ProjectedActorRef actorRef = ref world.Get<ProjectedActorRef>(entity);
+        actorRef.ExpireAtTicks = 0;
+    }
+
     private static bool DrainUntilReturned(LayerRuntime runtime, TimeSpan timeout)
     {
         DateTime deadline = DateTime.UtcNow + timeout;
@@ -187,6 +270,33 @@ public sealed class ProjectedActorOwnershipTests
         {
             ReleaseAttempts++;
             return ControlEnqueueResult.Closed;
+        }
+    }
+
+    private sealed class FullProjectedActorLifecycleSink : IProjectedActorLifecycleSink
+    {
+        public int DisableAttempts;
+        public int ReleaseAttempts;
+        public List<ActorId> ReleaseActorIds { get; } = new();
+
+        public ControlEnqueueResult TryEnableProjectedActor(ActorId actorId)
+        {
+            return ControlEnqueueResult.Failed;
+        }
+
+        public ControlEnqueueResult TryDisableProjectedActor(ActorId actorId)
+        {
+            DisableAttempts++;
+            return ControlEnqueueResult.Failed;
+        }
+
+        public ControlEnqueueResult TryReleaseProjectedActor(
+            ActorId actorId,
+            ProjectedActorReleasePolicy releasePolicy)
+        {
+            ReleaseAttempts++;
+            ReleaseActorIds.Add(actorId);
+            return ControlEnqueueResult.Failed;
         }
     }
 }

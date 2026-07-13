@@ -240,7 +240,22 @@ public sealed class ScopeLifecycleConcurrencyTests
     }
 
     [Test]
-    public void Dispose_infrastructure_must_reset_started_flag_when_cleanup_throws()
+    public void Stop_internal_must_not_wrap_resource_registry_cleanup_in_broad_catch()
+    {
+        string source = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "LayerBase", "Scope", "ScopeRuntime.cs"));
+        int start = source.IndexOf("private void StopInternal()", StringComparison.Ordinal);
+        int end = source.IndexOf("private void ReportException", StringComparison.Ordinal);
+
+        Assert.That(start, Is.GreaterThanOrEqualTo(0));
+        Assert.That(end, Is.GreaterThan(start));
+        string method = source.Substring(start, end - start);
+
+        Assert.That(method, Does.Not.Contain("ResourceRegistry.CloseAndUnbind(report);\r\n        }\r\n        catch"));
+        Assert.That(method, Does.Not.Contain("ResourceRegistry.CloseAndUnbind(report);\n        }\n        catch"));
+    }
+
+    [Test]
+    public void Dispose_infrastructure_must_not_reset_started_flag_when_cleanup_throws()
     {
         string source = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "LayerBase", "Scope", "ScopeRuntime.cs"));
         int start = source.IndexOf("private void DisposeInfrastructureOnce()", StringComparison.Ordinal);
@@ -250,8 +265,7 @@ public sealed class ScopeLifecycleConcurrencyTests
         Assert.That(end, Is.GreaterThan(start));
         string method = source.Substring(start, end - start);
 
-        Assert.That(method, Does.Contain("Volatile.Write(ref _disposeInfrastructureStarted, 0);"));
-        Assert.That(method, Does.Contain("throw;"));
+        Assert.That(method, Does.Not.Contain("Volatile.Write(ref _disposeInfrastructureStarted, 0);"));
     }
 
     [Test]

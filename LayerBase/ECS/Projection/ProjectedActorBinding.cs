@@ -327,6 +327,9 @@ internal static class ProjectedActorBinding
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool ShouldDeferActorWorldAccess(ActorWorld actorWorld)
     {
-        return false;
+        LayerRuntime? runtime = actorWorld.Runtime;
+        return runtime != null &&
+               ReferenceEquals(runtime.Actors, actorWorld) &&
+               !runtime.IsOwnerThreadForActorWorld;
     }
 }

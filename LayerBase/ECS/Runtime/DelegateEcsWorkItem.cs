@@ -18,4 +18,8 @@ internal sealed class DelegateEcsWorkItem : IEcsWorkItem
     {
         _execute(world);
     }
+
+    public void Cancel(Exception reason)
+    {
+    }
 }

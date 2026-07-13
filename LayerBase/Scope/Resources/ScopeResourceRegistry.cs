@@ -22,97 +22,87 @@ internal sealed class ScopeResourceRegistry
 
         if (_consumers.Count > 0 || _unbindActions.Count > 0 || _exports.Length > 0)
         {
-            CloseAndUnbind();
-            _closed = false;
+            throw new InvalidOperationException("Scope resource registry is already initialized.");
         }
 
         var exports = new object[plan.Exports.Length];
-        var boundConsumers = new List<IGeneratedScopeResourceConsumer>();
+        var consumers = new List<IGeneratedScopeResourceConsumer>();
 
-        try
+        for (int i = 0; i < plan.Exports.Length; i++)
         {
-            for (int i = 0; i < plan.Exports.Length; i++)
+            ScopeResourceExportPlan export = plan.Exports[i];
+            if ((uint)export.ProviderObjectSlot >= (uint)scopeObjects.Length)
             {
-                ScopeResourceExportPlan export = plan.Exports[i];
-                if ((uint)export.ProviderObjectSlot >= (uint)scopeObjects.Length)
-                {
-                    throw new InvalidOperationException(
-                        $"Scope resource provider object slot {export.ProviderObjectSlot} is outside scope object length {scopeObjects.Length}.");
-                }
-
-                if ((uint)export.ExportSlot >= (uint)exports.Length)
-                {
-                    throw new InvalidOperationException(
-                        $"Scope resource export slot {export.ExportSlot} is outside export table length {exports.Length}.");
-                }
-
-                if (export.ProviderLocalSlot < 0)
-                {
-                    throw new InvalidOperationException(
-                        $"Scope resource provider local slot {export.ProviderLocalSlot} is invalid.");
-                }
-
-                if (scopeObjects[export.ProviderObjectSlot] is not IGeneratedScopeResourcePublisher publisher)
-                {
-                    throw new InvalidOperationException(
-                        $"Scope resource provider object at slot {export.ProviderObjectSlot} does not implement {nameof(IGeneratedScopeResourcePublisher)}.");
-                }
-
-                object value = publisher.GetPublishedResource(export.ProviderLocalSlot);
-                if (value == null)
-                {
-                    throw new InvalidOperationException(
-                        $"Scope resource provider '{publisher.GetType().FullName}' returned null for local export slot {export.ProviderLocalSlot}.");
-                }
-
-                exports[export.ExportSlot] = value;
+                throw new InvalidOperationException(
+                    $"Scope resource provider object slot {export.ProviderObjectSlot} is outside scope object length {scopeObjects.Length}.");
             }
 
-            for (int i = 0; i < plan.Imports.Length; i++)
+            if ((uint)export.ExportSlot >= (uint)exports.Length)
             {
-                ScopeResourceImportPlan import = plan.Imports[i];
-                if ((uint)import.ConsumerObjectSlot >= (uint)scopeObjects.Length)
-                {
-                    throw new InvalidOperationException(
-                        $"Scope resource consumer object slot {import.ConsumerObjectSlot} is outside scope object length {scopeObjects.Length}.");
-                }
-
-                if ((uint)import.ExportSlot >= (uint)exports.Length)
-                {
-                    throw new InvalidOperationException(
-                        $"Scope resource import references export slot {import.ExportSlot}, outside export table length {exports.Length}.");
-                }
-
-                if (import.ConsumerLocalSlot < 0)
-                {
-                    throw new InvalidOperationException(
-                        $"Scope resource consumer local slot {import.ConsumerLocalSlot} is invalid.");
-                }
-
-                if (scopeObjects[import.ConsumerObjectSlot] is not IGeneratedScopeResourceConsumer consumer)
-                {
-                    throw new InvalidOperationException(
-                        $"Scope resource consumer object at slot {import.ConsumerObjectSlot} does not implement {nameof(IGeneratedScopeResourceConsumer)}.");
-                }
-
-                consumer.BindScopeResource(import.ConsumerLocalSlot, exports[import.ExportSlot]);
-
-                if (!boundConsumers.Contains(consumer))
-                {
-                    boundConsumers.Add(consumer);
-                }
+                throw new InvalidOperationException(
+                    $"Scope resource export slot {export.ExportSlot} is outside export table length {exports.Length}.");
             }
 
-            _exports = exports;
-            _consumers.Clear();
-            _consumers.AddRange(boundConsumers);
+            if (export.ProviderLocalSlot < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource provider local slot {export.ProviderLocalSlot} is invalid.");
+            }
+
+            if (scopeObjects[export.ProviderObjectSlot] is not IGeneratedScopeResourcePublisher publisher)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource provider object at slot {export.ProviderObjectSlot} does not implement {nameof(IGeneratedScopeResourcePublisher)}.");
+            }
+
+            object value = publisher.GetPublishedResource(export.ProviderLocalSlot);
+            if (value == null)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource provider '{publisher.GetType().FullName}' returned null for local export slot {export.ProviderLocalSlot}.");
+            }
+
+            exports[export.ExportSlot] = value;
         }
-        catch
+
+        for (int i = 0; i < plan.Imports.Length; i++)
         {
-            RollbackBoundConsumers(boundConsumers);
-            _exports = Array.Empty<object>();
-            throw;
+            ScopeResourceImportPlan import = plan.Imports[i];
+            if ((uint)import.ConsumerObjectSlot >= (uint)scopeObjects.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource consumer object slot {import.ConsumerObjectSlot} is outside scope object length {scopeObjects.Length}.");
+            }
+
+            if ((uint)import.ExportSlot >= (uint)exports.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource import references export slot {import.ExportSlot}, outside export table length {exports.Length}.");
+            }
+
+            if (import.ConsumerLocalSlot < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource consumer local slot {import.ConsumerLocalSlot} is invalid.");
+            }
+
+            if (scopeObjects[import.ConsumerObjectSlot] is not IGeneratedScopeResourceConsumer consumer)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource consumer object at slot {import.ConsumerObjectSlot} does not implement {nameof(IGeneratedScopeResourceConsumer)}.");
+            }
+
+            consumer.BindScopeResource(import.ConsumerLocalSlot, exports[import.ExportSlot]);
+
+            if (!consumers.Contains(consumer))
+            {
+                consumers.Add(consumer);
+            }
         }
+
+        _exports = exports;
+        _consumers.Clear();
+        _consumers.AddRange(consumers);
     }
 
     public void TrackUnbindAction(Action unbind)
@@ -155,21 +145,5 @@ internal sealed class ScopeResourceRegistry
 
         _unbindActions.Clear();
         _exports = Array.Empty<object>();
-    }
-
-    private static void RollbackBoundConsumers(List<IGeneratedScopeResourceConsumer> consumers)
-    {
-        for (int i = consumers.Count - 1; i >= 0; i--)
-        {
-            try
-            {
-                consumers[i].UnbindScopeResources();
-            }
-            catch
-            {
-            }
-        }
-
-        consumers.Clear();
     }
 }

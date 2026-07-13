@@ -14,6 +14,7 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
     private readonly EcsWorker _worker;
     private EcsSubmissionBatch _currentSubmissionBatch;
     private long _nextSequence;
+    private int _stopped;
 
     public AsyncEcsScheduler(LayerRuntime runtime, World world, EcsRuntimeOptions options)
     {
@@ -35,6 +36,12 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
 
     public void Schedule(IEcsWorkItem item)
     {
+        if (Volatile.Read(ref _stopped) != 0)
+        {
+            item.Cancel(new OperationCanceledException("ECS scheduler has stopped."));
+            return;
+        }
+
         _currentSubmissionBatch.Add(item);
     }
 
@@ -45,7 +52,7 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
 
     public void FlushSubmissions()
     {
-        FlushSubmissionsCore();
+        FlushSubmissionsCore(allowWhenStopped: false);
     }
 
     public void SetWorkerIdlePolicy(EcsWorkerIdleOptions options)
@@ -65,7 +72,7 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
 
     public long FlushSubmissionsForTest()
     {
-        return FlushSubmissionsCore();
+        return FlushSubmissionsCore(allowWhenStopped: false);
     }
 
     public void EnsureCurrentSubmissionCapacityForTest(int entryCapacity)
@@ -94,8 +101,14 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
         }
     }
 
-    private long FlushSubmissionsCore()
+    private long FlushSubmissionsCore(bool allowWhenStopped)
     {
+        if (!allowWhenStopped && Volatile.Read(ref _stopped) != 0)
+        {
+            _currentSubmissionBatch.CancelPendingItems();
+            return _workQueue.CompletedSequence;
+        }
+
         EcsSubmissionBatch batch = _currentSubmissionBatch;
         if (batch.Count == 0)
         {
@@ -105,7 +118,13 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
         long sequence = Interlocked.Increment(ref _nextSequence);
         batch.Sequence = sequence;
         _currentSubmissionBatch = _submissionBatchPool.Rent();
-        _workQueue.Enqueue(batch);
+        if (!_workQueue.TryEnqueue(batch))
+        {
+            batch.CancelPendingItems();
+            _submissionBatchPool.Return(batch);
+            throw new InvalidOperationException("ECS work queue rejected a submitted batch.");
+        }
+
         _worker.Signal();
         return sequence;
     }
@@ -117,7 +136,13 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
 
     public void Stop()
     {
-        FlushSubmissions();
+        if (Interlocked.Exchange(ref _stopped, 1) != 0)
+        {
+            return;
+        }
+
+        FlushSubmissionsCore(allowWhenStopped: true);
+        _workQueue.Close();
         _worker.Stop();
         _currentSubmissionBatch.CancelPendingItems();
 
@@ -162,6 +187,7 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
     public void Dispose()
     {
         Stop();
+        _resultQueue.Close();
         _resultQueue.Clear();
         _worker.Dispose();
     }

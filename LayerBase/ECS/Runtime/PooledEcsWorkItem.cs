@@ -45,6 +45,11 @@ internal sealed class PooledEcsWorkItem<TState> : IEcsWorkItem, IPooledEcsWorkIt
         execute(world, _state);
     }
 
+    public void Cancel(Exception reason)
+    {
+        ReturnToPool();
+    }
+
     public void ReturnToPool()
     {
         _execute = null;

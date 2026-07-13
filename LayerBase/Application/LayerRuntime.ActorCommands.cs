@@ -65,13 +65,11 @@ public sealed partial class LayerRuntime
 
     internal bool EnqueueActorEvent(ActorCommandEnvelope envelope)
     {
-        if (_disposed) return false;
         return _actorEventInbox.TryEnqueue(envelope);
     }
 
     internal ControlEnqueueResult EnqueueActorLifecycle(ActorCommandEnvelope envelope)
     {
-        if (_disposed) return ControlEnqueueResult.Closed;
         return _actorLifecycleInbox.TryEnqueue(envelope);
     }
 

@@ -136,6 +136,33 @@ public sealed class ScopePromiseShutdownTests
     }
 
     [Test]
+    public void Promise_continuation_queue_full_must_not_drop_completed_continuation()
+    {
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1225,
+                name: "PromiseContinuationFullScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            new ScopeRuntimeOptions(continuationQueueCapacity: 1));
+        var promise = new ScopePromise<int>(runtime);
+        int continuationRan = 0;
+
+        Assert.That(runtime.TryEnqueueContinuation(static () => { }), Is.True);
+        Assert.That(runtime.TryEnqueueContinuation(static () => { }), Is.True);
+
+        promise.SetResult(42);
+        promise.OnCompleted(() => Interlocked.Exchange(ref continuationRan, 1));
+
+        runtime.Pump(0);
+        Assert.That(Volatile.Read(ref continuationRan), Is.EqualTo(1));
+        Assert.That(promise.GetResult(), Is.EqualTo(42));
+    }
+
+    [Test]
     public void GetResult_exception_must_unregister_promise()
     {
         using var runtime = new ScopeRuntime(
@@ -185,6 +212,18 @@ public sealed class ScopePromiseShutdownTests
     }
 
     [Test]
+    public void Await_registry_cancel_all_must_surface_promise_protocol_exceptions()
+    {
+        var registry = new ScopeAwaitRegistry();
+        Assert.That(registry.TryRegister(new ThrowingPromiseControl()), Is.True);
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            registry.CancelAll(new InvalidOperationException("scope is stopping.")));
+
+        Assert.That(error!.Message, Does.Contain("protocol"));
+    }
+
+    [Test]
     public void OnCompleted_after_scope_stop_must_abandon_continuation_without_running_it()
     {
         using var runtime = new ScopeRuntime(
@@ -206,5 +245,22 @@ public sealed class ScopePromiseShutdownTests
         Assert.That(continuationRan, Is.EqualTo(0));
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => promise.GetResult())!;
         Assert.That(ex.Message, Does.Contain("scope is stopping"));
+    }
+
+    private sealed class ThrowingPromiseControl : IScopePromiseControl
+    {
+        public bool IsCompleted => false;
+
+        public bool IsCancelled => false;
+
+        public bool TrySetResult(object? result)
+        {
+            return false;
+        }
+
+        public bool TrySetException(Exception exception)
+        {
+            throw new InvalidOperationException("protocol violation");
+        }
     }
 }

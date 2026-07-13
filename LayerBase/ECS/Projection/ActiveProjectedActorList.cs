@@ -97,7 +97,10 @@ internal sealed class ActiveProjectedActorList
             }
 
             // 到期处理 - 需要获取 pooledActor 以调用生命周期方法
-            RetireProjectedActor(world, lifecycleSink, entity, ref meta, ref actorRef);
+            if (!RetireProjectedActor(world, lifecycleSink, entity, ref meta, ref actorRef))
+            {
+                i++;
+            }
         }
 
         if (_count == 0)
@@ -112,7 +115,7 @@ internal sealed class ActiveProjectedActorList
     /// <summary>
     /// 根据 RetirePolicy 处理到期的 ProjectedActor。
     /// </summary>
-    private void RetireProjectedActor(
+    private bool RetireProjectedActor(
         World                        world,
         IProjectedActorLifecycleSink lifecycleSink,
         Entity                       entity,
@@ -123,17 +126,10 @@ internal sealed class ActiveProjectedActorList
         {
             case ProjectedActorRetirePolicy.Disable:
                 ControlEnqueueResult disableResult = lifecycleSink.TryDisableProjectedActor(meta.ActorId);
-                if (disableResult == ControlEnqueueResult.Closed)
+                if (disableResult != ControlEnqueueResult.AcceptedFast &&
+                    disableResult != ControlEnqueueResult.AcceptedOverflow)
                 {
-                    return;
-                }
-
-                if (disableResult == ControlEnqueueResult.Failed)
-                {
-                    ProjectedActorBindingUtility.Clear(world, entity, ref meta);
-                    actorRef.ClearActor();
-                    RemoveAt(world, meta.ActiveListIndex, ref meta);
-                    return;
+                    return false;
                 }
 
                 meta.State = ProjectedActorState.DisablePending;
@@ -143,47 +139,55 @@ internal sealed class ActiveProjectedActorList
                 // 下一次 Touch 时 RefreshProjectedActorInterest 会先 OnEnable，再刷新 ExpireAtTicks。
                 actorRef.ExpireAtTicks = long.MaxValue;
 
-                return;
+                return false;
 
             case ProjectedActorRetirePolicy.ReturnToPool:
-                if (lifecycleSink.TryReleaseProjectedActor(
+                ControlEnqueueResult returnResult = lifecycleSink.TryReleaseProjectedActor(
                     meta.ActorId,
-                    ProjectedActorReleasePolicy.ReturnToPool) == ControlEnqueueResult.Closed)
+                    ProjectedActorReleasePolicy.ReturnToPool);
+                if (returnResult != ControlEnqueueResult.AcceptedFast &&
+                    returnResult != ControlEnqueueResult.AcceptedOverflow)
                 {
-                    return;
+                    return false;
                 }
 
                 ProjectedActorBindingUtility.Clear(world, entity, ref meta);
                 actorRef.ClearActor();
                 RemoveAt(world, meta.ActiveListIndex, ref meta);
-                return;
+                return true;
 
             case ProjectedActorRetirePolicy.DestroyImmediately:
-                if (lifecycleSink.TryReleaseProjectedActor(
+                ControlEnqueueResult destroyResult = lifecycleSink.TryReleaseProjectedActor(
                     meta.ActorId,
-                    ProjectedActorReleasePolicy.DestroyImmediately) == ControlEnqueueResult.Closed)
+                    ProjectedActorReleasePolicy.DestroyImmediately);
+                if (destroyResult != ControlEnqueueResult.AcceptedFast &&
+                    destroyResult != ControlEnqueueResult.AcceptedOverflow)
                 {
-                    return;
+                    return false;
                 }
 
                 ProjectedActorBindingUtility.Clear(world, entity, ref meta);
                 actorRef.ClearActor();
                 RemoveAt(world, meta.ActiveListIndex, ref meta);
-                return;
+                return true;
 
             case ProjectedActorRetirePolicy.DetachAndLetActorFinish:
-                if (lifecycleSink.TryReleaseProjectedActor(
+                ControlEnqueueResult detachResult = lifecycleSink.TryReleaseProjectedActor(
                     meta.ActorId,
-                    ProjectedActorReleasePolicy.DetachAndLetActorFinish) == ControlEnqueueResult.Closed)
+                    ProjectedActorReleasePolicy.DetachAndLetActorFinish);
+                if (detachResult != ControlEnqueueResult.AcceptedFast &&
+                    detachResult != ControlEnqueueResult.AcceptedOverflow)
                 {
-                    return;
+                    return false;
                 }
 
                 ProjectedActorBindingUtility.Clear(world, entity, ref meta);
                 actorRef.ClearActor();
                 RemoveAt(world, meta.ActiveListIndex, ref meta);
-                return;
+                return true;
         }
+
+        return false;
     }
 
     private void RemoveAt(

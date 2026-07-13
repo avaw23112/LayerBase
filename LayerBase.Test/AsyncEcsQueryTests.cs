@@ -147,6 +147,38 @@ public sealed class AsyncEcsQueryTests
     }
 
     [Test]
+    public void AsyncScheduler_Stop_must_cancel_queued_non_pooled_work_when_worker_was_not_started()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        using World world = World.Create();
+        var scheduler = new AsyncEcsScheduler(runtime, world, EcsRuntimeOptions.Default);
+        var item = new CancelCountingWorkItem();
+
+        scheduler.Schedule(item);
+        scheduler.FlushSubmissionsForTest();
+        scheduler.Stop();
+
+        Assert.That(item.CancelCount, Is.EqualTo(1));
+        Assert.That(item.CancelReason, Is.TypeOf<OperationCanceledException>());
+    }
+
+    [Test]
+    public void AsyncScheduler_Stop_must_reject_late_pooled_work_after_terminal_stop()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        using World world = World.Create();
+        var scheduler = new AsyncEcsScheduler(runtime, world, EcsRuntimeOptions.Default);
+        var item = new ReturnCountingWorkItem();
+
+        scheduler.Start();
+        scheduler.Stop();
+        scheduler.Schedule(item);
+        scheduler.FlushSubmissionsForTest();
+
+        Assert.That(item.ReturnCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public void ScopeRuntime_async_ecs_pump_must_submit_projected_actor_sweep_as_work()
     {
         string root = FindRepositoryRoot();
@@ -196,6 +228,18 @@ public sealed class AsyncEcsQueryTests
 
         Assert.That(returnThreadIds, Is.Not.Empty);
         Assert.That(returnThreadIds, Has.All.EqualTo(ownerThreadId));
+    }
+
+    [Test]
+    public void AsyncProjectedActor_binding_must_not_use_false_actor_world_defer_stub()
+    {
+        string root = FindRepositoryRoot();
+        string source = File.ReadAllText(Path.Combine(root, "LayerBase", "ECS", "Projection", "ProjectedActorBinding.cs"));
+        int start = source.IndexOf("private static bool ShouldDeferActorWorldAccess(ActorWorld actorWorld)", StringComparison.Ordinal);
+
+        Assert.That(start, Is.GreaterThanOrEqualTo(0));
+        string method = source.Substring(start, source.IndexOf("\n    }\n}", start, StringComparison.Ordinal) - start);
+        Assert.That(method, Does.Not.Contain("return false;"));
     }
 
     [Test]
@@ -350,6 +394,10 @@ public sealed class AsyncEcsQueryTests
             _gate.Wait();
             _execute();
         }
+
+        public void Cancel(Exception reason)
+        {
+        }
     }
 
     private sealed class CountWorkItem : IEcsWorkItem
@@ -367,6 +415,30 @@ public sealed class AsyncEcsQueryTests
         {
             _execute();
         }
+
+        public void Cancel(Exception reason)
+        {
+        }
+    }
+
+    private sealed class CancelCountingWorkItem : IEcsWorkItem
+    {
+        public int CancelCount { get; private set; }
+
+        public Exception? CancelReason { get; private set; }
+
+        public string DebugName => nameof(CancelCountingWorkItem);
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+            Assert.Fail("Queued work should not execute when the worker was never started.");
+        }
+
+        public void Cancel(Exception reason)
+        {
+            CancelCount++;
+            CancelReason = reason;
+        }
     }
 
     private sealed class ReturnCountingWorkItem : IEcsWorkItem, IPooledEcsWorkItem
@@ -378,6 +450,11 @@ public sealed class AsyncEcsQueryTests
         public void Execute(World world, EcsResultQueue results)
         {
             Assert.Fail("Queued work should not execute when the worker was never started.");
+        }
+
+        public void Cancel(Exception reason)
+        {
+            ReturnToPool();
         }
 
         public void ReturnToPool()
