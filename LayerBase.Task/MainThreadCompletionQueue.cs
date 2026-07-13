@@ -21,15 +21,31 @@ public readonly struct MainThreadCompletionItem
 public sealed class MainThreadCompletionQueue
 {
     private readonly ConcurrentQueue<MainThreadCompletionItem> _queue = new();
+    private readonly object _gate = new();
+    private ObjectDisposedException? _closed;
 
     public void Enqueue(MainThreadCompletionItem item)
     {
-        _queue.Enqueue(item);
+        lock (_gate)
+        {
+            ThrowIfClosed();
+            _queue.Enqueue(item);
+        }
     }
 
     public void Enqueue(Action action)
     {
-        _queue.Enqueue(new MainThreadCompletionItem(action));
+        Enqueue(new MainThreadCompletionItem(action));
+    }
+
+    public void Close(ObjectDisposedException error)
+    {
+        if (error == null) throw new ArgumentNullException(nameof(error));
+
+        lock (_gate)
+        {
+            _closed ??= error;
+        }
     }
 
     public CompletionDrainStats Drain(
@@ -62,5 +78,13 @@ public sealed class MainThreadCompletionQueue
         }
 
         return new CompletionDrainStats(processed - errors, errors, _queue.Count);
+    }
+
+    private void ThrowIfClosed()
+    {
+        if (_closed != null)
+        {
+            throw _closed;
+        }
     }
 }

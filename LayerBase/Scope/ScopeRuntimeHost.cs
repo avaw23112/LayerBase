@@ -174,6 +174,7 @@ public sealed class ScopeRuntimeHost : IDisposable
                     postDispatcher: postDispatcher,
                     callDispatcher: callDispatcher);
 
+                scopes[i].SetResourcePlan(scopePlan.ResourcePlan);
                 scopes[i].UpdateServiceBindings(scopePlan.Services);
             }
 

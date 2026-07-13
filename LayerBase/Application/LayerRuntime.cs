@@ -27,12 +27,17 @@ public sealed partial class LayerRuntime : IDisposable
 {
     #region External Dependencies
     // 核心子系统，在构造时创建，贯穿 Runtime 生命周期。
+    private readonly RuntimeKernel _kernel;
     internal WorldServiceRoot Services { get; }
     internal EventCenter EventCenter { get; set; }
-    public ActorWorld Actors { get; }
+    public ActorWorld Actors => _kernel.Actors;
     public WorkerRuntime Worker { get; }
-    public ScopeRuntimeHost? ScopeHost { get; private set; }
-    public LayerExceptionHub ExceptionHub { get; }
+    public ScopeRuntimeHost? ScopeHost
+    {
+        get => _kernel.ScopeHost;
+        private set => _kernel.ScopeHost = value;
+    }
+    public LayerExceptionHub ExceptionHub => _kernel.Exceptions;
     public LayerHubExceptionCallbacks ExceptionCallbacks { get; }
     private readonly LayerRuntimeExceptionSink _exceptionSink;
     private readonly PostIngressQueue _postIngress = new();
@@ -91,7 +96,7 @@ public sealed partial class LayerRuntime : IDisposable
 
     public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
 
-    public LayerToolRegistry Tools { get; }
+    public LayerToolRegistry Tools => _kernel.Tools;
 
     public bool IsDebugMode { get; internal set; }
     #endregion
@@ -104,13 +109,11 @@ public sealed partial class LayerRuntime : IDisposable
     internal LayerRuntime(int id)
     {
         _id = id;
+        _kernel = new RuntimeKernel(this);
         EventCenter = new EventCenter();
-        Actors = new ActorWorld(this);
         Worker = new WorkerRuntime(Math.Max(1, Environment.ProcessorCount - 1));
-        Tools = new LayerToolRegistry(this);
         Services = new WorldServiceRoot(this);
         InitializeEcsWorld();
-        ExceptionHub = new LayerExceptionHub();
         ExceptionCallbacks = new LayerHubExceptionCallbacks();
         _exceptionSink = new LayerRuntimeExceptionSink(this, ExceptionCallbacks);
         _completionExceptionHandler = ex => ReportLayerEventError(-1, "System", "Completion", ex);

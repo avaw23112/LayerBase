@@ -32,11 +32,13 @@ public sealed class ScopeActorGateway : IProjectedActorLifecycleSink
 
     public int ScopeId => _scopeId;
 
-    bool IProjectedActorLifecycleSink.TryDisableProjectedActor(ActorId actorId)
+    ControlEnqueueResult IProjectedActorLifecycleSink.TryDisableProjectedActor(ActorId actorId)
     {
         if (_runtime == null || !ReferenceEquals(_runtime.Actors, _world))
         {
-            return _world.DisableProjectedActor(actorId);
+            return _world.DisableProjectedActor(actorId)
+                ? ControlEnqueueResult.AcceptedFast
+                : ControlEnqueueResult.Failed;
         }
 
         return _runtime.EnqueueActorLifecycle(new ActorCommandEnvelope(
@@ -46,13 +48,15 @@ public sealed class ScopeActorGateway : IProjectedActorLifecycleSink
             payloadHandle: 0));
     }
 
-    bool IProjectedActorLifecycleSink.TryReleaseProjectedActor(
+    ControlEnqueueResult IProjectedActorLifecycleSink.TryReleaseProjectedActor(
         ActorId actorId,
         ProjectedActorReleasePolicy releasePolicy)
     {
         if (_runtime == null || !ReferenceEquals(_runtime.Actors, _world))
         {
-            return _world.ReleaseProjectedActor(actorId, releasePolicy);
+            return _world.ReleaseProjectedActor(actorId, releasePolicy)
+                ? ControlEnqueueResult.AcceptedFast
+                : ControlEnqueueResult.Failed;
         }
 
         return _runtime.EnqueueActorLifecycle(new ActorCommandEnvelope(

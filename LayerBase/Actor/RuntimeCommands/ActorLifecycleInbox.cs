@@ -5,30 +5,83 @@ namespace LayerBase.Actor.RuntimeCommands;
 
 internal sealed class ActorLifecycleInbox
 {
-    private readonly LockedBoundedRingQueue<ActorCommandEnvelope> _queue;
+    private readonly LockedBoundedRingQueue<ActorCommandEnvelope> _fastLane;
+    private readonly Queue<ActorCommandEnvelope> _overflow = new();
+    private readonly object _gate = new();
+    private bool _closed;
 
     public ActorLifecycleInbox(int capacity)
     {
-        _queue = new LockedBoundedRingQueue<ActorCommandEnvelope>(capacity > 0 ? capacity : 128);
+        _fastLane = new LockedBoundedRingQueue<ActorCommandEnvelope>(Math.Max(16, capacity));
     }
 
-    public int Count => _queue.Count;
-    public bool IsFull => _queue.Count >= _queue.Capacity;
-
-    public bool TryEnqueue(ActorCommandEnvelope envelope)
+    public int Count
     {
-        return _queue.TryEnqueue(envelope);
+        get
+        {
+            lock (_gate)
+            {
+                return _fastLane.Count + _overflow.Count;
+            }
+        }
+    }
+
+    public bool IsFull => false;
+
+    public int OverflowCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _overflow.Count;
+            }
+        }
+    }
+
+    public ControlEnqueueResult TryEnqueue(ActorCommandEnvelope envelope)
+    {
+        lock (_gate)
+        {
+            if (_closed)
+            {
+                return ControlEnqueueResult.Closed;
+            }
+
+            if (_fastLane.TryEnqueue(envelope))
+            {
+                return ControlEnqueueResult.AcceptedFast;
+            }
+
+            _overflow.Enqueue(envelope);
+            return ControlEnqueueResult.AcceptedOverflow;
+        }
     }
 
     public bool TryDequeue(out ActorCommandEnvelope envelope)
     {
-        return _queue.TryDequeue(out envelope);
+        lock (_gate)
+        {
+            if (_fastLane.TryDequeue(out envelope))
+            {
+                return true;
+            }
+
+            if (_overflow.Count > 0)
+            {
+                envelope = _overflow.Dequeue();
+                return true;
+            }
+
+            envelope = default;
+            return false;
+        }
     }
 
     public int Drain(Action<ActorCommandEnvelope> action, int maxCount = 0)
     {
         int drained = 0;
-        while (_queue.TryDequeue(out ActorCommandEnvelope envelope))
+        while (TryDequeue(out ActorCommandEnvelope envelope))
         {
             action(envelope);
             drained++;
@@ -40,11 +93,18 @@ internal sealed class ActorLifecycleInbox
 
     public void Clear()
     {
-        while (_queue.TryDequeue(out _)) { }
+        lock (_gate)
+        {
+            while (_fastLane.TryDequeue(out _)) { }
+            _overflow.Clear();
+        }
     }
 
     public void Close()
     {
-        _queue.Close();
+        lock (_gate)
+        {
+            _closed = true;
+        }
     }
 }

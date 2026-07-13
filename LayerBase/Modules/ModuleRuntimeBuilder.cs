@@ -1,4 +1,5 @@
 using LayerBase.Scope;
+using LayerBase.Scope.Resources;
 
 namespace LayerBase.Modules;
 
@@ -23,6 +24,8 @@ public static class ModuleRuntimeBuilder
         var services = new List<ServiceContribution>();
         var contexts = new List<ContextContribution>();
         var handlers = new List<ScopeHandlerContribution>();
+        var resourceExports = new List<ScopeResourceExportContribution>();
+        var resourceImports = new List<ScopeResourceImportContribution>();
         var serviceModuleIndex = new Dictionary<RuntimeTypeHandle, int>();
         var handlerModuleIndex = new Dictionary<RuntimeTypeHandle, Dictionary<int, int>>();
 
@@ -58,6 +61,16 @@ public static class ModuleRuntimeBuilder
 
                 handlerMap[handler.ModuleLocalHandlerId] = moduleIdx;
             }
+
+            for (int i = 0; i < manifest.ResourceExports.Count; i++)
+            {
+                resourceExports.Add(manifest.ResourceExports[i]);
+            }
+
+            for (int i = 0; i < manifest.ResourceImports.Count; i++)
+            {
+                resourceImports.Add(manifest.ResourceImports[i]);
+            }
         }
 
         ValidateServices(layerContracts, scopeDefinitions, services);
@@ -82,6 +95,8 @@ public static class ModuleRuntimeBuilder
             services,
             contexts,
             handlers,
+            resourceExports,
+            resourceImports,
             scopeIds,
             serviceSlots,
             messageRouteIds,

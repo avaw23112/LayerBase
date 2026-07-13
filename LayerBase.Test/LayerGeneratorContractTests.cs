@@ -600,9 +600,92 @@ public class LayerGeneratorContractTests
                          {
                          }
                          """)]
+    [TestCase("LBG413", """
+                         using LayerBase.DI;
+                         using LayerBase.DI.Options;
+
+                         public sealed partial class GenericService<T> : IService
+                         {
+                             [Mount] private GenericContext _context = null!;
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+
+                         public sealed partial class GenericContext : ILayerContext
+                         {
+                         }
+                         """)]
     public void Layer_service_generator_reports_expected_diagnostic(string diagnosticId, string source)
     {
         var result = RunGenerators(source, new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain(diagnosticId),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Layer_service_generator_emits_fixed_mount_dependency_slots()
+    {
+        const string source = """
+                              using LayerBase.DI;
+                              using LayerBase.DI.Options;
+
+                              public sealed partial class CombatService : IService
+                              {
+                                  [Mount] private CombatContext _context = null!;
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+
+                              public sealed partial class CombatContext : ILayerContext
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("IGeneratedScopeMountMetadata"));
+        Assert.That(generated, Does.Contain("context.GetAt<global::CombatContext>(0)"));
+        Assert.That(generated, Does.Not.Contain("context.Get<"));
+    }
+
+    [TestCase("LBG413", """
+                         using System.Collections.Generic;
+                         using LayerBase.DI;
+
+                         public sealed partial class GenericProvider<T> : IService
+                         {
+                             [Provide("items")]
+                             private readonly List<int> _items = new();
+
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+                         """)]
+    [TestCase("LBG413", """
+                         using System.Collections.Generic;
+                         using LayerBase.DI;
+
+                         public sealed partial class Provider : IService
+                         {
+                             [Provide("items")]
+                             private readonly List<int> _items = new();
+
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+
+                         public sealed partial class GenericConsumer<T> : IService
+                         {
+                             [From(typeof(Provider), "items")]
+                             private List<int>? _items;
+
+                             public void ConfigureServices(IServiceCollection services) { }
+                         }
+                         """)]
+    public void Scope_resource_generators_report_generic_owner_diagnostic(string diagnosticId, string source)
+    {
+        var result = RunGenerators(source, new ScopeResourceGenerator(), new SharedFieldAnalyzer());
 
         Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain(diagnosticId),
             string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
@@ -1620,6 +1703,10 @@ public class LayerGeneratorContractTests
         string generated = string.Join(Environment.NewLine, result.GeneratedSources);
         Assert.That(generated, Does.Contain("namespace Game.Resources"));
         Assert.That(generated, Does.Contain("public sealed partial class InventoryService"));
+        Assert.That(generated, Does.Contain("IGeneratedScopeResourceExportMetadata"));
+        Assert.That(generated, Does.Contain("IGeneratedScopeResourceImportMetadata"));
+        Assert.That(generated, Does.Not.Contain("ScopeResourceContributionRegistry"));
+        Assert.That(generated, Does.Not.Contain("ContributionsRegistered"));
         Assert.That(generated, Does.Not.Contain("partial class global::"));
     }
 
@@ -1673,6 +1760,9 @@ public class LayerGeneratorContractTests
                               [Scope<CombatScope>]
                               public sealed partial class CombatService : IService
                               {
+                                  [Provide("combat-state")]
+                                  private readonly System.Collections.Generic.List<int> _state = new();
+
                                   public void ConfigureServices(IServiceCollection services) { }
 
                                   [ScopeEvent]
@@ -1691,6 +1781,8 @@ public class LayerGeneratorContractTests
                               [OwnerService(typeof(CombatService))]
                               public sealed partial class CombatContext : ILayerContext
                               {
+                                  [From(typeof(CombatService), "combat-state")]
+                                  private System.Collections.Generic.IReadOnlyList<int>? _state;
                               }
                               """;
 
@@ -1718,6 +1810,9 @@ public class LayerGeneratorContractTests
         Assert.That(generated, Does.Contain("typeof(global::Game.ModuleContract.GameplayLayer).TypeHandle"));
         Assert.That(generated, Does.Contain("new global::LayerBase.Modules.ContextContribution("));
         Assert.That(generated, Does.Contain("new global::LayerBase.Modules.ScopeHandlerContribution("));
+        Assert.That(generated, Does.Contain("new global::LayerBase.Scope.Resources.ScopeResourceExportContribution("));
+        Assert.That(generated, Does.Contain("new global::LayerBase.Scope.Resources.ScopeResourceImportContribution("));
+        Assert.That(generated, Does.Contain("\"combat-state\""));
         Assert.That(generated, Does.Not.Contain("partial class GameplayLayer"));
         Assert.That(generated, Does.Not.Contain("partial class CombatScope"));
     }

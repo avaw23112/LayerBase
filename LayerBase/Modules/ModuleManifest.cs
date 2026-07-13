@@ -1,5 +1,6 @@
 using LayerBase.DI;
 using LayerBase.Scope;
+using LayerBase.Scope.Resources;
 
 namespace LayerBase.Modules;
 
@@ -16,7 +17,9 @@ public sealed class ModuleManifest
         Array.Empty<ScopeMessageContractContribution>(),
         Array.Empty<ServiceContribution>(),
         Array.Empty<ContextContribution>(),
-        Array.Empty<ScopeHandlerContribution>());
+        Array.Empty<ScopeHandlerContribution>(),
+        Array.Empty<ScopeResourceExportContribution>(),
+        Array.Empty<ScopeResourceImportContribution>());
 
     public ModuleManifest(
         IReadOnlyList<LayerContractContribution> layerContracts,
@@ -25,6 +28,27 @@ public sealed class ModuleManifest
         IReadOnlyList<ServiceContribution> services,
         IReadOnlyList<ContextContribution> contexts,
         IReadOnlyList<ScopeHandlerContribution> handlers)
+        : this(
+            layerContracts,
+            scopeDefinitions,
+            messageContracts,
+            services,
+            contexts,
+            handlers,
+            Array.Empty<ScopeResourceExportContribution>(),
+            Array.Empty<ScopeResourceImportContribution>())
+    {
+    }
+
+    public ModuleManifest(
+        IReadOnlyList<LayerContractContribution> layerContracts,
+        IReadOnlyList<ScopeDefinitionContribution> scopeDefinitions,
+        IReadOnlyList<ScopeMessageContractContribution> messageContracts,
+        IReadOnlyList<ServiceContribution> services,
+        IReadOnlyList<ContextContribution> contexts,
+        IReadOnlyList<ScopeHandlerContribution> handlers,
+        IReadOnlyList<ScopeResourceExportContribution> resourceExports,
+        IReadOnlyList<ScopeResourceImportContribution> resourceImports)
     {
         LayerContracts = layerContracts ?? throw new ArgumentNullException(nameof(layerContracts));
         ScopeDefinitions = scopeDefinitions ?? throw new ArgumentNullException(nameof(scopeDefinitions));
@@ -32,6 +56,8 @@ public sealed class ModuleManifest
         Services = services ?? throw new ArgumentNullException(nameof(services));
         Contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         Handlers = handlers ?? throw new ArgumentNullException(nameof(handlers));
+        ResourceExports = resourceExports ?? throw new ArgumentNullException(nameof(resourceExports));
+        ResourceImports = resourceImports ?? throw new ArgumentNullException(nameof(resourceImports));
     }
 
     public IReadOnlyList<LayerContractContribution> LayerContracts { get; }
@@ -45,6 +71,10 @@ public sealed class ModuleManifest
     public IReadOnlyList<ContextContribution> Contexts { get; }
 
     public IReadOnlyList<ScopeHandlerContribution> Handlers { get; }
+
+    public IReadOnlyList<ScopeResourceExportContribution> ResourceExports { get; }
+
+    public IReadOnlyList<ScopeResourceImportContribution> ResourceImports { get; }
 }
 
 public enum ScopeMessageKind

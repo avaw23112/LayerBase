@@ -137,7 +137,14 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             if (info.MountMembers.Count > 0)
             {
-                if (!IsPartial(info.Symbol))
+                if (GeneratorOwnerDiagnostics.HasGenericContainingType(info.Symbol))
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        GeneratorOwnerDiagnostics.GenericOwnerNotSupported,
+                        info.Symbol.Locations.FirstOrDefault(),
+                        info.Symbol.ToDisplayString()));
+                }
+                else if (!IsPartial(info.Symbol))
                 {
                     var diagnostic = isLayer ? Diagnostics.MountLayerMustBePartial : Diagnostics.MountServiceMustBePartial;
                     spc.ReportDiagnostic(Diagnostic.Create(diagnostic,
@@ -765,7 +772,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                .Append(" : global::LayerBase.DI.IAutoServiceMount");
         if (mountMembers.Count > 0)
         {
-            builder.Append(", global::LayerBase.Scope.DI.IGeneratedScopeMount");
+            builder.Append(", global::LayerBase.Scope.DI.IGeneratedScopeMount, global::LayerBase.Scope.DI.IGeneratedScopeMountMetadata");
         }
         builder.AppendLine();
         builder.AppendLine("{");
@@ -785,6 +792,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         builder.AppendLine("    }");
 
         AppendScopeMountMethod(builder, mountMembers);
+        AppendScopeMountMetadata(builder, mountMembers);
 
         builder.AppendLine("}");
 
@@ -812,9 +820,10 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         }
 
         builder.Append("partial class ").Append(typeIdentifier)
-               .AppendLine(" : global::LayerBase.Scope.DI.IGeneratedScopeMount");
+               .AppendLine(" : global::LayerBase.Scope.DI.IGeneratedScopeMount, global::LayerBase.Scope.DI.IGeneratedScopeMountMetadata");
         builder.AppendLine("{");
         AppendScopeMountMethod(builder, mountMembers);
+        AppendScopeMountMetadata(builder, mountMembers);
         builder.AppendLine("}");
 
         if (!string.IsNullOrEmpty(@namespace)) builder.AppendLine("}");
@@ -833,6 +842,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         builder.AppendLine("    void global::LayerBase.Scope.DI.IGeneratedScopeMount.Mount(in global::LayerBase.Scope.DI.ScopeMountContext context)");
         builder.AppendLine("    {");
 
+        int localDependencyId = 0;
         foreach (var member in mountMembers.OrderBy(static member => member.Locations[0].SourceSpan.Start))
         {
             if (!CanAssignMountMember(member)) continue;
@@ -843,11 +853,43 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             string lookupTypeName = lookupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             builder.Append("        this.")
                    .Append(member.Name)
-                   .Append(" = context.Get<")
+                   .Append(" = context.GetAt<")
                    .Append(lookupTypeName)
-                   .AppendLine(">();");
+                   .Append(">(")
+                   .Append(localDependencyId++)
+                   .AppendLine(");");
         }
 
+        builder.AppendLine("    }");
+    }
+
+    private static void AppendScopeMountMetadata(StringBuilder builder, List<ISymbol> mountMembers)
+    {
+        if (mountMembers.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("    global::System.RuntimeTypeHandle[] global::LayerBase.Scope.DI.IGeneratedScopeMountMetadata.GetScopeMountDependencies()");
+        builder.AppendLine("    {");
+        builder.AppendLine("        return new global::System.RuntimeTypeHandle[]");
+        builder.AppendLine("        {");
+
+        foreach (var member in mountMembers.OrderBy(static member => member.Locations[0].SourceSpan.Start))
+        {
+            if (!CanAssignMountMember(member)) continue;
+
+            var lookupType = GetMountLookupType(member);
+            if (lookupType == null) continue;
+
+            string lookupTypeName = lookupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            builder.Append("            typeof(")
+                   .Append(lookupTypeName)
+                   .AppendLine(").TypeHandle,");
+        }
+
+        builder.AppendLine("        };");
         builder.AppendLine("    }");
     }
 

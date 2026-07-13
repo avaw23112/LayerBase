@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using Arch.Core;
 using LayerBase.Actor;
@@ -46,6 +45,7 @@ public sealed class ScopeRuntime : IDisposable
     private readonly LayerExceptionOptions _exceptionOptions = new();
     private LayerBaseSynchronizationContext? _context;
     private ScopeRouteTable? _routes;
+    private ScopeResourcePlan? _resourcePlan;
     private Thread? _workerThread;
     private readonly ActorWorld _actorWorld;
     private readonly bool _ownsActorWorld;
@@ -58,6 +58,10 @@ public sealed class ScopeRuntime : IDisposable
     private ManualResetEventSlim? _workerStartedSignal;
     private ManualResetEventSlim? _workerLaunchSignal;
     private int _workerLaunchSucceeded;
+    private bool _cleanupDeferred;
+    private bool _cleanupClaimed;
+    private int _executionDepth;
+    private int _ownerThreadId = -1;
 
     public ScopeRuntime(
         ScopeDescriptor descriptor,
@@ -278,6 +282,11 @@ public sealed class ScopeRuntime : IDisposable
         BindContexts();
     }
 
+    internal void SetResourcePlan(ScopeResourcePlan resourcePlan)
+    {
+        _resourcePlan = resourcePlan ?? throw new ArgumentNullException(nameof(resourcePlan));
+    }
+
     public void Start()
     {
         ThrowIfDisposed();
@@ -317,6 +326,7 @@ public sealed class ScopeRuntime : IDisposable
             return;
         }
 
+        SetOwnerThread(Environment.CurrentManagedThreadId);
         ExecuteInScope(StartScope);
         TryTransition(ScopeRuntimeState.Starting, ScopeRuntimeState.Running);
     }
@@ -324,9 +334,10 @@ public sealed class ScopeRuntime : IDisposable
     public void Pump(float deltaTime)
     {
         ThrowIfDisposed();
-        if (State >= ScopeRuntimeState.Stopped || Descriptor.Threading == ScopeThreadingMode.Worker)
+        ScopeRuntimeState state = State;
+        if (IsStoppedOrLater(state) || Descriptor.Threading == ScopeThreadingMode.Worker)
         {
-            if (State < ScopeRuntimeState.Stopped &&
+            if (IsBeforeStopped(state) &&
                 Descriptor.Threading == ScopeThreadingMode.Worker &&
                 Descriptor.Clock == ScopeClockMode.Manual)
             {
@@ -345,67 +356,46 @@ public sealed class ScopeRuntime : IDisposable
 
     public void Stop()
     {
-        bool shouldStop = false;
-        Thread? threadToJoin = null;
-
-        lock (_lifecycleGate)
+        if (Descriptor.Threading == ScopeThreadingMode.Inline)
         {
-            if (_state >= ScopeRuntimeState.Disposing) return;
-            if (_state >= ScopeRuntimeState.StopRequested)
-            {
-                threadToJoin = _workerThread;
-            }
-            else if (_state == ScopeRuntimeState.Created ||
-                     _state == ScopeRuntimeState.Starting ||
-                     _state == ScopeRuntimeState.Running)
-            {
-                _state = ScopeRuntimeState.StopRequested;
-                shouldStop = true;
-                threadToJoin = _workerThread;
-            }
+            RequireInlineOwnerThread();
         }
 
-        if (!shouldStop && threadToJoin != null)
+        RequestStop();
+
+        Thread? threadToJoin;
+        lock (_lifecycleGate)
+        {
+            threadToJoin = _workerThread;
+        }
+
+        if (Descriptor.Threading == ScopeThreadingMode.Worker && threadToJoin != null)
         {
             if (!ReferenceEquals(Thread.CurrentThread, threadToJoin))
             {
                 JoinWorkerIfNeeded(threadToJoin);
             }
+
             return;
         }
 
-        if (!shouldStop) return;
-
-        CloseBusinessIngress();
-        _workerRunning = false;
-
-        if (Descriptor.Threading == ScopeThreadingMode.Worker && threadToJoin != null)
+        if (Volatile.Read(ref _stopCleanupStarted) != 0)
         {
-            if (ReferenceEquals(Thread.CurrentThread, threadToJoin))
-            {
-                ExecuteStopInternalOnce();
-            }
-            else
-            {
-                JoinWorkerIfNeeded(threadToJoin);
-            }
-            return;
+            WaitForStopCleanup();
         }
-
-        ExecuteStopInternalOnce();
     }
 
     public bool TryPost(ScopePostMessage message)
     {
         ThrowIfDisposed();
-        if (State >= ScopeRuntimeState.StopRequested) return false;
+        if (!AcceptsBusinessIngress(State)) return false;
         return _postInbox.TryEnqueue(message) == QueueEnqueueResult.Accepted;
     }
 
     public bool TryCall(ScopeCallMessage message)
     {
         ThrowIfDisposed();
-        if (State >= ScopeRuntimeState.StopRequested) return false;
+        if (!AcceptsBusinessIngress(State)) return false;
         return _callInbox.TryEnqueue(message) == QueueEnqueueResult.Accepted;
     }
 
@@ -441,6 +431,7 @@ public sealed class ScopeRuntime : IDisposable
         where T : struct
     {
         ThrowIfDisposed();
+        RequireBusinessIngressOpen(nameof(SchedulePost));
 
         int eventId = EventTypeId<T>.Id;
         EventTimerPolicy? timerPolicy = _policyTable.GetTimerPolicy(eventId);
@@ -461,7 +452,7 @@ public sealed class ScopeRuntime : IDisposable
         Thread? threadToJoin = null;
         lock (_lifecycleGate)
         {
-            if (_state >= ScopeRuntimeState.Disposing) return;
+            if (IsDisposingOrDisposed(_state)) return;
             _state = ScopeRuntimeState.Disposing;
             threadToJoin = _workerThread;
         }
@@ -478,8 +469,6 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         ExecuteStopInternalOnce();
-
-        lock (_lifecycleGate) { _state = ScopeRuntimeState.Stopped; }
 
         _subscriptionRegistry?.Dispose();
         _subscriptionRegistry = null;
@@ -498,6 +487,7 @@ public sealed class ScopeRuntime : IDisposable
 
     private void WorkerLoop()
     {
+        SetOwnerThread(Environment.CurrentManagedThreadId);
         try
         {
             var stopwatch = Stopwatch.StartNew();
@@ -567,32 +557,54 @@ public sealed class ScopeRuntime : IDisposable
 
     private void ExecuteInScope(Action action)
     {
-        var token = ScopeExecution.Enter(this);
-        using (GetOrCreateContext().EnterScope())
+        BeginOwnerExecution();
+        try
         {
-            try
+            var token = ScopeExecution.Enter(this);
+            using (GetOrCreateContext().EnterScope())
             {
-                action();
+                try
+                {
+                    action();
+                }
+                finally
+                {
+                    token.Dispose();
+                }
             }
-            finally
+        }
+        finally
+        {
+            if (EndOwnerExecution())
             {
-                token.Dispose();
+                ExecuteStopInternalOnce();
             }
         }
     }
 
     private void ExecuteInScope(Action<ScopeRuntime, float> action, float deltaTime)
     {
-        var token = ScopeExecution.Enter(this);
-        using (GetOrCreateContext().EnterScope())
+        BeginOwnerExecution();
+        try
         {
-            try
+            var token = ScopeExecution.Enter(this);
+            using (GetOrCreateContext().EnterScope())
             {
-                action(this, deltaTime);
+                try
+                {
+                    action(this, deltaTime);
+                }
+                finally
+                {
+                    token.Dispose();
+                }
             }
-            finally
+        }
+        finally
+        {
+            if (EndOwnerExecution())
             {
-                token.Dispose();
+                ExecuteStopInternalOnce();
             }
         }
     }
@@ -797,33 +809,35 @@ public sealed class ScopeRuntime : IDisposable
         }
     }
 
-    private void RequestStop()
+    public void RequestStop()
     {
-        bool shouldStop = false;
+        bool cleanupNow;
         lock (_lifecycleGate)
         {
-            if (_state >= ScopeRuntimeState.StopRequested) return;
-            if (_state == ScopeRuntimeState.Created ||
-                _state == ScopeRuntimeState.Starting ||
-                _state == ScopeRuntimeState.Running)
+            if (IsTerminal(_state) ||
+                _state is ScopeRuntimeState.Disposing)
+            {
+                return;
+            }
+
+            if (AcceptsBusinessIngress(_state))
             {
                 _state = ScopeRuntimeState.StopRequested;
-                shouldStop = true;
             }
-            else return;
-        }
 
-        if (!shouldStop) return;
+            _workerRunning = false;
+            _cleanupDeferred = true;
+
+            bool canCleanupOnCurrentThread = CanCurrentThreadRunOwnerCleanupNoLock();
+            cleanupNow = canCleanupOnCurrentThread && TryClaimDeferredCleanupNoLock();
+        }
 
         CloseBusinessIngress();
-        _workerRunning = false;
 
-        if (Descriptor.Threading == ScopeThreadingMode.Worker)
+        if (cleanupNow)
         {
-            return;
+            ExecuteStopInternalOnce();
         }
-
-        ExecuteStopInternalOnce();
     }
 
     private void WaitForWorkerStartup()
@@ -894,17 +908,19 @@ public sealed class ScopeRuntime : IDisposable
         {
             lock (_lifecycleGate)
             {
-                if (_state < ScopeRuntimeState.StopRequested)
+                if (AcceptsBusinessIngress(_state))
                     _state = ScopeRuntimeState.StopRequested;
-                if (_state < ScopeRuntimeState.Disposing)
+                if (_state is not ScopeRuntimeState.Disposing and not ScopeRuntimeState.Disposed)
                     _state = ScopeRuntimeState.Stopping;
+                _cleanupClaimed = true;
+                _cleanupDeferred = false;
             }
 
             ExecuteInScope(StopInternal);
 
             lock (_lifecycleGate)
             {
-                if (_state < ScopeRuntimeState.Disposing)
+                if (_state is not ScopeRuntimeState.Disposing and not ScopeRuntimeState.Disposed)
                     _state = ScopeRuntimeState.Stopped;
             }
         }
@@ -923,6 +939,139 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         _stopCleanupFinished.Wait();
+    }
+
+    private void BeginOwnerExecution()
+    {
+        lock (_lifecycleGate)
+        {
+            _executionDepth++;
+        }
+    }
+
+    private bool EndOwnerExecution()
+    {
+        lock (_lifecycleGate)
+        {
+            _executionDepth--;
+            if (_executionDepth < 0)
+            {
+                throw new InvalidOperationException("Scope execution depth underflow.");
+            }
+
+            return TryClaimDeferredCleanupNoLock();
+        }
+    }
+
+    private bool TryClaimDeferredCleanupNoLock()
+    {
+        if (_executionDepth != 0 ||
+            !_cleanupDeferred ||
+            _cleanupClaimed)
+        {
+            return false;
+        }
+
+        _cleanupClaimed = true;
+        _cleanupDeferred = false;
+        if (_state is not ScopeRuntimeState.Disposing and not ScopeRuntimeState.Disposed)
+        {
+            _state = ScopeRuntimeState.Stopping;
+        }
+
+        return true;
+    }
+
+    private static bool AcceptsBusinessIngress(ScopeRuntimeState state)
+    {
+        return state is ScopeRuntimeState.Created
+            or ScopeRuntimeState.Starting
+            or ScopeRuntimeState.Running;
+    }
+
+    private static bool IsTerminal(ScopeRuntimeState state)
+    {
+        return state is ScopeRuntimeState.Stopped
+            or ScopeRuntimeState.Faulted
+            or ScopeRuntimeState.Disposed;
+    }
+
+    private static bool IsBeforeStopped(ScopeRuntimeState state)
+    {
+        return state is ScopeRuntimeState.Created
+            or ScopeRuntimeState.Starting
+            or ScopeRuntimeState.Running
+            or ScopeRuntimeState.StopRequested
+            or ScopeRuntimeState.Stopping;
+    }
+
+    private static bool IsStoppedOrLater(ScopeRuntimeState state)
+    {
+        return state is ScopeRuntimeState.Stopped
+            or ScopeRuntimeState.Faulted
+            or ScopeRuntimeState.Disposing
+            or ScopeRuntimeState.Disposed;
+    }
+
+    private static bool IsDisposingOrDisposed(ScopeRuntimeState state)
+    {
+        return state is ScopeRuntimeState.Disposing
+            or ScopeRuntimeState.Disposed;
+    }
+
+    private void SetOwnerThread(int threadId)
+    {
+        lock (_lifecycleGate)
+        {
+            if (_ownerThreadId == -1)
+            {
+                _ownerThreadId = threadId;
+                return;
+            }
+
+            if (_ownerThreadId != threadId)
+            {
+                throw new InvalidOperationException(
+                    $"Scope '{Descriptor.Name}' owner thread is already assigned.");
+            }
+        }
+    }
+
+    private bool CanCurrentThreadRunOwnerCleanupNoLock()
+    {
+        return Descriptor.Threading == ScopeThreadingMode.Worker
+            ? ReferenceEquals(Thread.CurrentThread, _workerThread)
+            : _ownerThreadId == Environment.CurrentManagedThreadId;
+    }
+
+    private void RequireInlineOwnerThread()
+    {
+        lock (_lifecycleGate)
+        {
+            int currentThreadId = Environment.CurrentManagedThreadId;
+            if (_ownerThreadId == -1)
+            {
+                _ownerThreadId = currentThreadId;
+                return;
+            }
+
+            if (_ownerThreadId == currentThreadId)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"Inline scope '{Descriptor.Name}' Stop must be called from its owner thread. Use RequestStop from other threads.");
+        }
+    }
+
+    private void RequireBusinessIngressOpen(string apiName)
+    {
+        ScopeRuntimeState state = State;
+        if (!AcceptsBusinessIngress(state))
+        {
+            throw new ScopeStoppedException(ScopeId, Descriptor.Name, apiName);
+        }
     }
 
     private InvalidOperationException CreateScopeStoppedException(string message)
@@ -1049,109 +1198,136 @@ public sealed class ScopeRuntime : IDisposable
     {
         _serviceProvider?.Dispose();
         _serviceProvider = new ScopeServiceProvider(Services, Contexts);
+        object[] scopeObjects = Services.Cast<object>().Concat(Contexts).ToArray();
 
         for (int i = 0; i < Services.Length; i++)
         {
-            if (Services[i] is IGeneratedScopeMount mount)
-            {
-                mount.Mount(new ScopeMountContext(this, i, -1));
-            }
+            MountGeneratedObject(Services[i], serviceSlot: i, contextSlot: -1, scopeObjects);
         }
 
         for (int i = 0; i < Contexts.Length; i++)
         {
-            if (Contexts[i] is IGeneratedScopeMount mount)
+            ScopeContextPlan contextPlan = i < _contextPlans.Length
+                ? _contextPlans[i]
+                : new ScopeContextPlan(i, Contexts[i].GetType(), -1, Contexts[i]);
+            MountGeneratedObject(
+                Contexts[i],
+                contextPlan.OwnerServiceSlot,
+                contextPlan.ContextSlot,
+                scopeObjects);
+        }
+    }
+
+    private void MountGeneratedObject(
+        object target,
+        int serviceSlot,
+        int contextSlot,
+        object[] scopeObjects)
+    {
+        if (target is not IGeneratedScopeMount mount)
+        {
+            return;
+        }
+
+        if (target is not IGeneratedScopeMountMetadata metadata)
+        {
+            throw new InvalidOperationException(
+                $"Generated scope mount '{target.GetType().FullName}' does not provide mount dependency metadata.");
+        }
+
+        RuntimeTypeHandle[] dependencies = metadata.GetScopeMountDependencies();
+        var dependencySlots = new int[dependencies.Length];
+        for (int i = 0; i < dependencies.Length; i++)
+        {
+            Type? dependencyType = Type.GetTypeFromHandle(dependencies[i]);
+            if (dependencyType == null)
             {
-                ScopeContextPlan contextPlan = i < _contextPlans.Length
-                    ? _contextPlans[i]
-                    : new ScopeContextPlan(i, Contexts[i].GetType(), -1, Contexts[i]);
-                mount.Mount(new ScopeMountContext(this, contextPlan.OwnerServiceSlot, contextPlan.ContextSlot));
+                throw new InvalidOperationException("Scope mount dependency metadata contains an unknown type.");
             }
-        }
-    }
 
-    internal T GetServiceAt<T>(int slot) where T : class
-    {
-        if ((uint)slot >= (uint)Services.Length)
-        {
-            throw new InvalidOperationException($"Scope service slot out of range: {slot}.");
+            dependencySlots[i] = ResolveMountDependencySlot(dependencyType, serviceSlot, contextSlot);
         }
 
-        return (T)Services[slot];
+        mount.Mount(new ScopeMountContext(scopeObjects, dependencySlots, 0));
     }
 
-    internal T GetMountedObject<T>(int serviceSlot, int contextSlot) where T : class
+    private int ResolveMountDependencySlot(Type dependencyType, int serviceSlot, int contextSlot)
     {
-        if (contextSlot >= 0 && serviceSlot >= 0 && (uint)serviceSlot < (uint)Services.Length &&
-            Services[serviceSlot] is T ownerService)
+        if (contextSlot >= 0 &&
+            serviceSlot >= 0 &&
+            (uint)serviceSlot < (uint)Services.Length &&
+            dependencyType.IsInstanceOfType(Services[serviceSlot]))
         {
-            return ownerService;
+            return serviceSlot;
         }
 
         if (serviceSlot >= 0)
         {
+            int contextOffset = Services.Length;
             for (int i = 0; i < _contextPlans.Length; i++)
             {
                 ScopeContextPlan contextPlan = _contextPlans[i];
-                if (contextPlan.OwnerServiceSlot == serviceSlot && contextPlan.Instance is T ownedContext)
+                if (contextPlan.OwnerServiceSlot == serviceSlot &&
+                    dependencyType.IsInstanceOfType(contextPlan.Instance))
                 {
-                    return ownedContext;
+                    return contextOffset + contextPlan.ContextSlot;
                 }
             }
         }
 
         for (int i = 0; i < Services.Length; i++)
         {
-            if (Services[i] is T service)
+            if (dependencyType.IsInstanceOfType(Services[i]))
             {
-                return service;
+                return i;
             }
         }
 
+        int offset = Services.Length;
         for (int i = 0; i < Contexts.Length; i++)
         {
-            if (Contexts[i] is T context)
+            if (dependencyType.IsInstanceOfType(Contexts[i]))
             {
-                return context;
+                return offset + i;
             }
         }
 
-        throw new InvalidOperationException($"Scope mount dependency not registered: {typeof(T)}.");
+        throw new InvalidOperationException($"Scope mount dependency not registered: {dependencyType}.");
     }
 
     private void RebuildScopeResources()
     {
         object[] candidates = Services.Cast<object>().Concat(Contexts).ToArray();
-        var generatedPublishers = candidates.OfType<IGeneratedScopeResourcePublisher>().ToArray();
-        var generatedConsumers = candidates.OfType<IGeneratedScopeResourceConsumer>().ToArray();
-        if (generatedPublishers.Length > 0 || generatedConsumers.Length > 0)
+        ScopeResourcePlan plan = _resourcePlan ?? BuildDirectResourcePlan(candidates);
+        if (!plan.IsEmpty)
         {
-            EnsureGeneratedScopeResourcesRegistered(candidates);
-            var contributions = ScopeResourceContributionRegistry.CollectFor(candidates);
-            if (contributions.Exports.Length > 0 || contributions.Imports.Length > 0)
-            {
-                ResourceRegistry.Initialize(
-                    generatedPublishers,
-                    generatedConsumers,
-                    contributions.Exports,
-                    contributions.Imports);
-            }
+            ResourceRegistry.Initialize(candidates, plan);
         }
     }
 
-    private static void EnsureGeneratedScopeResourcesRegistered(
-        IReadOnlyList<object> candidates)
+    private static ScopeResourcePlan BuildDirectResourcePlan(IReadOnlyList<object> candidates)
     {
+        var objectCandidates = new ScopeResourceObjectCandidate[candidates.Count];
+        var exports = new List<ScopeResourceExportContribution>();
+        var imports = new List<ScopeResourceImportContribution>();
+
         for (int i = 0; i < candidates.Count; i++)
         {
-            if (candidates[i] is not IGeneratedScopeResourcePublisher &&
-                candidates[i] is not IGeneratedScopeResourceConsumer)
+            object candidate = candidates[i];
+            objectCandidates[i] = new ScopeResourceObjectCandidate(candidate.GetType().TypeHandle, i);
+
+            if (candidate is IGeneratedScopeResourceExportMetadata exportMetadata)
             {
-                continue;
+                exports.AddRange(exportMetadata.GetScopeResourceExports());
             }
 
-            RuntimeHelpers.RunClassConstructor(candidates[i].GetType().TypeHandle);
+            if (candidate is IGeneratedScopeResourceImportMetadata importMetadata)
+            {
+                imports.AddRange(importMetadata.GetScopeResourceImports());
+            }
         }
+
+        return ScopeResourcePlanBuilder.Build(objectCandidates, exports, imports);
     }
 
     private void RebindSubscriptions()
@@ -1314,7 +1490,7 @@ public sealed class ScopeRuntime : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (State >= ScopeRuntimeState.Disposing)
+        if (IsDisposingOrDisposed(State))
         {
             throw new ObjectDisposedException(nameof(ScopeRuntime));
         }

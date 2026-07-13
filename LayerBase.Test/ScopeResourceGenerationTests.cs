@@ -17,7 +17,8 @@ public sealed class ScopeResourceGenerationTests
         Assert.That(source, Does.Not.Contain("Assembly.GetType"));
         Assert.That(source, Does.Not.Contain("GetMethod("));
         Assert.That(source, Does.Not.Contain(".Invoke(null"));
-        Assert.That(source, Does.Contain("ScopeResourceContributionRegistry.CollectFor"));
+        Assert.That(source, Does.Not.Contain("ScopeResourceContributionRegistry"));
+        Assert.That(source, Does.Not.Contain("RunClassConstructor"));
     }
 
     [Test]

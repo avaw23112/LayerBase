@@ -87,11 +87,13 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
         var validPublishes = publishes
             .Where(p => p != null)
             .Select(p => p!)
+            .Where(p => ReportGenericOwner(spc, p))
             .Where(static p => CanGeneratePartialChain(p.ContainingType))
             .ToImmutableArray();
         var validUses = uses
             .Where(p => p != null)
             .Select(p => p!)
+            .Where(p => ReportGenericOwner(spc, p))
             .Where(static p => CanGeneratePartialChain(p.ContainingType))
             .ToImmutableArray();
 
@@ -134,11 +136,9 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
             AppendPartialTypeStart(
                 sb,
                 group.Key,
-                " : global::LayerBase.Scope.Resources.IGeneratedScopeResourcePublisher");
+                " : global::LayerBase.Scope.Resources.IGeneratedScopeResourcePublisher, global::LayerBase.Scope.Resources.IGeneratedScopeResourceExportMetadata");
 
             string indent = GetMemberIndent(group.Key);
-            sb.AppendLine($"{indent}private static readonly bool __LayerBaseScopeResourcePublisherContributionsRegistered = __LayerBaseRegisterScopeResourcePublisherContributions();");
-            sb.AppendLine();
             sb.AppendLine($"{indent}object global::LayerBase.Scope.Resources.IGeneratedScopeResourcePublisher.GetPublishedResource(int exportId)");
             sb.AppendLine($"{indent}{{");
             sb.AppendLine($"{indent}    switch (exportId)");
@@ -155,10 +155,9 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine($"{indent}}}");
             sb.AppendLine();
-            sb.AppendLine($"{indent}private static bool __LayerBaseRegisterScopeResourcePublisherContributions()");
+            sb.AppendLine($"{indent}global::LayerBase.Scope.Resources.ScopeResourceExportContribution[] global::LayerBase.Scope.Resources.IGeneratedScopeResourceExportMetadata.GetScopeResourceExports()");
             sb.AppendLine($"{indent}{{");
-            sb.AppendLine($"{indent}    global::LayerBase.Scope.Resources.ScopeResourceContributionRegistry.Register(");
-            sb.AppendLine($"{indent}        new global::LayerBase.Scope.Resources.ScopeResourceExportContribution[]");
+            sb.AppendLine($"{indent}    return new global::LayerBase.Scope.Resources.ScopeResourceExportContribution[]");
             sb.AppendLine($"{indent}        {{");
 
             int localSlot = 0;
@@ -171,10 +170,7 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
                     $"{SymbolDisplay.FormatLiteral(member.LocalKey, quote: true)}, {exportId++}, {localSlot++}),");
             }
 
-            sb.AppendLine($"{indent}        }},");
-            sb.AppendLine($"{indent}        global::System.Array.Empty<global::LayerBase.Scope.Resources.ScopeResourceImportContribution>());");
-            sb.AppendLine();
-            sb.AppendLine($"{indent}    return true;");
+            sb.AppendLine($"{indent}        }};");
             sb.AppendLine($"{indent}}}");
             AppendPartialTypeEnd(sb, group.Key);
             sb.AppendLine();
@@ -188,11 +184,9 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
             AppendPartialTypeStart(
                 sb,
                 group.Key,
-                " : global::LayerBase.Scope.Resources.IGeneratedScopeResourceConsumer");
+                " : global::LayerBase.Scope.Resources.IGeneratedScopeResourceConsumer, global::LayerBase.Scope.Resources.IGeneratedScopeResourceImportMetadata");
 
             string indent = GetMemberIndent(group.Key);
-            sb.AppendLine($"{indent}private static readonly bool __LayerBaseScopeResourceConsumerContributionsRegistered = __LayerBaseRegisterScopeResourceConsumerContributions();");
-            sb.AppendLine();
             sb.AppendLine($"{indent}void global::LayerBase.Scope.Resources.IGeneratedScopeResourceConsumer.BindScopeResource(int importId, object resource)");
             sb.AppendLine($"{indent}{{");
             sb.AppendLine($"{indent}    switch (importId)");
@@ -220,11 +214,9 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
 
             sb.AppendLine($"{indent}}}");
             sb.AppendLine();
-            sb.AppendLine($"{indent}private static bool __LayerBaseRegisterScopeResourceConsumerContributions()");
+            sb.AppendLine($"{indent}global::LayerBase.Scope.Resources.ScopeResourceImportContribution[] global::LayerBase.Scope.Resources.IGeneratedScopeResourceImportMetadata.GetScopeResourceImports()");
             sb.AppendLine($"{indent}{{");
-            sb.AppendLine($"{indent}    global::LayerBase.Scope.Resources.ScopeResourceContributionRegistry.Register(");
-            sb.AppendLine($"{indent}        global::System.Array.Empty<global::LayerBase.Scope.Resources.ScopeResourceExportContribution>(),");
-            sb.AppendLine($"{indent}        new global::LayerBase.Scope.Resources.ScopeResourceImportContribution[]");
+            sb.AppendLine($"{indent}    return new global::LayerBase.Scope.Resources.ScopeResourceImportContribution[]");
             sb.AppendLine($"{indent}        {{");
 
             int localSlot = 0;
@@ -238,9 +230,7 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
                     $"{SymbolDisplay.FormatLiteral(member.LocalKey, quote: true)}, {importId++}, {localSlot++}),");
             }
 
-            sb.AppendLine($"{indent}        }});");
-            sb.AppendLine();
-            sb.AppendLine($"{indent}    return true;");
+            sb.AppendLine($"{indent}        }};");
             sb.AppendLine($"{indent}}}");
             AppendPartialTypeEnd(sb, group.Key);
             sb.AppendLine();
@@ -470,6 +460,20 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
         }
 
         return true;
+    }
+
+    private static bool ReportGenericOwner(SourceProductionContext spc, ResourceInfo resource)
+    {
+        if (!GeneratorOwnerDiagnostics.HasGenericContainingType(resource.ContainingType))
+        {
+            return true;
+        }
+
+        spc.ReportDiagnostic(Diagnostic.Create(
+            GeneratorOwnerDiagnostics.GenericOwnerNotSupported,
+            resource.Location,
+            resource.ContainingType.ToDisplayString()));
+        return false;
     }
 
     private static bool IsPartialType(INamedTypeSymbol symbol)

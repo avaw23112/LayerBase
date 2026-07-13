@@ -1,5 +1,6 @@
 using LayerBase.DI;
 using LayerBase.DI.Options;
+using LayerBase.Core.Event;
 using LayerBase.Scope;
 
 namespace LayerBase.Test;
@@ -33,7 +34,7 @@ public sealed class ScopeLifecycleConcurrencyTests
     public void Dispose_must_not_return_before_concurrent_stop_cleanup_finishes()
     {
         var service = new BlockingDisposeService();
-        using var scope = CreateInlineScope(service);
+        using var scope = CreateWorkerScope(service, 1220);
 
         scope.Start();
 
@@ -56,6 +57,82 @@ public sealed class ScopeLifecycleConcurrencyTests
         }
 
         Assert.That(service.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Inline_request_stop_from_non_owner_thread_must_defer_cleanup_until_owner_pump()
+    {
+        var service = new CountingDisposeService();
+        using var scope = CreateInlineScope(service);
+
+        scope.Start();
+        Task requestStop = Task.Run(scope.RequestStop);
+        Assert.That(requestStop.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        Assert.That(service.DisposeCount, Is.EqualTo(0));
+
+        scope.Pump(0);
+
+        Assert.That(service.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Inline_stop_from_non_owner_thread_must_not_dispose_scope()
+    {
+        var service = new CountingDisposeService();
+        using var scope = CreateInlineScope(service);
+
+        scope.Start();
+        var stop = Task.Run(() => Assert.Throws<InvalidOperationException>(scope.Stop));
+        Assert.That(stop.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        Assert.That(service.DisposeCount, Is.EqualTo(0));
+
+        scope.Stop();
+
+        Assert.That(service.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Schedule_post_after_request_stop_must_reject_business_ingress()
+    {
+        var service = new CountingDisposeService();
+        using var scope = CreateInlineScope(service);
+
+        scope.Start();
+        scope.RequestStop();
+
+        Assert.Throws<ScopeStoppedException>(() =>
+            scope.SchedulePost(new ScopeLifecycleRequestStopEvent(), 0));
+    }
+
+    [Test]
+    public void RequestStop_inside_handler_must_defer_service_disposal_until_handler_returns()
+    {
+        var service = new ScopeLifecycleRequestStopHandlerService();
+        using var scope = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1211,
+                name: "LifecycleRequestStopScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            new IService[] { service },
+            postDispatcher: static (runtime, message) =>
+            {
+                runtime.EventCenter.Send((ScopeLifecycleRequestStopEvent)message.Payload);
+            });
+
+        scope.SetContexts(Array.Empty<ILayerContext>());
+        scope.Start();
+        Assert.That(scope.TryPost(new ScopePostMessage(0, new ScopeLifecycleRequestStopEvent())), Is.True);
+        scope.Pump(0);
+
+        Assert.That(service.RequestStopWasPublic, Is.True);
+        Assert.That(service.DisposedInsideHandler, Is.False);
+        Assert.That(service.DisposeCount, Is.EqualTo(1));
+        Assert.That(service.HandlerReturnedBeforeDispose, Is.True);
     }
 
     private static ScopeRuntime CreateWorkerScope(IService service, int iteration)
@@ -142,5 +219,56 @@ public sealed class ScopeLifecycleConcurrencyTests
                 throw new TimeoutException("Test did not release BlockingDisposeService.Dispose.");
             }
         }
+    }
+
+    private sealed class CountingDisposeService : IService, IDisposable
+    {
+        public int DisposeCount;
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+
+        public void Dispose()
+        {
+            Interlocked.Increment(ref DisposeCount);
+        }
+    }
+
+}
+
+internal readonly struct ScopeLifecycleRequestStopEvent
+{
+}
+
+internal sealed partial class ScopeLifecycleRequestStopHandlerService : IService, IDisposable
+{
+    private int _handlerReturned;
+
+    public bool RequestStopWasPublic;
+    public bool DisposedInsideHandler;
+    public bool HandlerReturnedBeforeDispose;
+    public int DisposeCount;
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    [Subscribe]
+    public void OnEvent(in ScopeLifecycleRequestStopEvent _)
+    {
+        ScopeRuntime scope = ScopeObjectBinder.Require(this).Scope;
+        var requestStop = typeof(ScopeRuntime).GetMethod("RequestStop");
+
+        RequestStopWasPublic = requestStop != null;
+        requestStop?.Invoke(scope, Array.Empty<object>());
+        DisposedInsideHandler = DisposeCount != 0;
+        Volatile.Write(ref _handlerReturned, 1);
+    }
+
+    public void Dispose()
+    {
+        HandlerReturnedBeforeDispose = Volatile.Read(ref _handlerReturned) != 0;
+        Interlocked.Increment(ref DisposeCount);
     }
 }

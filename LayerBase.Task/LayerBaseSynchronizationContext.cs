@@ -85,18 +85,18 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
     public void Dispose()
     {
-        ObjectDisposedException disposed;
+        var disposed = new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
         lock (_lock)
         {
             _disposed = true;
             for (int i = 0; i < _frameWork.Count; i++)
             {
-                _frameWork[i].Work.CancelOnDispose(new ObjectDisposedException(nameof(LayerBaseSynchronizationContext)));
+                _frameWork[i].Work.CancelOnDispose(disposed);
             }
             _frameWork.Clear();
-            disposed = new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
         }
 
+        CompletionQueue.Close(disposed);
         while (_queue.TryDequeue(out WorkItem work))
         {
             work.CancelOnDispose(disposed);
@@ -113,13 +113,18 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         var item = new WorkItem(d, state);
         lock (_lock)
         {
-            if (_disposed) return;
+            ThrowIfDisposedNoLock();
             _queue.Enqueue(item);
         }
     }
 
     public override void Send(SendOrPostCallback d, object? state)
     {
+        lock (_lock)
+        {
+            ThrowIfDisposedNoLock();
+        }
+
         if (Thread.CurrentThread.ManagedThreadId == _mainThreadId)
         {
             d(state);
@@ -150,13 +155,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
         lock (_lock)
         {
-            if (_disposed)
-            {
-                sendWork.TryCancel(new ObjectDisposedException(nameof(LayerBaseSynchronizationContext)));
-                gate.Wait();
-                if (sendWork.Error != null) throw sendWork.Error;
-                return;
-            }
+            ThrowIfDisposedNoLock();
             _queue.Enqueue(item);
         }
 
@@ -176,8 +175,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         {
             if (_disposed)
             {
-                workItem.CancelOnDispose(new ObjectDisposedException(nameof(LayerBaseSynchronizationContext)));
-                return;
+                throw new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
             }
 
             if (frames <= 0)
@@ -187,6 +185,14 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             }
 
             _frameWork.Add(new FrameWorkItem(frames, workItem));
+        }
+    }
+
+    private void ThrowIfDisposedNoLock()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
         }
     }
 

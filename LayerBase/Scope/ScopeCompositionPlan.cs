@@ -1,5 +1,6 @@
 using LayerBase.DI;
 using LayerBase.Modules;
+using LayerBase.Scope.Resources;
 
 namespace LayerBase.Scope;
 
@@ -32,12 +33,14 @@ public sealed class ScopePlan
         ScopeDescriptor descriptor,
         Type? scopeType,
         ScopeServicePlan[] services,
-        ScopeContextPlan[] contexts)
+        ScopeContextPlan[] contexts,
+        ScopeResourcePlan? resourcePlan = null)
     {
         Descriptor = descriptor;
         ScopeType = scopeType;
         Services = services ?? throw new ArgumentNullException(nameof(services));
         Contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
+        ResourcePlan = resourcePlan ?? ScopeResourcePlan.Empty;
     }
 
     public ScopeDescriptor Descriptor { get; }
@@ -47,6 +50,8 @@ public sealed class ScopePlan
     public ScopeServicePlan[] Services { get; }
 
     public ScopeContextPlan[] Contexts { get; }
+
+    internal ScopeResourcePlan ResourcePlan { get; }
 }
 
 public readonly struct ScopeServicePlan

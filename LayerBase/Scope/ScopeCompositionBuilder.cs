@@ -1,5 +1,6 @@
 using LayerBase.DI;
 using LayerBase.Modules;
+using LayerBase.Scope.Resources;
 
 namespace LayerBase.Scope;
 
@@ -26,6 +27,7 @@ internal static class ScopeCompositionBuilder
         var scopeTypesById = new Type?[maxScopeId + 1];
         var scopeServicesById = new ScopeServicePlan[maxScopeId + 1][];
         var scopeContextsById = new List<ScopeContextPlan>[maxScopeId + 1];
+        var resourcePlansById = new ScopeResourcePlan[maxScopeId + 1];
         var serviceScopeIds = new Dictionary<RuntimeTypeHandle, int>();
 
         scopeDescriptorsById[0] = ScopeDescriptors.Main;
@@ -137,15 +139,25 @@ internal static class ScopeCompositionBuilder
             ScopeDescriptors.Main,
             typeof(MainScope),
             Array.Empty<ScopeServicePlan>(),
-            Array.Empty<ScopeContextPlan>());
+            Array.Empty<ScopeContextPlan>(),
+            ScopeResourcePlan.Empty);
 
         for (int scopeId = 1; scopeId <= maxScopeId; scopeId++)
         {
+            ScopeServicePlan[] servicesForScope = scopeServicesById[scopeId] ?? Array.Empty<ScopeServicePlan>();
+            ScopeContextPlan[] contextsForScope = scopeContextsById[scopeId]?.ToArray() ?? Array.Empty<ScopeContextPlan>();
+            resourcePlansById[scopeId] = BuildResourcePlan(
+                servicesForScope,
+                contextsForScope,
+                catalog.ResourceExports,
+                catalog.ResourceImports);
+
             scopes[scopeId] = new ScopePlan(
                 scopeDescriptorsById[scopeId],
                 scopeTypesById[scopeId],
-                scopeServicesById[scopeId] ?? Array.Empty<ScopeServicePlan>(),
-                scopeContextsById[scopeId]?.ToArray() ?? Array.Empty<ScopeContextPlan>());
+                servicesForScope,
+                contextsForScope,
+                resourcePlansById[scopeId]);
         }
 
         return new ScopeCompositionPlan(
@@ -206,7 +218,8 @@ internal static class ScopeCompositionBuilder
                 original.Descriptor,
                 original.ScopeType,
                 updatedServices,
-                updatedContexts);
+                updatedContexts,
+                original.ResourcePlan);
         }
 
         return new ScopeCompositionPlan(
@@ -260,6 +273,43 @@ internal static class ScopeCompositionBuilder
         }
 
         return new LayerMembership(minIndex, maxIndex - minIndex + 1);
+    }
+
+    private static ScopeResourcePlan BuildResourcePlan(
+        ScopeServicePlan[] services,
+        ScopeContextPlan[] contexts,
+        IReadOnlyList<ScopeResourceExportContribution> exports,
+        IReadOnlyList<ScopeResourceImportContribution> imports)
+    {
+        if ((exports.Count == 0 && imports.Count == 0) ||
+            (services.Length == 0 && contexts.Length == 0))
+        {
+            return ScopeResourcePlan.Empty;
+        }
+
+        var candidates = new List<ScopeResourceObjectCandidate>(services.Length + contexts.Length);
+        for (int i = 0; i < services.Length; i++)
+        {
+            Type? serviceType = services[i].ServiceType;
+            if (serviceType != null)
+            {
+                candidates.Add(new ScopeResourceObjectCandidate(serviceType.TypeHandle, services[i].ServiceSlot));
+            }
+        }
+
+        int contextOffset = services.Length;
+        for (int i = 0; i < contexts.Length; i++)
+        {
+            Type? contextType = contexts[i].ContextType;
+            if (contextType != null)
+            {
+                candidates.Add(new ScopeResourceObjectCandidate(
+                    contextType.TypeHandle,
+                    contextOffset + contexts[i].ContextSlot));
+            }
+        }
+
+        return ScopeResourcePlanBuilder.Build(candidates, exports, imports);
     }
 
     private static LayerMembership ComputeContextMembership(

@@ -25,6 +25,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\LayerBase\LayerBase.csproj"/>
+        <ProjectReference Include="..\LayerBase.Task\LayerBase.Task.csproj"/>
         <ProjectReference Include="..\LayerBase.Generator\LayerBase.Generator\LayerBase.Generator.csproj"
                           OutputItemType="Analyzer"
                           ReferenceOutputAssembly="true"/>

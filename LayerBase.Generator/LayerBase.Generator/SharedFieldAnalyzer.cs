@@ -111,7 +111,19 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         foreach (var item in allValidFields)
         {
             var typeKey = item.ContainingType.ToDisplayString();
-            if (checkedTypes.Add(typeKey) && !IsPartialType(item.ContainingType))
+            if (!checkedTypes.Add(typeKey))
+            {
+                continue;
+            }
+
+            if (GeneratorOwnerDiagnostics.HasGenericContainingType(item.ContainingType))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorOwnerDiagnostics.GenericOwnerNotSupported,
+                    item.Location,
+                    item.ContainingType.ToDisplayString()));
+            }
+            else if (!IsPartialType(item.ContainingType))
             {
                 spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.TypeNotPartial, item.Location, item.ContainingType.ToDisplayString()));
             }

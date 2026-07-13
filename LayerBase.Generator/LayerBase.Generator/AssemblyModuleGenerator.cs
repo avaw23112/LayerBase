@@ -23,6 +23,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     private const string ScopeEventHandlerAttributeName = "LayerBase.Scope.ScopeEventAttribute";
     private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
     private const string OwnerServiceAttributeName = "LayerBase.DI.Options.OwnerServiceAttribute";
+    private const string ProvideAttributeName = "LayerBase.DI.ProvideAttribute";
+    private const string FromAttributeName = "LayerBase.DI.FromAttribute";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
     private const string ILayerContextMetadataName = "LayerBase.DI.ILayerContext";
 
@@ -47,12 +49,34 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                                   static (ctx, _) => GetHandlerContribution(ctx))
                               .Where(static item => item != null)!;
 
+        var providedResources = context.SyntaxProvider
+                                       .ForAttributeWithMetadataName(
+                                           ProvideAttributeName,
+                                           static (node, _) => node is VariableDeclaratorSyntax or PropertyDeclarationSyntax,
+                                           static (ctx, _) => GetResourceContribution(ctx, isExport: true))
+                                       .Where(static item => item != null)!;
+
+        var importedResources = context.SyntaxProvider
+                                       .ForAttributeWithMetadataName(
+                                           FromAttributeName,
+                                           static (node, _) => node is VariableDeclaratorSyntax,
+                                           static (ctx, _) => GetResourceContribution(ctx, isExport: false))
+                                       .Where(static item => item != null)!;
+
+        var resources = providedResources.Collect().Combine(importedResources.Collect());
         var combined = modules.Collect()
                               .Combine(types.Collect())
-                              .Combine(handlers.Collect());
+                              .Combine(handlers.Collect())
+                              .Combine(resources);
 
         context.RegisterSourceOutput(combined, static (spc, source) =>
-            Generate(spc, source.Left.Left, source.Left.Right, source.Right));
+            Generate(
+                spc,
+                source.Left.Left.Left,
+                source.Left.Left.Right,
+                source.Left.Right,
+                source.Right.Left,
+                source.Right.Right));
     }
 
     private static ModuleInfo? GetModule(GeneratorAttributeSyntaxContext context)
@@ -212,11 +236,68 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             kind);
     }
 
+    private static ResourceContribution? GetResourceContribution(GeneratorAttributeSyntaxContext context, bool isExport)
+    {
+        ISymbol symbol = context.TargetSymbol;
+        if (symbol.ContainingType == null ||
+            HasAttribute(symbol.ContainingType, ModuleIgnoreAttributeName))
+        {
+            return null;
+        }
+
+        AttributeData attr = context.Attributes[0];
+        string ownerType = symbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        int sourceStart = symbol.Locations.FirstOrDefault()?.SourceSpan.Start ?? 0;
+
+        if (isExport)
+        {
+            if (attr.ConstructorArguments.Length < 1 ||
+                attr.ConstructorArguments[0].Value is not string localKey ||
+                string.IsNullOrEmpty(localKey))
+            {
+                return null;
+            }
+
+            ITypeSymbol? resourceType = symbol switch
+            {
+                IFieldSymbol field => field.Type,
+                IPropertySymbol property => property.Type,
+                _ => null
+            };
+
+            return resourceType == null
+                ? null
+                : ResourceContribution.Export(
+                    ownerType,
+                    resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    localKey,
+                    sourceStart);
+        }
+
+        if (attr.ConstructorArguments.Length < 2 ||
+            attr.ConstructorArguments[0].Value is not ITypeSymbol providerType ||
+            attr.ConstructorArguments[1].Value is not string importKey ||
+            string.IsNullOrEmpty(importKey) ||
+            symbol is not IFieldSymbol fieldSymbol)
+        {
+            return null;
+        }
+
+        return ResourceContribution.Import(
+            ownerType,
+            providerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            fieldSymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            importKey,
+            sourceStart);
+    }
+
     private static void Generate(
         SourceProductionContext context,
         ImmutableArray<ModuleInfo?> nullableModules,
         ImmutableArray<TypeContribution?> nullableTypes,
-        ImmutableArray<HandlerContribution?> nullableHandlers)
+        ImmutableArray<HandlerContribution?> nullableHandlers,
+        ImmutableArray<ResourceContribution?> nullableResourceExports,
+        ImmutableArray<ResourceContribution?> nullableResourceImports)
     {
         var modules = nullableModules
                       .Where(static item => item != null)
@@ -240,6 +321,18 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                        .OrderBy(static item => item.MessageType, StringComparer.Ordinal)
                        .ThenBy(static item => item.ServiceType, StringComparer.Ordinal)
                        .ToImmutableArray();
+        var resourceExports = nullableResourceExports
+                              .Where(static item => item != null)
+                              .Select(static item => item!)
+                              .OrderBy(static item => item.OwnerType, StringComparer.Ordinal)
+                              .ThenBy(static item => item.SourceStart)
+                              .ToImmutableArray();
+        var resourceImports = nullableResourceImports
+                              .Where(static item => item != null)
+                              .Select(static item => item!)
+                              .OrderBy(static item => item.OwnerType, StringComparer.Ordinal)
+                              .ThenBy(static item => item.SourceStart)
+                              .ToImmutableArray();
 
         var layerContracts = types
                              .Where(static item => item.Kind == TypeContributionKind.LayerContract)
@@ -294,7 +387,9 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                 messageContracts,
                 services,
                 contexts,
-                handlers);
+                handlers,
+                resourceExports,
+                resourceImports);
         }
     }
 
@@ -335,7 +430,9 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         ImmutableArray<TypeContribution> messageContracts,
         ImmutableArray<TypeContribution> services,
         ImmutableArray<TypeContribution> contexts,
-        ImmutableArray<HandlerContribution> handlers)
+        ImmutableArray<HandlerContribution> handlers,
+        ImmutableArray<ResourceContribution> resourceExports,
+        ImmutableArray<ResourceContribution> resourceImports)
     {
         var builder = new StringBuilder();
         builder.AppendLine("// <auto-generated />");
@@ -361,6 +458,10 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         AppendContexts(builder, contexts);
         builder.AppendLine(",");
         AppendHandlers(builder, handlers);
+        builder.AppendLine(",");
+        AppendResourceExports(builder, resourceExports);
+        builder.AppendLine(",");
+        AppendResourceImports(builder, resourceImports);
         builder.AppendLine(");");
         builder.AppendLine("    }");
 
@@ -520,6 +621,53 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             builder.AppendLine($"                    {i},");
             builder.AppendLine($"                    global::LayerBase.Modules.ScopeMessageKind.{handler.Kind}),");
         }
+        builder.Append("            }");
+    }
+
+    private static void AppendResourceExports(StringBuilder builder, ImmutableArray<ResourceContribution> exports)
+    {
+        builder.AppendLine("            resourceExports: new global::LayerBase.Scope.Resources.ScopeResourceExportContribution[]");
+        builder.AppendLine("            {");
+
+        int exportId = 0;
+        foreach (IGrouping<string, ResourceContribution> group in exports.GroupBy(static item => item.OwnerType))
+        {
+            int localSlot = 0;
+            foreach (ResourceContribution export in group.OrderBy(static item => item.SourceStart))
+            {
+                builder.AppendLine("                new global::LayerBase.Scope.Resources.ScopeResourceExportContribution(");
+                builder.AppendLine($"                    typeof({export.OwnerType}).TypeHandle,");
+                builder.AppendLine($"                    typeof({export.ResourceType}).TypeHandle,");
+                builder.AppendLine($"                    {SymbolDisplay.FormatLiteral(export.LocalKey, quote: true)},");
+                builder.AppendLine($"                    {exportId++},");
+                builder.AppendLine($"                    {localSlot++}),");
+            }
+        }
+
+        builder.Append("            }");
+    }
+
+    private static void AppendResourceImports(StringBuilder builder, ImmutableArray<ResourceContribution> imports)
+    {
+        builder.AppendLine("            resourceImports: new global::LayerBase.Scope.Resources.ScopeResourceImportContribution[]");
+        builder.AppendLine("            {");
+
+        int importId = 0;
+        foreach (IGrouping<string, ResourceContribution> group in imports.GroupBy(static item => item.OwnerType))
+        {
+            int localSlot = 0;
+            foreach (ResourceContribution import in group.OrderBy(static item => item.SourceStart))
+            {
+                builder.AppendLine("                new global::LayerBase.Scope.Resources.ScopeResourceImportContribution(");
+                builder.AppendLine($"                    typeof({import.OwnerType}).TypeHandle,");
+                builder.AppendLine($"                    typeof({import.ProviderType}).TypeHandle,");
+                builder.AppendLine($"                    typeof({import.ResourceType}).TypeHandle,");
+                builder.AppendLine($"                    {SymbolDisplay.FormatLiteral(import.LocalKey, quote: true)},");
+                builder.AppendLine($"                    {importId++},");
+                builder.AppendLine($"                    {localSlot++}),");
+            }
+        }
+
         builder.Append("            }");
     }
 
@@ -783,5 +931,57 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         public string ServiceType { get; }
         public string ScopeType { get; }
         public string Kind { get; }
+    }
+
+    private sealed class ResourceContribution
+    {
+        private ResourceContribution(
+            string ownerType,
+            string providerType,
+            string resourceType,
+            string localKey,
+            int sourceStart)
+        {
+            OwnerType = ownerType;
+            ProviderType = providerType;
+            ResourceType = resourceType;
+            LocalKey = localKey;
+            SourceStart = sourceStart;
+        }
+
+        public string OwnerType { get; }
+        public string ProviderType { get; }
+        public string ResourceType { get; }
+        public string LocalKey { get; }
+        public int SourceStart { get; }
+
+        public static ResourceContribution Export(
+            string ownerType,
+            string resourceType,
+            string localKey,
+            int sourceStart)
+        {
+            return new ResourceContribution(
+                ownerType,
+                ownerType,
+                resourceType,
+                localKey,
+                sourceStart);
+        }
+
+        public static ResourceContribution Import(
+            string ownerType,
+            string providerType,
+            string resourceType,
+            string localKey,
+            int sourceStart)
+        {
+            return new ResourceContribution(
+                ownerType,
+                providerType,
+                resourceType,
+                localKey,
+                sourceStart);
+        }
     }
 }

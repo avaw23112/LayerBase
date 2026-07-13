@@ -1,13 +1,14 @@
 using System;
 using LayerBase.Actor;
+using LayerBase.Actor.RuntimeCommands;
 
 namespace LayerBase.ECS.Projection;
 
 internal interface IProjectedActorLifecycleSink
 {
-    bool TryDisableProjectedActor(ActorId actorId);
+    ControlEnqueueResult TryDisableProjectedActor(ActorId actorId);
 
-    bool TryReleaseProjectedActor(
+    ControlEnqueueResult TryReleaseProjectedActor(
         ActorId actorId,
         ProjectedActorReleasePolicy releasePolicy);
 }
@@ -21,15 +22,19 @@ internal sealed class ActorWorldProjectedActorLifecycleSink : IProjectedActorLif
         _world = world ?? throw new ArgumentNullException(nameof(world));
     }
 
-    public bool TryDisableProjectedActor(ActorId actorId)
+    public ControlEnqueueResult TryDisableProjectedActor(ActorId actorId)
     {
-        return _world.DisableProjectedActor(actorId);
+        return _world.DisableProjectedActor(actorId)
+            ? ControlEnqueueResult.AcceptedFast
+            : ControlEnqueueResult.Failed;
     }
 
-    public bool TryReleaseProjectedActor(
+    public ControlEnqueueResult TryReleaseProjectedActor(
         ActorId actorId,
         ProjectedActorReleasePolicy releasePolicy)
     {
-        return _world.ReleaseProjectedActor(actorId, releasePolicy);
+        return _world.ReleaseProjectedActor(actorId, releasePolicy)
+            ? ControlEnqueueResult.AcceptedFast
+            : ControlEnqueueResult.Failed;
     }
 }

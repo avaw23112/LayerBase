@@ -112,6 +112,7 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
 
     public TResult GetResult()
     {
+        TResult result;
         lock (_gate)
         {
             if (!_completed)
@@ -129,8 +130,11 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
                 throw _exception;
             }
 
-            return _result!;
+            result = _result!;
         }
+
+        _continuationScope?.AwaitRegistry.Unregister(this);
+        return result;
     }
 
     public void SetResult(TResult result)
@@ -166,11 +170,6 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
             _continuation = null;
         }
 
-        if (_continuationScope != null)
-        {
-            _continuationScope.AwaitRegistry.Unregister(this);
-        }
-
         if (continuation != null)
         {
             ScheduleContinuation(continuation);
@@ -190,6 +189,8 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
             _continuationScope.AwaitRegistry.Unregister(this);
             throw new InvalidOperationException("ScopePromise continuation could not be scheduled on its owner scope.");
         }
+
+        _continuationScope.AwaitRegistry.Unregister(this);
     }
 
     public readonly struct Awaiter : INotifyCompletion

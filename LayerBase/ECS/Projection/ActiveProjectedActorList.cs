@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Arch.Core;
+using LayerBase.Actor.RuntimeCommands;
 
 namespace LayerBase.ECS.Projection;
 
@@ -121,7 +122,13 @@ internal sealed class ActiveProjectedActorList
         switch (meta.RetirePolicy)
         {
             case ProjectedActorRetirePolicy.Disable:
-                if (!lifecycleSink.TryDisableProjectedActor(meta.ActorId))
+                ControlEnqueueResult disableResult = lifecycleSink.TryDisableProjectedActor(meta.ActorId);
+                if (disableResult == ControlEnqueueResult.Closed)
+                {
+                    return;
+                }
+
+                if (disableResult == ControlEnqueueResult.Failed)
                 {
                     ProjectedActorBindingUtility.Clear(world, entity, ref meta);
                     actorRef.ClearActor();
@@ -129,7 +136,7 @@ internal sealed class ActiveProjectedActorList
                     return;
                 }
 
-                meta.State = ProjectedActorState.Disabled;
+                meta.State = ProjectedActorState.DisablePending;
 
                 // ExpireAtTicks 参数作用：
                 // Disable 后不再让该 Actor 持续命中到期判断。
@@ -139,9 +146,12 @@ internal sealed class ActiveProjectedActorList
                 return;
 
             case ProjectedActorRetirePolicy.ReturnToPool:
-                lifecycleSink.TryReleaseProjectedActor(
+                if (lifecycleSink.TryReleaseProjectedActor(
                     meta.ActorId,
-                    ProjectedActorReleasePolicy.ReturnToPool);
+                    ProjectedActorReleasePolicy.ReturnToPool) == ControlEnqueueResult.Closed)
+                {
+                    return;
+                }
 
                 ProjectedActorBindingUtility.Clear(world, entity, ref meta);
                 actorRef.ClearActor();
@@ -149,9 +159,12 @@ internal sealed class ActiveProjectedActorList
                 return;
 
             case ProjectedActorRetirePolicy.DestroyImmediately:
-                lifecycleSink.TryReleaseProjectedActor(
+                if (lifecycleSink.TryReleaseProjectedActor(
                     meta.ActorId,
-                    ProjectedActorReleasePolicy.DestroyImmediately);
+                    ProjectedActorReleasePolicy.DestroyImmediately) == ControlEnqueueResult.Closed)
+                {
+                    return;
+                }
 
                 ProjectedActorBindingUtility.Clear(world, entity, ref meta);
                 actorRef.ClearActor();
@@ -159,9 +172,12 @@ internal sealed class ActiveProjectedActorList
                 return;
 
             case ProjectedActorRetirePolicy.DetachAndLetActorFinish:
-                lifecycleSink.TryReleaseProjectedActor(
+                if (lifecycleSink.TryReleaseProjectedActor(
                     meta.ActorId,
-                    ProjectedActorReleasePolicy.DetachAndLetActorFinish);
+                    ProjectedActorReleasePolicy.DetachAndLetActorFinish) == ControlEnqueueResult.Closed)
+                {
+                    return;
+                }
 
                 ProjectedActorBindingUtility.Clear(world, entity, ref meta);
                 actorRef.ClearActor();

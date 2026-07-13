@@ -114,8 +114,10 @@ internal enum ProjectedActorState : byte
     None = 0,
     Projectable = 1,
     Active = 2,
-    Disabled = 3,
-    Released = 4
+    DisablePending = 3,
+    Disabled = 4,
+    ReleasePending = 5,
+    Released = 6
 }
 
 public enum ProjectedActorReleasePolicy : byte

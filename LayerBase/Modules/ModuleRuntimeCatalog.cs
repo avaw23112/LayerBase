@@ -1,4 +1,5 @@
 using LayerBase.Scope;
+using LayerBase.Scope.Resources;
 
 namespace LayerBase.Modules;
 
@@ -13,6 +14,8 @@ public sealed class ModuleRuntimeCatalog
         IReadOnlyList<ServiceContribution> services,
         IReadOnlyList<ContextContribution> contexts,
         IReadOnlyList<ScopeHandlerContribution> handlers,
+        IReadOnlyList<ScopeResourceExportContribution> resourceExports,
+        IReadOnlyList<ScopeResourceImportContribution> resourceImports,
         IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds,
         IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots,
         IReadOnlyDictionary<RuntimeTypeHandle, int> messageRouteIds,
@@ -28,6 +31,8 @@ public sealed class ModuleRuntimeCatalog
         Services = services;
         Contexts = contexts;
         Handlers = handlers;
+        ResourceExports = resourceExports;
+        ResourceImports = resourceImports;
         ScopeIds = scopeIds;
         ServiceSlots = serviceSlots;
         MessageRouteIds = messageRouteIds;
@@ -51,6 +56,10 @@ public sealed class ModuleRuntimeCatalog
     public IReadOnlyList<ContextContribution> Contexts { get; }
 
     public IReadOnlyList<ScopeHandlerContribution> Handlers { get; }
+
+    public IReadOnlyList<ScopeResourceExportContribution> ResourceExports { get; }
+
+    public IReadOnlyList<ScopeResourceImportContribution> ResourceImports { get; }
 
     public IReadOnlyDictionary<RuntimeTypeHandle, int> ScopeIds { get; }
 
