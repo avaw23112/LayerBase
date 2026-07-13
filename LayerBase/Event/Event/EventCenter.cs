@@ -15,10 +15,10 @@ namespace LayerBase.Core.Event;
 public sealed class EventCenter
 {
     private static readonly ConcurrentDictionary<Type, EventBucketRegistration> s_registeredEventTypes = new();
-    private readonly ConcurrentDictionary<int, Action> _bucketCacheResetters = new();
     private readonly ConcurrentDictionary<int, IEventBucketNonGeneric> _eventBuckets = new();
     private readonly ConcurrentDictionary<Type, byte> _reflectionFallbackTypes = new();
     private readonly object _lock = new();
+    private IEventBucketNonGeneric?[] _bucketFastCache = new IEventBucketNonGeneric?[64];
     private int _isResetting;
     private int _reflectionFallbackCount;
 
@@ -170,8 +170,11 @@ public sealed class EventCenter
     internal EventHandledState Send<T>(in T value) where T : struct
     {
         if (Volatile.Read(ref _isResetting) == 1) return EventHandledState.Continue;
-        var cached = BucketCache<T>.Instance;
-        if (cached != null && cached.Owner == this) return cached.Dispatch(in value);
+        int typeId = EventTypeId<T>.Id;
+        IEventBucketNonGeneric? cached = (uint)typeId < (uint)_bucketFastCache.Length
+            ? Volatile.Read(ref _bucketFastCache[typeId])
+            : null;
+        if (cached is EventBucket<T> typedCached) return typedCached.Dispatch(in value);
         return GetBucket<T>().Dispatch(in value);
     }
 
@@ -195,8 +198,7 @@ public sealed class EventCenter
                 if (bucket is IDisposable b)
                     b.Dispose();
             _eventBuckets.Clear();
-            foreach (var resetter in _bucketCacheResetters.Values) resetter();
-            _bucketCacheResetters.Clear();
+            Array.Clear(_bucketFastCache, 0, _bucketFastCache.Length);
         }
 
         Volatile.Write(ref _isResetting, 0);
@@ -245,29 +247,68 @@ public sealed class EventCenter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private EventBucket<T> GetBucket<T>() where T : struct
     {
-        var cached = BucketCache<T>.Instance;
-        if (cached != null && cached.Owner == this) return cached;
         var typeId = EventTypeId<T>.Id;
-        _bucketCacheResetters.TryAdd(typeId, static () => BucketCache<T>.Instance = null);
+        IEventBucketNonGeneric? cached = (uint)typeId < (uint)_bucketFastCache.Length
+            ? Volatile.Read(ref _bucketFastCache[typeId])
+            : null;
+        if (cached is EventBucket<T> typedCached) return typedCached;
+
         var bucket = (EventBucket<T>)_eventBuckets.GetOrAdd(typeId, _ => new EventBucket<T>(this));
-        BucketCache<T>.Instance = bucket;
+        StoreFastBucket(typeId, bucket);
         return bucket;
     }
 
     private IEventBucketNonGeneric GetBucket(Type eventType)
     {
         var typeId = GetEventTypeId(eventType);
+        IEventBucketNonGeneric? cached = (uint)typeId < (uint)_bucketFastCache.Length
+            ? Volatile.Read(ref _bucketFastCache[typeId])
+            : null;
+        if (cached != null) return cached;
+
+        IEventBucketNonGeneric bucket;
         if (s_registeredEventTypes.TryGetValue(eventType, out EventBucketRegistration registration))
         {
-            return _eventBuckets.GetOrAdd(typeId, _ => registration.CreateBucket(this));
+            bucket = _eventBuckets.GetOrAdd(typeId, _ => registration.CreateBucket(this));
+            StoreFastBucket(typeId, bucket);
+            return bucket;
         }
 
-        return _eventBuckets.GetOrAdd(typeId, _ =>
+        bucket = _eventBuckets.GetOrAdd(typeId, _ =>
         {
             RecordReflectionFallback(eventType);
             var bucketType = typeof(EventBucket<>).MakeGenericType(eventType);
             return (IEventBucketNonGeneric)Activator.CreateInstance(bucketType, this);
         });
+        StoreFastBucket(typeId, bucket);
+        return bucket;
+    }
+
+    private void StoreFastBucket(int typeId, IEventBucketNonGeneric bucket)
+    {
+        if (typeId < 0)
+        {
+            return;
+        }
+
+        if ((uint)typeId >= (uint)_bucketFastCache.Length)
+        {
+            lock (_lock)
+            {
+                if (typeId >= _bucketFastCache.Length)
+                {
+                    int newLength = _bucketFastCache.Length;
+                    while (newLength <= typeId)
+                    {
+                        newLength *= 2;
+                    }
+
+                    Array.Resize(ref _bucketFastCache, newLength);
+                }
+            }
+        }
+
+        Volatile.Write(ref _bucketFastCache[typeId], bucket);
     }
 
     private static int GetEventTypeId(Type eventType)
@@ -309,11 +350,6 @@ public sealed class EventCenter
         {
             return _factory(center);
         }
-    }
-
-    private static class BucketCache<T> where T : struct
-    {
-        public static EventBucket<T>? Instance;
     }
 
     private interface IResetable : IDisposable

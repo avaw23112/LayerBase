@@ -648,7 +648,7 @@ public sealed class ScopeRuntimeFoundationTests
     {
         var first = new DisposeTrackingScopeContext();
         var throwing = new ThrowingDisposeScopeContext();
-        var second = new DisposeTrackingScopeContext();
+        var second = new SecondDisposeTrackingScopeContext();
 
         using var runtime = new ScopeRuntime(
             new ScopeDescriptor(
@@ -1437,6 +1437,34 @@ public sealed class ScopeRuntimeFoundationTests
     }
 
     [Test]
+    public void LayerRuntime_module_mode_should_pump_runtime_post_scheduler()
+    {
+        LayerHub.Reset();
+
+        using var module = new ScopeCatalogTestModule(
+            scopeDefinitions:
+            [
+                new ScopeDefinitionContribution(
+                    typeof(ScopeCatalogCombatScope).TypeHandle,
+                    ScopeThreadingMode.Inline,
+                    ScopeClockMode.EngineDriven,
+                    0,
+                    ScopeStopPolicy.Drain)
+            ]);
+
+        var layer = new ModuleModeRuntimePostLayer();
+        using LayerRuntime runtime = LayerHub.CreateLayers()
+            .Push(layer)
+            .Install(module)
+            .Build();
+
+        runtime.Post(new ModuleModeRuntimePostEvent(7));
+        runtime.Pump(0.016f);
+
+        Assert.That(layer.Service.Total, Is.EqualTo(7));
+    }
+
+    [Test]
     public void ScopeRuntimeHost_start_pump_stop_should_drive_inline_scopes_in_scope_execution()
     {
         var main = new HostMainService();
@@ -2060,6 +2088,10 @@ public sealed class ScopeRuntimeFoundationTests
         }
     }
 
+    private sealed class SecondDisposeTrackingScopeContext : DisposeTrackingScopeContext
+    {
+    }
+
     private sealed class WorkerProbeService : IService, IInitializable, IServiceScopeBinding, IDisposable
     {
         public ManualResetEventSlim Initialized { get; } = new();
@@ -2526,6 +2558,41 @@ internal sealed class ScopeCatalogCombatScope
 
 internal sealed class ScopeCatalogOwnerLayer : Layer
 {
+}
+
+internal sealed class ModuleModeRuntimePostLayer : Layer
+{
+    public ModuleModeRuntimePostService Service { get; } = new();
+
+    public override void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton(Service);
+    }
+}
+
+internal sealed partial class ModuleModeRuntimePostService : IService
+{
+    public int Total { get; private set; }
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    [Subscribe]
+    public void OnPost(in ModuleModeRuntimePostEvent value)
+    {
+        Total += value.Value;
+    }
+}
+
+internal readonly struct ModuleModeRuntimePostEvent
+{
+    public ModuleModeRuntimePostEvent(int value)
+    {
+        Value = value;
+    }
+
+    public int Value { get; }
 }
 
 internal readonly struct ScopeCatalogCall

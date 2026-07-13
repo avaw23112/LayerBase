@@ -48,6 +48,22 @@ public sealed class ScopeActorGateway : IProjectedActorLifecycleSink
             payloadHandle: 0));
     }
 
+    ControlEnqueueResult IProjectedActorLifecycleSink.TryEnableProjectedActor(ActorId actorId)
+    {
+        if (_runtime == null || !ReferenceEquals(_runtime.Actors, _world))
+        {
+            return _world.EnableProjectedActorIfDisabled(actorId)
+                ? ControlEnqueueResult.AcceptedFast
+                : ControlEnqueueResult.Failed;
+        }
+
+        return _runtime.EnqueueActorLifecycle(new ActorCommandEnvelope(
+            ActorCommandKind.Enable,
+            actorId,
+            routeId: 0,
+            payloadHandle: 0));
+    }
+
     ControlEnqueueResult IProjectedActorLifecycleSink.TryReleaseProjectedActor(
         ActorId actorId,
         ProjectedActorReleasePolicy releasePolicy)

@@ -12,10 +12,13 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     internal MainThreadCompletionQueue CompletionQueue { get; } = new();
     private bool _disposed;
 
-    private LayerBaseSynchronizationContext(int mainThreadId)
+    private LayerBaseSynchronizationContext(int mainThreadId, bool allowThreadPoolFallbackOnDispose)
     {
         _mainThreadId = mainThreadId;
+        AllowThreadPoolFallbackOnDispose = allowThreadPoolFallbackOnDispose;
     }
+
+    internal bool AllowThreadPoolFallbackOnDispose { get; }
 
     public void Update(
         int                       maxItems        = 0,
@@ -103,9 +106,11 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         }
     }
 
-    public static LayerBaseSynchronizationContext Install()
+    public static LayerBaseSynchronizationContext Install(bool allowThreadPoolFallbackOnDispose = true)
     {
-        return new LayerBaseSynchronizationContext(Thread.CurrentThread.ManagedThreadId);
+        return new LayerBaseSynchronizationContext(
+            Thread.CurrentThread.ManagedThreadId,
+            allowThreadPoolFallbackOnDispose);
     }
 
     public override void Post(SendOrPostCallback d, object? state)
@@ -217,6 +222,12 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             if (_state is SendWorkItem sendWork)
             {
                 sendWork.TryCancel(error);
+                return;
+            }
+
+            if (_state is IContextDisposeCancellable cancellable)
+            {
+                cancellable.CancelOnDispose(error);
             }
         }
     }
@@ -290,4 +301,9 @@ public interface IArchMainThreadPump
         int                       maxItems        = 0,
         CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
         Action<Exception>?        reportException = null);
+}
+
+internal interface IContextDisposeCancellable
+{
+    void CancelOnDispose(Exception error);
 }

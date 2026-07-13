@@ -39,7 +39,8 @@ public sealed class ModuleRuntimeBuilderTests
         Assert.That(catalog.ServiceSlots[typeof(TestService).TypeHandle], Is.EqualTo(0));
         Assert.That(catalog.MessageRouteIds[typeof(TestCall).TypeHandle], Is.EqualTo(0));
         Assert.That(catalog.CallRoutes, Has.Count.EqualTo(1));
-        Assert.That(catalog.EventRoutes, Has.Count.EqualTo(0));
+        Assert.That(catalog.EventRoutes, Has.Count.EqualTo(1));
+        Assert.That(catalog.EventRoutes[0].HandlerCount, Is.EqualTo(0));
         Assert.That(catalog.EventHandlerRoutes, Has.Count.EqualTo(0));
     }
 
@@ -135,6 +136,81 @@ public sealed class ModuleRuntimeBuilderTests
     }
 
     [Test]
+    public void Build_indexes_call_and_event_routes_by_unified_message_route_ids()
+    {
+        using var module = new TestModule(
+            layerContracts: [LayerContract<TestLayer>()],
+            scopeDefinitions: [ScopeDefinition<TestScope>()],
+            messageContracts:
+            [
+                EventContract<AUnifiedEvent, TestScope>(),
+                CallContract<ZUnifiedCall, TestScope, TestResult>()
+            ],
+            services:
+            [
+                Service<TestService>(
+                    ownerScope: typeof(TestScope),
+                    ownerLayers: [typeof(TestLayer)])
+            ],
+            handlers:
+            [
+                Handler<AUnifiedEvent, TestService, TestScope>(ScopeMessageKind.Event),
+                Handler<ZUnifiedCall, TestService, TestScope>(ScopeMessageKind.Call)
+            ]);
+
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(module);
+
+        int eventRouteId = catalog.MessageRouteIds[typeof(AUnifiedEvent).TypeHandle];
+        int callRouteId = catalog.MessageRouteIds[typeof(ZUnifiedCall).TypeHandle];
+
+        Assert.That(eventRouteId, Is.LessThan(callRouteId));
+        Assert.That(catalog.CallRoutes, Has.Count.EqualTo(2));
+        Assert.That(catalog.CallRoutes[eventRouteId].IsValid, Is.False);
+        Assert.That(catalog.CallRoutes[callRouteId].IsValid, Is.True);
+        Assert.That(catalog.EventRoutes, Has.Count.EqualTo(2));
+        Assert.That(catalog.EventRoutes[eventRouteId].HandlerCount, Is.EqualTo(1));
+        Assert.That(catalog.EventRoutes[callRouteId].HandlerCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Build_routes_handlers_to_the_module_that_contributed_the_handler()
+    {
+        using var serviceModule = new TestModule(
+            layerContracts: [LayerContract<TestLayer>()],
+            scopeDefinitions: [ScopeDefinition<TestScope>()],
+            services:
+            [
+                Service<TestService>(
+                    ownerScope: typeof(TestScope),
+                    ownerLayers: [typeof(TestLayer)])
+            ]);
+        using var handlerModule = new TestModule(
+            messageContracts:
+            [
+                CallContract<TestCall, TestScope, TestResult>(),
+                EventContract<TestEvent, TestScope>()
+            ],
+            handlers:
+            [
+                Handler<TestCall, TestService, TestScope>(ScopeMessageKind.Call),
+                Handler<TestEvent, TestService, TestScope>(ScopeMessageKind.Event)
+            ]);
+
+        ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(serviceModule, handlerModule);
+
+        int callRouteId = catalog.MessageRouteIds[typeof(TestCall).TypeHandle];
+        int eventRouteId = catalog.MessageRouteIds[typeof(TestEvent).TypeHandle];
+
+        Assert.That(catalog.CallRoutes[callRouteId].ModuleSlot, Is.EqualTo(1));
+        Assert.That(catalog.CallRoutes[callRouteId].LocalHandlerId, Is.EqualTo(0));
+        Assert.That(catalog.CallRoutes[callRouteId].ServiceSlot, Is.EqualTo(0));
+        ScopeEventHandlerRoute eventHandlerRoute = catalog.EventHandlerRoutes[catalog.EventRoutes[eventRouteId].HandlerStart];
+        Assert.That(eventHandlerRoute.ModuleSlot, Is.EqualTo(1));
+        Assert.That(eventHandlerRoute.LocalHandlerId, Is.EqualTo(0));
+        Assert.That(eventHandlerRoute.ServiceSlot, Is.EqualTo(0));
+    }
+
+    [Test]
     public void Build_rejects_duplicate_scope_definition()
     {
         using var first = new TestModule(scopeDefinitions: [ScopeDefinition<TestScope>()]);
@@ -145,6 +221,126 @@ public sealed class ModuleRuntimeBuilderTests
 
         Assert.That(exception.Code, Is.EqualTo(ModuleBuildErrorCodes.DuplicateScopeDefinition));
         Assert.That(exception.Message, Does.Contain("defined by multiple Modules"));
+    }
+
+    [Test]
+    public void Build_rejects_duplicate_module_instance()
+    {
+        using var module = new TestModule();
+
+        ModuleBuildException exception = Assert.Throws<ModuleBuildException>(
+            () => ModuleRuntimeBuilder.Build(module, module))!;
+
+        Assert.That(exception.Code, Is.EqualTo(ModuleBuildErrorCodes.DuplicateModule));
+        Assert.That(exception.Message, Does.Contain("installed more than once"));
+    }
+
+    [Test]
+    public void Build_rejects_duplicate_layer_contract()
+    {
+        using var first = new TestModule(layerContracts: [LayerContract<TestLayer>()]);
+        using var second = new TestModule(layerContracts: [LayerContract<TestLayer>()]);
+
+        ModuleBuildException exception = Assert.Throws<ModuleBuildException>(
+            () => ModuleRuntimeBuilder.Build(first, second))!;
+
+        Assert.That(exception.Code, Is.EqualTo(ModuleBuildErrorCodes.DuplicateLayerContract));
+        Assert.That(exception.Message, Does.Contain("Layer"));
+    }
+
+    [Test]
+    public void Build_rejects_duplicate_message_contract()
+    {
+        using var first = new TestModule(messageContracts: [EventContract<TestEvent, TestScope>()]);
+        using var second = new TestModule(messageContracts: [EventContract<TestEvent, TestScope>()]);
+
+        ModuleBuildException exception = Assert.Throws<ModuleBuildException>(
+            () => ModuleRuntimeBuilder.Build(first, second))!;
+
+        Assert.That(exception.Code, Is.EqualTo(ModuleBuildErrorCodes.DuplicateMessageContract));
+        Assert.That(exception.Message, Does.Contain("message"));
+    }
+
+    [Test]
+    public void Build_rejects_duplicate_service_contribution()
+    {
+        using var first = new TestModule(
+            layerContracts: [LayerContract<TestLayer>()],
+            scopeDefinitions: [ScopeDefinition<TestScope>()],
+            services:
+            [
+                Service<TestService>(
+                    ownerScope: typeof(TestScope),
+                    ownerLayers: [typeof(TestLayer)])
+            ]);
+        using var second = new TestModule(
+            services:
+            [
+                Service<TestService>(
+                    ownerScope: typeof(TestScope),
+                    ownerLayers: [typeof(TestLayer)])
+            ]);
+
+        ModuleBuildException exception = Assert.Throws<ModuleBuildException>(
+            () => ModuleRuntimeBuilder.Build(first, second))!;
+
+        Assert.That(exception.Code, Is.EqualTo(ModuleBuildErrorCodes.DuplicateServiceContribution));
+        Assert.That(exception.Message, Does.Contain("Service"));
+    }
+
+    [Test]
+    public void Build_rejects_duplicate_context_contribution()
+    {
+        using var module = new TestModule(
+            layerContracts: [LayerContract<TestLayer>()],
+            scopeDefinitions: [ScopeDefinition<TestScope>()],
+            services:
+            [
+                Service<TestService>(
+                    ownerScope: typeof(TestScope),
+                    ownerLayers: [typeof(TestLayer)])
+            ],
+            contexts:
+            [
+                Context<TestContext, TestService>(),
+                Context<TestContext, TestService>()
+            ]);
+
+        ModuleBuildException exception = Assert.Throws<ModuleBuildException>(
+            () => ModuleRuntimeBuilder.Build(module))!;
+
+        Assert.That(exception.Code, Is.EqualTo(ModuleBuildErrorCodes.DuplicateContextContribution));
+        Assert.That(exception.Message, Does.Contain("Context"));
+    }
+
+    [Test]
+    public void Build_rejects_duplicate_handler_module_slot()
+    {
+        using var module = new TestModule(
+            layerContracts: [LayerContract<TestLayer>()],
+            scopeDefinitions: [ScopeDefinition<TestScope>()],
+            messageContracts:
+            [
+                EventContract<TestEvent, TestScope>(),
+                EventContract<AUnifiedEvent, TestScope>()
+            ],
+            services:
+            [
+                Service<TestService>(
+                    ownerScope: typeof(TestScope),
+                    ownerLayers: [typeof(TestLayer)])
+            ],
+            handlers:
+            [
+                Handler<TestEvent, TestService, TestScope>(ScopeMessageKind.Event),
+                Handler<AUnifiedEvent, TestService, TestScope>(ScopeMessageKind.Event)
+            ]);
+
+        ModuleBuildException exception = Assert.Throws<ModuleBuildException>(
+            () => ModuleRuntimeBuilder.Build(module))!;
+
+        Assert.That(exception.Code, Is.EqualTo(ModuleBuildErrorCodes.DuplicateHandlerContribution));
+        Assert.That(exception.Message, Does.Contain("handler"));
     }
 
     [Test]
@@ -285,6 +481,17 @@ public sealed class ModuleRuntimeBuilderTests
             moduleLocalServiceId: 0);
     }
 
+    private static ContextContribution Context<TContext, TOwnerService>()
+        where TContext : ILayerContext, new()
+        where TOwnerService : IService
+    {
+        return new ContextContribution(
+            typeof(TContext).TypeHandle,
+            typeof(TOwnerService).TypeHandle,
+            static _ => new TContext(),
+            moduleLocalContextId: 0);
+    }
+
     private static ScopeHandlerContribution Handler<TMessage, TService, TScope>(ScopeMessageKind kind)
     {
         return new ScopeHandlerContribution(
@@ -345,6 +552,14 @@ public sealed class ModuleRuntimeBuilderTests
     {
     }
 
+    private readonly struct AUnifiedEvent
+    {
+    }
+
+    private readonly struct ZUnifiedCall
+    {
+    }
+
     private sealed class TestService : IService
     {
         public void ConfigureServices(IServiceCollection services)
@@ -364,5 +579,9 @@ public sealed class ModuleRuntimeBuilderTests
         public void ConfigureServices(IServiceCollection services)
         {
         }
+    }
+
+    private sealed class TestContext : ILayerContext
+    {
     }
 }

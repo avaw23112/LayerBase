@@ -109,6 +109,11 @@ public sealed partial class ActorWorld
             return false;
         }
 
+        if (!IsProjectedActorDisabled(actorId))
+        {
+            return true;
+        }
+
         SetEnable(actorId, true);
         actor.OnEnable();
         return true;

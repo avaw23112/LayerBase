@@ -135,7 +135,7 @@ public sealed partial class ScopeResourceBindingTests
                 new DuplicatePublisherContext()
             ]))!;
 
-        Assert.That(ex.Message, Does.Contain("Scope resource provider conflict"));
+        Assert.That(ex.Message, Does.Contain("Duplicate scope resource candidate"));
     }
 
     [Test]

@@ -150,7 +150,7 @@ internal sealed class EcsWorker : IDisposable
 
         try
         {
-            while (_running)
+            while (_running || HasPendingWork())
             {
                 if (TryExecuteAllBatches())
                 {

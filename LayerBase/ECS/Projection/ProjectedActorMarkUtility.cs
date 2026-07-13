@@ -79,12 +79,12 @@ internal static class ProjectedActorMarkUtility
             world.Add(entity, actorRef);
         }
 
-        if (options.CreatePolicy == ProjectedActorCreatePolicy.OnMark)
+        if (options.CreatePolicy == ProjectedActorCreatePolicy.OnMark ||
+            world.ShouldPrebindProjectedActorOnMark)
         {
             EnsureOnMarkProjectedActor(
                 world,
-                entity,
-                ref meta);
+                entity);
         }
     }
 
@@ -104,9 +104,11 @@ internal static class ProjectedActorMarkUtility
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void EnsureOnMarkProjectedActor(
         World world,
-        Entity entity,
-        ref ProjectedActorMeta meta)
+        Entity entity)
     {
+        ref ProjectedActorMeta meta =
+            ref world.GetProjectionMeta(entity);
+
         if (meta.ActorId.IsValid)
         {
             return;

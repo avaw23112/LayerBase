@@ -16,6 +16,8 @@ public sealed class AsyncEcsQueryTests
     {
         LayerHub.Reset();
         JobProbeActor.Received.Clear();
+        JobProbeActor.RentThreadIds.Clear();
+        JobProbeActor.ReturnThreadIds.Clear();
         JobProbeActor.RentCount = 0;
         JobProbeActor.ReturnCount = 0;
     }
@@ -105,6 +107,104 @@ public sealed class AsyncEcsQueryTests
         Assert.That(JobProbeActor.Received[0].Y, Is.EqualTo(6f));
     }
 
+    [Test]
+    public void AsyncScheduler_Stop_must_drain_accepted_batches_before_joining_worker()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        using var started = new ManualResetEventSlim(false);
+        using var gate = new ManualResetEventSlim(false);
+        var executed = 0;
+
+        runtime.EcsWorkScheduler.Schedule(new BlockingCountWorkItem(started, gate, () => Interlocked.Increment(ref executed)));
+        runtime.FlushEcsSubmissionsForTest();
+        runtime.EcsWorkScheduler.Schedule(new CountWorkItem(() => Interlocked.Increment(ref executed)));
+        runtime.FlushEcsSubmissionsForTest();
+
+        Assert.That(started.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        Task stop = Task.Run(runtime.EcsScheduler.Stop);
+        Assert.That(stop.Wait(TimeSpan.FromMilliseconds(100)), Is.False);
+
+        gate.Set();
+
+        Assert.That(stop.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(executed, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void AsyncProjectedActor_sweep_must_return_actor_on_runtime_owner_thread()
+    {
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        LayerRuntime runtime = CreateAsyncRuntime();
+
+        Entity entity = runtime.EcsWorld.Create(
+            new JobPositionComponent { X = 1f, Y = 2f },
+            new JobVelocityComponent { X = 3f, Y = 4f },
+            new JobAoiComponent { IsVisible = true });
+        runtime.EcsWorld.WithProjectedActor<JobProbeActor>(entity, keepAliveSeconds: 0f);
+
+        using var gate = new ManualResetEventSlim(true);
+        var job = new BlockingBringJob(gate);
+        runtime.EcsWorld
+               .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
+               .Bring<JobMoveViewEvent>()
+               .ForEach(ref job)
+               .Batch()
+               .Post();
+
+        runtime.WaitEcsIdleForTest(TimeSpan.FromSeconds(2));
+        runtime.Pump(0.016f);
+        runtime.WaitEcsIdleForTest(TimeSpan.FromSeconds(2));
+        runtime.Pump(0.016f);
+
+        int[] returnThreadIds;
+        lock (JobProbeActor.ReturnThreadIds)
+        {
+            returnThreadIds = JobProbeActor.ReturnThreadIds.ToArray();
+        }
+
+        Assert.That(returnThreadIds, Is.Not.Empty);
+        Assert.That(returnThreadIds, Has.All.EqualTo(ownerThreadId));
+    }
+
+    [Test]
+    public void AsyncProjectedActor_ensure_must_rent_actor_on_runtime_owner_thread()
+    {
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        LayerRuntime runtime = CreateAsyncRuntime();
+
+        Entity entity = runtime.EcsWorld.Create(
+            new JobPositionComponent { X = 1f, Y = 2f },
+            new JobVelocityComponent { X = 3f, Y = 4f },
+            new JobAoiComponent { IsVisible = true });
+        runtime.EcsWorld.WithProjectedActor<JobProbeActor>(entity, keepAliveSeconds: 0.5f);
+
+        Assert.That(runtime.EcsWorld.GetProjectionMeta(entity).ActorId.IsValid, Is.True);
+
+        using var gate = new ManualResetEventSlim(true);
+        var job = new BlockingBringJob(gate);
+        runtime.EcsWorld
+               .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
+               .Bring<JobMoveViewEvent>()
+               .ForEach(ref job)
+               .Batch()
+               .Post();
+
+        runtime.WaitEcsIdleForTest(TimeSpan.FromSeconds(2));
+        runtime.Pump(0.016f);
+        runtime.WaitEcsIdleForTest(TimeSpan.FromSeconds(2));
+        runtime.Pump(0.016f);
+
+        int[] rentThreadIds;
+        lock (JobProbeActor.RentThreadIds)
+        {
+            rentThreadIds = JobProbeActor.RentThreadIds.ToArray();
+        }
+
+        Assert.That(rentThreadIds, Is.Not.Empty);
+        Assert.That(rentThreadIds, Has.All.EqualTo(ownerThreadId));
+    }
+
     private static LayerRuntime CreateAsyncRuntime()
     {
         return LayerHub.CreateLayers()
@@ -180,5 +280,45 @@ public sealed class AsyncEcsQueryTests
 
     private sealed class AsyncEcsTestLayer : Layer
     {
+    }
+
+    private sealed class BlockingCountWorkItem : IEcsWorkItem
+    {
+        private readonly ManualResetEventSlim _started;
+        private readonly ManualResetEventSlim _gate;
+        private readonly Action _execute;
+
+        public BlockingCountWorkItem(ManualResetEventSlim started, ManualResetEventSlim gate, Action execute)
+        {
+            _started = started;
+            _gate = gate;
+            _execute = execute;
+        }
+
+        public string DebugName => nameof(BlockingCountWorkItem);
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+            _started.Set();
+            _gate.Wait();
+            _execute();
+        }
+    }
+
+    private sealed class CountWorkItem : IEcsWorkItem
+    {
+        private readonly Action _execute;
+
+        public CountWorkItem(Action execute)
+        {
+            _execute = execute;
+        }
+
+        public string DebugName => nameof(CountWorkItem);
+
+        public void Execute(World world, EcsResultQueue results)
+        {
+            _execute();
+        }
     }
 }

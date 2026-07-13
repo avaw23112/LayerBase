@@ -4,11 +4,13 @@
 public sealed class LBTaskCompletionSource : IDisposable
 {
     private readonly LBTaskSource _source;
+    private readonly int _version;
     private int _disposed;
 
     public LBTaskCompletionSource()
     {
         _source = LBTaskSource.Rent();
+        _version = _source.Version;
     }
 
     public LBTask Task => new(_source);
@@ -75,7 +77,7 @@ public sealed class LBTaskCompletionSource : IDisposable
     private void DisposeInternal()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            if (!_source.IsCompleted)
+            if (!_source.IsCompleted(_version))
                 _source.SetCanceled(default);
     }
 }
@@ -84,11 +86,13 @@ public sealed class LBTaskCompletionSource : IDisposable
 public sealed class LBTaskCompletionSource<T> : IDisposable
 {
     private readonly LBTaskSource<T> _source;
+    private readonly int _version;
     private int _disposed;
 
     public LBTaskCompletionSource()
     {
         _source = LBTaskSource<T>.Rent();
+        _version = _source.Version;
     }
 
     public LBTask<T> Task => new(_source);
@@ -155,7 +159,7 @@ public sealed class LBTaskCompletionSource<T> : IDisposable
     private void DisposeInternal()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            if (!_source.IsCompleted)
+            if (!_source.IsCompleted(_version))
                 _source.SetCanceled(default);
     }
 }

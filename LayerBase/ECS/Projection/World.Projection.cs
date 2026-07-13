@@ -1,5 +1,6 @@
 using LayerBase;
 using LayerBase.Actor;
+using LayerBase.Actor.RuntimeCommands;
 using LayerBase.ECS.Projection;
 
 namespace Arch.Core;
@@ -16,7 +17,7 @@ public partial class World
         LayerRuntime runtime)
     {
         Runtime = runtime;
-        _projectedActorLifecycleSink = new ActorWorldProjectedActorLifecycleSink(runtime.Actors);
+        _projectedActorLifecycleSink = new LayerRuntimeProjectedActorLifecycleSink(runtime);
     }
 
     internal void BindScopeActors(ActorWorld actors)
@@ -36,6 +37,16 @@ public partial class World
     {
         runtime = Runtime;
         return runtime != null;
+    }
+
+    internal bool ShouldPrebindProjectedActorOnMark
+    {
+        get
+        {
+            return Runtime != null &&
+                   Runtime.IsOwnerThreadForActorWorld &&
+                   Runtime.EcsOptions.ExecutionMode == LayerBase.ECS.Runtime.EcsExecutionMode.Async;
+        }
     }
 
     internal ActorWorld GetActorWorld()
@@ -104,5 +115,17 @@ public partial class World
     internal void SweepProjectedActors(int maxCount = 512)
     {
         _activeProjectedActors.Sweep(this, GetProjectedActorLifecycleSink(), maxCount);
+    }
+
+    internal ControlEnqueueResult TryReleaseProjectedActor(
+        ActorId actorId,
+        ProjectedActorReleasePolicy releasePolicy)
+    {
+        return GetProjectedActorLifecycleSink().TryReleaseProjectedActor(actorId, releasePolicy);
+    }
+
+    internal ControlEnqueueResult TryEnableProjectedActor(ActorId actorId)
+    {
+        return GetProjectedActorLifecycleSink().TryEnableProjectedActor(actorId);
     }
 }

@@ -102,6 +102,31 @@ public sealed class ScopeLifecycleConcurrencyTests
     }
 
     [Test]
+    public void Inline_pump_after_request_stop_must_not_run_business_update_frame()
+    {
+        var service = new UpdatingDisposeService();
+        using var scope = CreateInlineScope(service);
+
+        scope.Start();
+        scope.RequestStop();
+        scope.Pump(0.016f);
+
+        Assert.That(service.UpdateCount, Is.EqualTo(0));
+        Assert.That(service.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Worker_stop_before_start_must_cleanup_scope()
+    {
+        var service = new CountingDisposeService();
+        using var scope = CreateWorkerScope(service, 1400);
+
+        scope.Stop();
+
+        Assert.That(service.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Inline_stop_from_non_owner_thread_must_not_dispose_scope()
     {
         var service = new CountingDisposeService();
@@ -119,6 +144,23 @@ public sealed class ScopeLifecycleConcurrencyTests
     }
 
     [Test]
+    public void Inline_dispose_from_non_owner_thread_must_not_defer_and_leak_cleanup()
+    {
+        var service = new CountingDisposeService();
+        using var scope = CreateInlineScope(service);
+
+        scope.Start();
+        var dispose = Task.Run(() => Assert.Throws<InvalidOperationException>(scope.Dispose));
+        Assert.That(dispose.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        Assert.That(service.DisposeCount, Is.EqualTo(0));
+
+        scope.Dispose();
+
+        Assert.That(service.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Schedule_post_after_request_stop_must_reject_business_ingress()
     {
         var service = new CountingDisposeService();
@@ -129,6 +171,42 @@ public sealed class ScopeLifecycleConcurrencyTests
 
         Assert.Throws<ScopeStoppedException>(() =>
             scope.SchedulePost(new ScopeLifecycleRequestStopEvent(), 0));
+    }
+
+    [Test]
+    public void Scope_stop_must_close_timer_and_post_scheduler()
+    {
+        var service = new CountingDisposeService();
+        using var scope = CreateInlineScope(service);
+        scope.PostScheduler.BuildPlans(new[]
+        {
+            new PostTypePlan(
+                EventTypeId<ScopeLifecycleRequestStopEvent>.Id,
+                PostDeliveryMode.Normal,
+                BackpressurePolicy.RejectNew,
+                maxPending: 0,
+                defaultBackpressure: BackpressurePolicy.RejectNew)
+        });
+
+        int postCount = 0;
+        var timerSink = new CountingTimerSink();
+        scope.EventCenter.SubscribeNotify<ScopeLifecycleRequestStopEvent>(
+            0,
+            (in ScopeLifecycleRequestStopEvent _) => postCount++);
+
+        Assert.That(scope.PostScheduler.TryPost(new ScopeLifecycleRequestStopEvent()).IsSuccess, Is.True);
+        _ = scope.Timer.Schedule(new CountingTimerAction(), 0.1f);
+
+        scope.Start();
+        scope.Stop();
+
+        scope.PostScheduler.Pump();
+        scope.Timer.Tick(1.0f, timerSink);
+
+        Assert.That(postCount, Is.EqualTo(0));
+        Assert.That(timerSink.ExpiredCount, Is.EqualTo(0));
+        Assert.That(scope.PostScheduler.TryPost(new ScopeLifecycleRequestStopEvent()).IsSuccess, Is.False);
+        Assert.That(scope.Timer.Schedule(new CountingTimerAction(), 0.1f).IsInvalid, Is.True);
     }
 
     [Test]
@@ -351,6 +429,44 @@ public sealed class ScopeLifecycleConcurrencyTests
         }
     }
 
+    private sealed class UpdatingDisposeService : IService, IUpdate, IDisposable
+    {
+        public int UpdateCount;
+        public int DisposeCount;
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+
+        public void Update()
+        {
+            Interlocked.Increment(ref UpdateCount);
+        }
+
+        public void Dispose()
+        {
+            Interlocked.Increment(ref DisposeCount);
+        }
+    }
+
+    private sealed class CountingTimerSink : IExpiredTimerSink<ITimerAction>
+    {
+        public int ExpiredCount;
+
+        public bool TryAcceptExpired(in ITimerAction payload, TimerHandle handle)
+        {
+            ExpiredCount++;
+            return true;
+        }
+    }
+
+    private sealed class CountingTimerAction : ITimerAction
+    {
+        public bool Execute(PostScheduler scheduler)
+        {
+            return true;
+        }
+    }
 }
 
 internal readonly struct ScopeLifecycleRequestStopEvent

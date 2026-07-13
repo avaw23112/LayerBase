@@ -128,6 +128,7 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal void InitializeScheduler(PostSchedulerOptions options)
     {
+        _postIngress.SetCapacity(options.MaxIngressQueueCapacity);
         BuildEventPolicies(options);
     }
 
@@ -304,7 +305,9 @@ public sealed partial class LayerRuntime : IDisposable
         ScopeCompositionPlan plan = ScopeCompositionBuilder.Build(this, catalog);
         ScopeHost = ScopeRuntimeHost.Create(
             this,
-            plan);
+            plan,
+            CreateModuleCallDispatchers(catalog),
+            CreateModuleEventDispatchers(catalog));
 
         ApplyLayerServiceHandles(catalog);
 
@@ -314,6 +317,52 @@ public sealed partial class LayerRuntime : IDisposable
         }
 
         return ScopeHost != null;
+    }
+
+    private static ModuleCallDispatchHandler[] CreateModuleCallDispatchers(ModuleRuntimeCatalog catalog)
+    {
+        var dispatchers = new ModuleCallDispatchHandler[catalog.Modules.Count];
+        for (int i = 0; i < catalog.Modules.Count; i++)
+        {
+            dispatchers[i] = catalog.Modules[i] is IModuleScopeDispatchProvider provider &&
+                             provider.ModuleCallDispatcher != null
+                ? provider.ModuleCallDispatcher
+                : MissingModuleCallDispatcher;
+        }
+
+        return dispatchers;
+    }
+
+    private static ModuleEventDispatchHandler[] CreateModuleEventDispatchers(ModuleRuntimeCatalog catalog)
+    {
+        var dispatchers = new ModuleEventDispatchHandler[catalog.Modules.Count];
+        for (int i = 0; i < catalog.Modules.Count; i++)
+        {
+            dispatchers[i] = catalog.Modules[i] is IModuleScopeDispatchProvider provider &&
+                             provider.ModuleEventDispatcher != null
+                ? provider.ModuleEventDispatcher
+                : MissingModuleEventDispatcher;
+        }
+
+        return dispatchers;
+    }
+
+    private static void MissingModuleCallDispatcher(
+        ScopeRuntime scope,
+        ushort localHandlerId,
+        int serviceSlot,
+        ScopeCallMessage message)
+    {
+        message.Promise.SetException(new InvalidOperationException(
+            $"Installed module does not provide a scope call dispatcher for local handler id {localHandlerId}."));
+    }
+
+    private static void MissingModuleEventDispatcher(
+        ScopeRuntime scope,
+        ushort localHandlerId,
+        int serviceSlot,
+        ScopePostMessage message)
+    {
     }
 
     private void ApplyLayerServiceHandles(ModuleRuntimeCatalog catalog)
@@ -428,6 +477,17 @@ public sealed partial class LayerRuntime : IDisposable
             if (_scheduler != null)
             {
                 Worker.DrainEventsTo(_scheduler, _scheduler.Options.MaxIngressPostsPerPump);
+                var ingressResult = _postIngress.DrainTo(
+                    _scheduler,
+                    _scheduler.Options.MaxIngressPostsPerPump);
+
+                if (IsDebugMode && ingressResult.Failed > 0)
+                {
+                    ReportWarning(-1, "PostIngressQueue", "DrainTo",
+                        $"PostFromAnyThread failed: {ingressResult.Failed}/{ingressResult.Drained}");
+                }
+
+                _scheduler.Pump();
             }
 
             ScopeHost?.Pump(deltaTime);
@@ -660,8 +720,7 @@ public sealed partial class LayerRuntime : IDisposable
     internal bool TryPostFromAnyThread<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
         if (_disposed) return false;
-        _postIngress.Enqueue(value, policy);
-        return true;
+        return _postIngress.Enqueue(value, policy);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -752,14 +811,14 @@ public sealed partial class LayerRuntime : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-        _disposed = true;
 
         _postIngress.Clear();
-        EcsScheduler.Dispose();
-        Worker.Dispose();
         ScopeHost?.Dispose();
         ScopeHost = null;
+        EcsScheduler.Dispose();
+        Worker.Dispose();
         DrainLifecycleInbox();
+        _disposed = true;
         CloseActorInboxes();
         _chain?.DisposeLayers();
         _chain = null;

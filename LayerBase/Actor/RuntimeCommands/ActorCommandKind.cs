@@ -6,6 +6,7 @@ internal enum ActorCommandKind : byte
     PostMany = 1,
     Disable = 2,
     Release = 3,
-    Destroy = 4,
-    Detach = 5
+    Enable = 4,
+    Destroy = 5,
+    Detach = 6
 }

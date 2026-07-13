@@ -359,7 +359,7 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
         {
             int callId = callIds[binding.RequestType];
             builder.AppendLine($"                    case {callId}:");
-            builder.AppendLine($"                        Dispatch_{callId}(scope, message);");
+            builder.AppendLine($"                        Dispatch_{callId}(scope, -1, message);");
             builder.AppendLine("                        return;");
         }
 
@@ -374,21 +374,45 @@ public sealed class ScopeCallDispatchGenerator : IIncrementalGenerator
         builder.AppendLine("            }");
         builder.AppendLine("        }");
         builder.AppendLine();
+        builder.AppendLine("        public static void DispatchModule(global::LayerBase.Scope.ScopeRuntime scope, ushort localHandlerId, int serviceSlot, global::LayerBase.Scope.ScopeCallMessage message)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            if (scope == null)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                throw new global::System.ArgumentNullException(nameof(scope));");
+        builder.AppendLine("            }");
+        builder.AppendLine();
+        builder.AppendLine("            try");
+        builder.AppendLine("            {");
+        builder.AppendLine("                switch (localHandlerId)");
+        builder.AppendLine("                {");
 
-        foreach (ScopeCallHandlerInfo binding in bindings)
+        for (int i = 0; i < bindings.Length; i++)
         {
+            builder.AppendLine($"                    case {i}:");
+            builder.AppendLine($"                        Dispatch_{i}(scope, serviceSlot, message);");
+            builder.AppendLine("                        return;");
+        }
+
+        builder.AppendLine("                    default:");
+        builder.AppendLine("                        message.Promise.SetException(new global::System.InvalidOperationException($\"Unknown module scope call handler id {localHandlerId}.\"));");
+        builder.AppendLine("                        return;");
+        builder.AppendLine("                }");
+        builder.AppendLine("            }");
+        builder.AppendLine("            catch (global::System.Exception exception)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                message.Promise.SetException(exception);");
+        builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+
+        for (int localHandlerId = 0; localHandlerId < bindings.Length; localHandlerId++)
+        {
+            ScopeCallHandlerInfo binding = bindings[localHandlerId];
             int callId = callIds[binding.RequestType];
-            builder.AppendLine($"        private static void Dispatch_{callId}(global::LayerBase.Scope.ScopeRuntime scope, global::LayerBase.Scope.ScopeCallMessage message)");
+            builder.AppendLine($"        private static void Dispatch_{localHandlerId}(global::LayerBase.Scope.ScopeRuntime scope, int serviceSlot, global::LayerBase.Scope.ScopeCallMessage message)");
             builder.AppendLine("        {");
 
-            if (serviceSlots.TryGetValue(binding.ServiceType, out int slotIndex))
-            {
-                builder.AppendLine($"            var service = ({binding.ServiceType})scope.Services[{slotIndex}];");
-            }
-            else
-            {
-                builder.AppendLine($"            var service = FindService<{binding.ServiceType}>(scope.Services);");
-            }
+            builder.AppendLine($"            var service = serviceSlot >= 0 ? ({binding.ServiceType})scope.Services[serviceSlot] : FindService<{binding.ServiceType}>(scope.Services);");
 
             if (binding.ReturnsLBTask)
             {

@@ -874,11 +874,11 @@ public class LayerGeneratorContractTests
         Assert.That(generated,
             Does.Contain(
                 "public static bool Post(this global::LayerBase.Scope.ScopeRef<global::Game.CombatScope> scope, global::Game.SpawnBulletEvent message)"));
-        Assert.That(generated, Does.Contain("return scope.TryPost("));
+        Assert.That(generated, Does.Contain("return scope.TryPost(message);"));
     }
 
     [Test]
-    public void Scope_event_generator_assigns_ids_by_event_type_order()
+    public void Scope_event_generator_uses_runtime_message_route_resolution()
     {
         const string source = """
                               namespace Game;
@@ -923,20 +923,9 @@ public class LayerGeneratorContractTests
             string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
 
         string generated = string.Join(Environment.NewLine, result.GeneratedSources);
-        Assert.That(generated,
-            Does.Contain(
-                "public static bool Post(this global::LayerBase.Scope.ScopeRef<global::Game.ZuluScope> scope, global::Game.AlphaEvent message)" +
-                Environment.NewLine +
-                "        {" +
-                Environment.NewLine +
-                "            return scope.TryPost(0, message);"));
-        Assert.That(generated,
-            Does.Contain(
-                "public static bool Post(this global::LayerBase.Scope.ScopeRef<global::Game.AlphaScope> scope, global::Game.ZuluEvent message)" +
-                Environment.NewLine +
-                "        {" +
-                Environment.NewLine +
-                "            return scope.TryPost(1, message);"));
+        Assert.That(generated, Does.Not.Contain("scope.TryPost(0, message)"));
+        Assert.That(generated, Does.Not.Contain("scope.TryPost(1, message)"));
+        Assert.That(generated, Does.Contain("return scope.TryPost(message);"));
     }
 
     [Test]
@@ -999,11 +988,11 @@ public class LayerGeneratorContractTests
             Does.Contain(
                 "public static global::LayerBase.Async.LBTask<global::Game.BulletTickResult> Call(this global::LayerBase.Scope.ScopeRef<global::Game.CombatScope> scope, global::Game.BulletTickCall message)"));
         Assert.That(generated,
-            Does.Contain("return scope.CallTask<global::Game.BulletTickResult>("));
+            Does.Contain("return scope.CallTask<global::Game.BulletTickResult, global::Game.BulletTickCall>(message);"));
     }
 
     [Test]
-    public void Scope_call_generator_assigns_ids_by_request_type_order()
+    public void Scope_call_generator_uses_runtime_message_route_resolution()
     {
         const string source = """
                               namespace Game;
@@ -1049,20 +1038,10 @@ public class LayerGeneratorContractTests
             string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
 
         string generated = string.Join(Environment.NewLine, result.GeneratedSources);
-        Assert.That(generated,
-            Does.Contain(
-                "public static global::LayerBase.Async.LBTask<int> Call(this global::LayerBase.Scope.ScopeRef<global::Game.ZuluScope> scope, global::Game.AlphaCall message)" +
-                Environment.NewLine +
-                "        {" +
-                Environment.NewLine +
-                "            return scope.CallTask<int>(0, message);"));
-        Assert.That(generated,
-            Does.Contain(
-                "public static global::LayerBase.Async.LBTask<int> Call(this global::LayerBase.Scope.ScopeRef<global::Game.AlphaScope> scope, global::Game.ZuluCall message)" +
-                Environment.NewLine +
-                "        {" +
-                Environment.NewLine +
-                "            return scope.CallTask<int>(1, message);"));
+        Assert.That(generated, Does.Not.Contain("CallTask<int>(0, message)"));
+        Assert.That(generated, Does.Not.Contain("CallTask<int>(1, message)"));
+        Assert.That(generated, Does.Contain("return scope.CallTask<int, global::Game.AlphaCall>(message);"));
+        Assert.That(generated, Does.Contain("return scope.CallTask<int, global::Game.ZuluCall>(message);"));
     }
 
     [Test]
@@ -1852,6 +1831,32 @@ public class LayerGeneratorContractTests
 
         Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBM001"),
             string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Assembly_module_generator_reports_multiple_modules_per_assembly()
+    {
+        const string source = """
+                              using LayerBase.Modules;
+
+                              namespace Game.ModuleContract;
+
+                              [AssemblyModule]
+                              public sealed partial class CombatModule
+                              {
+                              }
+
+                              [AssemblyModule]
+                              public sealed partial class UiModule
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new AssemblyModuleGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBM002"),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+        Assert.That(string.Join(Environment.NewLine, result.GeneratedSources), Does.Not.Contain("AssemblyModule.g.cs"));
     }
 
     [Test]

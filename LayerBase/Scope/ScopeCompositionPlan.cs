@@ -10,12 +10,14 @@ public sealed class ScopeCompositionPlan
         ScopePlan[] scopes,
         ScopeCallRoute[] callRoutes,
         ScopeEventRoute[] eventRoutes,
-        ScopeEventHandlerRoute[] eventHandlerRoutes)
+        ScopeEventHandlerRoute[] eventHandlerRoutes,
+        IReadOnlyDictionary<RuntimeTypeHandle, int>? messageRouteIds = null)
     {
         Scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
         CallRoutes = callRoutes ?? throw new ArgumentNullException(nameof(callRoutes));
         EventRoutes = eventRoutes ?? throw new ArgumentNullException(nameof(eventRoutes));
         EventHandlerRoutes = eventHandlerRoutes ?? throw new ArgumentNullException(nameof(eventHandlerRoutes));
+        MessageRouteIds = messageRouteIds ?? new Dictionary<RuntimeTypeHandle, int>();
     }
 
     public ScopePlan[] Scopes { get; }
@@ -25,6 +27,8 @@ public sealed class ScopeCompositionPlan
     public ScopeEventRoute[] EventRoutes { get; }
 
     public ScopeEventHandlerRoute[] EventHandlerRoutes { get; }
+
+    public IReadOnlyDictionary<RuntimeTypeHandle, int> MessageRouteIds { get; }
 }
 
 public sealed class ScopePlan

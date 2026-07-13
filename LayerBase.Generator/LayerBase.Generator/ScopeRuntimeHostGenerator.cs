@@ -54,13 +54,15 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
                                    .ForAttributeWithMetadataName(
                                        ScopeEventRequestAttributeName,
                                        static (_, _) => true,
-                                       static (ctx, _) => ctx.TargetSymbol is INamedTypeSymbol);
+                                       static (ctx, _) => GetMessageType(ctx.TargetSymbol))
+                                   .Where(static item => item != null)!;
 
         var callRequests = context.SyntaxProvider
                                   .ForAttributeWithMetadataName(
                                       ScopeCallRequestAttributeName,
                                       static (_, _) => true,
-                                      static (ctx, _) => ctx.TargetSymbol is INamedTypeSymbol);
+                                      static (ctx, _) => GetMessageType(ctx.TargetSymbol))
+                                  .Where(static item => item != null)!;
 
         var scopeOptions = context.SyntaxProvider
                                   .ForAttributeWithMetadataName(
@@ -129,12 +131,14 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
 
             bool hasEventHandler = dispatcherInput.Left.Left.Left.Any(static value => value);
             bool hasCallHandler = dispatcherInput.Left.Left.Right.Any(static value => value);
-            bool hasEventRequest = dispatcherInput.Left.Right.Any(static value => value);
-            bool hasCallRequest = dispatcherInput.Right.Any(static value => value);
+            bool hasEventRequest = dispatcherInput.Left.Right.Any(static value => value != null);
+            bool hasCallRequest = dispatcherInput.Right.Any(static value => value != null);
             Generate(
                 spc,
                 hasEventRequest && hasEventHandler,
                 hasCallRequest && hasCallHandler,
+                dispatcherInput.Left.Right,
+                dispatcherInput.Right,
                 scopeInput.Left.Left,
                 scopeInput.Left.Right,
                 collectedLayerTypes,
@@ -324,6 +328,13 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
             scopeType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
 
+    private static string? GetMessageType(ISymbol symbol)
+    {
+        return symbol is INamedTypeSymbol type
+            ? type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+            : null;
+    }
+
     private static int GetIntValue(TypedConstant value, int fallback)
     {
         return value.Value is int intValue ? intValue : fallback;
@@ -333,6 +344,8 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         SourceProductionContext spc,
         bool hasPostDispatcher,
         bool hasCallDispatcher,
+        ImmutableArray<string?> nullableEventRequestTypes,
+        ImmutableArray<string?> nullableCallRequestTypes,
         ImmutableArray<ScopeOptionsInfo?> nullableDefinitions,
         ImmutableArray<ScopedServiceInfo?> nullableScopedServices,
         ImmutableArray<LayerTypeInfo> layerTypes,
@@ -369,6 +382,18 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         var partialDefinitions = definitions
                                  .Where(static item => item.IsPartial)
                                  .ToImmutableArray();
+        var eventRequestTypes = nullableEventRequestTypes
+                                .Where(static item => item != null)
+                                .Select(static item => item!)
+                                .Distinct(StringComparer.Ordinal)
+                                .OrderBy(static item => item, StringComparer.Ordinal)
+                                .ToImmutableArray();
+        var callRequestTypes = nullableCallRequestTypes
+                               .Where(static item => item != null)
+                               .Select(static item => item!)
+                               .Distinct(StringComparer.Ordinal)
+                               .OrderBy(static item => item, StringComparer.Ordinal)
+                               .ToImmutableArray();
         if (!moduleMode)
         {
             GenerateScopeOptionPartials(spc, partialDefinitions);
@@ -376,7 +401,7 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
 
         bool shouldGenerateRegistrar = definitions.Length > 0 && layerTypes.Length > 0 && (hasPostDispatcher || hasCallDispatcher);
 
-        bool hasGeneratedPlanner = !moduleMode && GeneratePlanner(spc, partialDefinitions, scopedServices);
+        bool hasGeneratedPlanner = !moduleMode && GeneratePlanner(spc, partialDefinitions, scopedServices, eventRequestTypes, callRequestTypes);
         if (!hasPostDispatcher && !hasCallDispatcher && !hasGeneratedPlanner)
         {
             return;
@@ -390,6 +415,9 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
             : "null";
         string scopeTypeResolver = hasGeneratedPlanner
             ? "global::LayerBase.Scope.GeneratedScopeRuntimePlanner.TryGetScopeId"
+            : "null";
+        string messageRouteResolver = hasGeneratedPlanner
+            ? "global::LayerBase.Scope.GeneratedScopeRuntimePlanner.TryGetMessageRouteId"
             : "null";
 
         var builder = new StringBuilder();
@@ -435,7 +463,8 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         builder.AppendLine("                owningRuntime,");
         builder.AppendLine($"                postDispatcher: {postDispatcher},");
         builder.AppendLine($"                callDispatcher: {callDispatcher},");
-        builder.AppendLine($"                scopeTypeResolver: {scopeTypeResolver});");
+        builder.AppendLine($"                scopeTypeResolver: {scopeTypeResolver},");
+        builder.AppendLine($"                messageRouteResolver: {messageRouteResolver});");
         builder.AppendLine("        }");
         builder.AppendLine("    }");
         builder.AppendLine("}");
@@ -525,7 +554,9 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
     private static bool GeneratePlanner(
         SourceProductionContext spc,
         ImmutableArray<ScopeOptionsInfo> definitions,
-        ImmutableArray<ScopedServiceInfo> scopedServices)
+        ImmutableArray<ScopedServiceInfo> scopedServices,
+        ImmutableArray<string> eventRequestTypes,
+        ImmutableArray<string> callRequestTypes)
     {
         if (definitions.Length == 0 || scopedServices.Length == 0)
         {
@@ -579,6 +610,33 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         }
 
         builder.AppendLine("            scopeId = -1;");
+        builder.AppendLine("            return false;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        public static bool TryGetMessageRouteId(global::System.Type messageType, out int routeId)");
+        builder.AppendLine("        {");
+
+        for (int i = 0; i < callRequestTypes.Length; i++)
+        {
+            builder.AppendLine($"            if (messageType == typeof({callRequestTypes[i]}))");
+            builder.AppendLine("            {");
+            builder.AppendLine($"                routeId = {i};");
+            builder.AppendLine("                return true;");
+            builder.AppendLine("            }");
+            builder.AppendLine();
+        }
+
+        for (int i = 0; i < eventRequestTypes.Length; i++)
+        {
+            builder.AppendLine($"            if (messageType == typeof({eventRequestTypes[i]}))");
+            builder.AppendLine("            {");
+            builder.AppendLine($"                routeId = {i};");
+            builder.AppendLine("                return true;");
+            builder.AppendLine("            }");
+            builder.AppendLine();
+        }
+
+        builder.AppendLine("            routeId = -1;");
         builder.AppendLine("            return false;");
         builder.AppendLine("        }");
         builder.AppendLine();

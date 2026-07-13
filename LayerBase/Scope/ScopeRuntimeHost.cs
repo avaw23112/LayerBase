@@ -13,10 +13,17 @@ public sealed class ScopeRuntimeHost : IDisposable
     private ScopeRuntimeHost(
         ScopeRuntime[] scopes,
         IReadOnlyDictionary<Type, int>? scopeTypeRoutes,
-        ScopeTypeIdResolver? scopeTypeResolver)
+        ScopeTypeIdResolver? scopeTypeResolver,
+        IReadOnlyDictionary<Type, int>? messageRouteIds,
+        ScopeMessageRouteResolver? messageRouteResolver)
     {
         _scopes = scopes;
-        _routes = new ScopeRouteTable(scopes, scopeTypeRoutes, scopeTypeResolver);
+        _routes = new ScopeRouteTable(
+            scopes,
+            scopeTypeRoutes,
+            scopeTypeResolver,
+            messageRouteIds,
+            messageRouteResolver);
         for (int i = 0; i < scopes.Length; i++)
         {
             scopes[i].BindRoutes(_routes);
@@ -64,7 +71,8 @@ public sealed class ScopeRuntimeHost : IDisposable
         LayerRuntime? owningRuntime = null,
         ScopePostDispatcher? postDispatcher = null,
         ScopeCallDispatcher? callDispatcher = null,
-        ScopeTypeIdResolver? scopeTypeResolver = null)
+        ScopeTypeIdResolver? scopeTypeResolver = null,
+        ScopeMessageRouteResolver? messageRouteResolver = null)
     {
         if (plans == null)
         {
@@ -91,7 +99,12 @@ public sealed class ScopeRuntimeHost : IDisposable
             IReadOnlyDictionary<Type, int>? scopeTypeRoutes = scopeTypeResolver == null
                 ? CreateScopeTypeRoutes(plans)
                 : null;
-            return new ScopeRuntimeHost(scopes, scopeTypeRoutes, scopeTypeResolver);
+            return new ScopeRuntimeHost(
+                scopes,
+                scopeTypeRoutes,
+                scopeTypeResolver,
+                messageRouteIds: null,
+                messageRouteResolver);
         }
         catch
         {
@@ -113,7 +126,8 @@ public sealed class ScopeRuntimeHost : IDisposable
         ActorWorld? sharedActorWorld = null,
         ScopePostDispatcher? fallbackPostDispatcher = null,
         ScopeCallDispatcher? fallbackCallDispatcher = null,
-        ScopeTypeIdResolver? scopeTypeResolver = null)
+        ScopeTypeIdResolver? scopeTypeResolver = null,
+        ScopeMessageRouteResolver? messageRouteResolver = null)
     {
         if (runtime == null)
         {
@@ -129,7 +143,8 @@ public sealed class ScopeRuntimeHost : IDisposable
             runtime,
             fallbackPostDispatcher,
             fallbackCallDispatcher,
-            scopeTypeResolver);
+            scopeTypeResolver,
+            messageRouteResolver);
     }
 
     public static ScopeRuntimeHost Create(
@@ -141,7 +156,8 @@ public sealed class ScopeRuntimeHost : IDisposable
         LayerRuntime? owningRuntime = null,
         ScopePostDispatcher? fallbackPostDispatcher = null,
         ScopeCallDispatcher? fallbackCallDispatcher = null,
-        ScopeTypeIdResolver? scopeTypeResolver = null)
+        ScopeTypeIdResolver? scopeTypeResolver = null,
+        ScopeMessageRouteResolver? messageRouteResolver = null)
     {
         if (plan == null)
         {
@@ -202,7 +218,15 @@ public sealed class ScopeRuntimeHost : IDisposable
             IReadOnlyDictionary<Type, int>? scopeTypeRoutes = scopeTypeResolver == null
                 ? CreateScopeTypeRoutes(scopePlans)
                 : null;
-            return new ScopeRuntimeHost(scopes, scopeTypeRoutes, scopeTypeResolver);
+            IReadOnlyDictionary<Type, int>? messageRouteIds = messageRouteResolver == null
+                ? CreateMessageRouteIds(plan.MessageRouteIds)
+                : null;
+            return new ScopeRuntimeHost(
+                scopes,
+                scopeTypeRoutes,
+                scopeTypeResolver,
+                messageRouteIds,
+                messageRouteResolver);
         }
         catch
         {
@@ -239,7 +263,9 @@ public sealed class ScopeRuntimeHost : IDisposable
             sharedActorWorld,
             owningRuntime,
             fallbackPostDispatcher,
-            fallbackCallDispatcher);
+            fallbackCallDispatcher,
+            scopeTypeResolver: null,
+            messageRouteResolver: null);
     }
 
     private static ScopeCallDispatcher? CreateModuleCallDispatcher(
@@ -264,6 +290,13 @@ public sealed class ScopeRuntimeHost : IDisposable
             }
 
             ScopeCallRoute route = routesCopy[callId];
+            if (!route.IsValid)
+            {
+                message.Promise.SetException(new InvalidOperationException(
+                    $"Scope message route {callId} is not a call route."));
+                return;
+            }
+
             ushort moduleSlot = route.ModuleSlot;
             if (moduleSlot >= dispatchersCopy.Count)
             {
@@ -358,6 +391,22 @@ public sealed class ScopeRuntimeHost : IDisposable
         return routes;
     }
 
+    private static IReadOnlyDictionary<Type, int> CreateMessageRouteIds(
+        IReadOnlyDictionary<RuntimeTypeHandle, int> messageRouteIds)
+    {
+        var routes = new Dictionary<Type, int>();
+        foreach (KeyValuePair<RuntimeTypeHandle, int> entry in messageRouteIds)
+        {
+            Type? type = Type.GetTypeFromHandle(entry.Key);
+            if (type != null)
+            {
+                routes[type] = entry.Value;
+            }
+        }
+
+        return routes;
+    }
+
     private static IService[] ResolveServices(IReadOnlyList<ScopeServicePlan> servicePlans)
     {
         if (servicePlans.Count == 0)
@@ -427,11 +476,17 @@ public sealed class ScopeRuntimeHost : IDisposable
             return;
         }
 
-        _disposed = true;
-        _routes.Dispose();
-        for (int i = _scopes.Length - 1; i >= 0; i--)
+        try
         {
-            _scopes[i].Dispose();
+            for (int i = _scopes.Length - 1; i >= 0; i--)
+            {
+                _scopes[i].Dispose();
+            }
+        }
+        finally
+        {
+            _routes.Dispose();
+            _disposed = true;
         }
     }
 

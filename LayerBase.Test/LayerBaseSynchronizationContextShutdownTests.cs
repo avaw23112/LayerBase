@@ -75,6 +75,136 @@ public class LayerBaseSynchronizationContextShutdownTests
         Assert.Throws<OperationCanceledException>(() => task.GetAwaiter().GetResult());
     }
 
+    [Test]
+    public void Context_dispose_must_cancel_next_frame_task()
+    {
+        var context = LayerBaseSynchronizationContext.Install();
+        LBTask task;
+        using (context.EnterScope())
+        {
+            task = LBTask.NextFrame(context);
+        }
+
+        context.Dispose();
+
+        var awaiter = task.GetAwaiter();
+        Assert.That(awaiter.IsCompleted, Is.True);
+        Assert.Throws<OperationCanceledException>(() => awaiter.GetResult());
+    }
+
+    [Test]
+    public void Context_dispose_must_cancel_run_on_main_thread_task()
+    {
+        var context = LayerBaseSynchronizationContext.Install();
+        var invoked = false;
+        LBTask task;
+        using (context.EnterScope())
+        {
+            task = LBTask.RunOnMainThread(() => invoked = true, context);
+        }
+
+        context.Dispose();
+
+        var awaiter = task.GetAwaiter();
+        Assert.That(awaiter.IsCompleted, Is.True);
+        Assert.Throws<OperationCanceledException>(() => awaiter.GetResult());
+        Assert.That(invoked, Is.False);
+    }
+
+    [Test]
+    public void Context_dispose_must_cancel_run_on_main_thread_result_task()
+    {
+        var context = LayerBaseSynchronizationContext.Install();
+        var invoked = false;
+        LBTask<int> task;
+        using (context.EnterScope())
+        {
+            task = LBTask<int>.RunOnMainThread(() =>
+            {
+                invoked = true;
+                return 42;
+            }, context);
+        }
+
+        context.Dispose();
+
+        var awaiter = task.GetAwaiter();
+        Assert.That(awaiter.IsCompleted, Is.True);
+        Assert.Throws<OperationCanceledException>(() => awaiter.GetResult());
+        Assert.That(invoked, Is.False);
+    }
+
+    [Test]
+    public void Background_completion_after_context_close_must_cancel_source_directly()
+    {
+        var context = LayerBaseSynchronizationContext.Install();
+        using var gate = new ManualResetEventSlim(false);
+        LBTask task;
+        using (context.EnterScope())
+        {
+            task = LBTask.RunBackground(() => gate.Wait());
+        }
+
+        context.Dispose();
+        gate.Set();
+
+        var awaiter = task.GetAwaiter();
+        Assert.That(
+            SpinWait.SpinUntil(() => awaiter.IsCompleted, TimeSpan.FromSeconds(2)),
+            Is.True);
+        Assert.Throws<OperationCanceledException>(() => awaiter.GetResult());
+    }
+
+    [Test]
+    public void LBTask_must_reject_second_GetResult_on_same_task()
+    {
+        LBTask task = LBTask.Run(static () => { });
+        var awaiter = task.GetAwaiter();
+        Assert.That(
+            SpinWait.SpinUntil(() => awaiter.IsCompleted, TimeSpan.FromSeconds(2)),
+            Is.True);
+
+        awaiter.GetResult();
+
+        Assert.Throws<InvalidOperationException>(() => awaiter.GetResult());
+    }
+
+    [Test]
+    public void LBTask_result_must_reject_second_GetResult_on_same_task()
+    {
+        LBTask<int> task = LBTask<int>.Run(static () => 7);
+        var awaiter = task.GetAwaiter();
+        Assert.That(
+            SpinWait.SpinUntil(() => awaiter.IsCompleted, TimeSpan.FromSeconds(2)),
+            Is.True);
+
+        Assert.That(awaiter.GetResult(), Is.EqualTo(7));
+
+        Assert.Throws<InvalidOperationException>(() => awaiter.GetResult());
+    }
+
+    [Test]
+    public void Scope_bound_context_must_not_run_continuation_on_threadpool_after_dispose()
+    {
+        var context = LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
+        LBTaskCompletionSource source;
+        LBTask task;
+        int continuationRan = 0;
+        using (context.EnterScope())
+        {
+            source = new LBTaskCompletionSource();
+            task = source.Task;
+            task.GetAwaiter().OnCompleted(() => Interlocked.Exchange(ref continuationRan, 1));
+        }
+
+        context.Dispose();
+        source.SetResult();
+
+        Thread.Sleep(100);
+        Assert.That(Volatile.Read(ref continuationRan), Is.EqualTo(0));
+        Assert.That(task.GetAwaiter().IsCompleted, Is.True);
+    }
+
     private static MainThreadCompletionQueue GetCompletionQueue(LayerBaseSynchronizationContext context)
     {
         var property = typeof(LayerBaseSynchronizationContext).GetProperty(

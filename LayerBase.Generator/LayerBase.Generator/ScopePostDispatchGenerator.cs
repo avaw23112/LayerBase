@@ -309,6 +309,28 @@ public sealed class ScopePostDispatchGenerator : IIncrementalGenerator
         builder.AppendLine("            }");
         builder.AppendLine("        }");
         builder.AppendLine();
+        builder.AppendLine("        public static void DispatchModule(global::LayerBase.Scope.ScopeRuntime scope, ushort localHandlerId, int serviceSlot, global::LayerBase.Scope.ScopePostMessage message)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            if (scope == null)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                throw new global::System.ArgumentNullException(nameof(scope));");
+        builder.AppendLine("            }");
+        builder.AppendLine();
+        builder.AppendLine("            switch (localHandlerId)");
+        builder.AppendLine("            {");
+
+        for (int i = 0; i < bindings.Length; i++)
+        {
+            builder.AppendLine($"                case {i}:");
+            builder.AppendLine($"                    DispatchModule_{i}(scope, serviceSlot, message);");
+            builder.AppendLine("                    return;");
+        }
+
+        builder.AppendLine("                default:");
+        builder.AppendLine("                    throw new global::System.InvalidOperationException($\"Unknown module scope event handler id {localHandlerId}.\");");
+        builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine();
 
         foreach (var group in bindings.GroupBy(static binding => binding.EventType))
         {
@@ -335,6 +357,18 @@ public sealed class ScopePostDispatchGenerator : IIncrementalGenerator
                 handlerIndex++;
             }
 
+            builder.AppendLine("        }");
+            builder.AppendLine();
+        }
+
+        for (int localHandlerId = 0; localHandlerId < bindings.Length; localHandlerId++)
+        {
+            ScopeEventHandlerInfo binding = bindings[localHandlerId];
+            builder.AppendLine($"        private static void DispatchModule_{localHandlerId}(global::LayerBase.Scope.ScopeRuntime scope, int serviceSlot, global::LayerBase.Scope.ScopePostMessage message)");
+            builder.AppendLine("        {");
+            builder.AppendLine($"            var payload = ({binding.EventType})message.Payload;");
+            builder.AppendLine($"            var service = serviceSlot >= 0 ? ({binding.ServiceType})scope.Services[serviceSlot] : FindService<{binding.ServiceType}>(scope.Services);");
+            builder.AppendLine($"            service.{binding.BridgeName}(payload);");
             builder.AppendLine("        }");
             builder.AppendLine();
         }

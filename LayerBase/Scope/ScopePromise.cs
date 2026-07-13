@@ -196,8 +196,16 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
 
         if (!_continuationScope.TryEnqueueContinuation(continuation))
         {
-            _continuationScope.AwaitRegistry.Unregister(this);
-            throw new InvalidOperationException("ScopePromise continuation could not be scheduled on its owner scope.");
+            try
+            {
+                continuation();
+            }
+            finally
+            {
+                _continuationScope.AwaitRegistry.Unregister(this);
+            }
+
+            return;
         }
 
         _continuationScope.AwaitRegistry.Unregister(this);

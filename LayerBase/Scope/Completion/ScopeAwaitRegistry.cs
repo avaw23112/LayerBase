@@ -47,10 +47,7 @@ internal sealed class ScopeAwaitRegistry
         {
             try
             {
-                if (promise.TrySetException(reason))
-                {
-                    Unregister(promise);
-                }
+                promise.TrySetException(reason);
             }
             catch
             {

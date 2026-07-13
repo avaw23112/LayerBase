@@ -5,12 +5,16 @@ namespace LayerBase.Scope;
 
 public delegate bool ScopeTypeIdResolver(Type scopeType, out int scopeId);
 
+public delegate bool ScopeMessageRouteResolver(Type messageType, out int routeId);
+
 public sealed class ScopeRouteTable : IDisposable
 {
     private static int s_generationCounter;
     private readonly ScopeRuntime?[] _scopes;
     private readonly IReadOnlyDictionary<Type, int>? _scopeIdsByType;
     private readonly ScopeTypeIdResolver? _scopeIdResolver;
+    private readonly IReadOnlyDictionary<Type, int>? _messageRouteIdsByType;
+    private readonly ScopeMessageRouteResolver? _messageRouteResolver;
 
     // High 32 bits: RouteTable Generation
     // Low 32 bits: (reserved)
@@ -20,7 +24,9 @@ public sealed class ScopeRouteTable : IDisposable
     public ScopeRouteTable(
         IReadOnlyList<ScopeRuntime> scopes,
         IReadOnlyDictionary<Type, int>? scopeIdsByType = null,
-        ScopeTypeIdResolver? scopeIdResolver = null)
+        ScopeTypeIdResolver? scopeIdResolver = null,
+        IReadOnlyDictionary<Type, int>? messageRouteIdsByType = null,
+        ScopeMessageRouteResolver? messageRouteResolver = null)
     {
         if (scopes == null)
         {
@@ -50,6 +56,8 @@ public sealed class ScopeRouteTable : IDisposable
 
         _scopeIdsByType = scopeIdsByType;
         _scopeIdResolver = scopeIdResolver;
+        _messageRouteIdsByType = messageRouteIdsByType;
+        _messageRouteResolver = messageRouteResolver;
     }
 
     public int Count
@@ -132,6 +140,24 @@ public sealed class ScopeRouteTable : IDisposable
         return found;
     }
 
+    public bool TryGetMessageRouteId<TMessage>(out int routeId)
+    {
+        ThrowIfDisposed();
+        UnpackEntry(Volatile.Read(ref _cachedEntry), out int generation, out _);
+        if (ScopeMessageRouteCache<TMessage>.TryGet(generation, out routeId))
+        {
+            return true;
+        }
+
+        bool found = TryGetMessageRouteId(typeof(TMessage), out routeId);
+        if (found)
+        {
+            ScopeMessageRouteCache<TMessage>.Set(generation, routeId);
+        }
+
+        return found;
+    }
+
     public bool TryPost(int targetScopeId, ScopePostMessage message)
     {
         ThrowIfDisposed();
@@ -178,6 +204,22 @@ public sealed class ScopeRouteTable : IDisposable
         return false;
     }
 
+    private bool TryGetMessageRouteId(Type messageType, out int routeId)
+    {
+        if (_messageRouteResolver != null && _messageRouteResolver(messageType, out routeId))
+        {
+            return true;
+        }
+
+        if (_messageRouteIdsByType != null && _messageRouteIdsByType.TryGetValue(messageType, out routeId))
+        {
+            return true;
+        }
+
+        routeId = -1;
+        return false;
+    }
+
     private void ThrowIfDisposed()
     {
         if (_disposed)
@@ -204,6 +246,17 @@ public readonly struct ScopeRef<TScope>
         return _routes.TryPost(TargetScopeId, new ScopePostMessage(eventId, payload));
     }
 
+    public bool TryPost<TMessage>(TMessage payload)
+    {
+        if (!_routes.TryGetMessageRouteId<TMessage>(out int eventId))
+        {
+            throw new InvalidOperationException(
+                $"Scope message type '{typeof(TMessage).FullName}' is not registered.");
+        }
+
+        return TryPost(eventId, payload!);
+    }
+
     public ScopePromise<TResult> Call<TResult>(int callId, object payload)
     {
         ScopeRuntime? originScope = ScopeExecution.Current.Runtime;
@@ -224,5 +277,23 @@ public readonly struct ScopeRef<TScope>
     public async LBTask<TResult> CallTask<TResult>(int callId, object payload)
     {
         return await Call<TResult>(callId, payload);
+    }
+
+    public ScopePromise<TResult> Call<TResult, TMessage>(TMessage payload)
+    {
+        if (!_routes.TryGetMessageRouteId<TMessage>(out int callId))
+        {
+            var promise = new ScopePromise<TResult>(ScopeExecution.Current.Runtime);
+            promise.SetException(new InvalidOperationException(
+                $"Scope message type '{typeof(TMessage).FullName}' is not registered."));
+            return promise;
+        }
+
+        return Call<TResult>(callId, payload!);
+    }
+
+    public async LBTask<TResult> CallTask<TResult, TMessage>(TMessage payload)
+    {
+        return await Call<TResult, TMessage>(payload);
     }
 }

@@ -171,6 +171,11 @@ public sealed class ProjectedActorOwnershipTests
     {
         public int ReleaseAttempts;
 
+        public ControlEnqueueResult TryEnableProjectedActor(ActorId actorId)
+        {
+            return ControlEnqueueResult.Closed;
+        }
+
         public ControlEnqueueResult TryDisableProjectedActor(ActorId actorId)
         {
             return ControlEnqueueResult.Closed;

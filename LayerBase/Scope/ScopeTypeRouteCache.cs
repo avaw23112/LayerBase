@@ -25,3 +25,29 @@ internal static class ScopeTypeRouteCache<TScope>
         Interlocked.Exchange(ref s_cachedEntry, entry);
     }
 }
+
+internal static class ScopeMessageRouteCache<TMessage>
+{
+    // High 32 bits: RouteTable Generation
+    // Low 32 bits: MessageRouteId
+    private static long s_cachedEntry;
+
+    public static bool TryGet(int generation, out int messageRouteId)
+    {
+        long entry = Volatile.Read(ref s_cachedEntry);
+        if ((int)(entry >> 32) == generation)
+        {
+            messageRouteId = (int)(entry & 0xFFFFFFFF);
+            return true;
+        }
+
+        messageRouteId = -1;
+        return false;
+    }
+
+    public static void Set(int generation, int messageRouteId)
+    {
+        long entry = ((long)generation << 32) | (uint)messageRouteId;
+        Interlocked.Exchange(ref s_cachedEntry, entry);
+    }
+}

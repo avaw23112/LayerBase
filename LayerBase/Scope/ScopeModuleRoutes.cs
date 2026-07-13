@@ -17,6 +17,8 @@ public readonly struct ScopeCallRoute
     public ushort LocalHandlerId { get; }
 
     public int ServiceSlot { get; }
+
+    public bool IsValid => ScopeId >= 0 && ServiceSlot >= 0;
 }
 
 public readonly struct ScopeEventHandlerRoute

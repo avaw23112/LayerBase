@@ -42,6 +42,7 @@ internal sealed class LongTimerHeap
     private int[] _indices;
     private long[] _expireTicks;
     private int[] _versions;
+    private int[] _positions;
     private int _count;
 
     public int Count => _count;
@@ -51,17 +52,21 @@ internal sealed class LongTimerHeap
         _indices = new int[capacity];
         _expireTicks = new long[capacity];
         _versions = new int[capacity];
+        _positions = new int[capacity];
+        Array.Fill(_positions, -1);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Enqueue(int timerIndex, long expireTick, int version)
     {
         if (_count == _indices.Length) GrowSlow();
+        EnsurePositionCapacity(timerIndex);
 
         var i = _count++;
         _indices[i] = timerIndex;
         _expireTicks[i] = expireTick;
         _versions[i] = version;
+        _positions[timerIndex] = i;
         HeapifyUp(i);
     }
 
@@ -86,12 +91,50 @@ internal sealed class LongTimerHeap
     public int Dequeue()
     {
         var result = _indices[0];
+        _positions[result] = -1;
         _count--;
-        _indices[0] = _indices[_count];
-        _expireTicks[0] = _expireTicks[_count];
-        _versions[0] = _versions[_count];
-        HeapifyDown(0);
+        if (_count > 0)
+        {
+            _indices[0] = _indices[_count];
+            _expireTicks[0] = _expireTicks[_count];
+            _versions[0] = _versions[_count];
+            _positions[_indices[0]] = 0;
+            HeapifyDown(0);
+        }
+
         return result;
+    }
+
+    public bool Remove(int timerIndex, int version)
+    {
+        if ((uint)timerIndex >= (uint)_positions.Length)
+        {
+            return false;
+        }
+
+        int position = _positions[timerIndex];
+        if ((uint)position >= (uint)_count ||
+            _indices[position] != timerIndex ||
+            _versions[position] != version)
+        {
+            return false;
+        }
+
+        _positions[timerIndex] = -1;
+        _count--;
+        if (position == _count)
+        {
+            return true;
+        }
+
+        _indices[position] = _indices[_count];
+        _expireTicks[position] = _expireTicks[_count];
+        _versions[position] = _versions[_count];
+        _positions[_indices[position]] = position;
+
+        int afterDown = HeapifyDown(position);
+        HeapifyUp(afterDown);
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -100,6 +143,24 @@ internal sealed class LongTimerHeap
         Array.Resize(ref _indices, _indices.Length * 2);
         Array.Resize(ref _expireTicks, _expireTicks.Length * 2);
         Array.Resize(ref _versions, _versions.Length * 2);
+    }
+
+    private void EnsurePositionCapacity(int timerIndex)
+    {
+        if (timerIndex < _positions.Length)
+        {
+            return;
+        }
+
+        int oldLength = _positions.Length;
+        int newLength = oldLength;
+        while (newLength <= timerIndex)
+        {
+            newLength *= 2;
+        }
+
+        Array.Resize(ref _positions, newLength);
+        Array.Fill(_positions, -1, oldLength, newLength - oldLength);
     }
 
     private void HeapifyUp(int index)
@@ -113,7 +174,7 @@ internal sealed class LongTimerHeap
         }
     }
 
-    private void HeapifyDown(int index)
+    private int HeapifyDown(int index)
     {
         while (true)
         {
@@ -131,6 +192,8 @@ internal sealed class LongTimerHeap
             Swap(index, smallest);
             index = smallest;
         }
+
+        return index;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -139,9 +202,19 @@ internal sealed class LongTimerHeap
         (_indices[a], _indices[b]) = (_indices[b], _indices[a]);
         (_expireTicks[a], _expireTicks[b]) = (_expireTicks[b], _expireTicks[a]);
         (_versions[a], _versions[b]) = (_versions[b], _versions[a]);
+        _positions[_indices[a]] = a;
+        _positions[_indices[b]] = b;
     }
 
-    public void Clear() => _count = 0;
+    public void Clear()
+    {
+        for (int i = 0; i < _count; i++)
+        {
+            _positions[_indices[i]] = -1;
+        }
+
+        _count = 0;
+    }
 }
 
 internal sealed class IntStack

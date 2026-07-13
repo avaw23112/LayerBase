@@ -18,6 +18,8 @@ public static class ModuleRuntimeBuilder
         }
 
         ILayerBaseModule[] moduleArray = modules.ToArray();
+        ValidateUniqueModules(moduleArray);
+
         var layerContracts = new Dictionary<RuntimeTypeHandle, LayerContractContribution>();
         var scopeDefinitions = new Dictionary<RuntimeTypeHandle, ScopeDefinitionContribution>();
         var messageContracts = new Dictionary<RuntimeTypeHandle, ScopeMessageContractContribution>();
@@ -27,7 +29,7 @@ public static class ModuleRuntimeBuilder
         var resourceExports = new List<ScopeResourceExportContribution>();
         var resourceImports = new List<ScopeResourceImportContribution>();
         var serviceModuleIndex = new Dictionary<RuntimeTypeHandle, int>();
-        var handlerModuleIndex = new Dictionary<RuntimeTypeHandle, Dictionary<int, int>>();
+        var handlerModuleIndex = new Dictionary<ScopeHandlerModuleKey, int>();
 
         for (int moduleIdx = 0; moduleIdx < moduleArray.Length; moduleIdx++)
         {
@@ -41,7 +43,14 @@ public static class ModuleRuntimeBuilder
             {
                 ServiceContribution service = manifest.Services[i];
                 services.Add(service);
-                serviceModuleIndex[service.ServiceType] = moduleIdx;
+                if (serviceModuleIndex.ContainsKey(service.ServiceType))
+                {
+                    throw new ModuleBuildException(
+                        ModuleBuildErrorCodes.DuplicateServiceContribution,
+                        $"Service '{GetTypeName(service.ServiceType)}' is contributed by multiple Modules.");
+                }
+
+                serviceModuleIndex.Add(service.ServiceType, moduleIdx);
             }
 
             for (int i = 0; i < manifest.Contexts.Count; i++)
@@ -53,13 +62,18 @@ public static class ModuleRuntimeBuilder
             {
                 ScopeHandlerContribution handler = manifest.Handlers[i];
                 handlers.Add(handler);
-                if (!handlerModuleIndex.TryGetValue(handler.ServiceType, out Dictionary<int, int>? handlerMap))
+                var key = new ScopeHandlerModuleKey(
+                    handler.ServiceType,
+                    handler.Kind,
+                    handler.ModuleLocalHandlerId);
+                if (handlerModuleIndex.ContainsKey(key))
                 {
-                    handlerMap = new Dictionary<int, int>();
-                    handlerModuleIndex[handler.ServiceType] = handlerMap;
+                    throw new ModuleBuildException(
+                        ModuleBuildErrorCodes.DuplicateHandlerContribution,
+                        $"Scope handler slot {handler.ModuleLocalHandlerId} for service '{GetTypeName(handler.ServiceType)}' and kind '{handler.Kind}' is contributed more than once.");
                 }
 
-                handlerMap[handler.ModuleLocalHandlerId] = moduleIdx;
+                handlerModuleIndex.Add(key, moduleIdx);
             }
 
             for (int i = 0; i < manifest.ResourceExports.Count; i++)
@@ -82,9 +96,9 @@ public static class ModuleRuntimeBuilder
         IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots = AllocateServiceSlots(services);
         IReadOnlyDictionary<RuntimeTypeHandle, int> messageRouteIds = AllocateMessageRouteIds(messageContracts.Values);
 
-        var callRoutes = AllocateCallRoutes(messageContracts, handlers, serviceSlots, serviceModuleIndex, handlerModuleIndex, scopeIds);
-        var eventRoutes = AllocateEventRoutes(messageContracts, handlers, serviceSlots, serviceModuleIndex, handlerModuleIndex, scopeIds);
-        var eventHandlerRoutes = AllocateEventHandlerRoutes(messageContracts, handlers, serviceSlots, serviceModuleIndex, handlerModuleIndex);
+        var callRoutes = AllocateCallRoutes(messageContracts, handlers, serviceSlots, handlerModuleIndex, scopeIds, messageRouteIds);
+        var eventRoutes = AllocateEventRoutes(messageContracts, handlers, scopeIds, messageRouteIds);
+        var eventHandlerRoutes = AllocateEventHandlerRoutes(handlers, serviceSlots, handlerModuleIndex);
 
         return new ModuleRuntimeCatalog(
             moduleArray,
@@ -105,15 +119,30 @@ public static class ModuleRuntimeBuilder
             eventHandlerRoutes);
     }
 
+    private static void ValidateUniqueModules(IReadOnlyList<ILayerBaseModule> modules)
+    {
+        var seen = new HashSet<ILayerBaseModule>();
+        for (int i = 0; i < modules.Count; i++)
+        {
+            ILayerBaseModule module = modules[i];
+            if (!seen.Add(module))
+            {
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.DuplicateModule,
+                    $"Module instance '{module.GetType().FullName}' is installed more than once.");
+            }
+        }
+    }
+
     private static IReadOnlyList<ScopeCallRoute> AllocateCallRoutes(
         IReadOnlyDictionary<RuntimeTypeHandle, ScopeMessageContractContribution> messageContracts,
         IReadOnlyList<ScopeHandlerContribution> handlers,
         IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots,
-        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceModuleIndex,
-        IReadOnlyDictionary<RuntimeTypeHandle, Dictionary<int, int>> handlerModuleIndex,
-        IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds)
+        IReadOnlyDictionary<ScopeHandlerModuleKey, int> handlerModuleIndex,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> messageRouteIds)
     {
-        var routes = new List<ScopeCallRoute>();
+        ScopeCallRoute[] routes = CreateCallRouteArray(messageRouteIds);
         var sortedContracts = messageContracts.Values
                                              .Where(static c => c.Kind == ScopeMessageKind.Call)
                                              .OrderBy(static c => GetTypeName(c.MessageType), StringComparer.Ordinal)
@@ -138,22 +167,28 @@ public static class ModuleRuntimeBuilder
                 continue;
             }
 
-            if (!serviceModuleIndex.TryGetValue(serviceType, out int moduleSlotVal))
+            int localHandlerId = resolvedHandler.ModuleLocalHandlerId;
+            if (!TryGetHandlerModuleSlot(handlerModuleIndex, serviceType, ScopeMessageKind.Call, localHandlerId, out int moduleSlotVal))
             {
                 continue;
             }
 
-            int localHandlerId = resolvedHandler.ModuleLocalHandlerId;
             if (!scopeIds.TryGetValue(contract.TargetScopeType, out int scopeId))
             {
                 continue;
             }
 
-            routes.Add(new ScopeCallRoute(
+            if (!messageRouteIds.TryGetValue(messageType, out int routeId) ||
+                (uint)routeId >= (uint)routes.Length)
+            {
+                continue;
+            }
+
+            routes[routeId] = new ScopeCallRoute(
                 scopeId,
                 (ushort)moduleSlotVal,
                 (ushort)localHandlerId,
-                serviceSlot));
+                serviceSlot);
         }
 
         return routes;
@@ -162,10 +197,8 @@ public static class ModuleRuntimeBuilder
     private static IReadOnlyList<ScopeEventRoute> AllocateEventRoutes(
         IReadOnlyDictionary<RuntimeTypeHandle, ScopeMessageContractContribution> messageContracts,
         IReadOnlyList<ScopeHandlerContribution> handlers,
-        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots,
-        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceModuleIndex,
-        IReadOnlyDictionary<RuntimeTypeHandle, Dictionary<int, int>> handlerModuleIndex,
-        IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds)
+        IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds,
+        IReadOnlyDictionary<RuntimeTypeHandle, int> messageRouteIds)
     {
         var eventHandlers = handlers
                             .Where(static h => h.Kind == ScopeMessageKind.Event)
@@ -173,7 +206,7 @@ public static class ModuleRuntimeBuilder
                             .ThenBy(static h => GetTypeName(h.ServiceType), StringComparer.Ordinal)
                             .ToList();
 
-        var eventRoutes = new List<ScopeEventRoute>();
+        ScopeEventRoute[] eventRoutes = new ScopeEventRoute[GetMessageRouteCount(messageRouteIds)];
         int currentStart = 0;
 
         var eventGroups = messageContracts.Values
@@ -207,7 +240,12 @@ public static class ModuleRuntimeBuilder
                 handlerCount = count;
             }
 
-            eventRoutes.Add(new ScopeEventRoute(scopeId, currentStart, handlerCount));
+            if (messageRouteIds.TryGetValue(contract.MessageType, out int routeId) &&
+                (uint)routeId < (uint)eventRoutes.Length)
+            {
+                eventRoutes[routeId] = new ScopeEventRoute(scopeId, currentStart, handlerCount);
+            }
+
             currentStart += handlerCount;
         }
 
@@ -215,11 +253,9 @@ public static class ModuleRuntimeBuilder
     }
 
     private static IReadOnlyList<ScopeEventHandlerRoute> AllocateEventHandlerRoutes(
-        IReadOnlyDictionary<RuntimeTypeHandle, ScopeMessageContractContribution> messageContracts,
         IReadOnlyList<ScopeHandlerContribution> handlers,
         IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots,
-        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceModuleIndex,
-        IReadOnlyDictionary<RuntimeTypeHandle, Dictionary<int, int>> handlerModuleIndex)
+        IReadOnlyDictionary<ScopeHandlerModuleKey, int> handlerModuleIndex)
     {
         var eventHandlers = handlers
                             .Where(static h => h.Kind == ScopeMessageKind.Event)
@@ -235,12 +271,11 @@ public static class ModuleRuntimeBuilder
                 continue;
             }
 
-            if (!serviceModuleIndex.TryGetValue(serviceType, out int moduleSlotVal))
+            int localHandlerId = handler.ModuleLocalHandlerId;
+            if (!TryGetHandlerModuleSlot(handlerModuleIndex, serviceType, ScopeMessageKind.Event, localHandlerId, out int moduleSlotVal))
             {
                 continue;
             }
-
-            int localHandlerId = handler.ModuleLocalHandlerId;
 
             routes.Add(new ScopeEventHandlerRoute(
                 (ushort)moduleSlotVal,
@@ -249,6 +284,80 @@ public static class ModuleRuntimeBuilder
         }
 
         return routes;
+    }
+
+    private static ScopeCallRoute[] CreateCallRouteArray(
+        IReadOnlyDictionary<RuntimeTypeHandle, int> messageRouteIds)
+    {
+        var routes = new ScopeCallRoute[GetMessageRouteCount(messageRouteIds)];
+        for (int i = 0; i < routes.Length; i++)
+        {
+            routes[i] = new ScopeCallRoute(-1, 0, 0, -1);
+        }
+
+        return routes;
+    }
+
+    private static int GetMessageRouteCount(
+        IReadOnlyDictionary<RuntimeTypeHandle, int> messageRouteIds)
+    {
+        return messageRouteIds.Count == 0
+            ? 0
+            : messageRouteIds.Values.Max() + 1;
+    }
+
+    private static bool TryGetHandlerModuleSlot(
+        IReadOnlyDictionary<ScopeHandlerModuleKey, int> handlerModuleIndex,
+        RuntimeTypeHandle serviceType,
+        ScopeMessageKind kind,
+        int localHandlerId,
+        out int moduleSlot)
+    {
+        if (handlerModuleIndex.TryGetValue(
+                new ScopeHandlerModuleKey(serviceType, kind, localHandlerId),
+                out moduleSlot))
+        {
+            return true;
+        }
+
+        moduleSlot = -1;
+        return false;
+    }
+
+    private readonly struct ScopeHandlerModuleKey : IEquatable<ScopeHandlerModuleKey>
+    {
+        public ScopeHandlerModuleKey(
+            RuntimeTypeHandle serviceType,
+            ScopeMessageKind kind,
+            int localHandlerId)
+        {
+            ServiceType = serviceType;
+            Kind = kind;
+            LocalHandlerId = localHandlerId;
+        }
+
+        private RuntimeTypeHandle ServiceType { get; }
+
+        private ScopeMessageKind Kind { get; }
+
+        private int LocalHandlerId { get; }
+
+        public bool Equals(ScopeHandlerModuleKey other)
+        {
+            return ServiceType.Equals(other.ServiceType) &&
+                   Kind == other.Kind &&
+                   LocalHandlerId == other.LocalHandlerId;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is ScopeHandlerModuleKey other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(ServiceType, Kind, LocalHandlerId);
+        }
     }
 
     private static IReadOnlyDictionary<ILayerBaseModule, int> AllocateModuleSlots(IReadOnlyList<ILayerBaseModule> modules)
@@ -308,7 +417,14 @@ public static class ModuleRuntimeBuilder
         for (int i = 0; i < contributions.Count; i++)
         {
             LayerContractContribution contribution = contributions[i];
-            layerContracts[contribution.LayerType] = contribution;
+            if (layerContracts.ContainsKey(contribution.LayerType))
+            {
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.DuplicateLayerContract,
+                    $"Layer '{GetTypeName(contribution.LayerType)}' is defined by multiple Modules. Only one Layer contract is allowed.");
+            }
+
+            layerContracts.Add(contribution.LayerType, contribution);
         }
     }
 
@@ -337,7 +453,14 @@ public static class ModuleRuntimeBuilder
         for (int i = 0; i < contributions.Count; i++)
         {
             ScopeMessageContractContribution contribution = contributions[i];
-            messageContracts[contribution.MessageType] = contribution;
+            if (messageContracts.ContainsKey(contribution.MessageType))
+            {
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.DuplicateMessageContract,
+                    $"Scope message '{GetTypeName(contribution.MessageType)}' is defined by multiple Modules. Only one message contract is allowed.");
+            }
+
+            messageContracts.Add(contribution.MessageType, contribution);
         }
     }
 
@@ -382,10 +505,19 @@ public static class ModuleRuntimeBuilder
         IReadOnlyList<ContextContribution> contexts)
     {
         var serviceTypes = new HashSet<RuntimeTypeHandle>(services.Select(static service => service.ServiceType));
+        var contextKeys = new HashSet<ContextContributionKey>();
 
         for (int i = 0; i < contexts.Count; i++)
         {
             ContextContribution context = contexts[i];
+            var key = new ContextContributionKey(context.OwnerServiceType, context.ContextType);
+            if (!contextKeys.Add(key))
+            {
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.DuplicateContextContribution,
+                    $"Context '{GetTypeName(context.ContextType)}' is contributed more than once for Service '{GetTypeName(context.OwnerServiceType)}'.");
+            }
+
             if (!serviceTypes.Contains(context.OwnerServiceType))
             {
                 throw new ModuleBuildException(
@@ -399,6 +531,35 @@ public static class ModuleRuntimeBuilder
                     ModuleBuildErrorCodes.InvalidContextContribution,
                     $"Context '{GetTypeName(context.ContextType)}' does not provide a factory.");
             }
+        }
+    }
+
+    private readonly struct ContextContributionKey : IEquatable<ContextContributionKey>
+    {
+        public ContextContributionKey(RuntimeTypeHandle ownerServiceType, RuntimeTypeHandle contextType)
+        {
+            OwnerServiceType = ownerServiceType;
+            ContextType = contextType;
+        }
+
+        private RuntimeTypeHandle OwnerServiceType { get; }
+
+        private RuntimeTypeHandle ContextType { get; }
+
+        public bool Equals(ContextContributionKey other)
+        {
+            return OwnerServiceType.Equals(other.OwnerServiceType) &&
+                   ContextType.Equals(other.ContextType);
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is ContextContributionKey other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(OwnerServiceType, ContextType);
         }
     }
 
@@ -487,6 +648,12 @@ public static class ModuleBuildErrorCodes
     public const string DuplicateScopeDefinition = "LBM004";
     public const string CallNoHandler = "LBM005";
     public const string CallMultipleHandlers = "LBM006";
+    public const string DuplicateModule = "LBM007";
+    public const string DuplicateLayerContract = "LBM008";
+    public const string DuplicateMessageContract = "LBM009";
+    public const string DuplicateServiceContribution = "LBM010";
+    public const string DuplicateContextContribution = "LBM011";
+    public const string DuplicateHandlerContribution = "LBM012";
 
     internal const string MissingLayerContract = "LBM101";
     internal const string InvalidServiceContribution = "LBM102";

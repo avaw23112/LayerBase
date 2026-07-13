@@ -9,6 +9,13 @@ public interface ILayerBaseModule
     ModuleManifest Manifest { get; }
 }
 
+public interface IModuleScopeDispatchProvider
+{
+    ModuleCallDispatchHandler? ModuleCallDispatcher { get; }
+
+    ModuleEventDispatchHandler? ModuleEventDispatcher { get; }
+}
+
 public sealed class ModuleManifest
 {
     public static readonly ModuleManifest Empty = new(

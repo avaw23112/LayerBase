@@ -51,6 +51,8 @@ public struct JobMoveViewEvent : IActorEvent
 internal sealed partial class JobProbeActor : IPooledActor
 {
     public static List<JobMoveViewEvent> Received { get; } = new();
+    public static List<int> RentThreadIds { get; } = new();
+    public static List<int> ReturnThreadIds { get; } = new();
     public static int RentCount { get; set; }
     public static int ReturnCount { get; set; }
 
@@ -62,11 +64,21 @@ internal sealed partial class JobProbeActor : IPooledActor
 
     public void OnRent()
     {
+        lock (RentThreadIds)
+        {
+            RentThreadIds.Add(Environment.CurrentManagedThreadId);
+        }
+
         RentCount++;
     }
 
     public void OnReturn()
     {
+        lock (ReturnThreadIds)
+        {
+            ReturnThreadIds.Add(Environment.CurrentManagedThreadId);
+        }
+
         ReturnCount++;
     }
 
@@ -89,6 +101,8 @@ public class QueryBringJobTests
     {
         LayerHub.Reset();
         JobProbeActor.Received.Clear();
+        JobProbeActor.RentThreadIds.Clear();
+        JobProbeActor.ReturnThreadIds.Clear();
         JobProbeActor.RentCount = 0;
         JobProbeActor.ReturnCount = 0;
     }

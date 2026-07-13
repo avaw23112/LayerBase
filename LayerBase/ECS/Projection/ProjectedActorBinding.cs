@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using Arch.Core;
+using LayerBase;
 using LayerBase.Actor;
 
 namespace LayerBase.ECS.Projection;
@@ -15,6 +16,11 @@ internal static class ProjectedActorBinding
         ref ProjectedActorMeta meta,
         long                   nowTicks)
     {
+        if (ShouldDeferActorWorldAccess(world, actorWorld))
+        {
+            return ActorId.Invalid;
+        }
+
         ProjectedActorHandle handle = ProjectedActorTypeRegistry.CreateActorByTypeId(actorWorld, meta.ActorTypeId);
         if (!handle.IsValid)
         {
@@ -38,6 +44,12 @@ internal static class ProjectedActorBinding
         ref ProjectedActorRef  actorRef,
         long                   nowTicks)
     {
+        if (ShouldDeferActorWorldAccess(world, actorWorld))
+        {
+            actorRef.ClearActor();
+            return ActorId.Invalid;
+        }
+
         ProjectedActorHandle handle = ProjectedActorTypeRegistry.CreateActorByTypeId(actorWorld, meta.ActorTypeId);
         if (!handle.IsValid)
         {
@@ -62,6 +74,12 @@ internal static class ProjectedActorBinding
         ref ProjectedActorRef actorRef,
         long                  nowTicks)
     {
+        if (ShouldDeferActorWorldAccess(world, actorWorld))
+        {
+            actorRef.ClearActor();
+            return ActorId.Invalid;
+        }
+
         ProjectedActorHandle handle =
             ProjectedActorTypeRegistry.CreateActorByTypeId(
                 actorWorld,
@@ -129,6 +147,12 @@ internal static class ProjectedActorBinding
             return false;
         }
 
+        if (ShouldDeferActorWorldAccess(actorWorld))
+        {
+            RefreshDeadline(ref actorRef, nowTicks);
+            return true;
+        }
+
         if (!actorWorld.TryGetPooledActor(actorId, out IPooledActor pooledActor))
         {
             ProjectedActorBindingUtility.Clear(ref meta, ref actorRef);
@@ -157,6 +181,12 @@ internal static class ProjectedActorBinding
         {
             ClearByEntity(world, entity, ref actorRef);
             return false;
+        }
+
+        if (ShouldDeferActorWorldAccess(world, actorWorld))
+        {
+            RefreshDeadline(ref actorRef, nowTicks);
+            return true;
         }
 
         if (!actorWorld.TryGetPooledActor(
@@ -219,6 +249,16 @@ internal static class ProjectedActorBinding
             return actorId.IsValid;
         }
 
+        if (ShouldDeferActorWorldAccess(world, actorWorld))
+        {
+            _ = world.TryEnableProjectedActor(actorId);
+            RefreshDeadline(
+                ref actorRef,
+                nowTicks);
+
+            return true;
+        }
+
         if (actorWorld.IsProjectedActorDisabled(actorId))
         {
             if (!actorWorld.EnableProjectedActorIfDisabled(actorId))
@@ -271,5 +311,22 @@ internal static class ProjectedActorBinding
         // 控制下一次允许真实 Touch 的时间。
         actorRef.NextTouchTicks =
             nowTicks + actorRef.TouchIntervalTicks;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool ShouldDeferActorWorldAccess(
+        World world,
+        ActorWorld actorWorld)
+    {
+        return world.TryGetRuntime(out LayerRuntime? runtime) &&
+               runtime != null &&
+               ReferenceEquals(runtime.Actors, actorWorld) &&
+               !runtime.IsOwnerThreadForActorWorld;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool ShouldDeferActorWorldAccess(ActorWorld actorWorld)
+    {
+        return false;
     }
 }

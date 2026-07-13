@@ -4,27 +4,29 @@ namespace LayerBase.Async;
 
 internal interface ILBTaskSource
 {
-    bool IsCompleted { get; }
-    void OnCompleted(Action continuation);
+    int Version { get; }
+    bool IsCompleted(int version);
+    void OnCompleted(int version, Action continuation);
     void SetResult();
     void SetException(Exception        ex);
     void SetCanceled(CancellationToken token);
-    void GetResult();
+    void GetResult(int version);
     void TryRelease(); // 新增：安全尝试回�?
 }
 
 internal interface ILBTaskSource<T>
 {
-    bool IsCompleted { get; }
-    void OnCompleted(Action            continuation);
+    int Version { get; }
+    bool IsCompleted(int version);
+    void OnCompleted(int version, Action continuation);
     void SetResult(T                   value);
     void SetException(Exception        ex);
     void SetCanceled(CancellationToken token);
-    T GetResult();
+    T GetResult(int version);
     void TryRelease(); // 新增：安全尝试回�?
 }
 
-internal sealed class LBTaskSource : ILBTaskSource
+internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
 {
     private static readonly ObjectPool<LBTaskSource> Pool = new(() => new LBTaskSource());
     private CancellationToken _canceledToken;
@@ -32,23 +34,32 @@ internal sealed class LBTaskSource : ILBTaskSource
 
     private Action? _continuation;
     private Exception? _exception;
+    private int _consumed;
     private int _released; // 0 = in use, 1 = released
     private int _status;   // 0 = pending, -1 = completing, 1 = completed
+    private int _version;
 
     private LBTaskSource()
     {
         _context = SynchronizationContext.Current;
     }
 
-    public bool IsCompleted => Volatile.Read(ref _status) == 1;
+    public int Version => Volatile.Read(ref _version);
 
-    public void OnCompleted(Action continuation)
+    public bool IsCompleted(int version)
+    {
+        if (!IsCurrent(version)) return true;
+        return Volatile.Read(ref _status) == 1;
+    }
+
+    public void OnCompleted(int version, Action continuation)
     {
         if (continuation == null) throw new ArgumentNullException(nameof(continuation));
+        ValidateVersion(version);
 
         while (true)
         {
-            if (IsCompleted)
+            if (IsCompleted(version))
             {
                 Schedule(continuation);
                 return;
@@ -71,7 +82,7 @@ internal sealed class LBTaskSource : ILBTaskSource
 
             if (Interlocked.CompareExchange(ref _continuation, next, original) != original) continue;
 
-            if (IsCompleted && Interlocked.CompareExchange(ref _continuation, null, next) == next)
+            if (IsCompleted(version) && Interlocked.CompareExchange(ref _continuation, null, next) == next)
                 Schedule(next);
             return;
         }
@@ -92,9 +103,15 @@ internal sealed class LBTaskSource : ILBTaskSource
         Complete(new OperationCanceledException(token), token);
     }
 
-    public void GetResult()
+    public void GetResult(int version)
     {
-        if (!IsCompleted) throw new InvalidOperationException("ArchTask not completed");
+        ValidateVersion(version);
+        if (!IsCompleted(version)) throw new InvalidOperationException("ArchTask not completed");
+        if (Interlocked.Exchange(ref _consumed, 1) != 0)
+        {
+            throw new InvalidOperationException("LBTask result has already been consumed.");
+        }
+
         var ex = _exception;
         TryRelease();
         if (ex != null) throw ex;
@@ -113,7 +130,9 @@ internal sealed class LBTaskSource : ILBTaskSource
         src._canceledToken = default;
         src._context = context;
         src._status = 0;
+        src._consumed = 0;
         src._released = 0;
+        src._version = NextVersion(src._version);
         return src;
     }
 
@@ -133,6 +152,30 @@ internal sealed class LBTaskSource : ILBTaskSource
         if (cont != null) Schedule(cont);
     }
 
+    public void CancelOnDispose(Exception error)
+    {
+        SetCanceled(default);
+    }
+
+    private bool IsCurrent(int version)
+    {
+        return version != 0 && Version == version && Volatile.Read(ref _released) == 0;
+    }
+
+    private void ValidateVersion(int version)
+    {
+        if (!IsCurrent(version))
+        {
+            throw new InvalidOperationException("LBTask source is no longer valid for this awaiter.");
+        }
+    }
+
+    private static int NextVersion(int current)
+    {
+        int next = unchecked(current + 1);
+        return next == 0 ? 1 : next;
+    }
+
     private void Schedule(Action continuation)
     {
         var ctx = _context;
@@ -145,6 +188,10 @@ internal sealed class LBTaskSource : ILBTaskSource
             }
             catch (ObjectDisposedException)
             {
+                if (ctx is LayerBaseSynchronizationContext { AllowThreadPoolFallbackOnDispose: false })
+                {
+                    return;
+                }
             }
         }
 
@@ -152,32 +199,41 @@ internal sealed class LBTaskSource : ILBTaskSource
     }
 }
 
-internal sealed class LBTaskSource<T> : ILBTaskSource<T>
+internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancellable
 {
     private static readonly ObjectPool<LBTaskSource<T>> Pool = new(() => new LBTaskSource<T>());
     private CancellationToken _canceledToken;
     private SynchronizationContext? _context;
 
     private Action? _continuation;
+    private int _consumed;
     private Exception? _exception;
     private int _released; // 0 = in use, 1 = released
     private T _result = default!;
     private int _status; // 0 = pending, -1 = completing, 1 = completed
+    private int _version;
 
     private LBTaskSource()
     {
         _context = SynchronizationContext.Current;
     }
 
-    public bool IsCompleted => Volatile.Read(ref _status) == 1;
+    public int Version => Volatile.Read(ref _version);
 
-    public void OnCompleted(Action continuation)
+    public bool IsCompleted(int version)
+    {
+        if (!IsCurrent(version)) return true;
+        return Volatile.Read(ref _status) == 1;
+    }
+
+    public void OnCompleted(int version, Action continuation)
     {
         if (continuation == null) throw new ArgumentNullException(nameof(continuation));
+        ValidateVersion(version);
 
         while (true)
         {
-            if (IsCompleted)
+            if (IsCompleted(version))
             {
                 Schedule(continuation);
                 return;
@@ -200,7 +256,7 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
 
             if (Interlocked.CompareExchange(ref _continuation, next, original) != original) continue;
 
-            if (IsCompleted && Interlocked.CompareExchange(ref _continuation, null, next) == next)
+            if (IsCompleted(version) && Interlocked.CompareExchange(ref _continuation, null, next) == next)
                 Schedule(next);
             return;
         }
@@ -225,9 +281,15 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
         CompleteCore(new OperationCanceledException(token), token);
     }
 
-    public T GetResult()
+    public T GetResult(int version)
     {
-        if (!IsCompleted) throw new InvalidOperationException("ArchTask not completed");
+        ValidateVersion(version);
+        if (!IsCompleted(version)) throw new InvalidOperationException("ArchTask not completed");
+        if (Interlocked.Exchange(ref _consumed, 1) != 0)
+        {
+            throw new InvalidOperationException("LBTask result has already been consumed.");
+        }
+
         var ex = _exception;
         var res = _result;
         TryRelease();
@@ -249,7 +311,9 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
         src._result = default!;
         src._context = context;
         src._status = 0;
+        src._consumed = 0;
         src._released = 0;
+        src._version = NextVersion(src._version);
         return src;
     }
 
@@ -286,10 +350,38 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
             }
             catch (ObjectDisposedException)
             {
+                if (ctx is LayerBaseSynchronizationContext { AllowThreadPoolFallbackOnDispose: false })
+                {
+                    return;
+                }
             }
         }
 
         ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
+    }
+
+    public void CancelOnDispose(Exception error)
+    {
+        SetCanceled(default);
+    }
+
+    private bool IsCurrent(int version)
+    {
+        return version != 0 && Version == version && Volatile.Read(ref _released) == 0;
+    }
+
+    private void ValidateVersion(int version)
+    {
+        if (!IsCurrent(version))
+        {
+            throw new InvalidOperationException("LBTask source is no longer valid for this awaiter.");
+        }
+    }
+
+    private static int NextVersion(int current)
+    {
+        int next = unchecked(current + 1);
+        return next == 0 ? 1 : next;
     }
 
     private void Release()
@@ -300,21 +392,51 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
 
 internal sealed class ObjectPool<T> where T : class
 {
+    private const int DefaultMaxRetained = 1024;
     private readonly ConcurrentBag<T> _bag = new();
     private readonly Func<T> _factory;
+    private readonly int _maxRetained;
+    private int _count;
 
-    public ObjectPool(Func<T> factory)
+    public ObjectPool(Func<T> factory, int maxRetained = DefaultMaxRetained)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        _maxRetained = Math.Max(0, maxRetained);
     }
+
+    internal int Count => Volatile.Read(ref _count);
+
+    internal int MaxRetained => _maxRetained;
 
     public T Rent()
     {
-        return _bag.TryTake(out var item) ? item : _factory();
+        if (_bag.TryTake(out var item))
+        {
+            Interlocked.Decrement(ref _count);
+            return item;
+        }
+
+        return _factory();
     }
 
     public void Return(T item)
     {
+        if (item == null) throw new ArgumentNullException(nameof(item));
+
+        while (true)
+        {
+            int current = Volatile.Read(ref _count);
+            if (current >= _maxRetained)
+            {
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref _count, current + 1, current) == current)
+            {
+                break;
+            }
+        }
+
         _bag.Add(item);
     }
 }

@@ -8,6 +8,7 @@ public readonly struct TimeSchedulerOptions
     public readonly float LongTimerThresholdSeconds;
     public readonly int MaxExpiredPerTick;
     public readonly int MaxPromotePerTick;
+    public readonly int MaxCatchUpTicksPerPump;
     public readonly TimerRepeatMode DefaultRepeatMode;
     public readonly TimerCatchUpPolicy DefaultCatchUpPolicy;
 
@@ -19,7 +20,8 @@ public readonly struct TimeSchedulerOptions
         int                maxExpiredPerTick,
         int                maxPromotePerTick,
         TimerRepeatMode    defaultRepeatMode,
-        TimerCatchUpPolicy defaultCatchUpPolicy)
+        TimerCatchUpPolicy defaultCatchUpPolicy,
+        int                maxCatchUpTicksPerPump = 8)
     {
         TickDurationSeconds = tickDurationSeconds;
         WheelSize = wheelSize;
@@ -27,6 +29,7 @@ public readonly struct TimeSchedulerOptions
         LongTimerThresholdSeconds = longTimerThresholdSeconds;
         MaxExpiredPerTick = maxExpiredPerTick;
         MaxPromotePerTick = maxPromotePerTick;
+        MaxCatchUpTicksPerPump = maxCatchUpTicksPerPump;
         DefaultRepeatMode = defaultRepeatMode;
         DefaultCatchUpPolicy = defaultCatchUpPolicy;
     }

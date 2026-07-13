@@ -91,6 +91,28 @@ public class PostFromAnyThreadTests
     }
 
     [Test]
+    public void TryPostFromAnyThread_ShouldReturnFalse_WhenIngressQueueFull()
+    {
+        var options = new PostSchedulerOptions(
+            readyCapacity: 1024,
+            nextCapacity: 1024,
+            maxEventsPerPump: 0,
+            maxMillisecondsPerPump: 0,
+            maxWavesPerPump: 1,
+            timeCheckInterval: 64,
+            defaultBackpressure: BackpressurePolicy.RejectNew,
+            maxIngressQueueCapacity: 1);
+
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new EmptyLayer())
+                              .SetPostOptions(options)
+                              .Build().Prewarm();
+
+        Assert.That(runtime.TryPostFromAnyThread(new TestEvent { Value = 1 }), Is.True);
+        Assert.That(runtime.TryPostFromAnyThread(new TestEvent { Value = 2 }), Is.False);
+    }
+
+    [Test]
     public void NormalPost_ShouldStillUseExistingPath()
     {
         var received = 0;
@@ -159,7 +181,7 @@ public class PostFromAnyThreadTests
         var ingress = new PostIngressQueue();
         for (int i = 0; i < 10; i++)
         {
-            ingress.Enqueue(new TestEvent { Value = i }, null);
+            Assert.That(ingress.Enqueue(new TestEvent { Value = i }, null), Is.True);
         }
 
         // 搬运 5 个，预期全部失败 (因为未注册)
@@ -175,5 +197,14 @@ public class PostFromAnyThreadTests
         // 队列应为空
         result = ingress.DrainTo(scheduler, 10);
         Assert.That(result.Drained, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void PostIngressQueue_Rejects_When_Capacity_Is_Full()
+    {
+        var ingress = new PostIngressQueue(capacity: 1);
+
+        Assert.That(ingress.Enqueue(new TestEvent { Value = 1 }, null), Is.True);
+        Assert.That(ingress.Enqueue(new TestEvent { Value = 2 }, null), Is.False);
     }
 }

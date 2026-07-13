@@ -72,6 +72,37 @@ public class TimeSchedulerTests
     }
 
     [Test]
+    public void Cancel_Long_Timer_Removes_From_Heap()
+    {
+        var options = new TimeSchedulerOptions(0.1f, 4, 4, 0.4f, 1024, 64, TimerRepeatMode.Once,
+            TimerCatchUpPolicy.SkipMissed);
+        var scheduler = new TimeScheduler<int>(options);
+
+        var handle = scheduler.Schedule(1, 5.0f);
+
+        Assert.That(GetLongHeapCount(scheduler), Is.EqualTo(1));
+        Assert.That(scheduler.Cancel(handle), Is.True);
+        Assert.That(GetLongHeapCount(scheduler), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Large_Delta_CatchUp_Is_Capped_By_Default()
+    {
+        var options = new TimeSchedulerOptions(0.1f, 64, 64, 6.4f, 1024, 64, TimerRepeatMode.FixedRate,
+            TimerCatchUpPolicy.FireAllCapped);
+        var scheduler = new TimeScheduler<int>(options);
+        var sink = new MockSink();
+
+        scheduler.Schedule(1, 0.1f, repeatCount: 100, intervalSeconds: 0.1f,
+            repeatMode: TimerRepeatMode.FixedRate,
+            catchUpPolicy: TimerCatchUpPolicy.FireAllCapped);
+
+        scheduler.Tick(2.0f, sink);
+
+        Assert.That(sink.Received.Count, Is.LessThanOrEqualTo(8));
+    }
+
+    [Test]
     public void FixedDelay_Repeating_Timer()
     {
         var options = new TimeSchedulerOptions(0.1f, 100, 64, 10.0f, 1024, 64, TimerRepeatMode.FixedDelay,
@@ -113,5 +144,16 @@ public class TimeSchedulerTests
         // Subtick 2: currentTick 2. Processes Slot 2.
 
         Assert.That(sink.Received.Count, Is.EqualTo(2));
+    }
+
+    private static int GetLongHeapCount(TimeScheduler<int> scheduler)
+    {
+        var heap = typeof(TimeScheduler<int>)
+            .GetField("_longHeap", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(scheduler)!;
+
+        return (int)heap.GetType()
+            .GetProperty("Count", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)!
+            .GetValue(heap)!;
     }
 }

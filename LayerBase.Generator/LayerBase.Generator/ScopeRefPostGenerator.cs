@@ -70,22 +70,14 @@ public sealed class ScopeRefPostGenerator : IIncrementalGenerator
         builder.AppendLine("    public static class ScopeRefPostExtensions");
         builder.AppendLine("    {");
 
-        var eventIds = items
-                       .Select(static item => item.EventType)
-                       .Distinct(StringComparer.Ordinal)
-                       .OrderBy(static item => item, StringComparer.Ordinal)
-                       .Select(static (eventType, index) => (EventType: eventType, EventId: index))
-                       .ToDictionary(static item => item.EventType, static item => item.EventId, StringComparer.Ordinal);
-
         for (int i = 0; i < items.Length; i++)
         {
             ScopeEventInfo item = items[i];
-            int eventId = eventIds[item.EventType];
 
             builder.AppendLine(
                 $"        public static bool Post(this global::LayerBase.Scope.ScopeRef<{item.ScopeType}> scope, {item.EventType} message)");
             builder.AppendLine("        {");
-            builder.AppendLine($"            return scope.TryPost({eventId}, message);");
+            builder.AppendLine("            return scope.TryPost(message);");
             builder.AppendLine("        }");
 
             if (i + 1 < items.Length)

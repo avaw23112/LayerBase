@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -130,9 +131,12 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
 
         // Generate IGeneratedScopeResourcePublisher for each type with [Provide]
         int exportId = 0;
-        foreach (var group in publishByType)
+        foreach (var group in publishByType.OrderBy(static group => group.Key.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal))
         {
-            var memberList = group.ToImmutableArray();
+            var memberList = group
+                .OrderBy(static member => member.SourceStart)
+                .ThenBy(static member => member.Name, StringComparer.Ordinal)
+                .ToImmutableArray();
             AppendPartialTypeStart(
                 sb,
                 group.Key,
@@ -178,9 +182,12 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
 
         // Generate IGeneratedScopeResourceConsumer for each type with [From]
         int importId = 0;
-        foreach (var group in useByType)
+        foreach (var group in useByType.OrderBy(static group => group.Key.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal))
         {
-            var memberList = group.ToImmutableArray();
+            var memberList = group
+                .OrderBy(static member => member.SourceStart)
+                .ThenBy(static member => member.Name, StringComparer.Ordinal)
+                .ToImmutableArray();
             AppendPartialTypeStart(
                 sb,
                 group.Key,
@@ -512,6 +519,7 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
             IsPublish = isPublish;
             Location = location;
             IsReadOnly = isReadOnly;
+            SourceStart = location?.SourceSpan.Start ?? 0;
         }
 
         public INamedTypeSymbol ContainingType { get; }
@@ -522,5 +530,6 @@ public sealed class ScopeResourceGenerator : IIncrementalGenerator
         public bool IsPublish { get; }
         public Location? Location { get; }
         public bool IsReadOnly { get; }
+        public int SourceStart { get; }
     }
 }

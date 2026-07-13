@@ -351,6 +351,13 @@ public sealed class ScopeRuntime : IDisposable
     {
         ThrowIfDisposed();
         ScopeRuntimeState state = State;
+        if (state is ScopeRuntimeState.StopRequested or ScopeRuntimeState.Stopping)
+        {
+            ExecuteStopInternalOnce();
+            DisposeInfrastructureIfRequested();
+            return;
+        }
+
         if (IsStoppedOrLater(state) || Descriptor.Threading == ScopeThreadingMode.Worker)
         {
             if (IsBeforeStopped(state) &&
@@ -393,6 +400,13 @@ public sealed class ScopeRuntime : IDisposable
             }
 
             return;
+        }
+
+        if (Descriptor.Threading == ScopeThreadingMode.Worker &&
+            threadToJoin == null &&
+            Volatile.Read(ref _stopCleanupStarted) == 0)
+        {
+            ExecuteStopInternalOnce();
         }
 
         if (Volatile.Read(ref _stopCleanupStarted) != 0)
@@ -465,6 +479,7 @@ public sealed class ScopeRuntime : IDisposable
 
     public void Dispose()
     {
+        ThrowIfInlineDisposeCannotRunOnCurrentThread();
         Interlocked.Exchange(ref _disposeRequested, 1);
 
         if (ShouldDeferDisposeToOwnerSafePoint())
@@ -666,13 +681,18 @@ public sealed class ScopeRuntime : IDisposable
 
     private LayerBaseSynchronizationContext GetOrCreateContext()
     {
-        return _context ??= LayerBaseSynchronizationContext.Install();
+        return _context ??= LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
     }
 
     private void StartServices()
     {
         for (int i = 0; i < Services.Length; i++)
         {
+            if (!AcceptsBusinessIngress(State))
+            {
+                break;
+            }
+
             if (Services[i] is not IInitializable initializable)
             {
                 continue;
@@ -694,6 +714,11 @@ public sealed class ScopeRuntime : IDisposable
     {
         for (int i = 0; i < Contexts.Length; i++)
         {
+            if (!AcceptsBusinessIngress(State))
+            {
+                break;
+            }
+
             if (Contexts[i] is not IInitializable initializable)
             {
                 continue;
@@ -720,7 +745,17 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         StartServices();
+        if (!AcceptsBusinessIngress(State))
+        {
+            return;
+        }
+
         StartContexts();
+        if (!AcceptsBusinessIngress(State))
+        {
+            return;
+        }
+
         if (_ownsActorWorld)
         {
             _actorWorld.CompleteRuntimeBuild();
@@ -802,10 +837,21 @@ public sealed class ScopeRuntime : IDisposable
 
         try { DrainContinuations(); } catch { }
 
+        try { Timer.CloseAndClear(); } catch { }
+        try { PostScheduler.CloseAndClear(); } catch { }
+
         try { _subscriptionRegistry?.Dispose(); } catch { }
         _subscriptionRegistry = null;
         try { DelayManager.Clear(); } catch { }
-        try { ResourceRegistry.CloseAndUnbind(); } catch { }
+        try
+        {
+            ResourceRegistry.CloseAndUnbind((exception, _) =>
+                ReportException(exception, -1, LayerExceptionPhase.ResourceUnbind, LayerQueueKind.None, -1));
+        }
+        catch (Exception ex)
+        {
+            ReportException(ex, -1, LayerExceptionPhase.ResourceUnbind, LayerQueueKind.None, -1);
+        }
         try { DisposeContexts(); } catch { }
         try { DisposeServices(); } catch { }
     }
@@ -1035,6 +1081,24 @@ public sealed class ScopeRuntime : IDisposable
             return Descriptor.Threading == ScopeThreadingMode.Inline &&
                 _ownerThreadId != -1 &&
                 _ownerThreadId != Environment.CurrentManagedThreadId;
+        }
+    }
+
+    private void ThrowIfInlineDisposeCannotRunOnCurrentThread()
+    {
+        lock (_lifecycleGate)
+        {
+            if (_state == ScopeRuntimeState.Disposed ||
+                Descriptor.Threading != ScopeThreadingMode.Inline ||
+                _ownerThreadId == -1 ||
+                _ownerThreadId == Environment.CurrentManagedThreadId ||
+                (_executionDepth > 0 && CanCurrentThreadRunOwnerCleanupNoLock()))
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"Inline scope '{Descriptor.Name}' Dispose must be called from its owner thread. Use RequestStop from other threads.");
         }
     }
 
@@ -1272,8 +1336,8 @@ public sealed class ScopeRuntime : IDisposable
     private void RebuildServiceProvider()
     {
         _serviceProvider?.Dispose();
-        _serviceProvider = new ScopeServiceProvider(Services, Contexts);
         object[] scopeObjects = Services.Cast<object>().Concat(Contexts).ToArray();
+        _serviceProvider = new ScopeServiceProvider(scopeObjects);
 
         for (int i = 0; i < Services.Length; i++)
         {
@@ -1339,22 +1403,42 @@ public sealed class ScopeRuntime : IDisposable
         if (serviceSlot >= 0)
         {
             int contextOffset = Services.Length;
+            int matchedSlot = -1;
             for (int i = 0; i < _contextPlans.Length; i++)
             {
                 ScopeContextPlan contextPlan = _contextPlans[i];
                 if (contextPlan.OwnerServiceSlot == serviceSlot &&
                     dependencyType.IsInstanceOfType(contextPlan.Instance))
                 {
-                    return contextOffset + contextPlan.ContextSlot;
+                    int slot = contextOffset + contextPlan.ContextSlot;
+                    if (matchedSlot >= 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"Scope mount dependency '{dependencyType.FullName}' is ambiguous among owner contexts.");
+                    }
+
+                    matchedSlot = slot;
                 }
+            }
+
+            if (matchedSlot >= 0)
+            {
+                return matchedSlot;
             }
         }
 
+        int globalMatchedSlot = -1;
         for (int i = 0; i < Services.Length; i++)
         {
             if (dependencyType.IsInstanceOfType(Services[i]))
             {
-                return i;
+                if (globalMatchedSlot >= 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Scope mount dependency '{dependencyType.FullName}' is ambiguous among scope objects.");
+                }
+
+                globalMatchedSlot = i;
             }
         }
 
@@ -1363,8 +1447,19 @@ public sealed class ScopeRuntime : IDisposable
         {
             if (dependencyType.IsInstanceOfType(Contexts[i]))
             {
-                return offset + i;
+                if (globalMatchedSlot >= 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Scope mount dependency '{dependencyType.FullName}' is ambiguous among scope objects.");
+                }
+
+                globalMatchedSlot = offset + i;
             }
+        }
+
+        if (globalMatchedSlot >= 0)
+        {
+            return globalMatchedSlot;
         }
 
         throw new InvalidOperationException($"Scope mount dependency not registered: {dependencyType}.");

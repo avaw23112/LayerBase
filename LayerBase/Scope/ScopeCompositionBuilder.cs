@@ -20,7 +20,7 @@ internal static class ScopeCompositionBuilder
         IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots = catalog.ServiceSlots;
 
         int maxScopeId = scopeDefinitions.Count > 0
-            ? scopeDefinitions.Values.Max(d => scopeIds.TryGetValue(d.ScopeType, out int id) ? id : -1)
+            ? scopeDefinitions.Values.Max(d => RequireScopeId(scopeIds, d.ScopeType))
             : 0;
 
         var scopeDescriptorsById = new ScopeDescriptor[maxScopeId + 1];
@@ -34,12 +34,15 @@ internal static class ScopeCompositionBuilder
 
         foreach (ScopeDefinitionContribution definition in scopeDefinitions.Values)
         {
-            if (!scopeIds.TryGetValue(definition.ScopeType, out int scopeId))
-            {
-                continue;
-            }
+            int scopeId = RequireScopeId(scopeIds, definition.ScopeType);
 
             scopeTypesById[scopeId] = Type.GetTypeFromHandle(definition.ScopeType);
+            if (scopeTypesById[scopeId] == null)
+            {
+                throw new InvalidOperationException(
+                    $"Scope definition contains an unknown scope type handle '{definition.ScopeType}'.");
+            }
+
             scopeDescriptorsById[scopeId] = new ScopeDescriptor(
                 scopeId,
                 GetTypeName(definition.ScopeType),
@@ -52,14 +55,10 @@ internal static class ScopeCompositionBuilder
         foreach (IGrouping<RuntimeTypeHandle, ServiceContribution> scopeGroup in services
                      .GroupBy(static service => service.OwnerScopeType))
         {
-            if (!scopeIds.TryGetValue(scopeGroup.Key, out int scopeId))
-            {
-                continue;
-            }
+            int scopeId = RequireScopeId(scopeIds, scopeGroup.Key);
 
             int serviceCount = scopeGroup
-                .Where(service => serviceSlots.ContainsKey(service.ServiceType))
-                .Select(service => serviceSlots[service.ServiceType] + 1)
+                .Select(service => RequireServiceSlot(serviceSlots, service.ServiceType) + 1)
                 .DefaultIfEmpty(0)
                 .Max();
 
@@ -69,28 +68,26 @@ internal static class ScopeCompositionBuilder
         for (int i = 0; i < services.Count; i++)
         {
             ServiceContribution service = services[i];
-            if (!scopeIds.TryGetValue(service.OwnerScopeType, out int scopeId))
-            {
-                continue;
-            }
+            int scopeId = RequireScopeId(scopeIds, service.OwnerScopeType);
 
             serviceScopeIds[service.ServiceType] = scopeId;
 
-            if (!serviceSlots.TryGetValue(service.ServiceType, out int serviceSlot))
-            {
-                continue;
-            }
+            int serviceSlot = RequireServiceSlot(serviceSlots, service.ServiceType);
 
             IService? instance = service.Factory?.Invoke();
             if (instance == null)
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"Service factory returned null for Service '{GetTypeName(service.ServiceType)}'.");
             }
 
-            ScopeServicePlan[] scopeServices = scopeServicesById[scopeId] ?? Array.Empty<ScopeServicePlan>();
+            ScopeServicePlan[] scopeServices = scopeServicesById[scopeId]
+                ?? throw new InvalidOperationException(
+                    $"Scope '{GetTypeName(service.OwnerScopeType)}' has no service plan array.");
             if ((uint)serviceSlot >= (uint)scopeServices.Length)
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"Service slot {serviceSlot} for Service '{GetTypeName(service.ServiceType)}' is outside Scope '{GetTypeName(service.OwnerScopeType)}' service plan length {scopeServices.Length}.");
             }
 
             scopeServices[serviceSlot] = new ScopeServicePlan(
@@ -105,25 +102,33 @@ internal static class ScopeCompositionBuilder
             ContextContribution context = contexts[i];
             if (!serviceScopeIds.TryGetValue(context.OwnerServiceType, out int scopeId))
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"Context '{GetTypeName(context.ContextType)}' targets Service '{GetTypeName(context.OwnerServiceType)}', but the service was not composed into a scope.");
             }
 
-            if (!serviceSlots.TryGetValue(context.OwnerServiceType, out int ownerServiceSlot))
-            {
-                continue;
-            }
+            int ownerServiceSlot = RequireServiceSlot(serviceSlots, context.OwnerServiceType);
 
-            ScopeServicePlan[] ownerServices = scopeServicesById[scopeId] ?? Array.Empty<ScopeServicePlan>();
+            ScopeServicePlan[] ownerServices = scopeServicesById[scopeId]
+                ?? throw new InvalidOperationException(
+                    $"Scope id {scopeId} has no service plan array for Context '{GetTypeName(context.ContextType)}'.");
             if ((uint)ownerServiceSlot >= (uint)ownerServices.Length)
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"Owner service slot {ownerServiceSlot} for Context '{GetTypeName(context.ContextType)}' is outside Scope service plan length {ownerServices.Length}.");
             }
 
             IService ownerService = ownerServices[ownerServiceSlot].Instance;
+            if (ownerService == null)
+            {
+                throw new InvalidOperationException(
+                    $"Context '{GetTypeName(context.ContextType)}' owner Service '{GetTypeName(context.OwnerServiceType)}' has no composed instance.");
+            }
+
             ILayerContext? instance = context.Factory?.Invoke(ownerService);
             if (instance == null)
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"Context factory returned null for Context '{GetTypeName(context.ContextType)}'.");
             }
 
             List<ScopeContextPlan> contextPlans = scopeContextsById[scopeId] ??= new List<ScopeContextPlan>();
@@ -144,6 +149,12 @@ internal static class ScopeCompositionBuilder
 
         for (int scopeId = 1; scopeId <= maxScopeId; scopeId++)
         {
+            if (scopeTypesById[scopeId] == null)
+            {
+                throw new InvalidOperationException(
+                    $"Scope composition is missing descriptor/type for scope id {scopeId}.");
+            }
+
             ScopeServicePlan[] servicesForScope = scopeServicesById[scopeId] ?? Array.Empty<ScopeServicePlan>();
             ScopeContextPlan[] contextsForScope = scopeContextsById[scopeId]?.ToArray() ?? Array.Empty<ScopeContextPlan>();
             resourcePlansById[scopeId] = BuildResourcePlan(
@@ -164,7 +175,8 @@ internal static class ScopeCompositionBuilder
             scopes,
             catalog.CallRoutes.ToArray(),
             catalog.EventRoutes.ToArray(),
-            catalog.EventHandlerRoutes.ToArray());
+            catalog.EventHandlerRoutes.ToArray(),
+            catalog.MessageRouteIds);
     }
 
     public static ScopeCompositionPlan Build(LayerRuntime runtime, ModuleRuntimeCatalog catalog)
@@ -226,7 +238,8 @@ internal static class ScopeCompositionBuilder
             scopePlans,
             basePlan.CallRoutes,
             basePlan.EventRoutes,
-            basePlan.EventHandlerRoutes);
+            basePlan.EventHandlerRoutes,
+            basePlan.MessageRouteIds);
     }
 
     private static LayerMembership ComputeMembership(
@@ -310,6 +323,44 @@ internal static class ScopeCompositionBuilder
         }
 
         return ScopeResourcePlanBuilder.Build(candidates, exports, imports);
+    }
+
+    private static int RequireScopeId(
+        IReadOnlyDictionary<RuntimeTypeHandle, int> scopeIds,
+        RuntimeTypeHandle scopeType)
+    {
+        if (!scopeIds.TryGetValue(scopeType, out int scopeId))
+        {
+            throw new InvalidOperationException(
+                $"Scope '{GetTypeName(scopeType)}' is missing scope id in the runtime catalog.");
+        }
+
+        if (scopeId <= 0)
+        {
+            throw new InvalidOperationException(
+                $"Scope '{GetTypeName(scopeType)}' has invalid scope id {scopeId}.");
+        }
+
+        return scopeId;
+    }
+
+    private static int RequireServiceSlot(
+        IReadOnlyDictionary<RuntimeTypeHandle, int> serviceSlots,
+        RuntimeTypeHandle serviceType)
+    {
+        if (!serviceSlots.TryGetValue(serviceType, out int serviceSlot))
+        {
+            throw new InvalidOperationException(
+                $"Service '{GetTypeName(serviceType)}' is missing service slot in the runtime catalog.");
+        }
+
+        if (serviceSlot < 0)
+        {
+            throw new InvalidOperationException(
+                $"Service '{GetTypeName(serviceType)}' has invalid service slot {serviceSlot}.");
+        }
+
+        return serviceSlot;
     }
 
     private static LayerMembership ComputeContextMembership(

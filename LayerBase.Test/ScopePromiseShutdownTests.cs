@@ -149,4 +149,28 @@ public sealed class ScopePromiseShutdownTests
         Assert.That(continuationRan, Is.EqualTo(1));
         Assert.That(promise.GetResult(), Is.EqualTo(42));
     }
+
+    [Test]
+    public void OnCompleted_after_scope_stop_must_not_throw_when_promise_was_cancelled_before_registration()
+    {
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1224,
+                name: "PromiseLateContinuationScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>());
+        var promise = new ScopePromise<int>(runtime);
+        int continuationRan = 0;
+
+        runtime.Stop();
+
+        Assert.DoesNotThrow(() =>
+            promise.OnCompleted(() => Interlocked.Exchange(ref continuationRan, 1)));
+        Assert.That(continuationRan, Is.EqualTo(1));
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => promise.GetResult())!;
+        Assert.That(ex.Message, Does.Contain("scope is stopping"));
+    }
 }

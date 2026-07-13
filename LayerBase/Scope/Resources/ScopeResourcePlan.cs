@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace LayerBase.Scope.Resources;
 
@@ -89,7 +90,20 @@ internal static class ScopeResourcePlanBuilder
         var objectSlotsByType = new Dictionary<RuntimeTypeHandle, int>();
         for (int i = 0; i < candidates.Count; i++)
         {
-            objectSlotsByType[candidates[i].ObjectType] = candidates[i].ObjectSlot;
+            ScopeResourceObjectCandidate candidate = candidates[i];
+            if (candidate.ObjectSlot < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource candidate '{GetTypeName(candidate.ObjectType)}' has invalid object slot {candidate.ObjectSlot}.");
+            }
+
+            if (objectSlotsByType.ContainsKey(candidate.ObjectType))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate scope resource candidate for object type '{GetTypeName(candidate.ObjectType)}'.");
+            }
+
+            objectSlotsByType.Add(candidate.ObjectType, candidate.ObjectSlot);
         }
 
         var exports = new List<ScopeResourceExportPlan>();
@@ -102,6 +116,14 @@ internal static class ScopeResourcePlanBuilder
             {
                 continue;
             }
+
+            if (export.ProviderLocalSlot < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource provider '{GetTypeName(export.ProviderType)}' has invalid local slot {export.ProviderLocalSlot}.");
+            }
+
+            _ = RequireType(export.DeclaredResourceType, "declared resource");
 
             var key = (export.ProviderType, export.LocalKey);
             if (exportSlotsByKey.ContainsKey(key))
@@ -128,6 +150,12 @@ internal static class ScopeResourcePlanBuilder
                 continue;
             }
 
+            if (import.ConsumerLocalSlot < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource consumer '{GetTypeName(import.ConsumerType)}' has invalid local slot {import.ConsumerLocalSlot}.");
+            }
+
             var key = (import.ProviderType, import.LocalKey);
             if (!exportSlotsByKey.TryGetValue(key, out int exportSlot))
             {
@@ -136,6 +164,17 @@ internal static class ScopeResourcePlanBuilder
                 throw new InvalidOperationException(
                     $"Scope resource consumer '{consumerType?.FullName ?? "<unknown>"}' could not find a published scope resource " +
                     $"for providerType '{providerType?.FullName ?? "<unknown>"}' and localKey '{import.LocalKey}'.");
+            }
+
+            ScopeResourceExportContribution export = exportContributions.First(e =>
+                e.ProviderType.Equals(import.ProviderType) &&
+                string.Equals(e.LocalKey, import.LocalKey, StringComparison.Ordinal));
+            Type declaredType = RequireType(export.DeclaredResourceType, "declared resource");
+            Type requestedType = RequireType(import.RequestedResourceType, "requested resource");
+            if (!requestedType.IsAssignableFrom(declaredType))
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource '{import.LocalKey}' from provider '{GetTypeName(import.ProviderType)}' declared type '{declaredType.FullName}' is not assignable to requested type '{requestedType.FullName}' for consumer '{GetTypeName(import.ConsumerType)}'.");
             }
 
             imports.Add(new ScopeResourceImportPlan(
@@ -147,5 +186,16 @@ internal static class ScopeResourcePlanBuilder
         return exports.Count == 0 && imports.Count == 0
             ? ScopeResourcePlan.Empty
             : new ScopeResourcePlan(exports.ToArray(), imports.ToArray());
+    }
+
+    private static Type RequireType(RuntimeTypeHandle handle, string role)
+    {
+        return Type.GetTypeFromHandle(handle)
+            ?? throw new InvalidOperationException($"Scope resource {role} type handle '{handle}' cannot be resolved.");
+    }
+
+    private static string GetTypeName(RuntimeTypeHandle handle)
+    {
+        return Type.GetTypeFromHandle(handle)?.FullName ?? "<unknown>";
     }
 }

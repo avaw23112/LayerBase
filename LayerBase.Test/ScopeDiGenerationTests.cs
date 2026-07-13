@@ -1,6 +1,7 @@
 using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.Scope;
+using LayerBase.Scope.DI;
 
 namespace LayerBase.Test;
 
@@ -42,12 +43,34 @@ public sealed class ScopeDiGenerationTests
     }
 
     [Test]
+    public void Scope_mount_dependency_resolution_rejects_ambiguous_candidates()
+    {
+        using var runtime = new ScopeRuntime(
+            ScopeDescriptors.Main,
+            new IService[]
+            {
+                new AmbiguousDependencyA(),
+                new AmbiguousDependencyB(),
+                new AmbiguousMountService()
+            });
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            runtime.SetContexts(Array.Empty<ILayerContext>()))!;
+
+        Assert.That(exception.Message, Does.Contain("ambiguous"));
+        Assert.That(exception.Message, Does.Contain(nameof(ISharedMountDependency)));
+    }
+
+    [Test]
     public void Scope_service_provider_does_not_use_reflection_member_injection()
     {
         string root = FindRepositoryRoot();
         string providerSource = File.ReadAllText(Path.Combine(root, "LayerBase", "Scope", "ScopeServiceProvider.cs"));
         string runtimeSource = File.ReadAllText(Path.Combine(root, "LayerBase", "Scope", "ScopeRuntime.cs"));
 
+        Assert.That(providerSource, Does.Not.Contain("Dictionary<Type, object>"));
+        Assert.That(providerSource, Does.Not.Contain("IsAssignableFrom"));
+        Assert.That(runtimeSource, Does.Not.Contain("new ScopeServiceProvider(Services, Contexts)"));
         Assert.That(providerSource, Does.Not.Contain("InjectMembers"));
         Assert.That(providerSource, Does.Not.Contain("GetFields"));
         Assert.That(providerSource, Does.Not.Contain("GetProperties"));
@@ -55,6 +78,19 @@ public sealed class ScopeDiGenerationTests
         Assert.That(providerSource, Does.Not.Contain("SetValue"));
         Assert.That(runtimeSource, Does.Not.Contain(".InjectMembers("));
         Assert.That(runtimeSource, Does.Contain("IGeneratedScopeMount"));
+    }
+
+    [Test]
+    public void Scope_service_provider_resolves_from_fixed_object_slots()
+    {
+        var main = new DiBoundaryMainService();
+        var scoped = new DiBoundaryScopedService();
+        var provider = new ScopeServiceProvider(new object[] { main, scoped });
+
+        Assert.That(provider.GetAt<DiBoundaryMainService>(0), Is.SameAs(main));
+        Assert.That(provider.GetAt<DiBoundaryScopedService>(1), Is.SameAs(scoped));
+        Assert.That(provider.Get<DiBoundaryScopedService>(), Is.SameAs(scoped));
+        Assert.That(provider.Get<IService>(), Is.SameAs(main));
     }
 
     [Test]
@@ -129,4 +165,38 @@ internal sealed partial class ScopeDiGeneratedMountContext : ILayerContext
     [Mount] private ScopeDiGeneratedMountService? _service;
 
     public ScopeDiGeneratedMountService? Service => _service;
+}
+
+internal interface ISharedMountDependency
+{
+}
+
+internal sealed class AmbiguousDependencyA : IService, ISharedMountDependency
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+internal sealed class AmbiguousDependencyB : IService, ISharedMountDependency
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+}
+
+internal sealed class AmbiguousMountService : IService, IGeneratedScopeMount, IGeneratedScopeMountMetadata
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    public void Mount(in ScopeMountContext context)
+    {
+    }
+
+    public RuntimeTypeHandle[] GetScopeMountDependencies()
+    {
+        return new[] { typeof(ISharedMountDependency).TypeHandle };
+    }
 }

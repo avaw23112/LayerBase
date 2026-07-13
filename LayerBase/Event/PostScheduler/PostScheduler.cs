@@ -42,6 +42,7 @@ public sealed class PostScheduler : IDisposable
     private long _sequenceCounter;
     private int _sealedMaxEventTypeId = -1;
     private bool _disposed;
+    private bool _closed;
     private bool _isPumping;
     private readonly BackpressurePolicy _defaultBackpressure;
 
@@ -171,7 +172,7 @@ public sealed class PostScheduler : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult TryPostLatest<T>(in T value) where T : struct
     {
-        if (_disposed) return FailSchedulerDisposed();
+        if (_disposed || _closed) return FailSchedulerDisposed();
         var typeId = EventTypeId<T>.Id;
         if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
         return EnqueueLatestInternal(typeId, in value);
@@ -180,7 +181,7 @@ public sealed class PostScheduler : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult TryPostCoalesced<T>(in T value) where T : struct
     {
-        if (_disposed) return FailSchedulerDisposed();
+        if (_disposed || _closed) return FailSchedulerDisposed();
         var typeId = EventTypeId<T>.Id;
         if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
         return EnqueueCoalescedInternal(typeId, in value);
@@ -189,7 +190,7 @@ public sealed class PostScheduler : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult TryPost<T>(in T value, EventPostPolicy? policyOverride = null) where T : struct
     {
-        if (_disposed) return FailSchedulerDisposed();
+        if (_disposed || _closed) return FailSchedulerDisposed();
 
         var typeId = EventTypeId<T>.Id;
         if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
@@ -309,7 +310,7 @@ public sealed class PostScheduler : IDisposable
 
     public PostResult MarkDirty<T>() where T : struct
     {
-        if (_disposed) return FailSchedulerDisposed();
+        if (_disposed || _closed) return FailSchedulerDisposed();
         var typeId = EventTypeId<T>.Id;
         return MarkDirtyById<T>(typeId);
     }
@@ -725,7 +726,7 @@ public sealed class PostScheduler : IDisposable
 
     public PostPumpStats Pump()
     {
-        if (_disposed) return new PostPumpStats(0, 0, 0, 0);
+        if (_disposed || _closed) return new PostPumpStats(0, 0, 0, 0);
 
         long startTimestamp = 0;
         if (_options.MaxMillisecondsPerPump > 0) startTimestamp = Stopwatch.GetTimestamp();
@@ -814,7 +815,7 @@ public sealed class PostScheduler : IDisposable
 
     public void PrewarmEvent<T>() where T : struct
     {
-        if (_disposed) return;
+        if (_disposed || _closed) return;
 
         var typeId = EventTypeId<T>.Id;
         EnsureEventCapacity(typeId, rebuildBitmap: false);
@@ -831,12 +832,25 @@ public sealed class PostScheduler : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-        _disposed = true;
+        CloseAndClear();
 
-        // 先释放 snapshot 残留，不能先 Clear。
+        _disposed = true;
+        _payloadStorage.Dispose();
+    }
+
+    internal void CloseAndClear()
+    {
+        if (_closed) return;
+        _closed = true;
+        ClearPendingPayloads();
+    }
+
+    private void ClearPendingPayloads()
+    {
         ReleaseRemainingCoalescedSnapshot();
         _snapshotCoalesced.Clear();
         ReleaseRemainingLatestSnapshot();
+        Array.Clear(_dirtySnapshotBits, 0, _dirtySnapshotBits.Length);
 
         for (int i = 0; i < _latestPendingBits.Length; i++)
         {
@@ -846,8 +860,11 @@ public sealed class PostScheduler : IDisposable
                 var bitIndex = BitHelper.TrailingZeroCount(bits);
                 var typeId = (i << 6) + bitIndex;
                 _payloadStorage.Release(_latestBuffer[typeId]);
+                _latestBuffer[typeId] = PayloadHandle.Invalid;
                 bits &= bits - 1;
             }
+
+            FastArray.At(_latestPendingBits, i) = 0;
         }
 
         foreach (var key in _pendingCoalesced)
@@ -860,8 +877,8 @@ public sealed class PostScheduler : IDisposable
 
         ReleaseQueuedPayloads(_readyQueue);
         ReleaseQueuedPayloads(_nextQueue);
-
-        _payloadStorage.Dispose();
+        Array.Clear(_dirtyPendingBits, 0, _dirtyPendingBits.Length);
+        Array.Clear(_pendingCount, 0, _pendingCount.Length);
     }
 
     private void ReleaseQueuedPayloads(RingBuffer<PostItem> queue)

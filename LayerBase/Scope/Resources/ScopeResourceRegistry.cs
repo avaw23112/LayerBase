@@ -26,7 +26,30 @@ internal sealed class ScopeResourceRegistry
         for (int i = 0; i < plan.Exports.Length; i++)
         {
             ScopeResourceExportPlan export = plan.Exports[i];
-            var publisher = (IGeneratedScopeResourcePublisher)scopeObjects[export.ProviderObjectSlot];
+            if ((uint)export.ProviderObjectSlot >= (uint)scopeObjects.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource provider object slot {export.ProviderObjectSlot} is outside scope object length {scopeObjects.Length}.");
+            }
+
+            if ((uint)export.ExportSlot >= (uint)_exports.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource export slot {export.ExportSlot} is outside export table length {_exports.Length}.");
+            }
+
+            if (export.ProviderLocalSlot < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource provider local slot {export.ProviderLocalSlot} is invalid.");
+            }
+
+            if (scopeObjects[export.ProviderObjectSlot] is not IGeneratedScopeResourcePublisher publisher)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource provider object at slot {export.ProviderObjectSlot} does not implement {nameof(IGeneratedScopeResourcePublisher)}.");
+            }
+
             object value = publisher.GetPublishedResource(export.ProviderLocalSlot);
             if (value == null)
             {
@@ -40,7 +63,30 @@ internal sealed class ScopeResourceRegistry
         for (int i = 0; i < plan.Imports.Length; i++)
         {
             ScopeResourceImportPlan import = plan.Imports[i];
-            var consumer = (IGeneratedScopeResourceConsumer)scopeObjects[import.ConsumerObjectSlot];
+            if ((uint)import.ConsumerObjectSlot >= (uint)scopeObjects.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource consumer object slot {import.ConsumerObjectSlot} is outside scope object length {scopeObjects.Length}.");
+            }
+
+            if ((uint)import.ExportSlot >= (uint)_exports.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource import references export slot {import.ExportSlot}, outside export table length {_exports.Length}.");
+            }
+
+            if (import.ConsumerLocalSlot < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource consumer local slot {import.ConsumerLocalSlot} is invalid.");
+            }
+
+            if (scopeObjects[import.ConsumerObjectSlot] is not IGeneratedScopeResourceConsumer consumer)
+            {
+                throw new InvalidOperationException(
+                    $"Scope resource consumer object at slot {import.ConsumerObjectSlot} does not implement {nameof(IGeneratedScopeResourceConsumer)}.");
+            }
+
             consumer.BindScopeResource(import.ConsumerLocalSlot, _exports[import.ExportSlot]);
 
             if (!_consumers.Contains(consumer))
@@ -56,18 +102,20 @@ internal sealed class ScopeResourceRegistry
         _unbindActions.Add(unbind);
     }
 
-    public void CloseAndUnbind()
+    public void CloseAndUnbind(Action<Exception, object>? report = null)
     {
         _closed = true;
 
         for (int i = 0; i < _consumers.Count; i++)
         {
+            IGeneratedScopeResourceConsumer consumer = _consumers[i];
             try
             {
-                _consumers[i].UnbindScopeResources();
+                consumer.UnbindScopeResources();
             }
-            catch
+            catch (Exception exception)
             {
+                report?.Invoke(exception, consumer);
             }
         }
 
@@ -75,12 +123,14 @@ internal sealed class ScopeResourceRegistry
 
         for (int i = 0; i < _unbindActions.Count; i++)
         {
+            Action unbind = _unbindActions[i];
             try
             {
-                _unbindActions[i]();
+                unbind();
             }
-            catch
+            catch (Exception exception)
             {
+                report?.Invoke(exception, unbind);
             }
         }
 

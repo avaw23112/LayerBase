@@ -90,6 +90,30 @@ public class PostSchedulerTests
     }
 
     [Test]
+    public void CloseAndClear_Drops_Queued_Posts_And_Rejects_New_Posts()
+    {
+        var options = PostSchedulerOptions.Default;
+        var scheduler = new PostScheduler(0, _eventCenter, options,
+            new EventBuildPolicyTable(options.DefaultBackpressure));
+        scheduler.BuildPlans(new[]
+        {
+            new PostTypePlan(EventTypeId<TestPostEvent>.Id, PostDeliveryMode.Normal, options.DefaultBackpressure, 0,
+                options.DefaultBackpressure)
+        });
+        int callCount = 0;
+
+        _eventCenter.SubscribeNotify<TestPostEvent>(0, (in TestPostEvent e) => callCount++);
+
+        Assert.That(scheduler.TryPost(new TestPostEvent()).IsSuccess, Is.True);
+        scheduler.CloseAndClear();
+
+        scheduler.Pump();
+
+        Assert.That(callCount, Is.EqualTo(0));
+        Assert.That(scheduler.TryPost(new TestPostEvent()).IsSuccess, Is.False);
+    }
+
+    [Test]
     public void Wave_Isolation_Post_During_Pump_Goes_To_Next_Wave()
     {
         var options = new PostSchedulerOptions(1024, 1024, 0, 0, 1, 64, BackpressurePolicy.RejectNew);

@@ -16,6 +16,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     private long _currentTick;
     private double _accumulator;
     private bool _disposed;
+    private bool _closed;
 
     private readonly int _wheelSize;
     private readonly int _wheelMask;
@@ -23,6 +24,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     private readonly float _tickDurationReciprocal;
     private readonly int _maxPromotePerTick;
     private readonly int _maxExpiredPerTick;
+    private readonly int _maxCatchUpTicksPerPump;
     private readonly TimerFlags _defaultRepeatFlags;
 
     public TimeScheduler(TimeSchedulerOptions options)
@@ -37,6 +39,9 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 
         _maxPromotePerTick = options.MaxPromotePerTick;
         _maxExpiredPerTick = options.MaxExpiredPerTick;
+        _maxCatchUpTicksPerPump = options.DefaultCatchUpPolicy == TimerCatchUpPolicy.FireAllCapped
+            ? options.MaxCatchUpTicksPerPump
+            : 0;
 
         _pool = new TimerEntry<TPayload>[options.InitialTimerCapacity];
         _wheel = new int[_wheelSize];
@@ -66,7 +71,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     public TimerHandle Schedule(in TPayload payload, float delaySeconds, int repeatCount = 0, float intervalSeconds = 0,
                                 TimerRepeatMode? repeatMode = null, TimerCatchUpPolicy? catchUpPolicy = null)
     {
-        if (_disposed) return TimerHandle.Invalid;
+        if (_disposed || _closed) return TimerHandle.Invalid;
 
         if (_freeList.Count == 0) GrowPool();
         int index = _freeList.Pop();
@@ -112,7 +117,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 
     public bool Cancel(TimerHandle handle)
     {
-        if (handle.IsInvalid || handle.Index >= _poolSize) return false;
+        if (_disposed || _closed || handle.IsInvalid || handle.Index >= _poolSize) return false;
 
         ref var entry = ref _pool[handle.Index];
         if ((entry.Flags & TimerFlags.Active) == 0 || entry.Version != handle.Version) return false;
@@ -129,7 +134,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 
     public void Tick(float deltaTime, IExpiredTimerSink<TPayload> sink)
     {
-        if (_disposed) return;
+        if (_disposed || _closed) return;
 
         _accumulator += deltaTime;
         if (_accumulator < _tickDuration) return;
@@ -155,10 +160,13 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void TickCatchUpSlow(IExpiredTimerSink<TPayload> sink)
     {
-        while (_accumulator >= _tickDuration)
+        int ticks = 0;
+        while (_accumulator >= _tickDuration &&
+               (_maxCatchUpTicksPerPump <= 0 || ticks < _maxCatchUpTicksPerPump - 1))
         {
             _accumulator -= _tickDuration;
             TickOnce(sink);
+            ticks++;
         }
     }
 
@@ -355,6 +363,10 @@ public sealed class TimeScheduler<TPayload> : IDisposable
             if (entry.Next != -1)
                 FastArray.At(_pool, entry.Next).Prev = entry.Prev;
         }
+        else
+        {
+            _longHeap.Remove(index, entry.Version);
+        }
     }
 
 
@@ -375,10 +387,34 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
+        CloseAndClear();
         _disposed = true;
-        Array.Clear(_wheel, 0, _wheel.Length);
+    }
+
+    internal void CloseAndClear()
+    {
+        if (_closed) return;
+        _closed = true;
+        Array.Fill(_wheel, -1);
         _longHeap.Clear();
         _freeList.Clear();
-        for (int i = 0; i < _pool.Length; i++) _pool[i].Payload = default!;
+        _accumulator = 0;
+
+        for (int i = 0; i < _poolSize; i++)
+        {
+            ref var entry = ref _pool[i];
+            if ((entry.Flags & TimerFlags.Active) != 0)
+            {
+                entry.Version++;
+                if (entry.Version == 0) entry.Version = 1;
+            }
+
+            entry.Flags = TimerFlags.None;
+            entry.Payload = default!;
+            entry.Next = -1;
+            entry.Prev = -1;
+            entry.SlotIndex = -1;
+            _freeList.Push(i);
+        }
     }
 }

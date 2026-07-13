@@ -77,22 +77,14 @@ public sealed class ScopeRefCallGenerator : IIncrementalGenerator
         builder.AppendLine("    public static class ScopeRefCallExtensions");
         builder.AppendLine("    {");
 
-        var callIds = items
-                      .Select(static item => item.RequestType)
-                      .Distinct(StringComparer.Ordinal)
-                      .OrderBy(static item => item, StringComparer.Ordinal)
-                      .Select(static (requestType, index) => (RequestType: requestType, CallId: index))
-                      .ToDictionary(static item => item.RequestType, static item => item.CallId, StringComparer.Ordinal);
-
         for (int i = 0; i < items.Length; i++)
         {
             ScopeCallInfo item = items[i];
-            int callId = callIds[item.RequestType];
 
             builder.AppendLine(
                 $"        public static global::LayerBase.Async.LBTask<{item.ResultType}> Call(this global::LayerBase.Scope.ScopeRef<{item.ScopeType}> scope, {item.RequestType} message)");
             builder.AppendLine("        {");
-            builder.AppendLine($"            return scope.CallTask<{item.ResultType}>({callId}, message);");
+            builder.AppendLine($"            return scope.CallTask<{item.ResultType}, {item.RequestType}>(message);");
             builder.AppendLine("        }");
 
             if (i + 1 < items.Length)

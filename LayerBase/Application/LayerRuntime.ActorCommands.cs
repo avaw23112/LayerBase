@@ -26,6 +26,9 @@ public sealed partial class LayerRuntime
     {
         switch (command.Kind)
         {
+            case ActorCommandKind.Enable:
+                Actors.EnableProjectedActorIfDisabled(command.ActorId);
+                break;
             case ActorCommandKind.Disable:
                 Actors.DisableProjectedActor(command.ActorId);
                 break;
@@ -71,6 +74,9 @@ public sealed partial class LayerRuntime
         if (_disposed) return ControlEnqueueResult.Closed;
         return _actorLifecycleInbox.TryEnqueue(envelope);
     }
+
+    internal bool IsOwnerThreadForActorWorld =>
+        Environment.CurrentManagedThreadId == _ownerThreadId;
 
     internal void CloseActorInboxes()
     {

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Threading;
 
 namespace LayerBase.Core.Event;
 
@@ -43,6 +44,14 @@ internal readonly struct PostIngressDrainResult
 /// </summary>
 internal sealed class PostIngressQueue
 {
+    private int _capacity;
+    private int _count;
+
+    public PostIngressQueue(int capacity = 65536)
+    {
+        _capacity = capacity <= 0 ? 65536 : capacity;
+    }
+
     /// <summary>
     /// 跨线程入口队列。
     ///
@@ -68,10 +77,31 @@ internal sealed class PostIngressQueue
     /// 可选 Post 策略。
     /// null 表示最终进入 PostScheduler 后使用默认策略。
     /// </param>
-    public void Enqueue<T>(in T value, EventPostPolicy? policy)
+    public bool Enqueue<T>(in T value, EventPostPolicy? policy)
         where T : struct
     {
+        while (true)
+        {
+            int current = Volatile.Read(ref _count);
+            int capacity = Volatile.Read(ref _capacity);
+            if (current >= capacity)
+            {
+                return false;
+            }
+
+            if (Interlocked.CompareExchange(ref _count, current + 1, current) == current)
+            {
+                break;
+            }
+        }
+
         _queue.Enqueue(new IngressPostItem<T>(value, policy));
+        return true;
+    }
+
+    public void SetCapacity(int capacity)
+    {
+        Volatile.Write(ref _capacity, capacity <= 0 ? 65536 : capacity);
     }
 
     /// <summary>
@@ -101,6 +131,7 @@ internal sealed class PostIngressQueue
         while ((maxCount <= 0 || drained < maxCount) &&
                _queue.TryDequeue(out var item))
         {
+            Interlocked.Decrement(ref _count);
             var result = item.PostTo(scheduler);
             if (!result.IsSuccess)
             {
@@ -121,6 +152,12 @@ internal sealed class PostIngressQueue
     {
         while (_queue.TryDequeue(out _))
         {
+            Interlocked.Decrement(ref _count);
+        }
+
+        if (Volatile.Read(ref _count) < 0)
+        {
+            Interlocked.Exchange(ref _count, 0);
         }
     }
 }

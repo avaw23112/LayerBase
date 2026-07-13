@@ -10,6 +10,7 @@ public readonly struct PostSchedulerOptions
     public readonly int TimeCheckInterval;
     public readonly int MaxCompletionsPerPump;
     public readonly int MaxIngressPostsPerPump;
+    public readonly int MaxIngressQueueCapacity;
     public readonly BackpressurePolicy DefaultBackpressure;
 
     public PostSchedulerOptions(
@@ -21,7 +22,8 @@ public readonly struct PostSchedulerOptions
         int                timeCheckInterval,
         BackpressurePolicy defaultBackpressure,
         int                maxCompletionsPerPump  = 0,
-        int                maxIngressPostsPerPump = 4096)
+        int                maxIngressPostsPerPump = 4096,
+        int                maxIngressQueueCapacity = 65536)
     {
         ReadyCapacity = readyCapacity;
         NextCapacity = nextCapacity;
@@ -31,6 +33,7 @@ public readonly struct PostSchedulerOptions
         TimeCheckInterval = timeCheckInterval <= 0 ? 64 : timeCheckInterval;
         MaxCompletionsPerPump = maxCompletionsPerPump;
         MaxIngressPostsPerPump = maxIngressPostsPerPump;
+        MaxIngressQueueCapacity = maxIngressQueueCapacity <= 0 ? 65536 : maxIngressQueueCapacity;
         DefaultBackpressure = defaultBackpressure;
     }
 
@@ -43,5 +46,6 @@ public readonly struct PostSchedulerOptions
         timeCheckInterval: 64,
         maxCompletionsPerPump: 0,
         maxIngressPostsPerPump: 4096,
+        maxIngressQueueCapacity: 65536,
         defaultBackpressure: BackpressurePolicy.RejectNew);
 }
