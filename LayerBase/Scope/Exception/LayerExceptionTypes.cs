@@ -36,6 +36,7 @@ public enum LayerExceptionPhase
     RuntimeStart,
     RuntimeStop,
     RuntimeShutdown,
+    ResourceUnbind,
 
     Unknown
 }

@@ -85,6 +85,37 @@ public sealed class LayerExceptionHubFusionTests
     }
 
     [Test]
+    public void Scope_resource_unbind_exception_should_flow_through_exception_hub()
+    {
+        LayerRuntime runtime = LayerHub.CreateLayers()
+                                       .Push(new ExceptionFusionLayer())
+                                       .Build();
+        var exception = new InvalidOperationException("resource unbind failed");
+        var records = new List<LayerExceptionRecord>();
+
+        runtime.ExceptionCallbacks.OnExceptionRecord += records.Add;
+
+        using var scope = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 32,
+                name: "ResourceUnbindScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            owningRuntime: runtime);
+
+        scope.ResourceRegistry.TrackUnbindAction(() => throw exception);
+        scope.Stop();
+
+        Assert.That(records, Has.Count.EqualTo(1));
+        Assert.That(records[0].Exception, Is.SameAs(exception));
+        Assert.That(records[0].ScopeId, Is.EqualTo(32));
+        Assert.That(records[0].Phase, Is.EqualTo(LayerExceptionPhase.ResourceUnbind));
+    }
+
+    [Test]
     public void Static_legacy_error_report_inside_runtime_pump_should_use_current_runtime_not_primary()
     {
         LayerRuntime primary = LayerHub.CreateLayers()
