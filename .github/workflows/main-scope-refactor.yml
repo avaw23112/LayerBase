@@ -6,12 +6,14 @@ on:
       - feat/main-scope-default-runtime
     paths:
       - tools/apply_main_scope_refactor.py
+      - tools/run_main_scope_refactor.py
       - .github/workflows/main-scope-refactor.yml
   pull_request:
     branches:
       - faster
     paths:
       - tools/apply_main_scope_refactor.py
+      - tools/run_main_scope_refactor.py
       - .github/workflows/main-scope-refactor.yml
 
 permissions:
@@ -38,7 +40,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python3 tools/apply_main_scope_refactor.py 2>&1 | tee main-scope-refactor.log
+          python3 tools/run_main_scope_refactor.py 2>&1 | tee main-scope-refactor.log
 
       - name: Restore dependencies
         shell: bash
@@ -70,6 +72,7 @@ jobs:
         if: github.event_name == 'push' && success()
         run: |
           rm tools/apply_main_scope_refactor.py
+          rm tools/run_main_scope_refactor.py
           rm .github/workflows/main-scope-refactor.yml
           rm main-scope-refactor.log
 
