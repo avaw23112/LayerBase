@@ -58,7 +58,7 @@ internal sealed class ServiceLayerBinding
     /// 当前 Runtime 的 EventCenter。
     /// Send 可以直接使用它，避免 Require 后再经过 Layer.Send。
     /// </summary>
-    public readonly EventCenter EventCenter;
+    public EventCenter EventCenter => Scope?.EventCenter ?? Runtime.EventCenter;
 
     /// <summary>
     /// 创建服务绑定信息。
@@ -93,7 +93,6 @@ internal sealed class ServiceLayerBinding
         Layer = layer;
         Scope = scope;
         Runtime = runtime;
-        EventCenter = scope?.EventCenter ?? runtime.EventCenter;
     }
 }
 

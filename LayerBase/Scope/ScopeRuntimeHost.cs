@@ -19,7 +19,8 @@ public sealed class ScopeRuntimeHost : IDisposable
         IReadOnlyDictionary<Type, int>? scopeTypeRoutes,
         ScopeTypeIdResolver? scopeTypeResolver,
         IReadOnlyDictionary<Type, int>? messageRouteIds,
-        ScopeMessageRouteResolver? messageRouteResolver)
+        ScopeMessageRouteResolver? messageRouteResolver,
+        bool requireMainScope)
     {
         _scopes = scopes;
         _routes = new ScopeRouteTable(
@@ -35,6 +36,20 @@ public sealed class ScopeRuntimeHost : IDisposable
     }
 
     public IReadOnlyList<ScopeRuntime> Scopes => _scopes;
+
+    public ScopeRuntime MainScope
+    {
+        get
+        {
+            ThrowIfDisposed();
+            if (_scopes.Length == 0 || _scopes[0].ScopeId != 0)
+            {
+                throw new InvalidOperationException("Scope host does not contain MainScope at slot zero.");
+            }
+
+            return _scopes[0];
+        }
+    }
 
     public ScopeRouteTable Routes => _routes;
 
@@ -92,7 +107,7 @@ public sealed class ScopeRuntimeHost : IDisposable
                 scopes[i] = new ScopeRuntime(
                     plan.Descriptor,
                     plan.Services,
-                    options,
+                    plan.RuntimeOptions,
                     sharedActorWorld,
                     owningRuntime,
                     postDispatcher,
@@ -108,7 +123,8 @@ public sealed class ScopeRuntimeHost : IDisposable
                 scopeTypeRoutes,
                 scopeTypeResolver,
                 messageRouteIds: null,
-                messageRouteResolver);
+                messageRouteResolver,
+                requireMainScope: owningRuntime != null);
         }
         catch
         {
@@ -188,7 +204,7 @@ public sealed class ScopeRuntimeHost : IDisposable
                 scopes[i] = new ScopeRuntime(
                     scopePlan.Descriptor,
                     services,
-                    options,
+                    scopePlan.RuntimeOptions,
                     sharedActorWorld,
                     owningRuntime,
                     postDispatcher: postDispatcher,
@@ -230,7 +246,8 @@ public sealed class ScopeRuntimeHost : IDisposable
                 scopeTypeRoutes,
                 scopeTypeResolver,
                 messageRouteIds,
-                messageRouteResolver);
+                messageRouteResolver,
+                requireMainScope: owningRuntime != null);
         }
         catch
         {
@@ -420,6 +437,33 @@ public sealed class ScopeRuntimeHost : IDisposable
         }
 
         return routes;
+    }
+
+    private static void ValidateMainScope(IReadOnlyList<ScopeRuntime> scopes)
+    {
+        if (scopes.Count == 0)
+        {
+            throw new InvalidOperationException("Scope host must contain MainScope.");
+        }
+
+        if (scopes[0].ScopeId != 0)
+        {
+            throw new InvalidOperationException("Scope host MainScope must be at slot zero.");
+        }
+
+        int mainScopeCount = 0;
+        for (int i = 0; i < scopes.Count; i++)
+        {
+            if (scopes[i].ScopeId == 0)
+            {
+                mainScopeCount++;
+            }
+        }
+
+        if (mainScopeCount != 1)
+        {
+            throw new InvalidOperationException("Scope host must contain exactly one MainScope.");
+        }
     }
 
     private static IReadOnlyDictionary<Type, int> CreateMessageRouteIds(

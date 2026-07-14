@@ -140,11 +140,13 @@ internal static class ScopeCompositionBuilder
         }
 
         var scopes = new ScopePlan[maxScopeId + 1];
+        ResolvedScopeOption mainOption = ScopeOptionResolver.ResolveMain();
         scopes[0] = new ScopePlan(
-            ScopeDescriptors.Main,
+            mainOption.Descriptor,
             typeof(MainScope),
             Array.Empty<ScopeServicePlan>(),
             Array.Empty<ScopeContextPlan>(),
+            mainOption.RuntimeOptions,
             ScopeResourcePlan.Empty);
 
         for (int scopeId = 1; scopeId <= maxScopeId; scopeId++)
@@ -163,11 +165,18 @@ internal static class ScopeCompositionBuilder
                 catalog.ResourceExports,
                 catalog.ResourceImports);
 
+            Type scopeType = scopeTypesById[scopeId]!;
+            ResolvedScopeOption scopeOption = ScopeOptionResolver.Resolve(
+                scopeType,
+                scopeId,
+                scopeDescriptorsById[scopeId]);
+
             scopes[scopeId] = new ScopePlan(
-                scopeDescriptorsById[scopeId],
-                scopeTypesById[scopeId],
+                scopeOption.Descriptor,
+                scopeType,
                 servicesForScope,
                 contextsForScope,
+                scopeOption.RuntimeOptions,
                 resourcePlansById[scopeId]);
         }
 
@@ -231,6 +240,7 @@ internal static class ScopeCompositionBuilder
                 original.ScopeType,
                 updatedServices,
                 updatedContexts,
+                original.RuntimeOptions,
                 original.ResourcePlan);
         }
 

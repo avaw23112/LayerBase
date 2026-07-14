@@ -20,6 +20,7 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
     private const string ScopeEventRequestAttributeName = "LayerBase.Scope.ScopeEventAttribute`1";
     private const string ScopeCallRequestAttributeName = "LayerBase.Scope.ScopeCallAttribute`2";
     private const string ScopeAttributeName = "LayerBase.Scope.ScopeAttribute`1";
+    private const string ScopeOptionTypeName = "LayerBase.Scope.ScopeOption<TScope>";
     private const string AssemblyModuleAttributeName = "LayerBase.Modules.AssemblyModuleAttribute";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
     private const int ScopeClockModeFixedRate = 1;
@@ -78,6 +79,12 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
                                         static (ctx, _) => GetScopedServiceInfo(ctx))
                                     .Where(static item => item != null)!;
 
+        var scopeOptionTypes = context.SyntaxProvider
+                                      .CreateSyntaxProvider(
+                                          static (node, _) => node is ClassDeclarationSyntax { BaseList: not null },
+                                          static (ctx, _) => GetScopeOptionInfo(ctx))
+                                      .Where(static item => item != null)!;
+
         var dispatcherInputs = eventHandlers.Collect()
                                            .Combine(callHandlers.Collect())
                                            .Combine(eventRequests.Collect())
@@ -104,14 +111,17 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
 
         var combined = dispatcherInputs.Combine(scopeInputs)
                                        .Combine(layerTypes.Collect())
-                                       .Combine(assemblyModules.Collect());
+                                       .Combine(assemblyModules.Collect())
+                                       .Combine(scopeOptionTypes.Collect());
 
         context.RegisterSourceOutput(combined, static (spc, source) =>
         {
-            var dispatcherInput = source.Left.Left.Left;
-            var scopeInput = source.Left.Left.Right;
-            var collectedLayerTypes = source.Left.Right;
-            bool moduleMode = source.Right.Length > 0;
+            var previous = source.Left;
+            var dispatcherInput = previous.Left.Left.Left;
+            var scopeInput = previous.Left.Left.Right;
+            var collectedLayerTypes = previous.Left.Right;
+            bool moduleMode = previous.Right.Length > 0;
+            var collectedScopeOptions = source.Right;
 
             foreach (ScopeDiagnostic? diagnostic in scopeInput.Right.Left)
             {
@@ -129,6 +139,8 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
                 }
             }
 
+            ReportScopeOptionDiagnostics(spc, collectedScopeOptions);
+
             bool hasEventHandler = dispatcherInput.Left.Left.Left.Any(static value => value);
             bool hasCallHandler = dispatcherInput.Left.Left.Right.Any(static value => value);
             bool hasEventRequest = dispatcherInput.Left.Right.Any(static value => value != null);
@@ -141,6 +153,7 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
                 dispatcherInput.Right,
                 scopeInput.Left.Left,
                 scopeInput.Left.Right,
+                collectedScopeOptions,
                 collectedLayerTypes,
                 moduleMode);
         });
@@ -302,7 +315,54 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
             threading,
             clock,
             tickRateHz,
-            stopPolicy);
+            stopPolicy,
+            null);
+    }
+
+    private static void ReportScopeOptionDiagnostics(
+        SourceProductionContext spc,
+        ImmutableArray<ScopeOptionInfo?> nullableScopeOptions)
+    {
+        var scopeOptions = nullableScopeOptions
+                           .Where(static item => item != null)
+                           .Select(static item => item!)
+                           .ToImmutableArray();
+
+        foreach (ScopeOptionInfo option in scopeOptions)
+        {
+            if (!option.HasAccessibleParameterlessConstructor)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.ScopeOptionNeedsAccessibleParameterlessConstructor,
+                    option.Location,
+                    option.OptionType));
+            }
+
+            if (option.HasMainScopeFixedFieldOverride)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.MainScopeOptionCannotOverrideFixedFields,
+                    option.Location,
+                    option.OptionType));
+            }
+        }
+
+        foreach (IGrouping<string, ScopeOptionInfo> group in scopeOptions.GroupBy(static item => item.ScopeType))
+        {
+            ScopeOptionInfo[] options = group.ToArray();
+            if (options.Length <= 1)
+            {
+                continue;
+            }
+
+            for (int i = 1; i < options.Length; i++)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.DuplicateScopeOption,
+                    options[i].Location,
+                    options[i].ScopeType));
+            }
+        }
     }
 
     private static ScopedServiceInfo? GetScopedServiceInfo(GeneratorAttributeSyntaxContext context)
@@ -328,6 +388,78 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
             scopeType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
 
+    private static ScopeOptionInfo? GetScopeOptionInfo(GeneratorSyntaxContext context)
+    {
+        if (context.Node is not ClassDeclarationSyntax ||
+            context.SemanticModel.GetDeclaredSymbol(context.Node) is not INamedTypeSymbol optionSymbol ||
+            optionSymbol.ContainingType != null ||
+            optionSymbol.IsAbstract ||
+            optionSymbol.IsGenericType)
+        {
+            return null;
+        }
+
+        INamedTypeSymbol? scopeType = GetScopeOptionScopeType(optionSymbol);
+        if (scopeType == null)
+        {
+            return null;
+        }
+
+        string scopeTypeName = scopeType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        return new ScopeOptionInfo(
+            optionSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            optionSymbol.Locations.FirstOrDefault() ?? Location.None,
+            scopeTypeName,
+            scopeType.ContainingNamespace.ToDisplayString(),
+            scopeType.Name,
+            HasAccessibleParameterlessConstructor(optionSymbol),
+            scopeTypeName == "global::LayerBase.Scope.MainScope" &&
+            OverridesAny(optionSymbol, "Threading", "Clock", "TickRateHz"));
+    }
+
+    private static INamedTypeSymbol? GetScopeOptionScopeType(INamedTypeSymbol optionSymbol)
+    {
+        INamedTypeSymbol? current = optionSymbol.BaseType;
+        while (current != null)
+        {
+            if (current.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ==
+                "global::" + ScopeOptionTypeName &&
+                current.TypeArguments.Length == 1 &&
+                current.TypeArguments[0] is INamedTypeSymbol scopeType)
+            {
+                return scopeType;
+            }
+
+            current = current.BaseType;
+        }
+
+        return null;
+    }
+
+    private static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol optionSymbol)
+    {
+        return optionSymbol.InstanceConstructors.Any(static constructor =>
+            constructor.Parameters.Length == 0 &&
+            (constructor.DeclaredAccessibility == Accessibility.Public ||
+             constructor.DeclaredAccessibility == Accessibility.Internal ||
+             constructor.DeclaredAccessibility == Accessibility.ProtectedOrInternal));
+    }
+
+    private static bool OverridesAny(INamedTypeSymbol optionSymbol, params string[] propertyNames)
+    {
+        foreach (ISymbol member in optionSymbol.GetMembers())
+        {
+            if (member is IPropertySymbol { IsOverride: true } property &&
+                propertyNames.Contains(property.Name, StringComparer.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static string? GetMessageType(ISymbol symbol)
     {
         return symbol is INamedTypeSymbol type
@@ -348,16 +480,46 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         ImmutableArray<string?> nullableCallRequestTypes,
         ImmutableArray<ScopeOptionsInfo?> nullableDefinitions,
         ImmutableArray<ScopedServiceInfo?> nullableScopedServices,
+        ImmutableArray<ScopeOptionInfo?> nullableScopeOptions,
         ImmutableArray<LayerTypeInfo> layerTypes,
         bool moduleMode)
     {
-        var definitions = nullableDefinitions
-                          .Where(static item => item != null)
-                          .Select(static item => item!)
-                          .GroupBy(static item => item.ScopeType)
-                          .Select(static group => group.First())
-                          .OrderBy(static item => item.ScopeType, StringComparer.Ordinal)
-                          .ToImmutableArray();
+        var attributeDefinitions = nullableDefinitions
+                                   .Where(static item => item != null)
+                                   .Select(static item => item!)
+                                   .ToImmutableArray();
+
+        var scopeOptions = nullableScopeOptions
+                           .Where(static item => item != null)
+                           .Select(static item => item!)
+                           .Where(static item => item.HasAccessibleParameterlessConstructor)
+                           .GroupBy(static item => item.ScopeType)
+                           .Select(static group => group.First())
+                           .OrderBy(static item => item.ScopeType, StringComparer.Ordinal)
+                           .ToImmutableArray();
+
+        var optionDefinitions = scopeOptions
+                                .Select(static item => new ScopeOptionsInfo(
+                                    item.ScopeType,
+                                    item.ScopeNamespace,
+                                    item.ScopeName,
+                                    "internal",
+                                    true,
+                                    item.Location,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    item.OptionType))
+                                .ToImmutableArray();
+
+        var definitions = attributeDefinitions.Concat(optionDefinitions)
+                                              .GroupBy(static item => item.ScopeType)
+                                              .Select(static group =>
+                                                  group.FirstOrDefault(static item => item.OptionType != null) ??
+                                                  group.First())
+                                              .OrderBy(static item => item.ScopeType, StringComparer.Ordinal)
+                                              .ToImmutableArray();
 
         var scopedServices = nullableScopedServices
                              .Where(static item => item != null)
@@ -379,7 +541,7 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
             }
         }
 
-        var partialDefinitions = definitions
+        var partialDefinitions = attributeDefinitions
                                  .Where(static item => item.IsPartial)
                                  .ToImmutableArray();
         var eventRequestTypes = nullableEventRequestTypes
@@ -397,11 +559,12 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         if (!moduleMode)
         {
             GenerateScopeOptionPartials(spc, partialDefinitions);
+            GenerateScopeOptionRegistry(spc, scopeOptions);
         }
 
         bool shouldGenerateRegistrar = definitions.Length > 0 && layerTypes.Length > 0 && (hasPostDispatcher || hasCallDispatcher);
 
-        bool hasGeneratedPlanner = !moduleMode && GeneratePlanner(spc, partialDefinitions, scopedServices, eventRequestTypes, callRequestTypes);
+        bool hasGeneratedPlanner = !moduleMode && GeneratePlanner(spc, definitions, scopedServices, eventRequestTypes, callRequestTypes);
         if (!hasPostDispatcher && !hasCallDispatcher && !hasGeneratedPlanner)
         {
             return;
@@ -444,6 +607,12 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         builder.AppendLine("                throw new global::System.ArgumentNullException(nameof(services));");
         builder.AppendLine("            }");
         builder.AppendLine();
+        if (scopeOptions.Length > 0)
+        {
+            builder.AppendLine("            global::LayerBase.Scope.GeneratedScopeOptionRegistry.Register();");
+            builder.AppendLine();
+        }
+
         if (hasGeneratedPlanner)
         {
             builder.AppendLine("            return Create(global::LayerBase.Scope.GeneratedScopeRuntimePlanner.Build(services), options, sharedActorWorld, owningRuntime);");
@@ -478,6 +647,46 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
                 GenerateRegistrar(spc, layerTypes[i]);
             }
         }
+    }
+
+    private static void GenerateScopeOptionRegistry(
+        SourceProductionContext spc,
+        ImmutableArray<ScopeOptionInfo> scopeOptions)
+    {
+        if (scopeOptions.Length == 0)
+        {
+            return;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("// <auto-generated />");
+        builder.AppendLine("#nullable enable");
+        builder.AppendLine();
+        builder.AppendLine("namespace LayerBase.Scope");
+        builder.AppendLine("{");
+        builder.AppendLine("    internal static class GeneratedScopeOptionRegistry");
+        builder.AppendLine("    {");
+        builder.AppendLine("        private static int s_registered;");
+        builder.AppendLine();
+        builder.AppendLine("        public static void Register()");
+        builder.AppendLine("        {");
+        builder.AppendLine("            if (global::System.Threading.Interlocked.Exchange(ref s_registered, 1) != 0)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                return;");
+        builder.AppendLine("            }");
+        builder.AppendLine();
+
+        foreach (ScopeOptionInfo option in scopeOptions)
+        {
+            builder.AppendLine($"            global::LayerBase.Scope.ScopeOptionAutoRegister<{option.ScopeType}>.SetReplay(");
+            builder.AppendLine($"                static () => global::LayerBase.Scope.ScopeOptionRegistry.Register(new {option.OptionType}()));");
+        }
+
+        builder.AppendLine("        }");
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+
+        spc.AddSource("LayerBase.Scope.GeneratedScopeOptionRegistry.g.cs", builder.ToString());
     }
 
     private static void GenerateRegistrar(SourceProductionContext spc, LayerTypeInfo layer)
@@ -593,6 +802,11 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         builder.AppendLine("    {");
         builder.AppendLine("        public static global::System.Collections.Generic.IReadOnlyList<global::LayerBase.Scope.ScopeRuntimePlan> Build(global::System.Collections.Generic.IReadOnlyList<global::LayerBase.DI.IService> services)");
         builder.AppendLine("        {");
+        if (definitions.Any(static item => item.OptionType != null))
+        {
+            builder.AppendLine("            global::LayerBase.Scope.GeneratedScopeOptionRegistry.Register();");
+        }
+
         builder.AppendLine("            return global::LayerBase.Scope.ScopeRuntimePlanner.Build(services, TryResolveServiceScope);");
         builder.AppendLine("        }");
         builder.AppendLine();
@@ -651,7 +865,21 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
             builder.AppendLine("            {");
             builder.AppendLine("                scopeInfo = new global::LayerBase.Scope.ScopeRuntimeServiceScopeInfo(");
             builder.AppendLine($"                    typeof({definition.ScopeType}),");
-            builder.AppendLine($"                    {definition.ScopeType}.__LayerBaseCreateScopeDescriptor({scopeId}));");
+            if (definition.OptionType == null)
+            {
+                builder.AppendLine($"                    {definition.ScopeType}.__LayerBaseCreateScopeDescriptor({scopeId}));");
+            }
+            else
+            {
+                builder.AppendLine("                    new global::LayerBase.Scope.ScopeDescriptor(");
+                builder.AppendLine($"                        {scopeId},");
+                builder.AppendLine($"                        \"{definition.ScopeName}\",");
+                builder.AppendLine("                        global::LayerBase.Scope.ScopeThreadingMode.Inline,");
+                builder.AppendLine("                        global::LayerBase.Scope.ScopeClockMode.EngineDriven,");
+                builder.AppendLine("                        0,");
+                builder.AppendLine("                        global::LayerBase.Scope.ScopeStopPolicy.Drain));");
+            }
+
             builder.AppendLine("                return true;");
             builder.AppendLine("            }");
             builder.AppendLine();
@@ -739,9 +967,19 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
         int Threading,
         int Clock,
         int TickRateHz,
-        int StopPolicy);
+        int StopPolicy,
+        string? OptionType);
 
     private sealed record ScopedServiceInfo(string ServiceType, string ScopeType);
+
+    private sealed record ScopeOptionInfo(
+        string OptionType,
+        Location Location,
+        string ScopeType,
+        string ScopeNamespace,
+        string ScopeName,
+        bool HasAccessibleParameterlessConstructor,
+        bool HasMainScopeFixedFieldOverride);
 
     private sealed record LayerTypeInfo(
         string FullTypeName,
@@ -819,6 +1057,30 @@ public sealed class ScopeRuntimeHostGenerator : IIncrementalGenerator
             "LBSD004",
             "[Scope<TScope>] owner must implement IService",
             "Type '{0}' uses [Scope<TScope>] and must implement IService so the source generator can bind it to a scope",
+            "LayerBase.Scope",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor DuplicateScopeOption = new(
+            "LBSD005",
+            "Duplicate ScopeOption",
+            "Scope '{0}' declares more than one ScopeOption<TScope>.",
+            "LayerBase.Scope",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor ScopeOptionNeedsAccessibleParameterlessConstructor = new(
+            "LBSD006",
+            "ScopeOption constructor is not accessible",
+            "ScopeOption '{0}' must declare an accessible parameterless constructor.",
+            "LayerBase.Scope",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor MainScopeOptionCannotOverrideFixedFields = new(
+            "LBSC001",
+            "MainScope fixed fields cannot be overridden",
+            "ScopeOption '{0}' targets MainScope and cannot override Threading, Clock, or TickRateHz.",
             "LayerBase.Scope",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);

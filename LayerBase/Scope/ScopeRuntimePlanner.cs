@@ -5,11 +5,16 @@ namespace LayerBase.Scope;
 
 public sealed class ScopeRuntimePlan
 {
-    internal ScopeRuntimePlan(ScopeDescriptor descriptor, Type? scopeType, IService[] services)
+    internal ScopeRuntimePlan(
+        ScopeDescriptor descriptor,
+        Type? scopeType,
+        IService[] services,
+        ScopeRuntimeOptions? runtimeOptions = null)
     {
         Descriptor = descriptor;
         ScopeType = scopeType;
         Services = services;
+        RuntimeOptions = runtimeOptions ?? ScopeRuntimeOptions.Default;
     }
 
     public ScopeDescriptor Descriptor { get; }
@@ -17,6 +22,8 @@ public sealed class ScopeRuntimePlan
     public Type? ScopeType { get; }
 
     public IService[] Services { get; }
+
+    public ScopeRuntimeOptions RuntimeOptions { get; }
 }
 
 public readonly struct ScopeRuntimeServiceScopeInfo
@@ -57,6 +64,14 @@ public static class ScopeRuntimePlanner
         IReadOnlyList<IService> services,
         ScopeRuntimeServiceScopeResolver? resolver)
     {
+        return Build(services, resolver, mainScopeRuntimeOptions: null);
+    }
+
+    public static IReadOnlyList<ScopeRuntimePlan> Build(
+        IReadOnlyList<IService> services,
+        ScopeRuntimeServiceScopeResolver? resolver,
+        ScopeRuntimeOptions? mainScopeRuntimeOptions)
+    {
         if (services == null)
         {
             throw new ArgumentNullException(nameof(services));
@@ -80,10 +95,10 @@ public static class ScopeRuntimePlanner
             {
                 scopedIndex = scopedServices.Count;
                 scopedIndexes.Add(scopeType, scopedIndex);
-                ScopeDescriptor descriptor = scopeInfo.Descriptor.ScopeId == 0
-                    ? CreateDescriptor(scopeType, scopedIndex + 1)
-                    : scopeInfo.Descriptor;
-                scopedServices.Add(new ScopedServiceBucket(scopeType, descriptor));
+                ResolvedScopeOption scopeOption = scopeInfo.Descriptor.ScopeId == 0
+                    ? CreateDefaultScopeOption(scopeType, scopedIndex + 1)
+                    : ScopeOptionResolver.Resolve(scopeType, scopeInfo.Descriptor.ScopeId, scopeInfo.Descriptor);
+                scopedServices.Add(new ScopedServiceBucket(scopeType, scopeOption.Descriptor, scopeOption.RuntimeOptions));
             }
 
             scopedServices[scopedIndex].Services.Add(service);
@@ -91,13 +106,21 @@ public static class ScopeRuntimePlanner
 
         var plans = new List<ScopeRuntimePlan>(scopedServices.Count + 1)
         {
-            new(ScopeDescriptors.Main, null, mainServices.ToArray())
+            new(
+                ScopeDescriptors.Main,
+                null,
+                mainServices.ToArray(),
+                mainScopeRuntimeOptions ?? ScopeOptionResolver.ResolveMain().RuntimeOptions)
         };
 
         for (int i = 0; i < scopedServices.Count; i++)
         {
             ScopedServiceBucket bucket = scopedServices[i];
-            plans.Add(new ScopeRuntimePlan(bucket.Descriptor, bucket.ScopeType, bucket.Services.ToArray()));
+            plans.Add(new ScopeRuntimePlan(
+                bucket.Descriptor,
+                bucket.ScopeType,
+                bucket.Services.ToArray(),
+                bucket.RuntimeOptions));
         }
 
         return plans;
@@ -122,7 +145,7 @@ public static class ScopeRuntimePlanner
 
         scopeInfo = new ScopeRuntimeServiceScopeInfo(
             scopeType,
-            CreateDescriptor(scopeType, scopeId: 0));
+            ScopeDescriptors.Main);
         return true;
     }
 
@@ -151,35 +174,42 @@ public static class ScopeRuntimePlanner
         return scopeType;
     }
 
-    private static ScopeDescriptor CreateDescriptor(Type scopeType, int scopeId)
+    private static ResolvedScopeOption CreateDefaultScopeOption(Type scopeType, int scopeId)
     {
         var options = scopeType.GetCustomAttribute<ScopeOptionsAttribute>(inherit: false);
         if (options == null)
         {
-            throw new InvalidOperationException(
-                $"Scope '{scopeType.FullName}' must declare ScopeOptionsAttribute.");
+            return ScopeOptionResolver.ResolveDefault(scopeType, scopeId);
         }
 
-        return new ScopeDescriptor(
+        var descriptor = new ScopeDescriptor(
             scopeId,
             scopeType.Name,
             options.Threading,
             options.Clock,
             options.TickRateHz,
             options.StopPolicy);
+
+        return ScopeOptionResolver.Resolve(scopeType, scopeId, descriptor);
     }
 
     private sealed class ScopedServiceBucket
     {
-        public ScopedServiceBucket(Type scopeType, ScopeDescriptor descriptor)
+        public ScopedServiceBucket(
+            Type scopeType,
+            ScopeDescriptor descriptor,
+            ScopeRuntimeOptions runtimeOptions)
         {
             ScopeType = scopeType;
             Descriptor = descriptor;
+            RuntimeOptions = runtimeOptions;
         }
 
         public Type ScopeType { get; }
 
         public ScopeDescriptor Descriptor { get; }
+
+        public ScopeRuntimeOptions RuntimeOptions { get; }
 
         public List<IService> Services { get; } = new();
     }

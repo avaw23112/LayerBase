@@ -16,6 +16,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     private const string ModuleIgnoreAttributeName = "LayerBase.Modules.ModuleIgnoreAttribute";
     private const string LayerBaseTypeName = "LayerBase.Layers.Layer";
     private const string ScopeOptionsAttributeName = "LayerBase.Scope.ScopeOptionsAttribute";
+    private const string ScopeOptionTypeName = "LayerBase.Scope.ScopeOption<TScope>";
     private const string ScopeAttributeName = "LayerBase.Scope.ScopeAttribute<TScope>";
     private const string ScopeCallContractAttributeName = "LayerBase.Scope.ScopeCallAttribute<TScope, TResult>";
     private const string ScopeEventContractAttributeName = "LayerBase.Scope.ScopeEventAttribute<TScope>";
@@ -127,6 +128,17 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                 GetIntArgument(scopeOptions, 1, "clock", 0),
                 GetIntArgument(scopeOptions, 2, "tickRateHz", 0),
                 GetIntArgument(scopeOptions, 3, "stopPolicy", 0));
+        }
+
+        INamedTypeSymbol? optionScopeType = GetScopeOptionScopeType(symbol);
+        if (optionScopeType != null &&
+            !symbol.IsAbstract &&
+            !symbol.IsGenericType &&
+            HasAccessibleParameterlessConstructor(symbol))
+        {
+            return TypeContribution.ScopeDefinitionFromOption(
+                optionScopeType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                typeName);
         }
 
         AttributeData? scopeCall = FindAttributeByOriginalDefinition(symbol, ScopeCallContractAttributeName);
@@ -361,7 +373,9 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         var scopeDefinitions = types
                                .Where(static item => item.Kind == TypeContributionKind.ScopeDefinition)
                                .GroupBy(static item => item.TypeName)
-                               .Select(static group => group.First())
+                               .Select(static group =>
+                                   group.FirstOrDefault(static item => item.OptionType != null) ??
+                                   group.First())
                                .OrderBy(static item => item.TypeName, StringComparer.Ordinal)
                                .ToImmutableArray();
         var messageContracts = types
@@ -488,6 +502,19 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
 
         builder.AppendLine($"    internal static class Generated{module.Name}Manifest");
         builder.AppendLine("    {");
+        if (scopeDefinitions.Any(static item => item.OptionType != null))
+        {
+            builder.AppendLine($"        static Generated{module.Name}Manifest()");
+            builder.AppendLine("        {");
+            foreach (TypeContribution scope in scopeDefinitions.Where(static item => item.OptionType != null))
+            {
+                builder.AppendLine($"            global::LayerBase.Scope.ScopeOptionAutoRegister<{scope.TypeName}>.SetReplay(");
+                builder.AppendLine($"                static () => global::LayerBase.Scope.ScopeOptionRegistry.Register(new {scope.OptionType}()));");
+            }
+            builder.AppendLine("        }");
+            builder.AppendLine();
+        }
+
         builder.AppendLine("        internal static readonly global::LayerBase.Modules.ModuleManifest Value = new global::LayerBase.Modules.ModuleManifest(");
         AppendLayerContracts(builder, layerContracts);
         builder.AppendLine(",");
@@ -797,6 +824,34 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         return false;
     }
 
+    private static INamedTypeSymbol? GetScopeOptionScopeType(INamedTypeSymbol optionSymbol)
+    {
+        INamedTypeSymbol? current = optionSymbol.BaseType;
+        while (current != null)
+        {
+            if (current.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ==
+                "global::" + ScopeOptionTypeName &&
+                current.TypeArguments.Length == 1 &&
+                current.TypeArguments[0] is INamedTypeSymbol scopeType)
+            {
+                return scopeType;
+            }
+
+            current = current.BaseType;
+        }
+
+        return null;
+    }
+
+    private static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol symbol)
+    {
+        return symbol.InstanceConstructors.Any(static constructor =>
+            constructor.Parameters.Length == 0 &&
+            (constructor.DeclaredAccessibility == Accessibility.Public ||
+             constructor.DeclaredAccessibility == Accessibility.Internal ||
+             constructor.DeclaredAccessibility == Accessibility.ProtectedOrInternal));
+    }
+
     private static bool IsPartial(INamedTypeSymbol symbol)
     {
         return symbol.DeclaringSyntaxReferences
@@ -917,6 +972,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         public ImmutableArray<string> OwnerLayerTypes { get; private set; }
         public string OwnerScopeType { get; private set; }
         public string OwnerServiceType { get; private set; }
+        public string? OptionType { get; private set; }
 
         public static TypeContribution LayerContract(string typeName) => new(TypeContributionKind.LayerContract, typeName);
 
@@ -933,6 +989,14 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                 Clock = clock,
                 TickRateHz = tickRateHz,
                 StopPolicy = stopPolicy
+            };
+        }
+
+        public static TypeContribution ScopeDefinitionFromOption(string scopeTypeName, string optionTypeName)
+        {
+            return new TypeContribution(TypeContributionKind.ScopeDefinition, scopeTypeName)
+            {
+                OptionType = optionTypeName
             };
         }
 

@@ -306,7 +306,8 @@ public sealed class ModuleRuntimeIsolationTests
             descriptor,
             typeof(IsolationScope),
             [new ScopeServicePlan(0, typeof(IsolationService), new IsolationService(), null)],
-            Array.Empty<ScopeContextPlan>());
+            Array.Empty<ScopeContextPlan>(),
+            ScopeRuntimeOptions.Default);
 
         return new ScopeCompositionPlan(
             [scopePlan],

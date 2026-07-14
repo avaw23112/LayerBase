@@ -1,6 +1,7 @@
 namespace LayerBase.Scope;
 
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+[Obsolete("Use ScopeOption<TScope> and ScopeOptionRegistry instead. ScopeOptionsAttribute remains compatible during migration.", false)]
 public sealed class ScopeOptionsAttribute : Attribute
 {
     public ScopeThreadingMode Threading { get; }

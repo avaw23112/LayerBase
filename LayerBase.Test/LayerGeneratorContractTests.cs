@@ -1662,6 +1662,100 @@ public class LayerGeneratorContractTests
     }
 
     [Test]
+    public void Scope_runtime_host_generator_discovers_scope_option_and_emits_registration()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.DI;
+                              using LayerBase.Layers;
+                              using LayerBase.Scope;
+
+                              public sealed class CombatScope
+                              {
+                              }
+
+                              public sealed class CombatScopeOption : ScopeOption<CombatScope>
+                              {
+                                  public override ScopeThreadingMode Threading => ScopeThreadingMode.Worker;
+                                  public override ScopeClockMode Clock => ScopeClockMode.FixedRate;
+                                  public override int TickRateHz => 30;
+                              }
+
+                              [Scope<CombatScope>]
+                              public sealed class CombatService : IService
+                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+
+                              public sealed partial class GameplayLayer : Layer
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeRuntimeHostGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("global::LayerBase.Scope.ScopeOptionAutoRegister<global::Game.CombatScope>.SetReplay"));
+        Assert.That(generated, Does.Contain("new global::Game.CombatScopeOption()"));
+        Assert.That(generated, Does.Contain("public static bool TryGetScopeId(global::System.Type scopeType, out int scopeId)"));
+    }
+
+    [Test]
+    public void Scope_runtime_host_generator_reports_duplicate_scope_option()
+    {
+        const string source = """
+                              namespace Game;
+
+                              using LayerBase.Scope;
+
+                              public sealed class CombatScope
+                              {
+                              }
+
+                              public sealed class FirstCombatScopeOption : ScopeOption<CombatScope>
+                              {
+                              }
+
+                              public sealed class SecondCombatScopeOption : ScopeOption<CombatScope>
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeRuntimeHostGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBSD005"),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Scope_runtime_host_generator_reports_main_scope_option_fixed_field_override()
+    {
+        const string source = """
+                              using LayerBase.Scope;
+
+                              public sealed class MainScopeOptionOverride : ScopeOption<MainScope>
+                              {
+                                  public override ScopeThreadingMode Threading => ScopeThreadingMode.Worker;
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeRuntimeHostGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBSC001"),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
     public void Scope_resource_generator_emits_compilable_partial_type_declarations()
     {
         const string source = """
@@ -1811,6 +1905,56 @@ public class LayerGeneratorContractTests
         Assert.That(generated, Does.Contain("\"combat-state\""));
         Assert.That(generated, Does.Not.Contain("partial class GameplayLayer"));
         Assert.That(generated, Does.Not.Contain("partial class CombatScope"));
+    }
+
+    [Test]
+    public void Assembly_module_generator_discovers_scope_option_definitions()
+    {
+        const string source = """
+                              namespace Game.ModuleOptionContract;
+
+                              using LayerBase.DI;
+                              using LayerBase.Modules;
+                              using LayerBase.Scope;
+
+                              [AssemblyModule]
+                              public sealed partial class CombatModule
+                              {
+                              }
+
+                              public sealed class CombatScope
+                              {
+                              }
+
+                              public sealed class CombatScopeOption : ScopeOption<CombatScope>
+                              {
+                                  public override ScopeThreadingMode Threading => ScopeThreadingMode.Worker;
+                                  public override ScopeClockMode Clock => ScopeClockMode.FixedRate;
+                                  public override int TickRateHz => 60;
+                              }
+
+                              [Scope<CombatScope>]
+                              public sealed partial class CombatService : IService
+                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new AssemblyModuleGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        string generated = string.Join(Environment.NewLine, result.GeneratedSources);
+        Assert.That(generated, Does.Contain("global::LayerBase.Scope.ScopeOptionAutoRegister<global::Game.ModuleOptionContract.CombatScope>.SetReplay"));
+        Assert.That(generated, Does.Contain("new global::Game.ModuleOptionContract.CombatScopeOption()"));
+        Assert.That(generated, Does.Contain("typeof(global::Game.ModuleOptionContract.CombatScope).TypeHandle"));
     }
 
     [Test]

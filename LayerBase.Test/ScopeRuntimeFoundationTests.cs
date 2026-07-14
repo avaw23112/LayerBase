@@ -1001,14 +1001,76 @@ public sealed class ScopeRuntimeFoundationTests
     }
 
     [Test]
-    public void ScopeRuntimePlanner_should_reject_scope_attribute_without_scope_options()
+    public void ScopeRuntimePlanner_should_default_scoped_services_without_scope_options()
     {
         var service = new PlannerMissingScopeOptionsService();
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => ScopeRuntimePlanner.Build(new IService[] { service }))!;
+        IReadOnlyList<ScopeRuntimePlan> plans = ScopeRuntimePlanner.Build(new IService[] { service });
 
-        Assert.That(exception.Message, Does.Contain(nameof(PlannerMissingScopeOptions)));
+        Assert.That(plans.Count, Is.EqualTo(2));
+        Assert.That(plans[1].ScopeType, Is.EqualTo(typeof(PlannerMissingScopeOptions)));
+        Assert.That(plans[1].Descriptor.ScopeId, Is.EqualTo(1));
+        Assert.That(plans[1].Descriptor.Name, Is.EqualTo(nameof(PlannerMissingScopeOptions)));
+        Assert.That(plans[1].Descriptor.Threading, Is.EqualTo(ScopeThreadingMode.Inline));
+        Assert.That(plans[1].Descriptor.Clock, Is.EqualTo(ScopeClockMode.EngineDriven));
+        Assert.That(plans[1].Descriptor.TickRateHz, Is.EqualTo(0));
+        Assert.That(plans[1].Descriptor.StopPolicy, Is.EqualTo(ScopeStopPolicy.Drain));
+        Assert.That(plans[1].Services, Is.EqualTo(new IService[] { service }));
+    }
+
+    [Test]
+    public void ScopeRuntimePlanner_should_apply_registered_scope_option_template()
+    {
+        ScopeOptionRegistry.Clear();
+        ScopeOptionRegistry.Register(new PlannerMissingScopeOptionsOption());
+
+        try
+        {
+            var service = new PlannerMissingScopeOptionsService();
+
+            IReadOnlyList<ScopeRuntimePlan> plans = ScopeRuntimePlanner.Build(new IService[] { service });
+
+            Assert.That(plans[1].Descriptor.Threading, Is.EqualTo(ScopeThreadingMode.Worker));
+            Assert.That(plans[1].Descriptor.Clock, Is.EqualTo(ScopeClockMode.FixedRate));
+            Assert.That(plans[1].Descriptor.TickRateHz, Is.EqualTo(20));
+            Assert.That(plans[1].RuntimeOptions.PostQueueCapacity, Is.EqualTo(13));
+        }
+        finally
+        {
+            ScopeOptionRegistry.Clear();
+        }
+    }
+
+    [Test]
+    public void ScopeOptionRegistry_clear_should_restore_default_templates()
+    {
+        ScopeOptionRegistry.Clear();
+        ScopeOptionRegistry.Register(new PlannerMissingScopeOptionsOption());
+        ScopeOptionRegistry.Clear();
+
+        var service = new PlannerMissingScopeOptionsService();
+
+        IReadOnlyList<ScopeRuntimePlan> plans = ScopeRuntimePlanner.Build(new IService[] { service });
+
+        Assert.That(plans[1].Descriptor.Threading, Is.EqualTo(ScopeThreadingMode.Inline));
+        Assert.That(plans[1].RuntimeOptions.PostQueueCapacity, Is.EqualTo(ScopeRuntimeOptions.Default.PostQueueCapacity));
+    }
+
+    [Test]
+    public void ScopeRuntimePlanner_should_reject_main_scope_fixed_field_overrides()
+    {
+        ScopeOptionRegistry.Clear();
+        ScopeOptionRegistry.Register(new InvalidMainScopeOption());
+
+        try
+        {
+            Assert.Throws<InvalidMainScopeOptionException>(() =>
+                ScopeRuntimePlanner.Build(new IService[] { new PlannerMainService() }));
+        }
+        finally
+        {
+            ScopeOptionRegistry.Clear();
+        }
     }
 
     [Test]
@@ -1249,6 +1311,40 @@ public sealed class ScopeRuntimeFoundationTests
         Assert.That(scope.Descriptor.Name, Is.EqualTo(nameof(ScopeCatalogCombatScope)));
         Assert.That(scope.Services[0], Is.TypeOf<ScopeCatalogAlphaService>());
         Assert.That(scope.Services[1], Is.TypeOf<ScopeCatalogZuluService>());
+    }
+
+    [Test]
+    public void ScopeCompositionBuilder_should_resolve_independent_runtime_options_per_scope()
+    {
+        ScopeOptionRegistry.Clear();
+        ScopeOptionRegistry.Register(new ScopeCatalogCombatScopeOption());
+
+        try
+        {
+            using var module = new ScopeCatalogTestModule(
+                scopeDefinitions:
+                [
+                    new ScopeDefinitionContribution(
+                        typeof(ScopeCatalogCombatScope).TypeHandle,
+                        ScopeThreadingMode.Inline,
+                        ScopeClockMode.EngineDriven,
+                        0,
+                        ScopeStopPolicy.Drain)
+                ]);
+
+            ModuleRuntimeCatalog catalog = ModuleRuntimeBuilder.Build(module);
+
+            ScopeCompositionPlan plan = ScopeCompositionBuilder.Build(catalog);
+
+            Assert.That(plan.Scopes, Has.Length.EqualTo(2));
+            Assert.That(plan.Scopes[0].RuntimeOptions.PostQueueCapacity, Is.EqualTo(ScopeRuntimeOptions.Default.PostQueueCapacity));
+            Assert.That(plan.Scopes[1].RuntimeOptions.PostQueueCapacity, Is.EqualTo(7));
+            Assert.That(plan.Scopes[1].RuntimeOptions.CallQueueCapacity, Is.EqualTo(11));
+        }
+        finally
+        {
+            ScopeOptionRegistry.Clear();
+        }
     }
 
     [Test]
@@ -2435,6 +2531,29 @@ public sealed class ScopeRuntimeFoundationTests
 
     private sealed class PlannerMissingScopeOptions
     {
+    }
+
+    private sealed class PlannerMissingScopeOptionsOption : ScopeOption<PlannerMissingScopeOptions>
+    {
+        public override ScopeThreadingMode Threading => ScopeThreadingMode.Worker;
+
+        public override ScopeClockMode Clock => ScopeClockMode.FixedRate;
+
+        public override int TickRateHz => 20;
+
+        public override int PostQueueCapacity => 13;
+    }
+
+    private sealed class InvalidMainScopeOption : ScopeOption<MainScope>
+    {
+        public override ScopeThreadingMode Threading => ScopeThreadingMode.Worker;
+    }
+
+    private sealed class ScopeCatalogCombatScopeOption : ScopeOption<ScopeCatalogCombatScope>
+    {
+        public override int PostQueueCapacity => 7;
+
+        public override int CallQueueCapacity => 11;
     }
 
     [Scope<PlannerMissingScopeOptions>]

@@ -38,12 +38,14 @@ public sealed class ScopePlan
         Type? scopeType,
         ScopeServicePlan[] services,
         ScopeContextPlan[] contexts,
+        ScopeRuntimeOptions runtimeOptions,
         ScopeResourcePlan? resourcePlan = null)
     {
         Descriptor = descriptor;
         ScopeType = scopeType;
         Services = services ?? throw new ArgumentNullException(nameof(services));
         Contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
+        RuntimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
         ResourcePlan = resourcePlan ?? ScopeResourcePlan.Empty;
     }
 
@@ -54,6 +56,8 @@ public sealed class ScopePlan
     public ScopeServicePlan[] Services { get; }
 
     public ScopeContextPlan[] Contexts { get; }
+
+    public ScopeRuntimeOptions RuntimeOptions { get; }
 
     internal ScopeResourcePlan ResourcePlan { get; }
 }

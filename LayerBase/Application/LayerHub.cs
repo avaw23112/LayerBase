@@ -166,6 +166,7 @@ public static class LayerHub
             ServiceLayerBinder.Reset();
             LayerServiceRegistry.Reset();
             EventIdentityRegistry.Reset();
+            ScopeOptionRegistry.Clear();
             OnLayerEventInfo = null;
         }
     }

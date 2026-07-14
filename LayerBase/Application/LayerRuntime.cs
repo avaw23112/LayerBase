@@ -61,6 +61,8 @@ public sealed partial class LayerRuntime : IDisposable
     internal DelayPublisherManager? DelayManager { get; private set; }
     internal List<ILayerBaseModule>? _installedModules;
     internal bool _moduleMode;
+    private ScopeRuntimeOptions? _mainScopeRuntimeOptions;
+    private bool _runtimeResourcesAliasedToMainScope;
     #endregion
 
     #region Runtime State - Layer Bindings
@@ -92,8 +94,23 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal RuntimeBuildState BuildState => (RuntimeBuildState)Volatile.Read(ref _buildState);
 
-    internal LayerBase.DI.IServiceProvider ServiceProvider =>
-        _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
+    internal LayerBase.DI.IServiceProvider ServiceProvider
+    {
+        get
+        {
+            if (_worldProvider != null)
+            {
+                return _worldProvider;
+            }
+
+            if (ScopeHost?.MainScope.ServiceProvider is { } scopeProvider)
+            {
+                return scopeProvider;
+            }
+
+            throw new InvalidOperationException("Runtime not built.");
+        }
+    }
 
     internal T GetService<T>() where T : class => ServiceProvider.Get<T>();
 
@@ -104,6 +121,8 @@ public sealed partial class LayerRuntime : IDisposable
     public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
 
     public LayerToolRegistry Tools => _kernel.Tools;
+
+    public ScopeRuntime MainScope => ScopeHost?.MainScope ?? throw new InvalidOperationException("Runtime not built.");
 
     public bool IsDebugMode { get; internal set; }
     #endregion
@@ -131,7 +150,9 @@ public sealed partial class LayerRuntime : IDisposable
     private EventBuildPolicyTable? _policyTable;
 
     public EventBuildPolicyTable PolicyTable =>
-        _policyTable ?? throw new InvalidOperationException("Runtime not built.");
+        ScopeHost?.MainScope.PolicyTable ??
+        _policyTable ??
+        throw new InvalidOperationException("Runtime not built.");
 
     internal void InitializeScheduler(PostSchedulerOptions options)
     {
@@ -287,13 +308,12 @@ public sealed partial class LayerRuntime : IDisposable
             }
         }
 
-        if (scopedServices.Count == 0)
-        {
-            return;
-        }
-
-        ScopeHost = generatedScopeHostFactory?.Invoke(scopedServices, null, Actors, this)
-                    ?? ScopeRuntimeHost.Create(ScopeRuntimePlanner.Build(scopedServices), sharedActorWorld: Actors, owningRuntime: this);
+        ScopeHost = generatedScopeHostFactory?.Invoke(scopedServices, _mainScopeRuntimeOptions, Actors, this)
+                    ?? ScopeRuntimeHost.Create(
+                        ScopeRuntimePlanner.Build(scopedServices, resolver: null, _mainScopeRuntimeOptions),
+                        sharedActorWorld: Actors,
+                        owningRuntime: this);
+        BindRuntimeResourceProxiesToMainScope();
     }
 
     private bool TryBuildFromInstalledModules()
@@ -310,11 +330,13 @@ public sealed partial class LayerRuntime : IDisposable
         }
 
         ScopeCompositionPlan plan = ScopeCompositionBuilder.Build(this, catalog);
+        ApplyMainScopeRuntimeOptions(plan);
         ScopeHost = ScopeRuntimeHost.Create(
             this,
             plan,
             CreateModuleCallDispatchers(catalog),
             CreateModuleEventDispatchers(catalog));
+        BindRuntimeResourceProxiesToMainScope();
 
         ApplyLayerServiceHandles(catalog);
 
@@ -472,7 +494,6 @@ public sealed partial class LayerRuntime : IDisposable
 
     private void EnsurePostSchedulersKnowAllocatedEventTypes()
     {
-        _scheduler?.BuildPlans(Array.Empty<PostTypePlan>());
         if (ScopeHost == null)
         {
             return;
@@ -481,8 +502,81 @@ public sealed partial class LayerRuntime : IDisposable
         IReadOnlyList<ScopeRuntime> scopes = ScopeHost.Scopes;
         for (int i = 0; i < scopes.Count; i++)
         {
-            scopes[i].PostScheduler.BuildPlans(Array.Empty<PostTypePlan>());
+            scopes[i].RebuildEventPolicies();
         }
+    }
+
+    private void ApplyMainScopeRuntimeOptions(ScopeCompositionPlan plan)
+    {
+        if (_mainScopeRuntimeOptions == null || plan.Scopes.Length == 0)
+        {
+            return;
+        }
+
+        ScopePlan main = plan.Scopes[0];
+        if (main.Descriptor.ScopeId != 0)
+        {
+            return;
+        }
+
+        plan.Scopes[0] = new ScopePlan(
+            main.Descriptor,
+            main.ScopeType,
+            main.Services,
+            main.Contexts,
+            _mainScopeRuntimeOptions,
+            main.ResourcePlan);
+    }
+
+    private ScopeRuntimeOptions CreateMainScopeRuntimeOptions(
+        PostSchedulerOptions postOptions,
+        TimeSchedulerOptions timerOptions,
+        DelayBufferOptions delayOptions)
+    {
+        _postIngress.SetCapacity(postOptions.MaxIngressQueueCapacity);
+        ScopeRuntimeOptions baseOptions = ScopeOptionResolver.ResolveMain().RuntimeOptions;
+        return new ScopeRuntimeOptions(
+            baseOptions.PostQueueCapacity,
+            baseOptions.CallQueueCapacity,
+            baseOptions.ContinuationQueueCapacity,
+            baseOptions.CompletionQueueCapacity,
+            postOptions,
+            timerOptions,
+            delayOptions,
+            EcsOptions);
+    }
+
+    private void BindRuntimeResourceProxiesToMainScope()
+    {
+        if (ScopeHost == null)
+        {
+            return;
+        }
+
+        ScopeRuntime mainScope = ScopeHost.MainScope;
+        if (!_runtimeResourcesAliasedToMainScope)
+        {
+            _scheduler?.Dispose();
+            _timer?.Dispose();
+            DelayManager?.Clear();
+            EventCenter.Reset();
+            if (!ReferenceEquals(EcsScheduler, mainScope.EcsScheduler))
+            {
+                EcsScheduler.Dispose();
+            }
+
+            if (!ReferenceEquals(EcsWorld, mainScope.EcsWorld))
+            {
+                EcsWorld.Dispose();
+            }
+        }
+
+        EventCenter = mainScope.EventCenter;
+        _scheduler = mainScope.PostScheduler;
+        _timer = mainScope.Timer;
+        DelayManager = mainScope.DelayManager;
+        AdoptMainScopeEcsResources(mainScope);
+        _runtimeResourcesAliasedToMainScope = true;
     }
     #endregion
 
@@ -493,91 +587,18 @@ public sealed partial class LayerRuntime : IDisposable
 
         using var runtimeScope = LayerRuntimeExecution.Enter(this);
 
-        if (_context != null)
-        {
-            using var scope = _context.EnterScope();
-
-            // Completion drain (only when sync context exists)
-            var policy = IsDebugMode ? CompletionExceptionPolicy.Throw : CompletionExceptionPolicy.ReportAndContinue;
-            _context.Update(_scheduler?.Options.MaxCompletionsPerPump ?? 0, policy, _completionExceptionHandler);
-        }
-
-        EcsScheduler?.NotifyFrameStart();
-        try
-        {
-            PumpCore(deltaTime);
-        }
-        finally
-        {
-            EcsScheduler?.NotifyFrameEnd();
-        }
+        PumpCore(deltaTime);
     }
 
     private void PumpCore(float deltaTime)
     {
-        if (_moduleMode)
-        {
-            if (_scheduler != null)
-            {
-                Worker.DrainEventsTo(_scheduler, _scheduler.Options.MaxIngressPostsPerPump);
-                var ingressResult = _postIngress.DrainTo(
-                    _scheduler,
-                    _scheduler.Options.MaxIngressPostsPerPump);
-
-                if (IsDebugMode && ingressResult.Failed > 0)
-                {
-                    ReportWarning(-1, "PostIngressQueue", "DrainTo",
-                        $"PostFromAnyThread failed: {ingressResult.Failed}/{ingressResult.Drained}");
-                }
-
-                _scheduler.Pump();
-            }
-
-            ScopeHost?.Pump(deltaTime);
-
-            RuntimeFrameBudget actorBudget = default;
-            DrainActorCommands();
-            Actors.Pump(
-                deltaTime: deltaTime,
-                fixedDeltaTime: 0f,
-                pumpFixedUpdate: false,
-                budget: ref actorBudget);
-
-            TryDrainExceptions();
-            return;
-        }
-
         if (_scheduler != null)
         {
             Worker.DrainEventsTo(_scheduler, _scheduler.Options.MaxIngressPostsPerPump);
         }
 
-        EcsScheduler?.DrainResults(EcsOptions.MaxResultsDrainPerPump);
-
         TryDrainExceptions();
 
-        // 1. Time tick
-        _timer?.Tick(deltaTime, _timerSink!);
-
-        // 2. Delay tick
-        if (_chain != null && _chain.HasAnyDelay)
-            DelayManager?.Tick(deltaTime);
-
-        // 3. FixedUpdate accumulator
-        if (_fixedUpdateOptions.Enabled)
-        {
-            _fixedUpdateAccumulator += deltaTime;
-            int steps = 0;
-            while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime &&
-                   steps < _fixedUpdateOptions.MaxStepsPerPump)
-            {
-                _chain?.PumpFixed(_fixedUpdateOptions.FixedDeltaTime);
-                _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
-                steps++;
-            }
-        }
-
-        // 4. Ingress drain
         if (_scheduler != null)
         {
             var ingressResult = _postIngress.DrainTo(
@@ -591,43 +612,49 @@ public sealed partial class LayerRuntime : IDisposable
             }
         }
 
-        // 5. Post pump + layer pump + actor pump
-        PostPumpStats postStats = _scheduler?.Pump()
-                                  ?? new PostPumpStats(0, 0, 0, 0);
-
-        _chain?.Pump(deltaTime);
         ScopeHost?.Pump(deltaTime);
-        EcsScheduler?.FlushSubmissions();
+        ScopeRuntime? mainScope = ScopeHost?.MainScope;
+        PostPumpStats postStats = mainScope?.LastPostPumpStats ?? new PostPumpStats(0, 0, 0, 0);
+
+        if (mainScope != null)
+        {
+            mainScope.ExecuteInOwnerScope(() => PumpLayerCallbacks(deltaTime));
+        }
+        else
+        {
+            PumpLayerCallbacks(deltaTime);
+        }
 
         if (_scheduler != null)
         {
             RuntimeFrameBudget actorBudget = CreateActorBudget(_scheduler.Options, postStats);
-            bool pumpActorFixedUpdate = _fixedUpdateOptions.Enabled;
-            float actorFixedDeltaTime = _fixedUpdateOptions.Enabled
-                ? _fixedUpdateOptions.FixedDeltaTime
-                : 0f;
-
             DrainActorCommands();
             Actors.Pump(
                 deltaTime: deltaTime,
-                fixedDeltaTime: actorFixedDeltaTime,
-                pumpFixedUpdate: pumpActorFixedUpdate,
+                fixedDeltaTime: _fixedUpdateOptions.Enabled ? _fixedUpdateOptions.FixedDeltaTime : 0f,
+                pumpFixedUpdate: _fixedUpdateOptions.Enabled,
                 budget: ref actorBudget);
-
-            if (EcsScheduler.Mode == EcsExecutionMode.Sync || EcsWorkScheduler.IsSchedulerThread)
-            {
-                EcsWorld.SweepProjectedActors();
-            }
-            else
-            {
-                EcsWorkScheduler.Schedule(PooledEcsWorkItem<object?>.Rent(
-                    "SweepProjectedActors",
-                    null,
-                    static (world, _) => world.SweepProjectedActors()));
-            }
-
-            EcsScheduler?.FlushSubmissions();
         }
+
+        TryDrainExceptions();
+    }
+
+    private void PumpLayerCallbacks(float deltaTime)
+    {
+        if (_fixedUpdateOptions.Enabled)
+        {
+            _fixedUpdateAccumulator += deltaTime;
+            int steps = 0;
+            while (_fixedUpdateAccumulator >= _fixedUpdateOptions.FixedDeltaTime &&
+                   steps < _fixedUpdateOptions.MaxStepsPerPump)
+            {
+                _chain?.PumpFixed(_fixedUpdateOptions.FixedDeltaTime);
+                _fixedUpdateAccumulator -= _fixedUpdateOptions.FixedDeltaTime;
+                steps++;
+            }
+        }
+
+        _chain?.Pump(deltaTime);
     }
     #endregion
 
@@ -775,7 +802,7 @@ public sealed partial class LayerRuntime : IDisposable
     internal TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
     {
         var eventId = EventTypeId<T>.Id;
-        var timerPolicy = _policyTable?.GetTimerPolicy(eventId);
+        var timerPolicy = PolicyTable.GetTimerPolicy(eventId);
 
         return Timer.Schedule(
             new PostEventAction<T>(value, timerPolicy?.ExpiredPostPolicy),
@@ -882,21 +909,36 @@ public sealed partial class LayerRuntime : IDisposable
                 Capture(_postIngress.Clear);
                 Capture(() => ScopeHost?.Dispose());
                 ScopeHost = null;
-                Capture(EcsScheduler.Dispose);
+                if (!_runtimeResourcesAliasedToMainScope)
+                {
+                    Capture(EcsScheduler.Dispose);
+                }
+
                 Capture(Worker.Dispose);
                 Capture(CloseActorInboxes);
                 Capture(() => _chain?.DisposeLayers());
                 _chain = null;
                 Capture(Actors.RuntimeStop);
                 Capture(Actors.Dispose);
-                Capture(EcsWorld.Dispose);
+                if (!_runtimeResourcesAliasedToMainScope)
+                {
+                    Capture(EcsWorld.Dispose);
+                }
+
                 Capture(Services.Dispose);
-                Capture(() => _scheduler?.Dispose());
-                Capture(() => _timer?.Dispose());
-                Capture(() => DelayManager?.Clear());
+                if (!_runtimeResourcesAliasedToMainScope)
+                {
+                    Capture(() => _scheduler?.Dispose());
+                    Capture(() => _timer?.Dispose());
+                    Capture(() => DelayManager?.Clear());
+                    Capture(EventCenter.Reset);
+                    Capture(() => _context?.Dispose());
+                }
+
+                _scheduler = null;
+                _timer = null;
                 DelayManager = null;
-                Capture(EventCenter.Reset);
-                Capture(() => _context?.Dispose());
+                _context = null;
                 Capture(TryDrainExceptions);
             }
             finally
@@ -963,21 +1005,36 @@ public sealed partial class LayerRuntime : IDisposable
             Capture(_postIngress.Clear);
             Capture(() => ScopeHost?.Dispose());
             ScopeHost = null;
-            Capture(EcsScheduler.Dispose);
+            if (!_runtimeResourcesAliasedToMainScope)
+            {
+                Capture(EcsScheduler.Dispose);
+            }
+
             Capture(Worker.Dispose);
             Capture(CloseActorInboxes);
             Capture(() => _chain?.DisposeLayerInstancesOnly());
             _chain = null;
             Capture(Actors.RuntimeStop);
             Capture(Actors.Dispose);
-            Capture(EcsWorld.Dispose);
+            if (!_runtimeResourcesAliasedToMainScope)
+            {
+                Capture(EcsWorld.Dispose);
+            }
+
             Capture(Services.Dispose);
-            Capture(() => _scheduler?.Dispose());
-            Capture(() => _timer?.Dispose());
-            Capture(() => DelayManager?.Clear());
+            if (!_runtimeResourcesAliasedToMainScope)
+            {
+                Capture(() => _scheduler?.Dispose());
+                Capture(() => _timer?.Dispose());
+                Capture(() => DelayManager?.Clear());
+                Capture(EventCenter.Reset);
+                Capture(() => _context?.Dispose());
+            }
+
+            _scheduler = null;
+            _timer = null;
             DelayManager = null;
-            Capture(EventCenter.Reset);
-            Capture(() => _context?.Dispose());
+            _context = null;
             Capture(TryDrainExceptions);
         }
         finally
@@ -1052,7 +1109,8 @@ public sealed partial class LayerRuntime : IDisposable
 
     public string GetPolicyMarkdown()
     {
-        if (_policyTable == null)
+        EventBuildPolicyTable? policyTable = ScopeHost?.MainScope.PolicyTable ?? _policyTable;
+        if (policyTable == null)
         {
             return "Runtime not built.";
         }
@@ -1066,7 +1124,7 @@ public sealed partial class LayerRuntime : IDisposable
             "| RuntimeId | StableId | StableKey | Version | Event Type | Post Mode | Backpressure | MaxPending | MergeFailure | Timer | Buffer |");
         sb.AppendLine("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |");
 
-        foreach (var snapshot in _policyTable.ExportSnapshots())
+        foreach (var snapshot in policyTable.ExportSnapshots())
         {
             var post = snapshot.PostPolicy;
             var timer = snapshot.TimerPolicy;
@@ -1333,15 +1391,13 @@ public sealed partial class LayerRuntime : IDisposable
                     configureTools(_runtime.Tools);
                 }
 
-                if (_runtime._context == null)
-                    _runtime._context = LayerBaseSynchronizationContext.Install();
-
                 _layerChain.Prebuild();
 
                 _runtime._fixedUpdateOptions = _fixedUpdateOptions;
-                _runtime.InitializeScheduler(_postOptions);
-                _runtime.InitializeTimer(_timerOptions);
-                _runtime.InitializeDelay(_delayOptions);
+                _runtime._mainScopeRuntimeOptions = _runtime.CreateMainScopeRuntimeOptions(
+                    _postOptions,
+                    _timerOptions,
+                    _delayOptions);
                 _runtime.BuildServiceProvider();
                 _runtime.Actors.PrepareRuntimeBuild();
                 _runtime.InitializeScopeHost();
@@ -1349,10 +1405,10 @@ public sealed partial class LayerRuntime : IDisposable
                 _runtime.EnsurePostSchedulersKnowAllocatedEventTypes();
                 _layerChain.Build(1024, true);
                 _runtime.ScopeHost?.Start();
+                _runtime._context = _runtime.ScopeHost?.MainScope.ContextForTest;
                 _runtime.Actors.CompleteRuntimeBuild();
                 _runtime.BuildFullSnapCache();
                 _runtime.PolicyTable.Freeze();
-                _runtime.EcsScheduler.Start();
                 _runtime.Worker.Start();
 
                 if (_debugMode)

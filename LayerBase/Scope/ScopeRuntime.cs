@@ -105,9 +105,9 @@ public sealed class ScopeRuntime : IDisposable
         _ownsActorWorld = sharedActorWorld == null;
         Actors = new ScopeActorGateway(owningRuntime, _actorWorld, descriptor.ScopeId);
         EcsWorld = World.Create();
-        EcsWorld.BindScopeActors(_actorWorld, Actors);
         EcsQueryRegistry = new EcsQueryRegistry(EcsWorld);
         OwningRuntime = owningRuntime;
+        EcsWorld.BindScopeActors(_actorWorld, Actors);
         InitializeEcsScheduler(options);
 
         PostInboxKind = ScopeInboxKind.Locked;
@@ -141,7 +141,15 @@ public sealed class ScopeRuntime : IDisposable
             _ => null
         };
 
-        EcsWorld.BindRuntimeOwner(OwningRuntime);
+        if (Descriptor.ScopeId == 0)
+        {
+            EcsWorld.BindRuntime(OwningRuntime);
+        }
+        else
+        {
+            EcsWorld.BindRuntimeOwner(OwningRuntime);
+        }
+
         if (EcsScheduler is IEcsWorkScheduler workScheduler)
         {
             EcsWorld.BindEcsScheduler(workScheduler);
@@ -164,6 +172,8 @@ public sealed class ScopeRuntime : IDisposable
     internal ScopeAwaitRegistry AwaitRegistry { get; } = new();
 
     internal ScopeCompletionPort CompletionPort => _completionPort;
+
+    internal EventBuildPolicyTable PolicyTable => _policyTable;
 
     public EventCenter EventCenter { get; }
 
@@ -205,6 +215,8 @@ public sealed class ScopeRuntime : IDisposable
     internal LayerBaseSynchronizationContext? ContextForTest => _context;
 
     internal int ExceptionCountForTest => Volatile.Read(ref _exceptionCountForTest);
+
+    internal PostPumpStats LastPostPumpStats { get; private set; }
 
     internal void RequireAccess(string apiName)
     {
@@ -413,6 +425,23 @@ public sealed class ScopeRuntime : IDisposable
         }
 
         ExecuteInScope(static (r, dt) => r.PumpInternal(dt), deltaTime);
+    }
+
+    internal void ExecuteInOwnerScope(Action action)
+    {
+        if (action == null)
+        {
+            throw new ArgumentNullException(nameof(action));
+        }
+
+        ThrowIfDisposed();
+        if (Descriptor.Threading != ScopeThreadingMode.Inline)
+        {
+            throw new InvalidOperationException(
+                $"Scope '{Descriptor.Name}' external owner execution is only supported for inline scopes.");
+        }
+
+        ExecuteInScope(action);
     }
 
     public void Stop()
@@ -798,6 +827,59 @@ public sealed class ScopeRuntime : IDisposable
         return _context ??= LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
     }
 
+    internal void RebuildEventPolicies()
+    {
+        var plans = new List<PostTypePlan>();
+        var metaData = LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData().ToList();
+        for (int i = 0; i < metaData.Count; i++)
+        {
+            var (type, meta) = metaData[i];
+            _ = type;
+            int eventId = meta.EventId;
+            _policyTable.SetMetaData(eventId, meta);
+
+            EventPostPolicy? postPolicy = meta.GetPostPolicy();
+            if (postPolicy != null)
+            {
+                _policyTable.SetPostPolicy(eventId, postPolicy.Value);
+            }
+
+            EventTimerPolicy? timerPolicy = meta.GetTimerPolicy();
+            if (timerPolicy != null)
+            {
+                _policyTable.SetTimerPolicy(eventId, timerPolicy.Value);
+            }
+
+            EventBufferPolicy? bufferPolicy = meta.GetBufferPolicy();
+            if (bufferPolicy != null)
+            {
+                _policyTable.SetBufferPolicy(eventId, bufferPolicy.Value);
+            }
+
+            ActorMailOptions? actorMailOptions = meta.GetActorMailOptions();
+            if (actorMailOptions != null)
+            {
+                _policyTable.SetActorMailOptions(eventId, actorMailOptions.Value);
+            }
+
+            EventPostPolicy effectivePolicy =
+                postPolicy ?? new EventPostPolicy(
+                    PostDeliveryMode.Normal,
+                    PostScheduler.Options.DefaultBackpressure,
+                    0);
+            plans.Add(new PostTypePlan(
+                eventId,
+                effectivePolicy.Mode,
+                effectivePolicy.Backpressure,
+                effectivePolicy.MaxPending,
+                PostScheduler.Options.DefaultBackpressure,
+                effectivePolicy.MergeFailure));
+        }
+
+        PostScheduler.UpdatePolicyTable(_policyTable);
+        PostScheduler.BuildPlans(plans.ToArray());
+    }
+
     private void StartServices()
     {
         for (int i = 0; i < Services.Length; i++)
@@ -878,33 +960,41 @@ public sealed class ScopeRuntime : IDisposable
 
     private void PumpInternal(float deltaTime)
     {
-        _context?.Update();
-        Timer.Tick(deltaTime, _timerSink);
-        DelayManager.Tick(deltaTime);
-        DrainPostInbox();
-        DrainCallInbox();
-        PostScheduler.Pump();
-
-        for (int i = 0; i < Services.Length; i++)
+        EcsScheduler?.NotifyFrameStart();
+        try
         {
-            if (Services[i] is LayerBase.DI.Options.IUpdate update)
-            {
-                update.Update();
-            }
-        }
+            _context?.Update(PostScheduler.Options.MaxCompletionsPerPump);
+            Timer.Tick(deltaTime, _timerSink);
+            DelayManager.Tick(deltaTime);
+            DrainPostInbox();
+            DrainCallInbox();
+            LastPostPumpStats = PostScheduler.Pump();
 
-        for (int i = 0; i < Contexts.Length; i++)
+            for (int i = 0; i < Services.Length; i++)
+            {
+                if (Services[i] is LayerBase.DI.Options.IUpdate update)
+                {
+                    update.Update();
+                }
+            }
+
+            for (int i = 0; i < Contexts.Length; i++)
+            {
+                if (Contexts[i] is LayerBase.DI.Options.IUpdate update)
+                {
+                    update.Update();
+                }
+            }
+
+            PumpActors(deltaTime);
+            ScheduleProjectedActorSweep();
+            EcsScheduler?.DrainResults(EcsOptions.MaxResultsDrainPerPump);
+            DrainContinuations();
+        }
+        finally
         {
-            if (Contexts[i] is LayerBase.DI.Options.IUpdate update)
-            {
-                update.Update();
-            }
+            EcsScheduler?.NotifyFrameEnd();
         }
-
-        PumpActors(deltaTime);
-        ScheduleProjectedActorSweep();
-        EcsScheduler?.DrainResults(EcsOptions.MaxResultsDrainPerPump);
-        DrainContinuations();
     }
 
     private void ScheduleProjectedActorSweep()
