@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tools import apply_main_scope_refactor as refactor
+import apply_main_scope_refactor as refactor
 
 
 _original_replace_once = refactor.replace_once
