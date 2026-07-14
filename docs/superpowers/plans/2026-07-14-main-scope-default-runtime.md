@@ -1,105 +1,118 @@
-# MainScope Default Runtime Implementation Plan
+# MainScope Scope-first Runtime Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `MainScope` the mandatory default execution domain of every successfully built `LayerRuntime`.
+**Goal:** Make MainScope the mandatory default execution domain and remove duplicate business-resource ownership from LayerRuntime.
 
-**Architecture:** Both legacy and Module build paths always create a `ScopeRuntimeHost`. Unannotated Services are grouped into the built-in MainScope, while explicit Scope annotations create additional execution domains. Layer event and lifecycle entry points resolve MainScope instead of using the parallel Runtime business domain.
+**Architecture:** LayerRuntime remains the application aggregate root and Pump root, while every business resource belongs to a ScopeRuntime. MainScope is always created at Scope ID 0 and receives unannotated Services, default Layer execution, events, timers, delay, ECS and continuations. Runtime-level APIs that must remain temporarily are stateless forwards to MainScope rather than owned resources.
 
-**Tech Stack:** C# 12, .NET 8/9, NUnit, Roslyn incremental generators.
+**Tech Stack:** C# 12, .NET 8/9, NUnit, Roslyn incremental generators, GitHub Actions.
 
 ## Global Constraints
 
 - MainScope always uses `ScopeId == 0`.
 - Custom Scope IDs start at 1.
+- LayerRuntime must not allocate, Pump or Dispose a second EventCenter, PostScheduler, Timer, DelayManager, ECS World, ECS Scheduler or business SynchronizationContext.
+- Scope-owned Services and Contexts have exactly one lifecycle owner.
+- ActorWorld remains Runtime-owned and is Pumped exactly once.
+- Existing explicit custom Scope routing remains valid.
 - No new runtime reflection on generated Module hot paths.
-- Existing explicit custom Scope behavior must remain compatible.
-- Production changes follow failing tests first.
 
 ---
 
-### Task 1: Add MainScope construction regression tests
+### Task 1: Establish failing ownership tests
 
 **Files:**
-- Modify: `LayerBase.Test/ScopeRuntimeFoundationTests.cs`
+- Create: `LayerBase.Test/MainScopeOwnershipTests.cs`
 
-**Interfaces:**
-- Consumes: `LayerHub.CreateLayers()`, `LayerRuntime.ScopeHost`, `ScopeRuntimeHost.Scopes`.
-- Produces: regression contracts for mandatory MainScope creation and default Service placement.
+- [ ] Verify an empty Layer Runtime still creates exactly one MainScope.
+- [ ] Verify an unannotated Service receives a `ScopeObjectBinding` whose Scope is MainScope.
+- [ ] Verify Runtime event, timer, delay and ECS entry points reference MainScope instances.
+- [ ] Verify a Layer Pump executes with `ScopeExecution.Current.ScopeId == 0`.
+- [ ] Verify MainScope Service Initialize and Update execute once.
+- [ ] Verify Module metadata reserves MainScope ID 0 without a contributed definition.
 
-- [ ] Add a test that builds a Runtime with an empty Layer and asserts `ScopeHost` exists with exactly one MainScope at ID 0.
-- [ ] Add a test that registers an unannotated Service and asserts the same instance is present in MainScope.
-- [ ] Add a test that combines an unannotated Service and an explicitly scoped Service and asserts correct partitioning.
-- [ ] Confirm these tests fail against `b02d461` because `InitializeScopeHost()` returns when no explicitly scoped Service exists.
-
-### Task 2: Make non-Module ScopeHost and MainScope mandatory
+### Task 2: Make ScopeHost and MainScope mandatory
 
 **Files:**
 - Modify: `LayerBase/Application/LayerRuntime.cs`
-- Modify: `LayerBase/Layer/Layer.cs`
+- Modify: `LayerBase/Scope/ScopeRuntimePlanner.cs` only if existing MainScope plan behavior is insufficient.
 
-**Interfaces:**
-- Consumes: `ScopeRuntimePlanner.Build(IReadOnlyList<IService>)`.
-- Produces: non-null `ScopeHost`; all resolved Services receive a `ScopeObjectBinding`.
+- [ ] Collect all unique resolved Services in `InitializeScopeHost()`.
+- [ ] Remove the early return for an empty explicitly-scoped Service list.
+- [ ] Pass Post, Timer, Delay and ECS configuration through `ScopeRuntimeOptions` when creating the Host.
+- [ ] Remove the Module-path `ScopeDefinitions.Count == 0` fallback.
+- [ ] Add a strict `MainScope` accessor resolving Scope ID 0.
 
-- [ ] Change `InitializeScopeHost()` to collect every unique resolved Service.
-- [ ] Remove the empty scoped-Service early return.
-- [ ] Always invoke generated factory or `ScopeRuntimeHost.Create(ScopeRuntimePlanner.Build(...))`.
-- [ ] Change Layer lifecycle collection to skip every Service with `ScopeObjectBinding`, preventing duplicate MainScope lifecycle execution.
-- [ ] Run the new ScopeRuntimeFoundation tests and existing Scope lifecycle tests.
-
-### Task 3: Add Module MainScope regression tests
+### Task 3: Transfer event, time and continuation ownership
 
 **Files:**
-- Modify: `LayerBase.Test/ModuleRuntimeBuilderTests.cs`
-- Modify: `LayerBase.Test/ScopeRuntimeFoundationTests.cs`
+- Modify: `LayerBase/Application/LayerRuntime.cs`
+- Modify: `LayerBase/Scope/ScopeRuntime.cs`
+- Modify: `LayerBase/Event/Delay/DelayPublisherManager.cs`
 
-**Interfaces:**
-- Consumes: `ModuleRuntimeBuilder.Build`, `ScopeCompositionBuilder.Build`, `LayerRuntime.TryBuildFromInstalledModules`.
-- Produces: built-in MainScope ID and Module build behavior without custom Scope definitions.
+- [ ] Remove Runtime EventCenter, PostScheduler, TimeScheduler, DelayManager, PostIngress and business SynchronizationContext fields and construction.
+- [ ] Move full EventBuildPolicyTable construction and Post plan prewarming into ScopeRuntime.
+- [ ] Move cross-thread PostIngressQueue to ScopeRuntime.
+- [ ] Route default Runtime/Layer Send, Post, Schedule and Delay operations to MainScope.
+- [ ] Ensure ScopeRuntime owns continuation draining and close semantics.
+- [ ] Keep any temporary Runtime compatibility member as a getter or forwarding method only.
 
-- [ ] Add a builder test asserting MainScope maps to ID 0 without a contributed definition.
-- [ ] Add a composition test asserting a MainScope-only plan contains one Scope.
-- [ ] Add a Runtime test installing a Module with MainScope Services but no custom Scope definition.
-- [ ] Confirm failures against current validation and `TryBuildFromInstalledModules()` early return.
+### Task 4: Transfer ECS ownership
 
-### Task 4: Reserve MainScope in Module metadata
+**Files:**
+- Modify: `LayerBase/Application/LayerRuntime.ECS.cs`
+- Modify: `LayerBase/Application/LayerRuntime.cs`
+- Modify: `LayerBase/Scope/ScopeRuntime.cs`
+
+- [ ] Remove Runtime ECS World/Scheduler initialization and disposal.
+- [ ] Store pre-Build ECS configuration in LayerRuntime and supply it to ScopeRuntimeOptions.
+- [ ] Make Runtime ECS accessors resolve MainScope ECS resources.
+- [ ] Remove Runtime ECS Start, frame notifications, flush and sweep from Runtime Pump.
+- [ ] Preserve test fence helpers by forwarding to MainScope scheduler.
+
+### Task 5: Run Layer and Service lifecycle inside MainScope
+
+**Files:**
+- Modify: `LayerBase/Application/LayerRuntime.cs`
+- Modify: `LayerBase/Scope/ScopeRuntime.cs`
+- Modify: `LayerBase/Layer/Layer.cs`
+- Modify: `LayerBase/DI/ServiceProvider.cs`
+- Modify: `LayerBase/DI/WorldServiceRoot.cs`
+
+- [ ] Let MainScope invoke LayerChain Update and FixedUpdate from inside Scope execution.
+- [ ] Extend Scope Service/Context lifecycle to Initializable, PostBuild, RuntimeStart, Update, FixedUpdate, RuntimeStop and Dispose.
+- [ ] Skip Layer lifecycle collection for every ScopeObjectBinder-bound Service.
+- [ ] Prevent legacy DI containers from disposing Scope-owned objects.
+- [ ] Keep Layer logical membership, handles and diagnostics intact.
+
+### Task 6: Make Module composition include MainScope objects
 
 **Files:**
 - Modify: `LayerBase/Modules/ModuleRuntimeBuilder.cs`
-- Modify: `LayerBase/Application/LayerRuntime.cs`
+- Modify: `LayerBase/Scope/ScopeCompositionBuilder.cs`
 
-**Interfaces:**
-- Produces: `catalog.ScopeIds[typeof(MainScope).TypeHandle] == 0`.
+- [ ] Seed `ScopeIds` with `typeof(MainScope).TypeHandle -> 0`.
+- [ ] Allow MainScope-targeting Service contributions without an explicit Scope definition.
+- [ ] Keep custom Scope IDs stable from 1.
+- [ ] Materialize MainScope Services, Contexts and ResourcePlan in `Scopes[0]`.
+- [ ] Preserve route validation and custom Scope composition.
 
-- [ ] Seed Scope ID allocation with built-in MainScope ID 0.
-- [ ] Treat MainScope as valid during Service validation without requiring a Module definition.
-- [ ] Keep custom Scope allocation stable from ID 1.
-- [ ] Remove the `ScopeDefinitions.Count == 0` fallback in `TryBuildFromInstalledModules()`.
-- [ ] Run ModuleRuntimeBuilder and Scope composition tests.
-
-### Task 5: Route Layer default events through MainScope
+### Task 7: Simplify Runtime Pump and disposal
 
 **Files:**
 - Modify: `LayerBase/Application/LayerRuntime.cs`
-- Modify: `LayerBase/Layer/Layer.cs`
-- Modify: `LayerBase.Test/ScopeRuntimeFoundationTests.cs`
 
-**Interfaces:**
-- Produces: `LayerRuntime.MainScope`; Layer Send/Post/Subscribe defaults use MainScope event resources.
+- [ ] Runtime Pump drains Worker events to MainScope, calls ScopeHost.Pump, drains Actor commands, Pumps ActorWorld once and drains exceptions.
+- [ ] Remove Runtime Timer, Delay, Scheduler, ECS and SynchronizationContext Pump paths.
+- [ ] Remove disposal of resources now owned by ScopeHost.
+- [ ] Verify Build abort disposes ScopeHost and leaves no duplicate-resource cleanup path.
 
-- [ ] Add a `MainScope` accessor that resolves Scope ID 0 and throws if the Runtime is not built.
-- [ ] Add failing tests proving a Layer subscription receives a Layer Send through MainScope and not Runtime EventCenter.
-- [ ] Route Layer subscription center, Send, Post and Delay Publisher selection to MainScope.
-- [ ] Keep Scope-bound Service/Context selection unchanged.
-- [ ] Run event, delay, lifecycle and full test suites.
+### Task 8: Verify the branch
 
-### Task 6: Verify and publish
-
-**Files:**
-- Review all changed files.
-
-- [ ] Build Release on .NET 8 and .NET 9.
-- [ ] Run the full NUnit suite.
-- [ ] Inspect the branch diff for unrelated changes.
-- [ ] Open a pull request against `faster` with the matching analysis and known compatibility boundary.
+- [ ] Apply exact source patch in a clean checkout.
+- [ ] Build Release with .NET 9.
+- [ ] Run the complete NUnit suite.
+- [ ] Run repository CI with .NET 8 and .NET 9 through the draft PR.
+- [ ] Inspect changed files for unrelated edits and temporary automation files.
+- [ ] Keep the PR in draft until all checks pass.
