@@ -1,60 +1,116 @@
-# MainScope 默认执行域设计
+# MainScope 默认执行域与 Scope-first 资源所有权设计
 
 ## 目标
 
-每个成功构建的 `LayerRuntime` 都必须拥有一个 `ScopeRuntimeHost`，并且该 Host 的 `ScopeId == 0` 永远是 `MainScope`。未声明 `[Scope<TScope>]` 的业务 Service 默认归属 `MainScope`；自定义 Scope 只用于把对象从默认执行域迁出。
+每个成功构建的 `LayerRuntime` 都必须拥有一个 `ScopeRuntimeHost`，并且 `ScopeId == 0` 永远对应 `MainScope`。未声明 `[Scope<TScope>]` 的业务 Service 默认归属 `MainScope`；自定义 Scope 只用于把对象从默认执行域迁出。
 
-## 本次改造边界
+`LayerRuntime` 不再拥有独立的业务执行资源。`EventCenter`、`PostScheduler`、`TimeScheduler`、`DelayManager`、ECS World、ECS Scheduler 和业务同步上下文全部属于 `ScopeRuntime`，其中默认业务入口落到 `MainScope`。
 
-本次改造建立 MainScope 的必建语义和默认服务归属，但不立即删除 `LayerRuntime` 现有的 `EventCenter`、`PostScheduler`、`Timer`、ECS World 等兼容资源。旧资源的移除需要后续独立迁移，因为当前 Layer、Actor、旧事件 API 和构建顺序仍直接依赖这些资源。
+## 最终职责边界
+
+```text
+LayerRuntime
+├─ Layer 层级与 RouteIndex
+├─ ScopeRuntimeHost
+├─ ActorWorld
+├─ WorkerRuntime
+├─ LayerExceptionHub
+├─ FullSnap / Tooling / Diagnostics
+└─ Runtime 生命周期与主线程 Pump 根节点
+
+ScopeRuntime
+├─ EventCenter
+├─ PostScheduler / PostIngress
+├─ TimeScheduler
+├─ DelayManager
+├─ EcsWorld / EcsScheduler / EcsQueryRegistry
+├─ SynchronizationContext / Continuation
+├─ ScopeServiceProvider
+├─ IService / ILayerContext 生命周期
+└─ Scope 本地 Post / Call / Resource
+```
 
 ## 核心不变量
 
 1. `LayerRuntime.ScopeHost` 在 Build 成功后不为 null。
 2. `ScopeRuntimeHost.Scopes` 至少包含一个 Scope。
-3. `Scopes[0].ScopeId == 0` 且 `Scopes[0].Descriptor.Name == "MainScope"`。
-4. 没有 `[Scope<TScope>]` 的 Service 被放入 MainScope。
-5. 显式 `[Scope<TScope>]` 的 Service 继续进入对应自定义 Scope。
-6. Module 模式即使没有自定义 Scope Definition，也必须构建 MainScope。
-7. MainScope 中的 Service 生命周期和 Update 只由 ScopeRuntime 推进一次，Layer 不再重复推进已绑定到任意 Scope 的 Service。
+3. `MainScope.ScopeId == 0`，自定义 Scope ID 从 1 开始。
+4. 没有 `[Scope<TScope>]` 的 Service 进入 MainScope。
+5. 显式 `[Scope<TScope>]` 的 Service 进入对应自定义 Scope。
+6. Module 模式不要求显式贡献 MainScope Definition。
+7. LayerRuntime 不创建、不 Pump、不释放第二套事件、时间、ECS 或同步上下文资源。
+8. 所有业务 Service/Context 生命周期只由 OwnerScope 推进一次。
+9. Layer 的每帧与固定帧回调在 MainScope 的 `ScopeExecution` 和同步上下文中运行。
+10. Runtime 保留的旧入口若暂时存在，只能是 MainScope 的无状态转发属性或方法，不能保存资源字段。
 
-## 非 Module 构建路径
+## 构建路径
 
-`LayerRuntime.InitializeScopeHost()` 收集所有已解析 Service，而不是只收集带 Scope 标记的 Service。`ScopeRuntimePlanner.Build()` 已经具备默认分组逻辑：无 Scope 标记进入 MainScope，有 Scope 标记进入自定义 Scope，并且即使 Service 列表为空也返回 MainScope Plan。
+### 非 Module 模式
 
-生成式 Host Factory 与反射 Planner 接收相同的完整 Service 列表，因此两条路径保持一致。
+`LayerRuntime.InitializeScopeHost()` 收集所有已解析 Service。`ScopeRuntimePlanner.Build()` 负责分组：
 
-## Module 构建路径
+- 未声明 Scope：MainScope。
+- 声明 `[Scope<TScope>]`：对应自定义 Scope。
+- 没有 Service：仍返回空 MainScope Plan。
 
-`MainScope` 是框架内建 Scope，不要求用户 Module 显式贡献 `ScopeDefinitionContribution`。
+`LayersBuilder` 只保存 Post、Timer、Delay 和 ECS 配置，创建 ScopeHost 时把配置封装成 `ScopeRuntimeOptions`。不再提前构建 Runtime 级业务资源。
 
-`ModuleRuntimeBuilder` 的 Scope ID 分配规则调整为：
+### Module 模式
 
-- `MainScope` 固定映射到 0。
-- 用户定义 Scope 从 1 开始按稳定顺序分配。
-- Service 或消息契约目标为 MainScope 时，验证直接通过。
+`ModuleRuntimeBuilder` 内建 `typeof(MainScope) -> 0` 映射。用户定义 Scope 从 1 开始稳定分配。Service、Context 和消息契约可以直接目标 MainScope，而不要求 Module 提供 MainScope 的 `ScopeDefinitionContribution`。
 
-`LayerRuntime.TryBuildFromInstalledModules()` 不再以 `catalog.ScopeDefinitions.Count == 0` 作为放弃 ScopeHost 的条件。只要安装了 Module，就构建 Composition Plan；Plan 本身无条件包含 MainScope。
+`ScopeCompositionBuilder` 必须把归属 MainScope 的 Service、Context 与 ResourcePlan 放入 `Scopes[0]`，而不是创建一个永远为空的占位 Scope。
 
-## 默认事件入口
+## Pump 数据流
 
-为了让 MainScope 成为默认执行域，Layer 的同步 Send、Post、事件订阅和 Delay Publisher 默认选择 MainScope 的资源。已绑定到自定义 Scope 的 Service/Context 继续通过 `ScopeObjectBinding` 选择自身 Scope。
+```text
+Engine
+  -> LayerRuntime.Pump(deltaTime)
+      -> Worker 普通事件转交 MainScope
+      -> ScopeRuntimeHost.Pump(deltaTime)
+          -> MainScope.Pump
+              -> Continuation / Timer / Delay
+              -> Scope Post / Call
+              -> MainScope Service / Context Update
+              -> LayerChain Update / FixedUpdate
+              -> MainScope ECS
+          -> 其他 Inline Scope
+      -> Drain Actor Commands
+      -> ActorWorld.Pump 一次
+      -> Drain ExceptionHub
+```
 
-在兼容期内，`LayerRuntime` 的旧事件资源仍保留给内部旧路径，但普通 Layer 业务入口不再默认使用它。
+`LayerRuntime.Pump` 中不得再出现 Runtime Scheduler、Runtime Timer、Runtime Delay、Runtime ECS 或 Runtime SynchronizationContext 的推进。
 
-## 生命周期与所有权
+## 生命周期与释放
 
-`ScopeRuntime` 已负责 Service 的 Initialize、Update、订阅绑定和停止释放。Layer 的生命周期收集逻辑改为跳过所有已经具有 `ScopeObjectBinding` 的 Service，而不是仅跳过带 `[Scope<TScope>]` 的类型，避免 MainScope Service 被初始化和更新两次。
+ScopeRuntime 负责：
 
-本次不重写 ServiceProvider/WorldServiceRoot 的物理释放所有权；现有显式 Scope Service 已经使用同一兼容结构。完全消除双轨所有权属于后续 Scope-first 重构。
+- `IInitializable`
+- `IPostBuild`
+- `IRuntimeStart`
+- `IUpdate`
+- `IFixedUpdate`
+- `IRuntimeStop`
+- `IDisposable`
+
+Layer 的旧 ServiceProvider 在迁移期间仍可用于构建实例，但发现对象已经绑定 `ScopeObjectBinding` 后，不得再执行生命周期或释放该对象，避免双 Initialize、双 Update 和双 Dispose。
+
+## 事件与异步入口
+
+默认 Layer Send、Post、Schedule、Delay 和订阅都解析 MainScope 资源。Service/Context 通过自身 `ScopeObjectBinding` 解析 OwnerScope。
+
+跨线程普通 Post 入口属于目标 Scope；默认入口由 MainScope 持有 `PostIngressQueue`。业务 continuation 由 Scope 的同步上下文恢复，LayerRuntime 不安装业务同步上下文。
 
 ## 测试要求
 
-新增测试覆盖：
-
-- 没有 Service 时仍创建 MainScope。
-- 只有未标记 Service 时，该 Service 位于 MainScope。
-- 自定义 Scope 与 MainScope 同时存在。
-- Module 没有自定义 Scope Definition 时仍分配 MainScope ID 0 并成功构建计划。
-- MainScope Service 的 Initialize/Update 不被 Layer 重复调用。
-- Layer 默认事件订阅和发送使用 MainScope EventCenter。
+- 空 Runtime 仍创建 MainScope。
+- 未标记 Service 绑定 MainScope。
+- 自定义 Scope 与 MainScope 正确分区。
+- Module 无自定义 Scope Definition 时仍可构建 MainScope。
+- MainScope ID 固定为 0。
+- Runtime 的资源入口与 MainScope 实例引用相同，且不存在对应 Runtime 存储字段。
+- MainScope Service 初始化与 Update 各执行一次。
+- Layer Pump 在 `ScopeExecution.Current.ScopeId == 0` 下执行。
+- Runtime Dispose 不会重复释放 Scope-owned Service/ECS/Event 资源。
+- 全量测试在 .NET 8 与 .NET 9 通过。
