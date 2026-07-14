@@ -1,0 +1,86 @@
+name: MainScope Refactor
+
+on:
+  push:
+    branches:
+      - feat/main-scope-default-runtime
+    paths:
+      - tools/apply_main_scope_refactor.py
+      - tools/run_main_scope_refactor.py
+      - .github/workflows/main-scope-refactor.yml
+  pull_request:
+    branches:
+      - faster
+    paths:
+      - tools/apply_main_scope_refactor.py
+      - tools/run_main_scope_refactor.py
+      - .github/workflows/main-scope-refactor.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/main-scope-default-runtime
+          fetch-depth: 0
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Apply Scope-first refactor
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 tools/run_main_scope_refactor.py 2>&1 | tee main-scope-refactor.log
+
+      - name: Restore dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet restore 2>&1 | tee -a main-scope-refactor.log
+
+      - name: Build release
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet build --no-restore --configuration Release 2>&1 | tee -a main-scope-refactor.log
+
+      - name: Run tests
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet test --no-build --configuration Release --verbosity normal 2>&1 | tee -a main-scope-refactor.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-scope-refactor-log-${{ github.run_id }}
+          path: main-scope-refactor.log
+          if-no-files-found: error
+
+      - name: Remove one-shot automation
+        if: github.event_name == 'push' && success()
+        run: |
+          rm tools/apply_main_scope_refactor.py
+          rm tools/run_main_scope_refactor.py
+          rm .github/workflows/main-scope-refactor.yml
+          rm main-scope-refactor.log
+
+      - name: Commit verified refactor
+        if: github.event_name == 'push' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: make MainScope own runtime business resources"
+          git push origin HEAD:feat/main-scope-default-runtime
