@@ -119,6 +119,31 @@ internal sealed class LayerChain
         }
     }
 
+    internal void DisposeLayerInstancesOnly()
+    {
+        List<Exception>? exceptions = null;
+
+        foreach (var node in _responsibilityChain)
+        {
+            if (node is Layer layer)
+            {
+                try
+                {
+                    layer.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    (exceptions ??= new List<Exception>()).Add(ex);
+                }
+            }
+        }
+
+        if (exceptions is { Count: > 0 })
+        {
+            throw new AggregateException("One or more layers failed during abort cleanup.", exceptions);
+        }
+    }
+
     /// <summary>
     /// 预构建阶段：分配事件总线索引、准备构建和自动绑定。
     /// </summary>

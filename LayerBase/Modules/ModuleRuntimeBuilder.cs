@@ -155,7 +155,9 @@ public static class ModuleRuntimeBuilder
                 h => h.Kind == ScopeMessageKind.Call && h.MessageType.Equals(contract.MessageType));
             if (handler == null)
             {
-                continue;
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.CallNoHandler,
+                    $"Call contract '{GetTypeName(contract.MessageType)}' has no installed handler.");
             }
 
             ScopeHandlerContribution resolvedHandler = handler.Value;
@@ -164,24 +166,32 @@ public static class ModuleRuntimeBuilder
 
             if (!serviceSlots.TryGetValue(serviceType, out int serviceSlot))
             {
-                continue;
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidHandlerContribution,
+                    $"Handler service '{GetTypeName(serviceType)}' is missing a service slot.");
             }
 
             int localHandlerId = resolvedHandler.ModuleLocalHandlerId;
             if (!TryGetHandlerModuleSlot(handlerModuleIndex, serviceType, ScopeMessageKind.Call, localHandlerId, out int moduleSlotVal))
             {
-                continue;
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidHandlerContribution,
+                    $"Call handler slot {localHandlerId} for service '{GetTypeName(serviceType)}' is missing a module slot.");
             }
 
             if (!scopeIds.TryGetValue(contract.TargetScopeType, out int scopeId))
             {
-                continue;
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.MissingScopeDefinition,
+                    $"Call contract '{GetTypeName(messageType)}' targets Scope '{GetTypeName(contract.TargetScopeType)}', but the runtime catalog has no scope id.");
             }
 
             if (!messageRouteIds.TryGetValue(messageType, out int routeId) ||
                 (uint)routeId >= (uint)routes.Length)
             {
-                continue;
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidMessageRoute,
+                    $"Call message '{GetTypeName(messageType)}' is missing a valid message route id.");
             }
 
             routes[routeId] = new ScopeCallRoute(
@@ -231,7 +241,9 @@ public static class ModuleRuntimeBuilder
             ScopeMessageContractContribution contract = eventGroups[i];
             if (!scopeIds.TryGetValue(contract.TargetScopeType, out int scopeId))
             {
-                continue;
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.MissingScopeDefinition,
+                    $"Event contract '{GetTypeName(contract.MessageType)}' targets Scope '{GetTypeName(contract.TargetScopeType)}', but the runtime catalog has no scope id.");
             }
 
             int handlerCount = 0;
@@ -240,11 +252,15 @@ public static class ModuleRuntimeBuilder
                 handlerCount = count;
             }
 
-            if (messageRouteIds.TryGetValue(contract.MessageType, out int routeId) &&
-                (uint)routeId < (uint)eventRoutes.Length)
+            if (!messageRouteIds.TryGetValue(contract.MessageType, out int routeId) ||
+                (uint)routeId >= (uint)eventRoutes.Length)
             {
-                eventRoutes[routeId] = new ScopeEventRoute(scopeId, currentStart, handlerCount);
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidMessageRoute,
+                    $"Event message '{GetTypeName(contract.MessageType)}' is missing a valid message route id.");
             }
+
+            eventRoutes[routeId] = new ScopeEventRoute(scopeId, currentStart, handlerCount);
 
             currentStart += handlerCount;
         }
@@ -268,13 +284,17 @@ public static class ModuleRuntimeBuilder
             RuntimeTypeHandle serviceType = handler.ServiceType;
             if (!serviceSlots.TryGetValue(serviceType, out int serviceSlot))
             {
-                continue;
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidHandlerContribution,
+                    $"Event handler service '{GetTypeName(serviceType)}' is missing a service slot.");
             }
 
             int localHandlerId = handler.ModuleLocalHandlerId;
             if (!TryGetHandlerModuleSlot(handlerModuleIndex, serviceType, ScopeMessageKind.Event, localHandlerId, out int moduleSlotVal))
             {
-                continue;
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidHandlerContribution,
+                    $"Event handler slot {localHandlerId} for service '{GetTypeName(serviceType)}' is missing a module slot.");
             }
 
             routes.Add(new ScopeEventHandlerRoute(
@@ -659,4 +679,6 @@ public static class ModuleBuildErrorCodes
     internal const string InvalidServiceContribution = "LBM102";
     internal const string InvalidContextContribution = "LBM103";
     internal const string InvalidHandlerContribution = "LBM104";
+    internal const string InvalidMessageRoute = "LBM105";
+    internal const string MissingModuleDispatcher = "LBM106";
 }

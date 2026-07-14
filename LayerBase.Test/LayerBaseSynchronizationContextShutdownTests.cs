@@ -327,6 +327,40 @@ public class LayerBaseSynchronizationContextShutdownTests
     }
 
     [Test]
+    public void Complete_before_OnCompleted_then_finalize_must_not_drop_continuation()
+    {
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        var context = LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);
+        LBTaskCompletionSource source;
+        LBTask.Awaiter awaiter;
+        int continuationThreadId = -1;
+
+        using (context.EnterScope())
+        {
+            source = new LBTaskCompletionSource();
+            awaiter = source.Task.GetAwaiter();
+            Assert.That(awaiter.IsCompleted, Is.False);
+        }
+
+        source.SetResult();
+        context.BeginClose(new ObjectDisposedException("test"));
+        context.DrainClosingOperations();
+
+        Assert.Throws<InvalidOperationException>(() => context.FinalizeClose());
+
+        awaiter.OnCompleted(() =>
+        {
+            continuationThreadId = Environment.CurrentManagedThreadId;
+        });
+
+        context.DrainClosingOperations();
+        context.FinalizeClose();
+
+        Assert.That(continuationThreadId, Is.EqualTo(ownerThreadId));
+        Assert.That(context.PendingSourceCount, Is.EqualTo(0));
+    }
+
+    [Test]
     public void Context_must_not_finalize_while_accepted_source_is_pending()
     {
         var context = LayerBaseSynchronizationContext.Install(allowThreadPoolFallbackOnDispose: false);

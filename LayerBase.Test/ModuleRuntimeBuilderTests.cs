@@ -8,6 +8,18 @@ namespace LayerBase.Test;
 [TestFixture]
 public sealed class ModuleRuntimeBuilderTests
 {
+    [SetUp]
+    public void SetUp()
+    {
+        LayerHub.Reset();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        LayerHub.Reset();
+    }
+
     [Test]
     public void Build_merges_definition_and_implementation_contributions()
     {
@@ -432,6 +444,62 @@ public sealed class ModuleRuntimeBuilderTests
 
         Assert.That(exception.Code, Is.EqualTo(ModuleBuildErrorCodes.CallMultipleHandlers));
         Assert.That(exception.Message, Does.Contain("multiple handlers"));
+    }
+
+    [Test]
+    public void Installed_module_with_handler_but_no_event_dispatcher_must_fail_build()
+    {
+        using var module = new TestModule(
+            layerContracts: [LayerContract<TestLayer>()],
+            scopeDefinitions: [ScopeDefinition<TestScope>()],
+            messageContracts: [EventContract<TestEvent, TestScope>()],
+            services:
+            [
+                Service<TestService>(
+                    ownerScope: typeof(TestScope),
+                    ownerLayers: [typeof(TestLayer)])
+            ],
+            handlers:
+            [
+                Handler<TestEvent, TestService, TestScope>(ScopeMessageKind.Event)
+            ]);
+
+        ModuleBuildException exception = Assert.Throws<ModuleBuildException>(() =>
+            LayerHub.CreateLayers()
+                    .Push(new TestLayer())
+                    .Install(module)
+                    .Build())!;
+
+        Assert.That(exception.Code, Is.EqualTo(ModuleBuildErrorCodes.MissingModuleDispatcher));
+        Assert.That(exception.Message, Does.Contain("event handler"));
+    }
+
+    [Test]
+    public void Installed_module_with_call_handler_but_no_call_dispatcher_must_fail_build()
+    {
+        using var module = new TestModule(
+            layerContracts: [LayerContract<TestLayer>()],
+            scopeDefinitions: [ScopeDefinition<TestScope>()],
+            messageContracts: [CallContract<TestCall, TestScope, TestResult>()],
+            services:
+            [
+                Service<TestService>(
+                    ownerScope: typeof(TestScope),
+                    ownerLayers: [typeof(TestLayer)])
+            ],
+            handlers:
+            [
+                Handler<TestCall, TestService, TestScope>(ScopeMessageKind.Call)
+            ]);
+
+        ModuleBuildException exception = Assert.Throws<ModuleBuildException>(() =>
+            LayerHub.CreateLayers()
+                    .Push(new TestLayer())
+                    .Install(module)
+                    .Build())!;
+
+        Assert.That(exception.Code, Is.EqualTo(ModuleBuildErrorCodes.MissingModuleDispatcher));
+        Assert.That(exception.Message, Does.Contain("call handler"));
     }
 
     private static LayerContractContribution LayerContract<TLayer>()

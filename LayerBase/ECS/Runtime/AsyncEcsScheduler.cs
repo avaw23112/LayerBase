@@ -38,8 +38,17 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
 
     internal World World => _world;
 
+    internal int CurrentSubmissionCountForTest => _currentSubmissionBatch.Count;
+
     public void Schedule(IEcsWorkItem item)
     {
+        if (!IsOwnerThread)
+        {
+            var exception = new InvalidOperationException("AsyncEcsScheduler can only be scheduled from the runtime owner thread.");
+            item.Cancel(exception);
+            throw exception;
+        }
+
         if (Volatile.Read(ref _stopped) != 0)
         {
             item.Cancel(new OperationCanceledException("ECS scheduler has stopped."));
@@ -56,6 +65,7 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
 
     public void FlushSubmissions()
     {
+        EnsureOwnerThread();
         FlushSubmissionsCore(allowWhenStopped: false);
     }
 
@@ -76,11 +86,13 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
 
     public long FlushSubmissionsForTest()
     {
+        EnsureOwnerThread();
         return FlushSubmissionsCore(allowWhenStopped: false);
     }
 
     public void EnsureCurrentSubmissionCapacityForTest(int entryCapacity)
     {
+        EnsureOwnerThread();
         _currentSubmissionBatch.EnsureCapacity(entryCapacity);
     }
 
@@ -135,11 +147,13 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
 
     public void Start()
     {
+        EnsureOwnerThread();
         _worker.Start();
     }
 
     public void Stop()
     {
+        EnsureOwnerThread();
         if (Interlocked.Exchange(ref _stopped, 1) != 0)
         {
             return;
@@ -190,9 +204,20 @@ internal sealed class AsyncEcsScheduler : IEcsWorkScheduler
 
     public void Dispose()
     {
+        EnsureOwnerThread();
         Stop();
         _resultQueue.Close();
         _resultQueue.Clear();
         _worker.Dispose();
+    }
+
+    private bool IsOwnerThread => _runtime.IsOwnerThreadForActorWorld;
+
+    private void EnsureOwnerThread()
+    {
+        if (!IsOwnerThread)
+        {
+            throw new InvalidOperationException("AsyncEcsScheduler control APIs must be called from the runtime owner thread.");
+        }
     }
 }

@@ -94,7 +94,7 @@ internal sealed class PostIngressQueue
                 return false;
             }
 
-            _queue.Enqueue(new IngressPostItem<T>(value, policy));
+            _queue.Enqueue(IngressPostItem<T>.Rent(value, policy));
             _count++;
             return true;
         }
@@ -143,10 +143,17 @@ internal sealed class PostIngressQueue
                 }
             }
 
-            var result = item.PostTo(scheduler);
-            if (!result.IsSuccess)
+            try
             {
-                failed++;
+                var result = item.PostTo(scheduler);
+                if (!result.IsSuccess)
+                {
+                    failed++;
+                }
+            }
+            finally
+            {
+                item.Release();
             }
 
             drained++;
@@ -164,8 +171,9 @@ internal sealed class PostIngressQueue
         lock (_gate)
         {
             _closed = true;
-            while (_queue.TryDequeue(out _))
+            while (_queue.TryDequeue(out IIngressPostItem? item))
             {
+                item.Release();
             }
 
             _count = 0;
@@ -192,6 +200,8 @@ internal interface IIngressPostItem
     /// PostScheduler.TryPost 的结果。
     /// </returns>
     PostResult PostTo(PostScheduler scheduler);
+
+    void Release();
 }
 
 /// <summary>
@@ -203,16 +213,20 @@ internal interface IIngressPostItem
 internal sealed class IngressPostItem<T> : IIngressPostItem
     where T : struct
 {
+    private const int MaxPoolSize = 1024;
+    private static readonly ConcurrentQueue<IngressPostItem<T>> Pool = new();
+    private static int s_poolCount;
+
     /// <summary>
     /// 事件数据的副本。
     /// </summary>
-    private readonly T _value;
+    private T _value;
 
     /// <summary>
     /// 可选 Post 策略。
     /// null 表示使用事件默认策略。
     /// </summary>
-    private readonly EventPostPolicy? _policy;
+    private EventPostPolicy? _policy;
 
     /// <summary>
     /// 创建跨线程 Post 项。
@@ -225,10 +239,24 @@ internal sealed class IngressPostItem<T> : IIngressPostItem
     /// 可选 Post 策略。
     /// null 表示使用事件默认策略。
     /// </param>
-    public IngressPostItem(T value, EventPostPolicy? policy)
+    private IngressPostItem()
     {
-        _value = value;
-        _policy = policy;
+    }
+
+    public static IngressPostItem<T> Rent(in T value, EventPostPolicy? policy)
+    {
+        if (Pool.TryDequeue(out IngressPostItem<T>? item))
+        {
+            Interlocked.Decrement(ref s_poolCount);
+        }
+        else
+        {
+            item = new IngressPostItem<T>();
+        }
+
+        item._value = value;
+        item._policy = policy;
+        return item;
     }
 
     /// <summary>
@@ -243,5 +271,26 @@ internal sealed class IngressPostItem<T> : IIngressPostItem
     public PostResult PostTo(PostScheduler scheduler)
     {
         return scheduler.TryPost(_value, _policy);
+    }
+
+    public void Release()
+    {
+        _value = default;
+        _policy = null;
+
+        while (true)
+        {
+            int current = Volatile.Read(ref s_poolCount);
+            if (current >= MaxPoolSize)
+            {
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref s_poolCount, current + 1, current) == current)
+            {
+                Pool.Enqueue(this);
+                return;
+            }
+        }
     }
 }

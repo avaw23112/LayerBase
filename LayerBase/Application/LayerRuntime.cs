@@ -75,6 +75,11 @@ public sealed partial class LayerRuntime : IDisposable
     private readonly int _id;
     private readonly int _ownerThreadId;
     private int _drainingExceptions;
+    private int _buildState;
+    private int _disposeStarted;
+    private int _disposeCompleted;
+    private readonly ManualResetEventSlim _disposeFinished = new(false);
+    private Exception? _disposeException;
     private bool _disposed;
     #endregion
 
@@ -84,6 +89,8 @@ public sealed partial class LayerRuntime : IDisposable
 
     #region Properties
     public int Id => _id;
+
+    internal RuntimeBuildState BuildState => (RuntimeBuildState)Volatile.Read(ref _buildState);
 
     internal LayerBase.DI.IServiceProvider ServiceProvider =>
         _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
@@ -322,12 +329,28 @@ public sealed partial class LayerRuntime : IDisposable
     private static ModuleCallDispatchHandler[] CreateModuleCallDispatchers(ModuleRuntimeCatalog catalog)
     {
         var dispatchers = new ModuleCallDispatchHandler[catalog.Modules.Count];
+        var modulesRequiringCallDispatcher = new HashSet<int>(
+            catalog.CallRoutes
+                   .Where(static route => route.IsValid)
+                   .Select(static route => (int)route.ModuleSlot));
+
         for (int i = 0; i < catalog.Modules.Count; i++)
         {
-            dispatchers[i] = catalog.Modules[i] is IModuleScopeDispatchProvider provider &&
-                             provider.ModuleCallDispatcher != null
-                ? provider.ModuleCallDispatcher
-                : MissingModuleCallDispatcher;
+            if (catalog.Modules[i] is IModuleScopeDispatchProvider provider &&
+                provider.ModuleCallDispatcher != null)
+            {
+                dispatchers[i] = provider.ModuleCallDispatcher;
+                continue;
+            }
+
+            if (modulesRequiringCallDispatcher.Contains(i))
+            {
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.MissingModuleDispatcher,
+                    $"Installed module '{catalog.Modules[i].GetType().FullName}' declares a call handler but does not provide a module call dispatcher.");
+            }
+
+            dispatchers[i] = MissingModuleCallDispatcher;
         }
 
         return dispatchers;
@@ -336,12 +359,26 @@ public sealed partial class LayerRuntime : IDisposable
     private static ModuleEventDispatchHandler[] CreateModuleEventDispatchers(ModuleRuntimeCatalog catalog)
     {
         var dispatchers = new ModuleEventDispatchHandler[catalog.Modules.Count];
+        var modulesRequiringEventDispatcher = new HashSet<int>(
+            catalog.EventHandlerRoutes.Select(static route => (int)route.ModuleSlot));
+
         for (int i = 0; i < catalog.Modules.Count; i++)
         {
-            dispatchers[i] = catalog.Modules[i] is IModuleScopeDispatchProvider provider &&
-                             provider.ModuleEventDispatcher != null
-                ? provider.ModuleEventDispatcher
-                : MissingModuleEventDispatcher;
+            if (catalog.Modules[i] is IModuleScopeDispatchProvider provider &&
+                provider.ModuleEventDispatcher != null)
+            {
+                dispatchers[i] = provider.ModuleEventDispatcher;
+                continue;
+            }
+
+            if (modulesRequiringEventDispatcher.Contains(i))
+            {
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.MissingModuleDispatcher,
+                    $"Installed module '{catalog.Modules[i].GetType().FullName}' declares an event handler but does not provide a module event dispatcher.");
+            }
+
+            dispatchers[i] = MissingModuleEventDispatcher;
         }
 
         return dispatchers;
@@ -363,6 +400,8 @@ public sealed partial class LayerRuntime : IDisposable
         int serviceSlot,
         ScopePostMessage message)
     {
+        throw new InvalidOperationException(
+            $"Installed module does not provide a scope event dispatcher for local handler id {localHandlerId}.");
     }
 
     private void ApplyLayerServiceHandles(ModuleRuntimeCatalog catalog)
@@ -379,7 +418,9 @@ public sealed partial class LayerRuntime : IDisposable
             if (!catalog.ScopeIds.TryGetValue(service.OwnerScopeType, out int scopeId) ||
                 !catalog.ServiceSlots.TryGetValue(service.ServiceType, out int serviceSlot))
             {
-                continue;
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidServiceContribution,
+                    $"Service '{Type.GetTypeFromHandle(service.ServiceType)?.FullName ?? "<unknown>"}' is missing scope id or service slot in the runtime catalog.");
             }
 
             LayerServiceHandle handle = new(service.ServiceType, scopeId, serviceSlot);
@@ -388,7 +429,9 @@ public sealed partial class LayerRuntime : IDisposable
                 Type? layerType = Type.GetTypeFromHandle(service.OwnerLayerTypes[j]);
                 if (layerType == null)
                 {
-                    continue;
+                    throw new ModuleBuildException(
+                        ModuleBuildErrorCodes.MissingLayerContract,
+                        $"Service '{Type.GetTypeFromHandle(service.ServiceType)?.FullName ?? "<unknown>"}' references an unknown owner layer type.");
                 }
 
                 if (!handlesByLayerType.TryGetValue(layerType, out List<LayerServiceHandle>? handles))
@@ -810,9 +853,14 @@ public sealed partial class LayerRuntime : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
+        {
+            WaitForDisposeCompletion();
+            return;
+        }
 
         _disposed = true;
+        MarkBuildState(RuntimeBuildState.Disposed);
         List<Exception>? exceptions = null;
 
         void Capture(Action action)
@@ -829,13 +877,96 @@ public sealed partial class LayerRuntime : IDisposable
 
         try
         {
+            try
+            {
+                Capture(_postIngress.Clear);
+                Capture(() => ScopeHost?.Dispose());
+                ScopeHost = null;
+                Capture(EcsScheduler.Dispose);
+                Capture(Worker.Dispose);
+                Capture(CloseActorInboxes);
+                Capture(() => _chain?.DisposeLayers());
+                _chain = null;
+                Capture(Actors.RuntimeStop);
+                Capture(Actors.Dispose);
+                Capture(EcsWorld.Dispose);
+                Capture(Services.Dispose);
+                Capture(() => _scheduler?.Dispose());
+                Capture(() => _timer?.Dispose());
+                Capture(() => DelayManager?.Clear());
+                DelayManager = null;
+                Capture(EventCenter.Reset);
+                Capture(() => _context?.Dispose());
+                Capture(TryDrainExceptions);
+            }
+            finally
+            {
+                LayerHub.ClearRuntimeCaches(_id);
+                LayerHub.Internal_Unregister(this);
+            }
+
+            if (exceptions is { Count: > 0 })
+            {
+                throw new AggregateException("One or more runtime components failed during disposal.", exceptions);
+            }
+        }
+        catch (Exception ex)
+        {
+            _disposeException = ex;
+            throw;
+        }
+        finally
+        {
+            Volatile.Write(ref _disposeCompleted, 1);
+            _disposeFinished.Set();
+        }
+    }
+
+    private void WaitForDisposeCompletion()
+    {
+        if (Volatile.Read(ref _disposeCompleted) == 0)
+        {
+            _disposeFinished.Wait();
+        }
+
+        if (_disposeException != null)
+        {
+            throw _disposeException;
+        }
+    }
+
+    internal void MarkBuildState(RuntimeBuildState state)
+    {
+        Volatile.Write(ref _buildState, (int)state);
+    }
+
+    internal void AbortFrameworkBuild()
+    {
+        if (_disposed) return;
+
+        _disposed = true;
+
+        void Capture(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch
+            {
+                // Preserve the original build exception; abort is best-effort cleanup.
+            }
+        }
+
+        try
+        {
             Capture(_postIngress.Clear);
             Capture(() => ScopeHost?.Dispose());
             ScopeHost = null;
             Capture(EcsScheduler.Dispose);
             Capture(Worker.Dispose);
             Capture(CloseActorInboxes);
-            Capture(() => _chain?.DisposeLayers());
+            Capture(() => _chain?.DisposeLayerInstancesOnly());
             _chain = null;
             Capture(Actors.RuntimeStop);
             Capture(Actors.Dispose);
@@ -853,11 +984,6 @@ public sealed partial class LayerRuntime : IDisposable
         {
             LayerHub.ClearRuntimeCaches(_id);
             LayerHub.Internal_Unregister(this);
-        }
-
-        if (exceptions is { Count: > 0 })
-        {
-            throw new AggregateException("One or more runtime components failed during disposal.", exceptions);
         }
     }
     #endregion
@@ -1110,6 +1236,8 @@ public sealed partial class LayerRuntime : IDisposable
 
         internal LayersBuilder(LayerRuntime runtime) => _runtime = runtime;
 
+        internal LayerRuntime RuntimeForTest => _runtime;
+
         public LayersBuilder Push(Layer layer)
         {
             if (_built) throw new InvalidOperationException("Cannot push layers after Build has been called.");
@@ -1196,45 +1324,56 @@ public sealed partial class LayerRuntime : IDisposable
             if (_built) throw new InvalidOperationException("LayersBuilder.Build can only be called once.");
             if (_layerChain == null) throw new InvalidOperationException("No layers added.");
             _built = true;
+            _runtime.MarkBuildState(RuntimeBuildState.Building);
 
-            foreach (var configureTools in _toolConfigurators)
+            try
             {
-                configureTools(_runtime.Tools);
+                foreach (var configureTools in _toolConfigurators)
+                {
+                    configureTools(_runtime.Tools);
+                }
+
+                if (_runtime._context == null)
+                    _runtime._context = LayerBaseSynchronizationContext.Install();
+
+                _layerChain.Prebuild();
+
+                _runtime._fixedUpdateOptions = _fixedUpdateOptions;
+                _runtime.InitializeScheduler(_postOptions);
+                _runtime.InitializeTimer(_timerOptions);
+                _runtime.InitializeDelay(_delayOptions);
+                _runtime.BuildServiceProvider();
+                _runtime.Actors.PrepareRuntimeBuild();
+                _runtime.InitializeScopeHost();
+                _layerChain.BuildAutoBindings();
+                _runtime.EnsurePostSchedulersKnowAllocatedEventTypes();
+                _layerChain.Build(1024, true);
+                _runtime.ScopeHost?.Start();
+                _runtime.Actors.CompleteRuntimeBuild();
+                _runtime.BuildFullSnapCache();
+                _runtime.PolicyTable.Freeze();
+                _runtime.EcsScheduler.Start();
+                _runtime.Worker.Start();
+
+                if (_debugMode)
+                {
+                    _runtime.ReportInfo(new LayerEventInfo(-1, "System", "Topology", _runtime.GetTopologySummary(),
+                        LayerEventInfoType.Info));
+                    _runtime.ReportInfo(new LayerEventInfo(-1, "System", "TopologySnapshot", _runtime.GetTopologyMarkdown(),
+                        LayerEventInfoType.Info));
+                    _runtime.ReportInfo(new LayerEventInfo(-1, "System", "PolicyDump", _runtime.GetPolicyMarkdown(),
+                        LayerEventInfoType.Info));
+                }
+
+                _runtime.MarkBuildState(RuntimeBuildState.Running);
+                return _runtime;
             }
-
-            if (_runtime._context == null)
-                _runtime._context = LayerBaseSynchronizationContext.Install();
-
-            _layerChain.Prebuild();
-
-            _runtime._fixedUpdateOptions = _fixedUpdateOptions;
-            _runtime.InitializeScheduler(_postOptions);
-            _runtime.InitializeTimer(_timerOptions);
-            _runtime.InitializeDelay(_delayOptions);
-            _runtime.BuildServiceProvider();
-            _runtime.Actors.PrepareRuntimeBuild();
-            _runtime.InitializeScopeHost();
-            _layerChain.BuildAutoBindings();
-            _runtime.EnsurePostSchedulersKnowAllocatedEventTypes();
-            _layerChain.Build(1024, true);
-            _runtime.ScopeHost?.Start();
-            _runtime.Actors.CompleteRuntimeBuild();
-            _runtime.BuildFullSnapCache();
-            _runtime.PolicyTable.Freeze();
-            _runtime.EcsScheduler.Start();
-            _runtime.Worker.Start();
-
-            if (_debugMode)
+            catch
             {
-                _runtime.ReportInfo(new LayerEventInfo(-1, "System", "Topology", _runtime.GetTopologySummary(),
-                    LayerEventInfoType.Info));
-                _runtime.ReportInfo(new LayerEventInfo(-1, "System", "TopologySnapshot", _runtime.GetTopologyMarkdown(),
-                    LayerEventInfoType.Info));
-                _runtime.ReportInfo(new LayerEventInfo(-1, "System", "PolicyDump", _runtime.GetPolicyMarkdown(),
-                    LayerEventInfoType.Info));
+                _runtime.MarkBuildState(RuntimeBuildState.Faulted);
+                _runtime.AbortFrameworkBuild();
+                throw;
             }
-
-            return _runtime;
         }
     }
 
@@ -1259,6 +1398,15 @@ public sealed partial class LayerRuntime : IDisposable
         {
             return new LayerTypeBinding(Layer ?? layer, Count + 1);
         }
+    }
+
+    internal enum RuntimeBuildState
+    {
+        Created = 0,
+        Building = 1,
+        Running = 2,
+        Faulted = 3,
+        Disposed = 4
     }
 
     public readonly struct LayerCallTarget<TLayer> where TLayer : Layer

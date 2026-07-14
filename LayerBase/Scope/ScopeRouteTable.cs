@@ -158,23 +158,42 @@ public sealed class ScopeRouteTable : IDisposable
         return found;
     }
 
+    internal bool IsScopeRefTargetValid<TScope>(int targetScopeId)
+    {
+        if (Volatile.Read(ref _disposed))
+        {
+            return true;
+        }
+
+        return !TryGetScopeIdNoThrow(typeof(TScope), out var expectedScopeId) ||
+               expectedScopeId == targetScopeId;
+    }
+
     public bool TryPost(int targetScopeId, ScopePostMessage message)
     {
-        ThrowIfDisposed();
+        if (Volatile.Read(ref _disposed))
+        {
+            return false;
+        }
+
         return TryGetScope(targetScopeId, out ScopeRuntime scope) &&
                scope.TryPost(message);
     }
 
     public bool TryCall(int targetScopeId, ScopeCallMessage message)
     {
-        ThrowIfDisposed();
+        if (Volatile.Read(ref _disposed))
+        {
+            return false;
+        }
+
         return TryGetScope(targetScopeId, out ScopeRuntime scope) &&
                scope.TryCall(message);
     }
 
     public void Dispose()
     {
-        _disposed = true;
+        Volatile.Write(ref _disposed, true);
     }
 
     private static long PackEntry(int generation, int scopeId)
@@ -189,6 +208,16 @@ public sealed class ScopeRouteTable : IDisposable
     }
 
     private bool TryGetScopeId(Type scopeType, out int scopeId)
+    {
+        if (TryGetScopeIdNoThrow(scopeType, out scopeId))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryGetScopeIdNoThrow(Type scopeType, out int scopeId)
     {
         if (_scopeIdResolver != null && _scopeIdResolver(scopeType, out scopeId))
         {
@@ -243,6 +272,11 @@ public readonly struct ScopeRef<TScope>
 
     public bool TryPost(int eventId, object payload)
     {
+        if (!_routes.IsScopeRefTargetValid<TScope>(TargetScopeId))
+        {
+            return false;
+        }
+
         return _routes.TryPost(TargetScopeId, new ScopePostMessage(eventId, payload));
     }
 
@@ -261,6 +295,18 @@ public readonly struct ScopeRef<TScope>
     {
         ScopeRuntime? originScope = ScopeExecution.Current.Runtime;
         var promise = new ScopePromise<TResult>(originScope);
+        if (!promise.IsAccepted)
+        {
+            return promise;
+        }
+
+        if (!_routes.IsScopeRefTargetValid<TScope>(TargetScopeId))
+        {
+            promise.SetException(new InvalidOperationException(
+                $"ScopeRef target id {TargetScopeId} does not match scope type '{typeof(TScope).FullName}'."));
+            return promise;
+        }
+
         bool accepted = _routes.TryCall(
             TargetScopeId,
             new ScopeCallMessage(callId, payload, promise));
@@ -274,9 +320,9 @@ public readonly struct ScopeRef<TScope>
         return promise;
     }
 
-    public async LBTask<TResult> CallTask<TResult>(int callId, object payload)
+    public LBTask<TResult> CallTask<TResult>(int callId, object payload)
     {
-        return await Call<TResult>(callId, payload);
+        return Call<TResult>(callId, payload).ToLBTask();
     }
 
     public ScopePromise<TResult> Call<TResult, TMessage>(TMessage payload)
@@ -292,8 +338,8 @@ public readonly struct ScopeRef<TScope>
         return Call<TResult>(callId, payload!);
     }
 
-    public async LBTask<TResult> CallTask<TResult, TMessage>(TMessage payload)
+    public LBTask<TResult> CallTask<TResult, TMessage>(TMessage payload)
     {
-        return await Call<TResult, TMessage>(payload);
+        return Call<TResult, TMessage>(payload).ToLBTask();
     }
 }

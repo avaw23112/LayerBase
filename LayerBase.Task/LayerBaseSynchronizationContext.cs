@@ -44,6 +44,14 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         }
     }
 
+    internal bool IsDisposed
+    {
+        get
+        {
+            lock (_lock) return _disposed;
+        }
+    }
+
     public void Update(
         int                       maxItems        = 0,
         CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
@@ -53,20 +61,50 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
         CompletionQueue.Drain(maxItems, exceptionPolicy, reportException);
 
+        List<FrameWorkItem>? frameWork = null;
         lock (_lock)
         {
-            for (var i = _frameWork.Count - 1; i >= 0; i--)
+            if (_frameWork.Count > 0)
             {
-                var item = _frameWork[i].Tick();
+                frameWork = new List<FrameWorkItem>(_frameWork);
+                _frameWork.Clear();
+            }
+        }
+
+        List<WorkItem>? readyFrameWork = null;
+        List<FrameWorkItem>? pendingFrameWork = null;
+        if (frameWork != null)
+        {
+            for (int i = 0; i < frameWork.Count; i++)
+            {
+                FrameWorkItem item = frameWork[i].Tick();
                 if (item.ShouldRun)
-                {
-                    _queue.Enqueue(item.Work);
-                    _frameWork.RemoveAt(i);
-                }
+                    (readyFrameWork ??= new List<WorkItem>()).Add(item.Work);
                 else
+                    (pendingFrameWork ??= new List<FrameWorkItem>()).Add(item);
+            }
+
+            lock (_lock)
+            {
+                if (_disposed)
                 {
-                    _frameWork[i] = item;
+                    var disposed = new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
+                    CancelFrameWorkNoLock(readyFrameWork, pendingFrameWork, disposed);
+                    return;
                 }
+
+                if (pendingFrameWork != null)
+                {
+                    _frameWork.AddRange(pendingFrameWork);
+                }
+            }
+        }
+
+        if (readyFrameWork != null)
+        {
+            for (int i = 0; i < readyFrameWork.Count; i++)
+            {
+                _queue.Enqueue(readyFrameWork[i]);
             }
         }
 
@@ -223,7 +261,9 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
                 _frameWork.Count != 0)
             {
                 throw new InvalidOperationException(
-                    "LayerBaseSynchronizationContext cannot finalize while accepted operations are pending.");
+                    "LayerBaseSynchronizationContext cannot finalize while accepted operations are pending. " +
+                    $"PendingSources={Volatile.Read(ref _pendingSourceCount)}, " +
+                    $"Closing={_closingQueue.Count}, Queue={_queue.Count}, FrameWork={_frameWork.Count}.");
             }
 
             _disposed = true;
@@ -387,6 +427,28 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         if (_disposed)
         {
             throw new ObjectDisposedException(nameof(LayerBaseSynchronizationContext));
+        }
+    }
+
+    private static void CancelFrameWorkNoLock(
+        List<WorkItem>? ready,
+        List<FrameWorkItem>? pending,
+        Exception error)
+    {
+        if (ready != null)
+        {
+            for (int i = 0; i < ready.Count; i++)
+            {
+                ready[i].CancelOnDispose(error);
+            }
+        }
+
+        if (pending != null)
+        {
+            for (int i = 0; i < pending.Count; i++)
+            {
+                pending[i].Work.CancelOnDispose(error);
+            }
         }
     }
 

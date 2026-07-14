@@ -1,6 +1,7 @@
 using LayerBase;
 using LayerBase.Actor;
 using LayerBase.Actor.RuntimeCommands;
+using LayerBase.Core.DataStruct;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.DI;
@@ -11,6 +12,7 @@ using LayerBase.Event.Delay;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 using LayerBase.Scope;
+using LayerBase.Scope.Queue;
 using LayerBase.Scope.Resources;
 using LayerBase.Snap;
 using NUnit.Framework;
@@ -880,6 +882,24 @@ public partial class RuntimeSafetyRegressionTests
             "LayerRuntime.ActorCommands.cs"));
 
         AssertMethodGroupDoesNotContainDisposedPrecheck(source, "internal bool EnqueueActorEvent");
+    }
+
+    [Test]
+    public void Channel_close_and_drain_callback_runs_outside_lock()
+    {
+        var queue = new ClosableLockedRingQueue<int>(4);
+        Assert.That(queue.TryEnqueue(1), Is.EqualTo(QueueEnqueueResult.Accepted));
+
+        QueueEnqueueResult enqueueFromCallback = default;
+        bool dequeueFromCallback = true;
+        queue.CloseAndDrain(_ =>
+        {
+            enqueueFromCallback = queue.TryEnqueue(2);
+            dequeueFromCallback = queue.TryDequeue(out _);
+        });
+
+        Assert.That(enqueueFromCallback, Is.EqualTo(QueueEnqueueResult.Closed));
+        Assert.That(dequeueFromCallback, Is.False);
     }
 
     [Test]

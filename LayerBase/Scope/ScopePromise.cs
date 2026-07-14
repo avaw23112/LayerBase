@@ -1,5 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using LayerBase.Async;
 using LayerBase.Scope.Completion;
 
 namespace LayerBase.Scope;
@@ -8,16 +10,21 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
 {
     private readonly object _gate = new();
     private readonly ScopeRuntime? _continuationScope;
+    private readonly LayerBaseSynchronizationContext? _continuationContext;
     private bool _completed;
     private TResult? _result;
     private Exception? _exception;
     private Action? _continuation;
+    private Action<ScopePromise<TResult>>? _terminalContinuation;
     private bool _cancelled;
     private bool _accepted = true;
 
     internal ScopePromise(ScopeRuntime? continuationScope)
     {
         _continuationScope = continuationScope;
+        _continuationContext = continuationScope == null
+            ? SynchronizationContext.Current as LayerBaseSynchronizationContext
+            : null;
         if (continuationScope != null)
         {
             if (!continuationScope.CompletionPort.TryReserve(this))
@@ -49,6 +56,14 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
             {
                 return _completed;
             }
+        }
+    }
+
+    internal bool IsAccepted
+    {
+        get
+        {
+            lock (_gate) return _accepted;
         }
     }
 
@@ -152,14 +167,14 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
                 }
 
                 unregister = true;
-                if (_cancelled)
-                {
-                    throw new InvalidOperationException("Scope call was cancelled.");
-                }
-
                 if (_exception != null)
                 {
                     throw _exception;
+                }
+
+                if (_cancelled)
+                {
+                    throw new InvalidOperationException("Scope call was cancelled.");
                 }
 
                 result = _result!;
@@ -192,9 +207,49 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
         _ = Complete(default, exception);
     }
 
+    internal LBTask<TResult> ToLBTask()
+    {
+        var source = new LBTaskCompletionSource<TResult>();
+        AttachTerminalContinuation(promise =>
+        {
+            try
+            {
+                source.TrySetResult(promise.GetResult());
+            }
+            catch (Exception ex)
+            {
+                source.TrySetException(ex);
+            }
+        });
+
+        return source.Task;
+    }
+
+    private void AttachTerminalContinuation(Action<ScopePromise<TResult>> continuation)
+    {
+        bool runNow;
+        lock (_gate)
+        {
+            runNow = _completed;
+            if (!runNow)
+            {
+                if (_terminalContinuation != null)
+                {
+                    throw new InvalidOperationException("ScopePromise only supports one terminal task bridge.");
+                }
+
+                _terminalContinuation = continuation;
+                return;
+            }
+        }
+
+        continuation(this);
+    }
+
     private bool Complete(TResult? result, Exception? exception)
     {
         Action? continuation;
+        Action<ScopePromise<TResult>>? terminalContinuation;
         lock (_gate)
         {
             if (_completed)
@@ -208,7 +263,11 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
             _exception = exception;
             continuation = _continuation;
             _continuation = null;
+            terminalContinuation = _terminalContinuation;
+            _terminalContinuation = null;
         }
+
+        terminalContinuation?.Invoke(this);
 
         if (continuation != null)
         {
@@ -222,7 +281,19 @@ public sealed class ScopePromise<TResult> : IScopePromise, IScopePromiseControl
     {
         if (_continuationScope == null)
         {
-            continuation();
+            if (_continuationContext != null)
+            {
+                try
+                {
+                    _continuationContext.Post(static state => ((Action)state!).Invoke(), continuation);
+                    return;
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            }
+
+            ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
             return;
         }
 

@@ -68,6 +68,32 @@ public static class LayerHub
     // Primary runtime for static convenience APIs
     private static LayerRuntime? s_primaryRuntime;
 
+    internal static int ActiveRuntimeCountForTest
+    {
+        get
+        {
+            lock (s_lock)
+            {
+                int count = 0;
+                for (int i = s_runtimes.Count - 1; i >= 0; i--)
+                {
+                    if (s_runtimes[i].TryGetTarget(out _))
+                    {
+                        count++;
+                    }
+                    else
+                    {
+                        s_runtimes.RemoveAt(i);
+                    }
+                }
+
+                return count;
+            }
+        }
+    }
+
+    internal static bool HasPrimaryRuntimeForTest => s_primaryRuntime != null;
+
     public static event Action<LayerEventInfo>? OnLayerEventInfo;
 
     /// <summary>

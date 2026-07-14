@@ -1,6 +1,7 @@
 using LayerBase.Actor;
 using LayerBase.DI;
 using LayerBase.Modules;
+using System.Runtime.ExceptionServices;
 
 namespace LayerBase.Scope;
 
@@ -8,6 +9,9 @@ public sealed class ScopeRuntimeHost : IDisposable
 {
     private readonly ScopeRuntime[] _scopes;
     private readonly ScopeRouteTable _routes;
+    private readonly ManualResetEventSlim _disposeFinished = new(false);
+    private int _disposeState;
+    private Exception? _disposeException;
     private bool _disposed;
 
     private ScopeRuntimeHost(
@@ -442,11 +446,49 @@ public sealed class ScopeRuntimeHost : IDisposable
         }
 
         int maxSlot = servicePlans.Max(static plan => plan.ServiceSlot);
+        if (maxSlot < 0)
+        {
+            throw new ModuleBuildException(
+                ModuleBuildErrorCodes.InvalidServiceContribution,
+                "Scope service plans cannot contain only negative slots.");
+        }
+
         var services = new IService[maxSlot + 1];
         for (int i = 0; i < servicePlans.Count; i++)
         {
             ScopeServicePlan servicePlan = servicePlans[i];
+            if (servicePlan.ServiceSlot < 0)
+            {
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidServiceContribution,
+                    $"Scope service plan at index {i} has negative slot {servicePlan.ServiceSlot}.");
+            }
+
+            if (servicePlan.Instance == null)
+            {
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidServiceContribution,
+                    $"Scope service plan at slot {servicePlan.ServiceSlot} has a null service instance.");
+            }
+
+            if (services[servicePlan.ServiceSlot] != null)
+            {
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidServiceContribution,
+                    $"Scope service slot {servicePlan.ServiceSlot} is contributed more than once.");
+            }
+
             services[servicePlan.ServiceSlot] = servicePlan.Instance;
+        }
+
+        for (int i = 0; i < services.Length; i++)
+        {
+            if (services[i] == null)
+            {
+                throw new ModuleBuildException(
+                    ModuleBuildErrorCodes.InvalidServiceContribution,
+                    $"Scope service slot {i} is missing from the composition plan.");
+            }
         }
 
         return services;
@@ -464,19 +506,29 @@ public sealed class ScopeRuntimeHost : IDisposable
                 started++;
             }
         }
-        catch
+        catch (Exception startException)
         {
+            List<Exception>? cleanupExceptions = null;
             for (int i = started - 1; i >= 0; i--)
             {
                 try
                 {
-                    _scopes[i].Stop();
+                    _scopes[i].Dispose();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    (cleanupExceptions ??= new List<Exception>()).Add(ex);
                 }
             }
 
+            Volatile.Write(ref _disposeState, 3);
+            if (cleanupExceptions is { Count: > 0 })
+            {
+                cleanupExceptions.Insert(0, startException);
+                throw new AggregateException("Scope host start failed and one or more started scopes failed during cleanup.", cleanupExceptions);
+            }
+
+            ExceptionDispatchInfo.Capture(startException).Throw();
             throw;
         }
     }
@@ -492,7 +544,7 @@ public sealed class ScopeRuntimeHost : IDisposable
 
     public void Stop()
     {
-        if (_disposed)
+        if (_disposed || Volatile.Read(ref _disposeState) != 0)
         {
             return;
         }
@@ -505,7 +557,7 @@ public sealed class ScopeRuntimeHost : IDisposable
 
     public void RequestStop()
     {
-        if (_disposed)
+        if (_disposed || Volatile.Read(ref _disposeState) != 0)
         {
             return;
         }
@@ -518,44 +570,74 @@ public sealed class ScopeRuntimeHost : IDisposable
 
     public void Dispose()
     {
-        if (_disposed)
+        int state = Interlocked.CompareExchange(ref _disposeState, 1, 0);
+        if (state != 0)
         {
+            WaitForDisposeCompletion();
             return;
         }
 
-        List<Exception>? exceptions = null;
-        for (int i = _scopes.Length - 1; i >= 0; i--)
+        try
         {
+            List<Exception>? exceptions = null;
+            for (int i = _scopes.Length - 1; i >= 0; i--)
+            {
+                try
+                {
+                    _scopes[i].Dispose();
+                }
+                catch (Exception ex)
+                {
+                    (exceptions ??= new List<Exception>()).Add(ex);
+                }
+            }
+
             try
             {
-                _scopes[i].Dispose();
+                _routes.Dispose();
             }
             catch (Exception ex)
             {
                 (exceptions ??= new List<Exception>()).Add(ex);
             }
-        }
 
-        try
-        {
-            _routes.Dispose();
+            _disposed = true;
+            Volatile.Write(ref _disposeState, exceptions is { Count: > 0 } ? 3 : 2);
+
+            if (exceptions is { Count: > 0 })
+            {
+                throw new AggregateException("One or more scopes failed during host disposal.", exceptions);
+            }
         }
         catch (Exception ex)
         {
-            (exceptions ??= new List<Exception>()).Add(ex);
+            _disposeException = ex;
+            Volatile.Write(ref _disposeState, 3);
+            throw;
+        }
+        finally
+        {
+            _disposeFinished.Set();
+        }
+    }
+
+    private void WaitForDisposeCompletion()
+    {
+        int state = Volatile.Read(ref _disposeState);
+        if (state == 1)
+        {
+            _disposeFinished.Wait();
         }
 
-        _disposed = true;
-
-        if (exceptions is { Count: > 0 })
+        if (_disposeException != null)
         {
-            throw new AggregateException("One or more scopes failed during host disposal.", exceptions);
+            throw _disposeException;
         }
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
+        if (_disposed || Volatile.Read(ref _disposeState) != 0)
         {
             throw new ObjectDisposedException(nameof(ScopeRuntimeHost));
         }

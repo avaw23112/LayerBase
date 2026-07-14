@@ -51,7 +51,7 @@ public sealed class ScopeRuntime : IDisposable
     private readonly ActorWorld _actorWorld;
     private readonly bool _ownsActorWorld;
     private readonly object _lifecycleGate = new();
-    private ScopeRuntimeState _state = ScopeRuntimeState.Created;
+    private int _state = (int)ScopeRuntimeState.Created;
     private volatile bool _workerRunning;
     private int _stopCleanupStarted;
     private int _stopCleanupCompleted;
@@ -59,12 +59,15 @@ public sealed class ScopeRuntime : IDisposable
     private ManualResetEventSlim? _workerStartedSignal;
     private ManualResetEventSlim? _workerLaunchSignal;
     private int _workerLaunchSucceeded;
-    private bool _cleanupDeferred;
-    private bool _cleanupClaimed;
+    private int _cleanupDeferred;
+    private int _cleanupClaimed;
     private int _executionDepth;
     private int _ownerThreadId = -1;
     private int _disposeRequested;
     private int _disposeInfrastructureStarted;
+    private int _disposeInfrastructureCompleted;
+    private readonly ManualResetEventSlim _disposeInfrastructureFinished = new(false);
+    private Exception? _disposeInfrastructureException;
     private int _exceptionCountForTest;
     private bool _compositionApplied;
 
@@ -194,10 +197,7 @@ public sealed class ScopeRuntime : IDisposable
 
     private ScopeRuntimeState State
     {
-        get
-        {
-            lock (_lifecycleGate) return _state;
-        }
+        get => (ScopeRuntimeState)Volatile.Read(ref _state);
     }
 
     internal ScopeRuntimeState StateForTest => State;
@@ -342,12 +342,12 @@ public sealed class ScopeRuntime : IDisposable
 
             lock (_lifecycleGate)
             {
-                if (_state != ScopeRuntimeState.Created)
+                if (StateNoLock != ScopeRuntimeState.Created)
                 {
                     return;
                 }
 
-                _state = ScopeRuntimeState.Starting;
+                SetStateNoLock(ScopeRuntimeState.Starting);
                 _workerRunning = true;
                 _workerStartedSignal = new ManualResetEventSlim(false);
                 _workerThread = thread;
@@ -363,7 +363,7 @@ public sealed class ScopeRuntime : IDisposable
                 {
                     _workerRunning = false;
                     _workerThread = null;
-                    _state = ScopeRuntimeState.Faulted;
+                    SetStateNoLock(ScopeRuntimeState.Faulted);
                     throw;
                 }
                 finally
@@ -466,6 +466,7 @@ public sealed class ScopeRuntime : IDisposable
     {
         ThrowIfDisposed();
         if (!AcceptsBusinessIngress(State)) return false;
+        if (_callDispatcher == null) return false;
         return _callInbox.TryEnqueue(message) == QueueEnqueueResult.Accepted;
     }
 
@@ -538,10 +539,10 @@ public sealed class ScopeRuntime : IDisposable
         Thread? threadToJoin = null;
         lock (_lifecycleGate)
         {
-            if (_state == ScopeRuntimeState.Disposed) return;
-            if (_state != ScopeRuntimeState.Disposing)
+            if (StateNoLock == ScopeRuntimeState.Disposed) return;
+            if (StateNoLock != ScopeRuntimeState.Disposing)
             {
-                _state = ScopeRuntimeState.Disposing;
+                SetStateNoLock(ScopeRuntimeState.Disposing);
             }
 
             threadToJoin = _workerThread;
@@ -577,65 +578,92 @@ public sealed class ScopeRuntime : IDisposable
     {
         if (Interlocked.Exchange(ref _disposeInfrastructureStarted, 1) != 0)
         {
+            WaitForDisposeInfrastructure();
             return;
         }
 
-        if (Volatile.Read(ref _stopCleanupStarted) != 0)
+        try
         {
-            WaitForStopCleanup();
-        }
-
-        List<Exception>? exceptions = null;
-
-        void Capture(Action action)
-        {
-            try
+            if (Volatile.Read(ref _stopCleanupStarted) != 0)
             {
-                action();
+                WaitForStopCleanup();
             }
-            catch (Exception ex)
+
+            List<Exception>? exceptions = null;
+
+            void Capture(Action action)
             {
-                (exceptions ??= new List<Exception>()).Add(ex);
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    (exceptions ??= new List<Exception>()).Add(ex);
+                }
+            }
+
+            Capture(() => _subscriptionRegistry?.Dispose());
+            _subscriptionRegistry = null;
+            Capture(AwaitRegistry.Close);
+            Capture(() => EcsScheduler?.Dispose());
+            Capture(() => _context?.DisposeFromRuntime(
+                CompletionExceptionPolicy.ReportAndContinue,
+                ex => ReportException(ex, -1, LayerExceptionPhase.Continuation, LayerQueueKind.ContinuationQueue, -1)));
+            Capture(Timer.Dispose);
+            Capture(PostScheduler.Dispose);
+            Capture(DelayManager.Clear);
+            Capture(EventCenter.Reset);
+            Capture(EcsWorld.Dispose);
+            if (_ownsActorWorld)
+            {
+                Capture(_actorWorld.Dispose);
+            }
+
+            ManualResetEventSlim? workerStartedSignal;
+            ManualResetEventSlim? workerLaunchSignal;
+            lock (_lifecycleGate)
+            {
+                SetStateNoLock(exceptions is { Count: > 0 }
+                    ? ScopeRuntimeState.Faulted
+                    : ScopeRuntimeState.Disposed);
+                workerStartedSignal = _workerStartedSignal;
+                workerLaunchSignal = _workerLaunchSignal;
+                _workerStartedSignal = null;
+                _workerLaunchSignal = null;
+            }
+
+            Capture(() => workerStartedSignal?.Dispose());
+            Capture(() => workerLaunchSignal?.Dispose());
+            Capture(_stopCleanupFinished.Dispose);
+
+            if (exceptions is { Count: > 0 })
+            {
+                throw new AggregateException("One or more scope infrastructure components failed during disposal.", exceptions);
             }
         }
-
-        Capture(() => _subscriptionRegistry?.Dispose());
-        _subscriptionRegistry = null;
-        Capture(AwaitRegistry.Close);
-        Capture(() => EcsScheduler?.Dispose());
-        Capture(() => _context?.DisposeFromRuntime(
-            CompletionExceptionPolicy.ReportAndContinue,
-            ex => ReportException(ex, -1, LayerExceptionPhase.Continuation, LayerQueueKind.ContinuationQueue, -1)));
-        Capture(Timer.Dispose);
-        Capture(PostScheduler.Dispose);
-        Capture(DelayManager.Clear);
-        Capture(EventCenter.Reset);
-        Capture(EcsWorld.Dispose);
-        if (_ownsActorWorld)
+        catch (Exception ex)
         {
-            Capture(_actorWorld.Dispose);
+            _disposeInfrastructureException = ex;
+            throw;
+        }
+        finally
+        {
+            Volatile.Write(ref _disposeInfrastructureCompleted, 1);
+            _disposeInfrastructureFinished.Set();
+        }
+    }
+
+    private void WaitForDisposeInfrastructure()
+    {
+        if (Volatile.Read(ref _disposeInfrastructureCompleted) == 0)
+        {
+            _disposeInfrastructureFinished.Wait();
         }
 
-        ManualResetEventSlim? workerStartedSignal;
-        ManualResetEventSlim? workerLaunchSignal;
-        lock (_lifecycleGate)
+        if (_disposeInfrastructureException != null)
         {
-            _state = exceptions is { Count: > 0 }
-                ? ScopeRuntimeState.Faulted
-                : ScopeRuntimeState.Disposed;
-            workerStartedSignal = _workerStartedSignal;
-            workerLaunchSignal = _workerLaunchSignal;
-            _workerStartedSignal = null;
-            _workerLaunchSignal = null;
-        }
-
-        Capture(() => workerStartedSignal?.Dispose());
-        Capture(() => workerLaunchSignal?.Dispose());
-        Capture(_stopCleanupFinished.Dispose);
-
-        if (exceptions is { Count: > 0 })
-        {
-            throw new AggregateException("One or more scope infrastructure components failed during disposal.", exceptions);
+            throw _disposeInfrastructureException;
         }
     }
 
@@ -951,7 +979,15 @@ public sealed class ScopeRuntime : IDisposable
         Timer.CloseAndClear();
         PostScheduler.CloseAndClear();
 
-        _subscriptionRegistry?.Dispose();
+        try
+        {
+            _subscriptionRegistry?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            ReportException(ex, -1, LayerExceptionPhase.ServiceDispose, LayerQueueKind.None, -1);
+        }
+
         _subscriptionRegistry = null;
         DelayManager.Clear();
         ResourceRegistry.CloseAndUnbind((exception, _) =>
@@ -1036,19 +1072,20 @@ public sealed class ScopeRuntime : IDisposable
         bool cleanupNow;
         lock (_lifecycleGate)
         {
-            if (IsTerminal(_state) ||
-                _state is ScopeRuntimeState.Disposing)
+            ScopeRuntimeState state = StateNoLock;
+            if (IsTerminal(state) ||
+                state is ScopeRuntimeState.Disposing)
             {
                 return;
             }
 
-            if (AcceptsBusinessIngress(_state))
+            if (AcceptsBusinessIngress(state))
             {
-                _state = ScopeRuntimeState.StopRequested;
+                SetStateNoLock(ScopeRuntimeState.StopRequested);
             }
 
             _workerRunning = false;
-            _cleanupDeferred = true;
+            Volatile.Write(ref _cleanupDeferred, 1);
 
             bool canCleanupOnCurrentThread = CanCurrentThreadRunOwnerCleanupNoLock();
             cleanupNow = canCleanupOnCurrentThread && TryClaimDeferredCleanupNoLock();
@@ -1131,20 +1168,21 @@ public sealed class ScopeRuntime : IDisposable
         {
             lock (_lifecycleGate)
             {
-                if (AcceptsBusinessIngress(_state))
-                    _state = ScopeRuntimeState.StopRequested;
-                if (_state is not ScopeRuntimeState.Disposing and not ScopeRuntimeState.Disposed)
-                    _state = ScopeRuntimeState.Stopping;
-                _cleanupClaimed = true;
-                _cleanupDeferred = false;
+                ScopeRuntimeState state = StateNoLock;
+                if (AcceptsBusinessIngress(state))
+                    SetStateNoLock(ScopeRuntimeState.StopRequested);
+                if (StateNoLock is not ScopeRuntimeState.Disposing and not ScopeRuntimeState.Disposed)
+                    SetStateNoLock(ScopeRuntimeState.Stopping);
+                Volatile.Write(ref _cleanupClaimed, 1);
+                Volatile.Write(ref _cleanupDeferred, 0);
             }
 
             ExecuteInScope(StopInternal);
 
             lock (_lifecycleGate)
             {
-                if (_state is not ScopeRuntimeState.Disposing and not ScopeRuntimeState.Disposed)
-                    _state = ScopeRuntimeState.Stopped;
+                if (StateNoLock is not ScopeRuntimeState.Disposing and not ScopeRuntimeState.Disposed)
+                    SetStateNoLock(ScopeRuntimeState.Stopped);
             }
         }
         finally
@@ -1166,22 +1204,25 @@ public sealed class ScopeRuntime : IDisposable
 
     private void BeginOwnerExecution()
     {
-        lock (_lifecycleGate)
-        {
-            _executionDepth++;
-        }
+        Interlocked.Increment(ref _executionDepth);
     }
 
     private bool EndOwnerExecution()
     {
+        int depth = Interlocked.Decrement(ref _executionDepth);
+        if (depth < 0)
+        {
+            Interlocked.Exchange(ref _executionDepth, 0);
+            throw new InvalidOperationException("Scope execution depth underflow.");
+        }
+
+        if (depth != 0 || Volatile.Read(ref _cleanupDeferred) == 0)
+        {
+            return false;
+        }
+
         lock (_lifecycleGate)
         {
-            _executionDepth--;
-            if (_executionDepth < 0)
-            {
-                throw new InvalidOperationException("Scope execution depth underflow.");
-            }
-
             return TryClaimDeferredCleanupNoLock();
         }
     }
@@ -1190,12 +1231,12 @@ public sealed class ScopeRuntime : IDisposable
     {
         lock (_lifecycleGate)
         {
-            if (_state == ScopeRuntimeState.Disposed)
+            if (StateNoLock == ScopeRuntimeState.Disposed)
             {
                 return false;
             }
 
-            if (_executionDepth > 0 && CanCurrentThreadRunOwnerCleanupNoLock())
+            if (Volatile.Read(ref _executionDepth) > 0 && CanCurrentThreadRunOwnerCleanupNoLock())
             {
                 return true;
             }
@@ -1210,11 +1251,11 @@ public sealed class ScopeRuntime : IDisposable
     {
         lock (_lifecycleGate)
         {
-            if (_state == ScopeRuntimeState.Disposed ||
+            if (StateNoLock == ScopeRuntimeState.Disposed ||
                 Descriptor.Threading != ScopeThreadingMode.Inline ||
                 _ownerThreadId == -1 ||
                 _ownerThreadId == Environment.CurrentManagedThreadId ||
-                (_executionDepth > 0 && CanCurrentThreadRunOwnerCleanupNoLock()))
+                (Volatile.Read(ref _executionDepth) > 0 && CanCurrentThreadRunOwnerCleanupNoLock()))
             {
                 return;
             }
@@ -1226,18 +1267,18 @@ public sealed class ScopeRuntime : IDisposable
 
     private bool TryClaimDeferredCleanupNoLock()
     {
-        if (_executionDepth != 0 ||
-            !_cleanupDeferred ||
-            _cleanupClaimed)
+        if (Volatile.Read(ref _executionDepth) != 0 ||
+            Volatile.Read(ref _cleanupDeferred) == 0 ||
+            Volatile.Read(ref _cleanupClaimed) != 0)
         {
             return false;
         }
 
-        _cleanupClaimed = true;
-        _cleanupDeferred = false;
-        if (_state is not ScopeRuntimeState.Disposing and not ScopeRuntimeState.Disposed)
+        Volatile.Write(ref _cleanupClaimed, 1);
+        Volatile.Write(ref _cleanupDeferred, 0);
+        if (StateNoLock is not ScopeRuntimeState.Disposing and not ScopeRuntimeState.Disposed)
         {
-            _state = ScopeRuntimeState.Stopping;
+            SetStateNoLock(ScopeRuntimeState.Stopping);
         }
 
         return true;
@@ -1809,15 +1850,22 @@ public sealed class ScopeRuntime : IDisposable
     {
         lock (_lifecycleGate)
         {
-            if (_state != from) return false;
-            _state = to;
+            if (StateNoLock != from) return false;
+            SetStateNoLock(to);
             return true;
         }
     }
 
     private void ForceTransition(ScopeRuntimeState to)
     {
-        lock (_lifecycleGate) _state = to;
+        lock (_lifecycleGate) SetStateNoLock(to);
+    }
+
+    private ScopeRuntimeState StateNoLock => (ScopeRuntimeState)_state;
+
+    private void SetStateNoLock(ScopeRuntimeState state)
+    {
+        Volatile.Write(ref _state, (int)state);
     }
 
     private sealed class ScopeTimerSink : IExpiredTimerSink<ITimerAction>

@@ -1,9 +1,12 @@
 using Arch.Core;
+using System.Diagnostics;
+using LayerBase.Actor;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 using LayerBase.ECS.Projection.Flow;
 using LayerBase.ECS.Runtime;
 using LayerBase.Layers;
+using LayerBase.Scope;
 using NUnit.Framework;
 
 namespace LayerBase.Test;
@@ -124,13 +127,62 @@ public sealed class AsyncEcsQueryTests
 
         Assert.That(started.Wait(TimeSpan.FromSeconds(2)), Is.True);
 
-        Task stop = Task.Run(runtime.EcsScheduler.Stop);
-        Assert.That(stop.Wait(TimeSpan.FromMilliseconds(100)), Is.False);
+        var stopWatch = Stopwatch.StartNew();
+        Task release = Task.Run(() =>
+        {
+            Thread.Sleep(100);
+            gate.Set();
+        });
 
-        gate.Set();
+        runtime.EcsScheduler.Stop();
+        Assert.That(release.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(stopWatch.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(80));
+        Assert.That(executed, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Non_owner_schedule_must_fail_before_batch_mutation()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        using World world = World.Create();
+        var scheduler = new AsyncEcsScheduler(runtime, world, EcsRuntimeOptions.Default);
+        var item = new CancelCountingWorkItem();
+
+        Exception? error = null;
+        Task schedule = Task.Run(() =>
+        {
+            error = Assert.Throws<InvalidOperationException>(() => scheduler.Schedule(item));
+        });
+
+        Assert.That(schedule.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(error, Is.Not.Null);
+        Assert.That(item.CancelCount, Is.EqualTo(1));
+        Assert.That(scheduler.CurrentSubmissionCountForTest, Is.EqualTo(0));
+
+        scheduler.Dispose();
+    }
+
+    [Test]
+    public void Non_owner_control_api_must_fail_before_stop_mutation()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        using World world = World.Create();
+        var scheduler = new AsyncEcsScheduler(runtime, world, EcsRuntimeOptions.Default);
+        var item = new CancelCountingWorkItem();
+        scheduler.Schedule(item);
+
+        Exception? error = null;
+        Task stop = Task.Run(() =>
+        {
+            error = Assert.Throws<InvalidOperationException>(scheduler.Stop);
+        });
 
         Assert.That(stop.Wait(TimeSpan.FromSeconds(2)), Is.True);
-        Assert.That(executed, Is.EqualTo(2));
+        Assert.That(error, Is.Not.Null);
+        Assert.That(scheduler.CurrentSubmissionCountForTest, Is.EqualTo(1));
+        Assert.That(item.CancelCount, Is.EqualTo(0));
+
+        scheduler.Dispose();
     }
 
     [Test]
@@ -382,6 +434,131 @@ public sealed class AsyncEcsQueryTests
         Assert.That(runtime.EcsWorld.ProjectionIntentCountForTest, Is.EqualTo(0));
     }
 
+    [Test]
+    public void Repeated_ensure_must_generate_one_intent()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        RegisterDeferredJobProbeActor();
+        Entity entity = CreateDeferredProjectedEntity(runtime);
+        var queue = new EcsResultQueue(ringCapacity: 8, overflowCapacity: 0, batchCapacity: 1);
+
+        Task.Run(() =>
+        {
+            EcsThreadGuard.EnterExecution(runtime.Id, queue);
+            try
+            {
+                ref ProjectedActorRef actorRef = ref runtime.EcsWorld.Get<ProjectedActorRef>(entity);
+                _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                    runtime.EcsWorld,
+                    runtime.Actors,
+                    entity,
+                    ref actorRef,
+                    Stopwatch.GetTimestamp());
+                _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                    runtime.EcsWorld,
+                    runtime.Actors,
+                    entity,
+                    ref actorRef,
+                    Stopwatch.GetTimestamp());
+            }
+            finally
+            {
+                EcsThreadGuard.ExitExecution(runtime.Id);
+            }
+        }).Wait(TimeSpan.FromSeconds(2));
+
+        ref ProjectedActorMeta meta = ref runtime.EcsWorld.GetProjectionMeta(entity);
+        Assert.That(runtime.EcsWorld.ProjectionIntentCountForTest, Is.EqualTo(1));
+        Assert.That(meta.EnsurePending, Is.True);
+
+        queue.DrainToMainThread(runtime, maxCount: 0);
+
+        Assert.That(meta.EnsurePending, Is.False);
+        Assert.That(runtime.EcsWorld.Get<ProjectedActorRef>(entity).ActorId.IsValid, Is.True);
+    }
+
+    [Test]
+    public void Rejected_projection_result_must_not_leave_pending_flag()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        RegisterDeferredJobProbeActor();
+        Entity entity = CreateDeferredProjectedEntity(runtime);
+        var queue = new EcsResultQueue(ringCapacity: 1, overflowCapacity: 0, batchCapacity: 1);
+        Assert.That(queue.Enqueue(new NoopResultItem()), Is.True);
+
+        Task.Run(() =>
+        {
+            EcsThreadGuard.EnterExecution(runtime.Id, queue);
+            try
+            {
+                ref ProjectedActorRef actorRef = ref runtime.EcsWorld.Get<ProjectedActorRef>(entity);
+                _ = ProjectedActorBinding.RefreshProjectedActorInterest(
+                    runtime.EcsWorld,
+                    runtime.Actors,
+                    entity,
+                    ref actorRef,
+                    Stopwatch.GetTimestamp());
+            }
+            finally
+            {
+                EcsThreadGuard.ExitExecution(runtime.Id);
+            }
+        }).Wait(TimeSpan.FromSeconds(2));
+
+        ref ProjectedActorMeta meta = ref runtime.EcsWorld.GetProjectionMeta(entity);
+        Assert.That(meta.EnsurePending, Is.False);
+        Assert.That(runtime.EcsWorld.ProjectionIntentCountForTest, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Deferred_enable_rejection_must_not_report_success()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        RegisterDeferredJobProbeActor();
+        long keepAliveTicks = ProjectedActorTime.SecondsToTicks(0.5f);
+        ProjectedActorHandle handle = runtime.Actors.CreateProjectedActor<JobProbeActor>();
+        Entity entity = runtime.EcsWorld.Create(new ProjectedActorRef(
+            handle.ActorId,
+            DeferredActorTypeId,
+            keepAliveTicks,
+            ProjectedActorReleasePolicy.ReturnToPool));
+        ref ProjectedActorMeta meta = ref runtime.EcsWorld.GetProjectionMeta(entity);
+        meta = ProjectedActorMeta.None;
+        meta.MarkProjected(DeferredActorTypeId, keepAliveTicks, ProjectedActorReleasePolicy.ReturnToPool);
+        meta.BindActor(handle.ActorId);
+        runtime.ActorLifecycleInbox.Close();
+        long beforeDeadline = runtime.EcsWorld.Get<ProjectedActorRef>(entity).ExpireAtTicks;
+        bool alive = true;
+
+        Task.Run(() =>
+        {
+            ref ProjectedActorRef actorRef = ref runtime.EcsWorld.Get<ProjectedActorRef>(entity);
+            alive = ProjectedActorBinding.RefreshProjectedActorInterest(
+                runtime.EcsWorld,
+                runtime.Actors,
+                entity,
+                ref actorRef,
+                Stopwatch.GetTimestamp());
+        }).Wait(TimeSpan.FromSeconds(2));
+
+        Assert.That(alive, Is.False);
+        Assert.That(meta.EnablePending, Is.False);
+        Assert.That(runtime.EcsWorld.Get<ProjectedActorRef>(entity).ExpireAtTicks, Is.EqualTo(beforeDeadline));
+    }
+
+    [Test]
+    public void Actor_batch_must_enqueue_one_command()
+    {
+        LayerRuntime runtime = CreateAsyncRuntime();
+        var gateway = new ScopeActorGateway(runtime, runtime.Actors, scopeId: 1);
+        ActorId[] actorIds = { ActorId.Invalid, ActorId.Invalid };
+
+        gateway.PostToMany(actorIds, new JobMoveViewEvent(1f, 2f));
+
+        Assert.That(runtime.ActorEventInbox.Count, Is.EqualTo(1));
+        Assert.That(runtime.ActorPayloads.Count, Is.EqualTo(1));
+    }
+
     private static LayerRuntime CreateAsyncRuntime()
     {
         return LayerHub.CreateLayers()
@@ -513,6 +690,15 @@ public sealed class AsyncEcsQueryTests
 
     private sealed class AsyncEcsTestLayer : Layer
     {
+    }
+
+    private sealed class NoopResultItem : IEcsResultItem
+    {
+        public string DebugName => nameof(NoopResultItem);
+
+        public void Apply(LayerRuntime runtime)
+        {
+        }
     }
 
     private sealed class BlockingCountWorkItem : IEcsWorkItem

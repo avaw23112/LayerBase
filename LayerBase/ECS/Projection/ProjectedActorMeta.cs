@@ -32,6 +32,10 @@ internal struct ProjectedActorMeta
     /// </summary>
     public long NextTouchTicks;
 
+    internal bool EnsurePending;
+
+    internal bool EnablePending;
+
     public static ProjectedActorMeta None
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -48,7 +52,9 @@ internal struct ProjectedActorMeta
                 RetirePolicy = ProjectedActorRetirePolicy.ReturnToPool,
                 CreatePolicy = ProjectedActorCreatePolicy.Lazy,
                 TouchIntervalTicks = 0,
-                NextTouchTicks = 0
+                NextTouchTicks = 0,
+                EnsurePending = false,
+                EnablePending = false
             };
         }
     }
@@ -97,6 +103,8 @@ internal struct ProjectedActorMeta
     {
         ActorId = actorId;
         State = ProjectedActorState.Active;
+        EnsurePending = false;
+        EnablePending = false;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -106,6 +114,8 @@ internal struct ProjectedActorMeta
         State = ActorTypeId >= 0
             ? ProjectedActorState.Projectable
             : ProjectedActorState.None;
+        EnsurePending = false;
+        EnablePending = false;
     }
 }
 

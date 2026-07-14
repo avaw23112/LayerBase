@@ -97,21 +97,33 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
 
     public void PostToRuntimeOwner(LayerRuntime runtime)
     {
-        for (int i = 0; i < Count; i++)
+        if (Count == 0)
         {
-            ActorId actorId = _actorIds[i];
-            TEvent capturedValue = _events[i];
-            Action<ActorWorld> postAction = world => world.PostTo(actorId, in capturedValue);
-            int payloadHandle = runtime.ActorPayloads.Store(postAction);
-            var envelope = new ActorCommandEnvelope(
-                ActorCommandKind.Post,
-                actorId,
-                routeId: 0,
-                payloadHandle: payloadHandle);
-            if (!runtime.EnqueueActorEvent(envelope))
+            return;
+        }
+
+        ActorId[] actorIds = new ActorId[Count];
+        TEvent[] events = new TEvent[Count];
+        Array.Copy(_actorIds, actorIds, Count);
+        Array.Copy(_events, events, Count);
+
+        Action<ActorWorld> postAction = world =>
+        {
+            for (int i = 0; i < actorIds.Length; i++)
             {
-                runtime.ActorPayloads.Free(payloadHandle);
+                world.PostTo(actorIds[i], in events[i]);
             }
+        };
+
+        int payloadHandle = runtime.ActorPayloads.Store(postAction);
+        var envelope = new ActorCommandEnvelope(
+            ActorCommandKind.PostMany,
+            ActorId.Invalid,
+            routeId: 0,
+            payloadHandle: payloadHandle);
+        if (!runtime.EnqueueActorEvent(envelope))
+        {
+            runtime.ActorPayloads.Free(payloadHandle);
         }
     }
 

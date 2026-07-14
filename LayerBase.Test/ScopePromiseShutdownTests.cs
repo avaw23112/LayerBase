@@ -202,6 +202,28 @@ public sealed class ScopePromiseShutdownTests
     }
 
     [Test]
+    public void Rejected_completion_must_surface_backpressure_exception()
+    {
+        using var runtime = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 1230,
+                name: "PromiseBackpressureExceptionScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            new ScopeRuntimeOptions(completionQueueCapacity: 1));
+
+        var first = new ScopePromise<int>(runtime);
+        var second = new ScopePromise<int>(runtime);
+
+        Assert.That(first.IsCompleted, Is.False);
+        Assert.That(second.IsCompleted, Is.True);
+        Assert.Throws<ScopeBackpressureException>(() => second.GetResult());
+    }
+
+    [Test]
     public void Completed_before_OnCompleted_must_keep_reserved_slot()
     {
         int ownerThreadId = Environment.CurrentManagedThreadId;

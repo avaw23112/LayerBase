@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using Arch.Core;
 using LayerBase;
 using LayerBase.Actor;
+using LayerBase.Actor.RuntimeCommands;
 using LayerBase.ECS.Projection.Flow;
 using LayerBase.ECS.Runtime;
 
@@ -18,7 +19,7 @@ internal static class ProjectedActorBinding
         ref ProjectedActorMeta meta,
         long                   nowTicks)
     {
-        if (TryDeferProjectedActorEnsure(world, actorWorld, entity, meta.ActorTypeId))
+        if (TryDeferProjectedActorEnsure(world, actorWorld, entity, ref meta, meta.ActorTypeId))
         {
             return ActorId.Invalid;
         }
@@ -46,7 +47,7 @@ internal static class ProjectedActorBinding
         ref ProjectedActorRef  actorRef,
         long                   nowTicks)
     {
-        if (TryDeferProjectedActorEnsure(world, actorWorld, entity, meta.ActorTypeId))
+        if (TryDeferProjectedActorEnsure(world, actorWorld, entity, ref meta, meta.ActorTypeId))
         {
             actorRef.ClearActor();
             return ActorId.Invalid;
@@ -76,7 +77,10 @@ internal static class ProjectedActorBinding
         ref ProjectedActorRef actorRef,
         long                  nowTicks)
     {
-        if (TryDeferProjectedActorEnsure(world, actorWorld, entity, actorRef.ActorTypeId))
+        ref ProjectedActorMeta meta =
+            ref world.GetProjectionMeta(entity);
+
+        if (TryDeferProjectedActorEnsure(world, actorWorld, entity, ref meta, actorRef.ActorTypeId))
         {
             actorRef.ClearActor();
             return ActorId.Invalid;
@@ -95,9 +99,6 @@ internal static class ProjectedActorBinding
 
         // 绑定 ActorId 并初始化 ExpireAtTicks
         actorRef.Bind(handle.ActorId, nowTicks);
-
-        ref ProjectedActorMeta meta =
-            ref world.GetProjectionMeta(entity);
 
         meta.BindActor(handle.ActorId);
 
@@ -253,7 +254,20 @@ internal static class ProjectedActorBinding
 
         if (ShouldDeferActorWorldAccess(world, actorWorld))
         {
-            _ = world.TryEnableProjectedActor(actorId);
+            ref ProjectedActorMeta meta = ref world.GetProjectionMeta(entity);
+            if (meta.EnablePending)
+            {
+                return true;
+            }
+
+            ControlEnqueueResult enableResult = world.TryEnableProjectedActor(actorId);
+            if (!IsAccepted(enableResult))
+            {
+                meta.EnablePending = false;
+                return false;
+            }
+
+            meta.EnablePending = true;
             RefreshDeadline(
                 ref actorRef,
                 nowTicks);
@@ -276,6 +290,9 @@ internal static class ProjectedActorBinding
 
             return true;
         }
+
+        ref ProjectedActorMeta activeMeta = ref world.GetProjectionMeta(entity);
+        activeMeta.EnablePending = false;
 
         if (nowTicks < actorRef.NextTouchTicks)
         {
@@ -331,6 +348,7 @@ internal static class ProjectedActorBinding
         World world,
         ActorWorld actorWorld,
         Entity entity,
+        ref ProjectedActorMeta meta,
         int actorTypeId)
     {
         if (!ShouldDeferActorWorldAccess(world, actorWorld))
@@ -338,21 +356,41 @@ internal static class ProjectedActorBinding
             return false;
         }
 
+        if (meta.EnsurePending)
+        {
+            return true;
+        }
+
         if (world.TryGetRuntime(out LayerRuntime? runtime) &&
             runtime != null &&
             EcsThreadGuard.TryGetCurrentResultQueue(runtime.Id, out EcsResultQueue? results) &&
             results != null)
         {
-            world.TrackProjectionIntentForTest();
-            _ = results.Enqueue(new ProjectedActorEnsureResult(
+            meta.EnsurePending = true;
+            var item = new ProjectedActorEnsureResult(
                 "ProjectedActorEnsure",
                 world,
                 actorWorld,
                 entity,
-                actorTypeId));
+                actorTypeId);
+
+            if (results.Enqueue(item))
+            {
+                world.TrackProjectionIntentForTest();
+            }
+            else
+            {
+                meta.EnsurePending = false;
+            }
         }
 
         return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsAccepted(ControlEnqueueResult result)
+    {
+        return result is ControlEnqueueResult.AcceptedFast or ControlEnqueueResult.AcceptedOverflow;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

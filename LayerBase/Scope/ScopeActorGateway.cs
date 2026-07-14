@@ -116,21 +116,18 @@ public sealed class ScopeActorGateway : IProjectedActorLifecycleSink
             return;
         }
 
-        for (int i = 0; i < actorIds.Length; i++)
+        ActorId[] capturedIds = actorIds.ToArray();
+        var capturedValue = value;
+        Action<ActorWorld> postAction = world => world.PostToMany(capturedIds, in capturedValue);
+        int payloadHandle = _runtime.ActorPayloads.Store(postAction);
+        var envelope = new ActorCommandEnvelope(
+            ActorCommandKind.PostMany,
+            ActorId.Invalid,
+            routeId: 0,
+            payloadHandle: payloadHandle);
+        if (!_runtime.EnqueueActorEvent(envelope))
         {
-            var capturedValue = value;
-            ActorId capturedId = actorIds[i];
-            Action<ActorWorld> postAction = world => world.PostTo(capturedId, in capturedValue);
-            int payloadHandle = _runtime.ActorPayloads.Store(postAction);
-            var envelope = new ActorCommandEnvelope(
-                ActorCommandKind.Post,
-                capturedId,
-                routeId: 0,
-                payloadHandle: payloadHandle);
-            if (!_runtime.EnqueueActorEvent(envelope))
-            {
-                _runtime.ActorPayloads.Free(payloadHandle);
-            }
+            _runtime.ActorPayloads.Free(payloadHandle);
         }
     }
 }

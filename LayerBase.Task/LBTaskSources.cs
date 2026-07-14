@@ -35,6 +35,7 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
     private Action? _continuation;
     private LayerBaseSynchronizationContext? _registeredContext;
     private Exception? _exception;
+    private bool _autoReleaseCompletedWithoutContinuation;
     private int _consumed;
     private int _released; // 0 = in use, 1 = released
     private int _status;   // 0 = pending, -1 = completing, 1 = completed
@@ -62,29 +63,28 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
         {
             if (IsCompleted(version))
             {
-                Schedule(continuation);
+                if (Schedule(continuation))
+                {
+                    UnregisterContextSource();
+                }
                 return;
             }
 
             var original = Volatile.Read(ref _continuation);
-            var next = original == null
-                ? continuation
-                : () =>
+            if (original != null)
+            {
+                throw new InvalidOperationException("LBTask only supports one awaiter continuation.");
+            }
+
+            if (Interlocked.CompareExchange(ref _continuation, continuation, null) != null) continue;
+
+            if (IsCompleted(version) && Interlocked.CompareExchange(ref _continuation, null, continuation) == continuation)
+            {
+                if (Schedule(continuation))
                 {
-                    try
-                    {
-                        original();
-                    }
-                    finally
-                    {
-                        continuation();
-                    }
-                };
-
-            if (Interlocked.CompareExchange(ref _continuation, next, original) != original) continue;
-
-            if (IsCompleted(version) && Interlocked.CompareExchange(ref _continuation, null, next) == next)
-                Schedule(next);
+                    UnregisterContextSource();
+                }
+            }
             return;
         }
     }
@@ -97,11 +97,13 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
     public void SetException(Exception ex)
     {
         Complete(ex, default);
+        UnregisterIfContextDisposed();
     }
 
     public void SetCanceled(CancellationToken token)
     {
         Complete(new OperationCanceledException(token), token);
+        UnregisterContextSource();
     }
 
     public void GetResult(int version)
@@ -114,16 +116,33 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
         }
 
         var ex = _exception;
+        UnregisterContextSource();
         TryRelease();
         if (ex != null) throw ex;
     }
 
     public void TryRelease()
     {
-        if (Interlocked.Exchange(ref _released, 1) == 0) Pool.Return(this);
+        if (Interlocked.Exchange(ref _released, 1) == 0)
+        {
+            ClearReferencesForPool();
+            Pool.Return(this);
+        }
     }
 
     public static LBTaskSource Rent(SynchronizationContext? context)
+    {
+        return Rent(context, autoReleaseCompletedWithoutContinuation: false);
+    }
+
+    public static LBTaskSource RentForAsyncMethodBuilder()
+    {
+        return Rent(SynchronizationContext.Current, autoReleaseCompletedWithoutContinuation: true);
+    }
+
+    private static LBTaskSource Rent(
+        SynchronizationContext? context,
+        bool autoReleaseCompletedWithoutContinuation)
     {
         var src = Pool.Rent();
         src._continuation = null;
@@ -131,6 +150,7 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
         src._canceledToken = default;
         src._context = context;
         src._registeredContext = null;
+        src._autoReleaseCompletedWithoutContinuation = autoReleaseCompletedWithoutContinuation;
         src._status = 0;
         src._consumed = 0;
         src._released = 0;
@@ -164,8 +184,14 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
         Volatile.Write(ref _status, 1);
 
         var cont = Interlocked.Exchange(ref _continuation, null);
-        if (cont != null) Schedule(cont);
-        UnregisterContextSource();
+        if (cont != null && Schedule(cont))
+        {
+            UnregisterContextSource();
+        }
+        else if (cont == null && _autoReleaseCompletedWithoutContinuation)
+        {
+            UnregisterContextSource();
+        }
     }
 
     public void CancelOnDispose(Exception error)
@@ -192,7 +218,7 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
         return next == 0 ? 1 : next;
     }
 
-    private void Schedule(Action continuation)
+    private bool Schedule(Action continuation)
     {
         var ctx = _context;
         if (ctx != null)
@@ -200,26 +226,45 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
             try
             {
                 ctx.Post(static state => ((Action)state!).Invoke(), continuation);
-                return;
+                return true;
             }
             catch (ObjectDisposedException)
             {
                 if (ctx is LayerBaseSynchronizationContext lbContext &&
                     !lbContext.AllowThreadPoolFallbackOnDispose)
                 {
-                    _ = lbContext.TryScheduleClosingContinuation(continuation);
-                    return;
+                    return lbContext.TryScheduleClosingContinuation(continuation);
                 }
             }
         }
 
         ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
+        return true;
+    }
+
+    private void ClearReferencesForPool()
+    {
+        _continuation = null;
+        _exception = null;
+        _canceledToken = default;
+        _context = null;
+        _registeredContext = null;
+        _autoReleaseCompletedWithoutContinuation = false;
     }
 
     private void UnregisterContextSource()
     {
         var context = Interlocked.Exchange(ref _registeredContext, null);
         context?.UnregisterSource();
+    }
+
+    private void UnregisterIfContextDisposed()
+    {
+        var context = Volatile.Read(ref _registeredContext);
+        if (context?.IsDisposed == true)
+        {
+            UnregisterContextSource();
+        }
     }
 }
 
@@ -231,6 +276,7 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
 
     private Action? _continuation;
     private LayerBaseSynchronizationContext? _registeredContext;
+    private bool _autoReleaseCompletedWithoutContinuation;
     private int _consumed;
     private Exception? _exception;
     private int _released; // 0 = in use, 1 = released
@@ -260,29 +306,28 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
         {
             if (IsCompleted(version))
             {
-                Schedule(continuation);
+                if (Schedule(continuation))
+                {
+                    UnregisterContextSource();
+                }
                 return;
             }
 
             var original = Volatile.Read(ref _continuation);
-            var next = original == null
-                ? continuation
-                : () =>
+            if (original != null)
+            {
+                throw new InvalidOperationException("LBTask only supports one awaiter continuation.");
+            }
+
+            if (Interlocked.CompareExchange(ref _continuation, continuation, null) != null) continue;
+
+            if (IsCompleted(version) && Interlocked.CompareExchange(ref _continuation, null, continuation) == continuation)
+            {
+                if (Schedule(continuation))
                 {
-                    try
-                    {
-                        original();
-                    }
-                    finally
-                    {
-                        continuation();
-                    }
-                };
-
-            if (Interlocked.CompareExchange(ref _continuation, next, original) != original) continue;
-
-            if (IsCompleted(version) && Interlocked.CompareExchange(ref _continuation, null, next) == next)
-                Schedule(next);
+                    UnregisterContextSource();
+                }
+            }
             return;
         }
     }
@@ -298,12 +343,14 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
     {
         if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
         CompleteCore(ex, default);
+        UnregisterIfContextDisposed();
     }
 
     public void SetCanceled(CancellationToken token)
     {
         if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
         CompleteCore(new OperationCanceledException(token), token);
+        UnregisterContextSource();
     }
 
     public T GetResult(int version)
@@ -317,6 +364,7 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
 
         var ex = _exception;
         var res = _result;
+        UnregisterContextSource();
         TryRelease();
         if (ex != null) throw ex;
         return res;
@@ -324,10 +372,26 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
 
     public void TryRelease()
     {
-        if (Interlocked.Exchange(ref _released, 1) == 0) Pool.Return(this);
+        if (Interlocked.Exchange(ref _released, 1) == 0)
+        {
+            ClearReferencesForPool();
+            Pool.Return(this);
+        }
     }
 
     public static LBTaskSource<T> Rent(SynchronizationContext? context)
+    {
+        return Rent(context, autoReleaseCompletedWithoutContinuation: false);
+    }
+
+    public static LBTaskSource<T> RentForAsyncMethodBuilder()
+    {
+        return Rent(SynchronizationContext.Current, autoReleaseCompletedWithoutContinuation: true);
+    }
+
+    private static LBTaskSource<T> Rent(
+        SynchronizationContext? context,
+        bool autoReleaseCompletedWithoutContinuation)
     {
         var src = Pool.Rent();
         src._continuation = null;
@@ -336,6 +400,7 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
         src._result = default!;
         src._context = context;
         src._registeredContext = null;
+        src._autoReleaseCompletedWithoutContinuation = autoReleaseCompletedWithoutContinuation;
         src._status = 0;
         src._consumed = 0;
         src._released = 0;
@@ -374,11 +439,17 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
         Volatile.Write(ref _status, 1);
 
         var cont = Interlocked.Exchange(ref _continuation, null);
-        if (cont != null) Schedule(cont);
-        UnregisterContextSource();
+        if (cont != null && Schedule(cont))
+        {
+            UnregisterContextSource();
+        }
+        else if (cont == null && _autoReleaseCompletedWithoutContinuation)
+        {
+            UnregisterContextSource();
+        }
     }
 
-    private void Schedule(Action continuation)
+    private bool Schedule(Action continuation)
     {
         var ctx = _context;
         if (ctx != null)
@@ -386,20 +457,31 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
             try
             {
                 ctx.Post(static state => ((Action)state!).Invoke(), continuation);
-                return;
+                return true;
             }
             catch (ObjectDisposedException)
             {
                 if (ctx is LayerBaseSynchronizationContext lbContext &&
                     !lbContext.AllowThreadPoolFallbackOnDispose)
                 {
-                    _ = lbContext.TryScheduleClosingContinuation(continuation);
-                    return;
+                    return lbContext.TryScheduleClosingContinuation(continuation);
                 }
             }
         }
 
         ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
+        return true;
+    }
+
+    private void ClearReferencesForPool()
+    {
+        _continuation = null;
+        _exception = null;
+        _canceledToken = default;
+        _result = default!;
+        _context = null;
+        _registeredContext = null;
+        _autoReleaseCompletedWithoutContinuation = false;
     }
 
     public void CancelOnDispose(Exception error)
@@ -435,6 +517,15 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
     {
         var context = Interlocked.Exchange(ref _registeredContext, null);
         context?.UnregisterSource();
+    }
+
+    private void UnregisterIfContextDisposed()
+    {
+        var context = Volatile.Read(ref _registeredContext);
+        if (context?.IsDisposed == true)
+        {
+            UnregisterContextSource();
+        }
     }
 }
 

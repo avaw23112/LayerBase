@@ -85,6 +85,34 @@ public sealed class ScopeLifecycleConcurrencyTests
     }
 
     [Test]
+    public void Concurrent_scope_dispose_callers_must_wait_for_infrastructure_cleanup()
+    {
+        var service = new BlockingDisposeService();
+        using var scope = CreateWorkerScope(service, 1222);
+
+        scope.Start();
+
+        Task first = Task.Run(scope.Dispose);
+        Assert.That(service.DisposeEntered.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        Task second = Task.Run(scope.Dispose);
+        try
+        {
+            Assert.That(
+                second.Wait(TimeSpan.FromMilliseconds(150)),
+                Is.False,
+                "The second scope Dispose caller returned while the first caller was still cleaning up.");
+        }
+        finally
+        {
+            service.AllowDisposeReturn.Set();
+            Assert.That(Task.WaitAll(new[] { first, second }, TimeSpan.FromSeconds(5)), Is.True);
+        }
+
+        Assert.That(service.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Dispose_must_release_internal_wait_handles()
     {
         var service = new CountingDisposeService();
@@ -269,18 +297,88 @@ public sealed class ScopeLifecycleConcurrencyTests
     }
 
     [Test]
-    public void Scope_runtime_host_dispose_must_not_mark_disposed_from_finally()
+    public void Concurrent_host_dispose_callers_must_not_return_early()
     {
-        string source = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "LayerBase", "Scope", "ScopeRuntimeHost.cs"));
-        int start = source.IndexOf("public void Dispose()", StringComparison.Ordinal);
-        int end = source.IndexOf("private void ThrowIfDisposed()", StringComparison.Ordinal);
+        var service = new BlockingDisposeService();
+        var plans = new[]
+        {
+            new ScopeRuntimePlan(
+                new ScopeDescriptor(
+                    scopeId: 1214,
+                    name: "ConcurrentHostDisposeScope",
+                    threading: ScopeThreadingMode.Worker,
+                    clock: ScopeClockMode.FixedRate,
+                    tickRateHz: 60,
+                    stopPolicy: ScopeStopPolicy.Drain),
+                typeof(RuntimeRequestStopWorkerScope),
+                new IService[] { service })
+        };
 
-        Assert.That(start, Is.GreaterThanOrEqualTo(0));
-        Assert.That(end, Is.GreaterThan(start));
-        string method = source.Substring(start, end - start);
+        using var host = ScopeRuntimeHost.Create(plans);
+        host.Start();
 
-        Assert.That(method, Does.Not.Contain("finally"));
-        Assert.That(method, Does.Contain("_disposed = true;"));
+        Task first = Task.Run(host.Dispose);
+        Assert.That(service.DisposeEntered.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        Task second = Task.Run(host.Dispose);
+        try
+        {
+            Assert.That(
+                second.Wait(TimeSpan.FromMilliseconds(150)),
+                Is.False,
+                "The second host Dispose caller returned while the first caller was still cleaning up.");
+        }
+        finally
+        {
+            service.AllowDisposeReturn.Set();
+            Assert.That(Task.WaitAll(new[] { first, second }, TimeSpan.FromSeconds(5)), Is.True);
+        }
+
+        Assert.That(service.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Concurrent_runtime_dispose_callers_must_wait_for_same_completion()
+    {
+        var runtime = new LayerRuntime(1215);
+        var service = new BlockingDisposeService();
+        var plans = new[]
+        {
+            new ScopeRuntimePlan(
+                new ScopeDescriptor(
+                    scopeId: 1215,
+                    name: "ConcurrentRuntimeDisposeScope",
+                    threading: ScopeThreadingMode.Worker,
+                    clock: ScopeClockMode.FixedRate,
+                    tickRateHz: 60,
+                    stopPolicy: ScopeStopPolicy.Drain),
+                typeof(RuntimeRequestStopWorkerScope),
+                new IService[] { service })
+        };
+        ScopeRuntimeHost host = ScopeRuntimeHost.Create(plans, owningRuntime: runtime);
+        typeof(LayerRuntime)
+            .GetProperty(nameof(LayerRuntime.ScopeHost))!
+            .SetValue(runtime, host);
+        host.Start();
+
+        Task first = Task.Run(runtime.Dispose);
+        Assert.That(service.DisposeEntered.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        Task second = Task.Run(runtime.Dispose);
+        try
+        {
+            Assert.That(
+                second.Wait(TimeSpan.FromMilliseconds(150)),
+                Is.False,
+                "The second runtime Dispose caller returned while the first caller was still cleaning up.");
+        }
+        finally
+        {
+            service.AllowDisposeReturn.Set();
+            Assert.That(Task.WaitAll(new[] { first, second }, TimeSpan.FromSeconds(5)), Is.True);
+        }
+
+        Assert.That(service.DisposeCount, Is.EqualTo(1));
     }
 
     [Test]

@@ -5,11 +5,12 @@ using LayerBase.ECS.Runtime;
 
 namespace LayerBase.ECS.Projection.Flow;
 
-internal sealed class ProjectedActorEnsureResult : IEcsResultItem
+internal sealed class ProjectedActorEnsureResult : IEcsResultItem, IDisposable
 {
     private readonly World _world;
     private readonly ActorWorld _actorWorld;
     private readonly Entity _entity;
+    private readonly int _entityVersion;
     private readonly int _actorTypeId;
 
     public ProjectedActorEnsureResult(
@@ -23,6 +24,7 @@ internal sealed class ProjectedActorEnsureResult : IEcsResultItem
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _actorWorld = actorWorld ?? throw new ArgumentNullException(nameof(actorWorld));
         _entity = entity;
+        _entityVersion = entity.Version;
         _actorTypeId = actorTypeId;
     }
 
@@ -32,14 +34,18 @@ internal sealed class ProjectedActorEnsureResult : IEcsResultItem
     {
         if (!runtime.IsOwnerThreadForActorWorld ||
             !ReferenceEquals(runtime.Actors, _actorWorld) ||
-            !_world.TryGetProjectionMeta(_entity, out ProjectedActorMetaRef metaRef) ||
-            !_world.Has<ProjectedActorRef>(_entity))
+            _entity.Version != _entityVersion ||
+            !_world.TryGetProjectionMeta(_entity, out ProjectedActorMetaRef metaRef))
         {
             return;
         }
 
         ref ProjectedActorMeta meta = ref metaRef.Value;
-        if (meta.ActorId.IsValid || meta.ActorTypeId != _actorTypeId)
+        meta.EnsurePending = false;
+
+        if (!_world.Has<ProjectedActorRef>(_entity) ||
+            meta.ActorId.IsValid ||
+            meta.ActorTypeId != _actorTypeId)
         {
             return;
         }
@@ -55,5 +61,20 @@ internal sealed class ProjectedActorEnsureResult : IEcsResultItem
         ref ProjectedActorRef actorRef = ref _world.Get<ProjectedActorRef>(_entity);
         ProjectedActorBindingUtility.Bind(ref meta, ref actorRef, handle.ActorId, nowTicks);
         _world.AddActiveProjectedActor(_entity, ref meta);
+    }
+
+    public void Dispose()
+    {
+        if (_entity.Version != _entityVersion ||
+            !_world.TryGetProjectionMeta(_entity, out ProjectedActorMetaRef metaRef))
+        {
+            return;
+        }
+
+        ref ProjectedActorMeta meta = ref metaRef.Value;
+        if (meta.ActorTypeId == _actorTypeId)
+        {
+            meta.EnsurePending = false;
+        }
     }
 }

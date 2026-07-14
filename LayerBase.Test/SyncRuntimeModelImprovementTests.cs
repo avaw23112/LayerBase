@@ -30,7 +30,6 @@ public sealed class SyncRuntimeModelImprovementTests
         var runtimeId = runtime.Id;
 
         Assert.That(runtime.Scheduler.TryPost(new RuntimeCachePayloadEvent()).IsSuccess, Is.True);
-        Assert.That(PayloadStoreCache<RuntimeCachePayloadEvent>.Stores[runtimeId], Is.Not.Null);
 
         Assert.That(runtime.TryResolveLayerTarget<CacheCleanupLayer>(out var resolved, out var error), Is.True);
         Assert.That(resolved, Is.SameAs(layer));
@@ -40,7 +39,6 @@ public sealed class SyncRuntimeModelImprovementTests
 
         runtime.Dispose();
 
-        Assert.That(PayloadStoreCache<RuntimeCachePayloadEvent>.Stores[runtimeId], Is.Null);
         Assert.That(LayerHub.TryGetCachedTarget<CacheCleanupLayer>(
             runtimeId,
             version,

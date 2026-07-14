@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace LayerBase.Scope.Completion;
 
 internal sealed class ScopeAwaitRegistry
 {
-    private readonly List<IScopePromiseControl> _promises = new();
+    private readonly LinkedList<IScopePromiseControl> _promises = new();
+    private readonly Dictionary<IScopePromiseControl, LinkedListNode<IScopePromiseControl>> _nodes = new(PromiseReferenceComparer.Instance);
     private readonly object _gate = new();
     private bool _closed;
 
@@ -17,7 +19,10 @@ internal sealed class ScopeAwaitRegistry
         lock (_gate)
         {
             if (_closed) return false;
-            _promises.Add(promise);
+            if (_nodes.ContainsKey(promise)) return false;
+
+            LinkedListNode<IScopePromiseControl> node = _promises.AddLast(promise);
+            _nodes.Add(promise, node);
             return true;
         }
     }
@@ -28,7 +33,10 @@ internal sealed class ScopeAwaitRegistry
 
         lock (_gate)
         {
-            _promises.Remove(promise);
+            if (_nodes.Remove(promise, out LinkedListNode<IScopePromiseControl>? node))
+            {
+                _promises.Remove(node);
+            }
         }
     }
 
@@ -45,7 +53,10 @@ internal sealed class ScopeAwaitRegistry
 
         foreach (var promise in pending)
         {
-            promise.TrySetException(reason);
+            if (!promise.IsCompleted && !promise.IsCancelled)
+            {
+                promise.TrySetException(reason);
+            }
         }
     }
 
@@ -55,6 +66,7 @@ internal sealed class ScopeAwaitRegistry
         {
             _closed = true;
             _promises.Clear();
+            _nodes.Clear();
         }
     }
 
@@ -63,6 +75,21 @@ internal sealed class ScopeAwaitRegistry
         get
         {
             lock (_gate) return _promises.Count;
+        }
+    }
+
+    private sealed class PromiseReferenceComparer : IEqualityComparer<IScopePromiseControl>
+    {
+        public static readonly PromiseReferenceComparer Instance = new();
+
+        public bool Equals(IScopePromiseControl? x, IScopePromiseControl? y)
+        {
+            return ReferenceEquals(x, y);
+        }
+
+        public int GetHashCode(IScopePromiseControl obj)
+        {
+            return RuntimeHelpers.GetHashCode(obj);
         }
     }
 }

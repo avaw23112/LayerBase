@@ -19,7 +19,7 @@ public struct LBTaskMethodBuilder
         get
         {
             if (_earlyCompleted) return LBTask.CompletedTask;
-            if (_source == null) _source = LBTaskSource.Rent();
+            if (_source == null) _source = LBTaskSource.RentForAsyncMethodBuilder();
             return new LBTask(_source);
         }
     }
@@ -38,7 +38,7 @@ public struct LBTaskMethodBuilder
 
     public void SetException(Exception exception)
     {
-        if (_source == null) _source = LBTaskSource.Rent();
+        if (_source == null) _source = LBTaskSource.RentForAsyncMethodBuilder();
         _source.SetException(exception ?? throw new ArgumentNullException(nameof(exception)));
     }
 
@@ -50,7 +50,7 @@ public struct LBTaskMethodBuilder
         where TAwaiter : INotifyCompletion
         where TStateMachine : IAsyncStateMachine
     {
-        if (_source == null) _source = LBTaskSource.Rent();
+        if (_source == null) _source = LBTaskSource.RentForAsyncMethodBuilder();
         awaiter.OnCompleted(stateMachine.MoveNext);
     }
 
@@ -58,7 +58,7 @@ public struct LBTaskMethodBuilder
         where TAwaiter : ICriticalNotifyCompletion
         where TStateMachine : IAsyncStateMachine
     {
-        if (_source == null) _source = LBTaskSource.Rent();
+        if (_source == null) _source = LBTaskSource.RentForAsyncMethodBuilder();
         awaiter.UnsafeOnCompleted(stateMachine.MoveNext);
     }
 }
@@ -81,7 +81,7 @@ public struct LBTaskMethodBuilder<T>
         get
         {
             if (_earlyCompleted) return new LBTask<T>(_result);
-            if (_source == null) _source = LBTaskSource<T>.Rent();
+            if (_source == null) _source = LBTaskSource<T>.RentForAsyncMethodBuilder();
             return new LBTask<T>(_source);
         }
     }
@@ -107,7 +107,7 @@ public struct LBTaskMethodBuilder<T>
 
     public void SetException(Exception exception)
     {
-        if (_source == null) _source = LBTaskSource<T>.Rent();
+        if (_source == null) _source = LBTaskSource<T>.RentForAsyncMethodBuilder();
         _source.SetException(exception ?? throw new ArgumentNullException(nameof(exception)));
     }
 
@@ -119,7 +119,7 @@ public struct LBTaskMethodBuilder<T>
         where TAwaiter : INotifyCompletion
         where TStateMachine : IAsyncStateMachine
     {
-        if (_source == null) _source = LBTaskSource<T>.Rent();
+        if (_source == null) _source = LBTaskSource<T>.RentForAsyncMethodBuilder();
         awaiter.OnCompleted(stateMachine.MoveNext);
     }
 
@@ -127,7 +127,7 @@ public struct LBTaskMethodBuilder<T>
         where TAwaiter : ICriticalNotifyCompletion
         where TStateMachine : IAsyncStateMachine
     {
-        if (_source == null) _source = LBTaskSource<T>.Rent();
+        if (_source == null) _source = LBTaskSource<T>.RentForAsyncMethodBuilder();
         awaiter.UnsafeOnCompleted(stateMachine.MoveNext);
     }
 }

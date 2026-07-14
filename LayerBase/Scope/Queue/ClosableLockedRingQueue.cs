@@ -1,28 +1,32 @@
 using System;
-using System.Threading;
-using LayerBase.Core.DataStruct;
 
 namespace LayerBase.Scope.Queue;
 
 internal sealed class ClosableLockedRingQueue<T> : IClosableBoundedQueue<T>
 {
-    private readonly LockedBoundedRingQueue<T> _inner;
+    private readonly T[] _buffer;
     private readonly object _gate = new();
+    private int _head;
+    private int _tail;
+    private int _count;
     private bool _closed;
-    private readonly int _capacity;
 
     public ClosableLockedRingQueue(int capacity)
     {
-        _inner = new LockedBoundedRingQueue<T>(capacity);
-        _capacity = capacity;
+        if (capacity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(capacity));
+        }
+
+        _buffer = new T[capacity];
     }
 
     public int Count
     {
-        get { lock (_gate) return _inner.Count; }
+        get { lock (_gate) return _count; }
     }
 
-    public int Capacity => _capacity;
+    public int Capacity => _buffer.Length;
 
     public bool IsClosed
     {
@@ -36,13 +40,13 @@ internal sealed class ClosableLockedRingQueue<T> : IClosableBoundedQueue<T>
             if (_closed)
                 return QueueEnqueueResult.Closed;
 
-            if (_inner.TryEnqueue(item))
-                return QueueEnqueueResult.Accepted;
+            if (_count == _buffer.Length)
+                return QueueEnqueueResult.Full;
 
-            if (_closed)
-                return QueueEnqueueResult.Closed;
-
-            return QueueEnqueueResult.Full;
+            _buffer[_tail] = item;
+            _tail = (_tail + 1) % _buffer.Length;
+            _count++;
+            return QueueEnqueueResult.Accepted;
         }
     }
 
@@ -50,7 +54,17 @@ internal sealed class ClosableLockedRingQueue<T> : IClosableBoundedQueue<T>
     {
         lock (_gate)
         {
-            return _inner.TryDequeue(out item);
+            if (_count == 0)
+            {
+                item = default!;
+                return false;
+            }
+
+            item = _buffer[_head];
+            _buffer[_head] = default!;
+            _head = (_head + 1) % _buffer.Length;
+            _count--;
+            return true;
         }
     }
 
@@ -64,13 +78,32 @@ internal sealed class ClosableLockedRingQueue<T> : IClosableBoundedQueue<T>
 
     public void CloseAndDrain(Action<T> drain)
     {
+        if (drain == null)
+        {
+            throw new ArgumentNullException(nameof(drain));
+        }
+
+        T[] items;
+        int count;
         lock (_gate)
         {
             _closed = true;
-            while (_inner.TryDequeue(out T item))
+            count = _count;
+            items = new T[count];
+            for (int i = 0; i < count; i++)
             {
-                drain(item);
+                items[i] = _buffer[_head];
+                _buffer[_head] = default!;
+                _head = (_head + 1) % _buffer.Length;
             }
+
+            _tail = _head;
+            _count = 0;
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            drain(items[i]);
         }
     }
 }

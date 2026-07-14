@@ -11,6 +11,7 @@ using LayerBase.ECS.Runtime;
 using LayerBase.Layers;
 using LayerBase.Modules;
 using LayerBase.Scope;
+using LayerBase.Scope.Completion;
 using ActorBehaviourAttribute = LayerBase.Actor.ActorBehaviourAttribute;
 using ActorId = LayerBase.Actor.ActorId;
 using ActorWorld = LayerBase.Actor.ActorWorld;
@@ -2013,6 +2014,58 @@ public sealed class ScopeRuntimeFoundationTests
     }
 
     [Test]
+    public void External_runtime_call_must_resume_on_origin_owner()
+    {
+        int callerThreadId = Thread.CurrentThread.ManagedThreadId;
+        using var handlerRan = new ManualResetEventSlim();
+        int handlerThreadId = -1;
+        int continuationThreadId = -1;
+        int continuationCount = 0;
+        int result = 0;
+
+        using var context = LayerBaseSynchronizationContext.Install();
+        using var combat = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 15,
+                name: "ExternalOriginWorkerCallScope",
+                threading: ScopeThreadingMode.Worker,
+                clock: ScopeClockMode.FixedRate,
+                tickRateHz: 120,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            callDispatcher: (_, message) =>
+            {
+                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
+                ((ScopePromise<int>)message.Promise).SetResult((int)message.Payload + 1);
+                handlerRan.Set();
+            });
+        using var routes = new ScopeRouteTable(new[] { combat });
+
+        combat.Start();
+        ScopePromise<int> promise;
+        using (context.EnterScope())
+        {
+            promise = routes.GetScopeRef<CombatScopeMarker>(15).Call<int>(7, 41);
+            promise.OnCompleted(() =>
+            {
+                continuationThreadId = Thread.CurrentThread.ManagedThreadId;
+                continuationCount++;
+                result = promise.GetResult();
+            });
+        }
+
+        Assert.That(handlerRan.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(handlerThreadId, Is.Not.EqualTo(callerThreadId));
+        Assert.That(continuationCount, Is.EqualTo(0));
+
+        context.Update();
+
+        Assert.That(continuationCount, Is.EqualTo(1));
+        Assert.That(continuationThreadId, Is.EqualTo(callerThreadId));
+        Assert.That(result, Is.EqualTo(42));
+    }
+
+    [Test]
     public void ScopeRef_call_to_missing_scope_should_complete_with_exception()
     {
         using var main = new ScopeRuntime(ScopeDescriptors.Main, Array.Empty<IService>());
@@ -2020,6 +2073,113 @@ public sealed class ScopeRuntimeFoundationTests
 
         ScopePromise<int> promise = routes.GetScopeRef<CombatScopeMarker>(4).Call<int>(1, "missing");
 
+        Assert.That(promise.IsCompleted, Is.True);
+        Assert.Throws<InvalidOperationException>(() => promise.GetResult());
+    }
+
+    [Test]
+    public void Completion_backpressure_must_prevent_target_handler_execution()
+    {
+        int handlerCount = 0;
+        using var main = new ScopeRuntime(
+            ScopeDescriptors.Main,
+            Array.Empty<IService>(),
+            new ScopeRuntimeOptions(completionQueueCapacity: 1));
+        using var combat = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 13,
+                name: "BackpressureTargetScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            callDispatcher: (_, message) =>
+            {
+                handlerCount++;
+                ((ScopePromise<int>)message.Promise).SetResult(42);
+            });
+        using var routes = new ScopeRouteTable(new[] { main, combat });
+
+        using (ScopeExecution.Enter(main))
+        {
+            _ = new ScopePromise<int>(main);
+            var rejected = routes.GetScopeRef<CombatScopeMarker>(13).Call<int>(7, 1);
+
+            Assert.That(rejected.IsCompleted, Is.True);
+            Assert.Throws<ScopeBackpressureException>(() => rejected.GetResult());
+        }
+
+        combat.Pump(0.016f);
+
+        Assert.That(handlerCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Call_route_dispose_race_must_terminalize_promise()
+    {
+        using var main = new ScopeRuntime(ScopeDescriptors.Main, Array.Empty<IService>());
+        using var combat = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 14,
+                name: "RouteDisposedTargetScope",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            callDispatcher: (_, message) => ((ScopePromise<int>)message.Promise).SetResult(42));
+        using var routes = new ScopeRouteTable(new[] { main, combat });
+
+        var scopeRef = routes.GetScopeRef<CombatScopeMarker>(14);
+        routes.Dispose();
+
+        ScopePromise<int> promise;
+        using (ScopeExecution.Enter(main))
+        {
+            promise = scopeRef.Call<int>(7, 1);
+        }
+
+        Assert.That(promise.IsCompleted, Is.True);
+        Assert.Throws<InvalidOperationException>(() => promise.GetResult());
+    }
+
+    [Test]
+    public void Wrong_scope_ref_must_reject_before_dispatch()
+    {
+        int handlerCount = 0;
+        using var main = new ScopeRuntime(ScopeDescriptors.Main, Array.Empty<IService>());
+        using var combat = new ScopeRuntime(
+            new ScopeDescriptor(
+                scopeId: 16,
+                name: "WrongScopeRefTarget",
+                threading: ScopeThreadingMode.Inline,
+                clock: ScopeClockMode.EngineDriven,
+                tickRateHz: 0,
+                stopPolicy: ScopeStopPolicy.Drain),
+            Array.Empty<IService>(),
+            callDispatcher: (_, message) =>
+            {
+                handlerCount++;
+                ((ScopePromise<int>)message.Promise).SetResult(42);
+            });
+        using var routes = new ScopeRouteTable(
+            new[] { main, combat },
+            new Dictionary<Type, int>
+            {
+                [typeof(MainScopeMarker)] = 0,
+                [typeof(CombatScopeMarker)] = 16
+            });
+
+        ScopePromise<int> promise;
+        using (ScopeExecution.Enter(main))
+        {
+            promise = routes.GetScopeRef<MainScopeMarker>(16).Call<int>(7, 1);
+        }
+
+        combat.Pump(0.016f);
+
+        Assert.That(handlerCount, Is.EqualTo(0));
         Assert.That(promise.IsCompleted, Is.True);
         Assert.Throws<InvalidOperationException>(() => promise.GetResult());
     }
@@ -2491,6 +2651,10 @@ public sealed class ScopeRuntimeFoundationTests
     }
 
     private sealed class CombatScopeMarker
+    {
+    }
+
+    private sealed class MainScopeMarker
     {
     }
 

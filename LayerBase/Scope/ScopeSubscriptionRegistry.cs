@@ -136,23 +136,43 @@ internal sealed class ScopeSubscriptionRegistry : IDisposable
         }
 
         _disposed = true;
+        List<Exception>? exceptions = null;
 
         for (int i = _subscriptions.Count - 1; i >= 0; i--)
         {
-            _subscriptions[i].Dispose();
+            try
+            {
+                _subscriptions[i].Dispose();
+            }
+            catch (Exception ex)
+            {
+                (exceptions ??= new List<Exception>()).Add(ex);
+            }
         }
 
         _subscriptions.Clear();
 
         foreach ((_, IDelayPublisherInternal publisher) in _delayPublishers)
         {
-            if (publisher.PublisherId >= 0)
+            try
             {
-                _scope.DelayManager.UnregisterPublisher(publisher.PublisherId);
+                if (publisher.PublisherId >= 0)
+                {
+                    _scope.DelayManager.UnregisterPublisher(publisher.PublisherId);
+                }
+            }
+            catch (Exception ex)
+            {
+                (exceptions ??= new List<Exception>()).Add(ex);
             }
         }
 
         _delayPublishers.Clear();
+
+        if (exceptions is { Count: > 0 })
+        {
+            throw new AggregateException("One or more scope subscriptions failed during unsubscribe.", exceptions);
+        }
     }
 
     private static int ResolveRouteKey(LayerMembership membership, int serviceSlot, int contextSlot)
@@ -212,34 +232,39 @@ internal sealed class ScopeSubscriptionRegistry : IDisposable
                 return;
             }
 
-            switch (_kind)
+            try
             {
-                case ScopeUnsubscribeKind.Flow:
-                    _center?.UnsubscribeFlow(_routeKey, _handler!, _eventType!);
-                    break;
-                case ScopeUnsubscribeKind.Async:
-                    _center?.UnsubscribeAsync(_routeKey, _handler!, _eventType!);
-                    break;
-                case ScopeUnsubscribeKind.Notify:
-                    _center?.UnsubscribeNotify(_routeKey, _handler!, _eventType!);
-                    break;
-                case ScopeUnsubscribeKind.Subscribe:
-                    _center?.Unsubscribe(_routeKey, _handler!, _eventType!);
-                    break;
-                case ScopeUnsubscribeKind.Parallel:
-                    _center?.UnsubscribeParallel(_routeKey, _handler!, _eventType!);
-                    break;
-            }
-
-            _center = null;
-            _handler = null;
-            _eventType = null;
-
-            lock (PoolLock)
-            {
-                if (Pool.Count < MaxPoolSize)
+                switch (_kind)
                 {
-                    Pool.Push(this);
+                    case ScopeUnsubscribeKind.Flow:
+                        _center?.UnsubscribeFlow(_routeKey, _handler!, _eventType!);
+                        break;
+                    case ScopeUnsubscribeKind.Async:
+                        _center?.UnsubscribeAsync(_routeKey, _handler!, _eventType!);
+                        break;
+                    case ScopeUnsubscribeKind.Notify:
+                        _center?.UnsubscribeNotify(_routeKey, _handler!, _eventType!);
+                        break;
+                    case ScopeUnsubscribeKind.Subscribe:
+                        _center?.Unsubscribe(_routeKey, _handler!, _eventType!);
+                        break;
+                    case ScopeUnsubscribeKind.Parallel:
+                        _center?.UnsubscribeParallel(_routeKey, _handler!, _eventType!);
+                        break;
+                }
+            }
+            finally
+            {
+                _center = null;
+                _handler = null;
+                _eventType = null;
+
+                lock (PoolLock)
+                {
+                    if (Pool.Count < MaxPoolSize)
+                    {
+                        Pool.Push(this);
+                    }
                 }
             }
         }

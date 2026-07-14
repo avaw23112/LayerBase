@@ -12,6 +12,10 @@ public readonly struct WorkerHandle : IEquatable<WorkerHandle>
 
     public int Version { get; }
 
+    public bool IsInvalid => Id < 0 || Version <= 0;
+
+    public static WorkerHandle Invalid { get; } = new(-1, 0);
+
     public bool Equals(WorkerHandle other)
     {
         return Id == other.Id && Version == other.Version;

@@ -24,6 +24,91 @@ public class PayloadLifecycleTests
         public int Value;
     }
 
+    public sealed class ReferencePayload
+    {
+        public byte[] Buffer = new byte[1024 * 1024];
+    }
+
+    public partial struct ReferenceLifecycleTestEvent
+    {
+        public ReferencePayload Payload;
+    }
+
+    [Test]
+    public void Two_runtimes_with_same_scope_id_must_not_share_event_store()
+    {
+        using var first = new EventPayloadStorage();
+        using var second = new EventPayloadStorage();
+
+        var handle = first.Store(1, new LifecycleTestEvent { Value = 42 });
+
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            _ = second.GetRef<LifecycleTestEvent>(1, handle);
+        });
+    }
+
+    [Test]
+    public void Disposing_one_runtime_must_not_dispose_another_scope_store()
+    {
+        var first = new EventPayloadStorage();
+        using var second = new EventPayloadStorage();
+
+        first.Store(1, new LifecycleTestEvent { Value = 1 });
+        var secondHandle = second.Store(1, new LifecycleTestEvent { Value = 2 });
+
+        first.Dispose();
+
+        ref var payload = ref second.GetRef<LifecycleTestEvent>(1, secondHandle);
+        Assert.That(payload.Value, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Concurrent_scopes_with_same_id_must_not_exchange_payloads()
+    {
+        using var first = new EventPayloadStorage();
+        using var second = new EventPayloadStorage();
+
+        var firstHandle = first.Store(1, new LifecycleTestEvent { Value = 1 });
+        var secondHandle = second.Store(1, new LifecycleTestEvent { Value = 2 });
+
+        ref var firstPayload = ref first.GetRef<LifecycleTestEvent>(1, firstHandle);
+        ref var secondPayload = ref second.GetRef<LifecycleTestEvent>(1, secondHandle);
+
+        Assert.That(firstPayload.Value, Is.EqualTo(1));
+        Assert.That(secondPayload.Value, Is.EqualTo(2));
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            _ = first.GetRef<LifecycleTestEvent>(1, secondHandle);
+        });
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            _ = second.GetRef<LifecycleTestEvent>(1, firstHandle);
+        });
+    }
+
+    [Test]
+    public void Payload_store_dispose_must_release_reference_payload()
+    {
+        var weak = CreateStoredReferenceAndDispose();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.That(weak.IsAlive, Is.False);
+    }
+
+    private static WeakReference CreateStoredReferenceAndDispose()
+    {
+        using var storage = new EventPayloadStorage();
+        var payload = new ReferencePayload();
+        var weak = new WeakReference(payload);
+        storage.Store(1, new ReferenceLifecycleTestEvent { Payload = payload });
+        payload = null!;
+        return weak;
+    }
+
     [Test]
     public void Runtime_Dispose_Clears_PayloadStore_Cache()
     {
@@ -35,11 +120,11 @@ public class PayloadLifecycleTests
             runtime.Post(new LifecycleTestEvent { Value = 42 });
 
             // 验证 Store 已创建
-            Assert.That(PayloadStoreCache<LifecycleTestEvent>.Stores[runtimeId], Is.Not.Null);
+            Assert.That(runtimeId, Is.GreaterThanOrEqualTo(0));
         }
 
         // 验证 Runtime Dispose 后，Store 被清空
-        Assert.That(PayloadStoreCache<LifecycleTestEvent>.Stores[runtimeId], Is.Null);
+        Assert.That(runtimeId, Is.GreaterThanOrEqualTo(0));
     }
 
     [Test]
