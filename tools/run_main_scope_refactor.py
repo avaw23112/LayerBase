@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import apply_main_scope_refactor as refactor
 
 
@@ -25,5 +27,25 @@ def replace_once_with_ordered_lifecycle_support(
     return _original_replace_once(text, old, new, label)
 
 
+def fix_value_type_options() -> None:
+    """The three scheduler option types are structs, so assignment needs no null guard."""
+    path = Path(__file__).resolve().parents[1] / "LayerBase/Application/LayerRuntime.cs"
+    text = path.read_text(encoding="utf-8")
+    replacements = {
+        "_postOptions = options ?? throw new ArgumentNullException(nameof(options));": "_postOptions = options;",
+        "_timerOptions = options ?? throw new ArgumentNullException(nameof(options));": "_timerOptions = options;",
+        "_delayOptions = options ?? throw new ArgumentNullException(nameof(options));": "_delayOptions = options;",
+    }
+
+    for old, new in replacements.items():
+        count = text.count(old)
+        if count != 1:
+            raise RuntimeError(f"option assignment patch expected one match for {old!r}, found {count}")
+        text = text.replace(old, new, 1)
+
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
 refactor.replace_once = replace_once_with_ordered_lifecycle_support
 refactor.main()
+fix_value_type_options()
