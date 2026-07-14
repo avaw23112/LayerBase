@@ -7,6 +7,12 @@ on:
     paths:
       - tools/apply_main_scope_refactor.py
       - .github/workflows/main-scope-refactor.yml
+  pull_request:
+    branches:
+      - faster
+    paths:
+      - tools/apply_main_scope_refactor.py
+      - .github/workflows/main-scope-refactor.yml
 
 permissions:
   contents: write
@@ -17,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout branch
+      - name: Checkout feature branch
         uses: actions/checkout@v4
         with:
           ref: feat/main-scope-default-runtime
@@ -41,11 +47,13 @@ jobs:
         run: dotnet test --no-build --configuration Release --verbosity normal
 
       - name: Remove one-shot automation
+        if: github.event_name == 'push'
         run: |
           rm tools/apply_main_scope_refactor.py
           rm .github/workflows/main-scope-refactor.yml
 
       - name: Commit verified refactor
+        if: github.event_name == 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
