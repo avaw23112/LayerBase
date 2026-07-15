@@ -13,7 +13,11 @@ internal enum ScopeRuntimeState
     Created = 0,
     Running = 1,
     StopRequested = 2,
-    Disposed = 3
+    Stopping = 3,
+    Stopped = 4,
+    Disposing = 5,
+    Disposed = 6,
+    Faulted = 7
 }
 
 internal enum ScopeThreadingMode

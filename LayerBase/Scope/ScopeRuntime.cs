@@ -25,6 +25,7 @@ internal sealed class ScopeRuntime : IDisposable
     private int _callSequence;
     private float _fixedUpdateAccumulator;
     private bool _runtimeStopRun;
+    private bool _disposeRequestedFromControl;
 
     public ScopeRuntime(LayerRuntime runtime, ScopeExecutionPlan plan, int runtimeId, int generation)
     {
@@ -264,6 +265,47 @@ internal sealed class ScopeRuntime : IDisposable
         return completion.Task;
     }
 
+    internal LBTask<TResponse> EnqueueControlCall<TRequest, TResponse>(
+        TRequest request,
+        CancellationToken cancellationToken = default)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        if (_state == ScopeRuntimeState.Disposed)
+            return LBTask<TResponse>.FromException(new ObjectDisposedException(nameof(ScopeRuntime)));
+        if (cancellationToken.IsCancellationRequested)
+            return LBTask<TResponse>.FromCanceled(cancellationToken);
+
+        var completion = new ScopeCallCompletion<TResponse>();
+        var queuedCall = new ScopeQueuedCall<TRequest, TResponse>(
+            request,
+            completion,
+            cancellationToken);
+        var payload = _callPayloadStorage.Store(_runtimeId, in queuedCall);
+        var token = new ScopeCallToken(
+            _generation,
+            Descriptor.ScopeId,
+            Interlocked.Increment(ref _callSequence),
+            version: 1);
+        var envelope = new ScopeCallEnvelope(
+            ScopeCallEnvelopeKind.Request,
+            ScopeCallClass.Control,
+            token,
+            Endpoint.Address,
+            ScopeLifecycleRouteIds.Resolve<TRequest, TResponse>(),
+            payload,
+            ScopeCallResult.None,
+            completion);
+
+        var result = Transport.CallInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
+        if (result == ScopeEnqueueResult.Accepted)
+            return completion.Task;
+
+        _callPayloadStorage.Release(payload);
+        completion.TrySetException(new InvalidOperationException($"Scope control call enqueue failed: {result}."));
+        return completion.Task;
+    }
+
     public ScopePostResult EnqueueEvent<TEvent>(in TEvent value)
         where TEvent : struct
     {
@@ -294,7 +336,12 @@ internal sealed class ScopeRuntime : IDisposable
     public void PumpIngress()
     {
         DrainCallInbox();
+        DisposeAfterControlIfNeeded();
+        if (_state == ScopeRuntimeState.Disposed)
+            return;
+
         DrainEventInbox();
+        DisposeAfterControlIfNeeded();
     }
 
     public void PumpScopeResources(float deltaTime)
@@ -353,6 +400,9 @@ internal sealed class ScopeRuntime : IDisposable
         {
             try
             {
+                if (TryDispatchLifecycleControl(envelope))
+                    continue;
+
                 if (_actorWorld != null &&
                     ActorCallDispatcherRegistry.TryDispatch(
                         envelope.RouteId,
@@ -371,6 +421,114 @@ internal sealed class ScopeRuntime : IDisposable
                 _callPayloadStorage.Release(envelope.Payload);
             }
         }
+    }
+
+    private bool TryDispatchLifecycleControl(ScopeCallEnvelope envelope)
+    {
+        if (envelope.Kind != ScopeCallEnvelopeKind.Request ||
+            envelope.Class != ScopeCallClass.Control)
+        {
+            return false;
+        }
+
+        switch (envelope.RouteId)
+        {
+            case ScopeLifecycleRouteIds.Stop:
+                DispatchStopControl(envelope);
+                return true;
+            case ScopeLifecycleRouteIds.Dispose:
+                DispatchDisposeControl(envelope);
+                return true;
+            default:
+                envelope.Completion?.TrySetException(
+                    new InvalidOperationException($"Unknown scope lifecycle control route {envelope.RouteId}."));
+                return true;
+        }
+    }
+
+    private void DispatchStopControl(ScopeCallEnvelope envelope)
+    {
+        if (!_callPayloadStorage.TryGet<ScopeQueuedCall<ScopeStopCall, ScopeStopResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope stop payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            StopOnOwnerThread();
+            queuedCall.Completion.TrySetResult(new ScopeStopResponse(ScopeControlResult.Succeeded));
+        }
+        catch (Exception ex)
+        {
+            _state = ScopeRuntimeState.Faulted;
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchDisposeControl(ScopeCallEnvelope envelope)
+    {
+        if (!_callPayloadStorage.TryGet<ScopeQueuedCall<ScopeDisposeCall, ScopeDisposeResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope dispose payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            if (_state != ScopeRuntimeState.Stopped)
+                StopOnOwnerThread();
+
+            _state = ScopeRuntimeState.Disposing;
+            _disposeRequestedFromControl = true;
+            queuedCall.Completion.TrySetResult(new ScopeDisposeResponse(ScopeControlResult.Succeeded));
+        }
+        catch (Exception ex)
+        {
+            _state = ScopeRuntimeState.Faulted;
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void StopOnOwnerThread()
+    {
+        if (_state == ScopeRuntimeState.Disposed ||
+            _state == ScopeRuntimeState.Disposing ||
+            _state == ScopeRuntimeState.Stopped)
+        {
+            return;
+        }
+
+        _state = ScopeRuntimeState.Stopping;
+        Transport.CloseBusinessAdmission();
+        RunRuntimeStop();
+        _state = ScopeRuntimeState.Stopped;
+    }
+
+    private void DisposeAfterControlIfNeeded()
+    {
+        if (_disposeRequestedFromControl)
+            DisposeOwnerThreadResources();
     }
 
     private void DrainEventInbox()
@@ -436,11 +594,19 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void Dispose()
     {
+        DisposeOwnerThreadResources();
+    }
+
+    private void DisposeOwnerThreadResources()
+    {
         if (_state == ScopeRuntimeState.Disposed)
             return;
 
-        _state = ScopeRuntimeState.Disposed;
-        RunRuntimeStop();
+        _disposeRequestedFromControl = false;
+        if (_state != ScopeRuntimeState.Stopped)
+            StopOnOwnerThread();
+
+        _state = ScopeRuntimeState.Disposing;
         ReleaseCallInbox();
         ReleaseEventInbox();
         _callPayloadStorage.Dispose();
@@ -459,6 +625,7 @@ internal sealed class ScopeRuntime : IDisposable
         EcsScheduler.Dispose();
         EcsWorld.Dispose();
         Transport.Dispose();
+        _state = ScopeRuntimeState.Disposed;
     }
 
     private void ReleaseCallInbox()

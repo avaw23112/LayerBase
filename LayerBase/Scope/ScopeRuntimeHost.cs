@@ -126,7 +126,19 @@ internal sealed class ScopeRuntimeHost : IDisposable
         for (int i = _workers.Length - 1; i >= 0; i--)
             _workers[i].Dispose();
         for (int i = _scopes.Length - 1; i >= 0; i--)
-            _scopes[i].Dispose();
+            DisposeScopeThroughControl(_scopes[i]);
+    }
+
+    private static void DisposeScopeThroughControl(ScopeRuntime scope)
+    {
+        if (scope.State == ScopeRuntimeState.Disposed)
+            return;
+
+        var disposeTask = scope.RequestDisposeAsync();
+        scope.PumpIngress();
+
+        if (!disposeTask.GetAwaiter().IsCompleted)
+            scope.Dispose();
     }
 
     private void ThrowIfDisposed()

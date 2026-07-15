@@ -29,6 +29,12 @@ internal sealed class ScopeTransport : IDisposable
         _callWriter.Attach(runtime);
     }
 
+    public void CloseBusinessAdmission()
+    {
+        EventInbox.CloseBusinessAdmission();
+        CallInbox.CloseBusinessAdmission();
+    }
+
     public void Dispose()
     {
         EventInbox.CloseAllAdmission();

@@ -5,7 +5,7 @@ internal sealed class ScopeWorker : IDisposable
     private readonly ScopeRuntime _runtime;
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _started = new(false);
-    private volatile bool _running;
+    private bool _startedThread;
 
     public ScopeWorker(ScopeRuntime runtime)
     {
@@ -19,24 +19,24 @@ internal sealed class ScopeWorker : IDisposable
 
     public void Start()
     {
-        if (_running)
+        if (_startedThread)
             return;
 
-        _running = true;
+        _startedThread = true;
         _thread.Start();
         _started.Wait();
     }
 
-    public void RequestStop()
-    {
-        _running = false;
-    }
-
     public void Dispose()
     {
-        RequestStop();
+        if (_startedThread && _runtime.State != ScopeRuntimeState.Disposed)
+            _ = _runtime.RequestDisposeAsync();
+
         if (_thread.IsAlive && !ReferenceEquals(Thread.CurrentThread, _thread))
             _thread.Join();
+
+        if (!_startedThread)
+            _runtime.Dispose();
     }
 
     private void Run()
@@ -44,7 +44,7 @@ internal sealed class ScopeWorker : IDisposable
         _started.Set();
         try
         {
-            while (_running)
+            while (_runtime.State != ScopeRuntimeState.Disposed)
             {
                 float deltaTime = GetDeltaTime();
                 _runtime.PumpScopeResources(deltaTime);
@@ -53,7 +53,8 @@ internal sealed class ScopeWorker : IDisposable
         }
         finally
         {
-            _runtime.RunRuntimeStop();
+            if (_runtime.State != ScopeRuntimeState.Disposed)
+                _runtime.RunRuntimeStop();
         }
     }
 

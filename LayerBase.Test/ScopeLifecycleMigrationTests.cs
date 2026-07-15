@@ -168,6 +168,92 @@ public sealed class ScopeLifecycleMigrationTests
     }
 
     [Test]
+    public async Task Stop_control_is_delivered_through_scope_call_inbox()
+    {
+        using var runtime = new LayerRuntime(9104);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                CreateTraceScopePlan<InlineTraceScope>(
+                    scopeId: 1,
+                    ScopeOptions.Inline,
+                    new List<string>(),
+                    "I0",
+                    "I2")
+            },
+            runtimeId: 9104,
+            generation: 1);
+
+        ScopeRuntime scope = host.Scopes[1];
+
+        var stopTask = scope.RequestStopAsync();
+
+        Assert.That(stopTask.GetAwaiter().IsCompleted, Is.False,
+            "Stop must be queued as a control ScopeCall and completed by the owner-thread pump.");
+
+        scope.PumpIngress();
+
+        ScopeStopResponse response = await stopTask;
+        Assert.That(response.State, Is.EqualTo(ScopeControlResult.Succeeded));
+        Assert.That(scope.State, Is.EqualTo(ScopeRuntimeState.Stopped));
+    }
+
+    [Test]
+    public async Task Stopped_scope_rejects_business_but_accepts_dispose_control()
+    {
+        using var runtime = new LayerRuntime(9105);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                CreateTraceScopePlan<InlineTraceScope>(
+                    scopeId: 1,
+                    ScopeOptions.Inline,
+                    new List<string>(),
+                    "I0",
+                    "I2")
+            },
+            runtimeId: 9105,
+            generation: 1);
+
+        ScopeRuntime scope = host.Scopes[1];
+
+        var stopTask = scope.RequestStopAsync();
+        scope.PumpIngress();
+        _ = await stopTask;
+
+        var postResult = scope.EnqueueEvent(new TraceScopeEvent(7));
+        Assert.That(postResult.Status, Is.EqualTo(ScopePostStatus.Rejected));
+
+        var disposeTask = scope.RequestDisposeAsync();
+        Assert.That(disposeTask.GetAwaiter().IsCompleted, Is.False);
+
+        scope.PumpIngress();
+
+        ScopeDisposeResponse response = await disposeTask;
+        Assert.That(response.State, Is.EqualTo(ScopeControlResult.Succeeded));
+        Assert.That(scope.State, Is.EqualTo(ScopeRuntimeState.Disposed));
+    }
+
+    [Test]
+    public void Scope_worker_does_not_use_stop_flag_as_lifecycle_command()
+    {
+        Type workerType = typeof(ScopeWorker);
+
+        Assert.That(workerType.GetMethod("RequestStop", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance),
+            Is.Null,
+            "Worker stop/dispose must be delivered through ScopeCall, not a direct worker command method.");
+
+        Assert.That(workerType.GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+                              .Select(static field => field.Name),
+            Has.No.EqualTo("_running"),
+            "A worker-local stop flag must not carry lifecycle command semantics.");
+    }
+
+    [Test]
     public void Scope_ref_posts_to_its_own_scope_inbox()
     {
         var trace = new List<string>();
