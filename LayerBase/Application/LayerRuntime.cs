@@ -9,6 +9,7 @@ using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
+using LayerBase.Modules;
 using LayerBase.Scope;
 using LayerBase.Snap;
 
@@ -78,6 +79,8 @@ public sealed partial class LayerRuntime : IDisposable
     internal int Generation => _generation;
 
     internal ScopeRuntimeHost ScopeHost => _scopeHost;
+
+    internal RuntimeCompositionPlan CompositionPlan { get; private set; } = RuntimeCompositionPlan.Empty;
     #endregion
 
     #region Events
@@ -582,6 +585,7 @@ public sealed partial class LayerRuntime : IDisposable
         private readonly ResponsibilityChain _chain = new(new RcOwnerToken());
         private bool _debugMode;
         private LayerChain? _layerChain;
+        private readonly List<IAssemblyModule> _assemblyModules = new();
         private int _pendingLayerCount;
         private PostSchedulerOptions _postOptions = PostSchedulerOptions.Default;
         private TimeSchedulerOptions _timerOptions = TimeSchedulerOptions.Default;
@@ -607,6 +611,15 @@ public sealed partial class LayerRuntime : IDisposable
 
             layer.AttachToContext(_runtime);
             _layerChain.AddNode(layer);
+            return this;
+        }
+
+        public LayersBuilder AddAssemblyModule(IAssemblyModule module)
+        {
+            if (_built) throw new InvalidOperationException("Cannot add assembly modules after Build has been called.");
+            if (module == null) throw new ArgumentNullException(nameof(module));
+
+            _assemblyModules.Add(module);
             return this;
         }
 
@@ -650,6 +663,9 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime._scopeHost.MainScope.InstallSynchronizationContext();
 
             _layerChain.Prebuild();
+            _runtime.CompositionPlan = RuntimeCompositionPlan.Build(
+                _layerChain.GetNodes().ToArray(),
+                _assemblyModules);
             _runtime.BuildLocalCallRegistry();
 
             _runtime._fixedUpdateOptions = _fixedUpdateOptions;
