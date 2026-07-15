@@ -184,6 +184,155 @@ public sealed class ScopeCompositionPlanTests
     }
 
     [Test]
+    public void Same_layer_can_receive_contributions_from_multiple_modules()
+    {
+        LayerHub.Reset();
+
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new GameplayLayer())
+                              .AddAssemblyModule(new TestAssemblyModule("combat",
+                                  ServiceContribution.ForTypes(typeof(ICombatService), typeof(CombatService), typeof(GameplayLayer), typeof(MainScope), ServiceLifetime.Singleton)))
+                              .AddAssemblyModule(new TestAssemblyModule("inventory",
+                                  ServiceContribution.ForTypes(typeof(IInventoryService), typeof(InventoryService), typeof(GameplayLayer), typeof(MainScope), ServiceLifetime.Singleton)))
+                              .Build();
+
+        var contribution = runtime.CompositionPlan.Layers.Single().ScopeContributions.Single();
+
+        Assert.That(contribution.ServiceCount, Is.EqualTo(2));
+        Assert.That(runtime.CompositionPlan.Services.Select(static service => service.OwnerLayerIndex),
+            Is.EqualTo(new[] { 0, 0 }));
+    }
+
+    [Test]
+    public void Same_module_can_contribute_one_layer_to_multiple_scopes()
+    {
+        LayerHub.Reset();
+
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new GameplayLayer())
+                              .AddAssemblyModule(new TestAssemblyModule(
+                                  "combat",
+                                  ServiceContribution.ForTypes(typeof(ICombatService), typeof(CombatService), typeof(GameplayLayer), typeof(MainScope), ServiceLifetime.Singleton),
+                                  ServiceContribution.ForTypes(typeof(IPathfindingService), typeof(PathfindingService), typeof(GameplayLayer), typeof(PathfindingScope), ServiceLifetime.Singleton)))
+                              .Build();
+
+        var gameplayPlan = runtime.CompositionPlan.Layers.Single();
+
+        Assert.That(gameplayPlan.ScopeContributions.Select(static contribution => contribution.OwnerScopeId),
+            Is.EqualTo(new[] { MainScope.ScopeId, PathfindingScope.ScopeId }));
+        Assert.That(runtime.CompositionPlan.Scopes.Select(static scope => scope.Descriptor.ScopeId),
+            Does.Contain(PathfindingScope.ScopeId));
+    }
+
+    [Test]
+    public void Context_must_match_owner_service_layer_and_scope()
+    {
+        LayerHub.Reset();
+
+        var module = new TestAssemblyModule(
+            "combat",
+            services: new[]
+            {
+                ServiceContribution.ForTypes(typeof(ICombatService), typeof(CombatService), typeof(GameplayLayer), typeof(MainScope), ServiceLifetime.Singleton)
+            },
+            contexts: new[]
+            {
+                ContextContribution.ForTypes(typeof(CombatContext), typeof(ICombatService), typeof(GameplayLayer), typeof(PathfindingScope))
+            });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            LayerHub.CreateLayers()
+                    .Push(new GameplayLayer())
+                    .AddAssemblyModule(module)
+                    .Build());
+    }
+
+    [Test]
+    public void Local_call_uniqueness_is_per_scope()
+    {
+        LayerHub.Reset();
+
+        var module = new TestAssemblyModule(
+            "calls",
+            calls: new[]
+            {
+                LocalCallContribution.ForTypes(typeof(SwitchSceneRequest), typeof(SwitchSceneResponse), typeof(CombatCallHandler), typeof(GameplayLayer), typeof(MainScope)),
+                LocalCallContribution.ForTypes(typeof(SwitchSceneRequest), typeof(SwitchSceneResponse), typeof(AlternateCombatCallHandler), typeof(PresentationLayer), typeof(MainScope))
+            });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            LayerHub.CreateLayers()
+                    .Push(new GameplayLayer())
+                    .Push(new PresentationLayer())
+                    .AddAssemblyModule(module)
+                    .Build());
+    }
+
+    [Test]
+    public void Same_call_can_have_handlers_in_different_scopes()
+    {
+        LayerHub.Reset();
+
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new GameplayLayer())
+                              .Push(new PresentationLayer())
+                              .AddAssemblyModule(new TestAssemblyModule(
+                                  "calls",
+                                  calls: new[]
+                                  {
+                                      LocalCallContribution.ForTypes(typeof(SwitchSceneRequest), typeof(SwitchSceneResponse), typeof(CombatCallHandler), typeof(GameplayLayer), typeof(MainScope)),
+                                      LocalCallContribution.ForTypes(typeof(SwitchSceneRequest), typeof(SwitchSceneResponse), typeof(PathfindingCallHandler), typeof(PresentationLayer), typeof(PathfindingScope))
+                                  }))
+                              .Build();
+
+        Assert.That(runtime.CompositionPlan.LocalCalls.Select(static call => call.OwnerScopeId),
+            Is.EqualTo(new[] { MainScope.ScopeId, PathfindingScope.ScopeId }));
+    }
+
+    [Test]
+    public void Tool_key_contains_layer_and_scope()
+    {
+        LayerHub.Reset();
+
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new GameplayLayer())
+                              .Push(new PresentationLayer())
+                              .AddAssemblyModule(new TestAssemblyModule(
+                                  "tools",
+                                  tools: new[]
+                                  {
+                                      LayerToolContribution.ForTypes(typeof(ICombatTool), "default", typeof(GameplayLayer), typeof(MainScope)),
+                                      LayerToolContribution.ForTypes(typeof(ICombatTool), "default", typeof(PresentationLayer), typeof(MainScope)),
+                                      LayerToolContribution.ForTypes(typeof(ICombatTool), "default", typeof(GameplayLayer), typeof(PathfindingScope))
+                                  }))
+                              .Build();
+
+        Assert.That(runtime.CompositionPlan.Tools.Select(static tool =>
+                $"{tool.OwnerLayerIndex}:{tool.OwnerScopeId}:{tool.ContractType.Name}:{tool.LocalKey}"),
+            Is.EqualTo(new[]
+            {
+                "0:0:ICombatTool:default",
+                $"0:{PathfindingScope.ScopeId}:ICombatTool:default",
+                "1:0:ICombatTool:default"
+            }));
+    }
+
+    [Test]
+    public void Manifest_contains_factories_not_instances_and_runtime_has_no_module_dispatcher()
+    {
+        var manifestProperties = typeof(AssemblyModuleManifest)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(static property => property.Name)
+            .ToArray();
+
+        Assert.That(manifestProperties, Does.Not.Contain("Runtime"));
+        Assert.That(manifestProperties, Does.Not.Contain("Scope"));
+        Assert.That(manifestProperties, Does.Not.Contain("Instance"));
+        Assert.That(typeof(LayerRuntime).Assembly.GetTypes().Any(static type => type.Name.Contains("ModuleDispatcher")),
+            Is.False);
+    }
+
+    [Test]
     public void Module_api_cannot_auto_push_layer_or_bypass_layer_owned_service_registration()
     {
         var publicLayerBuilderMethods = typeof(LayerRuntime.LayersBuilder)
@@ -219,9 +368,24 @@ public sealed class ScopeCompositionPlanTests
     private sealed class TestAssemblyModule : IAssemblyModule
     {
         public TestAssemblyModule(string id, params ServiceContribution[] services)
+            : this(id, services, Array.Empty<ContextContribution>(), Array.Empty<LocalCallContribution>(), Array.Empty<LayerToolContribution>())
+        {
+        }
+
+        public TestAssemblyModule(
+            string id,
+            ServiceContribution[]? services = null,
+            ContextContribution[]? contexts = null,
+            LocalCallContribution[]? calls = null,
+            LayerToolContribution[]? tools = null)
         {
             Id = new AssemblyModuleId(id);
-            Manifest = new AssemblyModuleManifest(Id, services);
+            Manifest = new AssemblyModuleManifest(
+                Id,
+                services ?? Array.Empty<ServiceContribution>(),
+                contexts ?? Array.Empty<ContextContribution>(),
+                calls ?? Array.Empty<LocalCallContribution>(),
+                tools ?? Array.Empty<LayerToolContribution>());
         }
 
         public AssemblyModuleId Id { get; }
@@ -242,4 +406,27 @@ public sealed class ScopeCompositionPlanTests
     private interface IPresentationService { }
 
     private sealed class PresentationService : IPresentationService { }
+
+    private interface IInventoryService { }
+
+    private sealed class InventoryService : IInventoryService { }
+
+    private interface IPathfindingService { }
+
+    private sealed class PathfindingService : IPathfindingService { }
+
+    private sealed class CombatContext { }
+
+    private interface ICombatTool { }
+
+    private sealed class CombatCallHandler { }
+
+    private sealed class AlternateCombatCallHandler { }
+
+    private sealed class PathfindingCallHandler { }
+
+    private readonly struct PathfindingScope : IScopeDefinition
+    {
+        public const int ScopeId = 7;
+    }
 }
