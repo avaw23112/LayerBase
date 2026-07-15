@@ -56,8 +56,8 @@ internal sealed class ServiceLayerBinding
     public readonly ScopeRuntime OwnerScope;
 
     /// <summary>
-    /// 当前 Runtime 的 EventCenter。
-    /// Send 可以直接使用它，避免 Require 后再经过 Layer.Send。
+    /// 当前对象所属 Scope 的 EventCenter。
+    /// Send 必须使用 OwnerScope 的本地 EventCenter，不能回退到 Runtime/MainScope。
     /// </summary>
     public readonly EventCenter EventCenter;
 

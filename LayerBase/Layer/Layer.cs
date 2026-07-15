@@ -462,7 +462,7 @@ public abstract class Layer : Node, IDisposable
     public EventHandledState Send<T>(in T value) where T : struct
     {
         if (OwnerContext == null) throw new InvalidOperationException("Layer 未附加到 Runtime 上下文。");
-        return OwnerContext.EventCenter.Send(value);
+        return OwnerContext.ScopeHost.MainScope.EventCenter.Send(value);
     }
 
     /// <summary>投递事件到调度队列（异步派发）。</summary>
@@ -477,7 +477,11 @@ public abstract class Layer : Node, IDisposable
     public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
         if (OwnerContext == null) return PostResult.Failure();
-        return OwnerContext.TryPost(value, policy);
+        var scheduler = OwnerContext.ScopeHost.MainScope.PostScheduler;
+        if (scheduler == null) return PostResult.Failure();
+        return policy.HasValue
+            ? scheduler.TryPost(value, policy.Value)
+            : scheduler.TryPost(value);
     }
     #endregion
 
@@ -488,8 +492,9 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            OwnerContext.EventCenter.SubscribeFlow(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Flow));
+            var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+            center.SubscribeFlow(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Flow));
         }
         else
         {
@@ -503,8 +508,9 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            OwnerContext.EventCenter.SubscribeNotify(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Notify));
+            var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+            center.SubscribeNotify(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Notify));
         }
         else
         {
@@ -518,8 +524,9 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            OwnerContext.EventCenter.Subscribe(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Subscribe));
+            var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+            center.Subscribe(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Subscribe));
         }
         else
         {
@@ -533,8 +540,9 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            OwnerContext.EventCenter.SubscribeAsync(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, handler, typeof(T), UnsubscribeKind.Async));
+            var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+            center.SubscribeAsync(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Async));
         }
         else
         {
@@ -760,15 +768,17 @@ public abstract class Layer : Node, IDisposable
 
             if (genericDefinition == typeof(IEventHandler<>))
             {
-                OwnerContext.EventCenter.SubscribeFlow(RouteIndex, instance, typeArguments[0]);
-                _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Flow));
+                var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+                center.SubscribeFlow(RouteIndex, instance, typeArguments[0]);
+                _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Flow));
                 RecordSubscribedEvent(typeArguments[0]);
                 continue;
             }
             if (genericDefinition == typeof(IEventHandlerAsync<>))
             {
-                OwnerContext.EventCenter.SubscribeAsync(RouteIndex, instance, typeArguments[0]);
-                _subscriptions.Add(UnsubscribeToken.Rent(OwnerContext.EventCenter, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Async));
+                var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+                center.SubscribeAsync(RouteIndex, instance, typeArguments[0]);
+                _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Async));
                 RecordSubscribedEvent(typeArguments[0]);
             }
         }
