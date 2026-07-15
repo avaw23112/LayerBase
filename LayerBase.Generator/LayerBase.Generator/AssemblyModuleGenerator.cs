@@ -13,6 +13,7 @@ namespace LayerBase.Generator;
 public sealed class AssemblyModuleGenerator : IIncrementalGenerator
 {
     private const string AssemblyModuleAttributeName = "LayerBase.Modules.AssemblyModuleAttribute";
+    private const string ModuleIgnoreAttributeName = "LayerBase.Modules.ModuleIgnoreAttribute";
     private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
     private const string OwnerServiceAttributeName = "LayerBase.DI.Options.OwnerServiceAttribute";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
@@ -274,6 +275,11 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         GeneratorAttributeSyntaxContext context)
     {
         var targetSymbol = (INamedTypeSymbol)context.TargetSymbol;
+        if (HasAttribute(targetSymbol, ModuleIgnoreAttributeName))
+        {
+            return ImmutableArray<OwnerLayerContributionInfo>.Empty;
+        }
+
         var ownerScope = ReadScopeType(targetSymbol);
         var builder = ImmutableArray.CreateBuilder<OwnerLayerContributionInfo>();
 
@@ -294,6 +300,11 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         GeneratorAttributeSyntaxContext context)
     {
         var contextSymbol = (INamedTypeSymbol)context.TargetSymbol;
+        if (HasAttribute(contextSymbol, ModuleIgnoreAttributeName))
+        {
+            return ImmutableArray<OwnerServiceContextInfo>.Empty;
+        }
+
         var builder = ImmutableArray.CreateBuilder<OwnerServiceContextInfo>();
 
         foreach (var attribute in context.Attributes)
@@ -365,6 +376,10 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         AppendLocalCallArray(source, indent, localCalls);
         AppendEventHandlerArray(source, indent, eventHandlers);
         source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LayerToolContribution>());");
+        source.AppendLine();
+
+        source.Append(indent).Append("    public static ").Append(module.TypeName).Append(" Instance { get; } = new ")
+              .Append(module.TypeName).AppendLine("();");
         source.AppendLine();
 
         source.Append(indent).AppendLine("    public global::LayerBase.Modules.AssemblyModuleId Id => __Manifest.ModuleId;");
@@ -609,6 +624,11 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     private static bool IsAttribute(AttributeData attribute, string metadataName)
     {
         return string.Equals(attribute.AttributeClass?.ToDisplayString(), metadataName, StringComparison.Ordinal);
+    }
+
+    private static bool HasAttribute(INamedTypeSymbol symbol, string metadataName)
+    {
+        return symbol.GetAttributes().Any(attribute => IsAttribute(attribute, metadataName));
     }
 
     private static string? ReadStringArgument(AttributeData attribute, int index)

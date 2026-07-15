@@ -41,6 +41,7 @@ public class AssemblyModuleGeneratorTests
             sourceText.Contains("partial class GameplayModule"));
 
         Assert.That(generatedSource, Does.Contain(": global::LayerBase.Modules.IAssemblyModule"));
+        Assert.That(generatedSource, Does.Contain("public static GameplayModule Instance { get; } = new GameplayModule();"));
         Assert.That(generatedSource, Does.Contain("new global::LayerBase.Modules.AssemblyModuleId(\"gameplay\")"));
         Assert.That(generatedSource, Does.Contain("global::System.Array.Empty<global::LayerBase.Modules.ServiceContribution>()"));
     }
@@ -432,6 +433,104 @@ public class AssemblyModuleGeneratorTests
 
         Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBMOD002"),
             string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Module_ignore_suppresses_cross_assembly_owner_layer_fallback()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.DI;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
+                              {
+                              }
+
+                              [ModuleIgnore]
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed partial class InventoryService : IService
+                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FeatureModule"));
+
+        Assert.That(generatedModule, Does.Not.Contain("ServiceContribution.ForTypes"));
+        Assert.That(generatedModule, Does.Not.Contain("typeof(global::FeaturePack.InventoryService)"));
+    }
+
+    [Test]
+    public void Module_ignore_suppresses_cross_assembly_owner_service_fallback()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.DI;
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+
+                                                       [OwnerLayer(typeof(GameplayLayer))]
+                                                       public sealed partial class InventoryService : IService
+                                                       {
+                                                           public void ConfigureServices(IServiceCollection services) { }
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.DI;
+                              using LayerBase.DI.Options;
+                              using LayerBase.Modules;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
+                              {
+                              }
+
+                              [ModuleIgnore]
+                              [OwnerService(typeof(InventoryService))]
+                              public sealed class InventoryContext : ILayerContext
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FeatureModule"));
+
+        Assert.That(generatedModule, Does.Not.Contain("ContextContribution.ForTypes"));
+        Assert.That(generatedModule, Does.Not.Contain("typeof(global::FeaturePack.InventoryContext)"));
     }
 
     [Test]
