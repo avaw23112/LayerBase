@@ -38,3 +38,4 @@ Acceptance points:
 - Cross-assembly `[OwnerService]` contexts emit `ContextContribution` metadata into the same `[AssemblyModule]` manifest and inherit owner layer/scope from their owner service.
 - Cross-assembly `[OwnerService]` event handlers emit `EventHandlerContribution` metadata into the same `[AssemblyModule]` manifest and inherit owner layer/scope from their owner service.
 - Cross-assembly CallHandler fallback emits `LocalCallContribution` metadata into the same `[AssemblyModule]` manifest; runtime invoker activation remains a later LocalCall runtime slice.
+- `ReflectionAssemblyModule.Build(Assembly)` is a cold-path fallback for assemblies without generated modules. It scans only the explicit assembly and emits the same immutable manifest contributions; it does not scan `AppDomain`, push layers, create runtime objects, or retain reflection dispatch state.

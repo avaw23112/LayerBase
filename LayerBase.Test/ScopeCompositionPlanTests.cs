@@ -1,7 +1,10 @@
 using System.Reflection;
 using LayerBase;
+using LayerBase.Async;
+using LayerBase.Call;
 using LayerBase.Core.EventHandler;
 using LayerBase.DI;
+using LayerBase.DI.Options;
 using LayerBase.Layers;
 using LayerBase.Modules;
 using LayerBase.Scope;
@@ -365,6 +368,36 @@ public sealed class ScopeCompositionPlanTests
     }
 
     [Test]
+    public void Reflection_assembly_module_builds_manifest_from_explicit_assembly_only()
+    {
+        var module = ReflectionAssemblyModule.Build(typeof(ReflectionFeatureService).Assembly);
+
+        Assert.That(module.Id.Value, Is.EqualTo(typeof(ReflectionFeatureService).Assembly.GetName().Name));
+        Assert.That(module.Manifest.Services.Any(static service =>
+            service.ServiceType == typeof(ReflectionFeatureService) &&
+            service.ImplementationType == typeof(ReflectionFeatureService) &&
+            service.OwnerLayerType == typeof(ReflectionFeatureLayer) &&
+            service.OwnerScopeType == typeof(ReflectionFeatureScope)), Is.True);
+        Assert.That(module.Manifest.Contexts.Any(static context =>
+            context.ContextType == typeof(ReflectionFeatureContext) &&
+            context.OwnerServiceType == typeof(ReflectionFeatureService) &&
+            context.OwnerLayerType == typeof(ReflectionFeatureLayer) &&
+            context.OwnerScopeType == typeof(ReflectionFeatureScope)), Is.True);
+        Assert.That(module.Manifest.EventHandlers.Any(static handler =>
+            handler.EventType == typeof(ReflectionFeatureEvent) &&
+            handler.HandlerType == typeof(ReflectionFeatureEventHandler) &&
+            handler.OwnerServiceType == typeof(ReflectionFeatureService) &&
+            handler.OwnerLayerType == typeof(ReflectionFeatureLayer) &&
+            handler.OwnerScopeType == typeof(ReflectionFeatureScope)), Is.True);
+        Assert.That(module.Manifest.LocalCalls.Any(static call =>
+            call.RequestType == typeof(ReflectionFeatureRequest) &&
+            call.ResponseType == typeof(ReflectionFeatureResponse) &&
+            call.HandlerType == typeof(ReflectionFeatureCallHandler) &&
+            call.OwnerLayerType == typeof(ReflectionFeatureLayer) &&
+            call.OwnerScopeType == typeof(MainScope)), Is.True);
+    }
+
+    [Test]
     public void Module_api_cannot_auto_push_layer_or_bypass_layer_owned_service_registration()
     {
         var publicLayerBuilderMethods = typeof(LayerRuntime.LayersBuilder)
@@ -477,5 +510,50 @@ public sealed class ScopeCompositionPlanTests
     private readonly struct PathfindingScope : IScopeDefinition
     {
         public const int ScopeId = 7;
+    }
+
+    public sealed partial class ReflectionFeatureLayer : Layer { }
+
+    public readonly struct ReflectionFeatureScope : IScopeDefinition
+    {
+        public const int ScopeId = 8;
+    }
+
+    [Scope<ReflectionFeatureScope>]
+    [OwnerLayer(typeof(ReflectionFeatureLayer))]
+    public sealed partial class ReflectionFeatureService : IService
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+    }
+
+    [OwnerService(typeof(ReflectionFeatureService))]
+    public sealed partial class ReflectionFeatureContext : ILayerContext { }
+
+    public readonly struct ReflectionFeatureEvent { }
+
+    [OwnerService(typeof(ReflectionFeatureService))]
+    public sealed partial class ReflectionFeatureEventHandler : IEventHandler<ReflectionFeatureEvent>
+    {
+        public void Deal(in ReflectionFeatureEvent @event)
+        {
+        }
+    }
+
+    public readonly struct ReflectionFeatureRequest { }
+
+    public readonly struct ReflectionFeatureResponse { }
+
+    [OwnerLayer(typeof(ReflectionFeatureLayer))]
+    public sealed partial class ReflectionFeatureCallHandler
+        : IScopeLocalCallHandler<ReflectionFeatureRequest, ReflectionFeatureResponse>
+    {
+        public LBTask<ReflectionFeatureResponse> HandleAsync(
+            ReflectionFeatureRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return LBTask<ReflectionFeatureResponse>.FromResult(new ReflectionFeatureResponse());
+        }
     }
 }
