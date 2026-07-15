@@ -14,8 +14,6 @@ internal sealed class ScopeRuntime : IDisposable
     private readonly int _runtimeId;
     private readonly int _generation;
     private readonly LayerRuntime _runtime;
-    private readonly EventPayloadStorage _callPayloadStorage = new();
-    private readonly EventPayloadStorage _eventPayloadStorage = new();
     private readonly MainActorRuntime? _mainActors;
     private ActorAccessor _actors;
     private bool _hasActorAccessor;
@@ -26,7 +24,6 @@ internal sealed class ScopeRuntime : IDisposable
     private IReadOnlyDictionary<int, ScopeRuntime> _scopeRuntimes =
         new Dictionary<int, ScopeRuntime>();
     private ScopeRuntime? _mainScopeRuntime;
-    private int _callSequence;
     private float _fixedUpdateAccumulator;
     private bool _runtimeStopRun;
     private bool _lifecycleDisposeRun;
@@ -52,7 +49,6 @@ internal sealed class ScopeRuntime : IDisposable
             _mainActors = runtime.MainActorRuntime;
         Transport = new ScopeTransport(
             new ScopeAddress(runtimeId, generation, Descriptor.ScopeId));
-        Transport.AttachRuntime(this);
         EventCenter = new EventCenter();
         LocalCalls = new ScopeLocalCallRegistry(Descriptor.ScopeId);
         if (_mainActors != null)
@@ -224,37 +220,8 @@ internal sealed class ScopeRuntime : IDisposable
     {
         if (_state == ScopeRuntimeState.Disposed)
             return LBTask<TResponse>.FromException(new ObjectDisposedException(nameof(ScopeRuntime)));
-        if (cancellationToken.IsCancellationRequested)
-            return LBTask<TResponse>.FromCanceled(cancellationToken);
 
-        var completion = new ScopeCallCompletion<TResponse>();
-        var queuedCall = new ScopeQueuedCall<TRequest, TResponse>(
-            request,
-            completion,
-            cancellationToken);
-        var payload = _callPayloadStorage.Store(_runtimeId, in queuedCall);
-        var token = new ScopeCallToken(
-            _generation,
-            Descriptor.ScopeId,
-            Interlocked.Increment(ref _callSequence),
-            version: 1);
-        var envelope = new ScopeCallEnvelope(
-            ScopeCallEnvelopeKind.Request,
-            ScopeCallClass.BusinessRequest,
-            token,
-            Endpoint.Address,
-            ScopeLocalCallRouteId<TRequest, TResponse>.Id,
-            payload,
-            ScopeCallResult.None,
-            completion);
-
-        var result = Transport.CallInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
-        if (result == ScopeEnqueueResult.Accepted)
-            return completion.Task;
-
-        _callPayloadStorage.Release(payload);
-        completion.TrySetException(new InvalidOperationException($"Scope call enqueue failed: {result}."));
-        return completion.Task;
+        return Transport.EnqueueCall<TRequest, TResponse>(in request, cancellationToken);
     }
 
     internal LBTask<TResponse> EnqueueControlCall<TRequest, TResponse>(
@@ -273,16 +240,11 @@ internal sealed class ScopeRuntime : IDisposable
             request,
             completion,
             cancellationToken);
-        var payload = _callPayloadStorage.Store(_runtimeId, in queuedCall);
-        var token = new ScopeCallToken(
-            _generation,
-            Descriptor.ScopeId,
-            Interlocked.Increment(ref _callSequence),
-            version: 1);
+        var payload = Transport.CallPayloadStorage.Store(_runtimeId, in queuedCall);
         var envelope = new ScopeCallEnvelope(
             ScopeCallEnvelopeKind.Request,
             ScopeCallClass.Control,
-            token,
+            Transport.NextCallToken(),
             Endpoint.Address,
             ScopeLifecycleRouteIds.Resolve<TRequest, TResponse>(),
             payload,
@@ -293,7 +255,7 @@ internal sealed class ScopeRuntime : IDisposable
         if (result == ScopeEnqueueResult.Accepted)
             return completion.Task;
 
-        _callPayloadStorage.Release(payload);
+        Transport.CallPayloadStorage.Release(payload);
         completion.TrySetException(new InvalidOperationException($"Scope control call enqueue failed: {result}."));
         return completion.Task;
     }
@@ -304,25 +266,7 @@ internal sealed class ScopeRuntime : IDisposable
         if (_state == ScopeRuntimeState.Disposed)
             return ScopePostResult.RuntimeDisposed;
 
-        var payload = _eventPayloadStorage.Store(_runtimeId, in value);
-        var envelope = new ScopeEventEnvelope(
-            Endpoint.Address,
-            EventTypeId<TEvent>.Id,
-            ScopeEventClass.Business,
-            payload);
-
-        var result = Transport.EventInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
-        if (result == ScopeEnqueueResult.Accepted)
-            return ScopePostResult.Accepted;
-
-        _eventPayloadStorage.Release(payload);
-        return result switch
-        {
-            ScopeEnqueueResult.Full => ScopePostResult.QueueFull,
-            ScopeEnqueueResult.Closed => ScopePostResult.RuntimeDisposed,
-            ScopeEnqueueResult.StaleEndpoint => ScopePostResult.StaleEndpoint,
-            _ => ScopePostResult.Rejected
-        };
+        return Transport.EnqueueEvent(in value);
     }
 
     public void PumpIngress()
@@ -464,16 +408,16 @@ internal sealed class ScopeRuntime : IDisposable
                         envelope.RouteId,
                         _runtimeId,
                         envelope,
-                        _callPayloadStorage))
+                        Transport.CallPayloadStorage))
                 {
                     continue;
                 }
 
-                LocalCalls.Dispatch(_runtimeId, envelope, _callPayloadStorage);
+                LocalCalls.Dispatch(_runtimeId, envelope, Transport.CallPayloadStorage);
             }
             finally
             {
-                _callPayloadStorage.Release(envelope.Payload);
+                Transport.CallPayloadStorage.Release(envelope.Payload);
             }
         }
     }
@@ -503,7 +447,7 @@ internal sealed class ScopeRuntime : IDisposable
 
     private void DispatchStopControl(ScopeCallEnvelope envelope)
     {
-        if (!_callPayloadStorage.TryGet<ScopeQueuedCall<ScopeStopCall, ScopeStopResponse>>(
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeStopCall, ScopeStopResponse>>(
                 _runtimeId,
                 envelope.Payload,
                 out var queuedCall))
@@ -533,7 +477,7 @@ internal sealed class ScopeRuntime : IDisposable
 
     private void DispatchDisposeControl(ScopeCallEnvelope envelope)
     {
-        if (!_callPayloadStorage.TryGet<ScopeQueuedCall<ScopeDisposeCall, ScopeDisposeResponse>>(
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeDisposeCall, ScopeDisposeResponse>>(
                 _runtimeId,
                 envelope.Payload,
                 out var queuedCall))
@@ -617,7 +561,7 @@ internal sealed class ScopeRuntime : IDisposable
                         this,
                         _runtimeId,
                         envelope.Payload,
-                        _eventPayloadStorage))
+                        Transport.EventPayloadStorage))
                 {
                     continue;
                 }
@@ -627,7 +571,7 @@ internal sealed class ScopeRuntime : IDisposable
                         EcsWorld,
                         _runtimeId,
                         envelope.Payload,
-                        _eventPayloadStorage))
+                        Transport.EventPayloadStorage))
                 {
                     continue;
                 }
@@ -637,17 +581,17 @@ internal sealed class ScopeRuntime : IDisposable
                         envelope.RouteId,
                         _runtimeId,
                         envelope.Payload,
-                        _eventPayloadStorage))
+                        Transport.EventPayloadStorage))
                 {
                     continue;
                 }
 
                 if (scheduler != null)
-                    _eventPayloadStorage.Post(envelope.Payload, scheduler);
+                    Transport.EventPayloadStorage.Post(envelope.Payload, scheduler);
             }
             finally
             {
-                _eventPayloadStorage.Release(envelope.Payload);
+                Transport.EventPayloadStorage.Release(envelope.Payload);
             }
         }
     }
@@ -657,7 +601,7 @@ internal sealed class ScopeRuntime : IDisposable
         if (envelope.RouteId != ScopeFaultRouteIds.FaultEvent)
             return false;
 
-        if (!_eventPayloadStorage.TryGet<ScopeFaultEvent>(
+        if (!Transport.EventPayloadStorage.TryGet<ScopeFaultEvent>(
                 _runtimeId,
                 envelope.Payload,
                 out var faultEvent))
@@ -708,7 +652,7 @@ internal sealed class ScopeRuntime : IDisposable
             return ScopePostResult.RuntimeDisposed;
 
         var faultEvent = new ScopeFaultEvent(record);
-        var payload = _eventPayloadStorage.Store(_runtimeId, in faultEvent);
+        var payload = Transport.EventPayloadStorage.Store(_runtimeId, in faultEvent);
         var envelope = new ScopeEventEnvelope(
             new ScopeAddress(record.RuntimeId, record.RuntimeGeneration, record.SourceScopeId),
             ScopeFaultRouteIds.FaultEvent,
@@ -719,14 +663,8 @@ internal sealed class ScopeRuntime : IDisposable
         if (result == ScopeEnqueueResult.Accepted)
             return ScopePostResult.Accepted;
 
-        _eventPayloadStorage.Release(payload);
-        return result switch
-        {
-            ScopeEnqueueResult.Full => ScopePostResult.QueueFull,
-            ScopeEnqueueResult.Closed => ScopePostResult.RuntimeDisposed,
-            ScopeEnqueueResult.StaleEndpoint => ScopePostResult.StaleEndpoint,
-            _ => ScopePostResult.Rejected
-        };
+        Transport.EventPayloadStorage.Release(payload);
+        return ScopeTransport.ToPostResult(result);
     }
 
     private void ApplyFaultPolicy(in ScopeFaultRecord record)
@@ -786,8 +724,6 @@ internal sealed class ScopeRuntime : IDisposable
         RunLifecycleDispose();
         ReleaseCallInbox();
         ReleaseEventInbox();
-        _callPayloadStorage.Dispose();
-        _eventPayloadStorage.Dispose();
         LocalCalls.Clear();
         DelayManager?.Clear();
         DelayManager = null;
@@ -810,14 +746,14 @@ internal sealed class ScopeRuntime : IDisposable
         while (Transport.CallInbox.TryDequeue(out var envelope))
         {
             envelope.Completion?.TrySetException(new ObjectDisposedException(nameof(ScopeRuntime)));
-            _callPayloadStorage.Release(envelope.Payload);
+            Transport.CallPayloadStorage.Release(envelope.Payload);
         }
     }
 
     private void ReleaseEventInbox()
     {
         while (Transport.EventInbox.TryDequeue(out var envelope))
-            _eventPayloadStorage.Release(envelope.Payload);
+            Transport.EventPayloadStorage.Release(envelope.Payload);
     }
 
     private sealed class ScopeTimerSink : IExpiredTimerSink<ITimerAction>

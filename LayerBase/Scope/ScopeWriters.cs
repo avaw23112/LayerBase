@@ -20,41 +20,27 @@ internal interface IScopeCallWriter
 
 internal sealed class RuntimeScopeEventWriter : IScopeEventWriter
 {
-    private WeakReference<ScopeRuntime>? _runtime;
+    private readonly ScopeTransport _transport;
 
-    public void Attach(ScopeRuntime runtime)
+    public RuntimeScopeEventWriter(ScopeTransport transport)
     {
-        _runtime = new WeakReference<ScopeRuntime>(runtime);
-    }
-
-    public void Detach()
-    {
-        _runtime = null;
+        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
     }
 
     public ScopePostResult Post<TEvent>(in TEvent value)
         where TEvent : struct
     {
-        var target = _runtime;
-        if (target == null || !target.TryGetTarget(out var runtime) || runtime.State == ScopeRuntimeState.Disposed)
-            return ScopePostResult.RuntimeDisposed;
-
-        return runtime.EnqueueEvent(in value);
+        return _transport.EnqueueEvent(in value);
     }
 }
 
 internal sealed class RuntimeScopeCallWriter : IScopeCallWriter
 {
-    private WeakReference<ScopeRuntime>? _runtime;
+    private readonly ScopeTransport _transport;
 
-    public void Attach(ScopeRuntime runtime)
+    public RuntimeScopeCallWriter(ScopeTransport transport)
     {
-        _runtime = new WeakReference<ScopeRuntime>(runtime);
-    }
-
-    public void Detach()
-    {
-        _runtime = null;
+        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
     }
 
     public LBTask<TResponse> Call<TRequest, TResponse>(
@@ -63,10 +49,6 @@ internal sealed class RuntimeScopeCallWriter : IScopeCallWriter
         where TRequest : struct
         where TResponse : struct
     {
-        var target = _runtime;
-        if (target == null || !target.TryGetTarget(out var runtime) || runtime.State == ScopeRuntimeState.Disposed)
-            return LBTask<TResponse>.FromException(new ObjectDisposedException(nameof(ScopeRuntime)));
-
-        return runtime.EnqueueCall<TRequest, TResponse>(in request, cancellationToken);
+        return _transport.EnqueueCall<TRequest, TResponse>(in request, cancellationToken);
     }
 }

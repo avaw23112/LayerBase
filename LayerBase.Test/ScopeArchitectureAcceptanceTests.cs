@@ -213,6 +213,60 @@ public sealed class ScopeArchitectureAcceptanceTests
     }
 
     [Test]
+    public void Scope_endpoint_writers_do_not_hold_scope_runtime_references()
+    {
+        AssertNoRuntimeReferenceFields(typeof(RuntimeScopeEventWriter));
+        AssertNoRuntimeReferenceFields(typeof(RuntimeScopeCallWriter));
+
+        AssertNoMethodNamed(typeof(RuntimeScopeEventWriter), "Attach");
+        AssertNoMethodNamed(typeof(RuntimeScopeEventWriter), "Detach");
+        AssertNoMethodNamed(typeof(RuntimeScopeCallWriter), "Attach");
+        AssertNoMethodNamed(typeof(RuntimeScopeCallWriter), "Detach");
+        AssertNoMethodNamed(typeof(ScopeTransport), "AttachRuntime");
+    }
+
+    [Test]
+    public void Scope_transport_owns_protocol_payload_storage()
+    {
+        var transportStorageFields = typeof(ScopeTransport)
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Where(field => field.FieldType == typeof(EventPayloadStorage))
+            .Select(field => field.Name)
+            .ToArray();
+
+        Assert.That(transportStorageFields, Is.EquivalentTo(new[]
+        {
+            "_eventPayloadStorage",
+            "_callPayloadStorage"
+        }));
+
+        var runtimeStorageFields = typeof(LayerRuntime).Assembly
+            .GetType("LayerBase.Scope.ScopeRuntime")!
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Where(field => field.FieldType == typeof(EventPayloadStorage))
+            .Select(field => field.Name)
+            .ToArray();
+
+        Assert.That(runtimeStorageFields, Is.Empty,
+            "ScopeRuntime should consume protocol storage through ScopeTransport instead of owning it.");
+    }
+
+    [Test]
+    public void Scope_ref_only_carries_endpoint_not_runtime_resources()
+    {
+        var fieldTypes = typeof(ScopeRef<MainScope>)
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Select(field => field.FieldType)
+            .ToArray();
+
+        Assert.That(fieldTypes, Is.EquivalentTo(new[] { typeof(ScopeEndpoint) }));
+        Assert.That(fieldTypes, Has.No.EqualTo(typeof(ScopeRuntime)));
+        Assert.That(fieldTypes, Has.No.EqualTo(typeof(EventCenter)));
+        Assert.That(fieldTypes, Has.No.EqualTo(typeof(PostScheduler)));
+        Assert.That(fieldTypes, Has.No.EqualTo(typeof(ScopeLocalCallRegistry)));
+    }
+
+    [Test]
     public void Main_scope_ref_try_post_uses_runtime_local_post_path()
     {
         LayerHub.Reset();
@@ -447,6 +501,29 @@ public sealed class ScopeArchitectureAcceptanceTests
             .FirstOrDefault(field => field.Name == fieldName);
 
         Assert.That(field, Is.Null, $"{type.Name} still contains {fieldName}.");
+    }
+
+    private static void AssertNoRuntimeReferenceFields(Type type)
+    {
+        var forbiddenFields = type
+            .GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
+            .Where(field => ReferencesScopeRuntime(field.FieldType))
+            .Select(field => field.Name)
+            .ToArray();
+
+        Assert.That(forbiddenFields, Is.Empty,
+            $"{type.Name} must write to the transport boundary, not retain ScopeRuntime fields.");
+    }
+
+    private static bool ReferencesScopeRuntime(Type type)
+    {
+        if (type == typeof(ScopeRuntime))
+            return true;
+
+        if (!type.IsGenericType)
+            return false;
+
+        return type.GetGenericArguments().Any(static argument => argument == typeof(ScopeRuntime));
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
