@@ -117,21 +117,18 @@ internal sealed class LayerChain
             builtLayers.SelectMany(static layer => layer.GetSharedFieldParticipants()));
 
         _hasDelayMask = 0;
-        var allSubscribers = new List<IAutoSubscribe>();
         foreach (var layer in builtLayers)
         {
             layer.LifecycleBuild();
-            allSubscribers.AddRange(layer.DiscoveredSubscribers);
             if (layer.HasDelayPublisher) _hasDelayMask |= 1UL << layer.RouteIndex;
         }
 
         var lifecyclePlan = ScopeLifecyclePlan.Build(builtLayers);
         _owner.ScopeHost.MainScope.SetLifecyclePlan(lifecyclePlan);
+        EventGraphValidator.Validate(builtLayers, _owner);
         lifecyclePlan.RunInitialize();
         lifecyclePlan.RunPostBuild();
         lifecyclePlan.RunRuntimeStart();
-
-        EventGraphValidator.Validate(allSubscribers, _owner);
     }
 
     /// <summary>

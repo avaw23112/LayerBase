@@ -42,6 +42,7 @@ public sealed partial class LayerRuntime : IDisposable
     private readonly WorkerJobScheduler _workerJobs;
     private FullSnapRuntime? _fullSnap;
     private LayerToolRegistry? _tools;
+    private TopologyAuditDiagnostic[] _topologyDiagnostics = Array.Empty<TopologyAuditDiagnostic>();
     internal DelayPublisherManager? DelayManager => _scopeHost.MainScope.DelayManager;
     #endregion
 
@@ -86,6 +87,8 @@ public sealed partial class LayerRuntime : IDisposable
     internal WorkerJobScheduler WorkerJobs => _workerJobs;
 
     internal RuntimeCompositionPlan CompositionPlan { get; private set; } = RuntimeCompositionPlan.Empty;
+
+    internal IReadOnlyList<TopologyAuditDiagnostic> TopologyDiagnostics => _topologyDiagnostics;
     #endregion
 
     #region Events
@@ -212,6 +215,17 @@ public sealed partial class LayerRuntime : IDisposable
         }
 
         _fullSnap.FreezePlans();
+    }
+
+    internal void RunTopologyAudit()
+    {
+        if (_chain == null)
+        {
+            _topologyDiagnostics = Array.Empty<TopologyAuditDiagnostic>();
+            return;
+        }
+
+        _topologyDiagnostics = TopologyAudit.Run(this, _chain.GetNodes().ToArray());
     }
 
     private void RegisterFullSnapNode(IGeneratedFullSnapNode node, int layerIndex, int objectSlot)
@@ -497,7 +511,8 @@ public sealed partial class LayerRuntime : IDisposable
         foreach (var entry in layer.LocalCallRouteEntries)
         {
             if (!_scopeHost.TryGetRuntime(entry.OwnerScopeId, out var ownerScope))
-                continue;
+                throw new InvalidOperationException(
+                    $"LocalCall route `{entry.RequestType.FullName}` -> `{entry.ResponseType.FullName}` targets unknown scope {entry.OwnerScopeId}.");
 
             ownerScope.LocalCalls.Register(entry);
         }
@@ -577,7 +592,16 @@ public sealed partial class LayerRuntime : IDisposable
         sb.AppendLine();
 
 
-        sb.AppendLine("## 2. Event Subscriptions");
+        sb.AppendLine("## 2. Scopes");
+        sb.AppendLine("| ScopeId | Scope Type | Execution | Layer Slices |");
+        sb.AppendLine("| :--- | :--- | :--- | :--- |");
+        foreach (var scope in CompositionPlan.Scopes.OrderBy(static scope => scope.Descriptor.ScopeId))
+            sb.AppendLine(
+                $"| {scope.Descriptor.ScopeId} | {scope.Descriptor.Name} | {scope.Options.Threading} | {string.Join(", ", scope.LayerSlices.Select(static slice => slice.LayerIndex))} |");
+        sb.AppendLine();
+
+
+        sb.AppendLine("## 3. Event Subscriptions");
         sb.AppendLine("| Event Type | Subscribed Layers |");
         sb.AppendLine("| :--- | :--- |");
 
@@ -598,22 +622,38 @@ public sealed partial class LayerRuntime : IDisposable
         sb.AppendLine();
 
 
-        sb.AppendLine("## 3. Call Routes");
-        sb.AppendLine("| Request | Response | Target Layer | Handler |");
-        sb.AppendLine("| :--- | :--- | :--- | :--- |");
+        sb.AppendLine("## 4. Scope Local Calls");
+        sb.AppendLine("| ScopeId | Request | Response | Target Layer | Handler | Source |");
+        sb.AppendLine("| :--- | :--- | :--- | :--- | :--- | :--- |");
         var hasCalls = false;
-        foreach (var layer in _chain.GetNodes().OfType<Layer>())
-        foreach (var call in layer.CallHandlers)
+        foreach (var call in CompositionPlan.LocalCalls
+                     .OrderBy(static call => call.OwnerScopeId)
+                     .ThenBy(static call => call.RequestType.FullName, StringComparer.Ordinal)
+                     .ThenBy(static call => call.ResponseType.FullName, StringComparer.Ordinal)
+                     .ThenBy(static call => call.OwnerLayerIndex))
         {
-            sb.AppendLine($"| {call.Req.Name} | {call.Resp.Name} | {layer.GetType().Name} | {call.Handler.Name} |");
+            var layerName = CompositionPlan.Layers
+                .FirstOrDefault(layer => layer.LayerIndex == call.OwnerLayerIndex)
+                ?.LayerType.Name ?? $"Layer {call.OwnerLayerIndex}";
+            sb.AppendLine(
+                $"| {call.OwnerScopeId} | {call.RequestType.Name} | {call.ResponseType.Name} | {layerName} | {call.HandlerType.Name} | Module |");
             hasCalls = true;
         }
 
-        if (!hasCalls) sb.AppendLine("| (None) | | | |");
+        foreach (var layer in _chain.GetNodes().OfType<Layer>())
+        foreach (var entry in layer.LocalCallRouteEntries.OrderBy(static entry => entry.OwnerScopeId)
+                                                         .ThenBy(static entry => entry.RouteId))
+        {
+            sb.AppendLine(
+                $"| {entry.OwnerScopeId} | {entry.RequestType.Name} | {entry.ResponseType.Name} | {layer.GetType().Name} | {entry.HandlerType.Name} | Runtime |");
+            hasCalls = true;
+        }
+
+        if (!hasCalls) sb.AppendLine("| (None) | | | | | |");
         sb.AppendLine();
 
 
-        sb.AppendLine("## 4. Shared Fields");
+        sb.AppendLine("## 5. Shared Fields");
         sb.AppendLine("| ProviderServiceType | LocalKey | Type | Role | Layer |");
         sb.AppendLine("| :--- | :--- | :--- | :--- | :--- |");
         var hasFields = false;
@@ -630,7 +670,21 @@ public sealed partial class LayerRuntime : IDisposable
         sb.AppendLine();
 
 
-        sb.AppendLine("## 5. Health Audit");
+        sb.AppendLine("## 6. Topology Diagnostics");
+        if (_topologyDiagnostics.Length == 0)
+        {
+            sb.AppendLine("No build topology diagnostics.");
+        }
+        else
+        {
+            foreach (var diagnostic in _topologyDiagnostics)
+                sb.AppendLine(
+                    $"- **{diagnostic.Severity}** `{diagnostic.Code}` Scope {diagnostic.ScopeId}, Layer {diagnostic.LayerIndex}: {diagnostic.Message}");
+        }
+        sb.AppendLine();
+
+
+        sb.AppendLine("## 7. Health Audit");
         var issues = new List<string>();
 
         var allLayers = _chain.GetNodes().OfType<Layer>().ToList();
@@ -767,6 +821,7 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime.InstallScopeHost(_runtime.CompositionPlan.Scopes);
             _runtime._scopeHost.MainScope.InstallSynchronizationContext();
             _layerChain.Prebuild();
+            _runtime.RunTopologyAudit();
             _runtime._tools = new LayerToolRegistry(_runtime, _runtime.CompositionPlan.Tools);
             _runtime.BuildLocalCallRegistry();
 
