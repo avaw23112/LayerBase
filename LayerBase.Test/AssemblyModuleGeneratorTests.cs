@@ -12,30 +12,14 @@ namespace LayerBase.Test;
 public class AssemblyModuleGeneratorTests
 {
     [Test]
-    public void Assembly_module_generator_emits_static_manifest_with_service_contribution()
+    public void Assembly_module_generator_emits_empty_static_manifest_for_explicit_module_root()
     {
         const string source = """
-                              using LayerBase.DI;
-                              using LayerBase.Layers;
                               using LayerBase.Modules;
-                              using LayerBase.Scope;
 
                               namespace Sample;
 
-                              public sealed class GameLayer : Layer
-                              {
-                              }
-
-                              public interface IGameService
-                              {
-                              }
-
-                              public sealed class GameService : IGameService
-                              {
-                              }
-
                               [AssemblyModule("gameplay")]
-                              [ModuleService(typeof(GameLayer), typeof(MainScope), typeof(IGameService), typeof(GameService), ServiceLifetime.Singleton)]
                               public sealed partial class GameplayModule
                               {
                               }
@@ -58,43 +42,219 @@ public class AssemblyModuleGeneratorTests
 
         Assert.That(generatedSource, Does.Contain(": global::LayerBase.Modules.IAssemblyModule"));
         Assert.That(generatedSource, Does.Contain("new global::LayerBase.Modules.AssemblyModuleId(\"gameplay\")"));
-        Assert.That(generatedSource, Does.Contain("global::LayerBase.Modules.ServiceContribution.ForTypes("));
-        Assert.That(generatedSource, Does.Contain("typeof(global::Sample.IGameService)"));
-        Assert.That(generatedSource, Does.Contain("typeof(global::Sample.GameService)"));
-        Assert.That(generatedSource, Does.Contain("typeof(global::Sample.GameLayer)"));
-        Assert.That(generatedSource, Does.Contain("typeof(global::LayerBase.Scope.MainScope)"));
-        Assert.That(generatedSource, Does.Contain("global::LayerBase.DI.ServiceLifetime.Singleton"));
+        Assert.That(generatedSource, Does.Contain("global::System.Array.Empty<global::LayerBase.Modules.ServiceContribution>()"));
     }
 
     [Test]
-    public void Assembly_module_generator_does_not_emit_runtime_ownership_or_instance_creation()
+    public void Cross_assembly_owner_layer_service_is_transferred_to_single_assembly_module()
     {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+                                                       """);
+
         const string source = """
+                              using AotGame;
+                              using LayerBase.DI;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
+                              {
+                              }
+
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed partial class InventoryService : IService
+                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FeatureModule"));
+
+        Assert.That(generatedModule, Does.Contain("global::LayerBase.Modules.ServiceContribution.ForTypes("));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.InventoryService)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.GameplayLayer)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::LayerBase.Scope.MainScope)"));
+        Assert.That(result.GeneratedSources, Has.None.Contains("__AutoMountServices"));
+    }
+
+    [Test]
+    public void Cross_assembly_owner_layer_service_uses_scope_attribute_when_declared()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+                                                       using LayerBase.Scope;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+
+                                                       public readonly struct BattleScope : IScopeDefinition
+                                                       {
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
                               using LayerBase.DI;
                               using LayerBase.Layers;
                               using LayerBase.Modules;
                               using LayerBase.Scope;
 
-                              public sealed class GameLayer : Layer
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
                               {
                               }
 
-                              public interface IGameService
+                              [Scope<BattleScope>]
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed partial class InventoryService : IService
                               {
-                              }
-
-                              public sealed class GameService : IGameService
-                              {
-                              }
-
-                              [AssemblyModule("gameplay")]
-                              [ModuleService(typeof(GameLayer), typeof(MainScope), typeof(IGameService), typeof(GameService))]
-                              public sealed partial class GameplayModule
-                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
                               }
                               """;
 
-        var result = RunGenerators(source, new AssemblyModuleGenerator());
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FeatureModule"));
+
+        Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.BattleScope)"));
+        Assert.That(generatedModule, Does.Not.Contain("typeof(global::LayerBase.Scope.MainScope)"));
+    }
+
+    [Test]
+    public void Cross_assembly_owner_layer_service_requires_module_root()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.DI;
+                              using LayerBase.Layers;
+
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed partial class InventoryService : IService
+                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBMOD001"),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Cross_assembly_owner_layer_service_requires_single_module_root()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.DI;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+
+                              [AssemblyModule("inventory")]
+                              public sealed partial class InventoryModule
+                              {
+                              }
+
+                              [AssemblyModule("combat")]
+                              public sealed partial class CombatModule
+                              {
+                              }
+
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed partial class InventoryService : IService
+                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBMOD002"),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Assembly_module_generator_does_not_emit_runtime_ownership_or_instance_creation()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.DI;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+
+                              [AssemblyModule("gameplay")]
+                              public sealed partial class GameplayModule
+                              {
+                              }
+
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed partial class GameService : IService
+                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
 
         var generatedSource = result.GeneratedSources.Single(static sourceText =>
             sourceText.Contains("partial class GameplayModule"));
@@ -107,11 +267,19 @@ public class AssemblyModuleGeneratorTests
 
     private static GeneratorTestResult RunGenerators(string source, params IIncrementalGenerator[] generators)
     {
+        return RunGenerators(source, [], generators);
+    }
+
+    private static GeneratorTestResult RunGenerators(
+        string source,
+        IEnumerable<MetadataReference> additionalReferences,
+        params IIncrementalGenerator[] generators)
+    {
         SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
         CSharpCompilation compilation = CSharpCompilation.Create(
             assemblyName: "AssemblyModuleGeneratorTests_" + Guid.NewGuid().ToString("N"),
             syntaxTrees: [syntaxTree],
-            references: GetMetadataReferences(),
+            references: GetMetadataReferences().Concat(additionalReferences),
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
@@ -132,6 +300,23 @@ public class AssemblyModuleGeneratorTests
                                         .ToImmutableArray();
 
         return new GeneratorTestResult(diagnostics, outputCompilation, generatedSources);
+    }
+
+    private static MetadataReference CreateReference(string assemblyName, string source)
+    {
+        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
+        CSharpCompilation compilation = CSharpCompilation.Create(
+            assemblyName,
+            syntaxTrees: [syntaxTree],
+            references: GetMetadataReferences(),
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        using var stream = new MemoryStream();
+        var result = compilation.Emit(stream);
+        Assert.That(result.Success, Is.True,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        return MetadataReference.CreateFromImage(stream.ToArray());
     }
 
     private static IEnumerable<MetadataReference> GetMetadataReferences()

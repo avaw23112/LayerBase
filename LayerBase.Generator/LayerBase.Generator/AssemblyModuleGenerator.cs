@@ -13,7 +13,9 @@ namespace LayerBase.Generator;
 public sealed class AssemblyModuleGenerator : IIncrementalGenerator
 {
     private const string AssemblyModuleAttributeName = "LayerBase.Modules.AssemblyModuleAttribute";
-    private const string ModuleServiceAttributeName = "LayerBase.Modules.ModuleServiceAttribute";
+    private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
+    private const string ScopeAttributeNamespace = "LayerBase.Scope";
+    private const string ScopeAttributeMetadataName = "ScopeAttribute`1";
 
     private static readonly SymbolDisplayFormat FullyQualifiedTypeFormat =
         SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
@@ -29,7 +31,75 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                              .Where(static module => module is not null)
                              .Select(static (module, _) => module!);
 
-        context.RegisterSourceOutput(modules, static (spc, module) => GenerateModule(spc, module));
+        var ownerLayerServices = context.SyntaxProvider
+                                        .ForAttributeWithMetadataName(
+                                            OwnerLayerAttributeName,
+                                            static (node, _) => node is ClassDeclarationSyntax,
+                                            static (ctx, _) => CreateOwnerLayerServices(ctx))
+                                        .SelectMany(static (items, _) => items);
+
+        var combined = context.CompilationProvider.Combine(modules.Collect()
+                                                                  .Combine(ownerLayerServices.Collect()));
+
+        context.RegisterSourceOutput(combined, static (spc, source) =>
+        {
+            var compilation = source.Left;
+            var data = source.Right;
+            Execute(spc, compilation, data.Left, data.Right);
+        });
+    }
+
+    private static void Execute(
+        SourceProductionContext spc,
+        Compilation compilation,
+        ImmutableArray<ModuleInfo> modules,
+        ImmutableArray<OwnerLayerServiceInfo> ownerLayerServices)
+    {
+        var moduleList = modules.OrderBy(static module => module.ModuleId, StringComparer.Ordinal)
+                                .ThenBy(static module => module.TypeName, StringComparer.Ordinal)
+                                .ToArray();
+
+        var fallbackServices = new List<ServiceContributionInfo>();
+        foreach (var service in ownerLayerServices)
+        {
+            if (SymbolEqualityComparer.Default.Equals(service.OwnerLayerType.ContainingAssembly, compilation.Assembly))
+            {
+                continue;
+            }
+
+            if (moduleList.Length == 0)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.CrossAssemblyOwnerLayerRequiresModule,
+                    service.Location,
+                    service.ServiceType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    service.OwnerLayerType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
+                continue;
+            }
+
+            if (moduleList.Length > 1)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.CrossAssemblyOwnerLayerRequiresSingleModule,
+                    service.Location,
+                    service.ServiceType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    string.Join(", ", moduleList.Select(static module =>
+                        module.TypeSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)))));
+                continue;
+            }
+
+            fallbackServices.Add(new ServiceContributionInfo(
+                ToTypeName(service.OwnerLayerType),
+                service.OwnerScopeType == null ? "global::LayerBase.Scope.MainScope" : ToTypeName(service.OwnerScopeType),
+                ToTypeName(service.ServiceType),
+                ToTypeName(service.ServiceType),
+                "global::LayerBase.DI.ServiceLifetime.Singleton"));
+        }
+
+        foreach (var module in moduleList)
+        {
+            GenerateModule(spc, module, moduleList.Length == 1 ? fallbackServices : Array.Empty<ServiceContributionInfo>());
+        }
     }
 
     private static ModuleInfo? CreateModule(GeneratorAttributeSyntaxContext context)
@@ -53,58 +123,47 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             moduleId = typeSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
         }
 
-        var services = typeSymbol.GetAttributes()
-                                 .Where(static attribute => IsAttribute(attribute, ModuleServiceAttributeName))
-                                 .Select(ReadServiceContribution)
-                                 .Where(static service => service is not null)
-                                 .Select(static service => service!)
-                                 .ToImmutableArray();
-
         return new ModuleInfo(
+            typeSymbol,
             typeSymbol.Name,
             typeSymbol.ContainingNamespace.IsGlobalNamespace
                 ? null
                 : typeSymbol.ContainingNamespace.ToDisplayString(),
             GetAccessibility(typeSymbol),
-            moduleId!,
-            services);
+            moduleId!);
     }
 
-    private static ServiceContributionInfo? ReadServiceContribution(AttributeData attribute)
+    private static ImmutableArray<OwnerLayerServiceInfo> CreateOwnerLayerServices(
+        GeneratorAttributeSyntaxContext context)
     {
-        var args = attribute.ConstructorArguments;
-        if (args.Length < 4 ||
-            args[0].Value is not ITypeSymbol ownerLayerType ||
-            args[1].Value is not ITypeSymbol ownerScopeType ||
-            args[2].Value is not ITypeSymbol serviceType ||
-            args[3].Value is not ITypeSymbol implementationType)
+        var serviceSymbol = (INamedTypeSymbol)context.TargetSymbol;
+        var ownerScope = ReadScopeType(serviceSymbol);
+        var builder = ImmutableArray.CreateBuilder<OwnerLayerServiceInfo>();
+
+        foreach (var attribute in context.Attributes)
         {
-            return null;
+            if (!IsAttribute(attribute, OwnerLayerAttributeName)) continue;
+            if (attribute.ConstructorArguments.Length != 1) continue;
+            if (attribute.ConstructorArguments[0].Value is not INamedTypeSymbol ownerLayerType) continue;
+
+            var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
+            builder.Add(new OwnerLayerServiceInfo(serviceSymbol, ownerLayerType, ownerScope, location));
         }
 
-        var lifetime = "global::LayerBase.DI.ServiceLifetime.Singleton";
-        if (args.Length >= 5 && args[4].Value is int lifetimeValue)
-        {
-            lifetime = lifetimeValue switch
-            {
-                0 => "global::LayerBase.DI.ServiceLifetime.Singleton",
-                1 => "global::LayerBase.DI.ServiceLifetime.Scoped",
-                2 => "global::LayerBase.DI.ServiceLifetime.Transient",
-                3 => "global::LayerBase.DI.ServiceLifetime.Instance",
-                _ => $"(global::LayerBase.DI.ServiceLifetime){lifetimeValue}"
-            };
-        }
-
-        return new ServiceContributionInfo(
-            ToTypeName(ownerLayerType),
-            ToTypeName(ownerScopeType),
-            ToTypeName(serviceType),
-            ToTypeName(implementationType),
-            lifetime);
+        return builder.ToImmutable();
     }
 
-    private static void GenerateModule(SourceProductionContext spc, ModuleInfo module)
+    private static void GenerateModule(
+        SourceProductionContext spc,
+        ModuleInfo module,
+        IReadOnlyList<ServiceContributionInfo> fallbackServices)
     {
+        var services = fallbackServices.OrderBy(static service => service.OwnerLayerType, StringComparer.Ordinal)
+                                       .ThenBy(static service => service.OwnerScopeType, StringComparer.Ordinal)
+                                       .ThenBy(static service => service.ServiceType, StringComparer.Ordinal)
+                                       .ThenBy(static service => service.ImplementationType, StringComparer.Ordinal)
+                                       .ToImmutableArray();
+
         var source = new StringBuilder();
         source.AppendLine("// <auto-generated/>");
         source.AppendLine("#nullable enable");
@@ -125,7 +184,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         source.Append(indent).Append("            new global::LayerBase.Modules.AssemblyModuleId(\"")
               .Append(Escape(module.ModuleId))
               .AppendLine("\"),");
-        AppendServiceArray(source, indent, module.Services);
+        AppendServiceArray(source, indent, services);
         source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.ContextContribution>(),");
         source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LocalCallContribution>(),");
         source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LayerToolContribution>());");
@@ -145,7 +204,10 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             SourceText.From(source.ToString(), Encoding.UTF8));
     }
 
-    private static void AppendServiceArray(StringBuilder source, string indent, ImmutableArray<ServiceContributionInfo> services)
+    private static void AppendServiceArray(
+        StringBuilder source,
+        string indent,
+        ImmutableArray<ServiceContributionInfo> services)
     {
         if (services.IsDefaultOrEmpty)
         {
@@ -167,6 +229,30 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         }
 
         source.Append(indent).AppendLine("            },");
+    }
+
+    private static INamedTypeSymbol? ReadScopeType(INamedTypeSymbol symbol)
+    {
+        foreach (var attribute in symbol.GetAttributes())
+        {
+            var attributeClass = attribute.AttributeClass;
+            if (attributeClass == null)
+            {
+                continue;
+            }
+
+            var original = attributeClass.OriginalDefinition;
+            if (original.MetadataName != ScopeAttributeMetadataName ||
+                original.ContainingNamespace.ToDisplayString() != ScopeAttributeNamespace ||
+                attributeClass.TypeArguments.Length != 1)
+            {
+                continue;
+            }
+
+            return attributeClass.TypeArguments[0] as INamedTypeSymbol;
+        }
+
+        return null;
     }
 
     private static bool IsAttribute(AttributeData attribute, string metadataName)
@@ -216,21 +302,48 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         return new string(chars);
     }
 
+#pragma warning disable RS2008
+    private static class Diagnostics
+    {
+        private const string Category = "AssemblyModuleGenerator";
+
+        public static readonly DiagnosticDescriptor CrossAssemblyOwnerLayerRequiresModule =
+            new(
+                "LBMOD001",
+                "Cross-assembly OwnerLayer requires AssemblyModule",
+                "Service '{0}' targets external owner layer '{1}' and must be compiled with an [AssemblyModule] root in the same assembly.",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor CrossAssemblyOwnerLayerRequiresSingleModule =
+            new(
+                "LBMOD002",
+                "Cross-assembly OwnerLayer requires exactly one AssemblyModule",
+                "Service '{0}' targets an external owner layer but this assembly has multiple modules ({1}). Keep one module root for automatic fallback or split the feature assembly.",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+    }
+#pragma warning restore RS2008
+
     private sealed class ModuleInfo
     {
         public ModuleInfo(
+            INamedTypeSymbol typeSymbol,
             string typeName,
             string? @namespace,
             string accessibility,
-            string moduleId,
-            ImmutableArray<ServiceContributionInfo> services)
+            string moduleId)
         {
+            TypeSymbol = typeSymbol;
             TypeName = typeName;
             Namespace = @namespace;
             Accessibility = accessibility;
             ModuleId = moduleId;
-            Services = services;
         }
+
+        public INamedTypeSymbol TypeSymbol { get; }
 
         public string TypeName { get; }
 
@@ -239,8 +352,29 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         public string Accessibility { get; }
 
         public string ModuleId { get; }
+    }
 
-        public ImmutableArray<ServiceContributionInfo> Services { get; }
+    private sealed class OwnerLayerServiceInfo
+    {
+        public OwnerLayerServiceInfo(
+            INamedTypeSymbol serviceType,
+            INamedTypeSymbol ownerLayerType,
+            INamedTypeSymbol? ownerScopeType,
+            Location? location)
+        {
+            ServiceType = serviceType;
+            OwnerLayerType = ownerLayerType;
+            OwnerScopeType = ownerScopeType;
+            Location = location;
+        }
+
+        public INamedTypeSymbol ServiceType { get; }
+
+        public INamedTypeSymbol OwnerLayerType { get; }
+
+        public INamedTypeSymbol? OwnerScopeType { get; }
+
+        public Location? Location { get; }
     }
 
     private sealed class ServiceContributionInfo

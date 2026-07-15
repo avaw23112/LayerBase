@@ -164,6 +164,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             foreach (var reg in info.OwnerLayerRegistrations)
             {
+                var ownerLayerInCurrentAssembly =
+                    SymbolEqualityComparer.Default.Equals(reg.LayerType.ContainingAssembly, compilation.Assembly);
+
                 if (!InheritsFromLayer(reg.LayerType, layerSymbol))
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LayerMustInheritLayer,
@@ -172,7 +175,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                if (!IsPartial(reg.LayerType))
+                if (ownerLayerInCurrentAssembly && !IsPartial(reg.LayerType))
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LayerMustBePartial,
                         reg.Location ?? reg.LayerType.Locations.FirstOrDefault(),
@@ -182,6 +185,15 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
                 if (implementsCallHandler)
                 {
+                    if (!ownerLayerInCurrentAssembly)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ExternalOwnerLayerCallHandlerNotSupported,
+                            reg.Location ?? info.Symbol.Locations.FirstOrDefault(),
+                            info.Symbol.ToDisplayString(),
+                            reg.LayerType.ToDisplayString()));
+                        continue;
+                    }
+
                     validatedOwnerLayerRegistrations.Add(reg);
                     foreach (var impl in GetCallHandlerInterfaces(info.Symbol, callHandlerSymbol))
                     {
@@ -217,6 +229,11 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                     spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ServiceCannotBeAbstract,
                         reg.Location ?? info.Symbol.Locations.FirstOrDefault(),
                         info.Symbol.ToDisplayString()));
+                    continue;
+                }
+
+                if (!ownerLayerInCurrentAssembly)
+                {
                     continue;
                 }
 
@@ -918,6 +935,15 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 "Type '{0}' has Mount members but also has owner-only registrations ({1}) which will be appended without guaranteed ordering.",
                 Category,
                 DiagnosticSeverity.Warning,
+                true);
+
+        public static readonly DiagnosticDescriptor ExternalOwnerLayerCallHandlerNotSupported =
+            new(
+                "LBG012",
+                "External OwnerLayer CallHandler requires module call contribution",
+                "CallHandler '{0}' targets external owner layer '{1}', but cross-assembly CallHandler module fallback is not implemented yet.",
+                Category,
+                DiagnosticSeverity.Error,
                 true);
 
         public static readonly DiagnosticDescriptor MountServiceMustBePartial =

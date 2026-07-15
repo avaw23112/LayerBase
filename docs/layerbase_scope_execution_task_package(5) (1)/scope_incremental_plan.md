@@ -18,7 +18,21 @@ The first source-generator slice is limited to static composition metadata. It m
 Acceptance points:
 
 - `[AssemblyModule]` marks an explicit partial module type; the generator does not scan referenced assemblies.
-- `[ModuleService]` emits immutable `ServiceContribution` metadata with owner layer, owner scope, service contract, implementation type, and lifetime.
+- Cross-assembly `[OwnerLayer]` services emit immutable `ServiceContribution` metadata with owner layer, owner scope, service contract, implementation type, and lifetime.
 - Generated modules implement `IAssemblyModule` and expose a static `AssemblyModuleManifest`.
 - Generated code must not Push layers, assign `LayerIndex`, assign `ScopeId`, create scope runtimes, or instantiate service implementations.
 - Later 05/06 slices can add generated Context, LocalCall, and Tool contribution attributes without changing the runtime composition contract.
+
+## 05/06 Cross-assembly OwnerLayer fallback
+
+`AssemblyModule` is the fallback registration owner when feature assemblies cannot emit partial code into AOT assemblies that contain Layer and Scope definitions.
+
+Acceptance points:
+
+- If an `[OwnerLayer]` service targets a Layer declared in the current assembly, the existing Layer partial path remains active.
+- If an `[OwnerLayer]` service targets a Layer from another assembly, `LayerServiceGenerator` must not require the external Layer to be partial.
+- Cross-assembly `[OwnerLayer]` services are emitted into an `[AssemblyModule]` manifest as `ServiceContribution` entries.
+- A single module root is selected automatically; multiple module roots are compile-time ambiguous and must be split before fallback can proceed.
+- `[Scope<TScope>]` assigns a custom AOT Scope; otherwise the fallback contribution uses `MainScope`.
+- Missing module roots and ambiguous module roots are compile-time diagnostics, never silent drops.
+- Cross-assembly CallHandler fallback remains explicit unsupported until LocalCall module contribution/invoker generation is implemented.
