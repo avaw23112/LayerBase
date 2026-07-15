@@ -187,6 +187,51 @@ public sealed class ScopeLifecycleMigrationTests
     }
 
     [Test]
+    public void Worker_scopes_install_independent_synchronization_contexts()
+    {
+        var firstSignal = new ManualResetEventSlim(false);
+        var secondSignal = new ManualResetEventSlim(false);
+        var mainThreadId = Environment.CurrentManagedThreadId;
+        var firstThreadId = 0;
+        var secondThreadId = 0;
+        SynchronizationContext? firstContext = null;
+        SynchronizationContext? secondContext = null;
+
+        using var runtime = new LayerRuntime(9111);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                CreateWorkerContextCapturePlan<WorkerTraceScope>(
+                    2,
+                    firstSignal,
+                    context => firstContext = context,
+                    threadId => firstThreadId = threadId),
+                CreateWorkerContextCapturePlan<SecondWorkerTraceScope>(
+                    3,
+                    secondSignal,
+                    context => secondContext = context,
+                    threadId => secondThreadId = threadId)
+            },
+            runtimeId: 9111,
+            generation: 1);
+
+        host.StartWorkers();
+
+        Assert.That(firstSignal.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(secondSignal.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(firstContext, Is.SameAs(host.Scopes[1].SynchronizationContext));
+        Assert.That(secondContext, Is.SameAs(host.Scopes[2].SynchronizationContext));
+        Assert.That(firstContext, Is.Not.Null);
+        Assert.That(secondContext, Is.Not.Null);
+        Assert.That(firstContext, Is.Not.SameAs(secondContext));
+        Assert.That(firstThreadId, Is.Not.EqualTo(mainThreadId));
+        Assert.That(secondThreadId, Is.Not.EqualTo(mainThreadId));
+        Assert.That(firstThreadId, Is.Not.EqualTo(secondThreadId));
+    }
+
+    [Test]
     public void Scope_pump_drains_owner_synchronization_context_before_update()
     {
         var trace = new List<string>();
@@ -453,6 +498,41 @@ public sealed class ScopeLifecycleMigrationTests
                 Array.Empty<LifecycleInvoker>()));
     }
 
+    private static ScopeExecutionPlan CreateWorkerContextCapturePlan<TScope>(
+        int scopeId,
+        ManualResetEventSlim updateSignal,
+        Action<SynchronizationContext?> captureContext,
+        Action<int> captureThread)
+        where TScope : IScopeDefinition
+    {
+        var update = new UpdateInvoker[]
+        {
+            _ =>
+            {
+                captureContext(SynchronizationContext.Current);
+                captureThread(Environment.CurrentManagedThreadId);
+                updateSignal.Set();
+            }
+        };
+        var layers = new[]
+        {
+            new ScopeLayerLifecycleSlice(0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0)
+        };
+
+        return new ScopeExecutionPlan(
+            new ScopeDescriptor(scopeId, typeof(TScope).Name, typeof(TScope)),
+            ScopeOptions.Worker(tickRateHz: 100),
+            lifecyclePlan: new ScopeLifecyclePlan(
+                layers,
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                update,
+                Array.Empty<FixedUpdateInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>()));
+    }
+
     private static ScopeExecutionPlan CreateDisposeScopePlan<TScope>(
         int scopeId,
         List<string> trace)
@@ -610,6 +690,10 @@ public sealed class ScopeLifecycleMigrationTests
     }
 
     private readonly struct WorkerTraceScope : IScopeDefinition
+    {
+    }
+
+    private readonly struct SecondWorkerTraceScope : IScopeDefinition
     {
     }
 

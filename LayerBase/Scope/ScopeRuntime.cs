@@ -647,6 +647,13 @@ internal sealed class ScopeRuntime : IDisposable
             StopOnOwnerThread();
 
         _state = ScopeRuntimeState.Disposing;
+        var context = SynchronizationContext;
+        if (context != null)
+        {
+            context.BeginClose(new OperationCanceledException("The scope runtime is disposing."));
+            context.DrainClosingOperations(PostScheduler?.Options.MaxCompletionsPerPump ?? 0);
+        }
+
         RunLifecycleDispose();
         ReleaseCallInbox();
         ReleaseEventInbox();
@@ -661,7 +668,7 @@ internal sealed class ScopeRuntime : IDisposable
         PostScheduler?.Dispose();
         PostScheduler = null;
         EventCenter.Reset();
-        SynchronizationContext?.Dispose();
+        context?.Dispose();
         SynchronizationContext = null;
         EcsScheduler.Dispose();
         EcsWorld.Dispose();

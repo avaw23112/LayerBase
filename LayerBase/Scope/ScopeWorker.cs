@@ -42,8 +42,12 @@ internal sealed class ScopeWorker : IDisposable
     private void Run()
     {
         _started.Set();
+        SynchronizationContext? previousContext = SynchronizationContext.Current;
         try
         {
+            _runtime.InstallSynchronizationContext();
+            SynchronizationContext.SetSynchronizationContext(_runtime.SynchronizationContext);
+
             while (_runtime.State != ScopeRuntimeState.Disposed)
             {
                 float deltaTime = GetDeltaTime();
@@ -53,8 +57,15 @@ internal sealed class ScopeWorker : IDisposable
         }
         finally
         {
-            if (_runtime.State != ScopeRuntimeState.Disposed)
-                _runtime.RunRuntimeStop();
+            try
+            {
+                if (_runtime.State != ScopeRuntimeState.Disposed)
+                    _runtime.RunRuntimeStop();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
         }
     }
 

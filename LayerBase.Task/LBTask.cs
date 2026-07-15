@@ -8,15 +8,17 @@ namespace LayerBase.Async;
 public readonly struct LBTask
 {
     internal readonly ILBTaskSource? Source;
+    internal readonly int Version;
 
     internal LBTask(ILBTaskSource? source)
     {
         Source = source;
+        Version = source?.Version ?? 0;
     }
 
     public Awaiter GetAwaiter()
     {
-        return new Awaiter(Source);
+        return new Awaiter(Source, Version);
     }
 
     public static LBTask CompletedTask => new(null);
@@ -104,33 +106,18 @@ public readonly struct LBTask
     public static LBTask RunBackground(Action action)
     {
         if (action == null) throw new ArgumentNullException(nameof(action));
-        var ctx = SynchronizationContext.Current as LayerBaseSynchronizationContext;
-        var src = LBTaskSource.Rent(ctx);
+        var src = LBTaskSource.Rent(SynchronizationContext.Current);
 
         var success = ParallelExecutor.Instance.TrySchedule(() =>
         {
             try
             {
                 action();
-                if (ctx != null)
-                {
-                    ctx.CompletionQueue.Enqueue(() => src.SetResult());
-                }
-                else
-                {
-                    src.SetResult();
-                }
+                src.SetResult();
             }
             catch (Exception ex)
             {
-                if (ctx != null)
-                {
-                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
-                }
-                else
-                {
-                    src.SetException(ex);
-                }
+                src.SetException(ex);
             }
         });
 
@@ -145,8 +132,7 @@ public readonly struct LBTask
     public static LBTask RunBackground(Action<CancellationToken> action, CancellationToken cancellationToken)
     {
         if (action == null) throw new ArgumentNullException(nameof(action));
-        var ctx = SynchronizationContext.Current as LayerBaseSynchronizationContext;
-        var src = LBTaskSource.Rent(ctx);
+        var src = LBTaskSource.Rent(SynchronizationContext.Current);
 
         var success = ParallelExecutor.Instance.TrySchedule(() =>
         {
@@ -154,37 +140,20 @@ public readonly struct LBTask
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
-                    else src.SetCanceled(cancellationToken);
+                    src.SetCanceled(cancellationToken);
                     return;
                 }
 
                 action(cancellationToken);
-
-                if (ctx != null)
-                {
-                    ctx.CompletionQueue.Enqueue(() => src.SetResult());
-                }
-                else
-                {
-                    src.SetResult();
-                }
+                src.SetResult();
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
             {
-                if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
-                else src.SetCanceled(cancellationToken);
+                src.SetCanceled(cancellationToken);
             }
             catch (Exception ex)
             {
-                if (ctx != null)
-                {
-                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
-                }
-                else
-                {
-                    src.SetException(ex);
-                }
+                src.SetException(ex);
             }
         });
 
@@ -199,33 +168,18 @@ public readonly struct LBTask
     public static LBTask<TResult> RunBackground<TResult>(Func<TResult> func)
     {
         if (func == null) throw new ArgumentNullException(nameof(func));
-        var ctx = SynchronizationContext.Current as LayerBaseSynchronizationContext;
-        var src = LBTaskSource<TResult>.Rent(ctx);
+        var src = LBTaskSource<TResult>.Rent(SynchronizationContext.Current);
 
         var success = ParallelExecutor.Instance.TrySchedule(() =>
         {
             try
             {
                 var result = func();
-                if (ctx != null)
-                {
-                    ctx.CompletionQueue.Enqueue(() => src.SetResult(result));
-                }
-                else
-                {
-                    src.SetResult(result);
-                }
+                src.SetResult(result);
             }
             catch (Exception ex)
             {
-                if (ctx != null)
-                {
-                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
-                }
-                else
-                {
-                    src.SetException(ex);
-                }
+                src.SetException(ex);
             }
         });
 
@@ -241,8 +195,7 @@ public readonly struct LBTask
                                                          CancellationToken                cancellationToken)
     {
         if (func == null) throw new ArgumentNullException(nameof(func));
-        var ctx = SynchronizationContext.Current as LayerBaseSynchronizationContext;
-        var src = LBTaskSource<TResult>.Rent(ctx);
+        var src = LBTaskSource<TResult>.Rent(SynchronizationContext.Current);
 
         var success = ParallelExecutor.Instance.TrySchedule(() =>
         {
@@ -250,37 +203,20 @@ public readonly struct LBTask
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
-                    else src.SetCanceled(cancellationToken);
+                    src.SetCanceled(cancellationToken);
                     return;
                 }
 
                 var result = func(cancellationToken);
-
-                if (ctx != null)
-                {
-                    ctx.CompletionQueue.Enqueue(() => src.SetResult(result));
-                }
-                else
-                {
-                    src.SetResult(result);
-                }
+                src.SetResult(result);
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
             {
-                if (ctx != null) ctx.CompletionQueue.Enqueue(() => src.SetCanceled(cancellationToken));
-                else src.SetCanceled(cancellationToken);
+                src.SetCanceled(cancellationToken);
             }
             catch (Exception ex)
             {
-                if (ctx != null)
-                {
-                    ctx.CompletionQueue.Enqueue(() => src.SetException(ex));
-                }
-                else
-                {
-                    src.SetException(ex);
-                }
+                src.SetException(ex);
             }
         });
 
@@ -624,13 +560,15 @@ public readonly struct LBTask
     public readonly struct Awaiter : INotifyCompletion
     {
         private readonly ILBTaskSource? _source;
+        private readonly int _version;
 
-        internal Awaiter(ILBTaskSource? source)
+        internal Awaiter(ILBTaskSource? source, int version)
         {
             _source = source;
+            _version = version;
         }
 
-        public bool IsCompleted => _source == null || _source.IsCompleted;
+        public bool IsCompleted => _source == null || _source.IsCompleted(_version);
 
         public void OnCompleted(Action continuation)
         {
@@ -640,12 +578,12 @@ public readonly struct LBTask
                 return;
             }
 
-            _source.OnCompleted(continuation);
+            _source.OnCompleted(continuation, _version);
         }
 
         public void GetResult()
         {
-            _source?.GetResult();
+            _source?.GetResult(_version);
         }
     }
 }
@@ -657,12 +595,14 @@ public readonly struct LBTask<T>
     internal readonly ILBTaskSource<T>? Source;
     internal readonly T? Result;
     internal readonly bool HasResult;
+    internal readonly int Version;
 
     internal LBTask(ILBTaskSource<T>? source)
     {
         Source = source;
         Result = default;
         HasResult = false;
+        Version = source?.Version ?? 0;
     }
 
     internal LBTask(T result)
@@ -670,6 +610,7 @@ public readonly struct LBTask<T>
         Source = null;
         Result = result;
         HasResult = true;
+        Version = 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -776,7 +717,7 @@ public readonly struct LBTask<T>
             _task = task;
         }
 
-        public bool IsCompleted => _task.HasResult || _task.Source == null || _task.Source.IsCompleted;
+        public bool IsCompleted => _task.HasResult || _task.Source == null || _task.Source.IsCompleted(_task.Version);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnCompleted(Action continuation)
@@ -787,14 +728,14 @@ public readonly struct LBTask<T>
                 return;
             }
 
-            _task.Source.OnCompleted(continuation);
+            _task.Source.OnCompleted(continuation, _task.Version);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T GetResult()
         {
             if (_task.HasResult) return _task.Result!;
-            return _task.Source == null ? default! : _task.Source.GetResult();
+            return _task.Source == null ? default! : _task.Source.GetResult(_task.Version);
         }
     }
 }

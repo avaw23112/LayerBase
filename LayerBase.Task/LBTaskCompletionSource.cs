@@ -75,7 +75,7 @@ public sealed class LBTaskCompletionSource : IDisposable
     private void DisposeInternal()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            if (!_source.IsCompleted)
+            if (!_source.IsCompleted(_source.Version))
                 _source.SetCanceled(default);
     }
 }
@@ -155,7 +155,7 @@ public sealed class LBTaskCompletionSource<T> : IDisposable
     private void DisposeInternal()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            if (!_source.IsCompleted)
+            if (!_source.IsCompleted(_source.Version))
                 _source.SetCanceled(default);
     }
 }

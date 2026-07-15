@@ -4,75 +4,82 @@ namespace LayerBase.Async;
 
 internal interface ILBTaskSource
 {
-    bool IsCompleted { get; }
-    void OnCompleted(Action continuation);
+    int Version { get; }
+    bool IsCompleted(int token);
+    void OnCompleted(Action continuation, int token);
     void SetResult();
     void SetException(Exception        ex);
     void SetCanceled(CancellationToken token);
-    void GetResult();
-    void TryRelease(); // 新增：安全尝试回�?
+    void GetResult(int token);
+    void TryRelease();
 }
 
 internal interface ILBTaskSource<T>
 {
-    bool IsCompleted { get; }
-    void OnCompleted(Action            continuation);
+    int Version { get; }
+    bool IsCompleted(int token);
+    void OnCompleted(Action            continuation, int token);
     void SetResult(T                   value);
     void SetException(Exception        ex);
     void SetCanceled(CancellationToken token);
-    T GetResult();
-    void TryRelease(); // 新增：安全尝试回�?
+    T GetResult(int token);
+    void TryRelease();
 }
 
-internal sealed class LBTaskSource : ILBTaskSource
+internal interface IContextDisposeCancellable
+{
+    void CancelFromContext(Exception reason);
+}
+
+internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
 {
     private static readonly ObjectPool<LBTaskSource> Pool = new(() => new LBTaskSource());
     private CancellationToken _canceledToken;
     private SynchronizationContext? _context;
+    private LayerBaseSynchronizationContext? _registeredContext;
 
     private Action? _continuation;
     private Exception? _exception;
+    private int _consumed;
     private int _released; // 0 = in use, 1 = released
     private int _status;   // 0 = pending, -1 = completing, 1 = completed
+    private int _version;
 
     private LBTaskSource()
     {
         _context = SynchronizationContext.Current;
     }
 
-    public bool IsCompleted => Volatile.Read(ref _status) == 1;
+    public int Version => Volatile.Read(ref _version);
 
-    public void OnCompleted(Action continuation)
+    public bool IsCompleted(int token)
+    {
+        return token == Version &&
+               Volatile.Read(ref _released) == 0 &&
+               Volatile.Read(ref _status) == 1;
+    }
+
+    public void OnCompleted(Action continuation, int token)
     {
         if (continuation == null) throw new ArgumentNullException(nameof(continuation));
+        ValidateToken(token);
 
         while (true)
         {
-            if (IsCompleted)
+            if (IsCompleted(token))
             {
                 Schedule(continuation);
                 return;
             }
 
             var original = Volatile.Read(ref _continuation);
-            var next = original == null
-                ? continuation
-                : () =>
-                {
-                    try
-                    {
-                        original();
-                    }
-                    finally
-                    {
-                        continuation();
-                    }
-                };
+            if (original != null)
+                throw new InvalidOperationException("LBTask only supports one awaiter continuation.");
 
-            if (Interlocked.CompareExchange(ref _continuation, next, original) != original) continue;
+            if (Interlocked.CompareExchange(ref _continuation, continuation, null) != null) continue;
 
-            if (IsCompleted && Interlocked.CompareExchange(ref _continuation, null, next) == next)
-                Schedule(next);
+            if (IsCompleted(token) && Interlocked.CompareExchange(ref _continuation, null, continuation) == continuation)
+                Schedule(continuation);
             return;
         }
     }
@@ -92,9 +99,13 @@ internal sealed class LBTaskSource : ILBTaskSource
         Complete(new OperationCanceledException(token), token);
     }
 
-    public void GetResult()
+    public void GetResult(int token)
     {
-        if (!IsCompleted) throw new InvalidOperationException("ArchTask not completed");
+        ValidateToken(token);
+        if (!IsCompleted(token)) throw new InvalidOperationException("LBTask is not completed.");
+        if (Interlocked.Exchange(ref _consumed, 1) != 0)
+            throw new InvalidOperationException("LBTask result has already been consumed.");
+
         var ex = _exception;
         TryRelease();
         if (ex != null) throw ex;
@@ -102,18 +113,44 @@ internal sealed class LBTaskSource : ILBTaskSource
 
     public void TryRelease()
     {
-        if (Interlocked.Exchange(ref _released, 1) == 0) Pool.Return(this);
+        if (Interlocked.Exchange(ref _released, 1) != 0)
+            return;
+
+        _registeredContext?.UnregisterSource(this);
+        _registeredContext = null;
+        _context = null;
+        _continuation = null;
+        _exception = null;
+        _canceledToken = default;
+        Pool.Return(this);
     }
 
     public static LBTaskSource Rent(SynchronizationContext? context)
     {
         var src = Pool.Rent();
+        unchecked
+        {
+            src._version++;
+            if (src._version == 0)
+                src._version = 1;
+        }
+
         src._continuation = null;
         src._exception = null;
         src._canceledToken = default;
         src._context = context;
+        src._registeredContext = null;
+        src._consumed = 0;
         src._status = 0;
         src._released = 0;
+        if (context is LayerBaseSynchronizationContext layerBaseContext)
+        {
+            if (layerBaseContext.TryRegisterSource(src))
+                src._registeredContext = layerBaseContext;
+            else
+                src.SetCanceled(default);
+        }
+
         return src;
     }
 
@@ -133,6 +170,12 @@ internal sealed class LBTaskSource : ILBTaskSource
         if (cont != null) Schedule(cont);
     }
 
+    public void CancelFromContext(Exception reason)
+    {
+        _registeredContext = null;
+        Complete(reason, default);
+    }
+
     private void Schedule(Action continuation)
     {
         var ctx = _context;
@@ -141,58 +184,64 @@ internal sealed class LBTaskSource : ILBTaskSource
         else
             ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
     }
+
+    private void ValidateToken(int token)
+    {
+        if (token != Version || Volatile.Read(ref _released) != 0)
+            throw new InvalidOperationException("LBTask source version is no longer valid.");
+    }
 }
 
-internal sealed class LBTaskSource<T> : ILBTaskSource<T>
+internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancellable
 {
     private static readonly ObjectPool<LBTaskSource<T>> Pool = new(() => new LBTaskSource<T>());
     private CancellationToken _canceledToken;
     private SynchronizationContext? _context;
+    private LayerBaseSynchronizationContext? _registeredContext;
 
     private Action? _continuation;
     private Exception? _exception;
+    private int _consumed;
     private int _released; // 0 = in use, 1 = released
     private T _result = default!;
     private int _status; // 0 = pending, -1 = completing, 1 = completed
+    private int _version;
 
     private LBTaskSource()
     {
         _context = SynchronizationContext.Current;
     }
 
-    public bool IsCompleted => Volatile.Read(ref _status) == 1;
+    public int Version => Volatile.Read(ref _version);
 
-    public void OnCompleted(Action continuation)
+    public bool IsCompleted(int token)
+    {
+        return token == Version &&
+               Volatile.Read(ref _released) == 0 &&
+               Volatile.Read(ref _status) == 1;
+    }
+
+    public void OnCompleted(Action continuation, int token)
     {
         if (continuation == null) throw new ArgumentNullException(nameof(continuation));
+        ValidateToken(token);
 
         while (true)
         {
-            if (IsCompleted)
+            if (IsCompleted(token))
             {
                 Schedule(continuation);
                 return;
             }
 
             var original = Volatile.Read(ref _continuation);
-            var next = original == null
-                ? continuation
-                : () =>
-                {
-                    try
-                    {
-                        original();
-                    }
-                    finally
-                    {
-                        continuation();
-                    }
-                };
+            if (original != null)
+                throw new InvalidOperationException("LBTask only supports one awaiter continuation.");
 
-            if (Interlocked.CompareExchange(ref _continuation, next, original) != original) continue;
+            if (Interlocked.CompareExchange(ref _continuation, continuation, null) != null) continue;
 
-            if (IsCompleted && Interlocked.CompareExchange(ref _continuation, null, next) == next)
-                Schedule(next);
+            if (IsCompleted(token) && Interlocked.CompareExchange(ref _continuation, null, continuation) == continuation)
+                Schedule(continuation);
             return;
         }
     }
@@ -216,9 +265,13 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
         CompleteCore(new OperationCanceledException(token), token);
     }
 
-    public T GetResult()
+    public T GetResult(int token)
     {
-        if (!IsCompleted) throw new InvalidOperationException("ArchTask not completed");
+        ValidateToken(token);
+        if (!IsCompleted(token)) throw new InvalidOperationException("LBTask is not completed.");
+        if (Interlocked.Exchange(ref _consumed, 1) != 0)
+            throw new InvalidOperationException("LBTask result has already been consumed.");
+
         var ex = _exception;
         var res = _result;
         TryRelease();
@@ -228,19 +281,46 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
 
     public void TryRelease()
     {
-        if (Interlocked.Exchange(ref _released, 1) == 0) Pool.Return(this);
+        if (Interlocked.Exchange(ref _released, 1) != 0)
+            return;
+
+        _registeredContext?.UnregisterSource(this);
+        _registeredContext = null;
+        _context = null;
+        _continuation = null;
+        _exception = null;
+        _canceledToken = default;
+        _result = default!;
+        Pool.Return(this);
     }
 
     public static LBTaskSource<T> Rent(SynchronizationContext? context)
     {
         var src = Pool.Rent();
+        unchecked
+        {
+            src._version++;
+            if (src._version == 0)
+                src._version = 1;
+        }
+
         src._continuation = null;
         src._exception = null;
         src._canceledToken = default;
         src._result = default!;
         src._context = context;
+        src._registeredContext = null;
+        src._consumed = 0;
         src._status = 0;
         src._released = 0;
+        if (context is LayerBaseSynchronizationContext layerBaseContext)
+        {
+            if (layerBaseContext.TryRegisterSource(src))
+                src._registeredContext = layerBaseContext;
+            else
+                src.SetCanceled(default);
+        }
+
         return src;
     }
 
@@ -265,6 +345,12 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
         if (cont != null) Schedule(cont);
     }
 
+    public void CancelFromContext(Exception reason)
+    {
+        _registeredContext = null;
+        Complete(reason, default);
+    }
+
     private void Schedule(Action continuation)
     {
         var ctx = _context;
@@ -274,9 +360,10 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>
             ThreadPool.QueueUserWorkItem(static state => ((Action)state!).Invoke(), continuation);
     }
 
-    private void Release()
+    private void ValidateToken(int token)
     {
-        Pool.Return(this);
+        if (token != Version || Volatile.Read(ref _released) != 0)
+            throw new InvalidOperationException("LBTask source version is no longer valid.");
     }
 }
 

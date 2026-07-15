@@ -11,8 +11,11 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     private readonly List<FrameWorkItem> _frameWork = new();
     private readonly object _lock = new();
     private readonly int _mainThreadId;
+    private readonly HashSet<IContextDisposeCancellable> _pendingSources = new();
     private readonly ConcurrentQueue<WorkItem> _queue = new();
     internal MainThreadCompletionQueue CompletionQueue { get; } = new();
+    private int _allowClosingCancellationPosts;
+    private bool _closing;
     private bool _disposed;
 
     private LayerBaseSynchronizationContext(int mainThreadId)
@@ -55,7 +58,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             {
                 work.Invoke();
             }
-            catch (Exception ex)
+            catch
             {
                 throw;
             }
@@ -90,15 +93,72 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
     public void Dispose()
     {
+        BeginClose(new OperationCanceledException("The LayerBase synchronization context has been disposed."));
         _disposed = true;
+    }
+
+    internal bool TryRegisterSource(IContextDisposeCancellable source)
+    {
+        if (source == null) throw new ArgumentNullException(nameof(source));
+
         lock (_lock)
         {
+            if (_closing || _disposed)
+                return false;
+
+            _pendingSources.Add(source);
+            return true;
+        }
+    }
+
+    internal void UnregisterSource(IContextDisposeCancellable source)
+    {
+        if (source == null) return;
+
+        lock (_lock)
+            _pendingSources.Remove(source);
+    }
+
+    public void BeginClose(Exception reason)
+    {
+        if (reason == null) throw new ArgumentNullException(nameof(reason));
+
+        IContextDisposeCancellable[] pendingSources;
+        lock (_lock)
+        {
+            if (_closing)
+                return;
+
+            _closing = true;
             _frameWork.Clear();
+            pendingSources = _pendingSources.ToArray();
+            _pendingSources.Clear();
         }
 
         while (_queue.TryDequeue(out _))
         {
         }
+
+        Volatile.Write(ref _allowClosingCancellationPosts, 1);
+        try
+        {
+            foreach (var source in pendingSources)
+                source.CancelFromContext(reason);
+        }
+        finally
+        {
+            Volatile.Write(ref _allowClosingCancellationPosts, 0);
+        }
+    }
+
+    public void DrainClosingOperations(
+        int                       maxItems        = 0,
+        CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
+        Action<Exception>?        reportException = null)
+    {
+        if (!_closing || _disposed) return;
+
+        Update(maxItems, exceptionPolicy, reportException);
     }
 
     public static LayerBaseSynchronizationContext Install()
@@ -110,6 +170,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     public override void Post(SendOrPostCallback d, object? state)
     {
         if (_disposed) return;
+        if (_closing && Volatile.Read(ref _allowClosingCancellationPosts) == 0) return;
         _queue.Enqueue(new WorkItem(d, state));
     }
 
@@ -134,7 +195,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
 
     internal void ScheduleInFrames(SendOrPostCallback callback, object? state, int frames)
     {
-        if (_disposed) return;
+        if (_disposed || _closing) return;
         var workItem = new WorkItem(callback, state);
         if (frames <= 0)
         {
