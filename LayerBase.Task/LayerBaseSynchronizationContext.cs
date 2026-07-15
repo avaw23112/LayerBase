@@ -122,26 +122,8 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             return;
         }
 
-        using var gate = new ManualResetEventSlim(false);
-        var sendWork = new SendWorkItem(d, state, gate);
-        _queue.Enqueue(new WorkItem(static payload =>
-        {
-            var work = (SendWorkItem)payload!;
-            try
-            {
-                work.Callback(work.State);
-            }
-            catch (Exception ex)
-            {
-                work.Error = ex;
-            }
-            finally
-            {
-                work.Gate.Set();
-            }
-        }, sendWork));
-        gate.Wait();
-        if (sendWork.Error != null) throw sendWork.Error;
+        throw new NotSupportedException(
+            "Synchronous Send to another LayerBaseSynchronizationContext thread is not supported.");
     }
 
     /// <summary>Schedule an action after the specified number of frames.</summary>
@@ -180,21 +162,6 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         public void Invoke()
         {
             _callback(_state);
-        }
-    }
-
-    private sealed class SendWorkItem
-    {
-        public readonly SendOrPostCallback Callback;
-        public readonly ManualResetEventSlim Gate;
-        public readonly object? State;
-        public Exception? Error;
-
-        public SendWorkItem(SendOrPostCallback callback, object? state, ManualResetEventSlim gate)
-        {
-            Callback = callback;
-            State = state;
-            Gate = gate;
         }
     }
 

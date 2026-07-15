@@ -38,8 +38,12 @@ public readonly struct LBTask
 
     public static LBTask Yield()
     {
-        var src = LBTaskSource.Rent();
-        ThreadPool.QueueUserWorkItem(static state => ((LBTaskSource)state!).SetResult(), src);
+        var context = SynchronizationContext.Current;
+        var src = LBTaskSource.Rent(context);
+        if (context != null)
+            context.Post(static state => ((LBTaskSource)state!).SetResult(), src);
+        else
+            ThreadPool.QueueUserWorkItem(static state => ((LBTaskSource)state!).SetResult(), src);
         return new LBTask(src);
     }
 
