@@ -7,6 +7,7 @@ using LayerBase.Core.Event;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 using LayerBase.Event.Delay;
+using LayerBase.Snap;
 using LayerBase.Worker;
 
 namespace LayerBase.Scope;
@@ -20,6 +21,9 @@ internal sealed class ScopeRuntime : IDisposable
     private ActorAccessor _actors;
     private bool _hasActorAccessor;
     private ScopeRuntimeState _state = ScopeRuntimeState.Created;
+    private ScopeSafePointState _safePointState = ScopeSafePointState.Running;
+    private long _safePointToken;
+    private ScopeSnapPlan _snapPlan = ScopeSnapPlan.Empty;
     private ScopeTimerSink? _timerSink;
     private IReadOnlyDictionary<int, ScopeEndpoint> _scopeEndpoints =
         new Dictionary<int, ScopeEndpoint>();
@@ -113,6 +117,8 @@ internal sealed class ScopeRuntime : IDisposable
     public ScopeLifecyclePlan LifecyclePlan { get; private set; }
 
     public ScopeRuntimeState State => _state;
+
+    public ScopeSafePointState SafePointState => _safePointState;
 
     public EventBuildPolicyTable? PolicyTable { get; private set; }
 
@@ -316,6 +322,8 @@ internal sealed class ScopeRuntime : IDisposable
         DisposeAfterControlIfNeeded();
         if (_state == ScopeRuntimeState.Disposed)
             return;
+        if (ShouldYieldBusinessForSafePoint())
+            return;
 
         DrainEventInbox();
         DisposeAfterControlIfNeeded();
@@ -374,6 +382,11 @@ internal sealed class ScopeRuntime : IDisposable
         LifecyclePlan = lifecyclePlan ?? throw new ArgumentNullException(nameof(lifecyclePlan));
     }
 
+    public void SetSnapPlan(ScopeSnapPlan snapPlan)
+    {
+        _snapPlan = snapPlan ?? throw new ArgumentNullException(nameof(snapPlan));
+    }
+
     public void PumpFixedUpdate(FixedUpdateOptions options, float deltaTime)
     {
         if (!options.Enabled || !CanPumpLifecycle())
@@ -414,7 +427,8 @@ internal sealed class ScopeRuntime : IDisposable
 
     private bool CanPumpLifecycle()
     {
-        return _state is ScopeRuntimeState.Created or ScopeRuntimeState.Running or ScopeRuntimeState.StopRequested;
+        return _safePointState == ScopeSafePointState.Running &&
+               _state is ScopeRuntimeState.Created or ScopeRuntimeState.Running or ScopeRuntimeState.StopRequested;
     }
 
     public void RequireOwnerThread()
@@ -510,11 +524,28 @@ internal sealed class ScopeRuntime : IDisposable
             case ScopeLifecycleRouteIds.Dispose:
                 DispatchDisposeControl(envelope);
                 return true;
+            case ScopeLifecycleRouteIds.EnterSafePoint:
+                DispatchEnterSafePointControl(envelope);
+                return true;
+            case ScopeLifecycleRouteIds.WriteSnapshot:
+                DispatchWriteSnapshotControl(envelope);
+                return true;
+            case ScopeLifecycleRouteIds.ReadSnapshot:
+                DispatchReadSnapshotControl(envelope);
+                return true;
+            case ScopeLifecycleRouteIds.ExitSafePoint:
+                DispatchExitSafePointControl(envelope);
+                return true;
             default:
                 envelope.Completion?.TrySetException(
                     new InvalidOperationException($"Unknown scope lifecycle control route {envelope.RouteId}."));
                 return true;
         }
+    }
+
+    private bool ShouldYieldBusinessForSafePoint()
+    {
+        return _safePointState is ScopeSafePointState.Frozen or ScopeSafePointState.Restoring or ScopeSafePointState.Releasing;
     }
 
     private void DispatchStopControl(ScopeCallEnvelope envelope)
@@ -579,6 +610,186 @@ internal sealed class ScopeRuntime : IDisposable
             _state = ScopeRuntimeState.Faulted;
             queuedCall.Completion.TrySetException(ex);
         }
+    }
+
+    private void DispatchEnterSafePointControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeEnterSafePointCall, ScopeEnterSafePointResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope safe point payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            queuedCall.Completion.TrySetResult(EnterSafePointForSnap());
+        }
+        catch (Exception ex)
+        {
+            _safePointState = ScopeSafePointState.Faulted;
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchWriteSnapshotControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeWriteSnapshotCall, ScopeWriteSnapshotResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope snapshot write payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            queuedCall.Completion.TrySetResult(WriteSnapshotForSnap());
+        }
+        catch (Exception ex)
+        {
+            _safePointState = ScopeSafePointState.Faulted;
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchReadSnapshotControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeReadSnapshotCall, ScopeReadSnapshotResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope snapshot read payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            queuedCall.Completion.TrySetResult(ReadSnapshotForSnap(queuedCall.Request.Document));
+        }
+        catch (Exception ex)
+        {
+            _safePointState = ScopeSafePointState.Faulted;
+            ReportFault(ex, ScopeFaultPhase.Snapshot);
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchExitSafePointControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeExitSafePointCall, ScopeExitSafePointResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope safe point release payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            queuedCall.Completion.TrySetResult(ExitSafePointForSnap());
+        }
+        catch (Exception ex)
+        {
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    internal ScopeEnterSafePointResponse EnterSafePointForSnap()
+    {
+        RequireOwnerThread();
+        if (_state is ScopeRuntimeState.Stopping or ScopeRuntimeState.Stopped or ScopeRuntimeState.Disposing or ScopeRuntimeState.Disposed or ScopeRuntimeState.Faulted)
+            throw new InvalidOperationException($"Scope `{Descriptor.Name}` cannot enter FullSnap safe point from state {_state}.");
+
+        if (_safePointState == ScopeSafePointState.Frozen)
+            return new ScopeEnterSafePointResponse(ScopeControlResult.Succeeded, _safePointToken);
+
+        if (_safePointState != ScopeSafePointState.Running)
+            throw new InvalidOperationException($"Scope `{Descriptor.Name}` cannot enter FullSnap safe point from safe state {_safePointState}.");
+
+        _safePointState = ScopeSafePointState.Requesting;
+        EcsScheduler.FlushStructuralChanges();
+        _safePointToken++;
+        _safePointState = ScopeSafePointState.Frozen;
+        return new ScopeEnterSafePointResponse(ScopeControlResult.Succeeded, _safePointToken);
+    }
+
+    internal ScopeWriteSnapshotResponse WriteSnapshotForSnap()
+    {
+        RequireOwnerThread();
+        if (_safePointState != ScopeSafePointState.Frozen)
+            throw new InvalidOperationException($"Scope `{Descriptor.Name}` must be frozen before writing FullSnap.");
+
+        return new ScopeWriteSnapshotResponse(
+            ScopeControlResult.Succeeded,
+            ScopeSnapExecutor.Write(_snapPlan));
+    }
+
+    internal ScopeReadSnapshotResponse ReadSnapshotForSnap(SnapDocument document)
+    {
+        RequireOwnerThread();
+        if (_safePointState != ScopeSafePointState.Frozen)
+            throw new InvalidOperationException($"Scope `{Descriptor.Name}` must be frozen before reading FullSnap.");
+
+        try
+        {
+            _safePointState = ScopeSafePointState.Restoring;
+            ScopeSnapExecutor.Read(_snapPlan, document);
+            _safePointState = ScopeSafePointState.Frozen;
+            return new ScopeReadSnapshotResponse(ScopeControlResult.Succeeded);
+        }
+        catch
+        {
+            _safePointState = ScopeSafePointState.Faulted;
+            throw;
+        }
+    }
+
+    internal ScopeExitSafePointResponse ExitSafePointForSnap()
+    {
+        RequireOwnerThread();
+        if (_safePointState == ScopeSafePointState.Running)
+            return new ScopeExitSafePointResponse(ScopeControlResult.Succeeded);
+
+        if (_safePointState == ScopeSafePointState.Faulted)
+            return new ScopeExitSafePointResponse(ScopeControlResult.Rejected);
+
+        _safePointState = ScopeSafePointState.Releasing;
+        _safePointState = ScopeSafePointState.Running;
+        return new ScopeExitSafePointResponse(ScopeControlResult.Succeeded);
     }
 
     private void StopOnOwnerThread()

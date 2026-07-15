@@ -194,21 +194,80 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal void BuildFullSnapCache()
     {
-        _fullSnap = new FullSnapRuntime(this);
+        _fullSnap = new FullSnapRuntime(this, _scopeHost);
         if (_chain == null) return;
 
         var visited = new HashSet<object>(LayerBase.Snap.ReferenceEqualityComparer.Instance);
         foreach (var layer in _chain.GetNodes().OfType<Layer>())
         {
+            int objectSlot = 0;
             if (layer is IGeneratedFullSnapNode layerNode && visited.Add(layerNode))
-                _fullSnap.Register(layerNode);
+                RegisterFullSnapNode(layerNode, layer.RouteIndex, objectSlot++);
 
             foreach (IGeneratedFullSnapNode node in layer.GetFullSnapNodes())
             {
                 if (visited.Add(node))
-                    _fullSnap.Register(node);
+                    RegisterFullSnapNode(node, layer.RouteIndex, objectSlot++);
             }
         }
+
+        _fullSnap.FreezePlans();
+    }
+
+    private void RegisterFullSnapNode(IGeneratedFullSnapNode node, int layerIndex, int objectSlot)
+    {
+        var binding = ServiceLayerBinder.GetBinding(node);
+        int ownerScopeId = ResolveFullSnapOwnerScopeId(node, layerIndex, binding);
+        if (!_scopeHost.TryGetRuntime(ownerScopeId, out _))
+        {
+            throw new InvalidOperationException(
+                $"FullSnap node `{node.GetType().FullName}` is bound to unknown scope id {ownerScopeId}.");
+        }
+
+        _fullSnap!.Register(
+            ownerScopeId,
+            new ScopeSnapNodePlan(layerIndex, objectSlot, node));
+    }
+
+    private int ResolveFullSnapOwnerScopeId(
+        IGeneratedFullSnapNode node,
+        int layerIndex,
+        ServiceLayerBinding? binding)
+    {
+        Type nodeType = node.GetType();
+        foreach (var service in CompositionPlan.Services)
+        {
+            if (service.OwnerLayerIndex == layerIndex &&
+                (service.ImplementationType == nodeType ||
+                 service.ServiceType == nodeType ||
+                 service.ServiceType.IsAssignableFrom(nodeType)))
+            {
+                return service.OwnerScopeId;
+            }
+        }
+
+        foreach (var context in CompositionPlan.Contexts)
+        {
+            if (context.OwnerLayerIndex == layerIndex &&
+                context.ContextType == nodeType)
+            {
+                return context.OwnerScopeId;
+            }
+        }
+
+        foreach (var attribute in nodeType.GetCustomAttributes(false))
+        {
+            Type attributeType = attribute.GetType();
+            if (attributeType.IsGenericType &&
+                attributeType.GetGenericTypeDefinition() == typeof(ScopeAttribute<>))
+            {
+                int attributeScopeId = ScopeDefinitionIds.Resolve(attributeType.GetGenericArguments()[0]);
+                if (_scopeHost.TryGetRuntime(attributeScopeId, out _))
+                    return attributeScopeId;
+            }
+        }
+
+        return binding?.OwnerScope.ScopeId ?? ScopeDefinitionIds.Main;
     }
 
     internal int GetNextLayerIndex()

@@ -21,6 +21,16 @@ internal enum ScopeRuntimeState
     Faulted = 7
 }
 
+internal enum ScopeSafePointState : byte
+{
+    Running = 0,
+    Requesting = 1,
+    Frozen = 2,
+    Restoring = 3,
+    Releasing = 4,
+    Faulted = 5
+}
+
 internal enum ScopeThreadingMode
 {
     Main = 0,

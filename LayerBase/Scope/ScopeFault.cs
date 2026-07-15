@@ -9,6 +9,7 @@ public enum ScopeFaultPhase
     ServiceUpdate,
     ServiceStop,
     ServiceDispose,
+    Snapshot,
     ContextInitialize,
     ContextUpdate,
     ContextDispose,

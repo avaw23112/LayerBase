@@ -35,6 +35,8 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
     public IReadOnlyList<ScopeRuntime> Scopes => _scopes;
 
+    public bool HasWorkerScopes => _workers.Length > 0;
+
     public bool TryGetRuntime(int scopeId, out ScopeRuntime scope)
     {
         ThrowIfDisposed();

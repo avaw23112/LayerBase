@@ -1,4 +1,5 @@
 using LayerBase.Async;
+using LayerBase.Snap;
 
 namespace LayerBase.Scope;
 
@@ -37,11 +38,87 @@ internal readonly struct ScopeDisposeResponse
     public ScopeControlResult State { get; }
 }
 
+internal readonly struct ScopeEnterSafePointCall
+{
+}
+
+internal readonly struct ScopeEnterSafePointResponse
+{
+    public ScopeEnterSafePointResponse(ScopeControlResult result, long token)
+    {
+        Result = result;
+        Token = token;
+    }
+
+    public ScopeControlResult Result { get; }
+
+    public long Token { get; }
+}
+
+internal readonly struct ScopeWriteSnapshotCall
+{
+}
+
+internal readonly struct ScopeWriteSnapshotResponse
+{
+    public ScopeWriteSnapshotResponse(ScopeControlResult result, SnapSection[] sections)
+    {
+        Result = result;
+        Sections = sections ?? Array.Empty<SnapSection>();
+    }
+
+    public ScopeControlResult Result { get; }
+
+    public SnapSection[] Sections { get; }
+}
+
+internal readonly struct ScopeReadSnapshotCall
+{
+    public ScopeReadSnapshotCall(SnapDocument document)
+    {
+        Document = document ?? throw new ArgumentNullException(nameof(document));
+    }
+
+    public SnapDocument Document { get; }
+}
+
+internal readonly struct ScopeReadSnapshotResponse
+{
+    public ScopeReadSnapshotResponse(ScopeControlResult result)
+    {
+        Result = result;
+    }
+
+    public ScopeControlResult Result { get; }
+}
+
+internal readonly struct ScopeExitSafePointCall
+{
+}
+
+internal readonly struct ScopeExitSafePointResponse
+{
+    public ScopeExitSafePointResponse(ScopeControlResult result)
+    {
+        Result = result;
+    }
+
+    public ScopeControlResult Result { get; }
+}
+
 internal static class ScopeLifecycleRouteIds
 {
     public const int Stop = -101;
 
     public const int Dispose = -102;
+
+    public const int EnterSafePoint = -103;
+
+    public const int WriteSnapshot = -104;
+
+    public const int ReadSnapshot = -105;
+
+    public const int ExitSafePoint = -106;
 
     public static int Resolve<TRequest, TResponse>()
         where TRequest : struct
@@ -59,6 +136,30 @@ internal static class ScopeLifecycleRouteIds
             return Dispose;
         }
 
+        if (typeof(TRequest) == typeof(ScopeEnterSafePointCall) &&
+            typeof(TResponse) == typeof(ScopeEnterSafePointResponse))
+        {
+            return EnterSafePoint;
+        }
+
+        if (typeof(TRequest) == typeof(ScopeWriteSnapshotCall) &&
+            typeof(TResponse) == typeof(ScopeWriteSnapshotResponse))
+        {
+            return WriteSnapshot;
+        }
+
+        if (typeof(TRequest) == typeof(ScopeReadSnapshotCall) &&
+            typeof(TResponse) == typeof(ScopeReadSnapshotResponse))
+        {
+            return ReadSnapshot;
+        }
+
+        if (typeof(TRequest) == typeof(ScopeExitSafePointCall) &&
+            typeof(TResponse) == typeof(ScopeExitSafePointResponse))
+        {
+            return ExitSafePoint;
+        }
+
         throw new InvalidOperationException(
             $"Unsupported scope lifecycle control call {typeof(TRequest).Name}/{typeof(TResponse).Name}.");
     }
@@ -74,5 +175,42 @@ internal static class ScopeLifecycleControlExtensions
     public static LBTask<ScopeDisposeResponse> RequestDisposeAsync(this ScopeRuntime scope)
     {
         return scope.EnqueueControlCall<ScopeDisposeCall, ScopeDisposeResponse>(new ScopeDisposeCall());
+    }
+
+    public static LBTask<ScopeEnterSafePointResponse> RequestEnterSafePointAsync(
+        this ScopeRuntime scope,
+        CancellationToken cancellationToken = default)
+    {
+        return scope.EnqueueControlCall<ScopeEnterSafePointCall, ScopeEnterSafePointResponse>(
+            new ScopeEnterSafePointCall(),
+            cancellationToken);
+    }
+
+    public static LBTask<ScopeWriteSnapshotResponse> RequestWriteSnapshotAsync(
+        this ScopeRuntime scope,
+        CancellationToken cancellationToken = default)
+    {
+        return scope.EnqueueControlCall<ScopeWriteSnapshotCall, ScopeWriteSnapshotResponse>(
+            new ScopeWriteSnapshotCall(),
+            cancellationToken);
+    }
+
+    public static LBTask<ScopeReadSnapshotResponse> RequestReadSnapshotAsync(
+        this ScopeRuntime scope,
+        SnapDocument document,
+        CancellationToken cancellationToken = default)
+    {
+        return scope.EnqueueControlCall<ScopeReadSnapshotCall, ScopeReadSnapshotResponse>(
+            new ScopeReadSnapshotCall(document),
+            cancellationToken);
+    }
+
+    public static LBTask<ScopeExitSafePointResponse> RequestExitSafePointAsync(
+        this ScopeRuntime scope,
+        CancellationToken cancellationToken = default)
+    {
+        return scope.EnqueueControlCall<ScopeExitSafePointCall, ScopeExitSafePointResponse>(
+            new ScopeExitSafePointCall(),
+            cancellationToken);
     }
 }
