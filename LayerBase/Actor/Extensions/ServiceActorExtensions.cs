@@ -7,20 +7,16 @@ namespace LayerBase;
 public static class ServiceActorExtensions
 {
     /// <summary>
-    /// Gets the <see cref="ActorWorld"/> bound to the current service.
-    ///
-    /// Advanced API:
-    /// Prefer the context-first actor facade APIs in normal business code. Access <see cref="ActorWorld"/>
-    /// directly only when doing batch actor operations, framework integration, or low-level tuning.
+    /// Gets the actor accessor bound to the current service scope.
     /// </summary>
-    public static ActorWorld Actors(this IService service)
+    public static ActorAccessor Actors(this IService service)
     {
         if (service == null)
         {
             throw new ArgumentNullException(nameof(service));
         }
 
-        return ServiceLayerBinder.RequireBinding(service).Runtime.Actors;
+        return ServiceLayerBinder.RequireBinding(service).Runtime.ScopeHost.MainScope.Actors;
     }
 
     public static LBTask<TResponse> AskActor<TRequest, TResponse>(

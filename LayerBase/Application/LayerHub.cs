@@ -2,7 +2,6 @@ using System.Runtime.CompilerServices;
 using System.Collections.Concurrent;
 using System.Text;
 using LayerBase.Async;
-using LayerBase.Call;
 using LayerBase.Core.Event;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
@@ -283,100 +282,6 @@ public static class LayerHub
     }
 
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static bool TryGetCachedTarget<TLayer>(int runtimeId, int version, out TLayer? layer, out Exception? error)
-        where TLayer : Layer
-    {
-        if (runtimeId >= 256)
-        {
-            layer = null;
-            error = null;
-            return false;
-        }
-
-        if (Volatile.Read(ref LayerTargetCache<TLayer>.Versions[runtimeId]) != version)
-        {
-            layer = null;
-            error = null;
-            return false;
-        }
-
-        switch (LayerTargetCache<TLayer>.States[runtimeId])
-        {
-            case LayerTargetState.Found:
-                layer = LayerTargetCache<TLayer>.Layers[runtimeId];
-                error = null;
-                return true;
-            case LayerTargetState.Missing:
-                layer = null;
-                error = new LayerCallTargetNotFoundException(typeof(TLayer));
-                return true;
-            case LayerTargetState.Ambiguous:
-                layer = null;
-                error = new LayerCallTargetAmbiguousException(typeof(TLayer));
-                return true;
-            default:
-                layer = null;
-                error = null;
-                return false;
-        }
-    }
-
-    internal static void UpdateLayerTargetCache<TLayer>(int              runtimeId, int version, TLayer? layer,
-                                                        LayerTargetState state)
-        where TLayer : Layer
-    {
-        if (runtimeId >= 256) return;
-        LayerTargetCache<TLayer>.Layers[runtimeId] = layer;
-        LayerTargetCache<TLayer>.States[runtimeId] = state;
-        Volatile.Write(ref LayerTargetCache<TLayer>.Versions[runtimeId], version);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static int GetCallCacheVersion<TLayer, TRequest, TResponse>(int runtimeId)
-        where TLayer : Layer
-        where TRequest : struct
-        where TResponse : struct
-    {
-        if (runtimeId >= 256) return -1;
-        return Volatile.Read(ref LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId]);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static LayerCallInvoker<TRequest, TResponse>? GetCallInvoker<TLayer, TRequest, TResponse>(int runtimeId)
-        where TLayer : Layer
-        where TRequest : struct
-        where TResponse : struct
-    {
-        if (runtimeId >= 256) return null;
-        return LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId];
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static Exception? GetCallError<TLayer, TRequest, TResponse>(int runtimeId)
-        where TLayer : Layer
-        where TRequest : struct
-        where TResponse : struct
-    {
-        if (runtimeId >= 256) return null;
-        return LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId];
-    }
-
-    internal static void UpdateLayerCallCache<TLayer, TRequest, TResponse>(
-        int runtimeId, int version, LayerCallInvoker<TRequest, TResponse>? invoker, Exception? error)
-        where TLayer : Layer
-        where TRequest : struct
-        where TResponse : struct
-    {
-        if (runtimeId >= 256) return;
-        lock (s_lock)
-        {
-            LayerCallCache<TLayer, TRequest, TResponse>.Invokers[runtimeId] = invoker;
-            LayerCallCache<TLayer, TRequest, TResponse>.Errors[runtimeId] = error;
-            Volatile.Write(ref LayerCallCache<TLayer, TRequest, TResponse>.Versions[runtimeId], version);
-        }
-    }
-
     internal static void RegisterCacheResetter(Action resetter)
     {
         s_cacheResetters.Add(resetter);
@@ -392,86 +297,6 @@ public static class LayerHub
         foreach (var resetter in s_runtimeCacheResetters)
         {
             resetter(runtimeId);
-        }
-    }
-
-    private static class LayerCallCache<TLayer, TRequest, TResponse>
-        where TLayer : Layer
-        where TRequest : struct
-        where TResponse : struct
-    {
-        public static readonly int[] Versions = new int[256];
-
-        public static readonly LayerCallInvoker<TRequest, TResponse>?[] Invokers =
-            new LayerCallInvoker<TRequest, TResponse>[256];
-
-        public static readonly Exception?[] Errors = new Exception?[256];
-
-        static LayerCallCache()
-        {
-            for (int i = 0; i < 256; i++) Versions[i] = -1;
-            RegisterCacheResetter(Reset);
-            RegisterRuntimeCacheResetter(ResetRuntime);
-        }
-
-        private static void Reset()
-        {
-            for (int i = 0; i < 256; i++)
-            {
-                Invokers[i] = null;
-                Errors[i] = null;
-                Volatile.Write(ref Versions[i], -1);
-            }
-        }
-
-        private static void ResetRuntime(int runtimeId)
-        {
-            if ((uint)runtimeId >= 256) return;
-
-            Invokers[runtimeId] = null;
-            Errors[runtimeId] = null;
-            Volatile.Write(ref Versions[runtimeId], -1);
-        }
-    }
-
-    internal enum LayerTargetState : byte
-    {
-        Unknown = 0,
-        Found = 1,
-        Missing = 2,
-        Ambiguous = 3
-    }
-
-    private static class LayerTargetCache<TLayer> where TLayer : Layer
-    {
-        public static readonly int[] Versions = new int[256];
-        public static readonly TLayer?[] Layers = new TLayer[256];
-        public static readonly LayerTargetState[] States = new LayerTargetState[256];
-
-        static LayerTargetCache()
-        {
-            for (int i = 0; i < 256; i++) Versions[i] = -1;
-            RegisterCacheResetter(Reset);
-            RegisterRuntimeCacheResetter(ResetRuntime);
-        }
-
-        private static void Reset()
-        {
-            for (int i = 0; i < 256; i++)
-            {
-                Layers[i] = null;
-                States[i] = LayerTargetState.Unknown;
-                Volatile.Write(ref Versions[i], -1);
-            }
-        }
-
-        private static void ResetRuntime(int runtimeId)
-        {
-            if ((uint)runtimeId >= 256) return;
-
-            Layers[runtimeId] = null;
-            States[runtimeId] = LayerTargetState.Unknown;
-            Volatile.Write(ref Versions[runtimeId], -1);
         }
     }
 }

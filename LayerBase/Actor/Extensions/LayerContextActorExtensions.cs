@@ -7,21 +7,16 @@ namespace LayerBase;
 public static class LayerContextActorExtensions
 {
     /// <summary>
-    /// Gets the <see cref="ActorWorld"/> bound to the current context.
-    ///
-    /// Advanced API:
-    /// Prefer <c>CreateActor</c>, <c>CreatePooledActor</c>, <c>PostActor</c>, <c>Ask</c>, and <c>DestroyActor</c>
-    /// in normal business code. Access <see cref="ActorWorld"/> directly only when doing batch actor operations,
-    /// framework integration, or low-level tuning.
+    /// Gets the actor accessor bound to the current context scope.
     /// </summary>
-    public static ActorWorld Actors(this ILayerContext context)
+    public static ActorAccessor Actors(this ILayerContext context)
     {
         if (context == null)
         {
             throw new ArgumentNullException(nameof(context));
         }
 
-        return ServiceLayerBinder.RequireBinding(context).Runtime.Actors;
+        return ServiceLayerBinder.RequireBinding(context).Runtime.ScopeHost.MainScope.Actors;
     }
 
     public static LBTask<TResponse> Ask<TRequest, TResponse>(
@@ -52,7 +47,7 @@ public static class LayerContextActorExtensions
         in TMessage        message)
         where TMessage : struct
     {
-        ServiceLayerBinder.RequireBinding(context).Runtime.PostTo(actorId, in message);
+        context.Actors().PostTo(actorId, in message);
     }
 
     public static void DestroyActor(

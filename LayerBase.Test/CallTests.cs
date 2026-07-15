@@ -39,7 +39,7 @@ public partial class CallTests
 
         Assert.That(async () =>
                 await LayerHub.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(new SwitchSceneRequest("Missing")),
-            Throws.TypeOf<LayerCallRouteNotFoundException>());
+            Throws.TypeOf<ScopeLocalCallRouteNotFoundException>());
     }
 
     [Test]
@@ -51,7 +51,7 @@ public partial class CallTests
 
         Assert.That(async () =>
                 await LayerHub.CallAsync<UnknownRequest, UnknownResponse>(new UnknownRequest("NoRoute")),
-            Throws.TypeOf<LayerCallRouteNotFoundException>());
+            Throws.TypeOf<ScopeLocalCallRouteNotFoundException>());
     }
 
     [Test]
@@ -109,7 +109,7 @@ public partial class CallTests
 
         Assert.That(async () =>
                 await LayerHub.CallAsync<NoOwnerLayerRequest, NoOwnerLayerResponse>(new NoOwnerLayerRequest()),
-            Throws.TypeOf<LayerCallRouteNotFoundException>());
+            Throws.TypeOf<ScopeLocalCallRouteNotFoundException>());
     }
 
     [Test]
@@ -416,7 +416,7 @@ public partial class LayerMethodLayer : Layer
 }
 
 [OwnerLayer(typeof(CoreLayer))]
-public sealed class SwitchSceneCallHandler : ILayerCallHandler<SwitchSceneRequest, SwitchSceneResponse>
+public sealed class SwitchSceneCallHandler : IScopeLocalCallHandler<SwitchSceneRequest, SwitchSceneResponse>
 {
     public LBTask<SwitchSceneResponse> HandleAsync(SwitchSceneRequest request,
                                                    CancellationToken  cancellationToken = default)
@@ -429,7 +429,7 @@ public sealed class SwitchSceneCallHandler : ILayerCallHandler<SwitchSceneReques
 }
 
 [OwnerLayer(typeof(CoreLayer))]
-public sealed class ServiceLookupCallHandler : ILayerCallHandler<ServiceLookupRequest, ServiceLookupResponse>
+public sealed class ServiceLookupCallHandler : IScopeLocalCallHandler<ServiceLookupRequest, ServiceLookupResponse>
 {
     public async LBTask<ServiceLookupResponse> HandleAsync(ServiceLookupRequest request,
                                                            CancellationToken    cancellationToken = default)
@@ -442,7 +442,7 @@ public sealed class ServiceLookupCallHandler : ILayerCallHandler<ServiceLookupRe
 }
 
 [OwnerLayer(typeof(CoreLayer))]
-public sealed class CrossLayerAccessCallHandler : ILayerCallHandler<CrossLayerAccessRequest, CrossLayerAccessResponse>
+public sealed class CrossLayerAccessCallHandler : IScopeLocalCallHandler<CrossLayerAccessRequest, CrossLayerAccessResponse>
 {
     public async LBTask<CrossLayerAccessResponse> HandleAsync(CrossLayerAccessRequest request,
                                                               CancellationToken       cancellationToken = default)
@@ -457,7 +457,7 @@ public sealed class CrossLayerAccessCallHandler : ILayerCallHandler<CrossLayerAc
 
 [OwnerLayer(typeof(CoreLayer))]
 public sealed class DirectCrossLayerAccessCallHandler
-    : ILayerCallHandler<DirectCrossLayerAccessRequest, DirectCrossLayerAccessResponse>
+    : IScopeLocalCallHandler<DirectCrossLayerAccessRequest, DirectCrossLayerAccessResponse>
 {
     public LBTask<DirectCrossLayerAccessResponse> HandleAsync(DirectCrossLayerAccessRequest request,
                                                               CancellationToken             cancellationToken = default)
@@ -469,7 +469,7 @@ public sealed class DirectCrossLayerAccessCallHandler
 }
 
 [OwnerLayer(typeof(AudioLayer))]
-public sealed class AudioMixerQueryCallHandler : ILayerCallHandler<AudioMixerQueryRequest, AudioMixerQueryResponse>
+public sealed class AudioMixerQueryCallHandler : IScopeLocalCallHandler<AudioMixerQueryRequest, AudioMixerQueryResponse>
 {
     public LBTask<AudioMixerQueryResponse> HandleAsync(AudioMixerQueryRequest request,
                                                        CancellationToken      cancellationToken = default)
@@ -479,7 +479,7 @@ public sealed class AudioMixerQueryCallHandler : ILayerCallHandler<AudioMixerQue
     }
 }
 
-public sealed class NoOwnerLayerCallHandler : ILayerCallHandler<NoOwnerLayerRequest, NoOwnerLayerResponse>
+public sealed class NoOwnerLayerCallHandler : IScopeLocalCallHandler<NoOwnerLayerRequest, NoOwnerLayerResponse>
 {
     public LBTask<NoOwnerLayerResponse> HandleAsync(NoOwnerLayerRequest request,
                                                     CancellationToken   cancellationToken = default)
@@ -489,7 +489,7 @@ public sealed class NoOwnerLayerCallHandler : ILayerCallHandler<NoOwnerLayerRequ
 }
 
 [OwnerLayer(typeof(CoreLayer))]
-public sealed class CancellationEchoCallHandler : ILayerCallHandler<CancellationEchoRequest, CancellationEchoResponse>
+public sealed class CancellationEchoCallHandler : IScopeLocalCallHandler<CancellationEchoRequest, CancellationEchoResponse>
 {
     public static CancellationToken LastToken;
 
@@ -503,7 +503,7 @@ public sealed class CancellationEchoCallHandler : ILayerCallHandler<Cancellation
 }
 
 [OwnerLayer(typeof(CoreLayer))]
-public sealed class ThrowingCallHandler : ILayerCallHandler<ThrowingRequest, ThrowingResponse>
+public sealed class ThrowingCallHandler : IScopeLocalCallHandler<ThrowingRequest, ThrowingResponse>
 {
     public LBTask<ThrowingResponse> HandleAsync(ThrowingRequest   request,
                                                 CancellationToken cancellationToken = default)
@@ -513,7 +513,7 @@ public sealed class ThrowingCallHandler : ILayerCallHandler<ThrowingRequest, Thr
 }
 
 [OwnerLayer(typeof(DuplicateLayer))]
-public sealed class DuplicateCallHandlerA : ILayerCallHandler<DuplicateRequest, DuplicateResponse>
+public sealed class DuplicateCallHandlerA : IScopeLocalCallHandler<DuplicateRequest, DuplicateResponse>
 {
     public LBTask<DuplicateResponse> HandleAsync(DuplicateRequest  request,
                                                  CancellationToken cancellationToken = default)

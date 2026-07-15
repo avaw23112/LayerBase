@@ -559,7 +559,7 @@ public abstract class Layer : Node, IDisposable
 
     #region Public API - Call Route
     /// <summary>注册一个调用路由处理器。同一请求-响应对只能注册一个处理器。</summary>
-    protected internal void RegisterCallHandler<TRequest, TResponse>(ILayerCallHandler<TRequest, TResponse> handler)
+    protected internal void RegisterCallHandler<TRequest, TResponse>(IScopeLocalCallHandler<TRequest, TResponse> handler)
         where TRequest : struct
         where TResponse : struct
     {
@@ -567,8 +567,8 @@ public abstract class Layer : Node, IDisposable
         if (handler == null) throw new ArgumentNullException(nameof(handler));
 
         ServiceLayerBinder.Attach(handler, this);
-        var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
-        var invoker = (LayerCallInvoker<TRequest, TResponse>)handler.HandleAsync;
+        var routeId = ScopeLocalCallRouteId<TRequest, TResponse>.Id;
+        var invoker = (ScopeLocalCallInvoker<TRequest, TResponse>)handler.HandleAsync;
 
         lock (_callRouteLock)
         {
@@ -589,9 +589,14 @@ public abstract class Layer : Node, IDisposable
             if (invokers[routeId] != null)
             {
                 if (handlerTypes[routeId] == handler.GetType()) return;
-                throw new LayerCallRouteConflictException(
-                    GetType(), typeof(TRequest), typeof(TResponse),
-                    handlerTypes[routeId] ?? invokers[routeId]!.GetType(), handler.GetType());
+                throw new ScopeLocalCallRouteConflictException(
+                    0,
+                    typeof(TRequest),
+                    typeof(TResponse),
+                    GetType(),
+                    handlerTypes[routeId] ?? invokers[routeId]!.GetType(),
+                    GetType(),
+                    handler.GetType());
             }
 
             invokers[routeId] = invoker;
@@ -634,15 +639,15 @@ public abstract class Layer : Node, IDisposable
 
     #region Internal - Call Route Resolution
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal LayerCallInvoker<TRequest, TResponse> GetCallInvoker<TRequest, TResponse>()
+    internal ScopeLocalCallInvoker<TRequest, TResponse> GetCallInvoker<TRequest, TResponse>()
         where TRequest : struct
         where TResponse : struct
     {
-        var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
+        var routeId = ScopeLocalCallRouteId<TRequest, TResponse>.Id;
         var invokers = Volatile.Read(ref _callRouteInvokers);
         if ((uint)routeId >= (uint)invokers.Length || invokers[routeId] == null)
             ThrowRouteNotFound<TRequest, TResponse>();
-        return (LayerCallInvoker<TRequest, TResponse>)invokers[routeId]!;
+        return (ScopeLocalCallInvoker<TRequest, TResponse>)invokers[routeId]!;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -654,11 +659,11 @@ public abstract class Layer : Node, IDisposable
         if (Volatile.Read(ref _disposed) != 0) ThrowDisposed();
         if (cancellationToken.IsCancellationRequested) return LBTask<TResponse>.FromCanceled(cancellationToken);
 
-        var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
+        var routeId = ScopeLocalCallRouteId<TRequest, TResponse>.Id;
         var invokers = Volatile.Read(ref _callRouteInvokers);
         if ((uint)routeId >= (uint)invokers.Length || invokers[routeId] == null)
             ThrowRouteNotFound<TRequest, TResponse>();
-        return ((LayerCallInvoker<TRequest, TResponse>)invokers[routeId]!)(request, cancellationToken);
+        return ((ScopeLocalCallInvoker<TRequest, TResponse>)invokers[routeId]!)(request, cancellationToken);
     }
     #endregion
 
@@ -766,7 +771,7 @@ public abstract class Layer : Node, IDisposable
         where TRequest : struct
         where TResponse : struct
     {
-        throw new LayerCallRouteNotFoundException(GetType(), typeof(TRequest), typeof(TResponse));
+        throw new ScopeLocalCallRouteNotFoundException(0, typeof(TRequest), typeof(TResponse));
     }
     #endregion
     #region Nested Types

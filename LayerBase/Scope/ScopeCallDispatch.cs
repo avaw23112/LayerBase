@@ -16,6 +16,8 @@ internal sealed class ScopeCallCompletion<TResponse> : IScopeCallCompletion
 {
     private readonly LBTaskCompletionSource<TResponse> _source = new();
 
+    internal LBTaskCompletionSource<TResponse> Source => _source;
+
     public LBTask<TResponse> Task => _source.Task;
 
     public void TrySetResult(TResponse response)
@@ -67,9 +69,9 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
     where TRequest : struct
     where TResponse : struct
 {
-    private readonly LayerCallInvoker<TRequest, TResponse> _invoker;
+    private readonly ScopeLocalCallInvoker<TRequest, TResponse> _invoker;
 
-    public ScopeLocalCallDispatcher(LayerCallInvoker<TRequest, TResponse> invoker)
+    public ScopeLocalCallDispatcher(ScopeLocalCallInvoker<TRequest, TResponse> invoker)
     {
         _invoker = invoker;
     }

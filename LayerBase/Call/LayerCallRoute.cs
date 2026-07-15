@@ -3,15 +3,15 @@
 namespace LayerBase.Call;
 
 /// <summary>
-/// 跨层调用的实际执行委托。
+/// 当前 Scope 内本地调用的实际执行委托。
 /// </summary>
-internal delegate LBTask<TResponse> LayerCallInvoker<TRequest, TResponse>(
+internal delegate LBTask<TResponse> ScopeLocalCallInvoker<TRequest, TResponse>(
     TRequest          request,
     CancellationToken cancellationToken)
     where TRequest : struct
     where TResponse : struct;
 
-internal static class LayerCallRouteRegistry
+internal static class ScopeLocalCallRouteRegistry
 {
     private static int s_nextId;
 
@@ -21,9 +21,9 @@ internal static class LayerCallRouteRegistry
     }
 }
 
-internal static class LayerCallRouteId<TRequest, TResponse>
+internal static class ScopeLocalCallRouteId<TRequest, TResponse>
     where TRequest : struct
     where TResponse : struct
 {
-    public static readonly int Id = LayerCallRouteRegistry.GetNextId();
+    public static readonly int Id = ScopeLocalCallRouteRegistry.GetNextId();
 }

@@ -54,7 +54,7 @@ public partial class VerifyService3 : IService
 }
 
 [OwnerLayer(typeof(VerifyLayer))]
-public partial class VerifyCallHandler : ILayerCallHandler<ChangeSceneRequest, ChangeSceneResponse>
+public partial class VerifyCallHandler : IScopeLocalCallHandler<ChangeSceneRequest, ChangeSceneResponse>
 {
     public LBTask<ChangeSceneResponse> HandleAsync(ChangeSceneRequest request,
                                                    CancellationToken  cancellationToken = default)

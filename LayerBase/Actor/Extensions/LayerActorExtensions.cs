@@ -7,20 +7,16 @@ namespace LayerBase;
 public static class LayerActorExtensions
 {
     /// <summary>
-    /// Gets the <see cref="ActorWorld"/> bound to the current layer.
-    ///
-    /// Advanced API:
-    /// Prefer the context-first actor facade APIs in normal business code. Access <see cref="ActorWorld"/>
-    /// directly only when doing batch actor operations, framework integration, or low-level tuning.
+    /// Gets the actor accessor bound to the current layer scope.
     /// </summary>
-    public static ActorWorld Actors(this Layer layer)
+    public static ActorAccessor Actors(this Layer layer)
     {
         if (layer == null)
         {
             throw new ArgumentNullException(nameof(layer));
         }
 
-        return layer.OwnerContext?.Actors
+        return layer.OwnerContext?.ScopeHost.MainScope.Actors
                ?? throw new InvalidOperationException("Layer not attached to LayerRuntime.");
     }
 

@@ -40,7 +40,7 @@ public class LayerGeneratorContractTests
                          }
 
                          [OwnerService(typeof(CombatService))]
-                         public sealed class BadHandler : ILayerCallHandler<TestRequest, TestResponse>
+                         public sealed class BadHandler : IScopeLocalCallHandler<TestRequest, TestResponse>
                          {
                              public LBTask<TestResponse> HandleAsync(TestRequest request, CancellationToken cancellationToken = default)
                              {

@@ -17,7 +17,7 @@ public sealed class ScopeArchitectureAcceptanceTests
         AssertNoTargetLayerCallAsync(typeof(LayerHub));
         AssertNoTargetLayerCallAsync(typeof(LayerRuntime));
 
-        var targetLayerCallExtension = typeof(LayerCallHandlerExtensions)
+        var targetLayerCallExtension = typeof(ScopeLocalCallHandlerExtensions)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .FirstOrDefault(method =>
                 method.Name == "Call" &&
@@ -446,7 +446,7 @@ public readonly struct ScopeDeferredCallResponse
 
 [OwnerLayer(typeof(CoreLayer))]
 public sealed class ScopeDeferredCallHandler
-    : ILayerCallHandler<ScopeDeferredCallRequest, ScopeDeferredCallResponse>
+    : IScopeLocalCallHandler<ScopeDeferredCallRequest, ScopeDeferredCallResponse>
 {
     public LBTask<ScopeDeferredCallResponse> HandleAsync(
         ScopeDeferredCallRequest request,

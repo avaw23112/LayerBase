@@ -20,7 +20,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private const string LayerMetadataName = "LayerBase.Layers.Layer";
     private const string EventHandlerMetadataName = "LayerBase.Core.EventHandler.IEventHandler`1";
     private const string EventHandlerAsyncMetadataName = "LayerBase.Core.EventHandler.IEventHandlerAsync`1";
-    private const string CallHandlerMetadataName = "LayerBase.Call.ILayerCallHandler`2";
+    private const string CallHandlerMetadataName = "LayerBase.Call.IScopeLocalCallHandler`2";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -260,40 +260,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
                 validatedOwnerServiceRegistrations.Add(reg);
             }
-        }
-
-        var conflictingRequests = callHandlerRegistrations
-                                  .GroupBy(static binding => binding.RequestType, SymbolEqualityComparer.Default)
-                                  .Select(static group => new
-                                  {
-                                      RequestType = group.Key,
-                                      Count = group.Count(),
-                                      Bindings = group.Select(static binding =>
-                                                          new CallBindingSignature(binding.LayerType,
-                                                              binding.ResponseType))
-                                                      .Distinct(CallBindingSignatureComparer.Instance)
-                                                      .OrderBy(static binding =>
-                                                          binding.LayerType.ToDisplayString())
-                                                      .ThenBy(static binding =>
-                                                          binding.ResponseType.ToDisplayString())
-                                                      .ToList()
-                                  })
-                                  .Where(static entry => entry.Count > 1)
-                                  .ToDictionary(static entry => entry.RequestType, static entry => entry.Bindings,
-                                      SymbolEqualityComparer.Default);
-
-        foreach (var registration in callHandlerRegistrations)
-        {
-            if (!conflictingRequests.TryGetValue(registration.RequestType, out var bindings)) continue;
-
-            var bindingList = string.Join(", ", bindings.Select(static binding =>
-                $"{binding.LayerType.ToDisplayString()} -> {binding.ResponseType.ToDisplayString()}"));
-
-            spc.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.RequestMustHaveSingleBinding,
-                registration.Location ?? registration.ServiceType.Locations.FirstOrDefault(),
-                registration.RequestType.ToDisplayString(),
-                bindingList));
         }
 
         var layerGroups = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
@@ -671,7 +637,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
                     builder.Append("        typedLayer.RegisterCallHandler<")
                            .Append(reqDisplay).Append(", ").Append(respDisplay)
-                           .Append(">((global::LayerBase.Call.ILayerCallHandler<")
+                           .Append(">((global::LayerBase.Call.IScopeLocalCallHandler<")
                            .Append(reqDisplay).Append(", ").Append(respDisplay)
                            .Append(">)new ")
                            .Append(implDisplay)
@@ -805,7 +771,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             {
                 "global::LayerBase.DI.IService" when metadataName == IServiceMetadataName => true,
                 "global::LayerBase.DI.ILayerContext" when metadataName == ILayerContextMetadataName => true,
-                "global::LayerBase.Call.ILayerCallHandler<TRequest, TResponse>" when metadataName == CallHandlerMetadataName => true,
+                "global::LayerBase.Call.IScopeLocalCallHandler<TRequest, TResponse>" when metadataName == CallHandlerMetadataName => true,
                 "global::LayerBase.Core.EventHandler.IEventHandler<TValue>" when metadataName == EventHandlerMetadataName => true,
                 "global::LayerBase.Core.EventHandler.IEventHandlerAsync<TValue>" when metadataName == EventHandlerAsyncMetadataName => true,
                 _ => false
@@ -868,7 +834,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             new(
                 "LBG001",
                 "OwnerLayer type must implement a supported contract",
-                "Type '{0}' is marked with OwnerLayer but does not implement any supported OwnerLayer contract (IService or ILayerCallHandler<TRequest, TResponse>)",
+                "Type '{0}' is marked with OwnerLayer but does not implement any supported OwnerLayer contract (IService or IScopeLocalCallHandler<TRequest, TResponse>)",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -905,15 +871,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 "LBG005",
                 "Service cannot be abstract",
                 "Service '{0}' cannot be abstract when used with OwnerLayerAttribute or MountAttribute",
-                Category,
-                DiagnosticSeverity.Error,
-                true);
-
-        public static readonly DiagnosticDescriptor RequestMustHaveSingleBinding =
-            new(
-                "LBG006",
-                "Call request must map to exactly one target and one response",
-                "Call request '{0}' has multiple call bindings: {1}. Call is only for single-target functional slices, so each request must map to exactly one layer and one response.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -1129,22 +1086,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
     private readonly record struct CallHandlerImplementation(ITypeSymbol RequestType, ITypeSymbol ResponseType);
 
-    private readonly record struct CallBindingSignature(INamedTypeSymbol LayerType, ITypeSymbol ResponseType);
-
     private readonly record struct MountedContext(INamedTypeSymbol ServiceType, INamedTypeSymbol ImplementationType);
-
-    private sealed class CallBindingSignatureComparer : IEqualityComparer<CallBindingSignature>
-    {
-        public static readonly CallBindingSignatureComparer Instance = new();
-
-        public bool Equals(CallBindingSignature x, CallBindingSignature y) =>
-            SymbolEqualityComparer.Default.Equals(x.LayerType, y.LayerType) &&
-            SymbolEqualityComparer.Default.Equals(x.ResponseType, y.ResponseType);
-
-        public int GetHashCode(CallBindingSignature obj) =>
-            (SymbolEqualityComparer.Default.GetHashCode(obj.LayerType) * 397) ^
-            SymbolEqualityComparer.Default.GetHashCode(obj.ResponseType);
-    }
 
     private sealed class MountedContextComparer : IEqualityComparer<MountedContext>
     {

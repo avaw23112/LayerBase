@@ -25,7 +25,7 @@ public sealed partial class LayerRuntime : IDisposable
     // 核心子系统，在构造时创建，贯穿 Runtime 生命周期。
     internal WorldServiceRoot Services { get; }
     public EventCenter EventCenter => _scopeHost.MainScope.EventCenter;
-    public ActorWorld Actors { get; }
+    public ActorWorld Actors => _scopeHost.MainScope.ActorWorld;
     #endregion
 
     #region Runtime State - Configuration
@@ -45,8 +45,6 @@ public sealed partial class LayerRuntime : IDisposable
     #region Runtime State - Layer Bindings
     // Layer 注册信息：索引计数器、类型绑定表、版本号。
     private int _layerIndexCounter;
-    private int _layerTypeBindingsVersion;
-    private readonly Dictionary<Type, LayerTypeBinding> _layerTypeBindings = new();
     #endregion
 
     #region Runtime State - Identification
@@ -77,6 +75,8 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal bool IsDisposed => _disposed;
 
+    internal int Generation => _generation;
+
     internal ScopeRuntimeHost ScopeHost => _scopeHost;
     #endregion
 
@@ -88,7 +88,6 @@ public sealed partial class LayerRuntime : IDisposable
     internal LayerRuntime(int id)
     {
         _id = id;
-        Actors = new ActorWorld(this);
         Services = new WorldServiceRoot(this);
         _scopeHost = ScopeRuntimeHost.CreateMain(this, _id, _generation);
         _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
@@ -255,7 +254,7 @@ public sealed partial class LayerRuntime : IDisposable
                 ? _fixedUpdateOptions.FixedDeltaTime
                 : 0f;
 
-            Actors.Pump(
+            _scopeHost.MainScope.PumpActors(
                 deltaTime: deltaTime,
                 fixedDeltaTime: actorFixedDeltaTime,
                 pumpFixedUpdate: pumpActorFixedUpdate,
@@ -380,8 +379,6 @@ public sealed partial class LayerRuntime : IDisposable
         _scopeHost.MainScope.RunRuntimeStop();
         _chain?.DisposeLayers();
         _chain = null;
-        Actors.RuntimeStop();
-        Actors.Dispose();
         Services.Dispose();
         _scopeHost.Dispose();
         LayerHub.ClearRuntimeCaches(_id);
@@ -389,56 +386,7 @@ public sealed partial class LayerRuntime : IDisposable
     }
     #endregion
 
-    #region Internal - Layer Registration
-    internal void RegisterLayerInstance(Layer layer)
-    {
-        var layerType = layer.GetType();
-        lock (_layerTypeBindings)
-        {
-            if (_layerTypeBindings.TryGetValue(layerType, out var existing))
-                _layerTypeBindings[layerType] = existing.WithAdditional(layer);
-            else
-                _layerTypeBindings[layerType] = LayerTypeBinding.Create(layer);
-            InvalidateLayerTargetCaches();
-        }
-    }
-
-    internal bool TryResolveLayerTarget<TLayer>(out TLayer? layer, out Exception? error)
-        where TLayer : Layer
-    {
-        var version = Volatile.Read(ref _layerTypeBindingsVersion);
-        if (LayerHub.TryGetCachedTarget(_id, version, out layer, out error)) return error == null;
-
-        lock (_layerTypeBindings)
-        {
-            version = _layerTypeBindingsVersion;
-            if (LayerHub.TryGetCachedTarget(_id, version, out layer, out error)) return error == null;
-
-            LayerHub.LayerTargetState state;
-            if (!_layerTypeBindings.TryGetValue(typeof(TLayer), out var binding))
-            {
-                layer = null;
-                error = new LayerCallTargetNotFoundException(typeof(TLayer));
-                state = LayerHub.LayerTargetState.Missing;
-            }
-            else if (binding.IsAmbiguous)
-            {
-                layer = null;
-                error = new LayerCallTargetAmbiguousException(typeof(TLayer));
-                state = LayerHub.LayerTargetState.Ambiguous;
-            }
-            else
-            {
-                layer = (TLayer)binding.Layer!;
-                error = null;
-                state = LayerHub.LayerTargetState.Found;
-            }
-
-            LayerHub.UpdateLayerTargetCache<TLayer>(_id, version, layer, state);
-            return error == null;
-        }
-    }
-
+    #region Internal - Scope Local Calls
     internal void BuildLocalCallRegistry()
     {
         _scopeHost.MainScope.ClearLocalCallRegistry();
@@ -449,13 +397,6 @@ public sealed partial class LayerRuntime : IDisposable
             _scopeHost.MainScope.LocalCalls.Register(entry);
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void InvalidateLayerTargetCaches()
-    {
-        Interlocked.Increment(ref _layerTypeBindingsVersion);
-    }
-
-    public int GetLayerTypeBindingsVersion() => Volatile.Read(ref _layerTypeBindingsVersion);
     #endregion
 
     #region Diagnostics
@@ -713,9 +654,9 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime.InitializeTimer(_timerOptions);
             _runtime.InitializeDelay(_delayOptions);
             _runtime.BuildServiceProvider();
-            _runtime.Actors.PrepareRuntimeBuild();
+            _runtime._scopeHost.MainScope.PrepareActorWorld();
             _layerChain.Build(1024, true);
-            _runtime.Actors.CompleteRuntimeBuild();
+            _runtime._scopeHost.MainScope.CompleteActorWorld();
             _runtime.BuildFullSnapCache();
             _runtime.PolicyTable.Freeze();
 
@@ -730,29 +671,6 @@ public sealed partial class LayerRuntime : IDisposable
             }
 
             return _runtime;
-        }
-    }
-
-    internal readonly struct LayerTypeBinding
-    {
-        private LayerTypeBinding(Layer? layer, int count)
-        {
-            Layer = layer;
-            Count = count;
-        }
-
-        public Layer? Layer { get; }
-        public int Count { get; }
-        public bool IsAmbiguous => Count > 1;
-
-        public static LayerTypeBinding Create(Layer layer)
-        {
-            return new LayerTypeBinding(layer, 1);
-        }
-
-        public LayerTypeBinding WithAdditional(Layer layer)
-        {
-            return new LayerTypeBinding(Layer ?? layer, Count + 1);
         }
     }
 

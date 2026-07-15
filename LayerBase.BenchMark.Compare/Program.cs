@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
@@ -494,7 +494,7 @@ public partial class CompareCallLayer : Layer
 }
 
 [OwnerLayer(typeof(CompareCallLayer))]
-public sealed class LayerBaseCompareHandler : ILayerCallHandler<CompareRequest, CompareResponse>
+public sealed class LayerBaseCompareHandler : IScopeLocalCallHandler<CompareRequest, CompareResponse>
 {
     public LBTask<CompareResponse> HandleAsync(CompareRequest request, CancellationToken cancellationToken = default)
     {

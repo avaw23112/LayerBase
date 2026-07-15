@@ -22,30 +22,18 @@ public sealed class SyncRuntimeModelImprovementTests
     }
 
     [Test]
-    public void Runtime_dispose_clears_payload_and_layer_target_cache_slots()
+    public void Runtime_dispose_clears_payload_cache_slots()
     {
         _ = EventTypeId<RuntimeCachePayloadEvent>.Id; // Ensure known before build
-        var layer = new CacheCleanupLayer();
-        var runtime = LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(new CacheCleanupLayer()).Build();
         var runtimeId = runtime.Id;
 
         Assert.That(runtime.Scheduler.TryPost(new RuntimeCachePayloadEvent()).IsSuccess, Is.True);
         Assert.That(PayloadStoreCache<RuntimeCachePayloadEvent>.Stores[runtimeId], Is.Not.Null);
 
-        Assert.That(runtime.TryResolveLayerTarget<CacheCleanupLayer>(out var resolved, out var error), Is.True);
-        Assert.That(resolved, Is.SameAs(layer));
-        Assert.That(error, Is.Null);
-
-        var version = runtime.GetLayerTypeBindingsVersion();
-
         runtime.Dispose();
 
         Assert.That(PayloadStoreCache<RuntimeCachePayloadEvent>.Stores[runtimeId], Is.Null);
-        Assert.That(LayerHub.TryGetCachedTarget<CacheCleanupLayer>(
-            runtimeId,
-            version,
-            out _,
-            out _), Is.False);
     }
 
     [Test]

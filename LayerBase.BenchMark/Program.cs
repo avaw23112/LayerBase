@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
@@ -868,7 +868,7 @@ public sealed class CallDirectBaseline
 }
 
 [OwnerLayer(typeof(CallBenchLayer))]
-public sealed class CallBenchHandler : ILayerCallHandler<CallRequest, CallResponse>
+public sealed class CallBenchHandler : IScopeLocalCallHandler<CallRequest, CallResponse>
 {
     public LBTask<CallResponse> HandleAsync(CallRequest request, CancellationToken cancellationToken = default)
     {

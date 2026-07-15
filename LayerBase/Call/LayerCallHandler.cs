@@ -5,16 +5,16 @@ using LayerBase.Layers;
 namespace LayerBase.Call;
 
 /// <summary>
-/// 跨层调用处理器的标记接口。
+/// 当前 Scope 内本地调用处理器的标记接口。
 /// </summary>
-public interface ILayerCallHandler
+public interface IScopeLocalCallHandler
 {
 }
 
 /// <summary>
-/// 跨层调用处理器的泛型接口。处理 TRequest 请求并返回 TResponse 响应。
+/// 当前 Scope 内本地调用处理器的泛型接口。处理 TRequest 请求并返回 TResponse 响应。
 /// </summary>
-public interface ILayerCallHandler<TRequest, TResponse> : ILayerCallHandler
+public interface IScopeLocalCallHandler<TRequest, TResponse> : IScopeLocalCallHandler
     where TRequest : struct
     where TResponse : struct
 {
@@ -22,18 +22,20 @@ public interface ILayerCallHandler<TRequest, TResponse> : ILayerCallHandler
 }
 
 /// <summary>
-/// 调用处理器的扩展方法，提供便捷的服务解析和跨层调用能力。
+/// 调用处理器的扩展方法，提供便捷的服务解析和当前 Scope 本地调用能力。
 /// </summary>
-public static class LayerCallHandlerExtensions
+public static class ScopeLocalCallHandlerExtensions
 {
-    public static TService Get<TService>(this ILayerCallHandler handler) where TService : class
+    public static TService Get<TService>(this IScopeLocalCallHandler handler) where TService : class
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
         return ServiceLayerBinder.Require(handler).GetService<TService>();
     }
 
-    public static LBTask<TResponse> Call<TRequest, TResponse>(this ILayerCallHandler handler, TRequest request,
-                                                              CancellationToken cancellationToken = default)
+    public static LBTask<TResponse> Call<TRequest, TResponse>(
+        this IScopeLocalCallHandler handler,
+        TRequest request,
+        CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct
     {
@@ -44,11 +46,11 @@ public static class LayerCallHandlerExtensions
     }
 }
 
-public static class LayerCallRegistrationBridge
+public static class ScopeLocalCallRegistrationBridge
 {
     public static void Register<TRequest, TResponse>(
         Layer                                  layer,
-        ILayerCallHandler<TRequest, TResponse> handler)
+        IScopeLocalCallHandler<TRequest, TResponse> handler)
         where TRequest : struct
         where TResponse : struct
     {

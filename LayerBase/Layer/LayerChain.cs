@@ -142,7 +142,6 @@ internal sealed class LayerChain
                     var index = _owner.GetNextLayerIndex();
                     layer.SetRouteIndex(index);
                 }
-                _owner.RegisterLayerInstance(layer);
                 if (layer.RouteIndex > maxIndex) maxIndex = layer.RouteIndex;
             }
 

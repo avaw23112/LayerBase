@@ -37,10 +37,16 @@ internal readonly struct ScopeLocalCallRouteEntry
 
 internal sealed class ScopeLocalCallRegistry
 {
+    private readonly int _scopeId;
     private object?[] _invokers = Array.Empty<object?>();
     private IScopeLocalCallDispatcher?[] _dispatchers = Array.Empty<IScopeLocalCallDispatcher?>();
     private Type?[] _handlerTypes = Array.Empty<Type?>();
     private Type?[] _ownerLayerTypes = Array.Empty<Type?>();
+
+    public ScopeLocalCallRegistry(int scopeId)
+    {
+        _scopeId = scopeId;
+    }
 
     public void Clear()
     {
@@ -57,11 +63,13 @@ internal sealed class ScopeLocalCallRegistry
         if (_invokers[entry.RouteId] != null)
         {
             if (_handlerTypes[entry.RouteId] == entry.HandlerType) return;
-            throw new LayerCallRouteConflictException(
-                entry.OwnerLayerType,
+            throw new ScopeLocalCallRouteConflictException(
+                _scopeId,
                 entry.RequestType,
                 entry.ResponseType,
+                _ownerLayerTypes[entry.RouteId] ?? typeof(LayerRuntime),
                 _handlerTypes[entry.RouteId] ?? _invokers[entry.RouteId]!.GetType(),
+                entry.OwnerLayerType,
                 entry.HandlerType);
         }
 
@@ -81,8 +89,8 @@ internal sealed class ScopeLocalCallRegistry
         if ((uint)routeId >= (uint)dispatchers.Length || dispatchers[routeId] == null)
         {
             envelope.Completion?.TrySetException(
-                new LayerCallRouteNotFoundException(
-                    typeof(LayerRuntime),
+                new ScopeLocalCallRouteNotFoundException(
+                    _scopeId,
                     typeof(object),
                     typeof(object)));
             return;
@@ -101,16 +109,16 @@ internal sealed class ScopeLocalCallRegistry
         if (cancellationToken.IsCancellationRequested)
             return LBTask<TResponse>.FromCanceled(cancellationToken);
 
-        var routeId = LayerCallRouteId<TRequest, TResponse>.Id;
+        var routeId = ScopeLocalCallRouteId<TRequest, TResponse>.Id;
         var invokers = _invokers;
         if ((uint)routeId >= (uint)invokers.Length || invokers[routeId] == null)
             return LBTask<TResponse>.FromException(
-                new LayerCallRouteNotFoundException(
-                    typeof(LayerRuntime),
+                new ScopeLocalCallRouteNotFoundException(
+                    _scopeId,
                     typeof(TRequest),
                     typeof(TResponse)));
 
-        return ((LayerCallInvoker<TRequest, TResponse>)invokers[routeId]!)(request, cancellationToken);
+        return ((ScopeLocalCallInvoker<TRequest, TResponse>)invokers[routeId]!)(request, cancellationToken);
     }
 
     private void EnsureCapacity(int routeId)

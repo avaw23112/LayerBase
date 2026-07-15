@@ -1,4 +1,5 @@
 using Arch.Core;
+using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
@@ -12,6 +13,9 @@ internal sealed class ScopeRuntime : IDisposable
     private readonly int _generation;
     private readonly EventPayloadStorage _callPayloadStorage = new();
     private readonly EventPayloadStorage _eventPayloadStorage = new();
+    private readonly ActorWorld? _actorWorld;
+    private ActorAccessor _actors;
+    private bool _hasActorAccessor;
     private ScopeRuntimeState _state = ScopeRuntimeState.Created;
     private ScopeTimerSink? _timerSink;
     private int _callSequence;
@@ -36,7 +40,13 @@ internal sealed class ScopeRuntime : IDisposable
             new ScopeAddress(runtimeId, generation, Descriptor.ScopeId));
         Transport.AttachRuntime(this);
         EventCenter = new EventCenter();
-        LocalCalls = new ScopeLocalCallRegistry();
+        LocalCalls = new ScopeLocalCallRegistry(Descriptor.ScopeId);
+        if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
+        {
+            _actorWorld = new ActorWorld(runtime);
+            _actors = new ActorAccessor(new LocalActorAccessor(_actorWorld, _generation));
+            _hasActorAccessor = true;
+        }
         EcsWorld = World.Create();
         EcsWorld.BindRuntime(runtime);
     }
@@ -58,6 +68,14 @@ internal sealed class ScopeRuntime : IDisposable
     public TimeScheduler<ITimerAction>? Timer { get; private set; }
 
     public DelayPublisherManager? DelayManager { get; private set; }
+
+    public ActorWorld ActorWorld =>
+        _actorWorld ?? throw new InvalidOperationException("ActorWorld is only available in MainScope.");
+
+    public ActorAccessor Actors =>
+        _hasActorAccessor
+            ? _actors
+            : throw new InvalidOperationException("Scope actor accessor is not initialized.");
 
     public World EcsWorld { get; }
 
@@ -116,6 +134,46 @@ internal sealed class ScopeRuntime : IDisposable
         Timer?.Tick(deltaTime, _timerSink!);
     }
 
+    public void PrepareActorWorld()
+    {
+        ActorWorld.PrepareRuntimeBuild();
+    }
+
+    public void CompleteActorWorld()
+    {
+        ActorWorld.CompleteRuntimeBuild();
+    }
+
+    public void BindMainActorEndpoint(ScopeEndpoint mainEndpoint)
+    {
+        if (_actorWorld != null)
+        {
+            _actors = new ActorAccessor(new LocalActorAccessor(_actorWorld, _generation));
+        }
+        else
+        {
+            _actors = new ActorAccessor(new RemoteActorAccessor(
+                new ScopeRef<MainScope>(mainEndpoint),
+                Descriptor.ScopeId,
+                _generation));
+        }
+
+        _hasActorAccessor = true;
+    }
+
+    public void PumpActors(
+        float deltaTime,
+        float fixedDeltaTime,
+        bool pumpFixedUpdate,
+        ref RuntimeFrameBudget budget)
+    {
+        ActorWorld.Pump(
+            deltaTime: deltaTime,
+            fixedDeltaTime: fixedDeltaTime,
+            pumpFixedUpdate: pumpFixedUpdate,
+            budget: ref budget);
+    }
+
     public LBTask<TResponse> CallLocalAsync<TRequest, TResponse>(
         TRequest request,
         CancellationToken cancellationToken = default)
@@ -152,7 +210,7 @@ internal sealed class ScopeRuntime : IDisposable
             ScopeCallClass.BusinessRequest,
             token,
             Endpoint.Address,
-            LayerCallRouteId<TRequest, TResponse>.Id,
+            ScopeLocalCallRouteId<TRequest, TResponse>.Id,
             payload,
             ScopeCallResult.None,
             completion);
@@ -246,6 +304,7 @@ internal sealed class ScopeRuntime : IDisposable
 
         _runtimeStopRun = true;
         LifecyclePlan.RunRuntimeStopReverse();
+        _actorWorld?.RuntimeStop();
     }
 
     private void DrainCallInbox()
@@ -254,6 +313,17 @@ internal sealed class ScopeRuntime : IDisposable
         {
             try
             {
+                if (_actorWorld != null &&
+                    ActorCallDispatcherRegistry.TryDispatch(
+                        envelope.RouteId,
+                        _actorWorld,
+                        _runtimeId,
+                        envelope,
+                        _callPayloadStorage))
+                {
+                    continue;
+                }
+
                 LocalCalls.Dispatch(_runtimeId, envelope, _callPayloadStorage);
             }
             finally
@@ -266,14 +336,24 @@ internal sealed class ScopeRuntime : IDisposable
     private void DrainEventInbox()
     {
         var scheduler = PostScheduler;
-        if (scheduler == null)
-            return;
 
         while (Transport.EventInbox.TryDequeue(out var envelope))
         {
             try
             {
-                _eventPayloadStorage.Post(envelope.Payload, scheduler);
+                if (_actorWorld != null &&
+                    ActorCommandDispatcherRegistry.TryDispatch(
+                        envelope.RouteId,
+                        _actorWorld,
+                        _runtimeId,
+                        envelope.Payload,
+                        _eventPayloadStorage))
+                {
+                    continue;
+                }
+
+                if (scheduler != null)
+                    _eventPayloadStorage.Post(envelope.Payload, scheduler);
             }
             finally
             {
@@ -304,6 +384,7 @@ internal sealed class ScopeRuntime : IDisposable
         _callPayloadStorage.Dispose();
         _eventPayloadStorage.Dispose();
         LocalCalls.Clear();
+        _actorWorld?.Dispose();
         DelayManager?.Clear();
         DelayManager = null;
         Timer?.Dispose();

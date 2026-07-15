@@ -12,6 +12,13 @@ public static class ActorExtensions
         return ActorGeneratedAccess.RequireGenerated(actor).GetId();
     }
 
+    public static ActorHandle GetActorHandle(this IActor actor)
+    {
+        IGeneratedActorMeta generated = ActorGeneratedAccess.RequireGenerated(actor);
+        int runtimeGeneration = generated.Context.Runtime?.Generation ?? 0;
+        return ActorHandle.FromActorId(generated.GetId(), runtimeGeneration);
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Post<TEvent>(this IActor actor, in TEvent value)
         where TEvent : struct

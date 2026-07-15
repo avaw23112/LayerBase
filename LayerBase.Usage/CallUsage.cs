@@ -1,4 +1,4 @@
-﻿using LayerBase.Async;
+using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.DI;
 using LayerBase.Layers;
@@ -74,7 +74,7 @@ public partial class SceneEchoService : IService
 }
 
 [OwnerLayer(typeof(SceneLayer))]
-public sealed class EchoSceneCallHandler : ILayerCallHandler<EchoSceneRequest, EchoSceneResponse>
+public sealed class EchoSceneCallHandler : IScopeLocalCallHandler<EchoSceneRequest, EchoSceneResponse>
 {
     public LBTask<EchoSceneResponse> HandleAsync(EchoSceneRequest request,
                                                  CancellationToken cancellationToken = default)

@@ -52,7 +52,7 @@ public sealed partial class ActorWorld
         return _archetypes[actorId.ArchetypeId].PostCall(actorId, in mail);
     }
 
-    private static ActorCallFailureKind ToCallFailureKind(PostResult postResult)
+    internal static ActorCallFailureKind ToCallFailureKind(PostResult postResult)
     {
         return postResult.ActorStatus switch
                {

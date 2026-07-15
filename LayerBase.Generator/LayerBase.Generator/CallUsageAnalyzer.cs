@@ -38,10 +38,10 @@ public sealed class CallUsageAnalyzer : IIncrementalGenerator
 
         if (methodSymbol == null) return null;
 
-        // Check if it's LayerHub.CallAsync or ILayerCallHandler.Call
+        // Check if it's LayerHub.CallAsync or IScopeLocalCallHandler.Call
         var containingType = methodSymbol.ContainingType.ToDisplayString();
         if (containingType != "LayerBase.LayerHub" &&
-            !methodSymbol.ContainingType.AllInterfaces.Any(i => i.ToDisplayString().Contains("ILayerCallHandler")))
+            !methodSymbol.ContainingType.AllInterfaces.Any(i => i.ToDisplayString().Contains("IScopeLocalCallHandler")))
             return null;
 
         if (methodSymbol.IsGenericMethod && methodSymbol.TypeArguments.Length >= 2)

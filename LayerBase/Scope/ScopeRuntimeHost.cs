@@ -16,6 +16,10 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
         _scopes = scopes;
         _workers = workers ?? Array.Empty<ScopeWorker>();
+
+        var mainEndpoint = _scopes[0].Endpoint;
+        for (int i = 0; i < _scopes.Length; i++)
+            _scopes[i].BindMainActorEndpoint(mainEndpoint);
     }
 
     public ScopeRuntime MainScope

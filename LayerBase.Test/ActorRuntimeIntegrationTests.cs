@@ -2,6 +2,8 @@ using LayerBase.Actor;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Layers;
+using LayerBase.Scope;
+using System.Reflection;
 using ServiceUpdate = LayerBase.DI.Options.IUpdate;
 
 namespace LayerBase.Test;
@@ -24,6 +26,10 @@ public struct RuntimeActorEvent
     {
         Value = value;
     }
+}
+
+internal readonly struct CustomActorScope : IScopeDefinition
+{
 }
 
 internal static class ActorRuntimeIntegrationTrace
@@ -136,6 +142,99 @@ public class ActorRuntimeIntegrationTests
     }
 
     [Test]
+    public void Main_scope_owns_runtime_actor_world()
+    {
+        LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(),
+            PostSchedulerOptions.Default);
+
+        Assert.That(runtime.ScopeHost.MainScope.ActorWorld, Is.SameAs(runtime.Actors));
+    }
+
+    [Test]
+    public void Layer_runtime_does_not_store_actor_world_as_runtime_unit()
+    {
+        var actorWorldFields = typeof(LayerRuntime)
+            .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Where(static field => field.FieldType == typeof(ActorWorld))
+            .Select(static field => field.Name)
+            .ToArray();
+
+        Assert.That(actorWorldFields, Is.Empty);
+    }
+
+    [Test]
+    public void Runtime_dispose_disposes_main_scope_actor_world()
+    {
+        LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(),
+            PostSchedulerOptions.Default);
+        ActorWorld actorWorld = runtime.ScopeHost.MainScope.ActorWorld;
+
+        runtime.Dispose();
+
+        Assert.That(
+            () => actorWorld.CreateActor<IntegrationActor>(),
+            Throws.TypeOf<ObjectDisposedException>());
+    }
+
+    [Test]
+    public void Scope_actor_accessor_is_local_only_for_main_scope()
+    {
+        using ScopeRuntimeHost host = BuildMainAndCustomScopeHost();
+
+        Assert.That(host.MainScope.Actors.IsLocal, Is.True);
+        Assert.That(host.Scopes[1].Actors.IsLocal, Is.False);
+        Assert.That(host.Scopes[1].Actors.Remote, Is.TypeOf<RemoteActorAccessor>());
+    }
+
+    [Test]
+    public void Custom_scope_actor_post_routes_to_main_scope_actor_world()
+    {
+        using ScopeRuntimeHost host = BuildMainAndCustomScopeHost();
+        IntegrationActor actor = host.MainScope.Actors.CreateActor<IntegrationActor>();
+        ActorHandle handle = ActorHandle.FromActorId(actor.GetActorId(), runtimeGeneration: 1);
+
+        host.Scopes[1].Actors.PostTo(handle, new RuntimeActorEvent(42));
+
+        var budget = new RuntimeFrameBudget(0, 0, 0);
+        host.MainScope.PumpIngress();
+        host.MainScope.PumpActors(
+            deltaTime: 0.016f,
+            fixedDeltaTime: 1f / 60f,
+            pumpFixedUpdate: true,
+            budget: ref budget);
+
+        Assert.That(ActorRuntimeIntegrationTrace.Entries, Is.EqualTo(new[] { "actor:42" }));
+    }
+
+    [Test]
+    public void Custom_scope_actor_call_routes_to_main_scope_actor_world()
+    {
+        ActorCallRuntimeTrace.Reset();
+        using ScopeRuntimeHost host = BuildMainAndCustomScopeHost();
+        ActorCallRuntimeActor actor = host.MainScope.Actors.CreateActor<ActorCallRuntimeActor>();
+        ActorHandle handle = ActorHandle.FromActorId(actor.GetActorId(), runtimeGeneration: 1);
+
+        var task = host.Scopes[1].Actors.Ask<ActorCallRuntimeRequest, ActorCallRuntimeResponse>(
+            handle,
+            new ActorCallRuntimeRequest(6));
+
+        Assert.That(task.GetAwaiter().IsCompleted, Is.False);
+
+        var budget = new RuntimeFrameBudget(0, 0, 0);
+        host.MainScope.PumpIngress();
+        host.MainScope.PumpActors(
+            deltaTime: 0.016f,
+            fixedDeltaTime: 1f / 60f,
+            pumpFixedUpdate: true,
+            budget: ref budget);
+
+        var awaiter = task.GetAwaiter();
+        Assert.That(awaiter.IsCompleted, Is.True);
+        Assert.That(awaiter.GetResult().Value, Is.EqualTo(12));
+        Assert.That(ActorCallRuntimeTrace.Entries, Is.EqualTo(new[] { "ask:6" }));
+    }
+
+    [Test]
     public void Actor_world_runs_after_post_scheduler_and_after_layer_update()
     {
         LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(),
@@ -227,5 +326,22 @@ public class ActorRuntimeIntegrationTests
         builder.Push(layer);
         builder.SetPostOptions(options);
         return builder.Build();
+    }
+
+    private static ScopeRuntimeHost BuildMainAndCustomScopeHost()
+    {
+        var runtime = new LayerRuntime(1);
+        var plans = new[]
+        {
+            ScopeExecutionPlan.CreateMain(),
+            new ScopeExecutionPlan(
+                new ScopeDescriptor(100, nameof(CustomActorScope), typeof(CustomActorScope)),
+                ScopeOptions.Inline)
+        };
+
+        ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        host.MainScope.PrepareActorWorld();
+        host.MainScope.CompleteActorWorld();
+        return host;
     }
 }
