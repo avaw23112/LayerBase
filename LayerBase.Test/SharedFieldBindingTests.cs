@@ -31,7 +31,7 @@ public partial class SharedFieldBindingTests
     }
 
     [Test]
-    public void Layer_scope_Provide_and_Use_share_state_across_services()
+    public void Same_layer_from_can_bind_to_another_service_provider()
     {
         var layer = new Layer_A();
         layer.RegisterService(new PlayerStateService());
@@ -47,29 +47,23 @@ public partial class SharedFieldBindingTests
     }
 
     [Test]
-    public void Global_scope_Provide_and_Use_share_reference_across_layers()
+    public void Same_scope_cross_layer_from_fails()
     {
-        var layerA = new Layer_A();
-        layerA.RegisterService(new GlobalPublisherService());
-        var layerB = new Layer_B();
-        layerB.RegisterService(new GlobalConsumerService());
+        var publisherLayer = new Layer_A();
+        publisherLayer.RegisterService(new CrossLayerPublisherService());
+        var consumerLayer = new Layer_B();
+        consumerLayer.RegisterService(new CrossLayerConsumerService());
 
-        LayerHub.CreateLayers().Push(layerA).Push(layerB).Build();
-
-        var publisher = layerA.GetService<SharedReferencePublisherModule>();
-        var consumer = layerB.GetService<SharedReferenceConsumerModule>();
-
-        publisher.SetValue("ready");
-
-        Assert.That(consumer.ReadValue(), Is.EqualTo("ready"));
+        Assert.That(
+            () => LayerHub.CreateLayers().Push(publisherLayer).Push(consumerLayer).Build(),
+            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("Cross-layer From is not allowed"));
     }
 
     [Test]
-    public void Duplicate_publishers_in_the_same_scope_fail_build()
+    public void Same_service_same_key_duplicate_fails()
     {
         var layer = new Layer_A();
-        layer.RegisterService(new DuplicatePublisherServiceA());
-        layer.RegisterService(new DuplicatePublisherServiceB());
+        layer.RegisterService(new DuplicatePublisherService());
 
         Assert.That(
             () => LayerHub.CreateLayers().Push(layer).Build(),
@@ -77,9 +71,31 @@ public partial class SharedFieldBindingTests
     }
 
     [Test]
+    public void Different_services_can_use_same_key()
+    {
+        var layer = new Layer_A();
+        layer.RegisterService(new DuplicatePublisherServiceA());
+        layer.RegisterService(new DuplicatePublisherServiceB());
+
+        Assert.DoesNotThrow(() => LayerHub.CreateLayers().Push(layer).Build());
+    }
+
+    [Test]
+    public void From_provider_must_be_service_registration()
+    {
+        var layer = new Layer_A();
+        layer.RegisterService(new InvalidProviderConsumerService());
+
+        Assert.That(
+            () => LayerHub.CreateLayers().Push(layer).Build(),
+            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("Provider service"));
+    }
+
+    [Test]
     public void Missing_publisher_fails_build()
     {
         var layer = new Layer_A();
+        layer.RegisterService(new PlayerStateService());
         layer.RegisterService(new MissingPublisherConsumerService());
 
         Assert.That(
@@ -136,7 +152,7 @@ public sealed partial class PlayerHudService : IService
     }
 }
 
-public sealed partial class GlobalPublisherService : IService
+public sealed partial class CrossLayerPublisherService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -144,7 +160,7 @@ public sealed partial class GlobalPublisherService : IService
     }
 }
 
-public sealed partial class GlobalConsumerService : IService
+public sealed partial class CrossLayerConsumerService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -168,11 +184,28 @@ public sealed partial class DuplicatePublisherServiceB : IService
     }
 }
 
+public sealed partial class DuplicatePublisherService : IService
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddScoped<DuplicateLayerPublisherModuleA, DuplicateLayerPublisherModuleA>();
+        services.AddScoped<DuplicateLayerPublisherModuleB, DuplicateLayerPublisherModuleB>();
+    }
+}
+
 public sealed partial class MissingPublisherConsumerService : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddScoped<MissingPublisherConsumerModule, MissingPublisherConsumerModule>();
+    }
+}
+
+public sealed partial class InvalidProviderConsumerService : IService
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddScoped<InvalidProviderConsumerModule, InvalidProviderConsumerModule>();
     }
 }
 
@@ -187,7 +220,7 @@ public sealed partial class WritableConsumerService : IService
 
 public sealed partial class PlayerStorageModule : ILayerContext
 {
-    [Provide(typeof(ServiceScopeSharingService), "players")]
+    [Provide("players")]
     private readonly List<int> _players = new();
 
     public void Add(int playerId)
@@ -218,7 +251,7 @@ public sealed partial class PlayerQueryModule : ILayerContext
 
 public sealed partial class PlayerStateModule : ILayerContext
 {
-    [Provide(typeof(Layer_A), "player_states")]
+    [Provide("player_states")]
     private readonly Dictionary<int, bool> _states = new();
 
     public void SetOnline(int playerId, bool isOnline)
@@ -229,7 +262,7 @@ public sealed partial class PlayerStateModule : ILayerContext
 
 public sealed partial class PlayerHudModule : ILayerContext
 {
-    [From(typeof(Layer_A), "player_states")]
+    [From(typeof(PlayerStateService), "player_states")]
     private readonly IReadOnlyDictionary<int, bool> _states = default!;
 
     public bool IsOnline(int playerId)
@@ -240,7 +273,7 @@ public sealed partial class PlayerHudModule : ILayerContext
 
 public sealed partial class SharedReferencePublisherModule : ILayerContext
 {
-    [Provide(typeof(GlobalScope), "shared-ref")]
+    [Provide("shared-ref")]
     private readonly SharedReferenceBox _box = new();
 
     public void SetValue(string value)
@@ -251,7 +284,7 @@ public sealed partial class SharedReferencePublisherModule : ILayerContext
 
 public sealed partial class SharedReferenceConsumerModule : ILayerContext
 {
-    [From(typeof(GlobalScope), "shared-ref")]
+    [From(typeof(CrossLayerPublisherService), "shared-ref")]
     private readonly SharedReferenceBox _box = default!;
 
     public string ReadValue()
@@ -262,25 +295,31 @@ public sealed partial class SharedReferenceConsumerModule : ILayerContext
 
 public sealed partial class DuplicateLayerPublisherModuleA : ILayerContext
 {
-    [Provide(typeof(Layer_A), "duplicate-layer-key")]
+    [Provide("duplicate-layer-key")]
     private Dictionary<int, int> _state = new();
 }
 
 public sealed partial class DuplicateLayerPublisherModuleB : ILayerContext
 {
-    [Provide(typeof(Layer_A), "duplicate-layer-key")]
+    [Provide("duplicate-layer-key")]
     private Dictionary<int, int> _state = new();
 }
 
 public sealed partial class MissingPublisherConsumerModule : ILayerContext
 {
-    [From(typeof(Layer_A), "missing-layer-key")]
+    [From(typeof(PlayerStateService), "missing-layer-key")]
+    private IReadOnlyDictionary<int, int> _state = default!;
+}
+
+public sealed partial class InvalidProviderConsumerModule : ILayerContext
+{
+    [From(typeof(SharedReferenceBox), "missing-layer-key")]
     private IReadOnlyDictionary<int, int> _state = default!;
 }
 
 public sealed partial class WritableListConsumerModule : ILayerContext
 {
-    [From(typeof(ServiceScopeSharingService), "players")]
+    [From(typeof(WritableConsumerService), "players")]
     private List<int> _players = default!;
 }
 

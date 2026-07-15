@@ -37,26 +37,46 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         var fieldSymbol = (IFieldSymbol)ctx.TargetSymbol;
         var attr = ctx.Attributes[0];
 
-        if (attr.ConstructorArguments.Length < 2) return null;
+        if (attr.ConstructorArguments.Length < (isProvide ? 1 : 2)) return null;
 
-        var ownerType = attr.ConstructorArguments[0].Value as ITypeSymbol;
-        var localKey = attr.ConstructorArguments[1].Value as string;
+        var providerServiceType = isProvide
+            ? ResolveProviderServiceType(fieldSymbol.ContainingType)
+            : attr.ConstructorArguments[0].Value as ITypeSymbol;
+        var localKey = attr.ConstructorArguments[isProvide ? 0 : 1].Value as string;
 
-        if (ownerType == null || string.IsNullOrEmpty(localKey)) return null;
+        if (providerServiceType == null || string.IsNullOrEmpty(localKey)) return null;
 
         var syntax = attr.ApplicationSyntaxReference?.GetSyntax() as AttributeSyntax;
-        bool isLiteral = syntax != null && syntax.ArgumentList != null && syntax.ArgumentList.Arguments.Count > 1 &&
-                         syntax.ArgumentList.Arguments[1].Expression.IsKind(SyntaxKind.StringLiteralExpression);
+        var localKeyArgumentIndex = isProvide ? 0 : 1;
+        bool isLiteral = syntax != null &&
+                         syntax.ArgumentList != null &&
+                         syntax.ArgumentList.Arguments.Count > localKeyArgumentIndex &&
+                         syntax.ArgumentList.Arguments[localKeyArgumentIndex].Expression.IsKind(SyntaxKind.StringLiteralExpression);
 
         return new FieldInfo(
             fieldSymbol.ContainingType,
             fieldSymbol.Name,
             fieldSymbol.Type,
-            ownerType,
-            localKey,
+            providerServiceType,
+            localKey!,
             isProvide,
             fieldSymbol.Locations.FirstOrDefault() ?? Location.None,
             isLiteral);
+    }
+
+    private static ITypeSymbol? ResolveProviderServiceType(INamedTypeSymbol containingType)
+    {
+        foreach (var attribute in containingType.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() != "LayerBase.DI.Options.OwnerServiceAttribute")
+                continue;
+
+            if (attribute.ConstructorArguments.Length == 1 &&
+                attribute.ConstructorArguments[0].Value is ITypeSymbol serviceType)
+                return serviceType;
+        }
+
+        return containingType;
     }
 
     private static void Analyze(SourceProductionContext    spc, Compilation compilation,
@@ -67,9 +87,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         var validUses = uses.Where(p => p != null).Select(p => p!).ToImmutableArray();
         var allValidFields = validProvides.Concat(validUses);
 
-        var layerSymbol = compilation.GetTypeByMetadataName("LayerBase.Layers.Layer");
         var iServiceSymbol = compilation.GetTypeByMetadataName("LayerBase.DI.IService");
-        var globalScopeSymbol = compilation.GetTypeByMetadataName("LayerBase.DI.GlobalScope");
 
         foreach (var f in allValidFields)
         {
@@ -78,18 +96,16 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
                 spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LiteralKeyWarning, f.Location, f.LocalKey));
             }
 
-            if (layerSymbol != null && iServiceSymbol != null && globalScopeSymbol != null)
+            if (!f.IsProvide && iServiceSymbol != null)
             {
-                bool isValidOwner = SymbolEqualityComparer.Default.Equals(f.OwnerType, globalScopeSymbol) ||
-                                    InheritsFrom(f.OwnerType, layerSymbol) ||
-                                    f.OwnerType.AllInterfaces.Any(i =>
-                                        SymbolEqualityComparer.Default.Equals(i, iServiceSymbol) ||
-                                        SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iServiceSymbol));
+                bool isValidProviderService = f.ProviderServiceType.AllInterfaces.Any(i =>
+                    SymbolEqualityComparer.Default.Equals(i, iServiceSymbol) ||
+                    SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, iServiceSymbol));
 
-                if (!isValidOwner)
+                if (!isValidProviderService)
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidOwnerType, f.Location,
-                        f.OwnerType.ToDisplayString()));
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidProviderServiceType, f.Location,
+                        f.ProviderServiceType.ToDisplayString()));
                 }
             }
         }
@@ -98,7 +114,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         var provideMap = new Dictionary<string, FieldInfo>();
         foreach (var p in validProvides)
         {
-            var uniqueKey = $"{p.OwnerType.ToDisplayString()}_{p.LocalKey}";
+            var uniqueKey = $"{p.ProviderServiceType.ToDisplayString()}_{p.LocalKey}";
 
             if (provideMap.TryGetValue(uniqueKey, out var existing))
                 spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ProvideConflict, p.Location, p.LocalKey,
@@ -110,7 +126,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         // 2. Check for Use matches and type compatibility
         foreach (var f in validUses)
         {
-            var uniqueKey = $"{f.OwnerType.ToDisplayString()}_{f.LocalKey}";
+            var uniqueKey = $"{f.ProviderServiceType.ToDisplayString()}_{f.LocalKey}";
             if (provideMap.TryGetValue(uniqueKey, out var p))
             {
                 if (!IsTypeCompatible(p.Type, f.Type))
@@ -165,13 +181,13 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
 
     private sealed class FieldInfo
     {
-        public FieldInfo(INamedTypeSymbol containingType, string name,      ITypeSymbol type, ITypeSymbol ownerType,
+        public FieldInfo(INamedTypeSymbol containingType, string name,      ITypeSymbol type, ITypeSymbol providerServiceType,
                          string           localKey,       bool   isProvide, Location? location, bool isLocalKeyLiteral)
         {
             ContainingType = containingType;
             Name = name;
             Type = type;
-            OwnerType = ownerType;
+            ProviderServiceType = providerServiceType;
             LocalKey = localKey;
             IsProvide = isProvide;
             Location = location;
@@ -181,7 +197,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public INamedTypeSymbol ContainingType { get; }
         public string Name { get; }
         public ITypeSymbol Type { get; }
-        public ITypeSymbol OwnerType { get; }
+        public ITypeSymbol ProviderServiceType { get; }
         public string LocalKey { get; }
         public bool IsProvide { get; }
         public Location? Location { get; }
@@ -193,7 +209,7 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
         public static readonly DiagnosticDescriptor ProvideConflict = new(
             "LBG401",
             "Shared field Provide conflict",
-            "LocalKey '{0}' is published by multiple owners: {1} and {2}. Shared keys must be unique within their OwnerType.",
+            "LocalKey '{0}' is published by multiple owners: {1} and {2}. Shared keys must be unique within their ProviderServiceType.",
             "Usage",
             DiagnosticSeverity.Error,
             true);
@@ -214,10 +230,10 @@ public sealed class SharedFieldAnalyzer : IIncrementalGenerator
             DiagnosticSeverity.Error,
             true);
 
-        public static readonly DiagnosticDescriptor InvalidOwnerType = new(
+        public static readonly DiagnosticDescriptor InvalidProviderServiceType = new(
             "LBG404",
-            "Invalid Owner Type",
-            "OwnerType '{0}' is invalid. Only Layer, Service, or GlobalScope are allowed as OwnerType.",
+            "Invalid Provider Service Type",
+            "ProviderServiceType '{0}' is invalid. [From] must reference an IService registration type.",
             "Usage",
             DiagnosticSeverity.Error,
             true);

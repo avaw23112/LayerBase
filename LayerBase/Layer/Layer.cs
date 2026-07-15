@@ -85,8 +85,8 @@ public abstract class Layer : Node, IDisposable
     #endregion
 
     #region Runtime State - Shared Field Metadata
-    // 共享字段声明列表，用于跨 Layer 数据绑定。
-    private readonly List<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> _sharedFields = new();
+    // 共享字段声明列表，用于 Layer/Scope/Service 本地数据绑定。
+    private readonly List<(Type ProviderServiceType, string Key, Type FieldType, bool IsProvider)> _sharedFields = new();
     #endregion
 
     #region Runtime State - Disposal
@@ -113,7 +113,7 @@ public abstract class Layer : Node, IDisposable
     public IReadOnlyList<Type> ProducedEvents => _producedEvents;
 
     /// <summary>该 Layer 声明的共享字段列表。</summary>
-    public IReadOnlyList<(Type OwnerType, string Key, Type FieldType, bool IsProvider)> SharedFields => _sharedFields;
+    public IReadOnlyList<(Type ProviderServiceType, string Key, Type FieldType, bool IsProvider)> SharedFields => _sharedFields;
 
     /// <summary>该 Layer 订阅的事件类型列表。</summary>
     public IReadOnlyList<Type> SubscribedEvents => _subscribedEvents;
@@ -643,9 +643,9 @@ public abstract class Layer : Node, IDisposable
         _producedEvents.Add(eventType);
     }
 
-    internal void RecordSharedField(Type ownerType, string key, Type fieldType, bool isProvider)
+    internal void RecordSharedField(Type providerServiceType, string key, Type fieldType, bool isProvider)
     {
-        _sharedFields.Add((ownerType, key, fieldType, isProvider));
+        _sharedFields.Add((providerServiceType, key, fieldType, isProvider));
     }
     #endregion
 
@@ -680,14 +680,41 @@ public abstract class Layer : Node, IDisposable
     #endregion
 
     #region Internal - Shared Field & Snap
-    internal IEnumerable<SharedFieldBinder.Participant> GetSharedFieldParticipants(bool includeGlobalScope)
+    internal IEnumerable<SharedFieldBinder.Participant> GetSharedFieldParticipants()
     {
-        if (includeGlobalScope)
-            yield return new SharedFieldBinder.Participant(this, this, 0);
+        var emitted = new HashSet<object>(ObjectReferenceComparer.Instance);
         foreach (var service in _activeServices)
-            yield return new SharedFieldBinder.Participant(service.Service, this, service.ScopeId);
+        {
+            if (emitted.Add(service.Service))
+                yield return new SharedFieldBinder.Participant(
+                    service.Service,
+                    this,
+                    MainScope.ScopeId,
+                    service.ScopeId,
+                    service.ServiceType);
+        }
+
         foreach (var resolved in _resolvedServices)
-            yield return new SharedFieldBinder.Participant(resolved.Instance, this, resolved.Descriptor.RegistrationScopeId);
+        {
+            if (!emitted.Add(resolved.Instance))
+                continue;
+
+            yield return new SharedFieldBinder.Participant(
+                resolved.Instance,
+                this,
+                MainScope.ScopeId,
+                resolved.Descriptor.RegistrationScopeId,
+                ResolveProviderServiceType(resolved.Descriptor));
+        }
+    }
+
+    private Type ResolveProviderServiceType(ServiceDescriptor descriptor)
+    {
+        foreach (var service in _activeServices)
+            if (service.ScopeId == descriptor.RegistrationScopeId)
+                return service.ServiceType;
+
+        return descriptor.ServiceType;
     }
 
     internal IEnumerable<IGeneratedFullSnapNode> GetFullSnapNodes()

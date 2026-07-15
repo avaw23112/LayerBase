@@ -109,7 +109,7 @@ internal sealed class LayerChain
                 builtLayers.Add(layer);
 
         SharedFieldBinder.Bind(
-            builtLayers.SelectMany(static layer => layer.GetSharedFieldParticipants(true)));
+            builtLayers.SelectMany(static layer => layer.GetSharedFieldParticipants()));
 
         _hasDelayMask = 0;
         var allSubscribers = new List<IAutoSubscribe>();

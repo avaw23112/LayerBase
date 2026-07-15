@@ -527,7 +527,7 @@ public sealed partial class LayerRuntime : IDisposable
 
 
         sb.AppendLine("## 4. Shared Fields");
-        sb.AppendLine("| OwnerType | LocalKey | Type | Role | Layer |");
+        sb.AppendLine("| ProviderServiceType | LocalKey | Type | Role | Layer |");
         sb.AppendLine("| :--- | :--- | :--- | :--- | :--- |");
         var hasFields = false;
         foreach (var layer in _chain.GetNodes().OfType<Layer>())
@@ -535,7 +535,7 @@ public sealed partial class LayerRuntime : IDisposable
         {
             var role = field.IsProvider ? "**Provide**" : "Use";
             sb.AppendLine(
-                $"| {field.OwnerType.Name} | `{field.Key}` | {field.FieldType.Name} | {role} | {layer.GetType().Name} |");
+                $"| {field.ProviderServiceType.Name} | `{field.Key}` | {field.FieldType.Name} | {role} | {layer.GetType().Name} |");
             hasFields = true;
         }
 
@@ -552,9 +552,9 @@ public sealed partial class LayerRuntime : IDisposable
         var allCallHandlers = allLayers.SelectMany(l => l.CallHandlers.Select(ch => ch.Req)).ToHashSet();
         var allCallInvoked = CallUsageTracker.GetUsedRequestTypes().ToHashSet();
         var allProvideKeys = allLayers.SelectMany(l =>
-            l.SharedFields.Where(f => f.IsProvider).Select(f => $"{f.OwnerType.FullName}_{f.Key}")).ToHashSet();
+            l.SharedFields.Where(f => f.IsProvider).Select(f => $"{f.ProviderServiceType.FullName}_{f.Key}")).ToHashSet();
         var allUseKeys = allLayers.SelectMany(l =>
-            l.SharedFields.Where(f => !f.IsProvider).Select(f => $"{f.OwnerType.FullName}_{f.Key}")).ToHashSet();
+            l.SharedFields.Where(f => !f.IsProvider).Select(f => $"{f.ProviderServiceType.FullName}_{f.Key}")).ToHashSet();
 
 
         foreach (var evt in allSubscribed)
