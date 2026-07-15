@@ -9,6 +9,7 @@ namespace LayerBase.Call;
 internal readonly struct ScopeLocalCallRouteEntry
 {
     public ScopeLocalCallRouteEntry(
+        int ownerScopeId,
         int routeId,
         Type requestType,
         Type responseType,
@@ -17,6 +18,7 @@ internal readonly struct ScopeLocalCallRouteEntry
         object invoker,
         IScopeLocalCallDispatcher dispatcher)
     {
+        OwnerScopeId = ownerScopeId;
         RouteId = routeId;
         RequestType = requestType;
         ResponseType = responseType;
@@ -26,6 +28,7 @@ internal readonly struct ScopeLocalCallRouteEntry
         Dispatcher = dispatcher;
     }
 
+    public int OwnerScopeId { get; }
     public int RouteId { get; }
     public Type RequestType { get; }
     public Type ResponseType { get; }

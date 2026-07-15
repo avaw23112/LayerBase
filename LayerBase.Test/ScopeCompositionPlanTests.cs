@@ -294,7 +294,7 @@ public sealed class ScopeCompositionPlanTests
                 LocalCallContribution.ForTypes(typeof(SwitchSceneRequest), typeof(SwitchSceneResponse), typeof(AlternateCombatCallHandler), typeof(PresentationLayer), typeof(MainScope))
             });
 
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<ScopeLocalCallRouteConflictException>(() =>
             LayerHub.CreateLayers()
                     .Push(new GameplayLayer())
                     .Push(new PresentationLayer())

@@ -102,6 +102,7 @@ public sealed class ScopeFaultPropagationTests
 
         ScopeRuntime scope = host.MainScope;
         scope.LocalCalls.Register(new ScopeLocalCallRouteEntry(
+            ScopeDefinitionIds.Main,
             ScopeLocalCallRouteId<FaultCallRequest, FaultCallResponse>.Id,
             typeof(FaultCallRequest),
             typeof(FaultCallResponse),

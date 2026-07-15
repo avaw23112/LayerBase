@@ -419,12 +419,19 @@ public sealed partial class LayerRuntime : IDisposable
     #region Internal - Scope Local Calls
     internal void BuildLocalCallRegistry()
     {
-        _scopeHost.MainScope.ClearLocalCallRegistry();
+        foreach (var scope in _scopeHost.Scopes)
+            scope.ClearLocalCallRegistry();
+
         if (_chain == null) return;
 
         foreach (var layer in _chain.GetNodes())
         foreach (var entry in layer.LocalCallRouteEntries)
-            _scopeHost.MainScope.LocalCalls.Register(entry);
+        {
+            if (!_scopeHost.TryGetRuntime(entry.OwnerScopeId, out var ownerScope))
+                continue;
+
+            ownerScope.LocalCalls.Register(entry);
+        }
     }
 
     #endregion

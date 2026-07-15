@@ -30,6 +30,7 @@ internal sealed class ScopeRuntime : IDisposable
     private bool _runtimeStopRun;
     private bool _lifecycleDisposeRun;
     private bool _disposeRequestedFromControl;
+    private int _ownerThreadId;
     private ScopeCallCompletion<ScopeDisposeResponse>? _pendingDisposeCompletion;
     private readonly ConcurrentDictionary<Type, IDelayPublisherInternal> _delayPublishers = new();
 
@@ -115,6 +116,7 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void InstallSynchronizationContext()
     {
+        BindOwnerThreadIfNeeded();
         SynchronizationContext ??= LayerBaseSynchronizationContext.Install();
     }
 
@@ -241,6 +243,11 @@ internal sealed class ScopeRuntime : IDisposable
         where TRequest : struct
         where TResponse : struct
     {
+        RequireOwnerThread();
+        if (_state is ScopeRuntimeState.StopRequested or ScopeRuntimeState.Stopped or ScopeRuntimeState.Disposing or ScopeRuntimeState.Disposed)
+            return LBTask<TResponse>.FromException(
+                new InvalidOperationException($"Scope `{Descriptor.Name}` is not accepting local calls."));
+
         return LocalCalls.CallAsync<TRequest, TResponse>(request, cancellationToken);
     }
 
@@ -314,6 +321,7 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void PumpScopeResources(float deltaTime)
     {
+        BindOwnerThreadIfNeeded();
         var context = SynchronizationContext;
         if (context != null)
         {
@@ -405,6 +413,36 @@ internal sealed class ScopeRuntime : IDisposable
     private bool CanPumpLifecycle()
     {
         return _state is ScopeRuntimeState.Created or ScopeRuntimeState.Running or ScopeRuntimeState.StopRequested;
+    }
+
+    public void RequireOwnerThread()
+    {
+        int ownerThreadId = Volatile.Read(ref _ownerThreadId);
+        if (ownerThreadId == 0)
+        {
+            BindOwnerThreadIfNeeded();
+            return;
+        }
+
+        if (Environment.CurrentManagedThreadId != ownerThreadId)
+        {
+            throw new InvalidOperationException(
+                $"Scope `{Descriptor.Name}` local call must run on its owner thread.");
+        }
+    }
+
+    private void BindOwnerThreadIfNeeded()
+    {
+        int currentThreadId = Environment.CurrentManagedThreadId;
+        int ownerThreadId = Volatile.Read(ref _ownerThreadId);
+        if (ownerThreadId == currentThreadId)
+            return;
+
+        if (ownerThreadId == 0 &&
+            Interlocked.CompareExchange(ref _ownerThreadId, currentThreadId, 0) == 0)
+            return;
+
+        RequireOwnerThread();
     }
 
     public void RunRuntimeStop()

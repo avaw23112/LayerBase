@@ -229,6 +229,40 @@ internal static class ServiceLayerBinder
         }
     }
 
+    public static void AttachScopeObject(object service, Layer layer, ScopeRuntime ownerScope)
+    {
+        if (service == null || layer == null)
+        {
+            return;
+        }
+
+        var runtime = layer.OwnerContext;
+        if (runtime == null)
+        {
+            throw new InvalidOperationException("Layer is not attached to LayerRuntime.");
+        }
+
+        if (ownerScope == null)
+        {
+            throw new ArgumentNullException(nameof(ownerScope));
+        }
+
+        var binding = new ServiceLayerBinding(
+            version: s_version,
+            runtimeId: runtime.Id,
+            layerIndex: layer.RouteIndex,
+            layer: layer,
+            runtime: runtime,
+            ownerScope: ownerScope);
+
+        ApplyBinding(service, binding);
+
+        if (service is IInternalLayerContext internalContext)
+        {
+            internalContext.LayerIndex = layer.RouteIndex;
+        }
+    }
+
     public static void AttachScopeRuntime(object service, LayerRuntime runtime, ScopeRuntime ownerScope)
     {
         if (service == null)

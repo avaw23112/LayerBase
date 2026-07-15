@@ -42,15 +42,11 @@ public abstract class Layer : Node, IDisposable
     #endregion
 
     #region Runtime State - Call Route
-    // 调用路由的锁，保护并发注册。
+    // 调用路由的锁，保护构建期自动注册。
     private readonly object _callRouteLock = new();
     // 已注册的调用处理器的元数据列表。
     private readonly List<(Type Req, Type Resp, Type Handler)> _callHandlers = new();
     private readonly List<ScopeLocalCallRouteEntry> _localCallRouteEntries = new();
-    // 按路由 ID 索引的调用路由处理器类型。
-    private Type?[] _callRouteHandlerTypes = Array.Empty<Type?>();
-    // 按路由 ID 索引的调用路由执行委托。
-    private object?[] _callRouteInvokers = Array.Empty<object?>();
     #endregion
 
     #region Runtime State - Event & Subscribe
@@ -239,8 +235,6 @@ public abstract class Layer : Node, IDisposable
         _activeServices.Clear();
         _resolvedServices.Clear();
         _serviceCollection.Reset();
-        _callRouteInvokers = Array.Empty<object?>();
-        _callRouteHandlerTypes = Array.Empty<Type?>();
         _callHandlers.Clear();
         _localCallRouteEntries.Clear();
         _producedEvents.Clear();
@@ -585,46 +579,50 @@ public abstract class Layer : Node, IDisposable
         where TRequest : struct
         where TResponse : struct
     {
+        RegisterCallHandler(handler, ResolveOwnerScopeType(handler?.GetType()));
+    }
+
+    protected internal void RegisterCallHandler<TRequest, TResponse, TOwnerScope>(
+        IScopeLocalCallHandler<TRequest, TResponse> handler)
+        where TRequest : struct
+        where TResponse : struct
+        where TOwnerScope : IScopeDefinition
+    {
+        RegisterCallHandler(handler, typeof(TOwnerScope));
+    }
+
+    internal void RegisterCallHandler<TRequest, TResponse>(
+        IScopeLocalCallHandler<TRequest, TResponse> handler,
+        Type ownerScopeType)
+        where TRequest : struct
+        where TResponse : struct
+    {
         ThrowIfDisposed();
         if (handler == null) throw new ArgumentNullException(nameof(handler));
+        if (ownerScopeType == null) throw new ArgumentNullException(nameof(ownerScopeType));
 
-        ServiceLayerBinder.Attach(handler, this);
+        int ownerScopeId = ScopeDefinitionIds.Resolve(ownerScopeType);
+        if (OwnerContext == null)
+            throw new InvalidOperationException("Layer not attached to a runtime context.");
+        if (!OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
+            throw new InvalidOperationException(
+                $"Scope `{ownerScopeType.FullName}` is not active in this runtime.");
+
+        ServiceLayerBinder.AttachScopeObject(handler, this, ownerScope);
         var routeId = ScopeLocalCallRouteId<TRequest, TResponse>.Id;
         var invoker = (ScopeLocalCallInvoker<TRequest, TResponse>)handler.HandleAsync;
 
         lock (_callRouteLock)
         {
-            var invokers = _callRouteInvokers;
-            var handlerTypes = _callRouteHandlerTypes;
+            if (_localCallRouteEntries.Any(entry =>
+                    entry.OwnerScopeId == ownerScopeId &&
+                    entry.RouteId == routeId &&
+                    entry.HandlerType == handler.GetType()))
+                return;
 
-            if (routeId >= invokers.Length)
-            {
-                var newSize = Math.Max(routeId + 1, invokers.Length == 0 ? 4 : invokers.Length * 2);
-                var newInvokers = new object?[newSize];
-                var newHandlerTypes = new Type?[newSize];
-                Array.Copy(invokers, newInvokers, invokers.Length);
-                Array.Copy(handlerTypes, newHandlerTypes, handlerTypes.Length);
-                invokers = newInvokers;
-                handlerTypes = newHandlerTypes;
-            }
-
-            if (invokers[routeId] != null)
-            {
-                if (handlerTypes[routeId] == handler.GetType()) return;
-                throw new ScopeLocalCallRouteConflictException(
-                    0,
-                    typeof(TRequest),
-                    typeof(TResponse),
-                    GetType(),
-                    handlerTypes[routeId] ?? invokers[routeId]!.GetType(),
-                    GetType(),
-                    handler.GetType());
-            }
-
-            invokers[routeId] = invoker;
-            handlerTypes[routeId] = handler.GetType();
             _callHandlers.Add((typeof(TRequest), typeof(TResponse), handler.GetType()));
             _localCallRouteEntries.Add(new ScopeLocalCallRouteEntry(
+                ownerScopeId,
                 routeId,
                 typeof(TRequest),
                 typeof(TResponse),
@@ -632,8 +630,6 @@ public abstract class Layer : Node, IDisposable
                 GetType(),
                 invoker,
                 new ScopeLocalCallDispatcher<TRequest, TResponse>(invoker)));
-            Volatile.Write(ref _callRouteInvokers, invokers);
-            Volatile.Write(ref _callRouteHandlerTypes, handlerTypes);
         }
     }
     #endregion
@@ -656,36 +652,6 @@ public abstract class Layer : Node, IDisposable
     internal void RecordSharedField(Type providerServiceType, string key, Type fieldType, bool isProvider)
     {
         _sharedFields.Add((providerServiceType, key, fieldType, isProvider));
-    }
-    #endregion
-
-    #region Internal - Call Route Resolution
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal ScopeLocalCallInvoker<TRequest, TResponse> GetCallInvoker<TRequest, TResponse>()
-        where TRequest : struct
-        where TResponse : struct
-    {
-        var routeId = ScopeLocalCallRouteId<TRequest, TResponse>.Id;
-        var invokers = Volatile.Read(ref _callRouteInvokers);
-        if ((uint)routeId >= (uint)invokers.Length || invokers[routeId] == null)
-            ThrowRouteNotFound<TRequest, TResponse>();
-        return (ScopeLocalCallInvoker<TRequest, TResponse>)invokers[routeId]!;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
-                                                               CancellationToken cancellationToken = default)
-        where TRequest : struct
-        where TResponse : struct
-    {
-        if (Volatile.Read(ref _disposed) != 0) ThrowDisposed();
-        if (cancellationToken.IsCancellationRequested) return LBTask<TResponse>.FromCanceled(cancellationToken);
-
-        var routeId = ScopeLocalCallRouteId<TRequest, TResponse>.Id;
-        var invokers = Volatile.Read(ref _callRouteInvokers);
-        if ((uint)routeId >= (uint)invokers.Length || invokers[routeId] == null)
-            ThrowRouteNotFound<TRequest, TResponse>();
-        return ((ScopeLocalCallInvoker<TRequest, TResponse>)invokers[routeId]!)(request, cancellationToken);
     }
     #endregion
 
@@ -817,12 +783,20 @@ public abstract class Layer : Node, IDisposable
         throw new ObjectDisposedException(GetType().Name);
     }
 
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private void ThrowRouteNotFound<TRequest, TResponse>()
-        where TRequest : struct
-        where TResponse : struct
+    private static Type ResolveOwnerScopeType(Type? handlerType)
     {
-        throw new ScopeLocalCallRouteNotFoundException(0, typeof(TRequest), typeof(TResponse));
+        if (handlerType == null)
+            throw new ArgumentNullException(nameof(handlerType));
+
+        foreach (var attribute in handlerType.GetCustomAttributes(false))
+        {
+            var attributeType = attribute.GetType();
+            if (attributeType.IsGenericType &&
+                attributeType.GetGenericTypeDefinition() == typeof(ScopeAttribute<>))
+                return attributeType.GetGenericArguments()[0];
+        }
+
+        return typeof(MainScope);
     }
     #endregion
     #region Nested Types

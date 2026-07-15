@@ -3,6 +3,7 @@ using LayerBase;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Layers;
+using LayerBase.Modules;
 using LayerBase.Scope;
 
 namespace EventsTest;
@@ -61,6 +62,95 @@ public sealed class ScopeLocalCallMigrationTests
     }
 
     [Test]
+    public void Local_call_never_searches_other_scope_registry()
+    {
+        using var runtime = new LayerRuntime(9301);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                new ScopeExecutionPlan(
+                    new ScopeDescriptor(SecondaryScope.ScopeId, nameof(SecondaryScope), typeof(SecondaryScope)),
+                    ScopeOptions.Inline)
+            },
+            runtimeId: 9301,
+            generation: 1);
+
+        host.Scopes.Single(scope => scope.ScopeId == SecondaryScope.ScopeId)
+            .LocalCalls.Register(new ScopeLocalCallRouteEntry(
+                SecondaryScope.ScopeId,
+                ScopeLocalCallRouteId<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>.Id,
+                typeof(ScopeLocalCallMigrationRequest),
+                typeof(ScopeLocalCallMigrationResponse),
+                typeof(ScopeLocalCallMigrationHandler),
+                typeof(ScopeLocalCallMigrationHandlerLayer),
+                new ScopeLocalCallInvoker<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
+                    static (request, _) => LBTask<ScopeLocalCallMigrationResponse>.FromResult(
+                        new ScopeLocalCallMigrationResponse("secondary:" + request.Value))),
+                new ScopeLocalCallDispatcher<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
+                    static (request, _) => LBTask<ScopeLocalCallMigrationResponse>.FromResult(
+                        new ScopeLocalCallMigrationResponse("secondary:" + request.Value)))));
+
+        Assert.That(async () =>
+                await host.MainScope.CallLocalAsync<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
+                    new ScopeLocalCallMigrationRequest("main")),
+            Throws.TypeOf<ScopeLocalCallRouteNotFoundException>());
+    }
+
+    [Test]
+    public void Same_request_response_in_different_scopes_is_allowed()
+    {
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new ScopeLocalCallMigrationHandlerLayer())
+                              .AddAssemblyModule(new SameRequestDifferentScopeModule())
+                              .Build();
+
+        var matchingCalls = runtime.CompositionPlan.LocalCalls
+            .Where(static call =>
+                call.RequestType == typeof(ScopeLocalCallMigrationRequest) &&
+                call.ResponseType == typeof(ScopeLocalCallMigrationResponse))
+            .Select(static call => call.OwnerScopeId)
+            .OrderBy(static scopeId => scopeId)
+            .ToArray();
+
+        Assert.That(matchingCalls, Is.EqualTo(new[] { MainScope.ScopeId, SecondaryScope.ScopeId }));
+    }
+
+    [Test]
+    public void Wrong_thread_local_call_fails()
+    {
+        LayerHub.CreateLayers()
+                .Push(new ScopeLocalCallerLayer())
+                .Push(new ScopeLocalCallMigrationHandlerLayer())
+                .Build();
+
+        Assert.That(async () =>
+                await Task.Run(async () =>
+                    await LayerHub.CallAsync<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
+                        new ScopeLocalCallMigrationRequest("wrong-thread"))),
+            Throws.InvalidOperationException);
+    }
+
+    [Test]
+    public async Task Scope_stop_rejects_new_local_call()
+    {
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new ScopeLocalCallerLayer())
+                              .Push(new ScopeLocalCallMigrationHandlerLayer())
+                              .Build();
+
+        var stopTask = runtime.ScopeHost.MainScope.RequestStopAsync();
+        runtime.ScopeHost.MainScope.PumpIngress();
+        await stopTask;
+
+        Assert.That(async () =>
+                await runtime.CallAsync<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
+                    new ScopeLocalCallMigrationRequest("stopped")),
+            Throws.InvalidOperationException);
+    }
+
+    [Test]
     public void Old_layer_call_public_contracts_do_not_exist()
     {
         var assembly = typeof(LayerRuntime).Assembly;
@@ -76,10 +166,51 @@ public sealed class ScopeLocalCallMigrationTests
             .ToArray();
 
         Assert.That(legacyLayerCallCacheMethods, Is.Empty);
+        Assert.That(typeof(Layer).GetMethod("GetCallInvoker", BindingFlags.NonPublic | BindingFlags.Instance), Is.Null);
+        Assert.That(typeof(Layer).GetMethod("CallAsync", BindingFlags.NonPublic | BindingFlags.Instance), Is.Null);
     }
 
     private sealed class ScopeLocalCallerLayer : Layer
     {
+    }
+
+    public readonly struct SecondaryScope : IScopeDefinition
+    {
+        public const int ScopeId = 20;
+    }
+
+    private sealed class SameRequestDifferentScopeModule : IAssemblyModule
+    {
+        private static readonly AssemblyModuleId s_id = new("scope-local-call-test");
+
+        public SameRequestDifferentScopeModule()
+        {
+            Manifest = new AssemblyModuleManifest(
+                s_id,
+                Array.Empty<ServiceContribution>(),
+                Array.Empty<ContextContribution>(),
+                new[]
+                {
+                    LocalCallContribution.ForTypes(
+                        typeof(ScopeLocalCallMigrationRequest),
+                        typeof(ScopeLocalCallMigrationResponse),
+                        typeof(ScopeLocalCallMigrationHandler),
+                        typeof(ScopeLocalCallMigrationHandlerLayer),
+                        typeof(MainScope)),
+                    LocalCallContribution.ForTypes(
+                        typeof(ScopeLocalCallMigrationRequest),
+                        typeof(ScopeLocalCallMigrationResponse),
+                        typeof(SecondaryScopeLocalCallMigrationHandler),
+                        typeof(ScopeLocalCallMigrationHandlerLayer),
+                        typeof(SecondaryScope))
+                },
+                Array.Empty<EventHandlerContribution>(),
+                Array.Empty<LayerToolContribution>());
+        }
+
+        public AssemblyModuleId Id => s_id;
+
+        public AssemblyModuleManifest Manifest { get; }
     }
 }
 
@@ -134,5 +265,17 @@ public sealed class DuplicateScopeLocalCallMigrationHandler
     {
         return LBTask<ScopeLocalCallMigrationResponse>.FromResult(
             new ScopeLocalCallMigrationResponse("duplicate:" + request.Value));
+    }
+}
+
+public sealed class SecondaryScopeLocalCallMigrationHandler
+    : IScopeLocalCallHandler<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>
+{
+    public LBTask<ScopeLocalCallMigrationResponse> HandleAsync(
+        ScopeLocalCallMigrationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return LBTask<ScopeLocalCallMigrationResponse>.FromResult(
+            new ScopeLocalCallMigrationResponse("secondary:" + request.Value));
     }
 }

@@ -1,3 +1,4 @@
+using LayerBase.Call;
 using LayerBase.Layers;
 using LayerBase.Modules;
 
@@ -184,7 +185,7 @@ internal sealed class RuntimeCompositionPlan
         LayerTypeIndex layerTypeIndex,
         Dictionary<Type, int> scopeIdsByType)
     {
-        var seen = new HashSet<LocalCallKey>();
+        var seen = new Dictionary<LocalCallKey, (Type OwnerLayerType, Type HandlerType)>();
         var resolved = new List<ResolvedLocalCallContribution>();
         foreach (var localCall in localCalls)
         {
@@ -195,9 +196,15 @@ internal sealed class RuntimeCompositionPlan
                 layerTypeIndex);
             int ownerScopeId = ResolveScopeId(localCall.OwnerScopeType, scopeIdsByType);
             var key = new LocalCallKey(ownerScopeId, localCall.RequestType, localCall.ResponseType);
-            if (!seen.Add(key))
-                throw new InvalidOperationException(
-                    $"Local call `{localCall.RequestType.FullName}->{localCall.ResponseType.FullName}` has more than one handler in scope `{ownerScopeId}`.");
+            if (seen.TryGetValue(key, out var existing))
+                throw new ScopeLocalCallRouteConflictException(
+                    ownerScopeId,
+                    localCall.RequestType,
+                    localCall.ResponseType,
+                    existing.OwnerLayerType,
+                    existing.HandlerType,
+                    localCall.OwnerLayerType,
+                    localCall.HandlerType);
 
             resolved.Add(new ResolvedLocalCallContribution(
                 localCall.ModuleId,
@@ -206,6 +213,7 @@ internal sealed class RuntimeCompositionPlan
                 localCall.RequestType,
                 localCall.ResponseType,
                 localCall.HandlerType));
+            seen.Add(key, (localCall.OwnerLayerType, localCall.HandlerType));
         }
 
         return resolved.OrderBy(static localCall => localCall.OwnerScopeId)
@@ -378,12 +386,7 @@ internal sealed class RuntimeCompositionPlan
         if (scopeIdsByType.TryGetValue(scopeType, out int existing))
             return existing;
 
-        var field = scopeType.GetField("ScopeId", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-        if (field == null || field.FieldType != typeof(int))
-            throw new InvalidOperationException(
-                $"Scope `{scopeType.FullName}` must expose a public static int ScopeId.");
-
-        int scopeId = (int)field.GetValue(null)!;
+        int scopeId = ScopeDefinitionIds.Resolve(scopeType);
         if (scopeId < 0)
             throw new InvalidOperationException($"Scope `{scopeType.FullName}` has an invalid negative ScopeId.");
 

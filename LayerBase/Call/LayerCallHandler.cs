@@ -40,9 +40,35 @@ public static class ScopeLocalCallHandlerExtensions
         where TResponse : struct
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
-        var layer = ServiceLayerBinder.Require(handler);
-        if (layer.OwnerContext == null) throw new InvalidOperationException("Layer not attached to a runtime context.");
-        return layer.OwnerContext.CallAsync<TRequest, TResponse>(request, cancellationToken);
+        return ServiceLayerBinder.RequireBinding(handler)
+                                 .OwnerScope
+                                 .CallLocalAsync<TRequest, TResponse>(request, cancellationToken);
+    }
+
+    public static LBTask<TResponse> Call<TRequest, TResponse>(
+        this IService service,
+        TRequest request,
+        CancellationToken cancellationToken = default)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        if (service == null) throw new ArgumentNullException(nameof(service));
+        return ServiceLayerBinder.RequireBinding(service)
+                                 .OwnerScope
+                                 .CallLocalAsync<TRequest, TResponse>(request, cancellationToken);
+    }
+
+    public static LBTask<TResponse> Call<TRequest, TResponse>(
+        this ILayerContext context,
+        TRequest request,
+        CancellationToken cancellationToken = default)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        if (context == null) throw new ArgumentNullException(nameof(context));
+        return ServiceLayerBinder.RequireBinding(context)
+                                 .OwnerScope
+                                 .CallLocalAsync<TRequest, TResponse>(request, cancellationToken);
     }
 }
 
