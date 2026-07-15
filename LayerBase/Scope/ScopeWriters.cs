@@ -5,7 +5,15 @@ namespace LayerBase.Scope;
 
 internal interface IScopeEventWriter
 {
+    bool AcceptsWorkerJobs { get; }
+
     ScopePostResult Post<TEvent>(in TEvent value)
+        where TEvent : struct;
+
+    ScopePostResult PostInternal<TEvent>(
+        int routeId,
+        ScopeEventClass eventClass,
+        in TEvent value)
         where TEvent : struct;
 }
 
@@ -27,10 +35,21 @@ internal sealed class RuntimeScopeEventWriter : IScopeEventWriter
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
     }
 
+    public bool AcceptsWorkerJobs => _transport.AcceptsWorkerJobs;
+
     public ScopePostResult Post<TEvent>(in TEvent value)
         where TEvent : struct
     {
         return _transport.EnqueueEvent(in value);
+    }
+
+    public ScopePostResult PostInternal<TEvent>(
+        int routeId,
+        ScopeEventClass eventClass,
+        in TEvent value)
+        where TEvent : struct
+    {
+        return _transport.EnqueueEvent(routeId, eventClass, in value);
     }
 }
 

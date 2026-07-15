@@ -6,6 +6,7 @@ using LayerBase.Core.Event;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 using LayerBase.Event.Delay;
+using LayerBase.Worker;
 
 namespace LayerBase.Scope;
 
@@ -572,6 +573,16 @@ internal sealed class ScopeRuntime : IDisposable
                         _runtimeId,
                         envelope.Payload,
                         Transport.EventPayloadStorage))
+                {
+                    continue;
+                }
+
+                if (WorkerScopeEventDispatcher.TryDispatch(
+                        envelope.RouteId,
+                        _runtimeId,
+                        envelope.Payload,
+                        Transport.EventPayloadStorage,
+                        scheduler))
                 {
                     continue;
                 }

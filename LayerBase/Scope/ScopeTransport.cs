@@ -11,6 +11,7 @@ internal sealed class ScopeTransport : IDisposable
     private readonly EventPayloadStorage _eventPayloadStorage = new();
     private readonly EventPayloadStorage _callPayloadStorage = new();
     private int _callSequence;
+    private bool _businessAdmissionClosed;
     private bool _disposed;
 
     public ScopeTransport(ScopeAddress address)
@@ -37,7 +38,21 @@ internal sealed class ScopeTransport : IDisposable
 
     internal EventPayloadStorage CallPayloadStorage => _callPayloadStorage;
 
+    internal bool AcceptsWorkerJobs => !_disposed && !_businessAdmissionClosed;
+
     internal ScopePostResult EnqueueEvent<TEvent>(in TEvent value)
+        where TEvent : struct
+    {
+        return EnqueueEvent(
+            EventTypeId<TEvent>.Id,
+            ScopeEventClass.Business,
+            in value);
+    }
+
+    internal ScopePostResult EnqueueEvent<TEvent>(
+        int routeId,
+        ScopeEventClass eventClass,
+        in TEvent value)
         where TEvent : struct
     {
         if (_disposed)
@@ -46,8 +61,8 @@ internal sealed class ScopeTransport : IDisposable
         var payload = _eventPayloadStorage.Store(Endpoint.Address.RuntimeId, in value);
         var envelope = new ScopeEventEnvelope(
             Endpoint.Address,
-            EventTypeId<TEvent>.Id,
-            ScopeEventClass.Business,
+            routeId,
+            eventClass,
             payload);
 
         var result = EventInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
@@ -116,6 +131,7 @@ internal sealed class ScopeTransport : IDisposable
 
     public void CloseBusinessAdmission()
     {
+        _businessAdmissionClosed = true;
         EventInbox.CloseBusinessAdmission();
         CallInbox.CloseBusinessAdmission();
     }

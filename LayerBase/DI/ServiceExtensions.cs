@@ -3,6 +3,7 @@ using LayerBase.Actor;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Layers;
+using LayerBase.Worker;
 
 namespace LayerBase.DI;
 
@@ -319,6 +320,14 @@ public static class ServiceExtensions
             .PostToMany(actorIds, in value);
     }
 
+    public static WorkerJobAccessor WorkerJobs(this IService service)
+    {
+        var binding = service.GetBinding();
+        return new WorkerJobAccessor(
+            binding.Runtime.WorkerJobs,
+            new WorkerJobOrigin(binding.OwnerScope.Endpoint));
+    }
+
     public static void SubscribeFlow<TValue>(
         this IService               service,
         EventHandleDelegate<TValue> handler)
@@ -596,6 +605,14 @@ public static class LayerContextExtensions
             .OwnerScope
             .Actors
             .PostToMany(actorIds, in value);
+    }
+
+    public static WorkerJobAccessor WorkerJobs(this ILayerContext context)
+    {
+        var binding = context.GetBinding();
+        return new WorkerJobAccessor(
+            binding.Runtime.WorkerJobs,
+            new WorkerJobOrigin(binding.OwnerScope.Endpoint));
     }
 
     public static void SubscribeFlow<TValue>(

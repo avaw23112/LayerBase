@@ -12,6 +12,7 @@ using LayerBase.Layers;
 using LayerBase.Modules;
 using LayerBase.Scope;
 using LayerBase.Snap;
+using LayerBase.Worker;
 
 namespace LayerBase;
 
@@ -38,6 +39,7 @@ public sealed partial class LayerRuntime : IDisposable
     private LayerChain? _chain;
     private readonly MainActorRuntime _mainActorRuntime;
     private readonly ScopeRuntimeHost _scopeHost;
+    private readonly WorkerJobScheduler _workerJobs;
     private FullSnapRuntime? _fullSnap;
     internal DelayPublisherManager? DelayManager => _scopeHost.MainScope.DelayManager;
     #endregion
@@ -76,6 +78,8 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal MainActorRuntime MainActorRuntime => _mainActorRuntime;
 
+    internal WorkerJobScheduler WorkerJobs => _workerJobs;
+
     internal RuntimeCompositionPlan CompositionPlan { get; private set; } = RuntimeCompositionPlan.Empty;
     #endregion
 
@@ -91,6 +95,7 @@ public sealed partial class LayerRuntime : IDisposable
         _id = id;
         _mainActorRuntime = new MainActorRuntime(this, _generation);
         _scopeHost = ScopeRuntimeHost.CreateMain(this, _id, _generation);
+        _workerJobs = new WorkerJobScheduler(WorkerJobSchedulerOptions.Default);
         _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
         LayerHub.Internal_Register(this);
     }
@@ -396,9 +401,11 @@ public sealed partial class LayerRuntime : IDisposable
         _disposed = true;
 
         _scopeHost.MainScope.RunRuntimeStop();
+        _workerJobs.BeginStop();
         _chain?.DisposeLayers();
         _chain = null;
         _scopeHost.Dispose();
+        _workerJobs.Dispose();
         _mainActorRuntime.Dispose();
         LayerHub.ClearRuntimeCaches(_id);
         LayerHub.Internal_Unregister(this);
