@@ -15,7 +15,7 @@ internal sealed class ScopeRuntime : IDisposable
     private readonly int _generation;
     private readonly EventPayloadStorage _callPayloadStorage = new();
     private readonly EventPayloadStorage _eventPayloadStorage = new();
-    private readonly ActorWorld? _actorWorld;
+    private readonly MainActorRuntime? _mainActors;
     private ActorAccessor _actors;
     private bool _hasActorAccessor;
     private ScopeRuntimeState _state = ScopeRuntimeState.Created;
@@ -42,15 +42,17 @@ internal sealed class ScopeRuntime : IDisposable
         LifecyclePlan = plan.LifecyclePlan;
         _runtimeId = runtimeId;
         _generation = generation;
+        if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
+            _mainActors = runtime.MainActorRuntime;
         Transport = new ScopeTransport(
             new ScopeAddress(runtimeId, generation, Descriptor.ScopeId));
         Transport.AttachRuntime(this);
         EventCenter = new EventCenter();
         LocalCalls = new ScopeLocalCallRegistry(Descriptor.ScopeId);
-        if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
+        if (_mainActors != null)
         {
-            _actorWorld = new ActorWorld(runtime);
-            _actors = new ActorAccessor(new LocalActorAccessor(_actorWorld, _generation));
+            _mainActors.BindProjectionSink();
+            _actors = _mainActors.Accessor;
             _hasActorAccessor = true;
         }
         EcsScheduler = new ScopeEcsScheduler(
@@ -61,8 +63,8 @@ internal sealed class ScopeRuntime : IDisposable
         EcsWorld = EcsScheduler.World;
         EcsWorld.BindRuntime(runtime);
         EcsWorld.BindEcsScheduler(EcsScheduler);
-        if (_actorWorld != null)
-            EcsWorld.BindProjectedActorCommandSink(new MainScopeProjectedActorCommandSink(_actorWorld));
+        if (_mainActors != null)
+            EcsWorld.BindProjectedActorCommandSink(_mainActors.ProjectedActorCommandSink);
     }
 
     public ScopeDescriptor Descriptor { get; }
@@ -82,9 +84,6 @@ internal sealed class ScopeRuntime : IDisposable
     public TimeScheduler<ITimerAction>? Timer { get; private set; }
 
     public DelayPublisherManager? DelayManager { get; private set; }
-
-    public ActorWorld ActorWorld =>
-        _actorWorld ?? throw new InvalidOperationException("ActorWorld is only available in MainScope.");
 
     public ActorAccessor Actors =>
         _hasActorAccessor
@@ -150,22 +149,13 @@ internal sealed class ScopeRuntime : IDisposable
         Timer?.Tick(deltaTime, _timerSink!);
     }
 
-    public void PrepareActorWorld()
-    {
-        ActorWorld.PrepareRuntimeBuild();
-    }
-
-    public void CompleteActorWorld()
-    {
-        ActorWorld.CompleteRuntimeBuild();
-    }
-
     public void BindMainActorEndpoint(ScopeEndpoint mainEndpoint)
     {
-        if (_actorWorld != null)
+        if (_mainActors != null)
         {
-            _actors = new ActorAccessor(new LocalActorAccessor(_actorWorld, _generation));
-            EcsWorld.BindProjectedActorCommandSink(new MainScopeProjectedActorCommandSink(_actorWorld));
+            _mainActors.BindProjectionSink();
+            _actors = _mainActors.Accessor;
+            EcsWorld.BindProjectedActorCommandSink(_mainActors.ProjectedActorCommandSink);
         }
         else
         {
@@ -201,19 +191,6 @@ internal sealed class ScopeRuntime : IDisposable
 
         IScopeEventWriter? writer = endpoint.EventWriter;
         return writer != null && writer.Post(in value).IsAccepted;
-    }
-
-    public void PumpActors(
-        float deltaTime,
-        float fixedDeltaTime,
-        bool pumpFixedUpdate,
-        ref RuntimeFrameBudget budget)
-    {
-        ActorWorld.Pump(
-            deltaTime: deltaTime,
-            fixedDeltaTime: fixedDeltaTime,
-            pumpFixedUpdate: pumpFixedUpdate,
-            budget: ref budget);
     }
 
     public LBTask<TResponse> CallLocalAsync<TRequest, TResponse>(
@@ -422,7 +399,7 @@ internal sealed class ScopeRuntime : IDisposable
 
         _runtimeStopRun = true;
         LifecyclePlan.RunRuntimeStopReverse();
-        _actorWorld?.RuntimeStop();
+        _mainActors?.RuntimeStop();
     }
 
     public void RunLifecycleDispose()
@@ -443,10 +420,9 @@ internal sealed class ScopeRuntime : IDisposable
                 if (TryDispatchLifecycleControl(envelope))
                     continue;
 
-                if (_actorWorld != null &&
-                    ActorCallDispatcherRegistry.TryDispatch(
+                if (_mainActors != null &&
+                    _mainActors.TryDispatchCall(
                         envelope.RouteId,
-                        _actorWorld,
                         _runtimeId,
                         envelope,
                         _callPayloadStorage))
@@ -579,11 +555,10 @@ internal sealed class ScopeRuntime : IDisposable
         {
             try
             {
-                if (_actorWorld != null &&
-                    ActorProjectionScopeEventDispatcher.TryDispatchCommand(
+                if (_mainActors != null &&
+                    _mainActors.TryDispatchProjectionCommand(
                         envelope.RouteId,
                         this,
-                        _actorWorld,
                         _runtimeId,
                         envelope.Payload,
                         _eventPayloadStorage))
@@ -601,10 +576,9 @@ internal sealed class ScopeRuntime : IDisposable
                     continue;
                 }
 
-                if (_actorWorld != null &&
-                    ActorCommandDispatcherRegistry.TryDispatch(
+                if (_mainActors != null &&
+                    _mainActors.TryDispatchCommand(
                         envelope.RouteId,
-                        _actorWorld,
                         _runtimeId,
                         envelope.Payload,
                         _eventPayloadStorage))
@@ -660,7 +634,6 @@ internal sealed class ScopeRuntime : IDisposable
         _callPayloadStorage.Dispose();
         _eventPayloadStorage.Dispose();
         LocalCalls.Clear();
-        _actorWorld?.Dispose();
         DelayManager?.Clear();
         DelayManager = null;
         Timer?.Dispose();

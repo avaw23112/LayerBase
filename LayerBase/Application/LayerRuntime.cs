@@ -26,7 +26,7 @@ public sealed partial class LayerRuntime : IDisposable
     // 核心子系统，在构造时创建，贯穿 Runtime 生命周期。
     internal WorldServiceRoot Services { get; }
     internal EventCenter EventCenter => _scopeHost.MainScope.EventCenter;
-    internal ActorWorld Actors => _scopeHost.MainScope.ActorWorld;
+    internal ActorWorld Actors => _mainActorRuntime.World;
     #endregion
 
     #region Runtime State - Configuration
@@ -37,6 +37,7 @@ public sealed partial class LayerRuntime : IDisposable
     #region Runtime State - Subsystems
     // 各子系统实例，在 Build 过程中创建。
     private LayerChain? _chain;
+    private readonly MainActorRuntime _mainActorRuntime;
     private readonly ScopeRuntimeHost _scopeHost;
     private ServiceProvider? _worldProvider;
     private FullSnapRuntime? _fullSnap;
@@ -80,6 +81,8 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal ScopeRuntimeHost ScopeHost => _scopeHost;
 
+    internal MainActorRuntime MainActorRuntime => _mainActorRuntime;
+
     internal RuntimeCompositionPlan CompositionPlan { get; private set; } = RuntimeCompositionPlan.Empty;
     #endregion
 
@@ -92,6 +95,7 @@ public sealed partial class LayerRuntime : IDisposable
     {
         _id = id;
         Services = new WorldServiceRoot(this);
+        _mainActorRuntime = new MainActorRuntime(this, _generation);
         _scopeHost = ScopeRuntimeHost.CreateMain(this, _id, _generation);
         _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
         LayerHub.Internal_Register(this);
@@ -260,7 +264,7 @@ public sealed partial class LayerRuntime : IDisposable
                 ? _fixedUpdateOptions.FixedDeltaTime
                 : 0f;
 
-            _scopeHost.MainScope.PumpActors(
+            _mainActorRuntime.Pump(
                 deltaTime: deltaTime,
                 fixedDeltaTime: actorFixedDeltaTime,
                 pumpFixedUpdate: pumpActorFixedUpdate,
@@ -387,6 +391,7 @@ public sealed partial class LayerRuntime : IDisposable
         _chain = null;
         Services.Dispose();
         _scopeHost.Dispose();
+        _mainActorRuntime.Dispose();
         LayerHub.ClearRuntimeCaches(_id);
         LayerHub.Internal_Unregister(this);
     }
@@ -673,9 +678,9 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime.InitializeTimer(_timerOptions);
             _runtime.InitializeDelay(_delayOptions);
             _runtime.BuildServiceProvider();
-            _runtime._scopeHost.MainScope.PrepareActorWorld();
+            _runtime._mainActorRuntime.PrepareRuntimeBuild();
             _layerChain.Build(1024, true);
-            _runtime._scopeHost.MainScope.CompleteActorWorld();
+            _runtime._mainActorRuntime.CompleteRuntimeBuild();
             _runtime.BuildFullSnapCache();
             _runtime.PolicyTable.Freeze();
 

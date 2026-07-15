@@ -142,12 +142,28 @@ public class ActorRuntimeIntegrationTests
     }
 
     [Test]
-    public void Main_scope_owns_runtime_actor_world()
+    public void Main_actor_runtime_owns_actor_world_outside_scope_runtime()
     {
         LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(),
             PostSchedulerOptions.Default);
 
-        Assert.That(runtime.ScopeHost.MainScope.ActorWorld, Is.SameAs(runtime.Actors));
+        Assert.That(runtime.Actors, Is.Not.Null);
+
+        var scopeActorWorldMembers = typeof(ScopeRuntime)
+            .GetMembers(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Where(static member =>
+            {
+                return member switch
+                {
+                    FieldInfo field => field.FieldType == typeof(ActorWorld),
+                    PropertyInfo property => property.PropertyType == typeof(ActorWorld),
+                    _ => false
+                };
+            })
+            .Select(static member => member.Name)
+            .ToArray();
+
+        Assert.That(scopeActorWorldMembers, Is.Empty);
     }
 
     [Test]
@@ -167,7 +183,7 @@ public class ActorRuntimeIntegrationTests
     {
         LayerRuntime runtime = BuildRuntime(new UpdateOrderingLayer(), new UpdateOrderingService(),
             PostSchedulerOptions.Default);
-        ActorWorld actorWorld = runtime.ScopeHost.MainScope.ActorWorld;
+        ActorWorld actorWorld = runtime.Actors;
 
         runtime.Dispose();
 
@@ -179,7 +195,8 @@ public class ActorRuntimeIntegrationTests
     [Test]
     public void Scope_actor_accessor_is_local_only_for_main_scope()
     {
-        using ScopeRuntimeHost host = BuildMainAndCustomScopeHost();
+        using var fixture = BuildMainAndCustomScopeHost();
+        ScopeRuntimeHost host = fixture.Host;
 
         Assert.That(host.MainScope.Actors.IsLocal, Is.True);
         Assert.That(host.Scopes[1].Actors.IsLocal, Is.False);
@@ -189,7 +206,8 @@ public class ActorRuntimeIntegrationTests
     [Test]
     public void Custom_scope_actor_post_routes_to_main_scope_actor_world()
     {
-        using ScopeRuntimeHost host = BuildMainAndCustomScopeHost();
+        using var fixture = BuildMainAndCustomScopeHost();
+        ScopeRuntimeHost host = fixture.Host;
         IntegrationActor actor = host.MainScope.Actors.CreateActor<IntegrationActor>();
         ActorHandle handle = ActorHandle.FromActorId(actor.GetActorId(), runtimeGeneration: 1);
 
@@ -197,7 +215,7 @@ public class ActorRuntimeIntegrationTests
 
         var budget = new RuntimeFrameBudget(0, 0, 0);
         host.MainScope.PumpIngress();
-        host.MainScope.PumpActors(
+        fixture.Runtime.MainActorRuntime.Pump(
             deltaTime: 0.016f,
             fixedDeltaTime: 1f / 60f,
             pumpFixedUpdate: true,
@@ -210,7 +228,8 @@ public class ActorRuntimeIntegrationTests
     public void Custom_scope_actor_call_routes_to_main_scope_actor_world()
     {
         ActorCallRuntimeTrace.Reset();
-        using ScopeRuntimeHost host = BuildMainAndCustomScopeHost();
+        using var fixture = BuildMainAndCustomScopeHost();
+        ScopeRuntimeHost host = fixture.Host;
         ActorCallRuntimeActor actor = host.MainScope.Actors.CreateActor<ActorCallRuntimeActor>();
         ActorHandle handle = ActorHandle.FromActorId(actor.GetActorId(), runtimeGeneration: 1);
 
@@ -222,7 +241,7 @@ public class ActorRuntimeIntegrationTests
 
         var budget = new RuntimeFrameBudget(0, 0, 0);
         host.MainScope.PumpIngress();
-        host.MainScope.PumpActors(
+        fixture.Runtime.MainActorRuntime.Pump(
             deltaTime: 0.016f,
             fixedDeltaTime: 1f / 60f,
             pumpFixedUpdate: true,
@@ -328,7 +347,7 @@ public class ActorRuntimeIntegrationTests
         return builder.Build();
     }
 
-    private static ScopeRuntimeHost BuildMainAndCustomScopeHost()
+    private static ScopeRuntimeHostFixture BuildMainAndCustomScopeHost()
     {
         var runtime = new LayerRuntime(1);
         var plans = new[]
@@ -340,8 +359,27 @@ public class ActorRuntimeIntegrationTests
         };
 
         ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
-        host.MainScope.PrepareActorWorld();
-        host.MainScope.CompleteActorWorld();
-        return host;
+        runtime.MainActorRuntime.PrepareRuntimeBuild();
+        runtime.MainActorRuntime.CompleteRuntimeBuild();
+        return new ScopeRuntimeHostFixture(runtime, host);
+    }
+
+    private sealed class ScopeRuntimeHostFixture : IDisposable
+    {
+        public ScopeRuntimeHostFixture(LayerRuntime runtime, ScopeRuntimeHost host)
+        {
+            Runtime = runtime;
+            Host = host;
+        }
+
+        public LayerRuntime Runtime { get; }
+
+        public ScopeRuntimeHost Host { get; }
+
+        public void Dispose()
+        {
+            Host.Dispose();
+            Runtime.Dispose();
+        }
     }
 }
