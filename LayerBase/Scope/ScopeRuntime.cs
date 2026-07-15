@@ -3,6 +3,7 @@ using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
+using LayerBase.ECS.Projection;
 using LayerBase.Event.Delay;
 
 namespace LayerBase.Scope;
@@ -18,6 +19,8 @@ internal sealed class ScopeRuntime : IDisposable
     private bool _hasActorAccessor;
     private ScopeRuntimeState _state = ScopeRuntimeState.Created;
     private ScopeTimerSink? _timerSink;
+    private IReadOnlyDictionary<int, ScopeEndpoint> _scopeEndpoints =
+        new Dictionary<int, ScopeEndpoint>();
     private int _callSequence;
     private float _fixedUpdateAccumulator;
     private bool _runtimeStopRun;
@@ -49,6 +52,8 @@ internal sealed class ScopeRuntime : IDisposable
         }
         EcsWorld = World.Create();
         EcsWorld.BindRuntime(runtime);
+        if (_actorWorld != null)
+            EcsWorld.BindProjectedActorCommandSink(new MainScopeProjectedActorCommandSink(_actorWorld));
     }
 
     public ScopeDescriptor Descriptor { get; }
@@ -149,6 +154,7 @@ internal sealed class ScopeRuntime : IDisposable
         if (_actorWorld != null)
         {
             _actors = new ActorAccessor(new LocalActorAccessor(_actorWorld, _generation));
+            EcsWorld.BindProjectedActorCommandSink(new MainScopeProjectedActorCommandSink(_actorWorld));
         }
         else
         {
@@ -156,9 +162,34 @@ internal sealed class ScopeRuntime : IDisposable
                 new ScopeRef<MainScope>(mainEndpoint),
                 Descriptor.ScopeId,
                 _generation));
+            EcsWorld.BindProjectedActorCommandSink(new ScopeEventProjectedActorCommandSink(
+                new ScopeRef<MainScope>(mainEndpoint),
+                Descriptor.ScopeId,
+                _generation));
         }
 
         _hasActorAccessor = true;
+    }
+
+    public void BindScopeEndpoints(IReadOnlyList<ScopeRuntime> scopes)
+    {
+        var endpoints = new Dictionary<int, ScopeEndpoint>(scopes.Count);
+        for (int i = 0; i < scopes.Count; i++)
+            endpoints[scopes[i].ScopeId] = scopes[i].Endpoint;
+
+        _scopeEndpoints = endpoints;
+    }
+
+    public bool TryPostEventToScope<TEvent>(
+        int scopeId,
+        in TEvent value)
+        where TEvent : struct
+    {
+        if (!_scopeEndpoints.TryGetValue(scopeId, out ScopeEndpoint endpoint))
+            return false;
+
+        IScopeEventWriter? writer = endpoint.EventWriter;
+        return writer != null && writer.Post(in value).IsAccepted;
     }
 
     public void PumpActors(
@@ -341,6 +372,28 @@ internal sealed class ScopeRuntime : IDisposable
         {
             try
             {
+                if (_actorWorld != null &&
+                    ActorProjectionScopeEventDispatcher.TryDispatchCommand(
+                        envelope.RouteId,
+                        this,
+                        _actorWorld,
+                        _runtimeId,
+                        envelope.Payload,
+                        _eventPayloadStorage))
+                {
+                    continue;
+                }
+
+                if (ActorProjectionScopeEventDispatcher.TryDispatchResult(
+                        envelope.RouteId,
+                        EcsWorld,
+                        _runtimeId,
+                        envelope.Payload,
+                        _eventPayloadStorage))
+                {
+                    continue;
+                }
+
                 if (_actorWorld != null &&
                     ActorCommandDispatcherRegistry.TryDispatch(
                         envelope.RouteId,

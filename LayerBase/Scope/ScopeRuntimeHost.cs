@@ -19,7 +19,10 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
         var mainEndpoint = _scopes[0].Endpoint;
         for (int i = 0; i < _scopes.Length; i++)
+        {
             _scopes[i].BindMainActorEndpoint(mainEndpoint);
+            _scopes[i].BindScopeEndpoints(_scopes);
+        }
     }
 
     public ScopeRuntime MainScope

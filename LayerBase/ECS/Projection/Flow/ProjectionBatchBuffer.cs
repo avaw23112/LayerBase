@@ -73,7 +73,7 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
         _events = newEvents;
     }
 
-    public void PostTo(ActorWorld actorWorld)
+    public void PostTo(IProjectedActorCommandSink commandSink)
     {
         int i = 0;
         int length = Count;
@@ -81,14 +81,14 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
         
         for (; i < unrolledLength; i += 4)
         {
-            actorWorld.PostTo(_actorIds[i], in _events[i]);
-            actorWorld.PostTo(_actorIds[i + 1], in _events[i+1]);
-            actorWorld.PostTo(_actorIds[i + 2], in _events[i+2]);
-            actorWorld.PostTo(_actorIds[i + 3], in _events[i+3]);
+            commandSink.PostTo(_actorIds[i], in _events[i]);
+            commandSink.PostTo(_actorIds[i + 1], in _events[i + 1]);
+            commandSink.PostTo(_actorIds[i + 2], in _events[i + 2]);
+            commandSink.PostTo(_actorIds[i + 3], in _events[i + 3]);
         }
         for (; i < length; i++)
         {
-            actorWorld.PostTo(_actorIds[i], in _events[i]);
+            commandSink.PostTo(_actorIds[i], in _events[i]);
         }
     }
 

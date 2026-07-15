@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Arch.Core;
-using LayerBase.Actor;
 
 namespace LayerBase.ECS.Projection;
 
@@ -12,47 +11,27 @@ internal sealed class ActiveProjectedActorList
     private int _sweepCursor;
 
     public void Add(
-        Entity                 entity,
+        Entity entity,
         ref ProjectedActorMeta meta)
     {
         if (meta.ActiveListIndex >= 0)
-        {
             return;
-        }
 
         int index = _count;
         if ((uint)index >= (uint)_items.Length)
-        {
             Array.Resize(ref _items, _items.Length << 1);
-        }
 
         _items[index] = new ProjectedEntityRef(entity);
         _count = index + 1;
         meta.ActiveListIndex = index;
     }
 
-    /// <summary>
-    /// Sweep 预算化版本。
-    ///
-    /// world 参数作用：
-    /// 当前 ECS World。
-    ///
-    /// actorWorld 参数作用：
-    /// 当前 ActorWorld，用于执行 Disable / ReturnToPool 等生命周期操作。
-    ///
-    /// maxCount 参数作用：
-    /// 单帧最多检查的 ProjectedActor 数量。
-    /// 注意：这里限制的是检查数量，不是退场数量。
-    /// </summary>
     public void Sweep(
-        World      world,
-        ActorWorld actorWorld,
-        int        maxCount = 512)
+        World world,
+        int maxCount = 512)
     {
         if (_count == 0 || maxCount <= 0)
-        {
             return;
-        }
 
         long nowTicks = Stopwatch.GetTimestamp();
         int inspected = 0;
@@ -64,9 +43,7 @@ internal sealed class ActiveProjectedActorList
 
             Entity entity = _items[index].Entity;
 
-            if (!world.TryGetProjectionMeta(
-                    entity,
-                    out ProjectedActorMetaRef metaRef))
+            if (!world.TryGetProjectionMeta(entity, out ProjectedActorMetaRef metaRef))
             {
                 RemoveDeadAt(world, index);
                 continue;
@@ -86,20 +63,14 @@ internal sealed class ActiveProjectedActorList
                 continue;
             }
 
-            // 读取 ProjectedActorRef 以获取 ExpireAtTicks
             ref ProjectedActorRef actorRef = ref world.Get<ProjectedActorRef>(entity);
-
-            // 使用 ExpireAtTicks 判断是否到期
             if (nowTicks < actorRef.ExpireAtTicks)
             {
                 i++;
                 continue;
             }
 
-            // 到期处理 - 需要获取 pooledActor 以调用生命周期方法
-            if (!actorWorld.TryGetPooledActor(
-                    meta.ActorId,
-                    out IPooledActor pooledActor))
+            if (!world.ProjectedActorCommands.Exists(meta.ActorId))
             {
                 ProjectedActorBindingUtility.Clear(world, entity, ref meta);
                 actorRef.ClearActor();
@@ -107,77 +78,55 @@ internal sealed class ActiveProjectedActorList
                 continue;
             }
 
-            RetireProjectedActor(world, actorWorld, entity, ref meta, ref actorRef, pooledActor);
+            RetireProjectedActor(world, entity, ref meta, ref actorRef);
         }
 
-        if (_count == 0)
-        {
-            _sweepCursor = 0;
-            return;
-        }
-
-        _sweepCursor = (_sweepCursor + inspected) % _count;
+        _sweepCursor = _count == 0
+            ? 0
+            : (_sweepCursor + inspected) % _count;
     }
 
-    /// <summary>
-    /// 根据 RetirePolicy 处理到期的 ProjectedActor。
-    /// </summary>
     private void RetireProjectedActor(
-        World                  world,
-        ActorWorld             actorWorld,
-        Entity                 entity,
+        World world,
+        Entity entity,
         ref ProjectedActorMeta meta,
-        ref ProjectedActorRef  actorRef,
-        IPooledActor           pooledActor)
+        ref ProjectedActorRef actorRef)
     {
         switch (meta.RetirePolicy)
         {
             case ProjectedActorRetirePolicy.Disable:
-                actorWorld.DisableProjectedActor(meta.ActorId);
+                world.ProjectedActorCommands.Disable(meta.ActorId);
                 meta.State = ProjectedActorState.Disabled;
-
-                // ExpireAtTicks 参数作用：
-                // Disable 后不再让该 Actor 持续命中到期判断。
-                // 下一次 Touch 时 RefreshProjectedActorInterest 会先 OnEnable，再刷新 ExpireAtTicks。
                 actorRef.ExpireAtTicks = long.MaxValue;
-
                 return;
 
             case ProjectedActorRetirePolicy.ReturnToPool:
-                actorWorld.ReleaseProjectedActor(
+                world.ProjectedActorCommands.Release(
                     meta.ActorId,
                     ProjectedActorReleasePolicy.ReturnToPool);
-
-                ProjectedActorBindingUtility.Clear(world, entity, ref meta);
-                actorRef.ClearActor();
-                RemoveAt(world, meta.ActiveListIndex, ref meta);
-                return;
+                break;
 
             case ProjectedActorRetirePolicy.DestroyImmediately:
-                actorWorld.ReleaseProjectedActor(
+                world.ProjectedActorCommands.Release(
                     meta.ActorId,
                     ProjectedActorReleasePolicy.DestroyImmediately);
-
-                ProjectedActorBindingUtility.Clear(world, entity, ref meta);
-                actorRef.ClearActor();
-                RemoveAt(world, meta.ActiveListIndex, ref meta);
-                return;
+                break;
 
             case ProjectedActorRetirePolicy.DetachAndLetActorFinish:
-                actorWorld.ReleaseProjectedActor(
+                world.ProjectedActorCommands.Release(
                     meta.ActorId,
                     ProjectedActorReleasePolicy.DetachAndLetActorFinish);
-
-                ProjectedActorBindingUtility.Clear(world, entity, ref meta);
-                actorRef.ClearActor();
-                RemoveAt(world, meta.ActiveListIndex, ref meta);
-                return;
+                break;
         }
+
+        ProjectedActorBindingUtility.Clear(world, entity, ref meta);
+        actorRef.ClearActor();
+        RemoveAt(world, meta.ActiveListIndex, ref meta);
     }
 
     private void RemoveAt(
-        World                  world,
-        int                    index,
+        World world,
+        int index,
         ref ProjectedActorMeta meta)
     {
         int lastIndex = _count - 1;
@@ -187,10 +136,8 @@ internal sealed class ActiveProjectedActorList
         _count = lastIndex;
         meta.ActiveListIndex = -1;
 
-        if (index != lastIndex
-            && world.TryGetProjectionMeta(
-                moved.Entity,
-                out ProjectedActorMetaRef movedMetaRef))
+        if (index != lastIndex &&
+            world.TryGetProjectionMeta(moved.Entity, out ProjectedActorMetaRef movedMetaRef))
         {
             movedMetaRef.Value.ActiveListIndex = index;
         }
@@ -198,7 +145,7 @@ internal sealed class ActiveProjectedActorList
 
     private void RemoveDeadAt(
         World world,
-        int   index)
+        int index)
     {
         int lastIndex = _count - 1;
         ProjectedEntityRef moved = _items[lastIndex];
@@ -206,10 +153,8 @@ internal sealed class ActiveProjectedActorList
         _items[lastIndex] = default;
         _count = lastIndex;
 
-        if (index != lastIndex
-            && world.TryGetProjectionMeta(
-                moved.Entity,
-                out ProjectedActorMetaRef movedMetaRef))
+        if (index != lastIndex &&
+            world.TryGetProjectionMeta(moved.Entity, out ProjectedActorMetaRef movedMetaRef))
         {
             movedMetaRef.Value.ActiveListIndex = index;
         }
@@ -220,8 +165,7 @@ internal readonly struct ProjectedEntityRef
 {
     public readonly Entity Entity;
 
-    public ProjectedEntityRef(
-        Entity entity)
+    public ProjectedEntityRef(Entity entity)
     {
         Entity = entity;
     }
@@ -233,8 +177,7 @@ internal readonly ref struct ProjectedActorMetaRef
 
     public ref ProjectedActorMeta Value => ref _span[0];
 
-    public ProjectedActorMetaRef(
-        ref ProjectedActorMeta value)
+    public ProjectedActorMetaRef(ref ProjectedActorMeta value)
     {
         _span = MemoryMarshal.CreateSpan(ref value, 1);
     }

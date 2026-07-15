@@ -125,7 +125,6 @@ internal static class ProjectedActorMarkUtility
 
         ProjectedActorBinding.EnsureProjectedActor(
             world,
-            world.Runtime.Actors,
             entity,
             ref meta,
             ref actorRef,

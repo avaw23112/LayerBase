@@ -18,7 +18,6 @@ internal static class ProjectionExecutor0
         ProjectionForEach<TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -26,10 +25,10 @@ internal static class ProjectionExecutor0
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -42,19 +41,17 @@ internal static class ProjectionExecutor0
         Query query,
         ProjectionPredicate? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate? predicate,
         ProjectionForEach<TEvent> forEach,
@@ -83,9 +80,7 @@ internal static class ProjectionExecutor0
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -112,7 +107,6 @@ internal static class ProjectionExecutor0
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate? predicate,
         long nowTicks)
@@ -138,9 +132,7 @@ internal static class ProjectionExecutor0
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -154,7 +146,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach2<TEvent0, TEvent1> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -163,13 +154,13 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -178,7 +169,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate? predicate, ProjectionForEach2<TEvent0, TEvent1> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1)
@@ -207,7 +198,7 @@ where TEvent0 : struct
             forEach(in entity, ref e0, ref e1);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, entity, ref actorRef, nowTicks);
             if (!alive) continue;
 
             ActorId actorId = actorRef.ActorId;
@@ -225,7 +216,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach3<TEvent0, TEvent1, TEvent2> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -235,15 +225,15 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -253,7 +243,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate? predicate, ProjectionForEach3<TEvent0, TEvent1, TEvent2> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -284,7 +274,7 @@ where TEvent0 : struct
             forEach(in entity, ref e0, ref e1, ref e2);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, entity, ref actorRef, nowTicks);
             if (!alive) continue;
 
             ActorId actorId = actorRef.ActorId;
@@ -304,7 +294,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach4<TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -315,17 +304,17 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
                     ref batch3);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -336,7 +325,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate? predicate, ProjectionForEach4<TEvent0, TEvent1, TEvent2, TEvent3> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -369,7 +358,7 @@ where TEvent0 : struct
             forEach(in entity, ref e0, ref e1, ref e2, ref e3);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, entity, ref actorRef, nowTicks);
             if (!alive) continue;
 
             ActorId actorId = actorRef.ActorId;
@@ -391,7 +380,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach5<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -403,7 +391,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -411,11 +399,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -427,7 +415,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate? predicate, ProjectionForEach5<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -462,7 +450,7 @@ where TEvent0 : struct
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, entity, ref actorRef, nowTicks);
             if (!alive) continue;
 
             ActorId actorId = actorRef.ActorId;
@@ -486,7 +474,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach6<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -499,7 +486,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -508,12 +495,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -526,7 +513,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate? predicate, ProjectionForEach6<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -563,7 +550,7 @@ where TEvent0 : struct
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, entity, ref actorRef, nowTicks);
             if (!alive) continue;
 
             ActorId actorId = actorRef.ActorId;
@@ -589,7 +576,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach7<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -603,7 +589,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -613,13 +599,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -633,7 +619,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate? predicate, ProjectionForEach7<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -672,7 +658,7 @@ where TEvent0 : struct
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, entity, ref actorRef, nowTicks);
             if (!alive) continue;
 
             ActorId actorId = actorRef.ActorId;
@@ -700,7 +686,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach8<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -715,7 +700,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -726,14 +711,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -748,7 +733,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate? predicate, ProjectionForEach8<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -789,7 +774,7 @@ where TEvent0 : struct
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, entity, ref actorRef, nowTicks);
             if (!alive) continue;
 
             ActorId actorId = actorRef.ActorId;
@@ -819,7 +804,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach9<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -835,7 +819,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -847,15 +831,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -871,7 +855,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate? predicate, ProjectionForEach9<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -914,7 +898,7 @@ where TEvent0 : struct
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, entity, ref actorRef, nowTicks);
             if (!alive) continue;
 
             ActorId actorId = actorRef.ActorId;
@@ -946,7 +930,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach10<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -963,7 +946,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -976,16 +959,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
-            batch9.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1002,7 +985,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate? predicate, ProjectionForEach10<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -1047,7 +1030,7 @@ where TEvent0 : struct
             forEach(in entity, ref e0, ref e1, ref e2, ref e3, ref e4, ref e5, ref e6, ref e7, ref e8, ref e9);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, entity, ref actorRef, nowTicks);
             if (!alive) continue;
 
             ActorId actorId = actorRef.ActorId;
@@ -1075,7 +1058,6 @@ internal static class ProjectionExecutor1<T0>
         ProjectionForEach<T0, TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -1083,10 +1065,10 @@ internal static class ProjectionExecutor1<T0>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1099,12 +1081,11 @@ internal static class ProjectionExecutor1<T0>
         Query query,
         ProjectionPredicate<T0>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
@@ -1165,9 +1146,6 @@ internal static class ProjectionExecutor1<T0>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob1x1<T0, TEvent0>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -1178,9 +1156,7 @@ internal static class ProjectionExecutor1<T0>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -1188,8 +1164,7 @@ internal static class ProjectionExecutor1<T0>
                     ref batch0);
             }
 
-            batch0.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1200,7 +1175,6 @@ internal static class ProjectionExecutor1<T0>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TEvent0, TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ref TJob job,
@@ -1252,9 +1226,7 @@ internal static class ProjectionExecutor1<T0>
                     row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -1280,7 +1252,6 @@ internal static class ProjectionExecutor1<T0>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ProjectionForEach<T0, TEvent> forEach,
@@ -1311,9 +1282,7 @@ internal static class ProjectionExecutor1<T0>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -1335,7 +1304,6 @@ internal static class ProjectionExecutor1<T0>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         long nowTicks)
@@ -1363,9 +1331,7 @@ internal static class ProjectionExecutor1<T0>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -1379,7 +1345,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach2<T0, TEvent0, TEvent1> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -1388,13 +1353,13 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1410,9 +1375,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x2<T0, TEvent0, TEvent1>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -1425,9 +1387,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -1436,10 +1396,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1451,7 +1409,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ref TJob job,
@@ -1511,9 +1468,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -1526,9 +1481,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -1556,7 +1509,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0>? predicate, ProjectionForEach2<T0, TEvent0, TEvent1> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1)
@@ -1589,12 +1542,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -1612,7 +1565,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach3<T0, TEvent0, TEvent1, TEvent2> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -1622,15 +1574,15 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1647,9 +1599,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x3<T0, TEvent0, TEvent1, TEvent2>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -1664,9 +1613,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -1676,12 +1623,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1694,7 +1638,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ref TJob job,
@@ -1758,9 +1701,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -1773,9 +1714,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -1806,7 +1745,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0>? predicate, ProjectionForEach3<T0, TEvent0, TEvent1, TEvent2> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -1841,12 +1780,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -1866,7 +1805,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach4<T0, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -1877,17 +1815,17 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
                     ref batch3);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1905,9 +1843,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x4<T0, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -1924,9 +1859,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -1937,14 +1870,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1958,7 +1887,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ref TJob job,
@@ -2026,9 +1954,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -2041,9 +1967,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -2077,7 +2001,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0>? predicate, ProjectionForEach4<T0, TEvent0, TEvent1, TEvent2, TEvent3> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -2114,12 +2038,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -2141,7 +2065,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach5<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -2153,7 +2076,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -2161,11 +2084,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2184,9 +2107,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x5<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -2205,9 +2125,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -2219,16 +2137,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2243,7 +2156,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ref TJob job,
@@ -2315,9 +2227,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -2330,9 +2240,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -2369,7 +2277,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0>? predicate, ProjectionForEach5<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -2408,12 +2316,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -2437,7 +2345,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach6<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -2450,7 +2357,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -2459,12 +2366,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2484,9 +2391,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x6<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -2507,9 +2411,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -2522,18 +2424,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2549,7 +2445,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ref TJob job,
@@ -2625,9 +2520,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -2640,9 +2533,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -2682,7 +2573,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0>? predicate, ProjectionForEach6<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -2723,12 +2614,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -2754,7 +2645,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach7<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -2768,7 +2658,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -2778,13 +2668,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2805,9 +2695,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x7<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -2830,9 +2717,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -2846,20 +2731,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2876,7 +2754,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ref TJob job,
@@ -2956,9 +2833,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -2971,9 +2846,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -3016,7 +2889,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0>? predicate, ProjectionForEach7<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -3059,12 +2932,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -3092,7 +2965,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach8<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -3107,7 +2979,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -3118,14 +2990,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3147,9 +3019,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x8<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -3174,9 +3043,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -3191,22 +3058,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3224,7 +3083,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ref TJob job,
@@ -3308,9 +3166,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -3323,9 +3179,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -3371,7 +3225,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0>? predicate, ProjectionForEach8<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -3416,12 +3270,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -3451,7 +3305,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach9<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -3467,7 +3320,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -3479,15 +3332,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3510,9 +3363,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x9<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -3539,9 +3389,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -3557,24 +3405,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3593,7 +3432,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ref TJob job,
@@ -3681,9 +3519,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -3696,9 +3532,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -3747,7 +3581,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0>? predicate, ProjectionForEach9<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -3794,12 +3628,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -3831,7 +3665,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach10<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -3848,7 +3681,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -3861,16 +3694,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
-            batch9.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3894,9 +3727,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob1x10<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -3925,9 +3755,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -3944,26 +3772,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
-            batch9.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3983,7 +3801,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0>? predicate,
         ref TJob job,
@@ -4075,9 +3892,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -4090,9 +3905,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -4144,7 +3957,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0>? predicate, ProjectionForEach10<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -4193,12 +4006,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -4226,7 +4039,6 @@ internal static class ProjectionExecutor2<T0, T1>
         ProjectionForEach<T0, T1, TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -4234,10 +4046,10 @@ internal static class ProjectionExecutor2<T0, T1>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4250,12 +4062,11 @@ internal static class ProjectionExecutor2<T0, T1>
         Query query,
         ProjectionPredicate<T0, T1>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
@@ -4319,9 +4130,6 @@ internal static class ProjectionExecutor2<T0, T1>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob2x1<T0, T1, TEvent0>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -4332,9 +4140,7 @@ internal static class ProjectionExecutor2<T0, T1>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -4342,8 +4148,7 @@ internal static class ProjectionExecutor2<T0, T1>
                     ref batch0);
             }
 
-            batch0.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4354,7 +4159,6 @@ internal static class ProjectionExecutor2<T0, T1>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TEvent0, TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ref TJob job,
@@ -4409,9 +4213,7 @@ internal static class ProjectionExecutor2<T0, T1>
                     row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -4437,7 +4239,6 @@ internal static class ProjectionExecutor2<T0, T1>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ProjectionForEach<T0, T1, TEvent> forEach,
@@ -4470,9 +4271,7 @@ internal static class ProjectionExecutor2<T0, T1>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -4494,7 +4293,6 @@ internal static class ProjectionExecutor2<T0, T1>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         long nowTicks)
@@ -4524,9 +4322,7 @@ internal static class ProjectionExecutor2<T0, T1>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -4540,7 +4336,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach2<T0, T1, TEvent0, TEvent1> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -4549,13 +4344,13 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4571,9 +4366,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x2<T0, T1, TEvent0, TEvent1>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -4586,9 +4378,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -4597,10 +4387,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4612,7 +4400,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ref TJob job,
@@ -4675,9 +4462,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -4690,9 +4475,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -4720,7 +4503,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate, ProjectionForEach2<T0, T1, TEvent0, TEvent1> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1)
@@ -4755,12 +4538,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -4778,7 +4561,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach3<T0, T1, TEvent0, TEvent1, TEvent2> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -4788,15 +4570,15 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4813,9 +4595,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x3<T0, T1, TEvent0, TEvent1, TEvent2>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -4830,9 +4609,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -4842,12 +4619,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4860,7 +4634,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ref TJob job,
@@ -4927,9 +4700,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -4942,9 +4713,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -4975,7 +4744,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate, ProjectionForEach3<T0, T1, TEvent0, TEvent1, TEvent2> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -5012,12 +4781,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -5037,7 +4806,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach4<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -5048,17 +4816,17 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
                     ref batch3);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5076,9 +4844,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x4<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -5095,9 +4860,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -5108,14 +4871,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5129,7 +4888,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ref TJob job,
@@ -5200,9 +4958,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -5215,9 +4971,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -5251,7 +5005,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate, ProjectionForEach4<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -5290,12 +5044,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -5317,7 +5071,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach5<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -5329,7 +5082,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -5337,11 +5090,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5360,9 +5113,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x5<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -5381,9 +5131,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -5395,16 +5143,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5419,7 +5162,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ref TJob job,
@@ -5494,9 +5236,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -5509,9 +5249,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -5548,7 +5286,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate, ProjectionForEach5<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -5589,12 +5327,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -5618,7 +5356,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach6<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -5631,7 +5368,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -5640,12 +5377,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5665,9 +5402,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x6<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -5688,9 +5422,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -5703,18 +5435,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5730,7 +5456,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ref TJob job,
@@ -5809,9 +5534,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -5824,9 +5547,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -5866,7 +5587,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate, ProjectionForEach6<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -5909,12 +5630,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -5940,7 +5661,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach7<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -5954,7 +5674,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -5964,13 +5684,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5991,9 +5711,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x7<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -6016,9 +5733,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -6032,20 +5747,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -6062,7 +5770,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ref TJob job,
@@ -6145,9 +5852,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -6160,9 +5865,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -6205,7 +5908,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate, ProjectionForEach7<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -6250,12 +5953,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -6283,7 +5986,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach8<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -6298,7 +6000,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -6309,14 +6011,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -6338,9 +6040,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x8<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -6365,9 +6064,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -6382,22 +6079,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -6415,7 +6104,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ref TJob job,
@@ -6502,9 +6190,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -6517,9 +6203,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -6565,7 +6249,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate, ProjectionForEach8<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -6612,12 +6296,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -6647,7 +6331,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach9<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -6663,7 +6346,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -6675,15 +6358,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -6706,9 +6389,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x9<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -6735,9 +6415,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -6753,24 +6431,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -6789,7 +6458,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ref TJob job,
@@ -6880,9 +6548,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -6895,9 +6561,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -6946,7 +6610,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate, ProjectionForEach9<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -6995,12 +6659,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -7032,7 +6696,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach10<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -7049,7 +6712,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -7062,16 +6725,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
-            batch9.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7095,9 +6758,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob2x10<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -7126,9 +6786,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -7145,26 +6803,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
-            batch9.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7184,7 +6832,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate,
         ref TJob job,
@@ -7279,9 +6926,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -7294,9 +6939,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -7348,7 +6991,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1>? predicate, ProjectionForEach10<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -7399,12 +7042,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -7432,7 +7075,6 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         ProjectionForEach<T0, T1, T2, TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -7440,10 +7082,10 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7456,12 +7098,11 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         Query query,
         ProjectionPredicate<T0, T1, T2>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
@@ -7528,9 +7169,6 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob3x1<T0, T1, T2, TEvent0>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -7541,9 +7179,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -7551,8 +7187,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                     ref batch0);
             }
 
-            batch0.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7563,7 +7198,6 @@ internal static class ProjectionExecutor3<T0, T1, T2>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TEvent0, TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ref TJob job,
@@ -7621,9 +7255,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                     row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -7649,7 +7281,6 @@ internal static class ProjectionExecutor3<T0, T1, T2>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ProjectionForEach<T0, T1, T2, TEvent> forEach,
@@ -7684,9 +7315,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -7708,7 +7337,6 @@ internal static class ProjectionExecutor3<T0, T1, T2>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         long nowTicks)
@@ -7740,9 +7368,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -7756,7 +7382,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach2<T0, T1, T2, TEvent0, TEvent1> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -7765,13 +7390,13 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7787,9 +7412,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x2<T0, T1, T2, TEvent0, TEvent1>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -7802,9 +7424,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -7813,10 +7433,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7828,7 +7446,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ref TJob job,
@@ -7894,9 +7511,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -7909,9 +7524,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -7939,7 +7552,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach2<T0, T1, T2, TEvent0, TEvent1> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1)
@@ -7976,12 +7589,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -7999,7 +7612,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach3<T0, T1, T2, TEvent0, TEvent1, TEvent2> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -8009,15 +7621,15 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8034,9 +7646,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x3<T0, T1, T2, TEvent0, TEvent1, TEvent2>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -8051,9 +7660,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -8063,12 +7670,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8081,7 +7685,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ref TJob job,
@@ -8151,9 +7754,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -8166,9 +7767,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -8199,7 +7798,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach3<T0, T1, T2, TEvent0, TEvent1, TEvent2> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -8238,12 +7837,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -8263,7 +7862,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach4<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -8274,17 +7872,17 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
                     ref batch3);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8302,9 +7900,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x4<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -8321,9 +7916,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -8334,14 +7927,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8355,7 +7944,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ref TJob job,
@@ -8429,9 +8017,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -8444,9 +8030,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -8480,7 +8064,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach4<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -8521,12 +8105,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -8548,7 +8132,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach5<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -8560,7 +8143,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -8568,11 +8151,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8591,9 +8174,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x5<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -8612,9 +8192,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -8626,16 +8204,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8650,7 +8223,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ref TJob job,
@@ -8728,9 +8300,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -8743,9 +8313,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -8782,7 +8350,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach5<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -8825,12 +8393,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -8854,7 +8422,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach6<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -8867,7 +8434,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -8876,12 +8443,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8901,9 +8468,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x6<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -8924,9 +8488,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -8939,18 +8501,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8966,7 +8522,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ref TJob job,
@@ -9048,9 +8603,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -9063,9 +8616,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -9105,7 +8656,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach6<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -9150,12 +8701,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -9181,7 +8732,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach7<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -9195,7 +8745,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -9205,13 +8755,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9232,9 +8782,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x7<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -9257,9 +8804,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -9273,20 +8818,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9303,7 +8841,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ref TJob job,
@@ -9389,9 +8926,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -9404,9 +8939,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -9449,7 +8982,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach7<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -9496,12 +9029,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -9529,7 +9062,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach8<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -9544,7 +9076,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -9555,14 +9087,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9584,9 +9116,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x8<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -9611,9 +9140,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -9628,22 +9155,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9661,7 +9180,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ref TJob job,
@@ -9751,9 +9269,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -9766,9 +9282,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -9814,7 +9328,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach8<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -9863,12 +9377,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -9898,7 +9412,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach9<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -9914,7 +9427,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -9926,15 +9439,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9957,9 +9470,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x9<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -9986,9 +9496,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -10004,24 +9512,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10040,7 +9539,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ref TJob job,
@@ -10134,9 +9632,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -10149,9 +9645,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -10200,7 +9694,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach9<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -10251,12 +9745,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -10288,7 +9782,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach10<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -10305,7 +9798,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -10318,16 +9811,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
-            batch9.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10351,9 +9844,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob3x10<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -10382,9 +9872,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -10401,26 +9889,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
-            batch9.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10440,7 +9918,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate,
         ref TJob job,
@@ -10538,9 +10015,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -10553,9 +10028,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -10607,7 +10080,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach10<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -10660,12 +10133,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -10693,7 +10166,6 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         ProjectionForEach<T0, T1, T2, T3, TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -10701,10 +10173,10 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10717,12 +10189,11 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
@@ -10792,9 +10263,6 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob4x1<T0, T1, T2, T3, TEvent0>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -10805,9 +10273,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -10815,8 +10281,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                     ref batch0);
             }
 
-            batch0.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10827,7 +10292,6 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TEvent0, TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ref TJob job,
@@ -10888,9 +10352,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                     row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -10916,7 +10378,6 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ProjectionForEach<T0, T1, T2, T3, TEvent> forEach,
@@ -10953,9 +10414,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -10977,7 +10436,6 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         long nowTicks)
@@ -11011,9 +10469,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -11027,7 +10483,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach2<T0, T1, T2, T3, TEvent0, TEvent1> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -11036,13 +10491,13 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11058,9 +10513,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x2<T0, T1, T2, T3, TEvent0, TEvent1>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -11073,9 +10525,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -11084,10 +10534,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11099,7 +10547,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ref TJob job,
@@ -11168,9 +10615,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -11183,9 +10628,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -11213,7 +10656,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach2<T0, T1, T2, T3, TEvent0, TEvent1> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1)
@@ -11252,12 +10695,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -11275,7 +10718,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach3<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -11285,15 +10727,15 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11310,9 +10752,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x3<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -11327,9 +10766,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -11339,12 +10776,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11357,7 +10791,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ref TJob job,
@@ -11430,9 +10863,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -11445,9 +10876,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -11478,7 +10907,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach3<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -11519,12 +10948,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -11544,7 +10973,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach4<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -11555,17 +10983,17 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
                     ref batch3);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11583,9 +11011,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x4<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -11602,9 +11027,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -11615,14 +11038,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11636,7 +11055,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ref TJob job,
@@ -11713,9 +11131,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -11728,9 +11144,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -11764,7 +11178,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach4<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -11807,12 +11221,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -11834,7 +11248,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach5<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -11846,7 +11259,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -11854,11 +11267,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11877,9 +11290,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x5<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -11898,9 +11308,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -11912,16 +11320,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11936,7 +11339,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ref TJob job,
@@ -12017,9 +11419,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -12032,9 +11432,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -12071,7 +11469,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach5<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -12116,12 +11514,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -12145,7 +11543,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach6<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -12158,7 +11555,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -12167,12 +11564,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12192,9 +11589,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x6<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -12215,9 +11609,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -12230,18 +11622,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12257,7 +11643,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ref TJob job,
@@ -12342,9 +11727,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -12357,9 +11740,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -12399,7 +11780,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach6<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -12446,12 +11827,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -12477,7 +11858,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach7<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -12491,7 +11871,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -12501,13 +11881,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12528,9 +11908,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x7<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -12553,9 +11930,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -12569,20 +11944,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12599,7 +11967,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ref TJob job,
@@ -12688,9 +12055,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -12703,9 +12068,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -12748,7 +12111,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach7<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -12797,12 +12160,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -12830,7 +12193,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach8<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -12845,7 +12207,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -12856,14 +12218,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12885,9 +12247,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x8<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -12912,9 +12271,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -12929,22 +12286,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12962,7 +12311,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ref TJob job,
@@ -13055,9 +12403,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -13070,9 +12416,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -13118,7 +12462,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach8<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -13169,12 +12513,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -13204,7 +12548,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach9<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -13220,7 +12563,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -13232,15 +12575,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -13263,9 +12606,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x9<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -13292,9 +12632,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -13310,24 +12648,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -13346,7 +12675,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ref TJob job,
@@ -13443,9 +12771,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -13458,9 +12784,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -13509,7 +12833,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach9<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -13562,12 +12886,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -13599,7 +12923,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach10<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -13616,7 +12939,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -13629,16 +12952,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
-            batch9.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -13662,9 +12985,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob4x10<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -13693,9 +13013,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -13712,26 +13030,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
-            batch9.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -13751,7 +13059,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate,
         ref TJob job,
@@ -13852,9 +13159,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -13867,9 +13172,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -13921,7 +13224,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach10<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -13976,12 +13279,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -14009,7 +13312,6 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         ProjectionForEach<T0, T1, T2, T3, T4, TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -14017,10 +13319,10 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14033,12 +13335,11 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
@@ -14111,9 +13412,6 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob5x1<T0, T1, T2, T3, T4, TEvent0>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -14124,9 +13422,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -14134,8 +13430,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                     ref batch0);
             }
 
-            batch0.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14146,7 +13441,6 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TEvent0, TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ref TJob job,
@@ -14210,9 +13504,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                     row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -14238,7 +13530,6 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ProjectionForEach<T0, T1, T2, T3, T4, TEvent> forEach,
@@ -14277,9 +13568,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -14301,7 +13590,6 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         long nowTicks)
@@ -14337,9 +13625,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -14353,7 +13639,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, TEvent0, TEvent1> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -14362,13 +13647,13 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14384,9 +13669,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x2<T0, T1, T2, T3, T4, TEvent0, TEvent1>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -14399,9 +13681,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -14410,10 +13690,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14425,7 +13703,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ref TJob job,
@@ -14497,9 +13774,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -14512,9 +13787,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -14542,7 +13815,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, TEvent0, TEvent1> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1)
@@ -14583,12 +13856,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -14606,7 +13879,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -14616,15 +13888,15 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14641,9 +13913,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x3<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -14658,9 +13927,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -14670,12 +13937,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14688,7 +13952,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ref TJob job,
@@ -14764,9 +14027,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -14779,9 +14040,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -14812,7 +14071,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -14855,12 +14114,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -14880,7 +14139,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -14891,17 +14149,17 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
                     ref batch3);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14919,9 +14177,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x4<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -14938,9 +14193,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -14951,14 +14204,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14972,7 +14221,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ref TJob job,
@@ -15052,9 +14300,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -15067,9 +14313,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -15103,7 +14347,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -15148,12 +14392,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -15175,7 +14419,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -15187,7 +14430,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -15195,11 +14438,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15218,9 +14461,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x5<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -15239,9 +14479,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -15253,16 +14491,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15277,7 +14510,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ref TJob job,
@@ -15361,9 +14593,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -15376,9 +14606,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -15415,7 +14643,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -15462,12 +14690,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -15491,7 +14719,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -15504,7 +14731,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -15513,12 +14740,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15538,9 +14765,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x6<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -15561,9 +14785,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -15576,18 +14798,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15603,7 +14819,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ref TJob job,
@@ -15691,9 +14906,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -15706,9 +14919,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -15748,7 +14959,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -15797,12 +15008,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -15828,7 +15039,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -15842,7 +15052,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -15852,13 +15062,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15879,9 +15089,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x7<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -15904,9 +15111,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -15920,20 +15125,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15950,7 +15148,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ref TJob job,
@@ -16042,9 +15239,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -16057,9 +15252,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -16102,7 +15295,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -16153,12 +15346,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -16186,7 +15379,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -16201,7 +15393,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -16212,14 +15404,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -16241,9 +15433,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x8<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -16268,9 +15457,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -16285,22 +15472,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -16318,7 +15497,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ref TJob job,
@@ -16414,9 +15592,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -16429,9 +15605,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -16477,7 +15651,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -16530,12 +15704,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -16565,7 +15739,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -16581,7 +15754,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -16593,15 +15766,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -16624,9 +15797,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x9<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -16653,9 +15823,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -16671,24 +15839,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -16707,7 +15866,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ref TJob job,
@@ -16807,9 +15965,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -16822,9 +15978,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -16873,7 +16027,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -16928,12 +16082,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -16965,7 +16119,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -16982,7 +16135,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -16995,16 +16148,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
-            batch9.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17028,9 +16181,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob5x10<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -17059,9 +16209,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -17078,26 +16226,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
-            batch9.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17117,7 +16255,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate,
         ref TJob job,
@@ -17221,9 +16358,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -17236,9 +16371,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -17290,7 +16423,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -17347,12 +16480,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -17380,7 +16513,6 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         ProjectionForEach<T0, T1, T2, T3, T4, T5, TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -17388,10 +16520,10 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17404,12 +16536,11 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
@@ -17485,9 +16616,6 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob6x1<T0, T1, T2, T3, T4, T5, TEvent0>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -17498,9 +16626,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -17508,8 +16634,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                     ref batch0);
             }
 
-            batch0.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17520,7 +16645,6 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TEvent0, TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ref TJob job,
@@ -17587,9 +16711,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                     row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -17615,7 +16737,6 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ProjectionForEach<T0, T1, T2, T3, T4, T5, TEvent> forEach,
@@ -17656,9 +16777,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -17680,7 +16799,6 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         long nowTicks)
@@ -17718,9 +16836,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -17734,7 +16850,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -17743,13 +16858,13 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17765,9 +16880,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x2<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -17780,9 +16892,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -17791,10 +16901,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17806,7 +16914,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ref TJob job,
@@ -17881,9 +16988,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -17896,9 +17001,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -17926,7 +17029,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1)
@@ -17969,12 +17072,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -17992,7 +17095,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -18002,15 +17104,15 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18027,9 +17129,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x3<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -18044,9 +17143,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -18056,12 +17153,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18074,7 +17168,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ref TJob job,
@@ -18153,9 +17246,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -18168,9 +17259,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -18201,7 +17290,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -18246,12 +17335,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -18271,7 +17360,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -18282,17 +17370,17 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
                     ref batch3);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18310,9 +17398,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x4<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -18329,9 +17414,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -18342,14 +17425,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18363,7 +17442,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ref TJob job,
@@ -18446,9 +17524,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -18461,9 +17537,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -18497,7 +17571,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -18544,12 +17618,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -18571,7 +17645,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -18583,7 +17656,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -18591,11 +17664,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18614,9 +17687,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x5<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -18635,9 +17705,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -18649,16 +17717,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18673,7 +17736,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ref TJob job,
@@ -18760,9 +17822,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -18775,9 +17835,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -18814,7 +17872,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -18863,12 +17921,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -18892,7 +17950,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -18905,7 +17962,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -18914,12 +17971,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18939,9 +17996,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x6<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -18962,9 +18016,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -18977,18 +18029,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -19004,7 +18050,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ref TJob job,
@@ -19095,9 +18140,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -19110,9 +18153,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -19152,7 +18193,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -19203,12 +18244,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -19234,7 +18275,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -19248,7 +18288,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -19258,13 +18298,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -19285,9 +18325,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x7<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -19310,9 +18347,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -19326,20 +18361,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -19356,7 +18384,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ref TJob job,
@@ -19451,9 +18478,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -19466,9 +18491,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -19511,7 +18534,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -19564,12 +18587,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -19597,7 +18620,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -19612,7 +18634,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -19623,14 +18645,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -19652,9 +18674,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x8<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -19679,9 +18698,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -19696,22 +18713,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -19729,7 +18738,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ref TJob job,
@@ -19828,9 +18836,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -19843,9 +18849,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -19891,7 +18895,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -19946,12 +18950,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -19981,7 +18985,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -19997,7 +19000,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -20009,15 +19012,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20040,9 +19043,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x9<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -20069,9 +19069,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -20087,24 +19085,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20123,7 +19112,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ref TJob job,
@@ -20226,9 +19214,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -20241,9 +19227,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -20292,7 +19276,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -20349,12 +19333,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -20386,7 +19370,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -20403,7 +19386,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -20416,16 +19399,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
-            batch9.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20449,9 +19432,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob6x10<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -20480,9 +19460,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -20499,26 +19477,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
-            batch9.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20538,7 +19506,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate,
         ref TJob job,
@@ -20645,9 +19612,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -20660,9 +19625,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -20714,7 +19677,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -20773,12 +19736,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -20806,7 +19769,6 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         ProjectionForEach<T0, T1, T2, T3, T4, T5, T6, TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -20814,10 +19776,10 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20830,12 +19792,11 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
@@ -20914,9 +19875,6 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob7x1<T0, T1, T2, T3, T4, T5, T6, TEvent0>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -20927,9 +19885,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -20937,8 +19893,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                     ref batch0);
             }
 
-            batch0.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20949,7 +19904,6 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TEvent0, TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ref TJob job,
@@ -21019,9 +19973,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                     row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -21047,7 +19999,6 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ProjectionForEach<T0, T1, T2, T3, T4, T5, T6, TEvent> forEach,
@@ -21090,9 +20041,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -21114,7 +20063,6 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         long nowTicks)
@@ -21154,9 +20102,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -21170,7 +20116,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -21179,13 +20124,13 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21201,9 +20146,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x2<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -21216,9 +20158,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -21227,10 +20167,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21242,7 +20180,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ref TJob job,
@@ -21320,9 +20257,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -21335,9 +20270,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -21365,7 +20298,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1)
@@ -21410,12 +20343,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -21433,7 +20366,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -21443,15 +20375,15 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21468,9 +20400,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x3<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -21485,9 +20414,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -21497,12 +20424,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21515,7 +20439,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ref TJob job,
@@ -21597,9 +20520,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -21612,9 +20533,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -21645,7 +20564,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -21692,12 +20611,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -21717,7 +20636,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -21728,17 +20646,17 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
                     ref batch3);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21756,9 +20674,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x4<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -21775,9 +20690,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -21788,14 +20701,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21809,7 +20718,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ref TJob job,
@@ -21895,9 +20803,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -21910,9 +20816,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -21946,7 +20850,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -21995,12 +20899,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -22022,7 +20926,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -22034,7 +20937,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -22042,11 +20945,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -22065,9 +20968,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x5<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -22086,9 +20986,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -22100,16 +20998,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -22124,7 +21017,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ref TJob job,
@@ -22214,9 +21106,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -22229,9 +21119,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -22268,7 +21156,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -22319,12 +21207,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -22348,7 +21236,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -22361,7 +21248,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -22370,12 +21257,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -22395,9 +21282,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x6<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -22418,9 +21302,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -22433,18 +21315,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -22460,7 +21336,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ref TJob job,
@@ -22554,9 +21429,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -22569,9 +21442,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -22611,7 +21482,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -22664,12 +21535,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -22695,7 +21566,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -22709,7 +21579,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -22719,13 +21589,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -22746,9 +21616,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x7<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -22771,9 +21638,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -22787,20 +21652,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -22817,7 +21675,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ref TJob job,
@@ -22915,9 +21772,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -22930,9 +21785,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -22975,7 +21828,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -23030,12 +21883,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -23063,7 +21916,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -23078,7 +21930,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -23089,14 +21941,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23118,9 +21970,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x8<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -23145,9 +21994,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -23162,22 +22009,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23195,7 +22034,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ref TJob job,
@@ -23297,9 +22135,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -23312,9 +22148,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -23360,7 +22194,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -23417,12 +22251,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -23452,7 +22286,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -23468,7 +22301,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -23480,15 +22313,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23511,9 +22344,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x9<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -23540,9 +22370,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -23558,24 +22386,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23594,7 +22413,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ref TJob job,
@@ -23700,9 +22518,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -23715,9 +22531,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -23766,7 +22580,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -23825,12 +22639,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -23862,7 +22676,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -23879,7 +22692,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -23892,16 +22705,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
-            batch9.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23925,9 +22738,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob7x10<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -23956,9 +22766,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -23975,26 +22783,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
-            batch9.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24014,7 +22812,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate,
         ref TJob job,
@@ -24124,9 +22921,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -24139,9 +22934,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -24193,7 +22986,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -24254,12 +23047,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -24287,7 +23080,6 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         ProjectionForEach<T0, T1, T2, T3, T4, T5, T6, T7, TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
@@ -24295,10 +23087,10 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24311,12 +23103,11 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         Query query,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
@@ -24398,9 +23189,6 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob8x1<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -24411,9 +23199,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -24421,8 +23207,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                     ref batch0);
             }
 
-            batch0.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24433,7 +23218,6 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TEvent0, TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ref TJob job,
@@ -24506,9 +23290,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                     row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -24534,7 +23316,6 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ProjectionForEach<T0, T1, T2, T3, T4, T5, T6, T7, TEvent> forEach,
@@ -24579,9 +23360,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -24603,7 +23382,6 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         long nowTicks)
@@ -24645,9 +23423,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -24661,7 +23437,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -24670,13 +23445,13 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24692,9 +23467,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x2<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -24707,9 +23479,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -24718,10 +23488,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24733,7 +23501,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ref TJob job,
@@ -24814,9 +23581,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -24829,9 +23594,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -24859,7 +23622,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1)
@@ -24906,12 +23669,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -24929,7 +23692,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -24939,15 +23701,15 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24964,9 +23726,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x3<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -24981,9 +23740,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -24993,12 +23750,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25011,7 +23765,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ref TJob job,
@@ -25096,9 +23849,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -25111,9 +23862,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -25144,7 +23893,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -25193,12 +23942,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -25218,7 +23967,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -25229,17 +23977,17 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
                     ref batch3);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25257,9 +24005,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x4<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -25276,9 +24021,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -25289,14 +24032,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25310,7 +24049,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ref TJob job,
@@ -25399,9 +24137,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -25414,9 +24150,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -25450,7 +24184,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -25501,12 +24235,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -25528,7 +24262,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -25540,7 +24273,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -25548,11 +24281,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25571,9 +24304,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x5<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -25592,9 +24322,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -25606,16 +24334,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25630,7 +24353,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ref TJob job,
@@ -25723,9 +24445,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -25738,9 +24458,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -25777,7 +24495,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -25830,12 +24548,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -25859,7 +24577,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -25872,7 +24589,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -25881,12 +24598,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25906,9 +24623,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x6<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -25929,9 +24643,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -25944,18 +24656,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25971,7 +24677,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ref TJob job,
@@ -26068,9 +24773,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -26083,9 +24786,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -26125,7 +24826,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -26180,12 +24881,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -26211,7 +24912,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -26225,7 +24925,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -26235,13 +24935,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -26262,9 +24962,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x7<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -26287,9 +24984,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -26303,20 +24998,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -26333,7 +25021,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ref TJob job,
@@ -26434,9 +25121,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -26449,9 +25134,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -26494,7 +25177,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -26551,12 +25234,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -26584,7 +25267,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -26599,7 +25281,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -26610,14 +25292,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -26639,9 +25321,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x8<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -26666,9 +25345,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -26683,22 +25360,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -26716,7 +25385,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ref TJob job,
@@ -26821,9 +25489,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -26836,9 +25502,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -26884,7 +25548,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -26943,12 +25607,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -26978,7 +25642,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -26994,7 +25657,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -27006,15 +25669,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -27037,9 +25700,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x9<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -27066,9 +25726,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -27084,24 +25742,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -27120,7 +25769,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ref TJob job,
@@ -27229,9 +25877,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -27244,9 +25890,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -27295,7 +25939,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -27356,12 +26000,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }
@@ -27393,7 +26037,6 @@ where TEvent0 : struct
 {
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
         ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
         ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
@@ -27410,7 +26053,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks,
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks,
                     ref batch0,
                     ref batch1,
                     ref batch2,
@@ -27423,16 +26066,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(actorWorld);
-            batch1.PostTo(actorWorld);
-            batch2.PostTo(actorWorld);
-            batch3.PostTo(actorWorld);
-            batch4.PostTo(actorWorld);
-            batch5.PostTo(actorWorld);
-            batch6.PostTo(actorWorld);
-            batch7.PostTo(actorWorld);
-            batch8.PostTo(actorWorld);
-            batch9.PostTo(actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -27456,9 +26099,6 @@ where TEvent0 : struct
         ref TJob job)
         where TJob : struct, IProjectionJob8x10<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -27487,9 +26127,7 @@ where TEvent0 : struct
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostJobChunk(
-                    world,
-                    actorWorld,
+                CollectPostJobChunk(world,
                     ref chunk,
                     predicate,
                     ref job,
@@ -27506,26 +26144,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(
-                actorWorld);
-            batch1.PostTo(
-                actorWorld);
-            batch2.PostTo(
-                actorWorld);
-            batch3.PostTo(
-                actorWorld);
-            batch4.PostTo(
-                actorWorld);
-            batch5.PostTo(
-                actorWorld);
-            batch6.PostTo(
-                actorWorld);
-            batch7.PostTo(
-                actorWorld);
-            batch8.PostTo(
-                actorWorld);
-            batch9.PostTo(
-                actorWorld);
+            batch0.PostTo(world.ProjectedActorCommands);
+            batch1.PostTo(world.ProjectedActorCommands);
+            batch2.PostTo(world.ProjectedActorCommands);
+            batch3.PostTo(world.ProjectedActorCommands);
+            batch4.PostTo(world.ProjectedActorCommands);
+            batch5.PostTo(world.ProjectedActorCommands);
+            batch6.PostTo(world.ProjectedActorCommands);
+            batch7.PostTo(world.ProjectedActorCommands);
+            batch8.PostTo(world.ProjectedActorCommands);
+            batch9.PostTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -27545,7 +26173,6 @@ where TEvent0 : struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate,
         ref TJob job,
@@ -27658,9 +26285,7 @@ where TEvent0 : struct
             if (!actorId.IsValid)
             {
                 actorId =
-                    ProjectedActorBinding.EnsureProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.EnsureProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -27673,9 +26298,7 @@ where TEvent0 : struct
             else
             {
                 bool alive =
-                    ProjectedActorBinding.TouchProjectedActor(
-                        world,
-                        actorWorld,
+                    ProjectedActorBinding.TouchProjectedActor(world,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -27727,7 +26350,7 @@ where TEvent0 : struct
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach, long nowTicks,
         ref ProjectionBatchBuffer<TEvent0> batch0,
         ref ProjectionBatchBuffer<TEvent1> batch1,
@@ -27790,12 +26413,12 @@ where TEvent0 : struct
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }

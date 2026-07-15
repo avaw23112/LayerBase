@@ -389,7 +389,7 @@ public partial class World : IDisposable
         ref ProjectedActorMeta projection = ref entityData.Chunk.ProjectionAt(entityData.Slot.Index);
         if (projection.ActorId.IsValid)
         {
-            Runtime.Actors.ReleaseProjectedActor(
+            ProjectedActorCommands.Release(
                 projection.ActorId,
                 projection.ReleasePolicy);
         }
