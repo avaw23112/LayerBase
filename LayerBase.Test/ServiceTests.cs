@@ -46,19 +46,40 @@ public partial class ServiceRegistrationTests
     }
 
     [Test]
-    public void Singleton_service_from_root_is_shared_across_layers()
+    public void Singleton_service_is_isolated_per_layer_provider()
     {
-        var rootInstance = new DemoService();
-
         var layer1 = new DemoLayer();
-        layer1.RegisterService(new InstanceServiceModule(rootInstance));
+        layer1.RegisterService(new SingletonServiceModule());
 
         var layer2 = new DemoLayer();
-        layer2.RegisterService(new InstanceServiceModule(rootInstance));
+        layer2.RegisterService(new SingletonServiceModule());
 
         LayerHub.CreateLayers().Push(layer1).Push(layer2).Build();
 
-        Assert.That(layer1.GetService<IDemoService>(), Is.SameAs(layer2.GetService<IDemoService>()));
+        Assert.That(layer1.GetService<IDemoService>(), Is.Not.SameAs(layer2.GetService<IDemoService>()));
+    }
+
+    [Test]
+    public void Instance_service_cannot_be_reused_by_multiple_layer_providers()
+    {
+        var instance = new DemoService();
+
+        var layer1 = new DemoLayer();
+        layer1.RegisterService(new InstanceServiceModule(instance));
+
+        var layer2 = new DemoLayer();
+        layer2.RegisterService(new InstanceServiceModule(instance));
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            LayerHub.CreateLayers().Push(layer1).Push(layer2).Build());
+
+        Assert.That(ex!.Message, Does.Contain("already bound"));
+    }
+
+    [Test]
+    public void Runtime_root_service_container_is_removed()
+    {
+        Assert.That(typeof(LayerRuntime).Assembly.GetType("LayerBase.DI.WorldServiceRoot"), Is.Null);
     }
 
     [Test]
@@ -138,6 +159,14 @@ public partial class ServiceRegistrationTests
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddScoped<IDemoService, DemoService>();
+        }
+    }
+
+    public partial class SingletonServiceModule : IService
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddSingleton<IDemoService, DemoService>();
         }
     }
 

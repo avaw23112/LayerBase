@@ -179,34 +179,6 @@ internal static class ServiceLayerBinder
         AttachLayer(service, layer);
     }
 
-    public static void AttachRuntime(object service, LayerRuntime runtime)
-    {
-        if (service == null)
-        {
-            return;
-        }
-
-        if (runtime == null)
-        {
-            throw new ArgumentNullException(nameof(runtime));
-        }
-
-        var binding = new ServiceLayerBinding(
-            version: s_version,
-            runtimeId: runtime.Id,
-            layerIndex: -1,
-            layer: null,
-            runtime: runtime,
-            ownerScope: runtime.ScopeHost.MainScope);
-
-        ApplyBinding(service, binding);
-
-        if (service is IInternalLayerContext internalContext)
-        {
-            internalContext.LayerIndex = -1;
-        }
-    }
-
     public static void AttachLayer(object service, Layer layer)
     {
         if (service == null || layer == null)
@@ -381,7 +353,7 @@ internal static class ServiceLayerBinder
     private static Layer ThrowRuntimeOnlyLayerRequired()
     {
         throw new InvalidOperationException(
-            "This service is bound to Runtime, not to a specific Layer. Layer-only API is unavailable.");
+            "This object is not attached to a Layer provider. Layer-only API is unavailable.");
     }
 
     /// <summary>

@@ -89,7 +89,7 @@ public partial class DiMultiWorldTests
     }
 
     [Test]
-    public void Singleton_IsShared_Between_Layers_In_Same_Runtime()
+    public void Singleton_IsNotShared_Between_Layers_In_Same_Runtime()
     {
         var layerA = new LayerA();
         var layerB = new LayerB();
@@ -105,7 +105,7 @@ public partial class DiMultiWorldTests
         var counterA = layerA.GetService<ICounter>();
         var counterB = layerB.GetService<ICounter>();
 
-        Assert.That(ReferenceEquals(counterA, counterB), Is.True);
+        Assert.That(ReferenceEquals(counterA, counterB), Is.False);
     }
 
     [Test]

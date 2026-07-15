@@ -50,39 +50,36 @@ public sealed class SyncRuntimeModelImprovementTests
     }
 
     [Test]
-    public void Duplicate_singleton_registration_with_different_implementation_fails()
+    public void Duplicate_singleton_registration_with_different_implementation_is_layer_isolated()
     {
         var layerA = new DuplicateSingletonLayerA();
         var layerB = new DuplicateSingletonLayerB();
 
-        Assert.That(
-            () => LayerHub.CreateLayers().Push(layerA).Push(layerB).Build(),
-            Throws.TypeOf<InvalidOperationException>()
-                  .With.Message.Contains("Duplicate singleton registration"));
+        LayerHub.CreateLayers().Push(layerA).Push(layerB).Build();
+
+        Assert.That(layerA.GetService<IDuplicateSingleton>(), Is.TypeOf<DuplicateSingletonA>());
+        Assert.That(layerB.GetService<IDuplicateSingleton>(), Is.TypeOf<DuplicateSingletonB>());
     }
 
     [Test]
-    public void Singleton_is_runtime_bound_and_layer_only_api_fails_clearly()
+    public void Singleton_is_layer_provider_bound_and_layer_only_api_is_available()
     {
         var layerA = new SameSingletonLayer();
         var layerB = new SameSingletonLayer();
 
         LayerHub.CreateLayers().Push(layerA).Push(layerB).Build();
 
-        var fromA = layerA.GetService<RuntimeBoundSingletonService>();
-        var fromB = layerB.GetService<RuntimeBoundSingletonService>();
+        var fromA = layerA.GetService<LayerBoundSingletonService>();
+        var fromB = layerB.GetService<LayerBoundSingletonService>();
 
-        Assert.That(fromB, Is.SameAs(fromA));
+        Assert.That(fromB, Is.Not.SameAs(fromA));
 
-        Assert.That(
-            () => fromA.GetService<RuntimeBoundSingletonService>(),
-            Throws.TypeOf<InvalidOperationException>()
-                  .With.Message.Contains("bound to Runtime"));
+        var binding = ServiceLayerBinder.GetBinding(fromA);
+        Assert.That(binding, Is.Not.Null);
+        Assert.That(binding!.Layer, Is.SameAs(layerA));
 
-        Assert.That(
-            () => fromA.Delay(new RuntimeCachePayloadEvent(), 1.0f),
-            Throws.TypeOf<InvalidOperationException>()
-                  .With.Message.Contains("bound to Runtime"));
+        Assert.That(fromA.GetService<LayerBoundSingletonService>(), Is.SameAs(fromA));
+        Assert.DoesNotThrow(() => fromA.Delay(new RuntimeCachePayloadEvent(), 1.0f));
     }
 
     [Test]
@@ -160,7 +157,7 @@ public sealed class SyncRuntimeModelImprovementTests
     {
         public SameSingletonLayer()
         {
-            RegisterService(new RuntimeBoundSingletonRegistrar());
+            RegisterService(new LayerBoundSingletonRegistrar());
         }
     }
 
@@ -188,11 +185,11 @@ public sealed class SyncRuntimeModelImprovementTests
         }
     }
 
-    private sealed class RuntimeBoundSingletonRegistrar : IService
+    private sealed class LayerBoundSingletonRegistrar : IService
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddSingleton<RuntimeBoundSingletonService, RuntimeBoundSingletonService>();
+            services.AddSingleton<LayerBoundSingletonService, LayerBoundSingletonService>();
         }
     }
 
@@ -217,7 +214,7 @@ public sealed class SyncRuntimeModelImprovementTests
     {
     }
 
-    private sealed class RuntimeBoundSingletonService : IService
+    private sealed class LayerBoundSingletonService : IService
     {
         public void ConfigureServices(IServiceCollection services)
         {

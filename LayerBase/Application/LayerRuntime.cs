@@ -24,7 +24,6 @@ public sealed partial class LayerRuntime : IDisposable
 {
     #region External Dependencies
     // 核心子系统，在构造时创建，贯穿 Runtime 生命周期。
-    internal WorldServiceRoot Services { get; }
     internal EventCenter EventCenter => _scopeHost.MainScope.EventCenter;
     internal ActorWorld Actors => _mainActorRuntime.World;
     #endregion
@@ -39,7 +38,6 @@ public sealed partial class LayerRuntime : IDisposable
     private LayerChain? _chain;
     private readonly MainActorRuntime _mainActorRuntime;
     private readonly ScopeRuntimeHost _scopeHost;
-    private ServiceProvider? _worldProvider;
     private FullSnapRuntime? _fullSnap;
     internal DelayPublisherManager? DelayManager => _scopeHost.MainScope.DelayManager;
     #endregion
@@ -61,11 +59,6 @@ public sealed partial class LayerRuntime : IDisposable
     public int Id => _id;
 
     public ScopeRef<MainScope> Main => _mainScope;
-
-    internal LayerBase.DI.IServiceProvider ServiceProvider =>
-        _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
-
-    internal T GetService<T>() where T : class => ServiceProvider.Get<T>();
 
     internal PostScheduler Scheduler => _scopeHost.MainScope.PostScheduler ?? throw new InvalidOperationException("Runtime not built.");
 
@@ -96,7 +89,6 @@ public sealed partial class LayerRuntime : IDisposable
     internal LayerRuntime(int id)
     {
         _id = id;
-        Services = new WorldServiceRoot(this);
         _mainActorRuntime = new MainActorRuntime(this, _generation);
         _scopeHost = ScopeRuntimeHost.CreateMain(this, _id, _generation);
         _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
@@ -178,11 +170,6 @@ public sealed partial class LayerRuntime : IDisposable
     internal void InitializeDelay(DelayBufferOptions options)
     {
         _scopeHost.MainScope.InitializeDelay(options);
-    }
-
-    internal void BuildServiceProvider()
-    {
-        _worldProvider = new ServiceProvider(Services);
     }
 
     internal void BuildFullSnapCache()
@@ -411,7 +398,6 @@ public sealed partial class LayerRuntime : IDisposable
         _scopeHost.MainScope.RunRuntimeStop();
         _chain?.DisposeLayers();
         _chain = null;
-        Services.Dispose();
         _scopeHost.Dispose();
         _mainActorRuntime.Dispose();
         LayerHub.ClearRuntimeCaches(_id);
@@ -699,7 +685,6 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime.InitializeScheduler(_postOptions);
             _runtime.InitializeTimer(_timerOptions);
             _runtime.InitializeDelay(_delayOptions);
-            _runtime.BuildServiceProvider();
             _runtime._mainActorRuntime.PrepareRuntimeBuild();
             _layerChain.Build(1024, true);
             _runtime._mainActorRuntime.CompleteRuntimeBuild();

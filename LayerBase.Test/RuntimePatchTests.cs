@@ -52,8 +52,6 @@ public class RuntimePatchTests
 
         var options = new PostSchedulerOptions(1024, 1024, 0, 0, 1, 64, BackpressurePolicy.RejectNew);
         builder.SetPostOptions(options);
-
-        runtime.BuildServiceProvider();
         runtime.InitializeScheduler(options);
 
         var policy = new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0,
@@ -75,6 +73,7 @@ public class RuntimePatchTests
         builder.Push(new TestLayer());
 
         var options = PostSchedulerOptions.Default;
+        builder.SetPostOptions(options);
         runtime.InitializeScheduler(options);
 
         var policy = new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0,

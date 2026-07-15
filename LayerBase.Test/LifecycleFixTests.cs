@@ -115,7 +115,7 @@ public class LifecycleFixTests
     #region P0-4 Singleton Binding
 
     [Test]
-    public void Singleton_Service_Is_Bound_To_Runtime()
+    public void Singleton_Service_Is_Bound_To_Layer_Provider()
     {
         var layer = new TestLayer(services => { services.AddSingleton<GlobalSingleton, GlobalSingleton>(); });
         using var runtime = LayerHub.CreateLayers().Push(layer).Build();
@@ -124,17 +124,18 @@ public class LifecycleFixTests
         var binding = ServiceLayerBinder.GetBinding(singleton);
 
         Assert.That(binding, Is.Not.Null);
-        Assert.That(binding.Layer, Is.Null, "Singleton should be bound to Runtime, not Layer");
+        Assert.That(binding.Layer, Is.SameAs(layer), "Singleton should be bound to its Layer provider.");
         Assert.That(binding.RuntimeId, Is.EqualTo(runtime.Id));
     }
 
     [Test]
-    public void Singleton_Cross_Runtime_Conflict_Throws()
+    public void Instance_Reused_By_Another_Runtime_Provider_Throws()
     {
         var singleton = new GlobalSingleton();
 
-        using var runtime1 = LayerHub.CreateLayers().Push(new TestLayer()).Build();
-        ServiceLayerBinder.AttachRuntime(singleton, runtime1);
+        var layer1 = new TestLayer(services => { services.AddSingleton(singleton); });
+        using var runtime1 = LayerHub.CreateLayers().Push(layer1).Build();
+        _ = layer1.GetService<GlobalSingleton>();
 
         var layer2 = new TestLayer(services => { services.AddSingleton(singleton); });
         var builder2 = LayerHub.CreateLayers().Push(layer2);
