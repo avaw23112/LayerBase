@@ -390,8 +390,11 @@ public partial class World : IDisposable
         if (projection.ActorId.IsValid)
         {
             ProjectedActorCommands.Release(
+                entity,
+                projection.ActorTypeId,
                 projection.ActorId,
-                projection.ReleasePolicy);
+                projection.ReleasePolicy,
+                Stopwatch.GetTimestamp());
         }
 
         projection = ProjectedActorMeta.None;

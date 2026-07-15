@@ -82,7 +82,7 @@ public partial class World
     internal void ApplyProjectedActorResult(
         in ProjectedActorScopeResult result)
     {
-        if (!result.Success || !IsAlive(result.Entity))
+        if (!IsAlive(result.Entity))
         {
             return;
         }
@@ -101,7 +101,8 @@ public partial class World
         switch (result.Kind)
         {
             case ProjectedActorScopeCommandKind.Ensure:
-                if (!result.ActorId.IsValid)
+                meta.EnsurePending = false;
+                if (!result.Success || !result.ActorId.IsValid)
                 {
                     return;
                 }
@@ -130,17 +131,53 @@ public partial class World
 
             case ProjectedActorScopeCommandKind.Release:
                 if (meta.ActorId.Equals(result.ActorId))
+                {
                     ProjectedActorBindingUtility.Clear(this, result.Entity, ref meta);
+                    if (Has<ProjectedActorRef>(result.Entity))
+                    {
+                        ref ProjectedActorRef actorRef = ref Get<ProjectedActorRef>(result.Entity);
+                        actorRef.ClearActor();
+                    }
+
+                    _activeProjectedActors.Remove(this, result.Entity, ref meta);
+                    meta.State = ProjectedActorState.Released;
+                }
                 return;
 
             case ProjectedActorScopeCommandKind.Disable:
                 if (meta.ActorId.Equals(result.ActorId))
-                    meta.State = ProjectedActorState.Disabled;
+                {
+                    meta.State = result.Success
+                        ? ProjectedActorState.Disabled
+                        : ProjectedActorState.Active;
+                }
                 return;
 
             case ProjectedActorScopeCommandKind.Enable:
+                meta.EnablePending = false;
                 if (meta.ActorId.Equals(result.ActorId))
-                    meta.State = ProjectedActorState.Active;
+                {
+                    if (result.Success)
+                    {
+                        meta.State = ProjectedActorState.Active;
+                        if (Has<ProjectedActorRef>(result.Entity))
+                        {
+                            ref ProjectedActorRef actorRef = ref Get<ProjectedActorRef>(result.Entity);
+                            actorRef.Bind(result.ActorId, result.NowTicks);
+                        }
+                    }
+                    else
+                    {
+                        ProjectedActorBindingUtility.Clear(this, result.Entity, ref meta);
+                        if (Has<ProjectedActorRef>(result.Entity))
+                        {
+                            ref ProjectedActorRef actorRef = ref Get<ProjectedActorRef>(result.Entity);
+                            actorRef.ClearActor();
+                        }
+
+                        _activeProjectedActors.Remove(this, result.Entity, ref meta);
+                    }
+                }
                 return;
         }
     }

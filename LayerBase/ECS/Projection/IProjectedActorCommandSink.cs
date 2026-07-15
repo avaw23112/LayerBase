@@ -1,39 +1,64 @@
 using LayerBase.Actor;
 using Arch.Core;
+using LayerBase.ECS.Projection.Flow;
 using LayerBase.Scope;
 
 namespace LayerBase.ECS.Projection;
 
 internal interface IProjectedActorCommandSink
 {
+    bool CompletesSynchronously { get; }
+
     ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks);
 
     bool Exists(ActorId actorId);
 
     bool IsDisabled(ActorId actorId);
 
-    bool EnableIfDisabled(ActorId actorId);
+    bool EnableIfDisabled(Entity entity, int actorTypeId, ActorId actorId, long nowTicks);
 
-    bool Disable(ActorId actorId);
+    bool Disable(Entity entity, int actorTypeId, ActorId actorId, long nowTicks);
 
-    bool Release(ActorId actorId, ProjectedActorReleasePolicy releasePolicy);
+    bool Release(
+        Entity entity,
+        int actorTypeId,
+        ActorId actorId,
+        ProjectedActorReleasePolicy releasePolicy,
+        long nowTicks);
 
     void PostTo<TEvent>(ActorId actorId, in TEvent value)
+        where TEvent : struct;
+
+    void PostBatch<TEvent>(ref ProjectionBatchBuffer<TEvent> batch)
         where TEvent : struct;
 }
 
 internal readonly struct ProjectedActorEnsureResult
 {
-    public ProjectedActorEnsureResult(ActorId actorId)
+    public ProjectedActorEnsureResult(
+        ActorId actorId,
+        bool accepted = true,
+        bool completedSynchronously = true)
     {
         ActorId = actorId;
+        Accepted = accepted;
+        CompletedSynchronously = completedSynchronously;
     }
 
     public ActorId ActorId { get; }
 
+    public bool Accepted { get; }
+
+    public bool CompletedSynchronously { get; }
+
     public bool IsValid => ActorId.IsValid;
 
-    public static ProjectedActorEnsureResult Invalid => new(ActorId.Invalid);
+    public static ProjectedActorEnsureResult Invalid => new(ActorId.Invalid, accepted: false, completedSynchronously: false);
+
+    public static ProjectedActorEnsureResult Pending(bool accepted)
+    {
+        return new ProjectedActorEnsureResult(ActorId.Invalid, accepted, completedSynchronously: false);
+    }
 }
 
 internal sealed class MainScopeProjectedActorCommandSink : IProjectedActorCommandSink
@@ -44,6 +69,8 @@ internal sealed class MainScopeProjectedActorCommandSink : IProjectedActorComman
     {
         _actorWorld = actorWorld ?? throw new ArgumentNullException(nameof(actorWorld));
     }
+
+    public bool CompletesSynchronously => true;
 
     public ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks)
     {
@@ -65,17 +92,22 @@ internal sealed class MainScopeProjectedActorCommandSink : IProjectedActorComman
         return _actorWorld.IsProjectedActorDisabled(actorId);
     }
 
-    public bool EnableIfDisabled(ActorId actorId)
+    public bool EnableIfDisabled(Entity entity, int actorTypeId, ActorId actorId, long nowTicks)
     {
         return _actorWorld.EnableProjectedActorIfDisabled(actorId);
     }
 
-    public bool Disable(ActorId actorId)
+    public bool Disable(Entity entity, int actorTypeId, ActorId actorId, long nowTicks)
     {
         return _actorWorld.DisableProjectedActor(actorId);
     }
 
-    public bool Release(ActorId actorId, ProjectedActorReleasePolicy releasePolicy)
+    public bool Release(
+        Entity entity,
+        int actorTypeId,
+        ActorId actorId,
+        ProjectedActorReleasePolicy releasePolicy,
+        long nowTicks)
     {
         return _actorWorld.ReleaseProjectedActor(actorId, releasePolicy);
     }
@@ -84,6 +116,12 @@ internal sealed class MainScopeProjectedActorCommandSink : IProjectedActorComman
         where TEvent : struct
     {
         _actorWorld.PostTo(actorId, in value);
+    }
+
+    public void PostBatch<TEvent>(ref ProjectionBatchBuffer<TEvent> batch)
+        where TEvent : struct
+    {
+        batch.PostTo(this);
     }
 }
 
@@ -103,6 +141,8 @@ internal sealed class ScopeEventProjectedActorCommandSink : IProjectedActorComma
         _runtimeGeneration = runtimeGeneration;
     }
 
+    public bool CompletesSynchronously => false;
+
     public ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks)
     {
         var command = ProjectedActorScopeCommand.Ensure(
@@ -110,29 +150,34 @@ internal sealed class ScopeEventProjectedActorCommandSink : IProjectedActorComma
             entity,
             actorTypeId,
             nowTicks);
-        _mainScope.Post(new ActorProjectionCommandBatchScopeEvent(command));
-        return ProjectedActorEnsureResult.Invalid;
+        ScopePostResult result = _mainScope.Post(new ActorProjectionCommandBatchScopeEvent(command));
+        return ProjectedActorEnsureResult.Pending(result.IsAccepted);
     }
 
     public bool Exists(ActorId actorId) => actorId.IsValid;
 
     public bool IsDisabled(ActorId actorId) => false;
 
-    public bool EnableIfDisabled(ActorId actorId)
+    public bool EnableIfDisabled(Entity entity, int actorTypeId, ActorId actorId, long nowTicks)
     {
-        var command = ProjectedActorScopeCommand.Enable(_originScopeId, actorId);
+        var command = ProjectedActorScopeCommand.Enable(_originScopeId, entity, actorTypeId, actorId, nowTicks);
         return _mainScope.Post(new ActorProjectionCommandBatchScopeEvent(command)).IsAccepted;
     }
 
-    public bool Disable(ActorId actorId)
+    public bool Disable(Entity entity, int actorTypeId, ActorId actorId, long nowTicks)
     {
-        var command = ProjectedActorScopeCommand.Disable(_originScopeId, actorId);
+        var command = ProjectedActorScopeCommand.Disable(_originScopeId, entity, actorTypeId, actorId, nowTicks);
         return _mainScope.Post(new ActorProjectionCommandBatchScopeEvent(command)).IsAccepted;
     }
 
-    public bool Release(ActorId actorId, ProjectedActorReleasePolicy releasePolicy)
+    public bool Release(
+        Entity entity,
+        int actorTypeId,
+        ActorId actorId,
+        ProjectedActorReleasePolicy releasePolicy,
+        long nowTicks)
     {
-        var command = ProjectedActorScopeCommand.Release(_originScopeId, actorId, releasePolicy);
+        var command = ProjectedActorScopeCommand.Release(_originScopeId, entity, actorTypeId, actorId, releasePolicy, nowTicks);
         return _mainScope.Post(new ActorProjectionCommandBatchScopeEvent(command)).IsAccepted;
     }
 
@@ -144,6 +189,19 @@ internal sealed class ScopeEventProjectedActorCommandSink : IProjectedActorComma
         var batch = new ActorCommandBatch<TEvent>(_originScopeId, handle, in value);
         _mainScope.Post(in batch);
     }
+
+    public void PostBatch<TEvent>(ref ProjectionBatchBuffer<TEvent> batch)
+        where TEvent : struct
+    {
+        if (batch.Count == 0)
+            return;
+
+        ActorProjectionScopeEventDispatcher.EnsurePostBatchRegistered<TEvent>();
+        ActorPostBatchScopeEvent<TEvent> value = batch.DetachToScopeEvent();
+        ScopePostResult result = _mainScope.Post(in value);
+        if (!result.IsAccepted)
+            value.Dispose();
+    }
 }
 
 internal sealed class RejectingProjectedActorCommandSink : IProjectedActorCommandSink
@@ -154,19 +212,31 @@ internal sealed class RejectingProjectedActorCommandSink : IProjectedActorComman
     {
     }
 
+    public bool CompletesSynchronously => false;
+
     public ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks) => ProjectedActorEnsureResult.Invalid;
 
     public bool Exists(ActorId actorId) => false;
 
     public bool IsDisabled(ActorId actorId) => false;
 
-    public bool EnableIfDisabled(ActorId actorId) => false;
+    public bool EnableIfDisabled(Entity entity, int actorTypeId, ActorId actorId, long nowTicks) => false;
 
-    public bool Disable(ActorId actorId) => false;
+    public bool Disable(Entity entity, int actorTypeId, ActorId actorId, long nowTicks) => false;
 
-    public bool Release(ActorId actorId, ProjectedActorReleasePolicy releasePolicy) => false;
+    public bool Release(
+        Entity entity,
+        int actorTypeId,
+        ActorId actorId,
+        ProjectedActorReleasePolicy releasePolicy,
+        long nowTicks) => false;
 
     public void PostTo<TEvent>(ActorId actorId, in TEvent value)
+        where TEvent : struct
+    {
+    }
+
+    public void PostBatch<TEvent>(ref ProjectionBatchBuffer<TEvent> batch)
         where TEvent : struct
     {
     }

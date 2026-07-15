@@ -15,6 +15,12 @@ internal static class ProjectedActorBinding
         long nowTicks)
     {
         ProjectedActorEnsureResult result = world.ProjectedActorCommands.Ensure(entity, meta.ActorTypeId, nowTicks);
+        if (!result.CompletedSynchronously)
+        {
+            meta.EnsurePending = result.Accepted;
+            return ActorId.Invalid;
+        }
+
         if (!result.IsValid)
             return ActorId.Invalid;
 
@@ -32,6 +38,12 @@ internal static class ProjectedActorBinding
         long nowTicks)
     {
         ProjectedActorEnsureResult result = world.ProjectedActorCommands.Ensure(entity, meta.ActorTypeId, nowTicks);
+        if (!result.CompletedSynchronously)
+        {
+            meta.EnsurePending = result.Accepted;
+            return ActorId.Invalid;
+        }
+
         if (!result.IsValid)
         {
             actorRef.ClearActor();
@@ -51,6 +63,13 @@ internal static class ProjectedActorBinding
         long nowTicks)
     {
         ProjectedActorEnsureResult result = world.ProjectedActorCommands.Ensure(entity, actorRef.ActorTypeId, nowTicks);
+        if (!result.CompletedSynchronously)
+        {
+            ref ProjectedActorMeta pendingMeta = ref world.GetProjectionMeta(entity);
+            pendingMeta.EnsurePending = result.Accepted;
+            return ActorId.Invalid;
+        }
+
         if (!result.IsValid)
         {
             actorRef.ClearActor();
@@ -148,6 +167,10 @@ internal static class ProjectedActorBinding
 
         if (!actorId.IsValid)
         {
+            ref ProjectedActorMeta meta = ref world.GetProjectionMeta(entity);
+            if (meta.EnsurePending)
+                return false;
+
             actorId = EnsureProjectedActor(
                 world,
                 entity,
@@ -157,13 +180,20 @@ internal static class ProjectedActorBinding
             return actorId.IsValid;
         }
 
+        ref ProjectedActorMeta actorMeta = ref world.GetProjectionMeta(entity);
+        if (actorMeta.EnablePending)
+            return false;
+
         if (world.ProjectedActorCommands.IsDisabled(actorId))
         {
-            if (!world.ProjectedActorCommands.EnableIfDisabled(actorId))
+            if (!world.ProjectedActorCommands.EnableIfDisabled(entity, actorRef.ActorTypeId, actorId, nowTicks))
             {
                 ClearByEntity(world, entity, ref actorRef);
                 return false;
             }
+
+            if (!world.ProjectedActorCommands.CompletesSynchronously)
+                actorMeta.EnablePending = true;
 
             RefreshDeadline(ref actorRef, nowTicks);
             return true;

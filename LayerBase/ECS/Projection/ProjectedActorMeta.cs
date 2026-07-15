@@ -9,6 +9,8 @@ internal struct ProjectedActorMeta
     public int ActorTypeId;
     public int ActiveListIndex;
     public ProjectedActorState State;
+    public bool EnsurePending;
+    public bool EnablePending;
     public ProjectedActorReleasePolicy ReleasePolicy;
     public long KeepAliveTicks;
 
@@ -43,6 +45,8 @@ internal struct ProjectedActorMeta
                 ActorTypeId = -1,
                 ActiveListIndex = -1,
                 State = ProjectedActorState.None,
+                EnsurePending = false,
+                EnablePending = false,
                 ReleasePolicy = ProjectedActorReleasePolicy.ReturnToPool,
                 KeepAliveTicks = 0,
                 RetirePolicy = ProjectedActorRetirePolicy.ReturnToPool,
@@ -68,6 +72,8 @@ internal struct ProjectedActorMeta
         ActorTypeId = actorTypeId;
         KeepAliveTicks = keepAliveTicks < 0 ? 0 : keepAliveTicks;
         ReleasePolicy = releasePolicy;
+        EnsurePending = false;
+        EnablePending = false;
         State = ProjectedActorState.Projectable;
     }
 
@@ -88,6 +94,8 @@ internal struct ProjectedActorMeta
         CreatePolicy = options.CreatePolicy;
         TouchIntervalTicks = options.TouchIntervalTicks;
         NextTouchTicks = 0;
+        EnsurePending = false;
+        EnablePending = false;
         State = ProjectedActorState.Projectable;
     }
 
@@ -96,6 +104,8 @@ internal struct ProjectedActorMeta
         ActorId actorId)
     {
         ActorId = actorId;
+        EnsurePending = false;
+        EnablePending = false;
         State = ProjectedActorState.Active;
     }
 
@@ -103,6 +113,8 @@ internal struct ProjectedActorMeta
     public void ClearActor()
     {
         ActorId = ActorId.Invalid;
+        EnsurePending = false;
+        EnablePending = false;
         State = ActorTypeId >= 0
             ? ProjectedActorState.Projectable
             : ProjectedActorState.None;
@@ -114,8 +126,10 @@ internal enum ProjectedActorState : byte
     None = 0,
     Projectable = 1,
     Active = 2,
-    Disabled = 3,
-    Released = 4
+    DisablePending = 3,
+    Disabled = 4,
+    ReleasePending = 5,
+    Released = 6
 }
 
 public enum ProjectedActorReleasePolicy : byte

@@ -78,7 +78,7 @@ internal sealed class ActiveProjectedActorList
                 continue;
             }
 
-            RetireProjectedActor(world, entity, ref meta, ref actorRef);
+            RetireProjectedActor(world, entity, ref meta, ref actorRef, nowTicks);
         }
 
         _sweepCursor = _count == 0
@@ -90,33 +90,61 @@ internal sealed class ActiveProjectedActorList
         World world,
         Entity entity,
         ref ProjectedActorMeta meta,
-        ref ProjectedActorRef actorRef)
+        ref ProjectedActorRef actorRef,
+        long nowTicks)
     {
         switch (meta.RetirePolicy)
         {
             case ProjectedActorRetirePolicy.Disable:
-                world.ProjectedActorCommands.Disable(meta.ActorId);
-                meta.State = ProjectedActorState.Disabled;
-                actorRef.ExpireAtTicks = long.MaxValue;
+                if (world.ProjectedActorCommands.Disable(
+                        entity,
+                        meta.ActorTypeId,
+                        meta.ActorId,
+                        nowTicks))
+                {
+                    meta.State = world.ProjectedActorCommands.CompletesSynchronously
+                        ? ProjectedActorState.Disabled
+                        : ProjectedActorState.DisablePending;
+                    actorRef.ExpireAtTicks = long.MaxValue;
+                }
                 return;
 
             case ProjectedActorRetirePolicy.ReturnToPool:
-                world.ProjectedActorCommands.Release(
-                    meta.ActorId,
-                    ProjectedActorReleasePolicy.ReturnToPool);
+                if (!world.ProjectedActorCommands.Release(
+                        entity,
+                        meta.ActorTypeId,
+                        meta.ActorId,
+                        ProjectedActorReleasePolicy.ReturnToPool,
+                        nowTicks))
+                    return;
                 break;
 
             case ProjectedActorRetirePolicy.DestroyImmediately:
-                world.ProjectedActorCommands.Release(
-                    meta.ActorId,
-                    ProjectedActorReleasePolicy.DestroyImmediately);
+                if (!world.ProjectedActorCommands.Release(
+                        entity,
+                        meta.ActorTypeId,
+                        meta.ActorId,
+                        ProjectedActorReleasePolicy.DestroyImmediately,
+                        nowTicks))
+                    return;
                 break;
 
             case ProjectedActorRetirePolicy.DetachAndLetActorFinish:
-                world.ProjectedActorCommands.Release(
-                    meta.ActorId,
-                    ProjectedActorReleasePolicy.DetachAndLetActorFinish);
+                if (!world.ProjectedActorCommands.Release(
+                        entity,
+                        meta.ActorTypeId,
+                        meta.ActorId,
+                        ProjectedActorReleasePolicy.DetachAndLetActorFinish,
+                        nowTicks))
+                    return;
                 break;
+        }
+
+        if (!world.ProjectedActorCommands.CompletesSynchronously)
+        {
+            meta.State = ProjectedActorState.ReleasePending;
+            actorRef.ExpireAtTicks = long.MaxValue;
+            return;
         }
 
         ProjectedActorBindingUtility.Clear(world, entity, ref meta);
@@ -141,6 +169,17 @@ internal sealed class ActiveProjectedActorList
         {
             movedMetaRef.Value.ActiveListIndex = index;
         }
+    }
+
+    public void Remove(
+        World world,
+        Entity entity,
+        ref ProjectedActorMeta meta)
+    {
+        if (meta.ActiveListIndex < 0)
+            return;
+
+        RemoveAt(world, meta.ActiveListIndex, ref meta);
     }
 
     private void RemoveDeadAt(

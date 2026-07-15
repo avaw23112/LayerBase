@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using Arch.Core;
 using LayerBase.Actor;
 using LayerBase.Core.Event;
@@ -11,6 +14,13 @@ internal enum ProjectedActorScopeCommandKind : byte
     Enable = 2,
     Disable = 3,
     Release = 4
+}
+
+internal enum ProjectedActorScopeResultCode : byte
+{
+    Applied = 1,
+    ActorMissing = 2,
+    CreateFailed = 3
 }
 
 internal readonly struct ActorProjectionCommandBatchScopeEvent
@@ -76,43 +86,56 @@ internal readonly struct ProjectedActorScopeCommand
             nowTicks);
     }
 
-    public static ProjectedActorScopeCommand Enable(int originScopeId, ActorId actorId)
+    public static ProjectedActorScopeCommand Enable(
+        int originScopeId,
+        Entity entity,
+        int actorTypeId,
+        ActorId actorId,
+        long nowTicks)
     {
         return new ProjectedActorScopeCommand(
             ProjectedActorScopeCommandKind.Enable,
             originScopeId,
-            default,
-            -1,
+            entity,
+            actorTypeId,
             actorId,
             ProjectedActorReleasePolicy.ReturnToPool,
-            0);
+            nowTicks);
     }
 
-    public static ProjectedActorScopeCommand Disable(int originScopeId, ActorId actorId)
+    public static ProjectedActorScopeCommand Disable(
+        int originScopeId,
+        Entity entity,
+        int actorTypeId,
+        ActorId actorId,
+        long nowTicks)
     {
         return new ProjectedActorScopeCommand(
             ProjectedActorScopeCommandKind.Disable,
             originScopeId,
-            default,
-            -1,
+            entity,
+            actorTypeId,
             actorId,
             ProjectedActorReleasePolicy.ReturnToPool,
-            0);
+            nowTicks);
     }
 
     public static ProjectedActorScopeCommand Release(
         int originScopeId,
+        Entity entity,
+        int actorTypeId,
         ActorId actorId,
-        ProjectedActorReleasePolicy releasePolicy)
+        ProjectedActorReleasePolicy releasePolicy,
+        long nowTicks)
     {
         return new ProjectedActorScopeCommand(
             ProjectedActorScopeCommandKind.Release,
             originScopeId,
-            default,
-            -1,
+            entity,
+            actorTypeId,
             actorId,
             releasePolicy,
-            0);
+            nowTicks);
     }
 }
 
@@ -129,6 +152,52 @@ internal readonly struct ActorProjectionResultBatchScopeEvent
     public int Count { get; }
 }
 
+internal readonly struct ActorPostBatchScopeEvent<TEvent>
+    where TEvent : struct
+{
+    public ActorPostBatchScopeEvent(
+        ActorId[] actorIds,
+        TEvent[] events,
+        int count)
+    {
+        ActorIds = actorIds ?? throw new ArgumentNullException(nameof(actorIds));
+        Events = events ?? throw new ArgumentNullException(nameof(events));
+        Count = count;
+    }
+
+    public ActorId[] ActorIds { get; }
+
+    public TEvent[] Events { get; }
+
+    public int Count { get; }
+
+    public void PostTo(ActorWorld actorWorld)
+    {
+        int i = 0;
+        int length = Count;
+        int unrolledLength = length - (length % 4);
+
+        for (; i < unrolledLength; i += 4)
+        {
+            actorWorld.PostTo(ActorIds[i], in Events[i]);
+            actorWorld.PostTo(ActorIds[i + 1], in Events[i + 1]);
+            actorWorld.PostTo(ActorIds[i + 2], in Events[i + 2]);
+            actorWorld.PostTo(ActorIds[i + 3], in Events[i + 3]);
+        }
+
+        for (; i < length; i++)
+            actorWorld.PostTo(ActorIds[i], in Events[i]);
+    }
+
+    public void Dispose()
+    {
+        if (ActorIds.Length > 0)
+            ArrayPool<ActorId>.Shared.Return(ActorIds, clearArray: false);
+        if (Events.Length > 0)
+            ArrayPool<TEvent>.Shared.Return(Events, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<TEvent>());
+    }
+}
+
 internal readonly struct ProjectedActorScopeResult
 {
     public ProjectedActorScopeResult(
@@ -136,14 +205,14 @@ internal readonly struct ProjectedActorScopeResult
         Entity entity,
         int actorTypeId,
         ActorId actorId,
-        bool success,
+        ProjectedActorScopeResultCode code,
         long nowTicks)
     {
         Kind = kind;
         Entity = entity;
         ActorTypeId = actorTypeId;
         ActorId = actorId;
-        Success = success;
+        Code = code;
         NowTicks = nowTicks;
     }
 
@@ -155,13 +224,56 @@ internal readonly struct ProjectedActorScopeResult
 
     public ActorId ActorId { get; }
 
-    public bool Success { get; }
+    public ProjectedActorScopeResultCode Code { get; }
+
+    public bool Success => Code == ProjectedActorScopeResultCode.Applied;
 
     public long NowTicks { get; }
 }
 
+internal interface IActorProjectionPostBatchDispatcher
+{
+    void Dispatch(
+        ActorWorld actorWorld,
+        int runtimeId,
+        PayloadHandle payload,
+        EventPayloadStorage payloadStorage);
+}
+
+internal sealed class ActorProjectionPostBatchDispatcher<TEvent> : IActorProjectionPostBatchDispatcher
+    where TEvent : struct
+{
+    public void Dispatch(
+        ActorWorld actorWorld,
+        int runtimeId,
+        PayloadHandle payload,
+        EventPayloadStorage payloadStorage)
+    {
+        if (!payloadStorage.TryGet<ActorPostBatchScopeEvent<TEvent>>(runtimeId, payload, out var batch))
+            return;
+
+        try
+        {
+            batch.PostTo(actorWorld);
+        }
+        finally
+        {
+            batch.Dispose();
+        }
+    }
+}
+
 internal static class ActorProjectionScopeEventDispatcher
 {
+    private static readonly ConcurrentDictionary<int, IActorProjectionPostBatchDispatcher> s_postBatchDispatchers = new();
+
+    public static void EnsurePostBatchRegistered<TEvent>()
+        where TEvent : struct
+    {
+        int routeId = EventTypeId<ActorPostBatchScopeEvent<TEvent>>.Id;
+        s_postBatchDispatchers.GetOrAdd(routeId, static _ => new ActorProjectionPostBatchDispatcher<TEvent>());
+    }
+
     public static bool TryDispatchCommand(
         int routeId,
         ScopeRuntime runtime,
@@ -171,7 +283,7 @@ internal static class ActorProjectionScopeEventDispatcher
         EventPayloadStorage payloadStorage)
     {
         if (routeId != EventTypeId<ActorProjectionCommandBatchScopeEvent>.Id)
-            return false;
+            return TryDispatchPostBatch(routeId, actorWorld, runtimeId, payload, payloadStorage);
 
         if (!payloadStorage.TryGet<ActorProjectionCommandBatchScopeEvent>(runtimeId, payload, out var batch))
             return true;
@@ -181,6 +293,20 @@ internal static class ActorProjectionScopeEventDispatcher
         runtime.TryPostEventToScope(
             command.OriginScopeId,
             new ActorProjectionResultBatchScopeEvent(result));
+        return true;
+    }
+
+    private static bool TryDispatchPostBatch(
+        int routeId,
+        ActorWorld actorWorld,
+        int runtimeId,
+        PayloadHandle payload,
+        EventPayloadStorage payloadStorage)
+    {
+        if (!s_postBatchDispatchers.TryGetValue(routeId, out IActorProjectionPostBatchDispatcher? dispatcher))
+            return false;
+
+        dispatcher.Dispatch(actorWorld, runtimeId, payload, payloadStorage);
         return true;
     }
 
@@ -217,7 +343,9 @@ internal static class ActorProjectionScopeEventDispatcher
                     command.Entity,
                     command.ActorTypeId,
                     handle.ActorId,
-                    handle.IsValid,
+                    handle.IsValid
+                        ? ProjectedActorScopeResultCode.Applied
+                        : ProjectedActorScopeResultCode.CreateFailed,
                     command.NowTicks);
 
             case ProjectedActorScopeCommandKind.Enable:
@@ -226,7 +354,9 @@ internal static class ActorProjectionScopeEventDispatcher
                     command.Entity,
                     command.ActorTypeId,
                     command.ActorId,
-                    actorWorld.EnableProjectedActorIfDisabled(command.ActorId),
+                    actorWorld.EnableProjectedActorIfDisabled(command.ActorId)
+                        ? ProjectedActorScopeResultCode.Applied
+                        : ProjectedActorScopeResultCode.ActorMissing,
                     command.NowTicks);
 
             case ProjectedActorScopeCommandKind.Disable:
@@ -235,7 +365,9 @@ internal static class ActorProjectionScopeEventDispatcher
                     command.Entity,
                     command.ActorTypeId,
                     command.ActorId,
-                    actorWorld.DisableProjectedActor(command.ActorId),
+                    actorWorld.DisableProjectedActor(command.ActorId)
+                        ? ProjectedActorScopeResultCode.Applied
+                        : ProjectedActorScopeResultCode.ActorMissing,
                     command.NowTicks);
 
             case ProjectedActorScopeCommandKind.Release:
@@ -244,7 +376,9 @@ internal static class ActorProjectionScopeEventDispatcher
                     command.Entity,
                     command.ActorTypeId,
                     command.ActorId,
-                    actorWorld.ReleaseProjectedActor(command.ActorId, command.ReleasePolicy),
+                    actorWorld.ReleaseProjectedActor(command.ActorId, command.ReleasePolicy)
+                        ? ProjectedActorScopeResultCode.Applied
+                        : ProjectedActorScopeResultCode.ActorMissing,
                     command.NowTicks);
 
             default:
@@ -253,7 +387,7 @@ internal static class ActorProjectionScopeEventDispatcher
                     command.Entity,
                     command.ActorTypeId,
                     command.ActorId,
-                    success: false,
+                    ProjectedActorScopeResultCode.ActorMissing,
                     command.NowTicks);
         }
     }

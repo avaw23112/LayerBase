@@ -359,6 +359,8 @@ internal sealed class RecordingProjectedActorSink : IProjectedActorCommandSink
 
     public IReadOnlyList<int> Values => _values;
 
+    public bool CompletesSynchronously => true;
+
     public ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks)
     {
         return ProjectedActorEnsureResult.Invalid;
@@ -368,17 +370,28 @@ internal sealed class RecordingProjectedActorSink : IProjectedActorCommandSink
 
     public bool IsDisabled(ActorId actorId) => false;
 
-    public bool EnableIfDisabled(ActorId actorId) => false;
+    public bool EnableIfDisabled(Entity entity, int actorTypeId, ActorId actorId, long nowTicks) => false;
 
-    public bool Disable(ActorId actorId) => false;
+    public bool Disable(Entity entity, int actorTypeId, ActorId actorId, long nowTicks) => false;
 
-    public bool Release(ActorId actorId, ProjectedActorReleasePolicy releasePolicy) => true;
+    public bool Release(
+        Entity entity,
+        int actorTypeId,
+        ActorId actorId,
+        ProjectedActorReleasePolicy releasePolicy,
+        long nowTicks) => true;
 
     public void PostTo<TEvent>(ActorId actorId, in TEvent value)
         where TEvent : struct
     {
         if (value is ScopeEcsProjectionEvent evt)
             _values.Add(evt.Value);
+    }
+
+    public void PostBatch<TEvent>(ref ProjectionBatchBuffer<TEvent> batch)
+        where TEvent : struct
+    {
+        batch.PostTo(this);
     }
 }
 

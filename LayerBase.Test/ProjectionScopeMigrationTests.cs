@@ -1,6 +1,7 @@
 using System.Reflection;
 using Arch.Core;
 using LayerBase.Actor;
+using LayerBase.Core.Event;
 using LayerBase.ECS.Projection;
 using LayerBase.ECS.Projection.Flow;
 using LayerBase.Scope;
@@ -160,12 +161,161 @@ public class ProjectionScopeMigrationTests
         Assert.That(ProjectionProbeActor.Received[0].Y, Is.EqualTo(6f));
     }
 
+    [Test]
+    public void Custom_scope_projection_batch_post_uses_single_scope_event_payload()
+    {
+        LayerHub.Reset();
+        ProjectionProbeActor.Received.Clear();
+
+        var runtime = new LayerRuntime(2203);
+        var plans = new[]
+        {
+            ScopeExecutionPlan.CreateMain(),
+            new ScopeExecutionPlan(
+                new ScopeDescriptor(222, nameof(ProjectionCustomScope), typeof(ProjectionCustomScope)),
+                ScopeOptions.Inline)
+        };
+
+        using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        host.MainScope.MainActors!.PrepareRuntimeBuild();
+        RegisterProjectionProbe(actorTypeId: 222);
+        host.MainScope.MainActors.CompleteRuntimeBuild();
+
+        ScopeRuntime customScope = host.Scopes[1];
+        Entity first = CreateProjectedEntity(customScope, 222, 1f, 2f, 3f, 4f);
+        Entity second = CreateProjectedEntity(customScope, 222, 10f, 20f, 30f, 40f);
+
+        customScope.EcsWorld.Query().TouchProjectedActor();
+        host.MainScope.PumpIngress();
+        customScope.PumpIngress();
+
+        customScope.EcsWorld
+                   .Query<ProjectionPositionComponent, ProjectionVelocityComponent>()
+                   .Bring<ProjectionMoveViewEvent>()
+                   .ForEach(static (
+                       in Entity _,
+                       ref ProjectionPositionComponent position,
+                       ref ProjectionVelocityComponent velocity,
+                       ref ProjectionMoveViewEvent output) =>
+                   {
+                       position.X += velocity.X;
+                       position.Y += velocity.Y;
+                       output = new ProjectionMoveViewEvent(position.X, position.Y);
+                   })
+                   .Batch()
+                   .Post();
+
+        Assert.That(host.MainScope.Transport.EventInbox.TryDequeue(out ScopeEventEnvelope envelope), Is.True);
+        Assert.That(envelope.RouteId, Is.EqualTo(EventTypeId<ActorPostBatchScopeEvent<ProjectionMoveViewEvent>>.Id));
+        Assert.That(
+            host.MainScope.Transport.EventPayloadStorage.TryGet<ActorPostBatchScopeEvent<ProjectionMoveViewEvent>>(
+                runtime.Id,
+                envelope.Payload,
+                out var batch),
+            Is.True);
+        Assert.That(batch.Count, Is.EqualTo(2));
+        Assert.That(host.MainScope.Transport.EventInbox.TryDequeue(out _), Is.False);
+
+        try
+        {
+            Assert.That(
+                host.MainScope.MainActors!.TryDispatchProjectionCommand(
+                    envelope.RouteId,
+                    host.MainScope,
+                    runtime.Id,
+                    envelope.Payload,
+                    host.MainScope.Transport.EventPayloadStorage),
+                Is.True);
+        }
+        finally
+        {
+            host.MainScope.Transport.EventPayloadStorage.Release(envelope.Payload);
+        }
+
+        var budget = new RuntimeFrameBudget(0, 0, 0);
+        host.MainScope.MainActors!.Pump(
+            deltaTime: 0.016f,
+            fixedDeltaTime: 1f / 60f,
+            pumpFixedUpdate: true,
+            budget: ref budget);
+
+        Assert.That(ProjectionProbeActor.Received.Count, Is.EqualTo(2));
+        Assert.That(customScope.EcsWorld.GetProjectionMeta(first).ActorId.IsValid, Is.True);
+        Assert.That(customScope.EcsWorld.GetProjectionMeta(second).ActorId.IsValid, Is.True);
+    }
+
+    [Test]
+    public void Custom_scope_release_waits_for_result_before_clearing_binding()
+    {
+        LayerHub.Reset();
+
+        var runtime = new LayerRuntime(2204);
+        var plans = new[]
+        {
+            ScopeExecutionPlan.CreateMain(),
+            new ScopeExecutionPlan(
+                new ScopeDescriptor(223, nameof(ProjectionCustomScope), typeof(ProjectionCustomScope)),
+                ScopeOptions.Inline)
+        };
+
+        using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        host.MainScope.MainActors!.PrepareRuntimeBuild();
+        RegisterProjectionProbe(actorTypeId: 223);
+        host.MainScope.MainActors.CompleteRuntimeBuild();
+
+        ScopeRuntime customScope = host.Scopes[1];
+        Entity entity = CreateProjectedEntity(customScope, 223, 1f, 2f, 3f, 4f);
+
+        customScope.EcsWorld.Query().TouchProjectedActor();
+        host.MainScope.PumpIngress();
+        customScope.PumpIngress();
+
+        ActorId actorId = customScope.EcsWorld.GetProjectionMeta(entity).ActorId;
+        Assert.That(actorId.IsValid, Is.True);
+
+        ref ProjectedActorRef actorRef = ref customScope.EcsWorld.Get<ProjectedActorRef>(entity);
+        actorRef.ExpireAtTicks = 0;
+        customScope.EcsWorld.SweepProjectedActors();
+
+        ref ProjectedActorMeta pendingMeta = ref customScope.EcsWorld.GetProjectionMeta(entity);
+        Assert.That(pendingMeta.State, Is.EqualTo(ProjectedActorState.ReleasePending));
+        Assert.That(pendingMeta.ActorId, Is.EqualTo(actorId));
+        Assert.That(customScope.EcsWorld.Get<ProjectedActorRef>(entity).ActorId, Is.EqualTo(actorId));
+
+        host.MainScope.PumpIngress();
+        customScope.PumpIngress();
+
+        ref ProjectedActorMeta releasedMeta = ref customScope.EcsWorld.GetProjectionMeta(entity);
+        Assert.That(releasedMeta.ActorId.IsValid, Is.False);
+        Assert.That(customScope.EcsWorld.Get<ProjectedActorRef>(entity).ActorId.IsValid, Is.False);
+    }
+
     private static void RegisterProjectionProbe(int actorTypeId)
     {
         ProjectedActorTypeRegistry.RegisterGenerated(
             actorTypeId,
             typeof(ProjectionProbeActor),
             static actorWorld => actorWorld.CreateProjectedActor<ProjectionProbeActor>());
+    }
+
+    private static Entity CreateProjectedEntity(
+        ScopeRuntime scope,
+        int actorTypeId,
+        float x,
+        float y,
+        float vx,
+        float vy)
+    {
+        Entity entity = scope.EcsWorld.Create(
+            new ProjectionPositionComponent { X = x, Y = y },
+            new ProjectionVelocityComponent { X = vx, Y = vy },
+            new ProjectedActorRef());
+        scope.EcsWorld.WithProjectedActor(
+            entity,
+            actorTypeId,
+            keepAliveOverrideTicks: ProjectedActorTime.SecondsToTicks(0.5f),
+            releasePolicy: ProjectedActorReleasePolicy.ReturnToPool);
+        return entity;
     }
 }
 

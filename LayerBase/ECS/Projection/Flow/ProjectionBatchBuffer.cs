@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using LayerBase.Actor;
+using LayerBase.Scope;
 
 namespace LayerBase.ECS.Projection.Flow;
 
@@ -114,14 +115,30 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
 
     public void FlushTo(IProjectedActorCommandSink commandSink)
     {
-        PostTo(commandSink);
+        commandSink.PostBatch(ref this);
         Count = 0;
+    }
+
+    internal ActorPostBatchScopeEvent<TEvent> DetachToScopeEvent()
+    {
+        var value = new ActorPostBatchScopeEvent<TEvent>(
+            _actorIds,
+            _events,
+            Count);
+        _actorIds = Array.Empty<ActorId>();
+        _events = Array.Empty<TEvent>();
+        _autoFlushSink = null;
+        _autoFlushLimit = 0;
+        Count = 0;
+        return value;
     }
 
     public void Dispose()
     {
-        ArrayPool<ActorId>.Shared.Return(_actorIds, clearArray: false);
-        ArrayPool<TEvent>.Shared.Return(_events, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<TEvent>());
+        if (_actorIds.Length > 0)
+            ArrayPool<ActorId>.Shared.Return(_actorIds, clearArray: false);
+        if (_events.Length > 0)
+            ArrayPool<TEvent>.Shared.Return(_events, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<TEvent>());
         _actorIds = Array.Empty<ActorId>();
         _events = Array.Empty<TEvent>();
         _autoFlushSink = null;
