@@ -17,13 +17,13 @@ public static class LayerToolExtensions
     {
         if (service == null) throw new ArgumentNullException(nameof(service));
 
-        return ServiceLayerBinder.RequireBinding(service).Runtime.Tools;
+        return ServiceLayerBinder.RequireBinding(service).RuntimeAccess.Tools;
     }
 
     public static LayerToolRegistry Tools(this ILayerContext context)
     {
         if (context == null) throw new ArgumentNullException(nameof(context));
 
-        return ServiceLayerBinder.RequireBinding(context).Runtime.Tools;
+        return ServiceLayerBinder.RequireBinding(context).RuntimeAccess.Tools;
     }
 }

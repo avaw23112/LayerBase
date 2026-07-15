@@ -92,11 +92,11 @@ public sealed class AssemblyModuleManifest
         LayerToolContribution[] tools)
     {
         ModuleId = moduleId;
-        Services = services ?? Array.Empty<ServiceContribution>();
-        Contexts = contexts ?? Array.Empty<ContextContribution>();
-        LocalCalls = localCalls ?? Array.Empty<LocalCallContribution>();
-        EventHandlers = eventHandlers ?? Array.Empty<EventHandlerContribution>();
-        Tools = tools ?? Array.Empty<LayerToolContribution>();
+        Services = Array.AsReadOnly((services ?? Array.Empty<ServiceContribution>()).ToArray());
+        Contexts = Array.AsReadOnly((contexts ?? Array.Empty<ContextContribution>()).ToArray());
+        LocalCalls = Array.AsReadOnly((localCalls ?? Array.Empty<LocalCallContribution>()).ToArray());
+        EventHandlers = Array.AsReadOnly((eventHandlers ?? Array.Empty<EventHandlerContribution>()).ToArray());
+        Tools = Array.AsReadOnly((tools ?? Array.Empty<LayerToolContribution>()).ToArray());
     }
 
     public AssemblyModuleId ModuleId { get; }

@@ -4,6 +4,7 @@ using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Layers;
 using LayerBase.Scope;
+using LayerBase.Tools;
 
 namespace LayerBase.DI;
 
@@ -60,6 +61,8 @@ internal sealed class ServiceLayerBinding
     /// </summary>
     public readonly EventCenter EventCenter;
 
+    public readonly LayerRuntimeAccess RuntimeAccess;
+
     /// <summary>
     /// 创建服务绑定信息。
     /// </summary>
@@ -94,7 +97,24 @@ internal sealed class ServiceLayerBinding
         Runtime = runtime;
         OwnerScope = ownerScope ?? throw new ArgumentNullException(nameof(ownerScope));
         EventCenter = ownerScope.EventCenter;
+        RuntimeAccess = new LayerRuntimeAccess(runtime);
     }
+}
+
+internal readonly struct LayerRuntimeAccess
+{
+    private readonly LayerRuntime _runtime;
+
+    public LayerRuntimeAccess(LayerRuntime runtime)
+    {
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+    }
+
+    public int RuntimeId => _runtime.Id;
+
+    public int Generation => _runtime.Generation;
+
+    public LayerToolRegistry Tools => _runtime.Tools;
 }
 
 /// <summary>
