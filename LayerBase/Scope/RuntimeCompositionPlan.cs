@@ -357,17 +357,19 @@ internal sealed class RuntimeCompositionPlan
         LayerBuildPlan[] layerPlans,
         Dictionary<Type, int> scopeIdsByType)
     {
-        var slices = layerPlans
+        var layerIndexes = layerPlans
             .OrderBy(static layer => layer.LayerIndex)
-            .Select(static layer => new ScopeLayerSlice(layer.LayerIndex))
+            .Select(static layer => layer.LayerIndex)
             .ToArray();
-
         return scopeIdsByType
             .OrderBy(static item => item.Value)
             .Select(item => new ScopeExecutionPlan(
                 new ScopeDescriptor(item.Value, item.Key.Name, item.Key),
                 item.Value == ScopeDefinitionIds.Main ? ScopeOptions.Main : ScopeOptions.Inline,
-                layerSlices: slices))
+                layerSlices: layerIndexes
+                    .Select(static layerIndex => new ScopeLayerSlice(layerIndex))
+                    .ToArray(),
+                lifecyclePlan: ScopeLifecyclePlan.EmptyForLayerIndexes(layerIndexes)))
             .ToArray();
     }
 

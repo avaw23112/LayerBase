@@ -229,6 +229,36 @@ public sealed class ScopeCompositionPlanTests
     }
 
     [Test]
+    public void Custom_scope_lifecycle_plan_preserves_empty_layer_slices()
+    {
+        LayerHub.Reset();
+
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new FoundationLayer())
+                              .Push(new GameplayLayer())
+                              .Push(new PresentationLayer())
+                              .AddAssemblyModule(new TestAssemblyModule(
+                                  "pathfinding",
+                                  ServiceContribution.ForTypes(
+                                      typeof(IPathfindingService),
+                                      typeof(PathfindingService),
+                                      typeof(GameplayLayer),
+                                      typeof(PathfindingScope),
+                                      ServiceLifetime.Singleton)))
+                              .Build();
+
+        var pathfindingScope = runtime.CompositionPlan.Scopes.Single(static scope =>
+            scope.Descriptor.ScopeId == PathfindingScope.ScopeId);
+
+        Assert.That(pathfindingScope.LayerSlices.Select(static slice => slice.LayerIndex),
+            Is.EqualTo(new[] { 0, 1, 2 }));
+        Assert.That(pathfindingScope.LifecyclePlan.Layers.Select(static slice => slice.LayerIndex),
+            Is.EqualTo(new[] { 0, 1, 2 }));
+        Assert.That(pathfindingScope.LifecyclePlan.Layers.Select(static slice => slice.UpdateCount),
+            Is.EqualTo(new[] { 0, 0, 0 }));
+    }
+
+    [Test]
     public void Context_must_match_owner_service_layer_and_scope()
     {
         LayerHub.Reset();

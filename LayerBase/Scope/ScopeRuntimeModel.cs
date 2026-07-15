@@ -245,6 +245,41 @@ internal sealed class ScopeLifecyclePlan
         Array.Empty<LifecycleInvoker>(),
         Array.Empty<LifecycleInvoker>());
 
+    public static ScopeLifecyclePlan EmptyForLayerIndexes(IEnumerable<int> layerIndexes)
+    {
+        if (layerIndexes == null)
+            throw new ArgumentNullException(nameof(layerIndexes));
+
+        var layers = layerIndexes
+            .Select(static layerIndex => new ScopeLayerLifecycleSlice(
+                layerIndex,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0))
+            .ToArray();
+
+        return new ScopeLifecyclePlan(
+            layers,
+            Array.Empty<LifecycleInvoker>(),
+            Array.Empty<LifecycleInvoker>(),
+            Array.Empty<LifecycleInvoker>(),
+            Array.Empty<UpdateInvoker>(),
+            Array.Empty<FixedUpdateInvoker>(),
+            Array.Empty<LifecycleInvoker>(),
+            Array.Empty<LifecycleInvoker>());
+    }
+
     public static ScopeLifecyclePlan Build(IReadOnlyList<Layer> layers)
     {
         if (layers == null)
