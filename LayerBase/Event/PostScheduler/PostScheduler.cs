@@ -45,6 +45,8 @@ public sealed class PostScheduler : IDisposable
     private bool _isPumping;
     private readonly BackpressurePolicy _defaultBackpressure;
 
+    internal int PendingCount => _readyQueue.Count + _nextQueue.Count + _pendingCoalesced.Count;
+
     public PostScheduler(int                   runtimeId, EventCenter eventCenter, PostSchedulerOptions options,
                          EventBuildPolicyTable policyTable)
     {

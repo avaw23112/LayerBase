@@ -19,6 +19,7 @@ internal sealed class ScopeEcsScheduler : IEcsScheduler
     private readonly CommandBuffer _commandBuffer;
     private int _ownerThreadId;
     private ScopeEcsSchedulerState _state;
+    private long _structuralPlaybackCount;
 
     public ScopeEcsScheduler(
         int runtimeGeneration,
@@ -70,7 +71,21 @@ internal sealed class ScopeEcsScheduler : IEcsScheduler
         ThrowIfDisposed();
         RequireOwnerThread();
         if (_commandBuffer.Size > 0)
+        {
             _commandBuffer.Playback(_world);
+            _structuralPlaybackCount++;
+        }
+    }
+
+    internal EcsDiagnosticsSnapshot CaptureDiagnostics()
+    {
+        return new EcsDiagnosticsSnapshot(
+            _world.Size,
+            BatchOptions.EnableImplicitBatching,
+            lastQueryBatchCount: 0,
+            lastQueryEntityCount: 0,
+            _commandBuffer.Size,
+            Volatile.Read(ref _structuralPlaybackCount));
     }
 
     public void EndTick()

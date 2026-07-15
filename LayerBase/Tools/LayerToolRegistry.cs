@@ -15,6 +15,8 @@ public sealed class LayerToolRegistry : IDisposable
     private readonly List<int> _creationOrder = new();
     private readonly object _orderLock = new();
     private int _disposed;
+    private int _createdCount;
+    private int _createFailureCount;
 
     internal LayerToolRegistry(LayerRuntime runtime, IReadOnlyList<ResolvedLayerToolContribution> tools)
     {
@@ -44,6 +46,22 @@ public sealed class LayerToolRegistry : IDisposable
     public int Count => _entries.Length;
 
     public IReadOnlyList<LayerToolDescriptor> Diagnostics => _entries;
+
+    internal ToolDiagnosticsSnapshot CaptureDiagnostics()
+    {
+        var cachedCount = 0;
+        for (int i = 0; i < _cache.Length; i++)
+        {
+            if (Volatile.Read(ref _cache[i]) != null)
+                cachedCount++;
+        }
+
+        return new ToolDiagnosticsSnapshot(
+            _entries.Length,
+            cachedCount,
+            Volatile.Read(ref _createdCount),
+            Volatile.Read(ref _createFailureCount));
+    }
 
     public LayerToolSlot ResolveSlot<T>(string key = "default")
         where T : class
@@ -255,13 +273,22 @@ public sealed class LayerToolRegistry : IDisposable
             {
                 var context = new LayerToolCreateContext(_runtime.Id, _runtime.Generation, this);
                 var created = entry.Factory(in context);
-                return ValidateCreated(entry, created);
+                var validated = ValidateCreated(entry, created);
+                Interlocked.Increment(ref _createdCount);
+                return validated;
             }
 
             var instance = Activator.CreateInstance(entry.ImplementationType)
                            ?? throw new InvalidOperationException(
                                $"LayerTool `{entry.ImplementationType.FullName}` factory returned null.");
-            return ValidateCreated(entry, instance);
+            var validatedInstance = ValidateCreated(entry, instance);
+            Interlocked.Increment(ref _createdCount);
+            return validatedInstance;
+        }
+        catch
+        {
+            Interlocked.Increment(ref _createFailureCount);
+            throw;
         }
         finally
         {

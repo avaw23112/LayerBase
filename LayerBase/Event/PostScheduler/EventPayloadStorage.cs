@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using LayerBase;
 using LayerBase.Core.DataStruct;
 
 namespace LayerBase.Core.Event;
@@ -10,6 +11,7 @@ internal interface IEventStore : IDisposable
     void Dispatch(int                index, int version, EventCenter center);
     void DispatchDefault(EventCenter center);
     PostResult Post(int index, int version, PostScheduler scheduler);
+    PayloadDiagnosticsSnapshot CaptureDiagnostics();
 }
 
 internal static class PayloadStoreCache<T> where T : struct
@@ -48,6 +50,10 @@ internal sealed class EventStore<T> : IEventStore where T : struct
     private int _freeHead = -1;
     private int _capacity;
     private readonly object _lock = new();
+    private long _rented;
+    private long _returned;
+    private long _outstanding;
+    private long _peakOutstanding;
     private bool _disposed;
 
     public EventStore(int initialCapacity = 256)
@@ -77,6 +83,9 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
         _buffer[index] = value;
         int version = _versions[index];
+        Interlocked.Increment(ref _rented);
+        long outstanding = Interlocked.Increment(ref _outstanding);
+        UpdatePeakOutstanding(outstanding);
 
         return new PayloadHandle(EventTypeId<T>.Id, index, version);
     }
@@ -112,6 +121,8 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
         _nextFree[index] = _freeHead;
         _freeHead = index;
+        Interlocked.Increment(ref _returned);
+        Interlocked.Decrement(ref _outstanding);
     }
 
     public void Dispatch(int index, int version, EventCenter center)
@@ -154,6 +165,28 @@ internal sealed class EventStore<T> : IEventStore where T : struct
         _nextFree[newCapacity - 1] = -1;
         _freeHead = oldCapacity;
         _capacity = newCapacity;
+    }
+
+    public PayloadDiagnosticsSnapshot CaptureDiagnostics()
+    {
+        return new PayloadDiagnosticsSnapshot(
+            Volatile.Read(ref _rented),
+            Volatile.Read(ref _returned),
+            Volatile.Read(ref _outstanding),
+            Volatile.Read(ref _peakOutstanding));
+    }
+
+    private void UpdatePeakOutstanding(long outstanding)
+    {
+        while (true)
+        {
+            long current = Volatile.Read(ref _peakOutstanding);
+            if (outstanding <= current)
+                return;
+
+            if (Interlocked.CompareExchange(ref _peakOutstanding, outstanding, current) == current)
+                return;
+        }
     }
 
     public void Dispose()
@@ -267,6 +300,49 @@ internal sealed class EventPayloadStorage : IDisposable
         if (handle.IsInvalid) return;
         var store = GetStoreByTypeId(handle.EventTypeId);
         store?.Release(handle.Index, handle.Version);
+    }
+
+    public PayloadDiagnosticsSnapshot CaptureDiagnostics()
+    {
+        var visited = new HashSet<IEventStore>();
+        AddStoresTo(visited);
+        return CaptureDiagnostics(visited);
+    }
+
+    internal void AddStoresTo(HashSet<IEventStore> stores)
+    {
+        if (stores == null)
+            throw new ArgumentNullException(nameof(stores));
+
+        for (int i = 0; i < _typeIdStores.Length; i++)
+        {
+            var store = _typeIdStores[i];
+            if (store != null)
+                stores.Add(store);
+        }
+    }
+
+    internal static PayloadDiagnosticsSnapshot CaptureDiagnostics(HashSet<IEventStore> stores)
+    {
+        long rented = 0;
+        long returned = 0;
+        long outstanding = 0;
+        long peakOutstanding = 0;
+
+        foreach (var store in stores)
+        {
+            var snapshot = store.CaptureDiagnostics();
+            rented += snapshot.Rented;
+            returned += snapshot.Returned;
+            outstanding += snapshot.Outstanding;
+            peakOutstanding += snapshot.PeakOutstanding;
+        }
+
+        return new PayloadDiagnosticsSnapshot(
+            rented,
+            returned,
+            outstanding,
+            peakOutstanding);
     }
 
     public void Dispatch(PayloadHandle handle, EventCenter center)

@@ -16,6 +16,8 @@ internal sealed class DelayBufferWheel
     private double _accumulator;
     private readonly float _tickDuration;
 
+    public int PendingCount => _poolSize - _freeList.Count;
+
     public DelayBufferWheel(DelayBufferOptions options, DelayPublisherManager manager)
     {
         _options = options;

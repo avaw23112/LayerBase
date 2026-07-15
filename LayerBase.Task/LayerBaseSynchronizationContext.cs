@@ -23,6 +23,17 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         _mainThreadId = mainThreadId;
     }
 
+    public int PendingCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _queue.Count + _frameWork.Count + CompletionQueue.Count;
+            }
+        }
+    }
+
     /// <summary>Run queued work and frame-delayed work; call once per frame on the main thread.</summary>
     public void Update(
         int                       maxItems        = 0,

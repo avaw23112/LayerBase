@@ -35,6 +35,8 @@ internal sealed class ScopeRuntime : IDisposable
     private bool _lifecycleDisposeRun;
     private bool _disposeRequestedFromControl;
     private int _ownerThreadId;
+    private long _tickCount;
+    private long _faultCount;
     private ScopeCallCompletion<ScopeDisposeResponse>? _pendingDisposeCompletion;
     private readonly ConcurrentDictionary<Type, IDelayPublisherInternal> _delayPublishers = new();
 
@@ -355,6 +357,7 @@ internal sealed class ScopeRuntime : IDisposable
 
     private void PumpScopeResourcesCore(float deltaTime)
     {
+        _tickCount++;
         PumpIngress();
         if (!CanPumpLifecycle())
             return;
@@ -546,6 +549,9 @@ internal sealed class ScopeRuntime : IDisposable
             case ScopeLifecycleRouteIds.ExitSafePoint:
                 DispatchExitSafePointControl(envelope);
                 return true;
+            case ScopeLifecycleRouteIds.CaptureDiagnostics:
+                DispatchCaptureDiagnosticsControl(envelope);
+                return true;
             default:
                 envelope.Completion?.TrySetException(
                     new InvalidOperationException($"Unknown scope lifecycle control route {envelope.RouteId}."));
@@ -731,6 +737,37 @@ internal sealed class ScopeRuntime : IDisposable
         try
         {
             queuedCall.Completion.TrySetResult(ExitSafePointForSnap());
+        }
+        catch (Exception ex)
+        {
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchCaptureDiagnosticsControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeCaptureDiagnosticsCall, ScopeCaptureDiagnosticsResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope diagnostics payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            queuedCall.Completion.TrySetResult(
+                new ScopeCaptureDiagnosticsResponse(
+                    ScopeControlResult.Succeeded,
+                    CaptureDiagnosticsOnOwnerThread()));
         }
         catch (Exception ex)
         {
@@ -934,6 +971,7 @@ internal sealed class ScopeRuntime : IDisposable
             serviceSlot,
             contextSlot);
 
+        Interlocked.Increment(ref _faultCount);
         _state = ScopeRuntimeState.Faulted;
         Transport.CloseBusinessAdmission();
 
@@ -985,6 +1023,68 @@ internal sealed class ScopeRuntime : IDisposable
                     _ = mainScope.RequestStopAsync();
                 break;
         }
+    }
+
+    internal bool IsOwnerThread
+    {
+        get
+        {
+            int ownerThreadId = Volatile.Read(ref _ownerThreadId);
+            return ownerThreadId != 0 && Environment.CurrentManagedThreadId == ownerThreadId;
+        }
+    }
+
+    internal ScopeDiagnosticsSnapshot CaptureDiagnostics()
+    {
+        if (Options.Threading == ScopeThreadingMode.Worker)
+            throw new InvalidOperationException(
+                $"Scope `{Descriptor.Name}` diagnostics must be captured through its owner-thread control call.");
+
+        return CaptureDiagnosticsOnOwnerThread();
+    }
+
+    internal ScopeDiagnosticsSnapshot CaptureDiagnosticsOnOwnerThread()
+    {
+        RequireOwnerThread();
+        var eventInbox = Transport.EventInbox.CaptureDiagnostics();
+        var callInbox = Transport.CallInbox.CaptureDiagnostics();
+        var tools = Descriptor.ScopeId == ScopeDefinitionIds.Main && _runtime.HasToolRegistry
+            ? _runtime.Tools.CaptureDiagnostics()
+            : default;
+
+        return new ScopeDiagnosticsSnapshot(
+            Descriptor.ScopeId,
+            Descriptor.Name,
+            _state,
+            Volatile.Read(ref _ownerThreadId),
+            Volatile.Read(ref _tickCount),
+            lastTickDurationTicks: 0,
+            maxTickDurationTicks: 0,
+            eventInbox.Count,
+            eventInbox.Capacity,
+            eventInbox.Accepted,
+            eventInbox.Rejected,
+            eventInbox.HighWatermark,
+            callInbox.Count,
+            callInbox.Capacity,
+            callInbox.Accepted,
+            callInbox.Rejected,
+            callInbox.HighWatermark,
+            PostScheduler?.PendingCount ?? 0,
+            Timer?.PendingCount ?? 0,
+            DelayManager?.PendingCount ?? 0,
+            SynchronizationContext?.PendingCount ?? 0,
+            workerJobsPending: 0,
+            workerJobsRunning: 0,
+            EcsScheduler.CaptureDiagnostics(),
+            tools,
+            new SnapDiagnosticsSnapshot(
+                _safePointState,
+                _snapPlan.Nodes.Length,
+                serializeCount: 0,
+                deserializeCount: 0,
+                failureCount: 0),
+            Volatile.Read(ref _faultCount));
     }
 
     private PostScheduler RequireScheduler()

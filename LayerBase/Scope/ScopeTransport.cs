@@ -40,6 +40,19 @@ internal sealed class ScopeTransport : IDisposable
 
     internal bool AcceptsWorkerJobs => !_disposed && !_businessAdmissionClosed;
 
+    internal PayloadDiagnosticsSnapshot CapturePayloadDiagnostics()
+    {
+        var stores = new HashSet<IEventStore>();
+        AddPayloadStoresTo(stores);
+        return EventPayloadStorage.CaptureDiagnostics(stores);
+    }
+
+    internal void AddPayloadStoresTo(HashSet<IEventStore> stores)
+    {
+        _eventPayloadStorage.AddStoresTo(stores);
+        _callPayloadStorage.AddStoresTo(stores);
+    }
+
     internal ScopePostResult EnqueueEvent<TEvent>(in TEvent value)
         where TEvent : struct
     {

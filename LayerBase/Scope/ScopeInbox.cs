@@ -84,6 +84,9 @@ internal sealed class ScopeBoundedInbox<T> : IScopeInbox<T>
     private readonly int _internalLimit;
     private int _head;
     private int _count;
+    private long _accepted;
+    private long _rejected;
+    private int _highWatermark;
     private bool _businessClosed;
     private bool _allClosed;
 
@@ -118,18 +121,44 @@ internal sealed class ScopeBoundedInbox<T> : IScopeInbox<T>
         lock (_gate)
         {
             if (_allClosed)
+            {
+                _rejected++;
                 return ScopeEnqueueResult.Closed;
+            }
+
             if (admission == ScopeAdmissionClass.Business && _businessClosed)
+            {
+                _rejected++;
                 return ScopeEnqueueResult.BusinessClosed;
+            }
 
             var limit = GetLimit(admission);
             if (_count >= limit)
+            {
+                _rejected++;
                 return ScopeEnqueueResult.Full;
+            }
 
             var tail = (_head + _count) % _items.Length;
             _items[tail] = item;
             _count++;
+            _accepted++;
+            if (_count > _highWatermark)
+                _highWatermark = _count;
             return ScopeEnqueueResult.Accepted;
+        }
+    }
+
+    public ScopeInboxDiagnosticsSnapshot CaptureDiagnostics()
+    {
+        lock (_gate)
+        {
+            return new ScopeInboxDiagnosticsSnapshot(
+                _count,
+                _items.Length,
+                _accepted,
+                _rejected,
+                _highWatermark);
         }
     }
 
@@ -177,4 +206,26 @@ internal sealed class ScopeBoundedInbox<T> : IScopeInbox<T>
             _ => _items.Length
         };
     }
+}
+
+internal readonly struct ScopeInboxDiagnosticsSnapshot
+{
+    public ScopeInboxDiagnosticsSnapshot(int count, int capacity, long accepted, long rejected, int highWatermark)
+    {
+        Count = count;
+        Capacity = capacity;
+        Accepted = accepted;
+        Rejected = rejected;
+        HighWatermark = highWatermark;
+    }
+
+    public int Count { get; }
+
+    public int Capacity { get; }
+
+    public long Accepted { get; }
+
+    public long Rejected { get; }
+
+    public int HighWatermark { get; }
 }

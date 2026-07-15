@@ -15,6 +15,17 @@ internal sealed class DelayPublisherManager : IDelayPublisherManager
 
     public EventBuildPolicyTable? PolicyTable { get; private set; }
 
+    internal int PendingCount
+    {
+        get
+        {
+            lock (_wheelLock)
+            {
+                return _wheel.PendingCount;
+            }
+        }
+    }
+
     internal static DelayPublisherManager Create(DelayBufferOptions options, EventBuildPolicyTable policyTable)
     {
         return new DelayPublisherManager(options, policyTable);

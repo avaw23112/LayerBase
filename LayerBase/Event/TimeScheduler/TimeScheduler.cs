@@ -25,6 +25,8 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     private readonly int _maxExpiredPerTick;
     private readonly TimerFlags _defaultRepeatFlags;
 
+    internal int PendingCount => _poolSize - _freeList.Count;
+
     public TimeScheduler(TimeSchedulerOptions options)
     {
         _options = options;

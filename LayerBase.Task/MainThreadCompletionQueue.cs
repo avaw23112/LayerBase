@@ -22,6 +22,8 @@ public sealed class MainThreadCompletionQueue
 {
     private readonly ConcurrentQueue<MainThreadCompletionItem> _queue = new();
 
+    public int Count => _queue.Count;
+
     public void Enqueue(MainThreadCompletionItem item)
     {
         _queue.Enqueue(item);

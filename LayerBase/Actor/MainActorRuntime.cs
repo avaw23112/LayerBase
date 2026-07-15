@@ -8,6 +8,8 @@ internal sealed class MainActorRuntime : IDisposable
 {
     private readonly ActorWorld _world;
     private readonly int _generation;
+    private MainActorRuntimeState _state = MainActorRuntimeState.Created;
+    private long _pumpCount;
 
     public MainActorRuntime(LayerRuntime runtime, int generation)
     {
@@ -36,6 +38,7 @@ internal sealed class MainActorRuntime : IDisposable
     public void CompleteRuntimeBuild()
     {
         _world.CompleteRuntimeBuild();
+        _state = MainActorRuntimeState.Running;
     }
 
     public void Pump(
@@ -44,6 +47,7 @@ internal sealed class MainActorRuntime : IDisposable
         bool pumpFixedUpdate,
         ref RuntimeFrameBudget budget)
     {
+        _pumpCount++;
         _world.Pump(
             deltaTime: deltaTime,
             fixedDeltaTime: fixedDeltaTime,
@@ -53,7 +57,23 @@ internal sealed class MainActorRuntime : IDisposable
 
     public void RuntimeStop()
     {
+        _state = MainActorRuntimeState.Stopping;
         _world.RuntimeStop();
+        _state = MainActorRuntimeState.Stopped;
+    }
+
+    internal MainActorDiagnosticsSnapshot CaptureDiagnostics()
+    {
+        return new MainActorDiagnosticsSnapshot(
+            _state,
+            actorCount: 0,
+            pendingMailCount: 0,
+            pendingCallCount: 0,
+            pendingLifecycleCount: 0,
+            pendingDestroyCount: 0,
+            pumpCount: Volatile.Read(ref _pumpCount),
+            lastPumpDurationTicks: 0,
+            faultCount: 0);
     }
 
     public bool TryDispatchCall(
@@ -102,6 +122,7 @@ internal sealed class MainActorRuntime : IDisposable
 
     public void Dispose()
     {
+        _state = MainActorRuntimeState.Disposed;
         _world.Dispose();
     }
 }

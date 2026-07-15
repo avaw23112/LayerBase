@@ -106,6 +106,25 @@ internal readonly struct ScopeExitSafePointResponse
     public ScopeControlResult Result { get; }
 }
 
+internal readonly struct ScopeCaptureDiagnosticsCall
+{
+}
+
+internal readonly struct ScopeCaptureDiagnosticsResponse
+{
+    public ScopeCaptureDiagnosticsResponse(
+        ScopeControlResult result,
+        ScopeDiagnosticsSnapshot snapshot)
+    {
+        Result = result;
+        Snapshot = snapshot;
+    }
+
+    public ScopeControlResult Result { get; }
+
+    public ScopeDiagnosticsSnapshot Snapshot { get; }
+}
+
 internal static class ScopeLifecycleRouteIds
 {
     public const int Stop = -101;
@@ -119,6 +138,8 @@ internal static class ScopeLifecycleRouteIds
     public const int ReadSnapshot = -105;
 
     public const int ExitSafePoint = -106;
+
+    public const int CaptureDiagnostics = -107;
 
     public static int Resolve<TRequest, TResponse>()
         where TRequest : struct
@@ -158,6 +179,12 @@ internal static class ScopeLifecycleRouteIds
             typeof(TResponse) == typeof(ScopeExitSafePointResponse))
         {
             return ExitSafePoint;
+        }
+
+        if (typeof(TRequest) == typeof(ScopeCaptureDiagnosticsCall) &&
+            typeof(TResponse) == typeof(ScopeCaptureDiagnosticsResponse))
+        {
+            return CaptureDiagnostics;
         }
 
         throw new InvalidOperationException(
@@ -211,6 +238,15 @@ internal static class ScopeLifecycleControlExtensions
     {
         return scope.EnqueueControlCall<ScopeExitSafePointCall, ScopeExitSafePointResponse>(
             new ScopeExitSafePointCall(),
+            cancellationToken);
+    }
+
+    public static LBTask<ScopeCaptureDiagnosticsResponse> RequestCaptureDiagnosticsAsync(
+        this ScopeRuntime scope,
+        CancellationToken cancellationToken = default)
+    {
+        return scope.EnqueueControlCall<ScopeCaptureDiagnosticsCall, ScopeCaptureDiagnosticsResponse>(
+            new ScopeCaptureDiagnosticsCall(),
             cancellationToken);
     }
 }

@@ -26,6 +26,7 @@ public enum LayerEventInfoType
 /// </summary>
 public readonly struct LayerEventInfo
 {
+    public readonly int ScopeId;
     public readonly int LayerIndex;
     public readonly string Source;
     public readonly string EventName;
@@ -35,7 +36,14 @@ public readonly struct LayerEventInfo
 
     public LayerEventInfo(int layerIndex, string source, string eventName, string message, LayerEventInfoType type,
                           Exception? exception = null)
+        : this(-1, layerIndex, source, eventName, message, type, exception)
     {
+    }
+
+    public LayerEventInfo(int scopeId, int layerIndex, string source, string eventName, string message,
+                          LayerEventInfoType type, Exception? exception = null)
+    {
+        ScopeId = scopeId;
         LayerIndex = layerIndex;
         Source = source;
         EventName = eventName;
@@ -46,7 +54,9 @@ public readonly struct LayerEventInfo
 
     public override string ToString()
     {
-        return $"[{Type}] [Layer {LayerIndex}] {Source} -> {EventName}: {Message}";
+        return ScopeId >= 0
+            ? $"[{Type}] [Scope {ScopeId}] [Layer {LayerIndex}] {Source} -> {EventName}: {Message}"
+            : $"[{Type}] [Layer {LayerIndex}] {Source} -> {EventName}: {Message}";
     }
 }
 

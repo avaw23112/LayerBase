@@ -81,6 +81,8 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal int Generation => _generation;
 
+    internal bool HasToolRegistry => _tools != null;
+
     internal ScopeRuntimeHost ScopeHost => _scopeHost;
 
     internal MainActorRuntime MainActorRuntime =>
@@ -187,7 +189,7 @@ public sealed partial class LayerRuntime : IDisposable
         _scopeHost.MainScope.InitializeDelay(options);
     }
 
-    private void InstallScopeHost(ScopeExecutionPlan[] plans)
+    internal void InstallScopeHost(ScopeExecutionPlan[] plans)
     {
         if (plans == null)
             throw new ArgumentNullException(nameof(plans));
@@ -883,6 +885,7 @@ public sealed partial class LayerRuntime : IDisposable
                     _runtime.FreezeRuntimeRegistries();
                 });
                 _runtime._state = RuntimeState.Running;
+                _runtime._scopeHost.StartWorkers();
             }
             catch
             {

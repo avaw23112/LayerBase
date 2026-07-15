@@ -9,7 +9,7 @@ internal delegate void UpdateInvoker(float deltaTime);
 
 internal delegate void FixedUpdateInvoker(float fixedDeltaTime);
 
-internal enum ScopeRuntimeState
+public enum ScopeRuntimeState
 {
     Created = 0,
     Running = 1,
@@ -21,7 +21,7 @@ internal enum ScopeRuntimeState
     Faulted = 7
 }
 
-internal enum ScopeSafePointState : byte
+public enum ScopeSafePointState : byte
 {
     Running = 0,
     Requesting = 1,
