@@ -187,10 +187,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 {
                     if (!ownerLayerInCurrentAssembly)
                     {
-                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ExternalOwnerLayerCallHandlerNotSupported,
-                            reg.Location ?? info.Symbol.Locations.FirstOrDefault(),
-                            info.Symbol.ToDisplayString(),
-                            reg.LayerType.ToDisplayString()));
                         continue;
                     }
 
@@ -935,15 +931,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 "Type '{0}' has Mount members but also has owner-only registrations ({1}) which will be appended without guaranteed ordering.",
                 Category,
                 DiagnosticSeverity.Warning,
-                true);
-
-        public static readonly DiagnosticDescriptor ExternalOwnerLayerCallHandlerNotSupported =
-            new(
-                "LBG012",
-                "External OwnerLayer CallHandler requires module call contribution",
-                "CallHandler '{0}' targets external owner layer '{1}', but cross-assembly CallHandler module fallback is not implemented yet.",
-                Category,
-                DiagnosticSeverity.Error,
                 true);
 
         public static readonly DiagnosticDescriptor MountServiceMustBePartial =

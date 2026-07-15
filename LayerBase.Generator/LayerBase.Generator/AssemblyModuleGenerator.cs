@@ -14,6 +14,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
 {
     private const string AssemblyModuleAttributeName = "LayerBase.Modules.AssemblyModuleAttribute";
     private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
+    private const string IServiceMetadataName = "LayerBase.DI.IService";
+    private const string CallHandlerMetadataName = "LayerBase.Call.IScopeLocalCallHandler`2";
     private const string ScopeAttributeNamespace = "LayerBase.Scope";
     private const string ScopeAttributeMetadataName = "ScopeAttribute`1";
 
@@ -31,15 +33,15 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                              .Where(static module => module is not null)
                              .Select(static (module, _) => module!);
 
-        var ownerLayerServices = context.SyntaxProvider
-                                        .ForAttributeWithMetadataName(
-                                            OwnerLayerAttributeName,
-                                            static (node, _) => node is ClassDeclarationSyntax,
-                                            static (ctx, _) => CreateOwnerLayerServices(ctx))
-                                        .SelectMany(static (items, _) => items);
+        var ownerLayerContributions = context.SyntaxProvider
+                                             .ForAttributeWithMetadataName(
+                                                 OwnerLayerAttributeName,
+                                                 static (node, _) => node is ClassDeclarationSyntax,
+                                                 static (ctx, _) => CreateOwnerLayerContributions(ctx))
+                                             .SelectMany(static (items, _) => items);
 
         var combined = context.CompilationProvider.Combine(modules.Collect()
-                                                                  .Combine(ownerLayerServices.Collect()));
+                                                                  .Combine(ownerLayerContributions.Collect()));
 
         context.RegisterSourceOutput(combined, static (spc, source) =>
         {
@@ -53,16 +55,19 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         SourceProductionContext spc,
         Compilation compilation,
         ImmutableArray<ModuleInfo> modules,
-        ImmutableArray<OwnerLayerServiceInfo> ownerLayerServices)
+        ImmutableArray<OwnerLayerContributionInfo> ownerLayerContributions)
     {
         var moduleList = modules.OrderBy(static module => module.ModuleId, StringComparer.Ordinal)
                                 .ThenBy(static module => module.TypeName, StringComparer.Ordinal)
                                 .ToArray();
+        var iServiceSymbol = compilation.GetTypeByMetadataName(IServiceMetadataName);
+        var callHandlerSymbol = compilation.GetTypeByMetadataName(CallHandlerMetadataName);
 
         var fallbackServices = new List<ServiceContributionInfo>();
-        foreach (var service in ownerLayerServices)
+        var fallbackLocalCalls = new List<LocalCallContributionInfo>();
+        foreach (var contribution in ownerLayerContributions)
         {
-            if (SymbolEqualityComparer.Default.Equals(service.OwnerLayerType.ContainingAssembly, compilation.Assembly))
+            if (SymbolEqualityComparer.Default.Equals(contribution.OwnerLayerType.ContainingAssembly, compilation.Assembly))
             {
                 continue;
             }
@@ -71,9 +76,9 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             {
                 spc.ReportDiagnostic(Diagnostic.Create(
                     Diagnostics.CrossAssemblyOwnerLayerRequiresModule,
-                    service.Location,
-                    service.ServiceType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
-                    service.OwnerLayerType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
+                    contribution.Location,
+                    contribution.TargetType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    contribution.OwnerLayerType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
                 continue;
             }
 
@@ -81,24 +86,55 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             {
                 spc.ReportDiagnostic(Diagnostic.Create(
                     Diagnostics.CrossAssemblyOwnerLayerRequiresSingleModule,
-                    service.Location,
-                    service.ServiceType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    contribution.Location,
+                    contribution.TargetType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
                     string.Join(", ", moduleList.Select(static module =>
                         module.TypeSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)))));
                 continue;
             }
 
+            var ownerLayerType = ToTypeName(contribution.OwnerLayerType);
+            var ownerScopeType = contribution.OwnerScopeType == null
+                ? "global::LayerBase.Scope.MainScope"
+                : ToTypeName(contribution.OwnerScopeType);
+
+            var callHandlerInterfaces = GetCallHandlerInterfaces(contribution.TargetType, callHandlerSymbol).ToArray();
+            if (callHandlerInterfaces.Length > 0)
+            {
+                foreach (var callHandler in callHandlerInterfaces)
+                {
+                    fallbackLocalCalls.Add(new LocalCallContributionInfo(
+                        ownerLayerType,
+                        ownerScopeType,
+                        ToTypeName(callHandler.RequestType),
+                        ToTypeName(callHandler.ResponseType),
+                        ToTypeName(contribution.TargetType)));
+                }
+
+                continue;
+            }
+
+            if (!ImplementsInterface(contribution.TargetType, iServiceSymbol) &&
+                !ImplementsInterfaceByMetadataName(contribution.TargetType, IServiceMetadataName))
+            {
+                continue;
+            }
+
             fallbackServices.Add(new ServiceContributionInfo(
-                ToTypeName(service.OwnerLayerType),
-                service.OwnerScopeType == null ? "global::LayerBase.Scope.MainScope" : ToTypeName(service.OwnerScopeType),
-                ToTypeName(service.ServiceType),
-                ToTypeName(service.ServiceType),
+                ownerLayerType,
+                ownerScopeType,
+                ToTypeName(contribution.TargetType),
+                ToTypeName(contribution.TargetType),
                 "global::LayerBase.DI.ServiceLifetime.Singleton"));
         }
 
         foreach (var module in moduleList)
         {
-            GenerateModule(spc, module, moduleList.Length == 1 ? fallbackServices : Array.Empty<ServiceContributionInfo>());
+            GenerateModule(
+                spc,
+                module,
+                moduleList.Length == 1 ? fallbackServices : Array.Empty<ServiceContributionInfo>(),
+                moduleList.Length == 1 ? fallbackLocalCalls : Array.Empty<LocalCallContributionInfo>());
         }
     }
 
@@ -133,12 +169,12 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             moduleId!);
     }
 
-    private static ImmutableArray<OwnerLayerServiceInfo> CreateOwnerLayerServices(
+    private static ImmutableArray<OwnerLayerContributionInfo> CreateOwnerLayerContributions(
         GeneratorAttributeSyntaxContext context)
     {
-        var serviceSymbol = (INamedTypeSymbol)context.TargetSymbol;
-        var ownerScope = ReadScopeType(serviceSymbol);
-        var builder = ImmutableArray.CreateBuilder<OwnerLayerServiceInfo>();
+        var targetSymbol = (INamedTypeSymbol)context.TargetSymbol;
+        var ownerScope = ReadScopeType(targetSymbol);
+        var builder = ImmutableArray.CreateBuilder<OwnerLayerContributionInfo>();
 
         foreach (var attribute in context.Attributes)
         {
@@ -147,7 +183,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             if (attribute.ConstructorArguments[0].Value is not INamedTypeSymbol ownerLayerType) continue;
 
             var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
-            builder.Add(new OwnerLayerServiceInfo(serviceSymbol, ownerLayerType, ownerScope, location));
+            builder.Add(new OwnerLayerContributionInfo(targetSymbol, ownerLayerType, ownerScope, location));
         }
 
         return builder.ToImmutable();
@@ -156,13 +192,20 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     private static void GenerateModule(
         SourceProductionContext spc,
         ModuleInfo module,
-        IReadOnlyList<ServiceContributionInfo> fallbackServices)
+        IReadOnlyList<ServiceContributionInfo> fallbackServices,
+        IReadOnlyList<LocalCallContributionInfo> fallbackLocalCalls)
     {
         var services = fallbackServices.OrderBy(static service => service.OwnerLayerType, StringComparer.Ordinal)
                                        .ThenBy(static service => service.OwnerScopeType, StringComparer.Ordinal)
                                        .ThenBy(static service => service.ServiceType, StringComparer.Ordinal)
                                        .ThenBy(static service => service.ImplementationType, StringComparer.Ordinal)
                                        .ToImmutableArray();
+        var localCalls = fallbackLocalCalls.OrderBy(static call => call.OwnerScopeType, StringComparer.Ordinal)
+                                           .ThenBy(static call => call.RequestType, StringComparer.Ordinal)
+                                           .ThenBy(static call => call.ResponseType, StringComparer.Ordinal)
+                                           .ThenBy(static call => call.OwnerLayerType, StringComparer.Ordinal)
+                                           .ThenBy(static call => call.HandlerType, StringComparer.Ordinal)
+                                           .ToImmutableArray();
 
         var source = new StringBuilder();
         source.AppendLine("// <auto-generated/>");
@@ -186,7 +229,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
               .AppendLine("\"),");
         AppendServiceArray(source, indent, services);
         source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.ContextContribution>(),");
-        source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LocalCallContribution>(),");
+        AppendLocalCallArray(source, indent, localCalls);
         source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LayerToolContribution>());");
         source.AppendLine();
 
@@ -231,6 +274,33 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         source.Append(indent).AppendLine("            },");
     }
 
+    private static void AppendLocalCallArray(
+        StringBuilder source,
+        string indent,
+        ImmutableArray<LocalCallContributionInfo> localCalls)
+    {
+        if (localCalls.IsDefaultOrEmpty)
+        {
+            source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LocalCallContribution>(),");
+            return;
+        }
+
+        source.Append(indent).AppendLine("            new global::LayerBase.Modules.LocalCallContribution[]");
+        source.Append(indent).AppendLine("            {");
+
+        foreach (var localCall in localCalls)
+        {
+            source.Append(indent).AppendLine("                global::LayerBase.Modules.LocalCallContribution.ForTypes(");
+            source.Append(indent).Append("                    typeof(").Append(localCall.RequestType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(localCall.ResponseType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(localCall.HandlerType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(localCall.OwnerLayerType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(localCall.OwnerScopeType).AppendLine(")),");
+        }
+
+        source.Append(indent).AppendLine("            },");
+    }
+
     private static INamedTypeSymbol? ReadScopeType(INamedTypeSymbol symbol)
     {
         foreach (var attribute in symbol.GetAttributes())
@@ -253,6 +323,53 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         }
 
         return null;
+    }
+
+    private static bool ImplementsInterface(INamedTypeSymbol? type, INamedTypeSymbol? interfaceSymbol)
+    {
+        if (type == null || interfaceSymbol == null) return false;
+
+        return type.AllInterfaces.Any(i =>
+            SymbolEqualityComparer.Default.Equals(i, interfaceSymbol) ||
+            SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, interfaceSymbol));
+    }
+
+    private static bool ImplementsInterfaceByMetadataName(INamedTypeSymbol type, string metadataName)
+    {
+        if (string.IsNullOrWhiteSpace(metadataName)) return false;
+
+        return type.AllInterfaces.Any(i =>
+        {
+            var candidate = i.OriginalDefinition is INamedTypeSymbol named ? named : i;
+            var display = candidate.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return display switch
+            {
+                "global::LayerBase.DI.IService" when metadataName == IServiceMetadataName => true,
+                "global::LayerBase.Call.IScopeLocalCallHandler<TRequest, TResponse>" when metadataName == CallHandlerMetadataName => true,
+                _ => false
+            };
+        });
+    }
+
+    private static IEnumerable<CallHandlerImplementation> GetCallHandlerInterfaces(
+        INamedTypeSymbol handlerType,
+        INamedTypeSymbol? callHandlerSymbol)
+    {
+        foreach (var iface in handlerType.AllInterfaces.OfType<INamedTypeSymbol>())
+        {
+            var isCallHandler = callHandlerSymbol != null
+                ? SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, callHandlerSymbol)
+                : IsCallHandlerByMetadataName(iface);
+            if (!isCallHandler || iface.TypeArguments.Length != 2) continue;
+
+            yield return new CallHandlerImplementation(iface.TypeArguments[0], iface.TypeArguments[1]);
+        }
+    }
+
+    private static bool IsCallHandlerByMetadataName(INamedTypeSymbol iface)
+    {
+        var display = iface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return display == "global::LayerBase.Call.IScopeLocalCallHandler<TRequest, TResponse>";
     }
 
     private static bool IsAttribute(AttributeData attribute, string metadataName)
@@ -311,7 +428,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             new(
                 "LBMOD001",
                 "Cross-assembly OwnerLayer requires AssemblyModule",
-                "Service '{0}' targets external owner layer '{1}' and must be compiled with an [AssemblyModule] root in the same assembly.",
+                "Type '{0}' uses external owner layer '{1}' and must be compiled with an [AssemblyModule] root in the same assembly.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -320,7 +437,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             new(
                 "LBMOD002",
                 "Cross-assembly OwnerLayer requires exactly one AssemblyModule",
-                "Service '{0}' targets an external owner layer but this assembly has multiple modules ({1}). Keep one module root for automatic fallback or split the feature assembly.",
+                "Type '{0}' uses an external owner layer but this assembly has multiple modules ({1}). Keep one module root for automatic fallback or split the feature assembly.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -354,21 +471,21 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         public string ModuleId { get; }
     }
 
-    private sealed class OwnerLayerServiceInfo
+    private sealed class OwnerLayerContributionInfo
     {
-        public OwnerLayerServiceInfo(
-            INamedTypeSymbol serviceType,
+        public OwnerLayerContributionInfo(
+            INamedTypeSymbol targetType,
             INamedTypeSymbol ownerLayerType,
             INamedTypeSymbol? ownerScopeType,
             Location? location)
         {
-            ServiceType = serviceType;
+            TargetType = targetType;
             OwnerLayerType = ownerLayerType;
             OwnerScopeType = ownerScopeType;
             Location = location;
         }
 
-        public INamedTypeSymbol ServiceType { get; }
+        public INamedTypeSymbol TargetType { get; }
 
         public INamedTypeSymbol OwnerLayerType { get; }
 
@@ -403,4 +520,33 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
 
         public string Lifetime { get; }
     }
+
+    private sealed class LocalCallContributionInfo
+    {
+        public LocalCallContributionInfo(
+            string ownerLayerType,
+            string ownerScopeType,
+            string requestType,
+            string responseType,
+            string handlerType)
+        {
+            OwnerLayerType = ownerLayerType;
+            OwnerScopeType = ownerScopeType;
+            RequestType = requestType;
+            ResponseType = responseType;
+            HandlerType = handlerType;
+        }
+
+        public string OwnerLayerType { get; }
+
+        public string OwnerScopeType { get; }
+
+        public string RequestType { get; }
+
+        public string ResponseType { get; }
+
+        public string HandlerType { get; }
+    }
+
+    private readonly record struct CallHandlerImplementation(ITypeSymbol RequestType, ITypeSymbol ResponseType);
 }

@@ -35,4 +35,4 @@ Acceptance points:
 - A single module root is selected automatically; multiple module roots are compile-time ambiguous and must be split before fallback can proceed.
 - `[Scope<TScope>]` assigns a custom AOT Scope; otherwise the fallback contribution uses `MainScope`.
 - Missing module roots and ambiguous module roots are compile-time diagnostics, never silent drops.
-- Cross-assembly CallHandler fallback remains explicit unsupported until LocalCall module contribution/invoker generation is implemented.
+- Cross-assembly CallHandler fallback emits `LocalCallContribution` metadata into the same `[AssemblyModule]` manifest; runtime invoker activation remains a later LocalCall runtime slice.
