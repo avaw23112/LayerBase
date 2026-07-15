@@ -101,13 +101,7 @@ internal sealed class RuntimeCompositionPlan
                 .AddEventHandler(eventHandlerIndex);
         }
 
-        var tools = ResolveTools(contributions.Tools, layerTypeIndex, scopeIdsByType);
-        for (int toolIndex = 0; toolIndex < tools.Length; toolIndex++)
-        {
-            var tool = tools[toolIndex];
-            GetOrCreateContributionBuilder(layerContributionBuilders, tool.OwnerLayerIndex, tool.OwnerScopeId)
-                .AddTool(toolIndex);
-        }
+        var tools = ResolveTools(contributions.Tools, layerTypeIndex);
 
         ApplyScopeContributions(layerPlans, layerContributionBuilders);
 
@@ -223,10 +217,10 @@ internal sealed class RuntimeCompositionPlan
 
     private static ResolvedLayerToolContribution[] ResolveTools(
         LayerToolContributionPlan[] tools,
-        LayerTypeIndex layerTypeIndex,
-        Dictionary<Type, int> scopeIdsByType)
+        LayerTypeIndex layerTypeIndex)
     {
         var seen = new HashSet<LayerToolKey>();
+        var implementationTypes = new HashSet<Type>();
         var resolved = new List<ResolvedLayerToolContribution>();
         foreach (var tool in tools)
         {
@@ -235,22 +229,26 @@ internal sealed class RuntimeCompositionPlan
                 tool.ContractType,
                 tool.OwnerLayerType,
                 layerTypeIndex);
-            int ownerScopeId = ResolveScopeId(tool.OwnerScopeType, scopeIdsByType);
-            var key = new LayerToolKey(ownerLayerIndex, ownerScopeId, tool.ContractType, tool.LocalKey);
+            var key = new LayerToolKey(tool.ContractType, tool.LocalKey);
             if (!seen.Add(key))
                 throw new InvalidOperationException(
-                    $"Tool `{tool.ContractType.FullName}` with key `{tool.LocalKey}` is already registered for layer `{ownerLayerIndex}` and scope `{ownerScopeId}`.");
+                    $"Tool `{tool.ContractType.FullName}` with key `{tool.LocalKey}` is already registered in this runtime.");
+
+            if (!implementationTypes.Add(tool.ImplementationType))
+                throw new InvalidOperationException(
+                    $"LayerTool implementation `{tool.ImplementationType.FullName}` is already registered in this runtime.");
 
             resolved.Add(new ResolvedLayerToolContribution(
                 tool.ModuleId,
                 ownerLayerIndex,
-                ownerScopeId,
                 tool.ContractType,
-                tool.LocalKey));
+                tool.ImplementationType,
+                tool.LocalKey,
+                tool.Cache,
+                tool.Factory));
         }
 
         return resolved.OrderBy(static tool => tool.OwnerLayerIndex)
-                       .ThenBy(static tool => tool.OwnerScopeId)
                        .ThenBy(static tool => tool.ContractType.FullName, StringComparer.Ordinal)
                        .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal)
                        .ToArray();
@@ -419,7 +417,6 @@ internal sealed class RuntimeCompositionPlan
         private int _contextStart = -1;
         private int _localCallStart = -1;
         private int _eventHandlerStart = -1;
-        private int _toolStart = -1;
 
         public LayerScopeContributionBuilder(int ownerScopeId)
         {
@@ -468,16 +465,6 @@ internal sealed class RuntimeCompositionPlan
             EventHandlerCount++;
         }
 
-        public int ToolCount { get; private set; }
-
-        public void AddTool(int toolIndex)
-        {
-            if (_toolStart < 0)
-                _toolStart = toolIndex;
-
-            ToolCount++;
-        }
-
         public LayerScopeContribution Build()
         {
             return new LayerScopeContribution(
@@ -489,9 +476,7 @@ internal sealed class RuntimeCompositionPlan
                 NormalizeStart(_localCallStart),
                 LocalCallCount,
                 NormalizeStart(_eventHandlerStart),
-                EventHandlerCount,
-                NormalizeStart(_toolStart),
-                ToolCount);
+                EventHandlerCount);
         }
 
         private static int NormalizeStart(int start)
@@ -557,24 +542,18 @@ internal sealed class RuntimeCompositionPlan
 
     private readonly struct LayerToolKey : IEquatable<LayerToolKey>
     {
-        private readonly int _layerIndex;
-        private readonly int _scopeId;
         private readonly Type _contractType;
         private readonly string _localKey;
 
-        public LayerToolKey(int layerIndex, int scopeId, Type contractType, string localKey)
+        public LayerToolKey(Type contractType, string localKey)
         {
-            _layerIndex = layerIndex;
-            _scopeId = scopeId;
             _contractType = contractType;
             _localKey = localKey;
         }
 
         public bool Equals(LayerToolKey other)
         {
-            return _layerIndex == other._layerIndex &&
-                   _scopeId == other._scopeId &&
-                   _contractType == other._contractType &&
+            return _contractType == other._contractType &&
                    string.Equals(_localKey, other._localKey, StringComparison.Ordinal);
         }
 
@@ -585,7 +564,7 @@ internal sealed class RuntimeCompositionPlan
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(_layerIndex, _scopeId, _contractType, _localKey);
+            return HashCode.Combine(_contractType, _localKey);
         }
     }
 }
@@ -630,9 +609,7 @@ internal readonly struct LayerScopeContribution
         int localCallStart,
         int localCallCount,
         int eventHandlerStart,
-        int eventHandlerCount,
-        int toolStart,
-        int toolCount)
+        int eventHandlerCount)
     {
         if (ownerScopeId < 0)
             throw new ArgumentOutOfRangeException(nameof(ownerScopeId));
@@ -652,11 +629,6 @@ internal readonly struct LayerScopeContribution
             throw new ArgumentOutOfRangeException(nameof(eventHandlerStart));
         if (eventHandlerCount < 0)
             throw new ArgumentOutOfRangeException(nameof(eventHandlerCount));
-        if (toolStart < 0)
-            throw new ArgumentOutOfRangeException(nameof(toolStart));
-        if (toolCount < 0)
-            throw new ArgumentOutOfRangeException(nameof(toolCount));
-
         OwnerScopeId = ownerScopeId;
         ServiceStart = serviceStart;
         ServiceCount = serviceCount;
@@ -666,8 +638,6 @@ internal readonly struct LayerScopeContribution
         LocalCallCount = localCallCount;
         EventHandlerStart = eventHandlerStart;
         EventHandlerCount = eventHandlerCount;
-        ToolStart = toolStart;
-        ToolCount = toolCount;
     }
 
     public int OwnerScopeId { get; }
@@ -688,9 +658,6 @@ internal readonly struct LayerScopeContribution
 
     public int EventHandlerCount { get; }
 
-    public int ToolStart { get; }
-
-    public int ToolCount { get; }
 }
 
 internal readonly struct ResolvedServiceContribution
@@ -822,24 +789,32 @@ internal readonly struct ResolvedLayerToolContribution
     public ResolvedLayerToolContribution(
         AssemblyModuleId moduleId,
         int ownerLayerIndex,
-        int ownerScopeId,
         Type contractType,
-        string localKey)
+        Type implementationType,
+        string localKey,
+        bool cache,
+        LayerBase.Tools.LayerToolFactoryInvoker? factory)
     {
         ModuleId = moduleId;
         OwnerLayerIndex = ownerLayerIndex;
-        OwnerScopeId = ownerScopeId;
         ContractType = contractType ?? throw new ArgumentNullException(nameof(contractType));
+        ImplementationType = implementationType ?? throw new ArgumentNullException(nameof(implementationType));
         LocalKey = localKey ?? throw new ArgumentNullException(nameof(localKey));
+        Cache = cache;
+        Factory = factory;
     }
 
     public AssemblyModuleId ModuleId { get; }
 
     public int OwnerLayerIndex { get; }
 
-    public int OwnerScopeId { get; }
-
     public Type ContractType { get; }
 
+    public Type ImplementationType { get; }
+
     public string LocalKey { get; }
+
+    public bool Cache { get; }
+
+    public LayerBase.Tools.LayerToolFactoryInvoker? Factory { get; }
 }

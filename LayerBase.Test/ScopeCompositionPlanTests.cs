@@ -325,31 +325,24 @@ public sealed class ScopeCompositionPlanTests
     }
 
     [Test]
-    public void Tool_key_contains_layer_and_scope()
+    public void Tool_key_is_runtime_global_contract_and_key()
     {
         LayerHub.Reset();
 
-        var runtime = LayerHub.CreateLayers()
-                              .Push(new GameplayLayer())
-                              .Push(new PresentationLayer())
-                              .AddAssemblyModule(new TestAssemblyModule(
-                                  "tools",
-                                  tools: new[]
-                                  {
-                                      LayerToolContribution.ForTypes(typeof(ICombatTool), "default", typeof(GameplayLayer), typeof(MainScope)),
-                                      LayerToolContribution.ForTypes(typeof(ICombatTool), "default", typeof(PresentationLayer), typeof(MainScope)),
-                                      LayerToolContribution.ForTypes(typeof(ICombatTool), "default", typeof(GameplayLayer), typeof(PathfindingScope))
-                                  }))
-                              .Build();
-
-        Assert.That(runtime.CompositionPlan.Tools.Select(static tool =>
-                $"{tool.OwnerLayerIndex}:{tool.OwnerScopeId}:{tool.ContractType.Name}:{tool.LocalKey}"),
-            Is.EqualTo(new[]
+        var module = new TestAssemblyModule(
+            "tools",
+            tools: new[]
             {
-                "0:0:ICombatTool:default",
-                $"0:{PathfindingScope.ScopeId}:ICombatTool:default",
-                "1:0:ICombatTool:default"
-            }));
+                LayerToolContribution.ForTypes(typeof(ICombatTool), typeof(CombatTool), "default", typeof(GameplayLayer)),
+                LayerToolContribution.ForTypes(typeof(ICombatTool), typeof(CombatTool), "default", typeof(PresentationLayer))
+            });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            LayerHub.CreateLayers()
+                    .Push(new GameplayLayer())
+                    .Push(new PresentationLayer())
+                    .AddAssemblyModule(module)
+                    .Build());
     }
 
     [Test]
@@ -491,6 +484,8 @@ public sealed class ScopeCompositionPlanTests
     private sealed class CombatContext { }
 
     private interface ICombatTool { }
+
+    private sealed class CombatTool : ICombatTool { }
 
     private readonly struct InventoryChangedEvent { }
 

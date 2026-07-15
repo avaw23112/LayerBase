@@ -1,5 +1,6 @@
 using LayerBase.DI;
 using LayerBase.Scope;
+using LayerBase.Tools;
 
 namespace LayerBase.Modules;
 
@@ -189,33 +190,54 @@ public readonly struct LayerToolContribution
 {
     private LayerToolContribution(
         Type contractType,
+        Type implementationType,
         string localKey,
         Type? ownerLayerType,
-        Type? ownerScopeType)
+        bool cache,
+        LayerToolFactoryInvoker? factory)
     {
         ContractType = contractType ?? throw new ArgumentNullException(nameof(contractType));
+        ImplementationType = implementationType ?? throw new ArgumentNullException(nameof(implementationType));
         LocalKey = string.IsNullOrWhiteSpace(localKey)
             ? throw new ArgumentException("Tool local key is required.", nameof(localKey))
             : localKey;
         OwnerLayerType = ownerLayerType;
-        OwnerScopeType = ownerScopeType;
+        Cache = cache;
+        Factory = factory;
     }
 
     public Type ContractType { get; }
+
+    public Type ImplementationType { get; }
 
     public string LocalKey { get; }
 
     public Type? OwnerLayerType { get; }
 
-    public Type? OwnerScopeType { get; }
+    public bool Cache { get; }
+
+    public LayerToolFactoryInvoker? Factory { get; }
 
     public static LayerToolContribution ForTypes(
         Type contractType,
+        Type implementationType,
         string localKey,
         Type? ownerLayerType,
-        Type? ownerScopeType)
+        bool cache = true)
     {
-        return new LayerToolContribution(contractType, localKey, ownerLayerType, ownerScopeType);
+        return new LayerToolContribution(contractType, implementationType, localKey, ownerLayerType, cache, null);
+    }
+
+    public static LayerToolContribution ForFactory(
+        Type contractType,
+        Type implementationType,
+        string localKey,
+        Type? ownerLayerType,
+        bool cache,
+        LayerToolFactoryInvoker factory)
+    {
+        return new LayerToolContribution(contractType, implementationType, localKey, ownerLayerType, cache,
+            factory ?? throw new ArgumentNullException(nameof(factory)));
     }
 }
 
@@ -434,16 +456,20 @@ internal readonly struct LayerToolContributionPlan
     public LayerToolContributionPlan(
         AssemblyModuleId moduleId,
         Type contractType,
+        Type implementationType,
         string localKey,
         Type ownerLayerType,
-        Type ownerScopeType,
+        bool cache,
+        LayerToolFactoryInvoker? factory,
         int toolIndex)
     {
         ModuleId = moduleId;
         ContractType = contractType ?? throw new ArgumentNullException(nameof(contractType));
+        ImplementationType = implementationType ?? throw new ArgumentNullException(nameof(implementationType));
         LocalKey = localKey ?? throw new ArgumentNullException(nameof(localKey));
         OwnerLayerType = ownerLayerType ?? throw new ArgumentNullException(nameof(ownerLayerType));
-        OwnerScopeType = ownerScopeType ?? throw new ArgumentNullException(nameof(ownerScopeType));
+        Cache = cache;
+        Factory = factory;
         ToolIndex = toolIndex;
     }
 
@@ -451,11 +477,15 @@ internal readonly struct LayerToolContributionPlan
 
     public Type ContractType { get; }
 
+    public Type ImplementationType { get; }
+
     public string LocalKey { get; }
 
     public Type OwnerLayerType { get; }
 
-    public Type OwnerScopeType { get; }
+    public bool Cache { get; }
+
+    public LayerToolFactoryInvoker? Factory { get; }
 
     public int ToolIndex { get; }
 }
@@ -594,13 +624,16 @@ internal static class AssemblyModuleComposer
             foreach (var contribution in manifest.Tools.OrderBy(static tool => tool.ContractType.FullName, StringComparer.Ordinal)
                                                        .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal))
             {
-                ValidateOwner(module.Id, "Tool", contribution.ContractType, contribution.OwnerLayerType, contribution.OwnerScopeType);
+                ValidateToolOwner(module.Id, contribution.ContractType, contribution.ImplementationType,
+                    contribution.OwnerLayerType);
                 toolPlans.Add(new LayerToolContributionPlan(
                     module.Id,
                     contribution.ContractType,
+                    contribution.ImplementationType,
                     contribution.LocalKey,
                     contribution.OwnerLayerType!,
-                    contribution.OwnerScopeType!,
+                    contribution.Cache,
+                    contribution.Factory,
                     toolPlans.Count));
             }
         }
@@ -631,5 +664,20 @@ internal static class AssemblyModuleComposer
         if (!typeof(IScopeDefinition).IsAssignableFrom(ownerScopeType))
             throw new InvalidOperationException(
                 $"Owner scope `{ownerScopeType.FullName}` must implement {nameof(IScopeDefinition)}.");
+    }
+
+    private static void ValidateToolOwner(
+        AssemblyModuleId moduleId,
+        Type contractType,
+        Type implementationType,
+        Type? ownerLayerType)
+    {
+        if (ownerLayerType == null)
+            throw new InvalidOperationException(
+                $"Tool contribution `{contractType.FullName}` from module `{moduleId}` must declare an owner layer.");
+
+        if (!contractType.IsAssignableFrom(implementationType))
+            throw new InvalidOperationException(
+                $"LayerTool implementation `{implementationType.FullName}` must implement contract `{contractType.FullName}`.");
     }
 }

@@ -12,6 +12,7 @@ using LayerBase.Layers;
 using LayerBase.Modules;
 using LayerBase.Scope;
 using LayerBase.Snap;
+using LayerBase.Tools;
 using LayerBase.Worker;
 
 namespace LayerBase;
@@ -41,6 +42,7 @@ public sealed partial class LayerRuntime : IDisposable
     private readonly ScopeRuntimeHost _scopeHost;
     private readonly WorkerJobScheduler _workerJobs;
     private FullSnapRuntime? _fullSnap;
+    private LayerToolRegistry? _tools;
     internal DelayPublisherManager? DelayManager => _scopeHost.MainScope.DelayManager;
     #endregion
 
@@ -67,6 +69,8 @@ public sealed partial class LayerRuntime : IDisposable
     internal TimeScheduler<ITimerAction> Timer => _scopeHost.MainScope.Timer ?? throw new InvalidOperationException("Runtime not built.");
 
     public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
+
+    public LayerToolRegistry Tools => _tools ?? throw new InvalidOperationException("Runtime not built.");
 
     public bool IsDebugMode { get; internal set; }
 
@@ -405,6 +409,7 @@ public sealed partial class LayerRuntime : IDisposable
         _chain?.DisposeLayers();
         _chain = null;
         _scopeHost.Dispose();
+        _tools?.Dispose();
         _workerJobs.Dispose();
         _mainActorRuntime.Dispose();
         LayerHub.ClearRuntimeCaches(_id);
@@ -686,6 +691,7 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime.CompositionPlan = RuntimeCompositionPlan.Build(
                 _layerChain.GetNodes().ToArray(),
                 _assemblyModules);
+            _runtime._tools = new LayerToolRegistry(_runtime, _runtime.CompositionPlan.Tools);
             _runtime.BuildLocalCallRegistry();
 
             _runtime._fixedUpdateOptions = _fixedUpdateOptions;
