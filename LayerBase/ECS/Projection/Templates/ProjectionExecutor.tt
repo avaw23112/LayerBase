@@ -21,18 +21,16 @@ internal static class ProjectionExecutor0
         ProjectionForEach<TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -45,19 +43,17 @@ internal static class ProjectionExecutor0
         Query query,
         ProjectionPredicate? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate? predicate,
         ProjectionForEach<TEvent> forEach,
@@ -86,9 +82,7 @@ internal static class ProjectionExecutor0
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -115,7 +109,6 @@ internal static class ProjectionExecutor0
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate? predicate,
         long nowTicks)
@@ -141,9 +134,7 @@ internal static class ProjectionExecutor0
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -169,13 +160,12 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
 {
     public static void Post(World world, Query query, ProjectionPredicate? predicate, <#= dName #><<#= evtG #>> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 <#
         for (var i = 0; i < e; i++)
         {
 #>
-        ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> = ProjectionBatchBuffer<TEvent<#= i #>>.Rent();
+        ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> = ProjectionBatchRuntime.RentBuffer<TEvent<#= i #>>(world);
 <#
         }
 #>
@@ -184,7 +174,7 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks<#
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks<#
         for (var i = 0; i < e; i++)
         {
 #>,
@@ -197,7 +187,7 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
         for (var i = 0; i < e; i++)
         {
 #>
-            batch<#= i #>.PostTo(actorWorld);
+            batch<#= i #>.FlushTo(world.ProjectedActorCommands);
 <#
         }
 #>
@@ -215,7 +205,7 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate? predicate, <#= dName #><<#= evtG #>> forEach, long nowTicks<#
         for (var i = 0; i < e; i++)
         {
@@ -259,7 +249,7 @@ internal static class ProjectionExecutor0_<#= e #>E<<#= evtG #>>
 #>);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, actorWorld, entity, ref actorRef, nowTicks);
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world, entity, ref actorRef, nowTicks);
             if (!alive) continue;
 
             ActorId actorId = actorRef.ActorId;
@@ -298,18 +288,16 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         ProjectionForEach<<#= compG #>, TEvent> forEach)
         where TEvent : struct
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks, ref batch);
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(actorWorld);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -322,12 +310,11 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         Query query,
         ProjectionPredicate<#= compGP #>? predicate)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 
         foreach (ref Chunk chunk in query.GetChunkIterator())
         {
-            TouchChunk(world, actorWorld, ref chunk, predicate, nowTicks);
+            TouchChunk(world, ref chunk, predicate, nowTicks);
         }
     }
 
@@ -393,14 +380,11 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
         where TEvent0 : struct
         where TJob : struct, IProjectionJob<#= c #>x1<<#= compG #>, TEvent0>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
 
         try
         {
@@ -408,7 +392,6 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
             {
                 CollectPostJobChunk(
                     world,
-                    actorWorld,
                     ref chunk,
                     predicate,
                     ref job,
@@ -416,8 +399,8 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
                     ref batch0);
             }
 
-            batch0.PostTo(
-                actorWorld);
+            batch0.FlushTo(
+                world.ProjectedActorCommands);
         }
         finally
         {
@@ -428,7 +411,6 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TEvent0, TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<#= compGP #>? predicate,
         ref TJob job,
@@ -485,9 +467,7 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
                     row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -513,7 +493,6 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostChunk<TEvent>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<#= compGP #>? predicate,
         ProjectionForEach<<#= compG #>, TEvent> forEach,
@@ -544,9 +523,7 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            bool alive = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -573,7 +550,6 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TouchChunk(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<#= compGP #>? predicate,
         long nowTicks)
@@ -601,9 +577,7 @@ internal static class ProjectionExecutor<#= c #><<#= compG #>>
                 ref Unsafe.Add(ref firstActorRef, row);
 
             // 使用 RefreshProjectedActorInterest 统一处理 Touch/Ensure/Enable
-            _ = ProjectedActorBinding.RefreshProjectedActorInterest(
-                world,
-                actorWorld,
+            _ = ProjectedActorBinding.RefreshProjectedActorInterest(world,
                 entity,
                 ref actorRef,
                 nowTicks);
@@ -632,13 +606,12 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
 {
     public static void Post(World world, Query query, ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach)
     {
-        ActorWorld actorWorld = world.Runtime.Actors;
         long nowTicks = Stopwatch.GetTimestamp();
 <#
             for (var i = 0; i < e; i++)
             {
 #>
-        ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> = ProjectionBatchBuffer<TEvent<#= i #>>.Rent();
+        ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> = ProjectionBatchRuntime.RentBuffer<TEvent<#= i #>>(world);
 <#
             }
 #>
@@ -647,7 +620,7 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
             {
-                CollectPostChunk(world, actorWorld, ref chunk, predicate, forEach, nowTicks<#
+                CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks<#
             for (var i = 0; i < e; i++)
             {
 #>,
@@ -660,7 +633,7 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
             for (var i = 0; i < e; i++)
             {
 #>
-            batch<#= i #>.PostTo(actorWorld);
+            batch<#= i #>.FlushTo(world.ProjectedActorCommands);
 <#
             }
 #>
@@ -685,9 +658,6 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
         ref TJob job)
         where TJob : struct, IProjectionJob<#= c #>x<#= e #><<#= allG #>>
     {
-        ActorWorld actorWorld =
-            world.Runtime.Actors;
-
         long nowTicks =
             Stopwatch.GetTimestamp();
 
@@ -696,7 +666,7 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
             {
 #>
         ProjectionBatchBuffer<TEvent<#= i #>> batch<#= i #> =
-            ProjectionBatchBuffer<TEvent<#= i #>>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent<#= i #>>(world);
 <#
             }
 #>
@@ -707,7 +677,6 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
             {
                 CollectPostJobChunk(
                     world,
-                    actorWorld,
                     ref chunk,
                     predicate,
                     ref job,
@@ -724,8 +693,8 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
             for (var i = 0; i < e; i++)
             {
 #>
-            batch<#= i #>.PostTo(
-                actorWorld);
+            batch<#= i #>.FlushTo(
+                world.ProjectedActorCommands);
 <#
             }
 #>
@@ -746,7 +715,6 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CollectPostJobChunk<TJob>(
         World world,
-        ActorWorld actorWorld,
         ref Chunk chunk,
         ProjectionPredicate<#= compGP #>? predicate,
         ref TJob job,
@@ -826,7 +794,6 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
                 actorId =
                     ProjectedActorBinding.EnsureProjectedActor(
                         world,
-                        actorWorld,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -841,7 +808,6 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
                 bool alive =
                     ProjectedActorBinding.TouchProjectedActor(
                         world,
-                        actorWorld,
                         entity,
                         ref actorRef,
                         nowTicks);
@@ -873,7 +839,7 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
         }
     }
 
-    private static void CollectPostChunk(World world, ActorWorld actorWorld, ref Chunk chunk,
+    private static void CollectPostChunk(World world, ref Chunk chunk,
         ProjectionPredicate<#= compGP #>? predicate, <#= dName #><<#= allG #>> forEach, long nowTicks<#
             for (var i = 0; i < e; i++)
             {
@@ -916,12 +882,12 @@ internal static class ProjectionExecutor<#= c #>_<#= e #>E<<#= allG #>>
             ActorId actorId = actorRef.ActorId;
             if (!actorId.IsValid)
             {
-                actorId = ProjectedActorBinding.EnsureProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                actorId = ProjectedActorBinding.EnsureProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!actorId.IsValid) continue;
             }
             else
             {
-                bool alive = ProjectedActorBinding.TouchProjectedActor(world, actorWorld, entity, ref actorRef, nowTicks);
+                bool alive = ProjectedActorBinding.TouchProjectedActor(world, entity, ref actorRef, nowTicks);
                 if (!alive) continue;
                 actorId = actorRef.ActorId;
             }

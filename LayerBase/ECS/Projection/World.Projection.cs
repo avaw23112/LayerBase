@@ -1,5 +1,6 @@
 using System;
 using LayerBase;
+using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 
 namespace Arch.Core;
@@ -8,8 +9,12 @@ public partial class World
 {
     private readonly ActiveProjectedActorList _activeProjectedActors = new();
     private IProjectedActorCommandSink _projectedActorCommandSink = RejectingProjectedActorCommandSink.Instance;
+    private ScopeEcsScheduler? _ecsScheduler;
 
     internal LayerRuntime Runtime { get; private set; } = null!;
+
+    internal ScopeEcsScheduler EcsScheduler =>
+        _ecsScheduler ?? throw new InvalidOperationException("World is not bound to a ScopeEcsScheduler.");
 
     internal IProjectedActorCommandSink ProjectedActorCommands => _projectedActorCommandSink;
 
@@ -17,6 +22,12 @@ public partial class World
         LayerRuntime runtime)
     {
         Runtime = runtime;
+    }
+
+    internal void BindEcsScheduler(
+        ScopeEcsScheduler scheduler)
+    {
+        _ecsScheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
     }
 
     internal void BindProjectedActorCommandSink(

@@ -19,8 +19,7 @@ internal static class ProjectionExecutor0
         where TEvent : struct
     {
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -28,7 +27,7 @@ internal static class ProjectionExecutor0
                 CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(world.ProjectedActorCommands);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -147,8 +146,8 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach2<TEvent0, TEvent1> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -159,8 +158,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -217,9 +216,9 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach3<TEvent0, TEvent1, TEvent2> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -231,9 +230,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -295,10 +294,10 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach4<TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -311,10 +310,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -381,11 +380,11 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach5<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -399,11 +398,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -475,12 +474,12 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach6<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -495,12 +494,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -577,13 +576,13 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach7<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -599,13 +598,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -687,14 +686,14 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach8<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -711,14 +710,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -805,15 +804,15 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach9<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -831,15 +830,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -931,16 +930,16 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate? predicate, ProjectionForEach10<TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
-        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchBuffer<TEvent9>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
+        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -959,16 +958,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1059,8 +1058,7 @@ internal static class ProjectionExecutor1<T0>
         where TEvent : struct
     {
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -1068,7 +1066,7 @@ internal static class ProjectionExecutor1<T0>
                 CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(world.ProjectedActorCommands);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1150,7 +1148,7 @@ internal static class ProjectionExecutor1<T0>
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
 
         try
         {
@@ -1164,7 +1162,7 @@ internal static class ProjectionExecutor1<T0>
                     ref batch0);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1346,8 +1344,8 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach2<T0, TEvent0, TEvent1> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -1358,8 +1356,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1379,9 +1377,9 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -1396,8 +1394,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1566,9 +1564,9 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach3<T0, TEvent0, TEvent1, TEvent2> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -1580,9 +1578,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1603,11 +1601,11 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -1623,9 +1621,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1806,10 +1804,10 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach4<T0, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -1822,10 +1820,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -1847,13 +1845,13 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -1870,10 +1868,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2066,11 +2064,11 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach5<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -2084,11 +2082,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2111,15 +2109,15 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -2137,11 +2135,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2346,12 +2344,12 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach6<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -2366,12 +2364,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2395,17 +2393,17 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -2424,12 +2422,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2646,13 +2644,13 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach7<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -2668,13 +2666,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2699,19 +2697,19 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -2731,13 +2729,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -2966,14 +2964,14 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach8<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -2990,14 +2988,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3023,21 +3021,21 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -3058,14 +3056,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3306,15 +3304,15 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach9<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -3332,15 +3330,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3367,23 +3365,23 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -3405,15 +3403,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3666,16 +3664,16 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0>? predicate, ProjectionForEach10<T0, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
-        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchBuffer<TEvent9>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
+        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -3694,16 +3692,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -3731,25 +3729,25 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
         ProjectionBatchBuffer<TEvent9> batch9 =
-            ProjectionBatchBuffer<TEvent9>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -3772,16 +3770,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4040,8 +4038,7 @@ internal static class ProjectionExecutor2<T0, T1>
         where TEvent : struct
     {
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -4049,7 +4046,7 @@ internal static class ProjectionExecutor2<T0, T1>
                 CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(world.ProjectedActorCommands);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4134,7 +4131,7 @@ internal static class ProjectionExecutor2<T0, T1>
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
 
         try
         {
@@ -4148,7 +4145,7 @@ internal static class ProjectionExecutor2<T0, T1>
                     ref batch0);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4337,8 +4334,8 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach2<T0, T1, TEvent0, TEvent1> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -4349,8 +4346,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4370,9 +4367,9 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -4387,8 +4384,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4562,9 +4559,9 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach3<T0, T1, TEvent0, TEvent1, TEvent2> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -4576,9 +4573,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4599,11 +4596,11 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -4619,9 +4616,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4807,10 +4804,10 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach4<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -4823,10 +4820,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -4848,13 +4845,13 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -4871,10 +4868,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5072,11 +5069,11 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach5<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -5090,11 +5087,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5117,15 +5114,15 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -5143,11 +5140,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5357,12 +5354,12 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach6<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -5377,12 +5374,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5406,17 +5403,17 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -5435,12 +5432,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5662,13 +5659,13 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach7<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -5684,13 +5681,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5715,19 +5712,19 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -5747,13 +5744,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -5987,14 +5984,14 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach8<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -6011,14 +6008,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -6044,21 +6041,21 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -6079,14 +6076,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -6332,15 +6329,15 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach9<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -6358,15 +6355,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -6393,23 +6390,23 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -6431,15 +6428,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -6697,16 +6694,16 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1>? predicate, ProjectionForEach10<T0, T1, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
-        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchBuffer<TEvent9>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
+        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -6725,16 +6722,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -6762,25 +6759,25 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
         ProjectionBatchBuffer<TEvent9> batch9 =
-            ProjectionBatchBuffer<TEvent9>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -6803,16 +6800,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7076,8 +7073,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
         where TEvent : struct
     {
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -7085,7 +7081,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                 CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(world.ProjectedActorCommands);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7173,7 +7169,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
 
         try
         {
@@ -7187,7 +7183,7 @@ internal static class ProjectionExecutor3<T0, T1, T2>
                     ref batch0);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7383,8 +7379,8 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach2<T0, T1, T2, TEvent0, TEvent1> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -7395,8 +7391,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7416,9 +7412,9 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -7433,8 +7429,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7613,9 +7609,9 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach3<T0, T1, T2, TEvent0, TEvent1, TEvent2> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -7627,9 +7623,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7650,11 +7646,11 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -7670,9 +7666,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7863,10 +7859,10 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach4<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -7879,10 +7875,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -7904,13 +7900,13 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -7927,10 +7923,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8133,11 +8129,11 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach5<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -8151,11 +8147,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8178,15 +8174,15 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -8204,11 +8200,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8423,12 +8419,12 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach6<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -8443,12 +8439,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8472,17 +8468,17 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -8501,12 +8497,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8733,13 +8729,13 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach7<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -8755,13 +8751,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -8786,19 +8782,19 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -8818,13 +8814,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9063,14 +9059,14 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach8<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -9087,14 +9083,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9120,21 +9116,21 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -9155,14 +9151,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9413,15 +9409,15 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach9<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -9439,15 +9435,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9474,23 +9470,23 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -9512,15 +9508,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9783,16 +9779,16 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2>? predicate, ProjectionForEach10<T0, T1, T2, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
-        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchBuffer<TEvent9>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
+        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -9811,16 +9807,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -9848,25 +9844,25 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
         ProjectionBatchBuffer<TEvent9> batch9 =
-            ProjectionBatchBuffer<TEvent9>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -9889,16 +9885,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10167,8 +10163,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
         where TEvent : struct
     {
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -10176,7 +10171,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                 CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(world.ProjectedActorCommands);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10267,7 +10262,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
 
         try
         {
@@ -10281,7 +10276,7 @@ internal static class ProjectionExecutor4<T0, T1, T2, T3>
                     ref batch0);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10484,8 +10479,8 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach2<T0, T1, T2, T3, TEvent0, TEvent1> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -10496,8 +10491,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10517,9 +10512,9 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -10534,8 +10529,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10719,9 +10714,9 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach3<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -10733,9 +10728,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10756,11 +10751,11 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -10776,9 +10771,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -10974,10 +10969,10 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach4<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -10990,10 +10985,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11015,13 +11010,13 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -11038,10 +11033,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11249,11 +11244,11 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach5<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -11267,11 +11262,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11294,15 +11289,15 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -11320,11 +11315,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11544,12 +11539,12 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach6<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -11564,12 +11559,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11593,17 +11588,17 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -11622,12 +11617,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11859,13 +11854,13 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach7<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -11881,13 +11876,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -11912,19 +11907,19 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -11944,13 +11939,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12194,14 +12189,14 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach8<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -12218,14 +12213,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12251,21 +12246,21 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -12286,14 +12281,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12549,15 +12544,15 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach9<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -12575,15 +12570,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12610,23 +12605,23 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -12648,15 +12643,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12924,16 +12919,16 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3>? predicate, ProjectionForEach10<T0, T1, T2, T3, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
-        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchBuffer<TEvent9>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
+        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -12952,16 +12947,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -12989,25 +12984,25 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
         ProjectionBatchBuffer<TEvent9> batch9 =
-            ProjectionBatchBuffer<TEvent9>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -13030,16 +13025,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -13313,8 +13308,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
         where TEvent : struct
     {
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -13322,7 +13316,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                 CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(world.ProjectedActorCommands);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -13416,7 +13410,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
 
         try
         {
@@ -13430,7 +13424,7 @@ internal static class ProjectionExecutor5<T0, T1, T2, T3, T4>
                     ref batch0);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -13640,8 +13634,8 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, TEvent0, TEvent1> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -13652,8 +13646,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -13673,9 +13667,9 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -13690,8 +13684,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -13880,9 +13874,9 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -13894,9 +13888,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -13917,11 +13911,11 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -13937,9 +13931,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14140,10 +14134,10 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -14156,10 +14150,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14181,13 +14175,13 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -14204,10 +14198,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14420,11 +14414,11 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -14438,11 +14432,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14465,15 +14459,15 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -14491,11 +14485,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14720,12 +14714,12 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -14740,12 +14734,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -14769,17 +14763,17 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -14798,12 +14792,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15040,13 +15034,13 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -15062,13 +15056,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15093,19 +15087,19 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -15125,13 +15119,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15380,14 +15374,14 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -15404,14 +15398,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15437,21 +15431,21 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -15472,14 +15466,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15740,15 +15734,15 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -15766,15 +15760,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -15801,23 +15795,23 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -15839,15 +15833,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -16120,16 +16114,16 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
-        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchBuffer<TEvent9>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
+        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -16148,16 +16142,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -16185,25 +16179,25 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
         ProjectionBatchBuffer<TEvent9> batch9 =
-            ProjectionBatchBuffer<TEvent9>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -16226,16 +16220,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -16514,8 +16508,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
         where TEvent : struct
     {
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -16523,7 +16516,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                 CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(world.ProjectedActorCommands);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -16620,7 +16613,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
 
         try
         {
@@ -16634,7 +16627,7 @@ internal static class ProjectionExecutor6<T0, T1, T2, T3, T4, T5>
                     ref batch0);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -16851,8 +16844,8 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -16863,8 +16856,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -16884,9 +16877,9 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -16901,8 +16894,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17096,9 +17089,9 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -17110,9 +17103,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17133,11 +17126,11 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -17153,9 +17146,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17361,10 +17354,10 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -17377,10 +17370,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17402,13 +17395,13 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -17425,10 +17418,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17646,11 +17639,11 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -17664,11 +17657,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17691,15 +17684,15 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -17717,11 +17710,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -17951,12 +17944,12 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -17971,12 +17964,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18000,17 +17993,17 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -18029,12 +18022,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18276,13 +18269,13 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -18298,13 +18291,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18329,19 +18322,19 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -18361,13 +18354,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18621,14 +18614,14 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -18645,14 +18638,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18678,21 +18671,21 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -18713,14 +18706,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -18986,15 +18979,15 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -19012,15 +19005,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -19047,23 +19040,23 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -19085,15 +19078,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -19371,16 +19364,16 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
-        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchBuffer<TEvent9>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
+        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -19399,16 +19392,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -19436,25 +19429,25 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
         ProjectionBatchBuffer<TEvent9> batch9 =
-            ProjectionBatchBuffer<TEvent9>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -19477,16 +19470,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -19770,8 +19763,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
         where TEvent : struct
     {
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -19779,7 +19771,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                 CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(world.ProjectedActorCommands);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -19879,7 +19871,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
 
         try
         {
@@ -19893,7 +19885,7 @@ internal static class ProjectionExecutor7<T0, T1, T2, T3, T4, T5, T6>
                     ref batch0);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20117,8 +20109,8 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -20129,8 +20121,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20150,9 +20142,9 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -20167,8 +20159,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20367,9 +20359,9 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -20381,9 +20373,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20404,11 +20396,11 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -20424,9 +20416,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20637,10 +20629,10 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -20653,10 +20645,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20678,13 +20670,13 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -20701,10 +20693,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20927,11 +20919,11 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -20945,11 +20937,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -20972,15 +20964,15 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -20998,11 +20990,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21237,12 +21229,12 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -21257,12 +21249,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21286,17 +21278,17 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -21315,12 +21307,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21567,13 +21559,13 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -21589,13 +21581,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21620,19 +21612,19 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -21652,13 +21644,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21917,14 +21909,14 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -21941,14 +21933,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -21974,21 +21966,21 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -22009,14 +22001,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -22287,15 +22279,15 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -22313,15 +22305,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -22348,23 +22340,23 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -22386,15 +22378,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -22677,16 +22669,16 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
-        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchBuffer<TEvent9>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
+        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -22705,16 +22697,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -22742,25 +22734,25 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
         ProjectionBatchBuffer<TEvent9> batch9 =
-            ProjectionBatchBuffer<TEvent9>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -22783,16 +22775,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23081,8 +23073,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
         where TEvent : struct
     {
         long nowTicks = Stopwatch.GetTimestamp();
-
-        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchBuffer<TEvent>.Rent();
+        ProjectionBatchBuffer<TEvent> batch = ProjectionBatchRuntime.RentBuffer<TEvent>(world);
         try
         {
             foreach (ref Chunk chunk in query.GetChunkIterator())
@@ -23090,7 +23081,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                 CollectPostChunk(world, ref chunk, predicate, forEach, nowTicks, ref batch);
             }
 
-            batch.PostTo(world.ProjectedActorCommands);
+            batch.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23193,7 +23184,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
 
         try
         {
@@ -23207,7 +23198,7 @@ internal static class ProjectionExecutor8<T0, T1, T2, T3, T4, T5, T6, T7>
                     ref batch0);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23438,8 +23429,8 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach2<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -23450,8 +23441,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23471,9 +23462,9 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
 
         try
         {
@@ -23488,8 +23479,8 @@ where TEvent0 : struct
                     ref batch1);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23693,9 +23684,9 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach3<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -23707,9 +23698,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23730,11 +23721,11 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
 
         try
         {
@@ -23750,9 +23741,9 @@ where TEvent0 : struct
                     ref batch2);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -23968,10 +23959,10 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach4<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -23984,10 +23975,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24009,13 +24000,13 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
 
         try
         {
@@ -24032,10 +24023,10 @@ where TEvent0 : struct
                     ref batch3);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24263,11 +24254,11 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach5<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -24281,11 +24272,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24308,15 +24299,15 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
 
         try
         {
@@ -24334,11 +24325,11 @@ where TEvent0 : struct
                     ref batch4);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24578,12 +24569,12 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach6<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -24598,12 +24589,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24627,17 +24618,17 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
 
         try
         {
@@ -24656,12 +24647,12 @@ where TEvent0 : struct
                     ref batch5);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24913,13 +24904,13 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach7<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -24935,13 +24926,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -24966,19 +24957,19 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
 
         try
         {
@@ -24998,13 +24989,13 @@ where TEvent0 : struct
                     ref batch6);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25268,14 +25259,14 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach8<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -25292,14 +25283,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25325,21 +25316,21 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
 
         try
         {
@@ -25360,14 +25351,14 @@ where TEvent0 : struct
                     ref batch7);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25643,15 +25634,15 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach9<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -25669,15 +25660,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -25704,23 +25695,23 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
 
         try
         {
@@ -25742,15 +25733,15 @@ where TEvent0 : struct
                     ref batch8);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -26038,16 +26029,16 @@ where TEvent0 : struct
     public static void Post(World world, Query query, ProjectionPredicate<T0, T1, T2, T3, T4, T5, T6, T7>? predicate, ProjectionForEach10<T0, T1, T2, T3, T4, T5, T6, T7, TEvent0, TEvent1, TEvent2, TEvent3, TEvent4, TEvent5, TEvent6, TEvent7, TEvent8, TEvent9> forEach)
     {
         long nowTicks = Stopwatch.GetTimestamp();
-        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchBuffer<TEvent0>.Rent();
-        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchBuffer<TEvent1>.Rent();
-        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchBuffer<TEvent2>.Rent();
-        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchBuffer<TEvent3>.Rent();
-        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchBuffer<TEvent4>.Rent();
-        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchBuffer<TEvent5>.Rent();
-        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchBuffer<TEvent6>.Rent();
-        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchBuffer<TEvent7>.Rent();
-        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchBuffer<TEvent8>.Rent();
-        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchBuffer<TEvent9>.Rent();
+        ProjectionBatchBuffer<TEvent0> batch0 = ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
+        ProjectionBatchBuffer<TEvent1> batch1 = ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
+        ProjectionBatchBuffer<TEvent2> batch2 = ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
+        ProjectionBatchBuffer<TEvent3> batch3 = ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
+        ProjectionBatchBuffer<TEvent4> batch4 = ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
+        ProjectionBatchBuffer<TEvent5> batch5 = ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
+        ProjectionBatchBuffer<TEvent6> batch6 = ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
+        ProjectionBatchBuffer<TEvent7> batch7 = ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
+        ProjectionBatchBuffer<TEvent8> batch8 = ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
+        ProjectionBatchBuffer<TEvent9> batch9 = ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -26066,16 +26057,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {
@@ -26103,25 +26094,25 @@ where TEvent0 : struct
             Stopwatch.GetTimestamp();
 
         ProjectionBatchBuffer<TEvent0> batch0 =
-            ProjectionBatchBuffer<TEvent0>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent0>(world);
         ProjectionBatchBuffer<TEvent1> batch1 =
-            ProjectionBatchBuffer<TEvent1>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent1>(world);
         ProjectionBatchBuffer<TEvent2> batch2 =
-            ProjectionBatchBuffer<TEvent2>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent2>(world);
         ProjectionBatchBuffer<TEvent3> batch3 =
-            ProjectionBatchBuffer<TEvent3>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent3>(world);
         ProjectionBatchBuffer<TEvent4> batch4 =
-            ProjectionBatchBuffer<TEvent4>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent4>(world);
         ProjectionBatchBuffer<TEvent5> batch5 =
-            ProjectionBatchBuffer<TEvent5>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent5>(world);
         ProjectionBatchBuffer<TEvent6> batch6 =
-            ProjectionBatchBuffer<TEvent6>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent6>(world);
         ProjectionBatchBuffer<TEvent7> batch7 =
-            ProjectionBatchBuffer<TEvent7>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent7>(world);
         ProjectionBatchBuffer<TEvent8> batch8 =
-            ProjectionBatchBuffer<TEvent8>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent8>(world);
         ProjectionBatchBuffer<TEvent9> batch9 =
-            ProjectionBatchBuffer<TEvent9>.Rent();
+            ProjectionBatchRuntime.RentBuffer<TEvent9>(world);
 
         try
         {
@@ -26144,16 +26135,16 @@ where TEvent0 : struct
                     ref batch9);
             }
 
-            batch0.PostTo(world.ProjectedActorCommands);
-            batch1.PostTo(world.ProjectedActorCommands);
-            batch2.PostTo(world.ProjectedActorCommands);
-            batch3.PostTo(world.ProjectedActorCommands);
-            batch4.PostTo(world.ProjectedActorCommands);
-            batch5.PostTo(world.ProjectedActorCommands);
-            batch6.PostTo(world.ProjectedActorCommands);
-            batch7.PostTo(world.ProjectedActorCommands);
-            batch8.PostTo(world.ProjectedActorCommands);
-            batch9.PostTo(world.ProjectedActorCommands);
+            batch0.FlushTo(world.ProjectedActorCommands);
+            batch1.FlushTo(world.ProjectedActorCommands);
+            batch2.FlushTo(world.ProjectedActorCommands);
+            batch3.FlushTo(world.ProjectedActorCommands);
+            batch4.FlushTo(world.ProjectedActorCommands);
+            batch5.FlushTo(world.ProjectedActorCommands);
+            batch6.FlushTo(world.ProjectedActorCommands);
+            batch7.FlushTo(world.ProjectedActorCommands);
+            batch8.FlushTo(world.ProjectedActorCommands);
+            batch9.FlushTo(world.ProjectedActorCommands);
         }
         finally
         {

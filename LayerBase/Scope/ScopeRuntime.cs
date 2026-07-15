@@ -3,6 +3,7 @@ using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
+using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 using LayerBase.Event.Delay;
 
@@ -50,8 +51,14 @@ internal sealed class ScopeRuntime : IDisposable
             _actors = new ActorAccessor(new LocalActorAccessor(_actorWorld, _generation));
             _hasActorAccessor = true;
         }
-        EcsWorld = World.Create();
+        EcsScheduler = new ScopeEcsScheduler(
+            _generation,
+            Descriptor.ScopeId,
+            World.Create(),
+            EcsRuntimeOptions.Default);
+        EcsWorld = EcsScheduler.World;
         EcsWorld.BindRuntime(runtime);
+        EcsWorld.BindEcsScheduler(EcsScheduler);
         if (_actorWorld != null)
             EcsWorld.BindProjectedActorCommandSink(new MainScopeProjectedActorCommandSink(_actorWorld));
     }
@@ -81,6 +88,8 @@ internal sealed class ScopeRuntime : IDisposable
         _hasActorAccessor
             ? _actors
             : throw new InvalidOperationException("Scope actor accessor is not initialized.");
+
+    public ScopeEcsScheduler EcsScheduler { get; }
 
     public World EcsWorld { get; }
 
@@ -447,6 +456,7 @@ internal sealed class ScopeRuntime : IDisposable
         EventCenter.Reset();
         SynchronizationContext?.Dispose();
         SynchronizationContext = null;
+        EcsScheduler.Dispose();
         EcsWorld.Dispose();
         Transport.Dispose();
     }

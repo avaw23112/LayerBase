@@ -3,6 +3,7 @@ using LayerBase.Actor;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
 using LayerBase.Layers;
+using LayerBase.Scope;
 
 namespace LayerBase.DI;
 
@@ -48,6 +49,12 @@ internal sealed class ServiceLayerBinding
     public readonly LayerRuntime Runtime;
 
     /// <summary>
+    /// 当前对象所属的 Scope。
+    /// Service / Context 的 ECS 资源必须从这里取得，不能从 Runtime 兼容门面回退到 MainScope。
+    /// </summary>
+    public readonly ScopeRuntime OwnerScope;
+
+    /// <summary>
     /// 当前 Runtime 的 EventCenter。
     /// Send 可以直接使用它，避免 Require 后再经过 Layer.Send。
     /// </summary>
@@ -77,14 +84,16 @@ internal sealed class ServiceLayerBinding
         int          runtimeId,
         int          layerIndex,
         Layer?       layer,
-        LayerRuntime runtime)
+        LayerRuntime runtime,
+        ScopeRuntime ownerScope)
     {
         Version = version;
         RuntimeId = runtimeId;
         LayerIndex = layerIndex;
         Layer = layer;
         Runtime = runtime;
-        EventCenter = runtime.EventCenter;
+        OwnerScope = ownerScope ?? throw new ArgumentNullException(nameof(ownerScope));
+        EventCenter = ownerScope.EventCenter;
     }
 }
 
@@ -180,7 +189,8 @@ internal static class ServiceLayerBinder
             runtimeId: runtime.Id,
             layerIndex: -1,
             layer: null,
-            runtime: runtime);
+            runtime: runtime,
+            ownerScope: runtime.ScopeHost.MainScope);
 
         ApplyBinding(service, binding);
 
@@ -209,13 +219,47 @@ internal static class ServiceLayerBinder
             runtimeId: runtime.Id,
             layerIndex: layer.RouteIndex,
             layer: layer,
-            runtime: runtime);
+            runtime: runtime,
+            ownerScope: runtime.ScopeHost.MainScope);
 
         ApplyBinding(service, binding);
 
         if (service is IInternalLayerContext internalContext)
         {
             internalContext.LayerIndex = layer.RouteIndex;
+        }
+    }
+
+    public static void AttachScopeRuntime(object service, LayerRuntime runtime, ScopeRuntime ownerScope)
+    {
+        if (service == null)
+        {
+            return;
+        }
+
+        if (runtime == null)
+        {
+            throw new ArgumentNullException(nameof(runtime));
+        }
+
+        if (ownerScope == null)
+        {
+            throw new ArgumentNullException(nameof(ownerScope));
+        }
+
+        var binding = new ServiceLayerBinding(
+            version: s_version,
+            runtimeId: runtime.Id,
+            layerIndex: -1,
+            layer: null,
+            runtime: runtime,
+            ownerScope: ownerScope);
+
+        ApplyBinding(service, binding);
+
+        if (service is IInternalLayerContext internalContext)
+        {
+            internalContext.LayerIndex = -1;
         }
     }
 

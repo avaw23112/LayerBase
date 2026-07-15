@@ -9,6 +9,8 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
 {
     private ActorId[] _actorIds;
     private TEvent[] _events;
+    private IProjectedActorCommandSink? _autoFlushSink;
+    private int _autoFlushLimit;
 
     public int Count { get; private set; }
 
@@ -18,10 +20,16 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
     /// </summary>
     internal int GrowCount { get; private set; }
 
-    private ProjectionBatchBuffer(ActorId[] actorIds, TEvent[] events)
+    private ProjectionBatchBuffer(
+        ActorId[] actorIds,
+        TEvent[] events,
+        IProjectedActorCommandSink? autoFlushSink,
+        int autoFlushLimit)
     {
         _actorIds = actorIds;
         _events = events;
+        _autoFlushSink = autoFlushSink;
+        _autoFlushLimit = Math.Max(0, autoFlushLimit);
         Count = 0;
         GrowCount = 0;
     }
@@ -32,7 +40,10 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
     /// 参数说明：
     /// initialCapacity：初始容量，用于容量预测。
     /// </summary>
-    public static ProjectionBatchBuffer<TEvent> Rent(int initialCapacity = 64)
+    public static ProjectionBatchBuffer<TEvent> Rent(
+        int initialCapacity = 64,
+        IProjectedActorCommandSink? autoFlushSink = null,
+        int autoFlushLimit = 0)
     {
         int safeCapacity = initialCapacity <= 0
             ? 64
@@ -40,7 +51,9 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
 
         return new ProjectionBatchBuffer<TEvent>(
             ArrayPool<ActorId>.Shared.Rent(safeCapacity),
-            ArrayPool<TEvent>.Shared.Rent(safeCapacity));
+            ArrayPool<TEvent>.Shared.Rent(safeCapacity),
+            autoFlushSink,
+            autoFlushLimit);
     }
 
     public void Add(ActorId actorId, in TEvent value)
@@ -54,6 +67,13 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
         _actorIds[index] = actorId;
         _events[index] = value;
         Count = index + 1;
+
+        if (_autoFlushSink != null &&
+            _autoFlushLimit > 0 &&
+            Count >= _autoFlushLimit)
+        {
+            FlushTo(_autoFlushSink);
+        }
     }
 
     private void Grow()
@@ -92,12 +112,20 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
         }
     }
 
+    public void FlushTo(IProjectedActorCommandSink commandSink)
+    {
+        PostTo(commandSink);
+        Count = 0;
+    }
+
     public void Dispose()
     {
         ArrayPool<ActorId>.Shared.Return(_actorIds, clearArray: false);
         ArrayPool<TEvent>.Shared.Return(_events, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<TEvent>());
         _actorIds = Array.Empty<ActorId>();
         _events = Array.Empty<TEvent>();
+        _autoFlushSink = null;
+        _autoFlushLimit = 0;
         Count = 0;
     }
 }

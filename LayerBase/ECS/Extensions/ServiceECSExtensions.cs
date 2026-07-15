@@ -140,6 +140,6 @@ public static class ServiceECSExtensions
             throw new ArgumentNullException(nameof(service));
         }
 
-        return ServiceLayerBinder.RequireBinding(service).Runtime.EcsWorld;
+        return ServiceLayerBinder.RequireBinding(service).OwnerScope.EcsScheduler.World;
     }
 }

@@ -141,6 +141,6 @@ public static class LayerContextECSExtensions
             throw new ArgumentNullException(nameof(ILayerContext));
         }
 
-        return ServiceLayerBinder.RequireBinding(ILayerContext).Runtime.EcsWorld;
+        return ServiceLayerBinder.RequireBinding(ILayerContext).OwnerScope.EcsScheduler.World;
     }
 }

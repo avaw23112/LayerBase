@@ -136,6 +136,6 @@ public static class LayerQueryExtensions
             throw new ArgumentNullException(nameof(layer));
         }
 
-        return ServiceLayerBinder.RequireBinding(layer).Runtime.EcsWorld;
+        return ServiceLayerBinder.RequireBinding(layer).OwnerScope.EcsScheduler.World;
     }
 }
