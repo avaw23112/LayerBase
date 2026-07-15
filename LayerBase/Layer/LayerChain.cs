@@ -79,7 +79,7 @@ internal sealed class LayerChain
     /// </summary>
     internal void DisposeLayers()
     {
-        _owner.ScopeHost.MainScope.LifecyclePlan.DisposeReverse();
+        _owner.ScopeHost.MainScope.RunLifecycleDispose();
     }
 
     /// <summary>
@@ -122,6 +122,7 @@ internal sealed class LayerChain
 
         var lifecyclePlan = ScopeLifecyclePlan.Build(builtLayers);
         _owner.ScopeHost.MainScope.SetLifecyclePlan(lifecyclePlan);
+        lifecyclePlan.RunInitialize();
         lifecyclePlan.RunPostBuild();
         lifecyclePlan.RunRuntimeStart();
 

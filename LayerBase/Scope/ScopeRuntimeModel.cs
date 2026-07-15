@@ -279,6 +279,17 @@ internal sealed class ScopeLifecyclePlan
             dispose.ToArray());
     }
 
+    public void RunInitialize()
+    {
+        for (int layerIndex = 0; layerIndex < Layers.Length; layerIndex++)
+        {
+            var slice = Layers[layerIndex];
+            int end = slice.InitializeStart + slice.InitializeCount;
+            for (int i = slice.InitializeStart; i < end; i++)
+                Initialize[i]();
+        }
+    }
+
     public void RunPostBuild()
     {
         for (int layerIndex = 0; layerIndex < Layers.Length; layerIndex++)

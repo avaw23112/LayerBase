@@ -25,6 +25,7 @@ internal sealed class ScopeRuntime : IDisposable
     private int _callSequence;
     private float _fixedUpdateAccumulator;
     private bool _runtimeStopRun;
+    private bool _lifecycleDisposeRun;
     private bool _disposeRequestedFromControl;
 
     public ScopeRuntime(LayerRuntime runtime, ScopeExecutionPlan plan, int runtimeId, int generation)
@@ -346,11 +347,41 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void PumpScopeResources(float deltaTime)
     {
+        var context = SynchronizationContext;
+        if (context != null)
+        {
+            using var scope = context.EnterScope();
+            PumpScopeResourcesCore(deltaTime);
+            return;
+        }
+
+        PumpScopeResourcesCore(deltaTime);
+    }
+
+    private void PumpScopeResourcesCore(float deltaTime)
+    {
+        PumpIngress();
+        PumpSynchronizationContext(
+            CompletionExceptionPolicy.Throw,
+            null);
         TickTimer(deltaTime);
         DelayManager?.Tick(deltaTime);
-        PumpIngress();
         PostScheduler?.Pump();
         PumpUpdate(deltaTime);
+    }
+
+    public void PumpSynchronizationContext(
+        CompletionExceptionPolicy exceptionPolicy,
+        Action<Exception>? reportException)
+    {
+        var context = SynchronizationContext;
+        if (context == null)
+            return;
+
+        context.Update(
+            PostScheduler?.Options.MaxCompletionsPerPump ?? 0,
+            exceptionPolicy,
+            reportException);
     }
 
     public void ClearLocalCallRegistry()
@@ -392,6 +423,15 @@ internal sealed class ScopeRuntime : IDisposable
         _runtimeStopRun = true;
         LifecyclePlan.RunRuntimeStopReverse();
         _actorWorld?.RuntimeStop();
+    }
+
+    public void RunLifecycleDispose()
+    {
+        if (_lifecycleDisposeRun)
+            return;
+
+        _lifecycleDisposeRun = true;
+        LifecyclePlan.DisposeReverse();
     }
 
     private void DrainCallInbox()
@@ -607,6 +647,7 @@ internal sealed class ScopeRuntime : IDisposable
             StopOnOwnerThread();
 
         _state = ScopeRuntimeState.Disposing;
+        RunLifecycleDispose();
         ReleaseCallInbox();
         ReleaseEventInbox();
         _callPayloadStorage.Dispose();

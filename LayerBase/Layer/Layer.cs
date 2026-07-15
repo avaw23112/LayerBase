@@ -65,6 +65,8 @@ public abstract class Layer : Node, IDisposable
     #endregion
 
     #region Runtime State - Lifecycle
+    // IInitializable 服务列表，Scope Activate 时按 Layer 顺序调用。
+    private readonly List<IInitializable> _initializables = new();
     // IUpdate 服务列表，每帧调用。
     private readonly List<IUpdate> _serviceUpdates = new();
     // IPostBuild 服务列表，构建完成后调用。
@@ -228,6 +230,7 @@ public abstract class Layer : Node, IDisposable
         }
 
         ReleaseDelayPublishers();
+        _initializables.Clear();
         _serviceUpdates.Clear();
         _postBuilds.Clear();
         _runtimeStarts.Clear();
@@ -305,7 +308,7 @@ public abstract class Layer : Node, IDisposable
     {
         foreach (var resolved in _resolvedServices)
         {
-            if (resolved.Instance is IInitializable init) init.Initialize();
+            if (resolved.Instance is IInitializable init) _initializables.Add(init);
             if (resolved.Instance is IUpdate up) _serviceUpdates.Add(up);
             if (resolved.Instance is IFixedUpdate fixedUpdate) _fixedUpdates.Add(fixedUpdate);
             if (resolved.Instance is IPostBuild postBuild) _postBuilds.Add(postBuild);
@@ -314,9 +317,16 @@ public abstract class Layer : Node, IDisposable
         }
 
         if (this is IFixedUpdate layerFixedUpdate) _fixedUpdates.Add(layerFixedUpdate);
+        if (this is IInitializable layerInitializable) _initializables.Add(layerInitializable);
         if (this is IPostBuild layerPostBuild) _postBuilds.Add(layerPostBuild);
         if (this is IRuntimeStart layerRuntimeStart) _runtimeStarts.Add(layerRuntimeStart);
         if (this is IRuntimeStop layerRuntimeStop) _runtimeStops.Add(layerRuntimeStop);
+    }
+
+    internal void RunInitialize()
+    {
+        for (var i = 0; i < _initializables.Count; i++)
+            _initializables[i].Initialize();
     }
 
     internal void RunPostBuild()
@@ -354,6 +364,8 @@ public abstract class Layer : Node, IDisposable
         var runtimeStopStart = runtimeStop.Count;
         var disposeStart = dispose.Count;
 
+        if (_initializables.Count > 0)
+            initialize.Add(RunInitialize);
         if (_postBuilds.Count > 0)
             postBuild.Add(RunPostBuild);
         if (_runtimeStarts.Count > 0)

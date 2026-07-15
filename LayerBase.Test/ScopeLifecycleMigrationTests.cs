@@ -56,6 +56,25 @@ public sealed class ScopeLifecycleMigrationTests
     }
 
     [Test]
+    public void Initialize_runs_through_scope_lifecycle_plan_in_forward_layer_order()
+    {
+        var trace = new List<string>();
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new TraceLayer("L0", trace, registerUpdate: false, registerInitialize: true))
+                              .Push(new TraceLayer("L1", trace, registerUpdate: false, registerInitialize: false))
+                              .Push(new TraceLayer("L2", trace, registerUpdate: false, registerInitialize: true))
+                              .Build();
+
+        var plan = runtime.ScopeHost.MainScope.LifecyclePlan;
+        var initializes = GetArray(plan.GetType(), plan, "Initialize");
+
+        Assert.That(initializes, Has.Length.EqualTo(2),
+            "Initialize invokers must be captured into the ScopeLifecyclePlan instead of running outside the scope lifecycle.");
+        Assert.That(trace.Where(static item => item.StartsWith("Init_", StringComparison.Ordinal)).ToArray(),
+            Is.EqualTo(new[] { "Init_L0", "Init_L2" }));
+    }
+
+    [Test]
     public void Runtime_stop_runs_in_reverse_layer_order()
     {
         var trace = new List<string>();
@@ -165,6 +184,59 @@ public sealed class ScopeLifecycleMigrationTests
         Assert.That(updateThreadId, Is.Not.EqualTo(0));
         Assert.That(stopThreadId, Is.EqualTo(updateThreadId));
         Assert.That(updateThreadId, Is.Not.EqualTo(mainThreadId));
+    }
+
+    [Test]
+    public void Scope_pump_drains_owner_synchronization_context_before_update()
+    {
+        var trace = new List<string>();
+        using var runtime = new LayerRuntime(9106);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                CreateTraceScopePlan<InlineTraceScope>(
+                    scopeId: 1,
+                    ScopeOptions.Inline,
+                    trace,
+                    "Update_I0",
+                    "Update_I2")
+            },
+            runtimeId: 9106,
+            generation: 1);
+
+        ScopeRuntime scope = host.Scopes[1];
+        scope.InstallSynchronizationContext();
+        scope.SynchronizationContext!.Post(_ => trace.Add("Continuation"), null);
+
+        scope.PumpScopeResources(0.016f);
+
+        Assert.That(trace, Is.EqualTo(new[] { "Continuation", "Update_I0", "Update_I2" }));
+    }
+
+    [Test]
+    public async Task Disposing_scope_runs_lifecycle_dispose_in_reverse_layer_order()
+    {
+        var trace = new List<string>();
+        using var runtime = new LayerRuntime(9107);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                CreateDisposeScopePlan<InlineTraceScope>(scopeId: 1, trace)
+            },
+            runtimeId: 9107,
+            generation: 1);
+
+        ScopeRuntime scope = host.Scopes[1];
+        var disposeTask = scope.RequestDisposeAsync();
+
+        scope.PumpIngress();
+
+        _ = await disposeTask;
+        Assert.That(trace, Is.EqualTo(new[] { "Dispose_L2", "Dispose_L0" }));
     }
 
     [Test]
@@ -381,23 +453,69 @@ public sealed class ScopeLifecycleMigrationTests
                 Array.Empty<LifecycleInvoker>()));
     }
 
+    private static ScopeExecutionPlan CreateDisposeScopePlan<TScope>(
+        int scopeId,
+        List<string> trace)
+        where TScope : IScopeDefinition
+    {
+        var dispose = new LifecycleInvoker[]
+        {
+            () => trace.Add("Dispose_L0"),
+            () => trace.Add("Dispose_L2")
+        };
+        var layers = new[]
+        {
+            new ScopeLayerLifecycleSlice(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            new ScopeLayerLifecycleSlice(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+            new ScopeLayerLifecycleSlice(2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1)
+        };
+
+        return new ScopeExecutionPlan(
+            new ScopeDescriptor(scopeId, typeof(TScope).Name, typeof(TScope)),
+            ScopeOptions.Inline,
+            lifecyclePlan: new ScopeLifecyclePlan(
+                layers,
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<UpdateInvoker>(),
+                Array.Empty<FixedUpdateInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                dispose));
+    }
+
     private sealed class TraceLayer : Layer, IRuntimeStop
     {
         private readonly string _name;
         private readonly List<string> _trace;
         private readonly bool _registerUpdate;
+        private readonly bool _registerInitialize;
         private readonly int _updateSlot;
 
-        public TraceLayer(string name, List<string> trace, bool registerUpdate, int updateSlot = 0)
+        public TraceLayer(
+            string name,
+            List<string> trace,
+            bool registerUpdate,
+            int updateSlot = 0,
+            bool registerInitialize = false)
         {
             _name = name;
             _trace = trace;
             _registerUpdate = registerUpdate;
+            _registerInitialize = registerInitialize;
             _updateSlot = updateSlot;
         }
 
         public override void ConfigureServices(IServiceCollection services)
         {
+            if (_registerInitialize)
+            {
+                if (_name == "L0")
+                    services.AddSingleton(new TraceInitializableServiceA(_name, _trace));
+                else
+                    services.AddSingleton(new TraceInitializableServiceB(_name, _trace));
+            }
+
             if (_registerUpdate)
             {
                 if (_updateSlot == 0)
@@ -410,6 +528,43 @@ public sealed class ScopeLifecycleMigrationTests
         public void RuntimeStop()
         {
             _trace.Add("Stop_" + _name);
+        }
+    }
+
+    private abstract class TraceInitializableService : IService, IInitializable
+    {
+        private readonly string _name;
+        private readonly List<string> _trace;
+
+        public TraceInitializableService(string name, List<string> trace)
+        {
+            _name = name;
+            _trace = trace;
+        }
+
+        public void Initialize()
+        {
+            _trace.Add("Init_" + _name);
+        }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+    }
+
+    private sealed class TraceInitializableServiceA : TraceInitializableService
+    {
+        public TraceInitializableServiceA(string name, List<string> trace)
+            : base(name, trace)
+        {
+        }
+    }
+
+    private sealed class TraceInitializableServiceB : TraceInitializableService
+    {
+        public TraceInitializableServiceB(string name, List<string> trace)
+            : base(name, trace)
+        {
         }
     }
 

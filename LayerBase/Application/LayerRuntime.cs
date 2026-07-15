@@ -215,11 +215,8 @@ public sealed partial class LayerRuntime : IDisposable
         if (context != null)
         {
             using var scope = context.EnterScope();
-
-            // Completion drain (only when sync context exists)
-            var policy = IsDebugMode ? CompletionExceptionPolicy.Throw : CompletionExceptionPolicy.ReportAndContinue;
-            context.Update(_scopeHost.MainScope.PostScheduler?.Options.MaxCompletionsPerPump ?? 0, policy,
-                ex => ReportLayerEventError(-1, "System", "Completion", ex));
+            PumpCore(deltaTime);
+            return;
         }
 
         PumpCore(deltaTime);
@@ -227,23 +224,29 @@ public sealed partial class LayerRuntime : IDisposable
 
     private void PumpCore(float deltaTime)
     {
-        // 1. Time tick
-        _scopeHost.MainScope.TickTimer(deltaTime);
+        // 1. Scope call/event ingress
+        _scopeHost.MainScope.PumpIngress();
 
-        // 2. Delay tick
+        // 2. OwnerScope continuations
+        var policy = IsDebugMode ? CompletionExceptionPolicy.Throw : CompletionExceptionPolicy.ReportAndContinue;
+        _scopeHost.MainScope.PumpSynchronizationContext(
+            policy,
+            ex => ReportLayerEventError(-1, "System", "Completion", ex));
+
+        // 3. Time and delay tick
+        _scopeHost.MainScope.TickTimer(deltaTime);
         if (_chain != null && _chain.HasAnyDelay)
             DelayManager?.Tick(deltaTime);
 
-        // 3. Scope-local FixedUpdate accumulator
-        _scopeHost.MainScope.PumpFixedUpdate(_fixedUpdateOptions, deltaTime);
-
-        // 4. Scope ingress + post pump + layer pump + actor pump
-        _scopeHost.MainScope.PumpIngress();
-
+        // 4. Local post pump
         var scheduler = _scopeHost.MainScope.PostScheduler;
         PostPumpStats postStats = scheduler?.Pump()
                                   ?? new PostPumpStats(0, 0, 0, 0);
 
+        // 5. Scope-local FixedUpdate accumulator
+        _scopeHost.MainScope.PumpFixedUpdate(_fixedUpdateOptions, deltaTime);
+
+        // 6. Layer lifecycle update
         _scopeHost.MainScope.PumpUpdate(deltaTime);
 
         if (scheduler != null)
