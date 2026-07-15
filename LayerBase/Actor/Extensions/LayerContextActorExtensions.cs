@@ -16,7 +16,7 @@ public static class LayerContextActorExtensions
             throw new ArgumentNullException(nameof(context));
         }
 
-        return ServiceLayerBinder.RequireBinding(context).Runtime.ScopeHost.MainScope.Actors;
+        return ServiceLayerBinder.RequireBinding(context).OwnerScope.Actors;
     }
 
     public static LBTask<TResponse> Ask<TRequest, TResponse>(

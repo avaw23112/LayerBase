@@ -299,9 +299,11 @@ public static class ServiceExtensions
         in TEvent     value)
         where TEvent : struct
     {
-         service
-               .GetBinding()
-               .Runtime.PostTo(actorId, in value);
+        service
+            .GetBinding()
+            .OwnerScope
+            .Actors
+            .PostTo(actorId, in value);
     }
 
     public static void PostToMany<TEvent>(
@@ -312,7 +314,9 @@ public static class ServiceExtensions
     {
         service
             .GetBinding()
-            .Runtime.PostToMany(actorIds, in value);
+            .OwnerScope
+            .Actors
+            .PostToMany(actorIds, in value);
     }
 
     public static void SubscribeFlow<TValue>(
@@ -574,9 +578,11 @@ public static class LayerContextExtensions
         in TEvent          value)
         where TEvent : struct
     {
-         context
-               .GetBinding()
-               .Runtime.PostTo(actorId, in value);
+        context
+            .GetBinding()
+            .OwnerScope
+            .Actors
+            .PostTo(actorId, in value);
     }
 
     public static void PostToMany<TEvent>(
@@ -587,7 +593,9 @@ public static class LayerContextExtensions
     {
         context
             .GetBinding()
-            .Runtime.PostToMany(actorIds, in value);
+            .OwnerScope
+            .Actors
+            .PostToMany(actorIds, in value);
     }
 
     public static void SubscribeFlow<TValue>(

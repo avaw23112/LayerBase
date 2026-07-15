@@ -62,6 +62,21 @@ public readonly struct ActorAccessor
         _remote.PostTo(target, in value);
     }
 
+    public void PostToMany<TEvent>(
+        ReadOnlySpan<ActorId> actorIds,
+        in TEvent value)
+        where TEvent : struct
+    {
+        if (IsLocal)
+        {
+            _local.PostToMany(actorIds, in value);
+            return;
+        }
+
+        for (int i = 0; i < actorIds.Length; i++)
+            _remote.PostTo(ActorHandle.FromActorId(actorIds[i], RuntimeGeneration), in value);
+    }
+
     public LBTask<TResponse> Ask<TRequest, TResponse>(
         ActorId actorId,
         in TRequest request,
@@ -135,6 +150,14 @@ public readonly struct LocalActorAccessor
         where TEvent : struct
     {
         World.PostTo(target.ActorId, in value);
+    }
+
+    public void PostToMany<TEvent>(
+        ReadOnlySpan<ActorId> actorIds,
+        in TEvent value)
+        where TEvent : struct
+    {
+        World.PostToMany(actorIds, in value);
     }
 
     public LBTask<TResponse> Ask<TRequest, TResponse>(
