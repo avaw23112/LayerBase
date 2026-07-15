@@ -317,6 +317,86 @@ public sealed class ScopeLifecycleMigrationTests
     }
 
     [Test]
+    public async Task Dispose_response_waits_for_owner_thread_lifecycle_dispose()
+    {
+        var disposeStarted = new ManualResetEventSlim(false);
+        var releaseDispose = new ManualResetEventSlim(false);
+        var disposeFinished = new ManualResetEventSlim(false);
+
+        using var runtime = new LayerRuntime(9109);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                CreateWorkerDisposeScopePlan(disposeStarted, releaseDispose, disposeFinished)
+            },
+            runtimeId: 9109,
+            generation: 1);
+
+        ScopeRuntime scope = host.Scopes[1];
+        host.StartWorkers();
+
+        var disposeTask = scope.RequestDisposeAsync();
+
+        Assert.That(disposeStarted.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        try
+        {
+            Assert.That(disposeTask.GetAwaiter().IsCompleted, Is.False,
+                "DisposeResponse must not be completed until the owner-thread lifecycle dispose has finished.");
+        }
+        finally
+        {
+            releaseDispose.Set();
+        }
+
+        ScopeDisposeResponse response = await disposeTask;
+        Assert.That(response.State, Is.EqualTo(ScopeControlResult.Succeeded));
+        Assert.That(disposeFinished.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(scope.State, Is.EqualTo(ScopeRuntimeState.Disposed));
+    }
+
+    [Test]
+    public void Scope_runtime_host_disposes_main_scope_after_custom_scopes()
+    {
+        var trace = new List<string>();
+        using var runtime = new LayerRuntime(9110);
+        var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                CreateNamedDisposeScopePlan<MainScope>(ScopeDefinitionIds.Main, ScopeOptions.Main, trace, "Main"),
+                CreateNamedDisposeScopePlan<InlineTraceScope>(1, ScopeOptions.Inline, trace, "Inline"),
+                CreateNamedDisposeScopePlan<SecondInlineTraceScope>(3, ScopeOptions.Inline, trace, "SecondInline")
+            },
+            runtimeId: 9110,
+            generation: 1);
+
+        host.Dispose();
+
+        Assert.That(trace, Is.EqualTo(new[] { "Dispose_SecondInline", "Dispose_Inline", "Dispose_Main" }));
+    }
+
+    [Test]
+    public void Scope_lifecycle_control_does_not_add_independent_queues()
+    {
+        var scopeAssembly = typeof(ScopeRuntime).Assembly;
+        var lifecycleQueueTypes = scopeAssembly
+            .GetTypes()
+            .Where(static type =>
+                type.Namespace == "LayerBase.Scope" &&
+                (type.Name.Contains("StopQueue", StringComparison.Ordinal) ||
+                 type.Name.Contains("DisposeQueue", StringComparison.Ordinal) ||
+                 type.Name.Contains("ControlQueue", StringComparison.Ordinal) ||
+                 type.Name.Contains("CompletionQueue", StringComparison.Ordinal)))
+            .Select(static type => type.FullName)
+            .ToArray();
+
+        Assert.That(lifecycleQueueTypes, Is.Empty,
+            "Scope lifecycle control must share the existing ScopeCallInbox instead of adding a parallel queue.");
+    }
+
+    [Test]
     public async Task Stop_control_is_delivered_through_scope_call_inbox()
     {
         using var runtime = new LayerRuntime(9104);
@@ -530,6 +610,70 @@ public sealed class ScopeLifecycleMigrationTests
                 Array.Empty<LifecycleInvoker>()));
     }
 
+    private static ScopeExecutionPlan CreateWorkerDisposeScopePlan(
+        ManualResetEventSlim disposeStarted,
+        ManualResetEventSlim releaseDispose,
+        ManualResetEventSlim disposeFinished)
+    {
+        var dispose = new LifecycleInvoker[]
+        {
+            () =>
+            {
+                disposeStarted.Set();
+                if (!releaseDispose.Wait(TimeSpan.FromSeconds(2)))
+                    throw new TimeoutException("Timed out waiting for the dispose gate.");
+                disposeFinished.Set();
+            }
+        };
+        var layers = new[]
+        {
+            new ScopeLayerLifecycleSlice(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+        };
+
+        return new ScopeExecutionPlan(
+            new ScopeDescriptor(2, nameof(WorkerTraceScope), typeof(WorkerTraceScope)),
+            ScopeOptions.Worker(tickRateHz: 100),
+            lifecyclePlan: new ScopeLifecyclePlan(
+                layers,
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<UpdateInvoker>(),
+                Array.Empty<FixedUpdateInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                dispose));
+    }
+
+    private static ScopeExecutionPlan CreateNamedDisposeScopePlan<TScope>(
+        int scopeId,
+        ScopeOptions options,
+        List<string> trace,
+        string name)
+        where TScope : IScopeDefinition
+    {
+        var dispose = new LifecycleInvoker[]
+        {
+            () => trace.Add("Dispose_" + name)
+        };
+        var layers = new[]
+        {
+            new ScopeLayerLifecycleSlice(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+        };
+
+        return new ScopeExecutionPlan(
+            new ScopeDescriptor(scopeId, typeof(TScope).Name, typeof(TScope)),
+            options,
+            lifecyclePlan: new ScopeLifecyclePlan(
+                layers,
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<UpdateInvoker>(),
+                Array.Empty<FixedUpdateInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                dispose));
+    }
+
     private static ScopeExecutionPlan CreateWorkerContextCapturePlan<TScope>(
         int scopeId,
         ManualResetEventSlim updateSignal,
@@ -726,6 +870,10 @@ public sealed class ScopeLifecycleMigrationTests
     }
 
     private readonly struct SecondWorkerTraceScope : IScopeDefinition
+    {
+    }
+
+    private readonly struct SecondInlineTraceScope : IScopeDefinition
     {
     }
 

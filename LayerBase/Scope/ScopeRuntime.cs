@@ -27,6 +27,7 @@ internal sealed class ScopeRuntime : IDisposable
     private bool _runtimeStopRun;
     private bool _lifecycleDisposeRun;
     private bool _disposeRequestedFromControl;
+    private ScopeCallCompletion<ScopeDisposeResponse>? _pendingDisposeCompletion;
 
     public ScopeRuntime(LayerRuntime runtime, ScopeExecutionPlan plan, int runtimeId, int generation)
     {
@@ -527,8 +528,8 @@ internal sealed class ScopeRuntime : IDisposable
                 StopOnOwnerThread();
 
             _state = ScopeRuntimeState.Disposing;
+            _pendingDisposeCompletion = queuedCall.Completion;
             _disposeRequestedFromControl = true;
-            queuedCall.Completion.TrySetResult(new ScopeDisposeResponse(ScopeControlResult.Succeeded));
         }
         catch (Exception ex)
         {
@@ -554,8 +555,22 @@ internal sealed class ScopeRuntime : IDisposable
 
     private void DisposeAfterControlIfNeeded()
     {
-        if (_disposeRequestedFromControl)
-            DisposeOwnerThreadResources();
+        if (!_disposeRequestedFromControl)
+            return;
+
+        var completion = _pendingDisposeCompletion;
+        try
+        {
+            DisposeOwnerThreadResources(completion);
+        }
+        catch (Exception ex)
+        {
+            completion?.TrySetException(ex);
+            _pendingDisposeCompletion = null;
+            _disposeRequestedFromControl = false;
+            _state = ScopeRuntimeState.Faulted;
+            throw;
+        }
     }
 
     private void DrainEventInbox()
@@ -622,12 +637,17 @@ internal sealed class ScopeRuntime : IDisposable
         DisposeOwnerThreadResources();
     }
 
-    private void DisposeOwnerThreadResources()
+    private void DisposeOwnerThreadResources(
+        ScopeCallCompletion<ScopeDisposeResponse>? disposeCompletion = null)
     {
         if (_state == ScopeRuntimeState.Disposed)
+        {
+            disposeCompletion?.TrySetResult(new ScopeDisposeResponse(ScopeControlResult.Succeeded));
             return;
+        }
 
         _disposeRequestedFromControl = false;
+        _pendingDisposeCompletion = null;
         if (_state != ScopeRuntimeState.Stopped)
             StopOnOwnerThread();
 
@@ -656,8 +676,9 @@ internal sealed class ScopeRuntime : IDisposable
         SynchronizationContext = null;
         EcsScheduler.Dispose();
         EcsWorld.Dispose();
-        Transport.Dispose();
         _state = ScopeRuntimeState.Disposed;
+        disposeCompletion?.TrySetResult(new ScopeDisposeResponse(ScopeControlResult.Succeeded));
+        Transport.Dispose();
     }
 
     private void ReleaseCallInbox()
