@@ -240,8 +240,7 @@ public sealed partial class LayerRuntime : IDisposable
 
         // 3. Time and delay tick
         _scopeHost.MainScope.TickTimer(deltaTime);
-        if (_chain != null && _chain.HasAnyDelay)
-            DelayManager?.Tick(deltaTime);
+        _scopeHost.MainScope.DelayManager?.Tick(deltaTime);
 
         // 4. Local post pump
         var scheduler = _scopeHost.MainScope.PostScheduler;

@@ -195,7 +195,7 @@ public abstract class Layer : Node, IDisposable
     private void ReleaseDelayPublishers()
     {
         if (_delayPublishers.IsEmpty) return;
-        var manager = OwnerContext?.DelayManager;
+        var manager = OwnerContext?.ScopeHost.MainScope.DelayManager;
         foreach (var publisher in _delayPublishers.Values)
         {
             if (manager != null && publisher.PublisherId >= 0)
@@ -562,7 +562,7 @@ public abstract class Layer : Node, IDisposable
         var type = typeof(T);
         if (_delayPublishers.TryGetValue(type, out var existing)) return (IDelayPublisher<T>)existing;
 
-        var manager = OwnerContext?.DelayManager;
+        var manager = OwnerContext?.ScopeHost.MainScope.DelayManager;
         if (manager == null) throw new InvalidOperationException("DelayPublisherManager 未初始化。");
 
         var publisher = new DelayPublisher<T>(manager, this);
@@ -572,6 +572,8 @@ public abstract class Layer : Node, IDisposable
         var actual = _delayPublishers.GetOrAdd(type, publisher);
         if (actual == publisher)
             OwnerContext?.MarkDelayDirty();
+        else
+            manager.UnregisterPublisher(id);
 
         return (IDelayPublisher<T>)actual;
     }

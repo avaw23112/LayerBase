@@ -2,7 +2,9 @@
 using LayerBase.Actor;
 using LayerBase.Core.Event;
 using LayerBase.Core.EventHandler;
+using LayerBase.Event.Delay;
 using LayerBase.Layers;
+using LayerBase.Scope;
 using LayerBase.Worker;
 
 namespace LayerBase.DI;
@@ -31,6 +33,15 @@ public static class ServiceExtensions
     {
         return binding.OwnerScope.PolicyTable
                ?? throw new InvalidOperationException("Owner scope policy table is not built.");
+    }
+
+    internal static IDelayPublisher<TValue> RequireOwnerDelayPublisher<TValue>(ServiceLayerBinding binding)
+        where TValue : struct
+    {
+        if (binding.Layer != null && binding.OwnerScope.ScopeId == ScopeDefinitionIds.Main)
+            return binding.Layer.SubscribeDelay<TValue>();
+
+        return binding.OwnerScope.SubscribeDelay<TValue>();
     }
 
     /// <summary>
@@ -288,9 +299,7 @@ public static class ServiceExtensions
         int           contractId = 0)
         where TValue : struct
     {
-        ServiceLayerBinder
-            .RequireLayer(service.GetBinding())
-            .SubscribeDelay<TValue>()
+        RequireOwnerDelayPublisher<TValue>(service.GetBinding())
             .Publish(value, ttl, contractId);
     }
 
@@ -575,9 +584,7 @@ public static class LayerContextExtensions
         int                contractId = 0)
         where TValue : struct
     {
-        ServiceLayerBinder
-            .RequireLayer(context.GetBinding())
-            .SubscribeDelay<TValue>()
+        ServiceExtensions.RequireOwnerDelayPublisher<TValue>(context.GetBinding())
             .Publish(value, ttl, contractId);
     }
 

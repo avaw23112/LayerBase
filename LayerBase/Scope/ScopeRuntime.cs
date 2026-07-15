@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Arch.Core;
 using LayerBase.Actor;
 using LayerBase.Async;
@@ -30,6 +31,7 @@ internal sealed class ScopeRuntime : IDisposable
     private bool _lifecycleDisposeRun;
     private bool _disposeRequestedFromControl;
     private ScopeCallCompletion<ScopeDisposeResponse>? _pendingDisposeCompletion;
+    private readonly ConcurrentDictionary<Type, IDelayPublisherInternal> _delayPublishers = new();
 
     public ScopeRuntime(LayerRuntime runtime, ScopeExecutionPlan plan, int runtimeId, int generation)
     {
@@ -145,6 +147,35 @@ internal sealed class ScopeRuntime : IDisposable
     public void InitializeDelay(DelayBufferOptions options)
     {
         DelayManager = DelayPublisherManager.Create(options, RequirePolicyTable());
+    }
+
+    public IDelayPublisher<T> SubscribeDelay<T>() where T : struct
+    {
+        var type = typeof(T);
+        if (_delayPublishers.TryGetValue(type, out var existing))
+            return (IDelayPublisher<T>)existing;
+
+        var manager = DelayManager
+                      ?? throw new InvalidOperationException("DelayPublisherManager is not built.");
+        var publisher = new DelayPublisher<T>(manager, MarkDelayDirty);
+        int id = manager.RegisterPublisher(publisher);
+        publisher.SetId(id);
+
+        var actual = _delayPublishers.GetOrAdd(type, publisher);
+        if (ReferenceEquals(actual, publisher))
+        {
+            MarkDelayDirty();
+            return publisher;
+        }
+
+        manager.UnregisterPublisher(id);
+        return (IDelayPublisher<T>)actual;
+    }
+
+    private void MarkDelayDirty()
+    {
+        if (ScopeId == ScopeDefinitionIds.Main)
+            _runtime.MarkDelayDirty();
     }
 
     public void TickTimer(float deltaTime)
@@ -736,6 +767,7 @@ internal sealed class ScopeRuntime : IDisposable
         ReleaseCallInbox();
         ReleaseEventInbox();
         LocalCalls.Clear();
+        ReleaseDelayPublishers();
         DelayManager?.Clear();
         DelayManager = null;
         Timer?.Dispose();
@@ -750,6 +782,23 @@ internal sealed class ScopeRuntime : IDisposable
         _state = ScopeRuntimeState.Disposed;
         disposeCompletion?.TrySetResult(new ScopeDisposeResponse(ScopeControlResult.Succeeded));
         Transport.Dispose();
+    }
+
+    private void ReleaseDelayPublishers()
+    {
+        if (_delayPublishers.IsEmpty)
+            return;
+
+        var manager = DelayManager;
+        foreach (var publisher in _delayPublishers.Values)
+        {
+            if (manager != null && publisher.PublisherId >= 0)
+                manager.UnregisterPublisher(publisher.PublisherId);
+            publisher.Deactivate();
+        }
+
+        _delayPublishers.Clear();
+        MarkDelayDirty();
     }
 
     private void ReleaseCallInbox()
