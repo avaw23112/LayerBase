@@ -285,6 +285,38 @@ public sealed class ScopeLifecycleMigrationTests
     }
 
     [Test]
+    public async Task Disposed_scope_layer_slice_is_never_pumped()
+    {
+        var trace = new List<string>();
+        using var runtime = new LayerRuntime(9108);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                CreateTraceScopePlan<InlineTraceScope>(
+                    scopeId: 1,
+                    ScopeOptions.Inline,
+                    trace,
+                    "Update_I0",
+                    "Update_I2")
+            },
+            runtimeId: 9108,
+            generation: 1);
+
+        ScopeRuntime scope = host.Scopes[1];
+        var disposeTask = scope.RequestDisposeAsync();
+        scope.PumpIngress();
+        _ = await disposeTask;
+
+        trace.Clear();
+        scope.PumpUpdate(0.016f);
+        scope.PumpFixedUpdate(new FixedUpdateOptions(true, 0.016f, 1), 0.016f);
+
+        Assert.That(trace, Is.Empty);
+    }
+
+    [Test]
     public async Task Stop_control_is_delivered_through_scope_call_inbox()
     {
         using var runtime = new LayerRuntime(9104);

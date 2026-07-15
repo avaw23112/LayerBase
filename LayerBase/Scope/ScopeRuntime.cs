@@ -338,6 +338,9 @@ internal sealed class ScopeRuntime : IDisposable
     private void PumpScopeResourcesCore(float deltaTime)
     {
         PumpIngress();
+        if (!CanPumpLifecycle())
+            return;
+
         PumpSynchronizationContext(
             CompletionExceptionPolicy.Throw,
             null);
@@ -373,7 +376,7 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void PumpFixedUpdate(FixedUpdateOptions options, float deltaTime)
     {
-        if (!options.Enabled)
+        if (!options.Enabled || !CanPumpLifecycle())
             return;
 
         _fixedUpdateAccumulator += deltaTime;
@@ -389,7 +392,15 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void PumpUpdate(float deltaTime)
     {
+        if (!CanPumpLifecycle())
+            return;
+
         LifecyclePlan.PumpUpdate(deltaTime);
+    }
+
+    private bool CanPumpLifecycle()
+    {
+        return _state is ScopeRuntimeState.Created or ScopeRuntimeState.Running or ScopeRuntimeState.StopRequested;
     }
 
     public void RunRuntimeStop()
