@@ -146,7 +146,7 @@ public static class LayerHub
     /// 便捷 API：向 Primary Runtime 同步发送事件。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Send<T>(in T value) where T : struct
+    internal static void Send<T>(in T value) where T : struct
     {
         s_primaryRuntime?.Send(value);
     }
@@ -155,13 +155,13 @@ public static class LayerHub
     /// 便捷 API：向 Primary Runtime 投递事件。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Post<T>(in T value) where T : struct
+    internal static void Post<T>(in T value) where T : struct
     {
         _ = TryPost(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    internal static PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
         return s_primaryRuntime != null
             ? s_primaryRuntime.TryPost(value, policy)
@@ -172,7 +172,7 @@ public static class LayerHub
     /// 便捷 API：在 Primary Runtime 中将事件类型标记为脏。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void MarkDirty<T>() where T : struct
+    internal static void MarkDirty<T>() where T : struct
     {
         s_primaryRuntime?.MarkDirty<T>();
     }
@@ -181,7 +181,7 @@ public static class LayerHub
     /// 便捷 API：向 Primary Runtime 投递最新值事件（合并模式）。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void PostLatest<T>(in T value) where T : struct
+    internal static void PostLatest<T>(in T value) where T : struct
     {
         s_primaryRuntime?.PostLatest(value);
     }
@@ -190,7 +190,7 @@ public static class LayerHub
     /// 便捷 API：向 Primary Runtime 投递合并事件。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void PostCoalesced<T>(in T value) where T : struct
+    internal static void PostCoalesced<T>(in T value) where T : struct
     {
         s_primaryRuntime?.PostCoalesced(value);
     }
@@ -199,7 +199,7 @@ public static class LayerHub
     /// 便捷 API：在 Primary Runtime 的当前 Scope 上执行本地调用。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
+    internal static LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
                                                                    CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct

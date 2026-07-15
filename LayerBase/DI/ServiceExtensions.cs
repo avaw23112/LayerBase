@@ -14,6 +14,24 @@ public static class ServiceExtensions
         return ServiceLayerBinder.RequireBinding(service);
     }
 
+    internal static PostScheduler RequireOwnerScheduler(ServiceLayerBinding binding)
+    {
+        return binding.OwnerScope.PostScheduler
+               ?? throw new InvalidOperationException("Owner scope scheduler is not built.");
+    }
+
+    internal static TimeScheduler<ITimerAction> RequireOwnerTimer(ServiceLayerBinding binding)
+    {
+        return binding.OwnerScope.Timer
+               ?? throw new InvalidOperationException("Owner scope timer is not built.");
+    }
+
+    internal static EventBuildPolicyTable RequireOwnerPolicyTable(ServiceLayerBinding binding)
+    {
+        return binding.OwnerScope.PolicyTable
+               ?? throw new InvalidOperationException("Owner scope policy table is not built.");
+    }
+
     /// <summary>
     /// 同步发送事件。
     /// </summary>
@@ -68,7 +86,7 @@ public static class ServiceExtensions
         EventPostPolicy? policy = default)
         where TValue : struct
     {
-        var scheduler = service.GetBinding().Runtime.Scheduler;
+        var scheduler = RequireOwnerScheduler(service.GetBinding());
 
         return policy.HasValue
             ? scheduler.TryPost(value, policy.Value)
@@ -93,10 +111,7 @@ public static class ServiceExtensions
     public static PostResult MarkDirty<TValue>(this IService service)
         where TValue : struct
     {
-        return service
-               .GetBinding()
-               .Runtime
-               .Scheduler
+        return RequireOwnerScheduler(service.GetBinding())
                .MarkDirty<TValue>();
     }
 
@@ -132,10 +147,7 @@ public static class ServiceExtensions
         int                capacity     = 0)
         where TValue : struct
     {
-        return service
-               .GetBinding()
-               .Runtime
-               .Scheduler
+        return RequireOwnerScheduler(service.GetBinding())
                .TryPost(
                    value,
                    new EventPostPolicy(
@@ -176,10 +188,7 @@ public static class ServiceExtensions
         int                capacity     = 0)
         where TValue : struct
     {
-        return service
-               .GetBinding()
-               .Runtime
-               .Scheduler
+        return RequireOwnerScheduler(service.GetBinding())
                .TryPost(
                    value,
                    new EventPostPolicy(
@@ -238,11 +247,10 @@ public static class ServiceExtensions
         where TValue : struct
     {
         var binding = service.GetBinding();
-        var runtime = binding.Runtime;
         var eventId = EventTypeId<TValue>.Id;
-        var timerPolicy = runtime.PolicyTable.GetTimerPolicy(eventId);
+        var timerPolicy = RequireOwnerPolicyTable(binding).GetTimerPolicy(eventId);
 
-        return runtime.Timer.Schedule(
+        return RequireOwnerTimer(binding).Schedule(
             new PostEventAction<TValue>(
                 value,
                 expiredPostPolicy ?? timerPolicy?.ExpiredPostPolicy),
@@ -347,7 +355,7 @@ public static class ServiceExtensions
             return binding.Layer.GetService<T>();
         }
 
-        return binding.Runtime.GetService<T>();
+        return ServiceLayerBinder.RequireLayer(binding).GetService<T>();
     }
 }
 
@@ -412,7 +420,7 @@ public static class LayerContextExtensions
         EventPostPolicy?   policy = default)
         where TValue : struct
     {
-        var scheduler = context.GetBinding().Runtime.Scheduler;
+        var scheduler = ServiceExtensions.RequireOwnerScheduler(context.GetBinding());
 
         return policy.HasValue
             ? scheduler.TryPost(value, policy.Value)
@@ -435,10 +443,7 @@ public static class LayerContextExtensions
     public static PostResult MarkDirty<TValue>(this ILayerContext context)
         where TValue : struct
     {
-        return context
-               .GetBinding()
-               .Runtime
-               .Scheduler
+        return ServiceExtensions.RequireOwnerScheduler(context.GetBinding())
                .MarkDirty<TValue>();
     }
 
@@ -471,10 +476,7 @@ public static class LayerContextExtensions
         int                capacity     = 0)
         where TValue : struct
     {
-        return context
-               .GetBinding()
-               .Runtime
-               .Scheduler
+        return ServiceExtensions.RequireOwnerScheduler(context.GetBinding())
                .TryPost(
                    value,
                    new EventPostPolicy(
@@ -512,10 +514,7 @@ public static class LayerContextExtensions
         int                capacity     = 0)
         where TValue : struct
     {
-        return context
-               .GetBinding()
-               .Runtime
-               .Scheduler
+        return ServiceExtensions.RequireOwnerScheduler(context.GetBinding())
                .TryPost(
                    value,
                    new EventPostPolicy(
@@ -539,11 +538,10 @@ public static class LayerContextExtensions
         where TValue : struct
     {
         var binding = context.GetBinding();
-        var runtime = binding.Runtime;
         var eventId = EventTypeId<TValue>.Id;
-        var timerPolicy = runtime.PolicyTable.GetTimerPolicy(eventId);
+        var timerPolicy = ServiceExtensions.RequireOwnerPolicyTable(binding).GetTimerPolicy(eventId);
 
-        return runtime.Timer.Schedule(
+        return ServiceExtensions.RequireOwnerTimer(binding).Schedule(
             new PostEventAction<TValue>(
                 value,
                 expiredPostPolicy ?? timerPolicy?.ExpiredPostPolicy),
@@ -638,6 +636,6 @@ public static class LayerContextExtensions
             return binding.Layer.GetService<T>();
         }
 
-        return binding.Runtime.GetService<T>();
+        return ServiceLayerBinder.RequireLayer(binding).GetService<T>();
     }
 }

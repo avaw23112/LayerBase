@@ -24,8 +24,8 @@ public sealed partial class LayerRuntime : IDisposable
     #region External Dependencies
     // 核心子系统，在构造时创建，贯穿 Runtime 生命周期。
     internal WorldServiceRoot Services { get; }
-    public EventCenter EventCenter => _scopeHost.MainScope.EventCenter;
-    public ActorWorld Actors => _scopeHost.MainScope.ActorWorld;
+    internal EventCenter EventCenter => _scopeHost.MainScope.EventCenter;
+    internal ActorWorld Actors => _scopeHost.MainScope.ActorWorld;
     #endregion
 
     #region Runtime State - Configuration
@@ -60,14 +60,14 @@ public sealed partial class LayerRuntime : IDisposable
 
     public ScopeRef<MainScope> Main => _mainScope;
 
-    public LayerBase.DI.IServiceProvider ServiceProvider =>
+    internal LayerBase.DI.IServiceProvider ServiceProvider =>
         _worldProvider ?? throw new InvalidOperationException("Runtime not built.");
 
-    public T GetService<T>() where T : class => ServiceProvider.Get<T>();
+    internal T GetService<T>() where T : class => ServiceProvider.Get<T>();
 
-    public PostScheduler Scheduler => _scopeHost.MainScope.PostScheduler ?? throw new InvalidOperationException("Runtime not built.");
+    internal PostScheduler Scheduler => _scopeHost.MainScope.PostScheduler ?? throw new InvalidOperationException("Runtime not built.");
 
-    public TimeScheduler<ITimerAction> Timer => _scopeHost.MainScope.Timer ?? throw new InvalidOperationException("Runtime not built.");
+    internal TimeScheduler<ITimerAction> Timer => _scopeHost.MainScope.Timer ?? throw new InvalidOperationException("Runtime not built.");
 
     public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
 
@@ -109,7 +109,7 @@ public sealed partial class LayerRuntime : IDisposable
         return _scopeHost.TryGetScope(out scope);
     }
 
-    public EventBuildPolicyTable PolicyTable =>
+    internal EventBuildPolicyTable PolicyTable =>
         _scopeHost.MainScope.PolicyTable ?? throw new InvalidOperationException("Runtime not built.");
 
     internal void InitializeScheduler(PostSchedulerOptions options)
@@ -117,7 +117,7 @@ public sealed partial class LayerRuntime : IDisposable
         BuildEventPolicies(options);
     }
 
-    public void RebuildEventPolicies()
+    internal void RebuildEventPolicies()
     {
         var scheduler = _scopeHost.MainScope.PostScheduler;
         if (scheduler == null) throw new InvalidOperationException("Runtime not built.");
@@ -281,7 +281,7 @@ public sealed partial class LayerRuntime : IDisposable
             usedEvents: postStats.ProcessedCount,
             deadlineTicks: deadlineTicks);
     }
-    public void ReportInfo(LayerEventInfo info)
+    internal void ReportInfo(LayerEventInfo info)
     {
         OnLayerEventInfo?.Invoke(info);
         LayerHub.Internal_NotifyEvent(info);
@@ -308,19 +308,19 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Send<T>(in T value) where T : struct
+    internal void Send<T>(in T value) where T : struct
     {
         EventCenter.Send(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Post<T>(in T value) where T : struct
+    internal void Post<T>(in T value) where T : struct
     {
         _ = TryPost(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    internal PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
         return policy.HasValue
             ? Scheduler.TryPost(value, policy.Value)
@@ -328,24 +328,24 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void MarkDirty<T>() where T : struct
+    internal void MarkDirty<T>() where T : struct
     {
         Scheduler.MarkDirty<T>();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostLatest<T>(in T value) where T : struct
+    internal void PostLatest<T>(in T value) where T : struct
     {
         Scheduler.TryPostLatest(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostCoalesced<T>(in T value) where T : struct
+    internal void PostCoalesced<T>(in T value) where T : struct
     {
         Scheduler.TryPostCoalesced(value);
     }
 
-    public TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
+    internal TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
     {
         var eventId = EventTypeId<T>.Id;
         var timerPolicy = PolicyTable.GetTimerPolicy(eventId);
@@ -360,7 +360,7 @@ public sealed partial class LayerRuntime : IDisposable
 
     #region Public API - Cross-Layer Call
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
+    internal LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
                                                             CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct

@@ -108,6 +108,73 @@ public sealed class ScopeArchitectureAcceptanceTests
     }
 
     [Test]
+    public void Layer_runtime_public_api_does_not_expose_scope_local_resources_or_root_provider()
+    {
+        string[] forbidden =
+        {
+            "EventCenter",
+            "Scheduler",
+            "Timer",
+            "EcsWorld",
+            "Actors",
+            "ServiceProvider",
+            "GetService",
+            "Send",
+            "Post",
+            "TryPost",
+            "MarkDirty",
+            "PostLatest",
+            "PostCoalesced",
+            "SchedulePost",
+            "CreateActor",
+            "AskActor",
+            "PostTo",
+            "PostToMany",
+            "PolicyTable",
+            "RebuildEventPolicies",
+            "ReportInfo",
+            "CallAsync"
+        };
+
+        var publicMembers = typeof(LayerRuntime)
+            .GetMembers(BindingFlags.Public | BindingFlags.Instance)
+            .Select(static member => member.Name)
+            .ToArray();
+
+        foreach (string name in forbidden)
+        {
+            Assert.That(publicMembers, Does.Not.Contain(name),
+                $"LayerRuntime must expose ScopeRef/control API instead of raw runtime resource '{name}'.");
+        }
+    }
+
+    [Test]
+    public void Layer_hub_public_api_does_not_expose_primary_runtime_event_or_call_shortcuts()
+    {
+        string[] forbidden =
+        {
+            "Send",
+            "Post",
+            "TryPost",
+            "MarkDirty",
+            "PostLatest",
+            "PostCoalesced",
+            "CallAsync"
+        };
+
+        var publicMembers = typeof(LayerHub)
+            .GetMembers(BindingFlags.Public | BindingFlags.Static)
+            .Select(static member => member.Name)
+            .ToArray();
+
+        foreach (string name in forbidden)
+        {
+            Assert.That(publicMembers, Does.Not.Contain(name),
+                $"LayerHub must expose runtime creation/control, not primary-runtime shortcut '{name}'.");
+        }
+    }
+
+    [Test]
     public void Main_scope_ingress_and_runtime_resources_are_owned_by_scope_runtime_not_layer_runtime_fields()
     {
         var runtimeInboxFields = typeof(LayerRuntime)

@@ -115,6 +115,7 @@ internal static class ServiceLayerBinder
     /// value 是该对象所属 Runtime 与 Layer 的绑定信息。
     /// </summary>
     private static ConditionalWeakTable<object, ServiceLayerBinding> s_bindingMap = new();
+    private static readonly object s_bindingMapLock = new();
 
     /// <summary>
     /// 当前绑定版本号。
@@ -130,7 +131,10 @@ internal static class ServiceLayerBinder
     /// </summary>
     public static void Reset()
     {
-        s_bindingMap = new ConditionalWeakTable<object, ServiceLayerBinding>();
+        lock (s_bindingMapLock)
+        {
+            s_bindingMap = new ConditionalWeakTable<object, ServiceLayerBinding>();
+        }
 
         unchecked
         {
@@ -150,7 +154,10 @@ internal static class ServiceLayerBinder
             accessor.__LayerBaseBinding = null;
         }
 
-        s_bindingMap.Remove(service);
+        lock (s_bindingMapLock)
+        {
+            s_bindingMap.Remove(service);
+        }
 
         if (service is IInternalLayerContext internalContext)
         {
@@ -273,10 +280,13 @@ internal static class ServiceLayerBinder
             return binding;
         }
 
-        if (s_bindingMap.TryGetValue(service, out binding) &&
-            binding.Version == s_version)
+        lock (s_bindingMapLock)
         {
-            return binding;
+            if (s_bindingMap.TryGetValue(service, out var mappedBinding) &&
+                mappedBinding.Version == s_version)
+            {
+                return mappedBinding;
+            }
         }
 
         return null;
@@ -290,8 +300,11 @@ internal static class ServiceLayerBinder
         }
         else
         {
-            s_bindingMap.Remove(service);
-            s_bindingMap.Add(service, binding);
+            lock (s_bindingMapLock)
+            {
+                s_bindingMap.Remove(service);
+                s_bindingMap.Add(service, binding);
+            }
         }
     }
 
@@ -329,10 +342,13 @@ internal static class ServiceLayerBinder
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static ServiceLayerBinding RequireBindingSlow(object service)
     {
-        if (s_bindingMap.TryGetValue(service, out var binding) &&
-            binding.Version == s_version)
+        lock (s_bindingMapLock)
         {
-            return binding;
+            if (s_bindingMap.TryGetValue(service, out var binding) &&
+                binding.Version == s_version)
+            {
+                return binding;
+            }
         }
 
         throw new InvalidOperationException(

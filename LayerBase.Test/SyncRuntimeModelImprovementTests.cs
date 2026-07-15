@@ -74,10 +74,11 @@ public sealed class SyncRuntimeModelImprovementTests
 
         Assert.That(fromB, Is.SameAs(fromA));
 
-        // GetService should now work because it falls back to world provider
-        Assert.That(fromA.GetService<RuntimeBoundSingletonService>(), Is.SameAs(fromA));
+        Assert.That(
+            () => fromA.GetService<RuntimeBoundSingletonService>(),
+            Throws.TypeOf<InvalidOperationException>()
+                  .With.Message.Contains("bound to Runtime"));
 
-        // But Layer-only API like Delay should still fail clearly
         Assert.That(
             () => fromA.Delay(new RuntimeCachePayloadEvent(), 1.0f),
             Throws.TypeOf<InvalidOperationException>()

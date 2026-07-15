@@ -3,6 +3,7 @@ using Arch.Buffer;
 using Arch.Core;
 using LayerBase.Actor;
 using LayerBase.Core;
+using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
@@ -77,6 +78,81 @@ public class ScopeEcsMigrationTests
 
         Assert.That(context.ECSWorld(), Is.SameAs(host.Scopes[1].EcsWorld));
         Assert.That(context.ECSWorld(), Is.Not.SameAs(runtime.EcsWorld));
+    }
+
+    [Test]
+    public void Service_event_api_uses_owner_scope_post_scheduler()
+    {
+        LayerHub.Reset();
+        var runtime = new LayerRuntime(2307);
+        var plans = CreateTwoScopePlans(235);
+
+        using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        ScopeRuntime customScope = host.Scopes[1];
+        InitializeScopeEventRuntime(customScope, EventTypeId<ScopeOwnerPostEvent>.Id);
+
+        int mainValue = 0;
+        int customValue = 0;
+        runtime.ScopeHost.MainScope.EventCenter.SubscribeNotify<ScopeOwnerPostEvent>(0, (in ScopeOwnerPostEvent evt) => mainValue = evt.Value);
+        customScope.EventCenter.SubscribeNotify<ScopeOwnerPostEvent>(0, (in ScopeOwnerPostEvent evt) => customValue = evt.Value);
+
+        var service = new ScopeEcsProbeService();
+        AttachScopeRuntime(service, runtime, customScope);
+
+        PostResult result = service.Post(new ScopeOwnerPostEvent(17));
+        customScope.PostScheduler!.Pump();
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(customValue, Is.EqualTo(17));
+        Assert.That(mainValue, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Context_event_api_uses_owner_service_scope_post_scheduler()
+    {
+        LayerHub.Reset();
+        var runtime = new LayerRuntime(2308);
+        var plans = CreateTwoScopePlans(236);
+
+        using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        ScopeRuntime customScope = host.Scopes[1];
+        InitializeScopeEventRuntime(customScope, EventTypeId<ScopeOwnerPostEvent>.Id);
+
+        int customValue = 0;
+        customScope.EventCenter.SubscribeNotify<ScopeOwnerPostEvent>(0, (in ScopeOwnerPostEvent evt) => customValue = evt.Value);
+
+        var context = new ScopeEcsProbeContext();
+        AttachScopeRuntime(context, runtime, customScope);
+
+        PostResult result = context.Post(new ScopeOwnerPostEvent(23));
+        customScope.PostScheduler!.Pump();
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(customValue, Is.EqualTo(23));
+    }
+
+    [Test]
+    public void Service_timer_api_uses_owner_scope_timer_and_post_scheduler()
+    {
+        LayerHub.Reset();
+        var runtime = new LayerRuntime(2309);
+        var plans = CreateTwoScopePlans(237);
+
+        using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        ScopeRuntime customScope = host.Scopes[1];
+        InitializeScopeEventRuntime(customScope, EventTypeId<ScopeOwnerPostEvent>.Id);
+
+        int customValue = 0;
+        customScope.EventCenter.SubscribeNotify<ScopeOwnerPostEvent>(0, (in ScopeOwnerPostEvent evt) => customValue = evt.Value);
+
+        var service = new ScopeEcsProbeService();
+        AttachScopeRuntime(service, runtime, customScope);
+
+        service.SchedulePost(new ScopeOwnerPostEvent(31), delaySeconds: 0f);
+        customScope.TickTimer(0.02f);
+        customScope.PostScheduler!.Pump();
+
+        Assert.That(customValue, Is.EqualTo(31));
     }
 
     [Test]
@@ -213,6 +289,23 @@ public class ScopeEcsMigrationTests
         Assert.That(method, Is.Not.Null, "ServiceLayerBinder must expose an internal OwnerScope binding path.");
         method!.Invoke(null, new object[] { target, runtime, scope });
     }
+
+    private static void InitializeScopeEventRuntime(ScopeRuntime scope, params int[] eventTypeIds)
+    {
+        var options = PostSchedulerOptions.Default;
+        var policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
+        var plans = eventTypeIds
+            .Select(eventTypeId => new PostTypePlan(
+                eventTypeId,
+                PostDeliveryMode.Normal,
+                options.DefaultBackpressure,
+                maxPending: 0,
+                options.DefaultBackpressure))
+            .ToArray();
+
+        scope.InitializeOrUpdateScheduler(options, policyTable, plans);
+        scope.InitializeTimer(TimeSchedulerOptions.Default);
+    }
 }
 
 internal readonly struct ScopeEcsCustomScope : IScopeDefinition
@@ -243,6 +336,16 @@ internal struct ScopeEcsProbeComponent : IComponent
 internal readonly struct ScopeEcsProjectionEvent
 {
     public ScopeEcsProjectionEvent(int value)
+    {
+        Value = value;
+    }
+
+    public int Value { get; }
+}
+
+internal readonly struct ScopeOwnerPostEvent
+{
+    public ScopeOwnerPostEvent(int value)
     {
         Value = value;
     }

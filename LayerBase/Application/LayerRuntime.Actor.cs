@@ -7,14 +7,14 @@ namespace LayerBase;
 public sealed partial class LayerRuntime
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public TActor CreateActor<TActor>(bool usePool = false)
+    internal TActor CreateActor<TActor>(bool usePool = false)
         where TActor : class, IActor, new()
     {
         return Actors.CreateActor<TActor>(usePool);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public LBTask<TResponse> AskActor<TRequest, TResponse>(
+    internal LBTask<TResponse> AskActor<TRequest, TResponse>(
         ActorId           actorId,
         in TRequest       request,
         CancellationToken cancellationToken = default)

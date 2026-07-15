@@ -7,7 +7,7 @@ namespace LayerBase;
 public sealed partial class LayerRuntime
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostTo<TEvent>(
+    internal void PostTo<TEvent>(
         ActorId   actorId,
         in TEvent value)
         where TEvent : struct
@@ -16,7 +16,7 @@ public sealed partial class LayerRuntime
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostToMany<TEvent>(
+    internal void PostToMany<TEvent>(
         ReadOnlySpan<ActorId> actorIds,
         in TEvent             value)
         where TEvent : struct

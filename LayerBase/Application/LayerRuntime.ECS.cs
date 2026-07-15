@@ -6,5 +6,5 @@ namespace LayerBase;
 
 public sealed partial class LayerRuntime
 {
-    public World EcsWorld => _scopeHost.MainScope.EcsScheduler.World;
+    internal World EcsWorld => _scopeHost.MainScope.EcsScheduler.World;
 }
