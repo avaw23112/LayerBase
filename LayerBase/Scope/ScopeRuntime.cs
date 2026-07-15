@@ -65,7 +65,7 @@ internal sealed class ScopeRuntime : IDisposable
             _generation,
             Descriptor.ScopeId,
             World.Create(),
-            EcsRuntimeOptions.Default);
+            Options.EcsRuntime);
         EcsWorld = EcsScheduler.World;
         EcsWorld.BindRuntime(runtime);
         EcsWorld.BindEcsScheduler(EcsScheduler);

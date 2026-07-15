@@ -1,4 +1,5 @@
 using LayerBase.Layers;
+using LayerBase.ECS;
 
 namespace LayerBase.Scope;
 
@@ -40,7 +41,8 @@ internal readonly struct ScopeOptions
         ScopeThreadingMode threading,
         ScopeClockMode clock,
         int tickRateHz,
-        ScopeFaultPolicy faultPolicy = ScopeFaultPolicy.ReportAndContinue)
+        ScopeFaultPolicy faultPolicy = ScopeFaultPolicy.ReportAndContinue,
+        EcsRuntimeOptions? ecsRuntime = null)
     {
         if (tickRateHz < 0)
             throw new ArgumentOutOfRangeException(nameof(tickRateHz));
@@ -49,6 +51,7 @@ internal readonly struct ScopeOptions
         Clock = clock;
         TickRateHz = tickRateHz;
         FaultPolicy = faultPolicy;
+        EcsRuntime = ecsRuntime ?? EcsRuntimeOptions.Default;
     }
 
     public ScopeThreadingMode Threading { get; }
@@ -59,6 +62,8 @@ internal readonly struct ScopeOptions
 
     public ScopeFaultPolicy FaultPolicy { get; }
 
+    public EcsRuntimeOptions EcsRuntime { get; }
+
     public static ScopeOptions Main { get; } = new(ScopeThreadingMode.Main, ScopeClockMode.RuntimePump, 0);
 
     public static ScopeOptions Inline { get; } = new(ScopeThreadingMode.Inline, ScopeClockMode.RuntimePump, 0);
@@ -66,6 +71,11 @@ internal readonly struct ScopeOptions
     public static ScopeOptions Worker(int tickRateHz = 60)
     {
         return new ScopeOptions(ScopeThreadingMode.Worker, ScopeClockMode.FixedRate, tickRateHz);
+    }
+
+    public ScopeOptions WithEcsRuntime(EcsRuntimeOptions ecsRuntime)
+    {
+        return new ScopeOptions(Threading, Clock, TickRateHz, FaultPolicy, ecsRuntime);
     }
 }
 

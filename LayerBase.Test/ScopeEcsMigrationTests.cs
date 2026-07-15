@@ -230,6 +230,41 @@ public class ScopeEcsMigrationTests
     }
 
     [Test]
+    public void Scope_query_batch_options_drive_projection_buffer_autoflush()
+    {
+        LayerHub.Reset();
+        var runtime = new LayerRuntime(2310);
+        var batchOptions = new EcsQueryBatchOptions(
+            EnableImplicitBatching: true,
+            DefaultBatchLimitBytes: 1,
+            MinBatchEntityCount: 1,
+            MaxBatchEntityCount: 1);
+        var plans = new[]
+        {
+            ScopeExecutionPlan.CreateMain(),
+            new ScopeExecutionPlan(
+                new ScopeDescriptor(238, nameof(ScopeEcsCustomScope), typeof(ScopeEcsCustomScope)),
+                ScopeOptions.Inline.WithEcsRuntime(new EcsRuntimeOptions(batchOptions)))
+        };
+
+        using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
+        ScopeRuntime customScope = host.Scopes[1];
+        var sink = new RecordingProjectedActorSink();
+        customScope.EcsWorld.BindProjectedActorCommandSink(sink);
+
+        ProjectionBatchBuffer<ScopeEcsProjectionEvent> buffer =
+            ProjectionBatchRuntime.RentBuffer<ScopeEcsProjectionEvent>(customScope.EcsWorld);
+
+        buffer.Add(new ActorId(1, 1, 1), new ScopeEcsProjectionEvent(10));
+        buffer.Add(new ActorId(1, 2, 1), new ScopeEcsProjectionEvent(20));
+        buffer.Dispose();
+
+        Assert.That(customScope.EcsScheduler.BatchOptions, Is.EqualTo(batchOptions));
+        Assert.That(sink.Values, Is.EqualTo(new[] { 10, 20 }));
+        Assert.That(sink.BatchCount, Is.EqualTo(2));
+    }
+
+    [Test]
     public void Projection_batch_buffer_flushes_at_batch_boundary_and_reuses_buffer()
     {
         var sink = new RecordingProjectedActorSink();
@@ -359,6 +394,8 @@ internal sealed class RecordingProjectedActorSink : IProjectedActorCommandSink
 
     public IReadOnlyList<int> Values => _values;
 
+    public int BatchCount { get; private set; }
+
     public bool CompletesSynchronously => true;
 
     public ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks)
@@ -391,6 +428,7 @@ internal sealed class RecordingProjectedActorSink : IProjectedActorCommandSink
     public void PostBatch<TEvent>(ref ProjectionBatchBuffer<TEvent> batch)
         where TEvent : struct
     {
+        BatchCount++;
         batch.PostTo(this);
     }
 }
