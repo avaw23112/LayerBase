@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Linq.Expressions;
 using System.Reflection;
 using LayerBase;
 using LayerBase.DI.Options;
@@ -15,23 +14,6 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
     private readonly Layer _ownerLayer;
     private ResolutionContext? _activeResolutionContext;
     private int _disposed;
-
-    private static readonly ConcurrentDictionary<MemberInfo, Func<object, object?, object>> s_setterCache = new();
-    private static readonly ConcurrentDictionary<Type, bool> s_scannedTypes = new();
-    private static readonly bool s_canCompileExpression;
-
-    static ServiceProvider()
-    {
-        try
-        {
-            Expression.Lambda<Action>(Expression.Empty()).Compile();
-            s_canCompileExpression = true;
-        }
-        catch
-        {
-            s_canCompileExpression = false;
-        }
-    }
 
     public ServiceProvider(
         LayerRuntime runtime,
@@ -255,87 +237,10 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
 
     private void InjectMembers(object instance, ResolutionContext context)
     {
-        var type = instance.GetType();
-        if (s_scannedTypes.TryGetValue(type, out var hasMount) && !hasMount)
-            return;
-
-        var foundAny = false;
-
-        foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+        if (instance is IGeneratedMountInject generatedMount)
         {
-            if (field.GetCustomAttribute<MountAttribute>() == null)
-                continue;
-
-            foundAny = true;
-            var dependency = GetServiceInternal(field.FieldType, context);
-            if (dependency == null)
-                continue;
-
-            var setter = s_setterCache.GetOrAdd(field, static member => CreateFieldSetter((FieldInfo)member));
-            setter(instance, dependency);
+            generatedMount.__InjectMounts(this);
         }
-
-        foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-        {
-            if (property.GetCustomAttribute<MountAttribute>() == null || !property.CanWrite)
-                continue;
-
-            foundAny = true;
-            var dependency = GetServiceInternal(property.PropertyType, context);
-            if (dependency == null)
-                continue;
-
-            var setter = s_setterCache.GetOrAdd(property, static member => CreatePropertySetter((PropertyInfo)member));
-            setter(instance, dependency);
-        }
-
-        s_scannedTypes[type] = foundAny;
-    }
-
-    private static Func<object, object?, object> CreateFieldSetter(FieldInfo field)
-    {
-        if (!s_canCompileExpression)
-            return (obj, val) =>
-            {
-                field.SetValue(obj, val);
-                return obj;
-            };
-
-        var target = Expression.Parameter(typeof(object));
-        var value = Expression.Parameter(typeof(object));
-        var expr = Expression.Assign(
-            Expression.Field(Expression.Convert(target, field.DeclaringType!), field),
-            Expression.Convert(value, field.FieldType));
-        var lambda = Expression.Lambda<Action<object, object?>>(expr, target, value);
-        var compiled = lambda.Compile();
-        return (obj, val) =>
-        {
-            compiled(obj, val);
-            return obj;
-        };
-    }
-
-    private static Func<object, object?, object> CreatePropertySetter(PropertyInfo property)
-    {
-        if (!s_canCompileExpression)
-            return (obj, val) =>
-            {
-                property.SetValue(obj, val);
-                return obj;
-            };
-
-        var target = Expression.Parameter(typeof(object));
-        var value = Expression.Parameter(typeof(object));
-        var expr = Expression.Assign(
-            Expression.Property(Expression.Convert(target, property.DeclaringType!), property),
-            Expression.Convert(value, property.PropertyType));
-        var lambda = Expression.Lambda<Action<object, object?>>(expr, target, value);
-        var compiled = lambda.Compile();
-        return (obj, val) =>
-        {
-            compiled(obj, val);
-            return obj;
-        };
     }
 
     private sealed class ResolutionContext

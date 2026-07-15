@@ -67,4 +67,9 @@ public sealed class MountAttribute : Attribute
     ///   表示生成器应使用该类型作为 DI 注册实现类型。
     /// </summary>
     public Type? ImplementationType { get; }
+
+    /// <summary>
+    /// Named-form implementation override for source-generated Mount declarations.
+    /// </summary>
+    public Type? Implementation { get; set; }
 }

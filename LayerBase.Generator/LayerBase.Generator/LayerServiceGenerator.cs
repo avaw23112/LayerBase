@@ -21,6 +21,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private const string EventHandlerMetadataName = "LayerBase.Core.EventHandler.IEventHandler`1";
     private const string EventHandlerAsyncMetadataName = "LayerBase.Core.EventHandler.IEventHandlerAsync`1";
     private const string CallHandlerMetadataName = "LayerBase.Call.IScopeLocalCallHandler`2";
+    private const string ScopeAttributeNamespace = "LayerBase.Scope";
+    private const string ScopeAttributeMetadataName = "ScopeAttribute`1";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -150,7 +152,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 }
                 else if (isService)
                 {
-                    info.ProcessedMountedContexts = ProcessServiceMounts(spc, info, iLayerContextSymbol, classMap);
+                    info.ProcessedMountedContexts =
+                        ProcessServiceMounts(spc, info, iServiceSymbol, iLayerContextSymbol, classMap);
                 }
                 else if (!isLayerContext)
                 {
@@ -333,8 +336,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                     string.Join(", ", ownerOnlyServices.Select(s => s.ToDisplayString()))));
             }
 
-            var sourceText = GenerateLayerPartial(layerType, injectServices, ownerLayerServices, iServiceSymbol,
-                callHandlerSymbol);
+            var mountInjections = layerInfo?.ProcessedMountInjections ?? new List<MountInjection>();
+            var sourceText = GenerateLayerPartial(layerType, injectServices, ownerLayerServices, mountInjections,
+                iServiceSymbol, callHandlerSymbol);
             if (!string.IsNullOrEmpty(sourceText))
             {
                 spc.AddSource(CreateHintName(layerType), SourceText.From(sourceText, Encoding.UTF8));
@@ -371,7 +375,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var sourceText = GenerateServicePartial(info.Symbol, combinedContexts);
+            var sourceText = GenerateServicePartial(info.Symbol, combinedContexts, info.ProcessedMountInjections);
             if (!string.IsNullOrEmpty(sourceText))
             {
                 spc.AddSource(CreateHintName(info.Symbol), SourceText.From(sourceText, Encoding.UTF8));
@@ -401,19 +405,14 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
         var mountedTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         info.LayerMountedServices.Clear();
+        info.ProcessedMountInjections.Clear();
 
         foreach (var member in info.MountMembers)
         {
             var type = GetSymbolType(member);
             if (type is not INamedTypeSymbol serviceType) continue;
 
-            INamedTypeSymbol? implType = null;
-            var attribute = member.GetAttributes()
-                                  .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == MountAttributeName);
-            if (attribute != null && attribute.ConstructorArguments.Length > 0)
-            {
-                implType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
-            }
+            var implType = GetMountImplementationType(member);
 
             var actualImplType = implType ?? serviceType;
 
@@ -444,9 +443,18 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                     !SymbolEqualityComparer.Default.Equals(r.LayerType, info.Symbol));
                 if (hasMismatch)
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountOwnerConflict, member.Locations[0],
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountDependencyInAnotherLayer, member.Locations[0],
                         actualImplType.ToDisplayString(), info.Symbol.ToDisplayString()));
+                    continue;
                 }
+            }
+
+            var targetScope = GetEffectiveScope(actualImplType, classMap);
+            if (targetScope != null)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LayerMountsNonMainScopeObject, member.Locations[0],
+                    info.Symbol.ToDisplayString(), actualImplType.ToDisplayString(), targetScope.ToDisplayString()));
+                continue;
             }
 
             if (!ImplementsInterface(actualImplType, iServiceSymbol))
@@ -457,10 +465,12 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             }
 
             info.LayerMountedServices.Add(new MountedContext(serviceType, actualImplType));
+            info.ProcessedMountInjections.Add(new MountInjection(member, serviceType));
         }
     }
 
     private static List<MountedContext> ProcessServiceMounts(SourceProductionContext spc, ClassInfo info,
+                                                             INamedTypeSymbol iServiceSymbol,
                                                              INamedTypeSymbol? iLayerContextSymbol,
                                                              Dictionary<INamedTypeSymbol, ClassInfo> classMap)
     {
@@ -469,19 +479,14 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
         var results = new List<MountedContext>();
         var seenPairs = new HashSet<MountedContext>(MountedContextComparer.Instance);
+        info.ProcessedMountInjections.Clear();
 
         foreach (var member in info.MountMembers)
         {
             var type = GetSymbolType(member);
             if (type is not INamedTypeSymbol serviceType) continue;
 
-            INamedTypeSymbol? implType = null;
-            var attribute = member.GetAttributes()
-                                  .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == MountAttributeName);
-            if (attribute != null && attribute.ConstructorArguments.Length > 0)
-            {
-                implType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
-            }
+            var implType = GetMountImplementationType(member);
 
             var actualImplType = implType ?? serviceType;
 
@@ -499,8 +504,13 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (iLayerContextSymbol != null && !ImplementsInterface(actualImplType, iLayerContextSymbol) &&
-                !ImplementsInterfaceByMetadataName(actualImplType, ILayerContextMetadataName))
+            var implementsService = ImplementsInterface(actualImplType, iServiceSymbol) ||
+                                    ImplementsInterfaceByMetadataName(actualImplType, IServiceMetadataName);
+            var implementsLayerContext =
+                iLayerContextSymbol != null && ImplementsInterface(actualImplType, iLayerContextSymbol) ||
+                ImplementsInterfaceByMetadataName(actualImplType, ILayerContextMetadataName);
+
+            if (!implementsService && !implementsLayerContext)
             {
                 spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountImplMustImplementILayerContext,
                     member.Locations[0], actualImplType.ToDisplayString()));
@@ -516,14 +526,40 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             if (classMap.TryGetValue(actualImplType, out var targetInfo))
             {
-                var hasMismatch = targetInfo.OwnerServiceRegistrations.Any(r =>
-                    !SymbolEqualityComparer.Default.Equals(r.ServiceType, info.Symbol));
-                if (hasMismatch)
+                var parentLayer = GetEffectiveOwnerLayer(info.Symbol, classMap);
+                var targetLayer = GetEffectiveOwnerLayer(actualImplType, classMap);
+                if (parentLayer != null &&
+                    targetLayer != null &&
+                    !SymbolEqualityComparer.Default.Equals(parentLayer, targetLayer))
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OwnerServiceConflictsWithExplicitMount,
-                        member.Locations[0], actualImplType.ToDisplayString(), info.Symbol.ToDisplayString()));
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountDependencyInAnotherLayer,
+                        member.Locations[0], actualImplType.ToDisplayString(), parentLayer.ToDisplayString()));
                     continue;
                 }
+
+                if (implementsLayerContext)
+                {
+                    var hasMismatch = targetInfo.OwnerServiceRegistrations.Any(r =>
+                        !SymbolEqualityComparer.Default.Equals(r.ServiceType, info.Symbol));
+                    if (hasMismatch)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.OwnerServiceConflictsWithExplicitMount,
+                        member.Locations[0], actualImplType.ToDisplayString(), info.Symbol.ToDisplayString()));
+                        continue;
+                    }
+                }
+            }
+
+            var parentScope = GetEffectiveScope(info.Symbol, classMap);
+            var targetScope = GetEffectiveScope(actualImplType, classMap);
+            if (!SameScope(parentScope, targetScope))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.MountDependencyInAnotherScope,
+                    member.Locations[0],
+                    actualImplType.ToDisplayString(),
+                    ToScopeDisplay(parentScope),
+                    ToScopeDisplay(targetScope)));
+                continue;
             }
 
             var mountedContext = new MountedContext(serviceType, actualImplType);
@@ -531,6 +567,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             {
                 results.Add(mountedContext);
             }
+
+            info.ProcessedMountInjections.Add(new MountInjection(member, serviceType));
         }
 
         return results;
@@ -605,8 +643,131 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         };
     }
 
+    private static INamedTypeSymbol? GetMountImplementationType(ISymbol member)
+    {
+        var attribute = member.GetAttributes()
+                              .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == MountAttributeName);
+        if (attribute == null)
+        {
+            return null;
+        }
+
+        if (attribute.ConstructorArguments.Length > 0 &&
+            attribute.ConstructorArguments[0].Value is INamedTypeSymbol constructorType)
+        {
+            return constructorType;
+        }
+
+        foreach (var argument in attribute.NamedArguments)
+        {
+            if ((argument.Key == "Implementation" || argument.Key == "ImplementationType") &&
+                argument.Value.Value is INamedTypeSymbol namedType)
+            {
+                return namedType;
+            }
+        }
+
+        return null;
+    }
+
+    private static INamedTypeSymbol? GetEffectiveOwnerLayer(
+        INamedTypeSymbol type,
+        Dictionary<INamedTypeSymbol, ClassInfo> classMap)
+    {
+        if (!classMap.TryGetValue(type, out var info))
+        {
+            return null;
+        }
+
+        var directLayer = info.OwnerLayerRegistrations
+                              .Select(static registration => registration.LayerType)
+                              .FirstOrDefault();
+        if (directLayer != null)
+        {
+            return directLayer;
+        }
+
+        foreach (var ownerService in info.OwnerServiceRegistrations.Select(static registration => registration.ServiceType))
+        {
+            var ownerLayer = GetEffectiveOwnerLayer(ownerService, classMap);
+            if (ownerLayer != null)
+            {
+                return ownerLayer;
+            }
+        }
+
+        return null;
+    }
+
+    private static INamedTypeSymbol? GetEffectiveScope(
+        INamedTypeSymbol type,
+        Dictionary<INamedTypeSymbol, ClassInfo> classMap)
+    {
+        var explicitScope = GetExplicitScope(type);
+        if (explicitScope != null)
+        {
+            return explicitScope;
+        }
+
+        if (!classMap.TryGetValue(type, out var info))
+        {
+            return null;
+        }
+
+        foreach (var ownerService in info.OwnerServiceRegistrations.Select(static registration => registration.ServiceType))
+        {
+            var ownerScope = GetEffectiveScope(ownerService, classMap);
+            if (ownerScope != null)
+            {
+                return ownerScope;
+            }
+        }
+
+        return null;
+    }
+
+    private static INamedTypeSymbol? GetExplicitScope(INamedTypeSymbol type)
+    {
+        foreach (var attribute in type.GetAttributes())
+        {
+            var attributeClass = attribute.AttributeClass;
+            if (attributeClass == null)
+            {
+                continue;
+            }
+
+            var original = attributeClass.OriginalDefinition;
+            if (original.MetadataName != ScopeAttributeMetadataName ||
+                original.ContainingNamespace.ToDisplayString() != ScopeAttributeNamespace ||
+                attributeClass.TypeArguments.Length != 1)
+            {
+                continue;
+            }
+
+            return attributeClass.TypeArguments[0] as INamedTypeSymbol;
+        }
+
+        return null;
+    }
+
+    private static bool SameScope(INamedTypeSymbol? left, INamedTypeSymbol? right)
+    {
+        if (left == null || right == null)
+        {
+            return left == null && right == null;
+        }
+
+        return SymbolEqualityComparer.Default.Equals(left, right);
+    }
+
+    private static string ToScopeDisplay(INamedTypeSymbol? scope)
+    {
+        return scope?.ToDisplayString() ?? "LayerBase.Scope.MainScope";
+    }
+
     private static string GenerateLayerPartial(INamedTypeSymbol layerType, List<MountedContext> injectServices,
                                                List<INamedTypeSymbol> ownerLayerServices,
+                                               List<MountInjection> mountInjections,
                                                INamedTypeSymbol iServiceSymbol, INamedTypeSymbol? callHandlerSymbol)
     {
         var layerDisplayName = layerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -628,7 +789,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         }
 
         builder.Append("partial class ").Append(layerIdentifier)
-               .AppendLine(" : global::LayerBase.DI.IAutoLayerMount");
+               .AppendLine(" : global::LayerBase.DI.IAutoLayerMount, global::LayerBase.DI.IGeneratedMountInject");
         builder.AppendLine("{");
 
         builder.AppendLine(
@@ -679,6 +840,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         }
 
         builder.AppendLine("    }");
+
+        EmitMountInjectionMethod(builder, mountInjections);
+
         builder.AppendLine("}");
 
         if (!string.IsNullOrEmpty(@namespace)) builder.AppendLine("}");
@@ -686,7 +850,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         return builder.ToString();
     }
 
-    private static string GenerateServicePartial(INamedTypeSymbol serviceType, List<MountedContext> mountedContexts)
+    private static string GenerateServicePartial(INamedTypeSymbol serviceType, List<MountedContext> mountedContexts,
+                                                 List<MountInjection> mountInjections)
     {
         var serviceIdentifier = serviceType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
         var namespaceSymbol = serviceType.ContainingNamespace;
@@ -705,7 +870,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         }
 
         builder.Append("partial class ").Append(serviceIdentifier)
-               .AppendLine(" : global::LayerBase.DI.IAutoServiceMount");
+               .AppendLine(" : global::LayerBase.DI.IAutoServiceMount, global::LayerBase.DI.IGeneratedMountInject");
         builder.AppendLine("{");
 
         builder.AppendLine(
@@ -721,11 +886,34 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         }
 
         builder.AppendLine("    }");
+
+        EmitMountInjectionMethod(builder, mountInjections);
+
         builder.AppendLine("}");
 
         if (!string.IsNullOrEmpty(@namespace)) builder.AppendLine("}");
 
         return builder.ToString();
+    }
+
+    private static void EmitMountInjectionMethod(StringBuilder builder, List<MountInjection> mountInjections)
+    {
+        builder.AppendLine();
+        builder.AppendLine(
+            "    void global::LayerBase.DI.IGeneratedMountInject.__InjectMounts(global::LayerBase.DI.IServiceProvider services)");
+        builder.AppendLine("    {");
+
+        foreach (var injection in mountInjections)
+        {
+            var serviceName = injection.ServiceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            builder.Append("        this.")
+                   .Append(injection.Member.Name)
+                   .Append(" = services.Get<")
+                   .Append(serviceName)
+                   .AppendLine(">();");
+        }
+
+        builder.AppendLine("    }");
     }
 
     private static string CreateHintName(INamedTypeSymbol type)
@@ -971,8 +1159,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         public static readonly DiagnosticDescriptor MountImplMustImplementILayerContext =
             new(
                 "LBMOUNT004",
-                "Mount implementation type must implement ILayerContext",
-                "Mount implementation type '{0}' must implement ILayerContext to be auto-registered from IService.",
+                "Mount implementation type must implement IService or ILayerContext",
+                "Mount implementation type '{0}' must implement IService or ILayerContext to be auto-registered from IService.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -991,6 +1179,42 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 "LBMOUNT006",
                 "Layer type must be partial",
                 "Layer type '{0}' contains [Mount] IService members and must be declared partial.",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor LayerMountsNonMainScopeObject =
+            new(
+                "LBMOUNT007",
+                "Layer object cannot mount non-MainScope object",
+                "Layer '{0}' cannot mount '{1}' because it belongs to Scope '{2}'. Use ScopeEvent or ScopeCall for cross-scope access.",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor MountDependencyInAnotherScope =
+            new(
+                "LBMOUNT008",
+                "Mount dependency belongs to another Scope",
+                "Mounted type '{0}' belongs to Scope '{2}' but the parent belongs to Scope '{1}'. Use ScopeEvent or ScopeCall for cross-scope access.",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor MountDependencyInAnotherLayer =
+            new(
+                "LBMOUNT009",
+                "Mount dependency belongs to another Layer",
+                "Mounted type '{0}' does not belong to Layer '{1}'. Use this.Call<Request, Response>(...) for cross-layer access.",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor MountTargetIsLayerTool =
+            new(
+                "LBMOUNT010",
+                "LayerTool cannot be mounted",
+                "Mounted type '{0}' is a LayerTool. Use this.Tools().GetOrCreate<Tool>() instead of [Mount].",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -1054,6 +1278,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         public List<ServiceRegistration> OwnerLayerRegistrations { get; } = new();
         public List<ServiceContextRegistration> OwnerServiceRegistrations { get; } = new();
         public List<MountedContext> LayerMountedServices { get; } = new();
+        public List<MountInjection> ProcessedMountInjections { get; } = new();
         public List<MountedContext>? ProcessedMountedContexts { get; set; }
     }
 
@@ -1108,6 +1333,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private readonly record struct CallHandlerImplementation(ITypeSymbol RequestType, ITypeSymbol ResponseType);
 
     private readonly record struct MountedContext(INamedTypeSymbol ServiceType, INamedTypeSymbol ImplementationType);
+
+    private readonly record struct MountInjection(ISymbol Member, INamedTypeSymbol ServiceType);
 
     private sealed class MountedContextComparer : IEqualityComparer<MountedContext>
     {
