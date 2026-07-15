@@ -1,5 +1,6 @@
 using System.Reflection;
 using LayerBase;
+using LayerBase.Core.EventHandler;
 using LayerBase.DI;
 using LayerBase.Layers;
 using LayerBase.Modules;
@@ -290,6 +291,37 @@ public sealed class ScopeCompositionPlanTests
     }
 
     [Test]
+    public void Event_handler_contribution_is_written_to_layer_plan_without_module_dispatcher()
+    {
+        LayerHub.Reset();
+
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new GameplayLayer())
+                              .AddAssemblyModule(new TestAssemblyModule(
+                                  "events",
+                                  eventHandlers: new[]
+                                  {
+                                      EventHandlerContribution.ForTypes(
+                                          typeof(InventoryChangedEvent),
+                                          typeof(InventoryChangedHandler),
+                                          typeof(IInventoryService),
+                                          typeof(GameplayLayer),
+                                          typeof(MainScope))
+                                  }))
+                              .Build();
+
+        var gameplayPlan = runtime.CompositionPlan.Layers.Single();
+        var contribution = gameplayPlan.ScopeContributions.Single();
+
+        Assert.That(runtime.CompositionPlan.EventHandlers.Single().OwnerLayerIndex, Is.EqualTo(0));
+        Assert.That(runtime.CompositionPlan.EventHandlers.Single().OwnerScopeId, Is.EqualTo(MainScope.ScopeId));
+        Assert.That(runtime.CompositionPlan.EventHandlers.Single().EventType, Is.EqualTo(typeof(InventoryChangedEvent)));
+        Assert.That(runtime.CompositionPlan.EventHandlers.Single().HandlerType, Is.EqualTo(typeof(InventoryChangedHandler)));
+        Assert.That(runtime.CompositionPlan.EventHandlers.Single().OwnerServiceType, Is.EqualTo(typeof(IInventoryService)));
+        Assert.That(contribution.EventHandlerCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Tool_key_contains_layer_and_scope()
     {
         LayerHub.Reset();
@@ -368,7 +400,13 @@ public sealed class ScopeCompositionPlanTests
     private sealed class TestAssemblyModule : IAssemblyModule
     {
         public TestAssemblyModule(string id, params ServiceContribution[] services)
-            : this(id, services, Array.Empty<ContextContribution>(), Array.Empty<LocalCallContribution>(), Array.Empty<LayerToolContribution>())
+            : this(
+                id,
+                services,
+                Array.Empty<ContextContribution>(),
+                Array.Empty<LocalCallContribution>(),
+                Array.Empty<EventHandlerContribution>(),
+                Array.Empty<LayerToolContribution>())
         {
         }
 
@@ -377,6 +415,7 @@ public sealed class ScopeCompositionPlanTests
             ServiceContribution[]? services = null,
             ContextContribution[]? contexts = null,
             LocalCallContribution[]? calls = null,
+            EventHandlerContribution[]? eventHandlers = null,
             LayerToolContribution[]? tools = null)
         {
             Id = new AssemblyModuleId(id);
@@ -385,6 +424,7 @@ public sealed class ScopeCompositionPlanTests
                 services ?? Array.Empty<ServiceContribution>(),
                 contexts ?? Array.Empty<ContextContribution>(),
                 calls ?? Array.Empty<LocalCallContribution>(),
+                eventHandlers ?? Array.Empty<EventHandlerContribution>(),
                 tools ?? Array.Empty<LayerToolContribution>());
         }
 
@@ -418,6 +458,15 @@ public sealed class ScopeCompositionPlanTests
     private sealed class CombatContext { }
 
     private interface ICombatTool { }
+
+    private readonly struct InventoryChangedEvent { }
+
+    private sealed class InventoryChangedHandler : IEventHandler<InventoryChangedEvent>
+    {
+        public void Deal(in InventoryChangedEvent @event)
+        {
+        }
+    }
 
     private sealed class CombatCallHandler { }
 

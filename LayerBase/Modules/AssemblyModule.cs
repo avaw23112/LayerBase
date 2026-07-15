@@ -61,6 +61,7 @@ public sealed class AssemblyModuleManifest
             services,
             Array.Empty<ContextContribution>(),
             Array.Empty<LocalCallContribution>(),
+            Array.Empty<EventHandlerContribution>(),
             Array.Empty<LayerToolContribution>())
     {
     }
@@ -71,11 +72,29 @@ public sealed class AssemblyModuleManifest
         ContextContribution[] contexts,
         LocalCallContribution[] localCalls,
         LayerToolContribution[] tools)
+        : this(
+            moduleId,
+            services,
+            contexts,
+            localCalls,
+            Array.Empty<EventHandlerContribution>(),
+            tools)
+    {
+    }
+
+    public AssemblyModuleManifest(
+        AssemblyModuleId moduleId,
+        ServiceContribution[] services,
+        ContextContribution[] contexts,
+        LocalCallContribution[] localCalls,
+        EventHandlerContribution[] eventHandlers,
+        LayerToolContribution[] tools)
     {
         ModuleId = moduleId;
         Services = services ?? Array.Empty<ServiceContribution>();
         Contexts = contexts ?? Array.Empty<ContextContribution>();
         LocalCalls = localCalls ?? Array.Empty<LocalCallContribution>();
+        EventHandlers = eventHandlers ?? Array.Empty<EventHandlerContribution>();
         Tools = tools ?? Array.Empty<LayerToolContribution>();
     }
 
@@ -86,6 +105,8 @@ public sealed class AssemblyModuleManifest
     public IReadOnlyList<ContextContribution> Contexts { get; }
 
     public IReadOnlyList<LocalCallContribution> LocalCalls { get; }
+
+    public IReadOnlyList<EventHandlerContribution> EventHandlers { get; }
 
     public IReadOnlyList<LayerToolContribution> Tools { get; }
 
@@ -198,6 +219,43 @@ public readonly struct LayerToolContribution
     }
 }
 
+public readonly struct EventHandlerContribution
+{
+    private EventHandlerContribution(
+        Type eventType,
+        Type handlerType,
+        Type ownerServiceType,
+        Type? ownerLayerType,
+        Type? ownerScopeType)
+    {
+        EventType = eventType ?? throw new ArgumentNullException(nameof(eventType));
+        HandlerType = handlerType ?? throw new ArgumentNullException(nameof(handlerType));
+        OwnerServiceType = ownerServiceType ?? throw new ArgumentNullException(nameof(ownerServiceType));
+        OwnerLayerType = ownerLayerType;
+        OwnerScopeType = ownerScopeType;
+    }
+
+    public Type EventType { get; }
+
+    public Type HandlerType { get; }
+
+    public Type OwnerServiceType { get; }
+
+    public Type? OwnerLayerType { get; }
+
+    public Type? OwnerScopeType { get; }
+
+    public static EventHandlerContribution ForTypes(
+        Type eventType,
+        Type handlerType,
+        Type ownerServiceType,
+        Type? ownerLayerType,
+        Type? ownerScopeType)
+    {
+        return new EventHandlerContribution(eventType, handlerType, ownerServiceType, ownerLayerType, ownerScopeType);
+    }
+}
+
 public readonly struct ServiceContribution
 {
     private ServiceContribution(
@@ -241,11 +299,13 @@ internal sealed class CompositionContributions
         ServiceContributionPlan[] services,
         ContextContributionPlan[] contexts,
         LocalCallContributionPlan[] localCalls,
+        EventHandlerContributionPlan[] eventHandlers,
         LayerToolContributionPlan[] tools)
     {
         Services = services ?? throw new ArgumentNullException(nameof(services));
         Contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         LocalCalls = localCalls ?? throw new ArgumentNullException(nameof(localCalls));
+        EventHandlers = eventHandlers ?? throw new ArgumentNullException(nameof(eventHandlers));
         Tools = tools ?? throw new ArgumentNullException(nameof(tools));
     }
 
@@ -255,6 +315,8 @@ internal sealed class CompositionContributions
 
     public LocalCallContributionPlan[] LocalCalls { get; }
 
+    public EventHandlerContributionPlan[] EventHandlers { get; }
+
     public LayerToolContributionPlan[] Tools { get; }
 
     public static CompositionContributions Empty { get; } =
@@ -262,6 +324,7 @@ internal sealed class CompositionContributions
             Array.Empty<ServiceContributionPlan>(),
             Array.Empty<ContextContributionPlan>(),
             Array.Empty<LocalCallContributionPlan>(),
+            Array.Empty<EventHandlerContributionPlan>(),
             Array.Empty<LayerToolContributionPlan>());
 }
 
@@ -397,6 +460,41 @@ internal readonly struct LayerToolContributionPlan
     public int ToolIndex { get; }
 }
 
+internal readonly struct EventHandlerContributionPlan
+{
+    public EventHandlerContributionPlan(
+        AssemblyModuleId moduleId,
+        Type eventType,
+        Type handlerType,
+        Type ownerServiceType,
+        Type ownerLayerType,
+        Type ownerScopeType,
+        int eventHandlerIndex)
+    {
+        ModuleId = moduleId;
+        EventType = eventType ?? throw new ArgumentNullException(nameof(eventType));
+        HandlerType = handlerType ?? throw new ArgumentNullException(nameof(handlerType));
+        OwnerServiceType = ownerServiceType ?? throw new ArgumentNullException(nameof(ownerServiceType));
+        OwnerLayerType = ownerLayerType ?? throw new ArgumentNullException(nameof(ownerLayerType));
+        OwnerScopeType = ownerScopeType ?? throw new ArgumentNullException(nameof(ownerScopeType));
+        EventHandlerIndex = eventHandlerIndex;
+    }
+
+    public AssemblyModuleId ModuleId { get; }
+
+    public Type EventType { get; }
+
+    public Type HandlerType { get; }
+
+    public Type OwnerServiceType { get; }
+
+    public Type OwnerLayerType { get; }
+
+    public Type OwnerScopeType { get; }
+
+    public int EventHandlerIndex { get; }
+}
+
 internal static class AssemblyModuleComposer
 {
     public static CompositionContributions Compose(IReadOnlyList<IAssemblyModule> modules)
@@ -420,6 +518,7 @@ internal static class AssemblyModuleComposer
         var servicePlans = new List<ServiceContributionPlan>();
         var contextPlans = new List<ContextContributionPlan>();
         var localCallPlans = new List<LocalCallContributionPlan>();
+        var eventHandlerPlans = new List<EventHandlerContributionPlan>();
         var toolPlans = new List<LayerToolContributionPlan>();
         foreach (var module in modules.OrderBy(static module => module.Id))
         {
@@ -477,6 +576,21 @@ internal static class AssemblyModuleComposer
                     localCallPlans.Count));
             }
 
+            foreach (var contribution in manifest.EventHandlers.OrderBy(static handler => handler.EventType.FullName, StringComparer.Ordinal)
+                                                               .ThenBy(static handler => handler.HandlerType.FullName, StringComparer.Ordinal)
+                                                               .ThenBy(static handler => handler.OwnerServiceType.FullName, StringComparer.Ordinal))
+            {
+                ValidateOwner(module.Id, "EventHandler", contribution.HandlerType, contribution.OwnerLayerType, contribution.OwnerScopeType);
+                eventHandlerPlans.Add(new EventHandlerContributionPlan(
+                    module.Id,
+                    contribution.EventType,
+                    contribution.HandlerType,
+                    contribution.OwnerServiceType,
+                    contribution.OwnerLayerType!,
+                    contribution.OwnerScopeType!,
+                    eventHandlerPlans.Count));
+            }
+
             foreach (var contribution in manifest.Tools.OrderBy(static tool => tool.ContractType.FullName, StringComparer.Ordinal)
                                                        .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal))
             {
@@ -495,6 +609,7 @@ internal static class AssemblyModuleComposer
             servicePlans.ToArray(),
             contextPlans.ToArray(),
             localCallPlans.ToArray(),
+            eventHandlerPlans.ToArray(),
             toolPlans.ToArray());
     }
 

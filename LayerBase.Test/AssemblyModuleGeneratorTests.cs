@@ -294,7 +294,7 @@ public class AssemblyModuleGeneratorTests
     }
 
     [Test]
-    public void Cross_assembly_owner_service_event_handler_is_not_emitted_as_context_contribution()
+    public void Cross_assembly_owner_service_event_handler_is_transferred_to_single_assembly_module()
     {
         var aotReference = CreateReference("AotGame", """
                                                        using LayerBase.DI;
@@ -339,14 +339,26 @@ public class AssemblyModuleGeneratorTests
 
         var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
 
-        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBMOD004"),
+        Assert.That(result.Diagnostics, Is.Empty,
             string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
 
         var generatedModule = result.GeneratedSources.Single(static sourceText =>
             sourceText.Contains("partial class FeatureModule"));
 
+        Assert.That(generatedModule, Does.Contain("global::LayerBase.Modules.EventHandlerContribution.ForTypes("));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.InventoryChanged)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.InventoryChangedHandler)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.InventoryService)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.GameplayLayer)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::LayerBase.Scope.MainScope)"));
         Assert.That(generatedModule, Does.Not.Contain("global::LayerBase.Modules.ContextContribution.ForTypes("));
-        Assert.That(generatedModule, Does.Not.Contain("typeof(global::FeaturePack.InventoryChangedHandler)"));
     }
 
     [Test]

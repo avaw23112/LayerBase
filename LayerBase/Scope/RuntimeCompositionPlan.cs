@@ -11,6 +11,7 @@ internal sealed class RuntimeCompositionPlan
         ResolvedServiceContribution[] services,
         ResolvedContextContribution[] contexts,
         ResolvedLocalCallContribution[] localCalls,
+        ResolvedEventHandlerContribution[] eventHandlers,
         ResolvedLayerToolContribution[] tools)
     {
         Layers = layers ?? throw new ArgumentNullException(nameof(layers));
@@ -18,6 +19,7 @@ internal sealed class RuntimeCompositionPlan
         Services = services ?? throw new ArgumentNullException(nameof(services));
         Contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         LocalCalls = localCalls ?? throw new ArgumentNullException(nameof(localCalls));
+        EventHandlers = eventHandlers ?? throw new ArgumentNullException(nameof(eventHandlers));
         Tools = tools ?? throw new ArgumentNullException(nameof(tools));
     }
 
@@ -31,6 +33,8 @@ internal sealed class RuntimeCompositionPlan
 
     public ResolvedLocalCallContribution[] LocalCalls { get; }
 
+    public ResolvedEventHandlerContribution[] EventHandlers { get; }
+
     public ResolvedLayerToolContribution[] Tools { get; }
 
     public static RuntimeCompositionPlan Empty { get; } =
@@ -40,6 +44,7 @@ internal sealed class RuntimeCompositionPlan
             Array.Empty<ResolvedServiceContribution>(),
             Array.Empty<ResolvedContextContribution>(),
             Array.Empty<ResolvedLocalCallContribution>(),
+            Array.Empty<ResolvedEventHandlerContribution>(),
             Array.Empty<ResolvedLayerToolContribution>());
 
     public static RuntimeCompositionPlan Build(
@@ -88,6 +93,14 @@ internal sealed class RuntimeCompositionPlan
                 .AddLocalCall(localCallIndex);
         }
 
+        var eventHandlers = ResolveEventHandlers(contributions.EventHandlers, layerTypeIndex, scopeIdsByType);
+        for (int eventHandlerIndex = 0; eventHandlerIndex < eventHandlers.Length; eventHandlerIndex++)
+        {
+            var eventHandler = eventHandlers[eventHandlerIndex];
+            GetOrCreateContributionBuilder(layerContributionBuilders, eventHandler.OwnerLayerIndex, eventHandler.OwnerScopeId)
+                .AddEventHandler(eventHandlerIndex);
+        }
+
         var tools = ResolveTools(contributions.Tools, layerTypeIndex, scopeIdsByType);
         for (int toolIndex = 0; toolIndex < tools.Length; toolIndex++)
         {
@@ -99,7 +112,7 @@ internal sealed class RuntimeCompositionPlan
         ApplyScopeContributions(layerPlans, layerContributionBuilders);
 
         var scopes = BuildScopeExecutionPlans(layerPlans, scopeIdsByType);
-        return new RuntimeCompositionPlan(layerPlans, scopes, services, contexts, localCalls, tools);
+        return new RuntimeCompositionPlan(layerPlans, scopes, services, contexts, localCalls, eventHandlers, tools);
     }
 
     private static ResolvedServiceContribution[] ResolveServices(
@@ -243,6 +256,37 @@ internal sealed class RuntimeCompositionPlan
                        .ToArray();
     }
 
+    private static ResolvedEventHandlerContribution[] ResolveEventHandlers(
+        EventHandlerContributionPlan[] eventHandlers,
+        LayerTypeIndex layerTypeIndex,
+        Dictionary<Type, int> scopeIdsByType)
+    {
+        var resolved = new List<ResolvedEventHandlerContribution>();
+        foreach (var eventHandler in eventHandlers)
+        {
+            int ownerLayerIndex = ResolveOwnerLayer(
+                eventHandler.ModuleId,
+                eventHandler.HandlerType,
+                eventHandler.OwnerLayerType,
+                layerTypeIndex);
+            int ownerScopeId = ResolveScopeId(eventHandler.OwnerScopeType, scopeIdsByType);
+
+            resolved.Add(new ResolvedEventHandlerContribution(
+                eventHandler.ModuleId,
+                ownerLayerIndex,
+                ownerScopeId,
+                eventHandler.EventType,
+                eventHandler.HandlerType,
+                eventHandler.OwnerServiceType));
+        }
+
+        return resolved.OrderBy(static handler => handler.OwnerLayerIndex)
+                       .ThenBy(static handler => handler.OwnerScopeId)
+                       .ThenBy(static handler => handler.EventType.FullName, StringComparer.Ordinal)
+                       .ThenBy(static handler => handler.HandlerType.FullName, StringComparer.Ordinal)
+                       .ToArray();
+    }
+
     private static void ApplyScopeContributions(
         LayerBuildPlan[] layerPlans,
         List<LayerScopeContributionBuilder>[] layerContributionBuilders)
@@ -374,6 +418,7 @@ internal sealed class RuntimeCompositionPlan
         private int _serviceStart = -1;
         private int _contextStart = -1;
         private int _localCallStart = -1;
+        private int _eventHandlerStart = -1;
         private int _toolStart = -1;
 
         public LayerScopeContributionBuilder(int ownerScopeId)
@@ -413,6 +458,16 @@ internal sealed class RuntimeCompositionPlan
             LocalCallCount++;
         }
 
+        public int EventHandlerCount { get; private set; }
+
+        public void AddEventHandler(int eventHandlerIndex)
+        {
+            if (_eventHandlerStart < 0)
+                _eventHandlerStart = eventHandlerIndex;
+
+            EventHandlerCount++;
+        }
+
         public int ToolCount { get; private set; }
 
         public void AddTool(int toolIndex)
@@ -433,6 +488,8 @@ internal sealed class RuntimeCompositionPlan
                 ContextCount,
                 NormalizeStart(_localCallStart),
                 LocalCallCount,
+                NormalizeStart(_eventHandlerStart),
+                EventHandlerCount,
                 NormalizeStart(_toolStart),
                 ToolCount);
         }
@@ -572,6 +629,8 @@ internal readonly struct LayerScopeContribution
         int contextCount,
         int localCallStart,
         int localCallCount,
+        int eventHandlerStart,
+        int eventHandlerCount,
         int toolStart,
         int toolCount)
     {
@@ -589,6 +648,10 @@ internal readonly struct LayerScopeContribution
             throw new ArgumentOutOfRangeException(nameof(localCallStart));
         if (localCallCount < 0)
             throw new ArgumentOutOfRangeException(nameof(localCallCount));
+        if (eventHandlerStart < 0)
+            throw new ArgumentOutOfRangeException(nameof(eventHandlerStart));
+        if (eventHandlerCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(eventHandlerCount));
         if (toolStart < 0)
             throw new ArgumentOutOfRangeException(nameof(toolStart));
         if (toolCount < 0)
@@ -601,6 +664,8 @@ internal readonly struct LayerScopeContribution
         ContextCount = contextCount;
         LocalCallStart = localCallStart;
         LocalCallCount = localCallCount;
+        EventHandlerStart = eventHandlerStart;
+        EventHandlerCount = eventHandlerCount;
         ToolStart = toolStart;
         ToolCount = toolCount;
     }
@@ -618,6 +683,10 @@ internal readonly struct LayerScopeContribution
     public int LocalCallStart { get; }
 
     public int LocalCallCount { get; }
+
+    public int EventHandlerStart { get; }
+
+    public int EventHandlerCount { get; }
 
     public int ToolStart { get; }
 
@@ -715,6 +784,37 @@ internal readonly struct ResolvedLocalCallContribution
     public Type ResponseType { get; }
 
     public Type HandlerType { get; }
+}
+
+internal readonly struct ResolvedEventHandlerContribution
+{
+    public ResolvedEventHandlerContribution(
+        AssemblyModuleId moduleId,
+        int ownerLayerIndex,
+        int ownerScopeId,
+        Type eventType,
+        Type handlerType,
+        Type ownerServiceType)
+    {
+        ModuleId = moduleId;
+        OwnerLayerIndex = ownerLayerIndex;
+        OwnerScopeId = ownerScopeId;
+        EventType = eventType ?? throw new ArgumentNullException(nameof(eventType));
+        HandlerType = handlerType ?? throw new ArgumentNullException(nameof(handlerType));
+        OwnerServiceType = ownerServiceType ?? throw new ArgumentNullException(nameof(ownerServiceType));
+    }
+
+    public AssemblyModuleId ModuleId { get; }
+
+    public int OwnerLayerIndex { get; }
+
+    public int OwnerScopeId { get; }
+
+    public Type EventType { get; }
+
+    public Type HandlerType { get; }
+
+    public Type OwnerServiceType { get; }
 }
 
 internal readonly struct ResolvedLayerToolContribution

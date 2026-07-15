@@ -17,6 +17,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     private const string OwnerServiceAttributeName = "LayerBase.DI.Options.OwnerServiceAttribute";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
     private const string ILayerContextMetadataName = "LayerBase.DI.ILayerContext";
+    private const string EventHandlerMetadataName = "LayerBase.Core.EventHandler.IEventHandler`1";
+    private const string AsyncEventHandlerMetadataName = "LayerBase.Core.EventHandler.IEventHandlerAsync`1";
     private const string CallHandlerMetadataName = "LayerBase.Call.IScopeLocalCallHandler`2";
     private const string ScopeAttributeNamespace = "LayerBase.Scope";
     private const string ScopeAttributeMetadataName = "ScopeAttribute`1";
@@ -73,11 +75,14 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                                 .ToArray();
         var iServiceSymbol = compilation.GetTypeByMetadataName(IServiceMetadataName);
         var iLayerContextSymbol = compilation.GetTypeByMetadataName(ILayerContextMetadataName);
+        var eventHandlerSymbol = compilation.GetTypeByMetadataName(EventHandlerMetadataName);
+        var asyncEventHandlerSymbol = compilation.GetTypeByMetadataName(AsyncEventHandlerMetadataName);
         var callHandlerSymbol = compilation.GetTypeByMetadataName(CallHandlerMetadataName);
 
         var fallbackServices = new List<ServiceContributionInfo>();
         var fallbackContexts = new List<ContextContributionInfo>();
         var fallbackLocalCalls = new List<LocalCallContributionInfo>();
+        var fallbackEventHandlers = new List<EventHandlerContributionInfo>();
         foreach (var contribution in ownerLayerContributions)
         {
             if (SymbolEqualityComparer.Default.Equals(contribution.OwnerLayerType.ContainingAssembly, compilation.Assembly))
@@ -169,8 +174,13 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (!ImplementsInterface(context.ContextType, iLayerContextSymbol) &&
-                !ImplementsInterfaceByMetadataName(context.ContextType, ILayerContextMetadataName))
+            var isLayerContext = ImplementsInterface(context.ContextType, iLayerContextSymbol) ||
+                                 ImplementsInterfaceByMetadataName(context.ContextType, ILayerContextMetadataName);
+            var eventHandlerInterfaces = GetEventHandlerInterfaces(
+                context.ContextType,
+                eventHandlerSymbol,
+                asyncEventHandlerSymbol).ToArray();
+            if (!isLayerContext && eventHandlerInterfaces.Length == 0)
             {
                 spc.ReportDiagnostic(Diagnostic.Create(
                     Diagnostics.CrossAssemblyOwnerServiceContextOnlySupportsLayerContext,
@@ -194,11 +204,26 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             var ownerScopeType = ReadScopeType(context.OwnerServiceType);
             foreach (var ownerLayerRegistration in ownerLayerRegistrations)
             {
-                fallbackContexts.Add(new ContextContributionInfo(
-                    ToTypeName(ownerLayerRegistration.OwnerLayerType),
-                    ownerScopeType == null ? "global::LayerBase.Scope.MainScope" : ToTypeName(ownerScopeType),
-                    ToTypeName(context.ContextType),
-                    ToTypeName(context.OwnerServiceType)));
+                var ownerLayerTypeName = ToTypeName(ownerLayerRegistration.OwnerLayerType);
+                var ownerScopeTypeName = ownerScopeType == null ? "global::LayerBase.Scope.MainScope" : ToTypeName(ownerScopeType);
+                if (isLayerContext)
+                {
+                    fallbackContexts.Add(new ContextContributionInfo(
+                        ownerLayerTypeName,
+                        ownerScopeTypeName,
+                        ToTypeName(context.ContextType),
+                        ToTypeName(context.OwnerServiceType)));
+                }
+
+                foreach (var eventHandler in eventHandlerInterfaces)
+                {
+                    fallbackEventHandlers.Add(new EventHandlerContributionInfo(
+                        ownerLayerTypeName,
+                        ownerScopeTypeName,
+                        ToTypeName(eventHandler.EventType),
+                        ToTypeName(context.ContextType),
+                        ToTypeName(context.OwnerServiceType)));
+                }
             }
         }
 
@@ -209,7 +234,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                 module,
                 moduleList.Length == 1 ? fallbackServices : Array.Empty<ServiceContributionInfo>(),
                 moduleList.Length == 1 ? fallbackContexts : Array.Empty<ContextContributionInfo>(),
-                moduleList.Length == 1 ? fallbackLocalCalls : Array.Empty<LocalCallContributionInfo>());
+                moduleList.Length == 1 ? fallbackLocalCalls : Array.Empty<LocalCallContributionInfo>(),
+                moduleList.Length == 1 ? fallbackEventHandlers : Array.Empty<EventHandlerContributionInfo>());
         }
     }
 
@@ -288,7 +314,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         ModuleInfo module,
         IReadOnlyList<ServiceContributionInfo> fallbackServices,
         IReadOnlyList<ContextContributionInfo> fallbackContexts,
-        IReadOnlyList<LocalCallContributionInfo> fallbackLocalCalls)
+        IReadOnlyList<LocalCallContributionInfo> fallbackLocalCalls,
+        IReadOnlyList<EventHandlerContributionInfo> fallbackEventHandlers)
     {
         var services = fallbackServices.OrderBy(static service => service.OwnerLayerType, StringComparer.Ordinal)
                                        .ThenBy(static service => service.OwnerScopeType, StringComparer.Ordinal)
@@ -306,6 +333,12 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                                            .ThenBy(static call => call.OwnerLayerType, StringComparer.Ordinal)
                                            .ThenBy(static call => call.HandlerType, StringComparer.Ordinal)
                                            .ToImmutableArray();
+        var eventHandlers = fallbackEventHandlers.OrderBy(static handler => handler.OwnerLayerType, StringComparer.Ordinal)
+                                                 .ThenBy(static handler => handler.OwnerScopeType, StringComparer.Ordinal)
+                                                 .ThenBy(static handler => handler.EventType, StringComparer.Ordinal)
+                                                 .ThenBy(static handler => handler.HandlerType, StringComparer.Ordinal)
+                                                 .ThenBy(static handler => handler.OwnerServiceType, StringComparer.Ordinal)
+                                                 .ToImmutableArray();
 
         var source = new StringBuilder();
         source.AppendLine("// <auto-generated/>");
@@ -330,6 +363,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         AppendServiceArray(source, indent, services);
         AppendContextArray(source, indent, contexts);
         AppendLocalCallArray(source, indent, localCalls);
+        AppendEventHandlerArray(source, indent, eventHandlers);
         source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LayerToolContribution>());");
         source.AppendLine();
 
@@ -427,6 +461,33 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         source.Append(indent).AppendLine("            },");
     }
 
+    private static void AppendEventHandlerArray(
+        StringBuilder source,
+        string indent,
+        ImmutableArray<EventHandlerContributionInfo> eventHandlers)
+    {
+        if (eventHandlers.IsDefaultOrEmpty)
+        {
+            source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.EventHandlerContribution>(),");
+            return;
+        }
+
+        source.Append(indent).AppendLine("            new global::LayerBase.Modules.EventHandlerContribution[]");
+        source.Append(indent).AppendLine("            {");
+
+        foreach (var eventHandler in eventHandlers)
+        {
+            source.Append(indent).AppendLine("                global::LayerBase.Modules.EventHandlerContribution.ForTypes(");
+            source.Append(indent).Append("                    typeof(").Append(eventHandler.EventType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(eventHandler.HandlerType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(eventHandler.OwnerServiceType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(eventHandler.OwnerLayerType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(eventHandler.OwnerScopeType).AppendLine(")),");
+        }
+
+        source.Append(indent).AppendLine("            },");
+    }
+
     private static INamedTypeSymbol? ReadScopeType(INamedTypeSymbol symbol)
     {
         foreach (var attribute in symbol.GetAttributes())
@@ -472,6 +533,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             {
                 "global::LayerBase.DI.IService" when metadataName == IServiceMetadataName => true,
                 "global::LayerBase.DI.ILayerContext" when metadataName == ILayerContextMetadataName => true,
+                "global::LayerBase.Core.EventHandler.IEventHandler<TValue>" when metadataName == EventHandlerMetadataName => true,
+                "global::LayerBase.Core.EventHandler.IEventHandlerAsync<TValue>" when metadataName == AsyncEventHandlerMetadataName => true,
                 "global::LayerBase.Call.IScopeLocalCallHandler<TRequest, TResponse>" when metadataName == CallHandlerMetadataName => true,
                 _ => false
             };
@@ -497,6 +560,38 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     {
         var display = iface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         return display == "global::LayerBase.Call.IScopeLocalCallHandler<TRequest, TResponse>";
+    }
+
+    private static IEnumerable<EventHandlerImplementation> GetEventHandlerInterfaces(
+        INamedTypeSymbol handlerType,
+        INamedTypeSymbol? eventHandlerSymbol,
+        INamedTypeSymbol? asyncEventHandlerSymbol)
+    {
+        foreach (var iface in handlerType.AllInterfaces.OfType<INamedTypeSymbol>())
+        {
+            var isEventHandler = eventHandlerSymbol != null
+                ? SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, eventHandlerSymbol)
+                : IsEventHandlerByMetadataName(iface);
+            var isAsyncEventHandler = asyncEventHandlerSymbol != null
+                ? SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, asyncEventHandlerSymbol)
+                : IsAsyncEventHandlerByMetadataName(iface);
+            if (!isEventHandler && !isAsyncEventHandler) continue;
+            if (iface.TypeArguments.Length != 1) continue;
+
+            yield return new EventHandlerImplementation(iface.TypeArguments[0]);
+        }
+    }
+
+    private static bool IsEventHandlerByMetadataName(INamedTypeSymbol iface)
+    {
+        var display = iface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return display == "global::LayerBase.Core.EventHandler.IEventHandler<TValue>";
+    }
+
+    private static bool IsAsyncEventHandlerByMetadataName(INamedTypeSymbol iface)
+    {
+        var display = iface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return display == "global::LayerBase.Core.EventHandler.IEventHandlerAsync<TValue>";
     }
 
     private static IEnumerable<OwnerLayerRegistrationInfo> GetOwnerLayerRegistrations(INamedTypeSymbol serviceType)
@@ -593,8 +688,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         public static readonly DiagnosticDescriptor CrossAssemblyOwnerServiceContextOnlySupportsLayerContext =
             new(
                 "LBMOD004",
-                "Cross-assembly OwnerService module fallback only supports ILayerContext",
-                "Type '{0}' targets external owner service '{1}', but the current AssemblyModule context fallback only supports ILayerContext",
+                "Cross-assembly OwnerService module fallback only supports layer contexts and event handlers",
+                "Type '{0}' targets external owner service '{1}', but the current AssemblyModule OwnerService fallback only supports ILayerContext and IEventHandler",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -747,7 +842,36 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         public string HandlerType { get; }
     }
 
+    private sealed class EventHandlerContributionInfo
+    {
+        public EventHandlerContributionInfo(
+            string ownerLayerType,
+            string ownerScopeType,
+            string eventType,
+            string handlerType,
+            string ownerServiceType)
+        {
+            OwnerLayerType = ownerLayerType;
+            OwnerScopeType = ownerScopeType;
+            EventType = eventType;
+            HandlerType = handlerType;
+            OwnerServiceType = ownerServiceType;
+        }
+
+        public string OwnerLayerType { get; }
+
+        public string OwnerScopeType { get; }
+
+        public string EventType { get; }
+
+        public string HandlerType { get; }
+
+        public string OwnerServiceType { get; }
+    }
+
     private readonly record struct CallHandlerImplementation(ITypeSymbol RequestType, ITypeSymbol ResponseType);
+
+    private readonly record struct EventHandlerImplementation(ITypeSymbol EventType);
 
     private readonly record struct OwnerLayerRegistrationInfo(INamedTypeSymbol OwnerLayerType);
 }
