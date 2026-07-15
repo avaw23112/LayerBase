@@ -1,0 +1,130 @@
+namespace LayerBase.Scope;
+
+internal sealed class ScopeRuntimeHost : IDisposable
+{
+    private readonly ScopeRuntime[] _scopes;
+    private readonly ScopeWorker[] _workers;
+    private bool _disposed;
+
+    private ScopeRuntimeHost(ScopeRuntime[] scopes, ScopeWorker[] workers)
+    {
+        if (scopes == null || scopes.Length == 0)
+            throw new ArgumentException("Scope host must contain at least MainScope.", nameof(scopes));
+
+        if (scopes[0].Descriptor.ScopeId != ScopeDefinitionIds.Main)
+            throw new InvalidOperationException("MainScope must be the first scope runtime.");
+
+        _scopes = scopes;
+        _workers = workers ?? Array.Empty<ScopeWorker>();
+    }
+
+    public ScopeRuntime MainScope
+    {
+        get
+        {
+            return _scopes[0];
+        }
+    }
+
+    public IReadOnlyList<ScopeRuntime> Scopes => _scopes;
+
+    public bool TryGetRuntime(int scopeId, out ScopeRuntime scope)
+    {
+        ThrowIfDisposed();
+        for (int i = 0; i < _scopes.Length; i++)
+        {
+            if (_scopes[i].ScopeId == scopeId)
+            {
+                scope = _scopes[i];
+                return true;
+            }
+        }
+
+        scope = null!;
+        return false;
+    }
+
+    public static ScopeRuntimeHost CreateMain(LayerRuntime runtime, int runtimeId, int generation)
+    {
+        return Create(runtime, new[] { ScopeExecutionPlan.CreateMain() }, runtimeId, generation);
+    }
+
+    public static ScopeRuntimeHost Create(
+        LayerRuntime runtime,
+        IReadOnlyList<ScopeExecutionPlan> plans,
+        int runtimeId,
+        int generation)
+    {
+        if (runtime == null)
+            throw new ArgumentNullException(nameof(runtime));
+        if (plans == null)
+            throw new ArgumentNullException(nameof(plans));
+        if (plans.Count == 0)
+            throw new ArgumentException("Scope host requires at least MainScope.", nameof(plans));
+
+        var scopes = new ScopeRuntime[plans.Count];
+        var workers = new List<ScopeWorker>();
+        try
+        {
+            for (int i = 0; i < plans.Count; i++)
+            {
+                scopes[i] = new ScopeRuntime(runtime, plans[i], runtimeId, generation);
+                if (plans[i].Options.Threading == ScopeThreadingMode.Worker)
+                    workers.Add(new ScopeWorker(scopes[i]));
+            }
+
+            return new ScopeRuntimeHost(scopes, workers.ToArray());
+        }
+        catch
+        {
+            for (int i = 0; i < scopes.Length; i++)
+                scopes[i]?.Dispose();
+            foreach (var worker in workers)
+                worker.Dispose();
+            throw;
+        }
+    }
+
+    public void StartWorkers()
+    {
+        ThrowIfDisposed();
+        for (int i = 0; i < _workers.Length; i++)
+            _workers[i].Start();
+    }
+
+    public bool TryGetScope<TScope>(out ScopeRef<TScope> scope)
+        where TScope : IScopeDefinition
+    {
+        ThrowIfDisposed();
+        var scopeType = typeof(TScope);
+        for (int i = 0; i < _scopes.Length; i++)
+        {
+            if (_scopes[i].Descriptor.ScopeType == scopeType)
+            {
+                scope = new ScopeRef<TScope>(_scopes[i].Endpoint);
+                return true;
+            }
+        }
+
+        scope = default;
+        return false;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        for (int i = _workers.Length - 1; i >= 0; i--)
+            _workers[i].Dispose();
+        for (int i = _scopes.Length - 1; i >= 0; i--)
+            _scopes[i].Dispose();
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(ScopeRuntimeHost));
+    }
+}
