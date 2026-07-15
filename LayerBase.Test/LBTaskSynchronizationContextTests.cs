@@ -171,6 +171,68 @@ public sealed class LBTaskSynchronizationContextTests
     }
 
     [Test]
+    public void Disposed_scope_context_does_not_fallback_to_thread_pool()
+    {
+        var context = LayerBaseSynchronizationContext.Install();
+        var resumed = new ManualResetEventSlim(false);
+        LBTask task;
+
+        using (context.EnterScope())
+        {
+            var completion = new LBTaskCompletionSource();
+            task = completion.Task;
+            task.GetAwaiter().OnCompleted(() => resumed.Set());
+        }
+
+        context.Dispose();
+
+        Assert.That(task.GetAwaiter().IsCompleted, Is.True);
+        Assert.That(resumed.Wait(TimeSpan.FromMilliseconds(100)), Is.False);
+    }
+
+    [Test]
+    public void Pooled_source_clears_context_and_continuation_references()
+    {
+        var previous = SynchronizationContext.Current;
+        var context = new RecordingSynchronizationContext();
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+
+            var completion = new LBTaskCompletionSource();
+            var task = completion.Task;
+            var source = GetSource(task)!;
+            task.GetAwaiter().OnCompleted(() => task.GetAwaiter().GetResult());
+
+            completion.SetResult();
+            context.Drain();
+
+            Assert.That(GetField(source, "_context"), Is.Null);
+            Assert.That(GetField(source, "_registeredContext"), Is.Null);
+            Assert.That(GetField(source, "_continuation"), Is.Null);
+            Assert.That(GetField(source, "_exception"), Is.Null);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    [Test]
+    public void Post_never_runs_callback_inline_on_producer_thread()
+    {
+        using var context = LayerBaseSynchronizationContext.Install();
+        var producerThreadId = Environment.CurrentManagedThreadId;
+        var callbackThreadId = 0;
+
+        context.Post(_ => callbackThreadId = Environment.CurrentManagedThreadId, null);
+
+        Assert.That(callbackThreadId, Is.EqualTo(0));
+        context.Update();
+        Assert.That(callbackThreadId, Is.EqualTo(producerThreadId));
+    }
+
+    [Test]
     public void RunBackground_resumes_on_captured_regular_synchronization_context()
     {
         var previous = SynchronizationContext.Current;
@@ -303,5 +365,12 @@ public sealed class LBTaskSynchronizationContextTests
         return typeof(LBTask)
             .GetField("Source", BindingFlags.NonPublic | BindingFlags.Instance)!
             .GetValue(task);
+    }
+
+    private static object? GetField(object source, string name)
+    {
+        return source.GetType()
+            .GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(source);
     }
 }

@@ -1,5 +1,6 @@
 using System.Reflection;
 using LayerBase;
+using LayerBase.Async;
 using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.Layers;
@@ -229,6 +230,136 @@ public sealed class ScopeLifecycleMigrationTests
         Assert.That(firstThreadId, Is.Not.EqualTo(mainThreadId));
         Assert.That(secondThreadId, Is.Not.EqualTo(mainThreadId));
         Assert.That(firstThreadId, Is.Not.EqualTo(secondThreadId));
+    }
+
+    [Test]
+    public void Worker_task_continuation_runs_on_worker_owner_thread()
+    {
+        var signal = new ManualResetEventSlim(false);
+        var mainThreadId = Environment.CurrentManagedThreadId;
+        var updateThreadId = 0;
+        var continuationThreadId = 0;
+        SynchronizationContext? capturedContext = null;
+
+        using var runtime = new LayerRuntime(9112);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                CreateWorkerContinuationPlan(
+                    signal,
+                    context => capturedContext = context,
+                    threadId => updateThreadId = threadId,
+                    threadId => continuationThreadId = threadId)
+            },
+            runtimeId: 9112,
+            generation: 1);
+
+        host.StartWorkers();
+
+        Assert.That(signal.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(capturedContext, Is.SameAs(host.Scopes[1].SynchronizationContext));
+        Assert.That(updateThreadId, Is.Not.EqualTo(0));
+        Assert.That(continuationThreadId, Is.EqualTo(updateThreadId));
+        Assert.That(continuationThreadId, Is.Not.EqualTo(mainThreadId));
+    }
+
+    [Test]
+    public void Main_scope_task_captures_main_synchronization_context()
+    {
+        using var runtime = LayerHub.CreateLayers()
+                                    .Push(new TraceLayer("L0", new List<string>(), registerUpdate: false))
+                                    .Build();
+        var mainContext = runtime.ScopeHost.MainScope.SynchronizationContext!;
+        var mainThreadId = Environment.CurrentManagedThreadId;
+        var continuationThreadId = 0;
+        SynchronizationContext? continuationContext = null;
+
+        using (mainContext.EnterScope())
+        {
+            var task = LBTask.Yield();
+            task.GetAwaiter().OnCompleted(() =>
+            {
+                task.GetAwaiter().GetResult();
+                continuationThreadId = Environment.CurrentManagedThreadId;
+                continuationContext = SynchronizationContext.Current;
+            });
+        }
+
+        runtime.Pump(0.016f);
+
+        Assert.That(continuationThreadId, Is.EqualTo(mainThreadId));
+        Assert.That(continuationContext, Is.SameAs(mainContext));
+    }
+
+    [Test]
+    public void Inline_scope_task_captures_inline_context_and_restores_previous_context()
+    {
+        var signal = new ManualResetEventSlim(false);
+        var ownerThreadId = Environment.CurrentManagedThreadId;
+        var continuationThreadId = 0;
+        SynchronizationContext? updateContext = null;
+        SynchronizationContext? continuationContext = null;
+
+        using var runtime = new LayerRuntime(9113);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                CreateInlineContextCapturePlan<InlineTraceScope>(
+                    2,
+                    context => updateContext = context,
+                    context => continuationContext = context,
+                    threadId => continuationThreadId = threadId,
+                    signal)
+            },
+            runtimeId: 9113,
+            generation: 1);
+        ScopeRuntime scope = host.Scopes[1];
+        scope.InstallSynchronizationContext();
+        using var previousContext = LayerBaseSynchronizationContext.Install();
+        using var previousScope = previousContext.EnterScope();
+
+        scope.PumpScopeResources(0.016f);
+
+        Assert.That(SynchronizationContext.Current, Is.SameAs(previousContext));
+        scope.PumpScopeResources(0.016f);
+
+        Assert.That(signal.Wait(TimeSpan.FromMilliseconds(100)), Is.True);
+        Assert.That(updateContext, Is.SameAs(scope.SynchronizationContext));
+        Assert.That(continuationThreadId, Is.EqualTo(ownerThreadId));
+        Assert.That(SynchronizationContext.Current, Is.SameAs(previousContext));
+        Assert.That(continuationContext, Is.SameAs(scope.SynchronizationContext));
+    }
+
+    [Test]
+    public void Nested_context_switches_restore_previous_context()
+    {
+        using var outer = LayerBaseSynchronizationContext.Install();
+        using var firstInline = LayerBaseSynchronizationContext.Install();
+        using var secondInline = LayerBaseSynchronizationContext.Install();
+        var previous = SynchronizationContext.Current;
+
+        using (outer.EnterScope())
+        {
+            Assert.That(SynchronizationContext.Current, Is.SameAs(outer));
+            using (firstInline.EnterScope())
+            {
+                Assert.That(SynchronizationContext.Current, Is.SameAs(firstInline));
+                using (secondInline.EnterScope())
+                {
+                    Assert.That(SynchronizationContext.Current, Is.SameAs(secondInline));
+                }
+
+                Assert.That(SynchronizationContext.Current, Is.SameAs(firstInline));
+            }
+
+            Assert.That(SynchronizationContext.Current, Is.SameAs(outer));
+        }
+
+        Assert.That(SynchronizationContext.Current, Is.SameAs(previous));
     }
 
     [Test]
@@ -698,6 +829,96 @@ public sealed class ScopeLifecycleMigrationTests
         return new ScopeExecutionPlan(
             new ScopeDescriptor(scopeId, typeof(TScope).Name, typeof(TScope)),
             ScopeOptions.Worker(tickRateHz: 100),
+            lifecyclePlan: new ScopeLifecyclePlan(
+                layers,
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                update,
+                Array.Empty<FixedUpdateInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>()));
+    }
+
+    private static ScopeExecutionPlan CreateWorkerContinuationPlan(
+        ManualResetEventSlim continuationSignal,
+        Action<SynchronizationContext?> captureContext,
+        Action<int> captureUpdateThread,
+        Action<int> captureContinuationThread)
+    {
+        var started = 0;
+        var update = new UpdateInvoker[]
+        {
+            _ =>
+            {
+                if (Interlocked.Exchange(ref started, 1) != 0)
+                    return;
+
+                captureContext(SynchronizationContext.Current);
+                captureUpdateThread(Environment.CurrentManagedThreadId);
+                var task = LBTask.RunBackground(() => 42);
+                task.GetAwaiter().OnCompleted(() =>
+                {
+                    _ = task.GetAwaiter().GetResult();
+                    captureContinuationThread(Environment.CurrentManagedThreadId);
+                    continuationSignal.Set();
+                });
+            }
+        };
+        var layers = new[]
+        {
+            new ScopeLayerLifecycleSlice(0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0)
+        };
+
+        return new ScopeExecutionPlan(
+            new ScopeDescriptor(2, nameof(WorkerTraceScope), typeof(WorkerTraceScope)),
+            ScopeOptions.Worker(tickRateHz: 100),
+            lifecyclePlan: new ScopeLifecyclePlan(
+                layers,
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                update,
+                Array.Empty<FixedUpdateInvoker>(),
+                Array.Empty<LifecycleInvoker>(),
+                Array.Empty<LifecycleInvoker>()));
+    }
+
+    private static ScopeExecutionPlan CreateInlineContextCapturePlan<TScope>(
+        int scopeId,
+        Action<SynchronizationContext?> captureUpdateContext,
+        Action<SynchronizationContext?> captureContinuationContext,
+        Action<int> captureContinuationThread,
+        ManualResetEventSlim continuationSignal)
+        where TScope : IScopeDefinition
+    {
+        var started = 0;
+        var update = new UpdateInvoker[]
+        {
+            _ =>
+            {
+                if (Interlocked.Exchange(ref started, 1) != 0)
+                    return;
+
+                captureUpdateContext(SynchronizationContext.Current);
+                var task = LBTask.Yield();
+                task.GetAwaiter().OnCompleted(() =>
+                {
+                    task.GetAwaiter().GetResult();
+                    captureContinuationContext(SynchronizationContext.Current);
+                    captureContinuationThread(Environment.CurrentManagedThreadId);
+                    continuationSignal.Set();
+                });
+            }
+        };
+        var layers = new[]
+        {
+            new ScopeLayerLifecycleSlice(0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0)
+        };
+
+        return new ScopeExecutionPlan(
+            new ScopeDescriptor(scopeId, typeof(TScope).Name, typeof(TScope)),
+            ScopeOptions.Inline,
             lifecyclePlan: new ScopeLifecyclePlan(
                 layers,
                 Array.Empty<LifecycleInvoker>(),
