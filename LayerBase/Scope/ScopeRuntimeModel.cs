@@ -39,7 +39,8 @@ internal readonly struct ScopeOptions
     public ScopeOptions(
         ScopeThreadingMode threading,
         ScopeClockMode clock,
-        int tickRateHz)
+        int tickRateHz,
+        ScopeFaultPolicy faultPolicy = ScopeFaultPolicy.ReportAndContinue)
     {
         if (tickRateHz < 0)
             throw new ArgumentOutOfRangeException(nameof(tickRateHz));
@@ -47,6 +48,7 @@ internal readonly struct ScopeOptions
         Threading = threading;
         Clock = clock;
         TickRateHz = tickRateHz;
+        FaultPolicy = faultPolicy;
     }
 
     public ScopeThreadingMode Threading { get; }
@@ -54,6 +56,8 @@ internal readonly struct ScopeOptions
     public ScopeClockMode Clock { get; }
 
     public int TickRateHz { get; }
+
+    public ScopeFaultPolicy FaultPolicy { get; }
 
     public static ScopeOptions Main { get; } = new(ScopeThreadingMode.Main, ScopeClockMode.RuntimePump, 0);
 

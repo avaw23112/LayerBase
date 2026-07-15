@@ -50,8 +50,16 @@ internal sealed class ScopeWorker : IDisposable
 
             while (_runtime.State != ScopeRuntimeState.Disposed)
             {
-                float deltaTime = GetDeltaTime();
-                _runtime.PumpScopeResources(deltaTime);
+                try
+                {
+                    float deltaTime = GetDeltaTime();
+                    _runtime.PumpScopeResources(deltaTime);
+                }
+                catch (Exception ex)
+                {
+                    _runtime.ReportFault(ex, ScopeFaultPhase.WorkerLoop);
+                }
+
                 Sleep();
             }
         }

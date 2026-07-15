@@ -88,6 +88,8 @@ public sealed partial class LayerRuntime : IDisposable
 
     #region Events
     public event Action<LayerEventInfo>? OnLayerEventInfo;
+
+    public event Action<ScopeFaultInfo>? Faulted;
     #endregion
 
     #region Constructors & Initialization
@@ -295,6 +297,26 @@ public sealed partial class LayerRuntime : IDisposable
     {
         OnLayerEventInfo?.Invoke(info);
         LayerHub.Internal_NotifyEvent(info);
+    }
+
+    internal void ReportScopeFault(in ScopeFaultRecord record)
+    {
+        var handlers = Faulted;
+        if (handlers == null)
+            return;
+
+        var info = new ScopeFaultInfo(record);
+        foreach (Action<ScopeFaultInfo> handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler(info);
+            }
+            catch
+            {
+                // Fault callbacks are host-side diagnostics; they must not become a recursive fault channel.
+            }
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

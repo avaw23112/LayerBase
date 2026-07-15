@@ -13,6 +13,7 @@ internal sealed class ScopeRuntime : IDisposable
 {
     private readonly int _runtimeId;
     private readonly int _generation;
+    private readonly LayerRuntime _runtime;
     private readonly EventPayloadStorage _callPayloadStorage = new();
     private readonly EventPayloadStorage _eventPayloadStorage = new();
     private readonly MainActorRuntime? _mainActors;
@@ -22,6 +23,9 @@ internal sealed class ScopeRuntime : IDisposable
     private ScopeTimerSink? _timerSink;
     private IReadOnlyDictionary<int, ScopeEndpoint> _scopeEndpoints =
         new Dictionary<int, ScopeEndpoint>();
+    private IReadOnlyDictionary<int, ScopeRuntime> _scopeRuntimes =
+        new Dictionary<int, ScopeRuntime>();
+    private ScopeRuntime? _mainScopeRuntime;
     private int _callSequence;
     private float _fixedUpdateAccumulator;
     private bool _runtimeStopRun;
@@ -41,6 +45,7 @@ internal sealed class ScopeRuntime : IDisposable
         LayerProviders = plan.LayerProviders;
         LayerSlices = plan.LayerSlices;
         LifecyclePlan = plan.LifecyclePlan;
+        _runtime = runtime;
         _runtimeId = runtimeId;
         _generation = generation;
         if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
@@ -176,10 +181,18 @@ internal sealed class ScopeRuntime : IDisposable
     public void BindScopeEndpoints(IReadOnlyList<ScopeRuntime> scopes)
     {
         var endpoints = new Dictionary<int, ScopeEndpoint>(scopes.Count);
+        var runtimes = new Dictionary<int, ScopeRuntime>(scopes.Count);
         for (int i = 0; i < scopes.Count; i++)
+        {
             endpoints[scopes[i].ScopeId] = scopes[i].Endpoint;
+            runtimes[scopes[i].ScopeId] = scopes[i];
+        }
 
         _scopeEndpoints = endpoints;
+        _scopeRuntimes = runtimes;
+        _mainScopeRuntime = runtimes.TryGetValue(ScopeDefinitionIds.Main, out var mainScope)
+            ? mainScope
+            : null;
     }
 
     public bool TryPostEventToScope<TEvent>(
@@ -380,14 +393,21 @@ internal sealed class ScopeRuntime : IDisposable
         if (!options.Enabled || !CanPumpLifecycle())
             return;
 
-        _fixedUpdateAccumulator += deltaTime;
-        int steps = 0;
-        while (_fixedUpdateAccumulator >= options.FixedDeltaTime &&
-               steps < options.MaxStepsPerPump)
+        try
         {
-            LifecyclePlan.PumpFixedUpdate(options.FixedDeltaTime);
-            _fixedUpdateAccumulator -= options.FixedDeltaTime;
-            steps++;
+            _fixedUpdateAccumulator += deltaTime;
+            int steps = 0;
+            while (_fixedUpdateAccumulator >= options.FixedDeltaTime &&
+                   steps < options.MaxStepsPerPump)
+            {
+                LifecyclePlan.PumpFixedUpdate(options.FixedDeltaTime);
+                _fixedUpdateAccumulator -= options.FixedDeltaTime;
+                steps++;
+            }
+        }
+        catch (Exception ex)
+        {
+            ReportFault(ex, ScopeFaultPhase.ServiceUpdate);
         }
     }
 
@@ -396,7 +416,14 @@ internal sealed class ScopeRuntime : IDisposable
         if (!CanPumpLifecycle())
             return;
 
-        LifecyclePlan.PumpUpdate(deltaTime);
+        try
+        {
+            LifecyclePlan.PumpUpdate(deltaTime);
+        }
+        catch (Exception ex)
+        {
+            ReportFault(ex, ScopeFaultPhase.ServiceUpdate);
+        }
     }
 
     private bool CanPumpLifecycle()
@@ -581,6 +608,9 @@ internal sealed class ScopeRuntime : IDisposable
         {
             try
             {
+                if (TryDispatchScopeFaultEvent(envelope))
+                    continue;
+
                 if (_mainActors != null &&
                     _mainActors.TryDispatchProjectionCommand(
                         envelope.RouteId,
@@ -619,6 +649,100 @@ internal sealed class ScopeRuntime : IDisposable
             {
                 _eventPayloadStorage.Release(envelope.Payload);
             }
+        }
+    }
+
+    private bool TryDispatchScopeFaultEvent(ScopeEventEnvelope envelope)
+    {
+        if (envelope.RouteId != ScopeFaultRouteIds.FaultEvent)
+            return false;
+
+        if (!_eventPayloadStorage.TryGet<ScopeFaultEvent>(
+                _runtimeId,
+                envelope.Payload,
+                out var faultEvent))
+        {
+            return true;
+        }
+
+        _runtime.ReportScopeFault(faultEvent.Record);
+        ApplyFaultPolicy(faultEvent.Record);
+        return true;
+    }
+
+    internal void ReportFault(
+        Exception exception,
+        ScopeFaultPhase phase,
+        int routeId = 0,
+        int serviceSlot = -1,
+        int contextSlot = -1)
+    {
+        var record = new ScopeFaultRecord(
+            _runtimeId,
+            _generation,
+            Descriptor.ScopeId,
+            phase,
+            exception,
+            routeId,
+            serviceSlot,
+            contextSlot);
+
+        _state = ScopeRuntimeState.Faulted;
+        Transport.CloseBusinessAdmission();
+
+        if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
+        {
+            _runtime.ReportScopeFault(record);
+            ApplyFaultPolicy(record);
+            return;
+        }
+
+        ScopeRuntime? mainScope = _mainScopeRuntime;
+        if (mainScope != null)
+            _ = mainScope.EnqueueScopeFaultEvent(record);
+    }
+
+    private ScopePostResult EnqueueScopeFaultEvent(in ScopeFaultRecord record)
+    {
+        if (_state == ScopeRuntimeState.Disposed)
+            return ScopePostResult.RuntimeDisposed;
+
+        var faultEvent = new ScopeFaultEvent(record);
+        var payload = _eventPayloadStorage.Store(_runtimeId, in faultEvent);
+        var envelope = new ScopeEventEnvelope(
+            new ScopeAddress(record.RuntimeId, record.RuntimeGeneration, record.SourceScopeId),
+            ScopeFaultRouteIds.FaultEvent,
+            ScopeEventClass.Critical,
+            payload);
+
+        var result = Transport.EventInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
+        if (result == ScopeEnqueueResult.Accepted)
+            return ScopePostResult.Accepted;
+
+        _eventPayloadStorage.Release(payload);
+        return result switch
+        {
+            ScopeEnqueueResult.Full => ScopePostResult.QueueFull,
+            ScopeEnqueueResult.Closed => ScopePostResult.RuntimeDisposed,
+            ScopeEnqueueResult.StaleEndpoint => ScopePostResult.StaleEndpoint,
+            _ => ScopePostResult.Rejected
+        };
+    }
+
+    private void ApplyFaultPolicy(in ScopeFaultRecord record)
+    {
+        if (!_scopeRuntimes.TryGetValue(record.SourceScopeId, out var sourceScope))
+            return;
+
+        switch (sourceScope.Options.FaultPolicy)
+        {
+            case ScopeFaultPolicy.StopScope:
+                _ = sourceScope.RequestStopAsync();
+                break;
+            case ScopeFaultPolicy.StopRuntime:
+                if (_scopeRuntimes.TryGetValue(ScopeDefinitionIds.Main, out var mainScope))
+                    _ = mainScope.RequestStopAsync();
+                break;
         }
     }
 
