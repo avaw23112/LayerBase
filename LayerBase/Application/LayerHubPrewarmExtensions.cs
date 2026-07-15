@@ -35,8 +35,6 @@ public static class LayerHubPrewarmExtensions
         // 这里的实现方式是：
         // 1. 调用源生成器参与填充的预热注册表。
         // 2. 注册表会调用源生成器生成的 PrewarmGenerated 方法。
-        LayerBasePrewarmRegistry.Prewarm(runtime.EventCenter, options);
-
-        return runtime;
+        return runtime.PrewarmInternal(in options);
     }
 }

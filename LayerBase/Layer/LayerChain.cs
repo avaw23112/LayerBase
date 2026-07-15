@@ -106,7 +106,7 @@ internal sealed class LayerChain
     /// <summary>
     /// 完整构建阶段：绑定共享字段、执行生命周期构建、PostBuild 和 RuntimeStart。
     /// </summary>
-    internal void Build(int eventStateSlabSize, bool releaseMode)
+    internal void Build(int eventStateSlabSize, bool releaseMode, Action? afterPostBuild = null)
     {
         var builtLayers = new List<Layer>();
         foreach (var node in _responsibilityChain)
@@ -128,6 +128,7 @@ internal sealed class LayerChain
         EventGraphValidator.Validate(builtLayers, _owner);
         lifecyclePlan.RunInitialize();
         lifecyclePlan.RunPostBuild();
+        afterPostBuild?.Invoke();
         lifecyclePlan.RunRuntimeStart();
     }
 

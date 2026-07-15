@@ -159,6 +159,16 @@ internal sealed class ScopeRuntime : IDisposable
         DelayManager = DelayPublisherManager.Create(options, RequirePolicyTable());
     }
 
+    internal void Prewarm(in LayerPrewarmOptions options)
+    {
+        LayerBasePrewarmRegistry.Prewarm(EventCenter, options);
+    }
+
+    internal void FreezeRuntimeRegistries()
+    {
+        PolicyTable?.Freeze();
+    }
+
     public IDelayPublisher<T> SubscribeDelay<T>() where T : struct
     {
         var type = typeof(T);

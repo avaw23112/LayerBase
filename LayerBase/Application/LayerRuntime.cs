@@ -56,6 +56,7 @@ public sealed partial class LayerRuntime : IDisposable
     private readonly int _id;
     private readonly int _generation = 1;
     private ScopeRef<MainScope> _mainScope;
+    private RuntimeState _state = RuntimeState.Created;
     private bool _disposed;
     #endregion
 
@@ -63,6 +64,8 @@ public sealed partial class LayerRuntime : IDisposable
     public int Id => _id;
 
     public ScopeRef<MainScope> Main => _mainScope;
+
+    public RuntimeState State => _state;
 
     internal PostScheduler Scheduler => _scopeHost.MainScope.PostScheduler ?? throw new InvalidOperationException("Runtime not built.");
 
@@ -226,6 +229,39 @@ public sealed partial class LayerRuntime : IDisposable
         }
 
         _topologyDiagnostics = TopologyAudit.Run(this, _chain.GetNodes().ToArray());
+    }
+
+    public LayerRuntime Activate()
+    {
+        if (_disposed || _state is RuntimeState.Disposing or RuntimeState.Disposed)
+            throw new ObjectDisposedException(nameof(LayerRuntime));
+        if (_state == RuntimeState.Running)
+            return this;
+        if (_state == RuntimeState.Built)
+        {
+            _state = RuntimeState.Activating;
+            _state = RuntimeState.Running;
+            return this;
+        }
+
+        throw new InvalidOperationException($"LayerRuntime cannot be activated from state {_state}.");
+    }
+
+    internal LayerRuntime PrewarmInternal(in LayerPrewarmOptions options)
+    {
+        if (_disposed || _state is RuntimeState.Disposing or RuntimeState.Disposed)
+            throw new ObjectDisposedException(nameof(LayerRuntime));
+
+        foreach (var scope in _scopeHost.Scopes)
+            scope.Prewarm(in options);
+
+        return this;
+    }
+
+    internal void FreezeRuntimeRegistries()
+    {
+        foreach (var scope in _scopeHost.Scopes)
+            scope.FreezeRuntimeRegistries();
     }
 
     private void RegisterFullSnapNode(IGeneratedFullSnapNode node, int layerIndex, int objectSlot)
@@ -487,15 +523,18 @@ public sealed partial class LayerRuntime : IDisposable
         if (_disposed) return;
         _disposed = true;
 
+        _state = RuntimeState.Stopping;
         _scopeHost.MainScope.RunRuntimeStop();
         _workerJobs.BeginStop();
         _chain?.DisposeLayers();
         _chain = null;
+        _state = RuntimeState.Disposing;
         _scopeHost.Dispose();
         _tools?.Dispose();
         _workerJobs.Dispose();
         LayerHub.ClearRuntimeCaches(_id);
         LayerHub.Internal_Unregister(this);
+        _state = RuntimeState.Disposed;
     }
     #endregion
 
@@ -814,26 +853,42 @@ public sealed partial class LayerRuntime : IDisposable
             if (_layerChain == null) throw new InvalidOperationException("No layers added.");
             _built = true;
 
-            _layerChain.AssignLayerIndexes();
-            _runtime.CompositionPlan = RuntimeCompositionPlan.Build(
-                _layerChain.GetNodes().ToArray(),
-                _assemblyModules);
-            _runtime.InstallScopeHost(_runtime.CompositionPlan.Scopes);
-            _runtime._scopeHost.MainScope.InstallSynchronizationContext();
-            _layerChain.Prebuild();
-            _runtime.RunTopologyAudit();
-            _runtime._tools = new LayerToolRegistry(_runtime, _runtime.CompositionPlan.Tools);
-            _runtime.BuildLocalCallRegistry();
+            _runtime._state = RuntimeState.Building;
+            try
+            {
+                _layerChain.AssignLayerIndexes();
+                _runtime.CompositionPlan = RuntimeCompositionPlan.Build(
+                    _layerChain.GetNodes().ToArray(),
+                    _assemblyModules);
+                _runtime.InstallScopeHost(_runtime.CompositionPlan.Scopes);
+                _runtime._scopeHost.MainScope.InstallSynchronizationContext();
+                _layerChain.Prebuild();
+                _runtime.RunTopologyAudit();
+                _runtime._state = RuntimeState.Built;
 
-            _runtime._fixedUpdateOptions = _fixedUpdateOptions;
-            _runtime.InitializeScheduler(_postOptions);
-            _runtime.InitializeTimer(_timerOptions);
-            _runtime.InitializeDelay(_delayOptions);
-            _runtime.MainActorRuntime.PrepareRuntimeBuild();
-            _layerChain.Build(1024, true);
-            _runtime.MainActorRuntime.CompleteRuntimeBuild();
-            _runtime.BuildFullSnapCache();
-            _runtime.PolicyTable.Freeze();
+                _runtime._state = RuntimeState.Activating;
+                _runtime._tools = new LayerToolRegistry(_runtime, _runtime.CompositionPlan.Tools);
+                _runtime.BuildLocalCallRegistry();
+
+                _runtime._fixedUpdateOptions = _fixedUpdateOptions;
+                _runtime.InitializeScheduler(_postOptions);
+                _runtime.InitializeTimer(_timerOptions);
+                _runtime.InitializeDelay(_delayOptions);
+                _runtime.MainActorRuntime.PrepareRuntimeBuild();
+                _layerChain.Build(1024, true, () =>
+                {
+                    _runtime.MainActorRuntime.CompleteRuntimeBuild();
+                    _runtime.BuildFullSnapCache();
+                    _runtime.PrewarmInternal(LayerPrewarmOptions.Default);
+                    _runtime.FreezeRuntimeRegistries();
+                });
+                _runtime._state = RuntimeState.Running;
+            }
+            catch
+            {
+                _runtime._state = RuntimeState.Faulted;
+                throw;
+            }
 
             if (_debugMode)
             {
