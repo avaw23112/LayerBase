@@ -25,6 +25,12 @@ public static class DiagnosticIds
     public const string ECS022 = "LB-ECS022";
     public const string ECS023 = "LB-ECS023";
     public const string ECS024 = "LB-ECS024";
+    public const string QueryInputRefNotSupported = "LBQUERY_INPUT_REF_NOT_SUPPORTED";
+    public const string QueryInputOutNotSupported = "LBQUERY_INPUT_OUT_NOT_SUPPORTED";
+    public const string QueryInputByRefLikeNotSupported = "LBQUERY_INPUT_BYREFLIKE_NOT_SUPPORTED";
+    public const string QueryInputAfterBringNotSupported = "LBQUERY_INPUT_AFTER_BRING_NOT_SUPPORTED";
+    public const string QueryInputEntityNotSupported = "LBQUERY_INPUT_ENTITY_NOT_SUPPORTED";
+    public const string QueryInputBringEventNotSupported = "LBQUERY_INPUT_BRING_EVENT_NOT_SUPPORTED";
 
     // Blueprint 诊断 (LB-BPxxx)
     public const string BP001 = "LB-BP001";

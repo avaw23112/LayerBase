@@ -33,6 +33,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
     private const string QueryAttributeName = "LayerBase.ECS.QueryAttribute";
     private const string BringAttributeName = "LayerBase.ECS.BringAttribute";
     private const string EntryPointAttributeName = "LayerBase.ECS.EntryPointAttribute";
+    private const string InputAttributeName = "LayerBase.ECS.InputAttribute";
     private const string ProjectResultMetadataName = "LayerBase.ECS.ProjectResult";
     private const string EntityMetadataName = "Arch.Core.Entity";
 
@@ -138,6 +139,9 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         var componentTypes = new List<ITypeSymbol>();
         var componentRefKinds = new List<RefKind>();
+        var inputTypes = new List<ITypeSymbol>();
+        var inputRefKinds = new List<RefKind>();
+        var inputNames = new List<string>();
         var userParameters = new List<QueryUserParameterInfo>();
 
         int entityCount = 0;
@@ -146,6 +150,33 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         foreach (var param in parameters)
         {
+            if (HasInputAttribute(param))
+            {
+                if (bringTailStarted ||
+                    param.RefKind is RefKind.Ref or RefKind.Out ||
+                    IsUnsupportedInputType(param.Type) ||
+                    IsMetadataType(param.Type, EntityMetadataName) ||
+                    bringEventTypes.Any(type => SymbolEqualityComparer.Default.Equals(type, param.Type)))
+                {
+                    return null;
+                }
+
+                int inputIndex = inputTypes.Count;
+
+                inputTypes.Add(param.Type);
+                inputRefKinds.Add(param.RefKind);
+                inputNames.Add(param.Name);
+
+                userParameters.Add(new QueryUserParameterInfo
+                {
+                    Kind = QueryUserParameterKind.Input,
+                    Index = inputIndex,
+                    RefKind = param.RefKind
+                });
+
+                continue;
+            }
+
             // Entity：Arch ECS 的实体标识。
             // 它不是组件数据本身，而是当前被遍历实体的句柄。
             if (IsMetadataType(param.Type, EntityMetadataName))
@@ -250,6 +281,9 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
             EntryPointName = entryPointName,
             ComponentTypes = componentTypes.ToImmutableArray(),
             ComponentRefKinds = componentRefKinds.ToImmutableArray(),
+            InputTypes = inputTypes.ToImmutableArray(),
+            InputRefKinds = inputRefKinds.ToImmutableArray(),
+            InputNames = inputNames.ToImmutableArray(),
             BringEventTypes = bringEventTypes,
             UserParameters = userParameters.ToImmutableArray(),
             HasEntity = entityCount > 0,
@@ -371,7 +405,10 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         // 生成外部入口方法。
         // 例如用户写 OnMove，默认生成 Move。
-        sb.AppendLine($"        public void {entryPoint}()");
+        string inputParameterList = BuildInputParameterList(method);
+        sb.AppendLine(inputParameterList.Length == 0
+            ? $"        public void {entryPoint}()"
+            : $"        public void {entryPoint}({inputParameterList})");
         sb.AppendLine("        {");
 
         if (hasBring)
@@ -398,7 +435,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         // job 是查询执行器。
         // ForEach 会把每个匹配实体和组件传给 job.Execute。
-        sb.AppendLine($"            var job = new __{method.EntryPointName}Job(this);");
+        sb.AppendLine($"            var job = new __{method.EntryPointName}Job({BuildJobConstructorArgumentList(method)});");
         sb.AppendLine();
 
         // 使用 global::LayerBase.ServiceECSExtensions.Query<T...>(this) 避免生成代码依赖 using 解析扩展方法。
@@ -414,7 +451,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         // Bring：在 Query 组件集合的基础上，把事件数据带入遍历流程。
         // 常见用途是 Query 到目标实体后，对目标实体执行事件投递或事件处理。
-        sb.AppendLine($"            var job = new __{method.EntryPointName}Job(this);");
+        sb.AppendLine($"            var job = new __{method.EntryPointName}Job({BuildJobConstructorArgumentList(method)});");
         sb.AppendLine();
 
         // 使用 global::LayerBase.ServiceECSExtensions.Query<T...>(this) 避免生成代码依赖 using 解析扩展方法。
@@ -443,13 +480,25 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         // _self 保存当前业务类实例。
         // Job 是独立 struct，不能直接访问外层 this，所以要显式保存。
         sb.AppendLine($"            private readonly {selfTypeName} _self;");
+
+        for (int i = 0; i < method.InputTypes.Length; i++)
+        {
+            sb.AppendLine($"            private readonly {GetTypeDisplayName(method.InputTypes[i])} _input{i};");
+        }
+
         sb.AppendLine();
 
         // self 参数：入口方法所在对象实例。
         // 例如 Move() 中 new __MoveJob(this)，这个 this 就会传到这里。
-        sb.AppendLine($"            public __{method.EntryPointName}Job({selfTypeName} self)");
+        sb.AppendLine($"            public __{method.EntryPointName}Job({BuildJobConstructorParameterList(method, selfTypeName)})");
         sb.AppendLine("            {");
         sb.AppendLine("                _self = self;");
+
+        for (int i = 0; i < method.InputTypes.Length; i++)
+        {
+            sb.AppendLine($"                _input{i} = input{i};");
+        }
+
         sb.AppendLine("            }");
         sb.AppendLine();
 
@@ -488,8 +537,6 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
     private static List<string> BuildExecuteParameters(QueryMethodInfo method)
     {
-        bool hasBring = method.BringEventTypes.Length > 0;
-
         var parameters = new List<string>
         {
             // Entity 参数固定由 Query Job 接口提供。
@@ -501,13 +548,10 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         {
             string typeName = GetTypeDisplayName(method.ComponentTypes[i]);
 
-            // Bring 分支：接口层统一使用 ref，便于 Flow 模板复用。
-            // 纯 Query 分支：保留用户原始 ref / in 语义。
-            string refKind = hasBring ? "ref" : (method.ComponentRefKinds[i] == RefKind.Ref ? "ref" : "in");
-
+            // Query / Bring 的 Job 接口层统一使用 ref；用户方法调用处保留原始 ref / in 语义。
             // c0、c1、c2 是生成代码内部使用的组件变量名。
             // 它们会按用户方法中组件参数的出现顺序排列。
-            parameters.Add($"{refKind} {typeName} c{i}");
+            parameters.Add($"ref {typeName} c{i}");
         }
 
         for (int i = 0; i < method.BringEventTypes.Length; i++)
@@ -544,6 +588,13 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
                 case QueryUserParameterKind.BringEvent:
                     args.Add($"ref e{userParameter.Index}");
                     break;
+
+                case QueryUserParameterKind.Input:
+                {
+                    string refKind = userParameter.RefKind == RefKind.In ? "in " : "";
+                    args.Add($"{refKind}_input{userParameter.Index}");
+                    break;
+                }
             }
         }
 
@@ -558,6 +609,45 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
     private static string BuildEventGenericArguments(QueryMethodInfo method)
     {
         return string.Join(", ", method.BringEventTypes.Select(static type => GetTypeDisplayName(type)));
+    }
+
+    private static string BuildInputParameterList(QueryMethodInfo method)
+    {
+        var parameters = new List<string>();
+
+        for (int i = 0; i < method.InputTypes.Length; i++)
+        {
+            string refKind = method.InputRefKinds[i] == RefKind.In ? "in " : "";
+            parameters.Add($"{refKind}{GetTypeDisplayName(method.InputTypes[i])} {EscapeIdentifier(method.InputNames[i])}");
+        }
+
+        return string.Join(", ", parameters);
+    }
+
+    private static string BuildJobConstructorArgumentList(QueryMethodInfo method)
+    {
+        var arguments = new List<string> { "this" };
+
+        for (int i = 0; i < method.InputTypes.Length; i++)
+        {
+            string refKind = method.InputRefKinds[i] == RefKind.In ? "in " : "";
+            arguments.Add($"{refKind}{EscapeIdentifier(method.InputNames[i])}");
+        }
+
+        return string.Join(", ", arguments);
+    }
+
+    private static string BuildJobConstructorParameterList(QueryMethodInfo method, string selfTypeName)
+    {
+        var parameters = new List<string> { $"{selfTypeName} self" };
+
+        for (int i = 0; i < method.InputTypes.Length; i++)
+        {
+            string refKind = method.InputRefKinds[i] == RefKind.In ? "in " : "";
+            parameters.Add($"{refKind}{GetTypeDisplayName(method.InputTypes[i])} input{i}");
+        }
+
+        return string.Join(", ", parameters);
     }
 
     private static string BuildJobGenericArguments(QueryMethodInfo method)
@@ -661,6 +751,26 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
         return fullName == metadataName;
     }
 
+    private static bool HasInputAttribute(IParameterSymbol parameter)
+    {
+        return parameter.GetAttributes()
+                        .Any(static attribute => IsAttributeOfMetadataName(attribute, InputAttributeName));
+    }
+
+    private static bool IsUnsupportedInputType(ITypeSymbol type)
+    {
+        return type.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer ||
+               type is INamedTypeSymbol { IsRefLikeType: true };
+    }
+
+    private static string EscapeIdentifier(string name)
+    {
+        return SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None ||
+               SyntaxFacts.GetContextualKeywordKind(name) != SyntaxKind.None
+            ? "@" + name
+            : name;
+    }
+
     private static bool IsAttributeOfMetadataName(AttributeData attribute, string metadataName)
     {
         var attributeClass = attribute.AttributeClass;
@@ -710,6 +820,12 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
 
         public ImmutableArray<RefKind> ComponentRefKinds { get; set; }
 
+        public ImmutableArray<ITypeSymbol> InputTypes { get; set; }
+
+        public ImmutableArray<RefKind> InputRefKinds { get; set; }
+
+        public ImmutableArray<string> InputNames { get; set; }
+
         public ImmutableArray<ITypeSymbol> BringEventTypes { get; set; }
 
         public ImmutableArray<QueryUserParameterInfo> UserParameters { get; set; }
@@ -732,6 +848,7 @@ public sealed class QueryBringGenerator : IIncrementalGenerator
     {
         Entity,
         Component,
-        BringEvent
+        BringEvent,
+        Input
     }
 }

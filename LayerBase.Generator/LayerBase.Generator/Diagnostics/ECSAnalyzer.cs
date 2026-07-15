@@ -16,6 +16,7 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
     private const string QueryAttributeName = "LayerBase.ECS.QueryAttribute";
     private const string BringAttributeName = "LayerBase.ECS.BringAttribute";
     private const string EntryPointAttributeName = "LayerBase.ECS.EntryPointAttribute";
+    private const string InputAttributeName = "LayerBase.ECS.InputAttribute";
     private const string IComponentName = "LayerBase.Core.IComponent";
     private const string IActorEventName = "LayerBase.Core.IActorEvent";
 
@@ -33,7 +34,13 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.ECS013_ComponentMustImplementIComponent,
             DiagnosticDescriptors.ECS014_BringEventMustImplementIActorEvent,
             DiagnosticDescriptors.ECS020_QueryMethodMustStartWithOn,
-            DiagnosticDescriptors.ECS024_EntryPointNameInvalid);
+            DiagnosticDescriptors.ECS024_EntryPointNameInvalid,
+            DiagnosticDescriptors.ECS025_InputRefNotSupported,
+            DiagnosticDescriptors.ECS026_InputOutNotSupported,
+            DiagnosticDescriptors.ECS027_InputByRefLikeNotSupported,
+            DiagnosticDescriptors.ECS028_InputAfterBringNotSupported,
+            DiagnosticDescriptors.ECS029_InputEntityNotSupported,
+            DiagnosticDescriptors.ECS030_InputBringEventNotSupported);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -170,6 +177,12 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
             bool isEntity = param.Type.MetadataName == "Entity"
                             && param.Type.ContainingNamespace?.ToDisplayString() == "Arch.Core";
 
+            if (HasInputAttribute(param))
+            {
+                AnalyzeInputParameter(context, methodSymbol, param, isEntity, foundBringEvent, hasBring);
+                continue;
+            }
+
             if (isEntity)
             {
                 entityCount++;
@@ -233,10 +246,95 @@ public sealed class ECSAnalyzer : DiagnosticAnalyzer
         }
     }
 
+    private static void AnalyzeInputParameter(
+        SymbolAnalysisContext context,
+        IMethodSymbol         methodSymbol,
+        IParameterSymbol      parameter,
+        bool                  isEntity,
+        bool                  foundBringEvent,
+        bool                  hasBring)
+    {
+        if (foundBringEvent)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.ECS028_InputAfterBringNotSupported,
+                parameter.Locations.FirstOrDefault(),
+                parameter.Name));
+        }
+
+        if (isEntity)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.ECS029_InputEntityNotSupported,
+                parameter.Locations.FirstOrDefault(),
+                parameter.Name));
+        }
+
+        if (hasBring && IsBringEventParam(parameter, methodSymbol))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.ECS030_InputBringEventNotSupported,
+                parameter.Locations.FirstOrDefault(),
+                parameter.Name));
+        }
+
+        if (parameter.RefKind == RefKind.Ref)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.ECS025_InputRefNotSupported,
+                parameter.Locations.FirstOrDefault(),
+                parameter.Name));
+        }
+        else if (parameter.RefKind == RefKind.Out)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.ECS026_InputOutNotSupported,
+                parameter.Locations.FirstOrDefault(),
+                parameter.Name));
+        }
+
+        if (IsUnsupportedInputType(parameter.Type))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.ECS027_InputByRefLikeNotSupported,
+                parameter.Locations.FirstOrDefault(),
+                parameter.Name,
+                parameter.Type.ToDisplayString()));
+        }
+    }
+
     private static bool IsBringEventParam(IParameterSymbol param, IMethodSymbol method)
     {
         // 简化检查：如果参数类型实现 IActorEvent，则认为是 Bring 事件参数
         return ImplementsInterface(param.Type, IActorEventName);
+    }
+
+    private static bool HasInputAttribute(IParameterSymbol parameter)
+    {
+        return parameter.GetAttributes()
+                        .Any(static attribute => IsAttributeOfMetadataName(attribute, InputAttributeName));
+    }
+
+    private static bool IsUnsupportedInputType(ITypeSymbol type)
+    {
+        return type.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer ||
+               type is INamedTypeSymbol { IsRefLikeType: true };
+    }
+
+    private static bool IsAttributeOfMetadataName(AttributeData attribute, string metadataName)
+    {
+        var attributeClass = attribute.AttributeClass;
+        if (attributeClass == null)
+        {
+            return false;
+        }
+
+        string ns = attributeClass.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+        string fullMetadataName = string.IsNullOrEmpty(ns)
+            ? attributeClass.MetadataName
+            : $"{ns}.{attributeClass.MetadataName}";
+
+        return fullMetadataName == metadataName;
     }
 
     private static bool ImplementsInterface(ITypeSymbol type, string interfaceName)

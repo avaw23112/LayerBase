@@ -116,6 +116,54 @@ public static class DiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor ECS025_InputRefNotSupported = new(
+        DiagnosticIds.QueryInputRefNotSupported,
+        "Input parameter cannot be ref",
+        "[Input] parameter '{0}' cannot be ref",
+        ECS,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ECS026_InputOutNotSupported = new(
+        DiagnosticIds.QueryInputOutNotSupported,
+        "Input parameter cannot be out",
+        "[Input] parameter '{0}' cannot be out",
+        ECS,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ECS027_InputByRefLikeNotSupported = new(
+        DiagnosticIds.QueryInputByRefLikeNotSupported,
+        "Input parameter cannot be byref-like",
+        "[Input] parameter '{0}' cannot use byref-like, pointer, or function pointer type '{1}'",
+        ECS,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ECS028_InputAfterBringNotSupported = new(
+        DiagnosticIds.QueryInputAfterBringNotSupported,
+        "Input parameter cannot appear after Bring event",
+        "[Input] parameter '{0}' cannot appear after Bring event parameters have started",
+        ECS,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ECS029_InputEntityNotSupported = new(
+        DiagnosticIds.QueryInputEntityNotSupported,
+        "Input parameter cannot be Entity",
+        "[Input] parameter '{0}' cannot be Arch.Core.Entity",
+        ECS,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ECS030_InputBringEventNotSupported = new(
+        DiagnosticIds.QueryInputBringEventNotSupported,
+        "Input parameter cannot be Bring event",
+        "[Input] parameter '{0}' cannot be a Bring event type",
+        ECS,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     // Blueprint 诊断
     public static readonly DiagnosticDescriptor BP001_BundleMustBeClass = new(
         DiagnosticIds.BP001,
