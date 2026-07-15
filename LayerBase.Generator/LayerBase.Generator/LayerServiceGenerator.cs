@@ -238,6 +238,9 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             foreach (var reg in info.OwnerServiceRegistrations)
             {
+                var ownerServiceInCurrentAssembly =
+                    SymbolEqualityComparer.Default.Equals(reg.ServiceType.ContainingAssembly, compilation.Assembly);
+
                 if (!ImplementsInterface(reg.ServiceType, iServiceSymbol) &&
                     !ImplementsInterfaceByMetadataName(reg.ServiceType, IServiceMetadataName))
                 {
@@ -263,11 +266,16 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                if (!IsPartial(reg.ServiceType))
+                if (ownerServiceInCurrentAssembly && !IsPartial(reg.ServiceType))
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LayerMustBePartial,
                         reg.Location ?? reg.ServiceType.Locations.FirstOrDefault(),
                         reg.ServiceType.ToDisplayString()));
+                    continue;
+                }
+
+                if (!ownerServiceInCurrentAssembly)
+                {
                     continue;
                 }
 

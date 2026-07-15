@@ -35,4 +35,6 @@ Acceptance points:
 - A single module root is selected automatically; multiple module roots are compile-time ambiguous and must be split before fallback can proceed.
 - `[Scope<TScope>]` assigns a custom AOT Scope; otherwise the fallback contribution uses `MainScope`.
 - Missing module roots and ambiguous module roots are compile-time diagnostics, never silent drops.
+- Cross-assembly `[OwnerService]` contexts emit `ContextContribution` metadata into the same `[AssemblyModule]` manifest and inherit owner layer/scope from their owner service.
+- This 05/06 context slice only transfers `[OwnerService]` targets that implement `ILayerContext`; cross-assembly event handler fallback is reserved for the later EventHandlerContribution slice and is diagnosed instead of being emitted as a context.
 - Cross-assembly CallHandler fallback emits `LocalCallContribution` metadata into the same `[AssemblyModule]` manifest; runtime invoker activation remains a later LocalCall runtime slice.

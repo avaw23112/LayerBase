@@ -225,6 +225,131 @@ public class AssemblyModuleGeneratorTests
     }
 
     [Test]
+    public void Cross_assembly_owner_service_context_is_transferred_to_single_assembly_module()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.DI;
+                                                       using LayerBase.Layers;
+                                                       using LayerBase.Scope;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+
+                                                       public readonly struct BattleScope : IScopeDefinition
+                                                       {
+                                                       }
+
+                                                       [Scope<BattleScope>]
+                                                       [OwnerLayer(typeof(GameplayLayer))]
+                                                       public sealed partial class InventoryService : IService
+                                                       {
+                                                           public void ConfigureServices(IServiceCollection services) { }
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.DI;
+                              using LayerBase.DI.Options;
+                              using LayerBase.Modules;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
+                              {
+                              }
+
+                              [OwnerService(typeof(InventoryService))]
+                              public sealed class InventoryContext : ILayerContext
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FeatureModule"));
+
+        Assert.That(generatedModule, Does.Contain("global::LayerBase.Modules.ContextContribution.ForTypes("));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.InventoryContext)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.InventoryService)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.GameplayLayer)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.BattleScope)"));
+        Assert.That(generatedModule, Does.Not.Contain("typeof(global::LayerBase.Scope.MainScope)"));
+        Assert.That(result.GeneratedSources, Has.None.Contains("__AutoMountContexts"));
+    }
+
+    [Test]
+    public void Cross_assembly_owner_service_event_handler_is_not_emitted_as_context_contribution()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.DI;
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+
+                                                       [OwnerLayer(typeof(GameplayLayer))]
+                                                       public sealed partial class InventoryService : IService
+                                                       {
+                                                           public void ConfigureServices(IServiceCollection services) { }
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.Core.EventHandler;
+                              using LayerBase.DI.Options;
+                              using LayerBase.Modules;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
+                              {
+                              }
+
+                              public readonly struct InventoryChanged
+                              {
+                              }
+
+                              [OwnerService(typeof(InventoryService))]
+                              public sealed class InventoryChangedHandler : IEventHandler<InventoryChanged>
+                              {
+                                  public void Deal(in InventoryChanged @event) { }
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBMOD004"),
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FeatureModule"));
+
+        Assert.That(generatedModule, Does.Not.Contain("global::LayerBase.Modules.ContextContribution.ForTypes("));
+        Assert.That(generatedModule, Does.Not.Contain("typeof(global::FeaturePack.InventoryChangedHandler)"));
+    }
+
+    [Test]
     public void Cross_assembly_owner_layer_service_requires_module_root()
     {
         var aotReference = CreateReference("AotGame", """
