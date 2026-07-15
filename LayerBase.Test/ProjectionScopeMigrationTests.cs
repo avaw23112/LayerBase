@@ -72,9 +72,9 @@ public class ProjectionScopeMigrationTests
         };
 
         using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
-        runtime.MainActorRuntime.PrepareRuntimeBuild();
+        host.MainScope.MainActors!.PrepareRuntimeBuild();
         RegisterProjectionProbe(actorTypeId: 220);
-        runtime.MainActorRuntime.CompleteRuntimeBuild();
+        host.MainScope.MainActors.CompleteRuntimeBuild();
 
         ScopeRuntime customScope = host.Scopes[1];
         Entity entity = customScope.EcsWorld.Create(new ProjectedActorRef());
@@ -93,7 +93,7 @@ public class ProjectionScopeMigrationTests
 
         ActorId actorId = customScope.EcsWorld.GetProjectionMeta(entity).ActorId;
         Assert.That(actorId.IsValid, Is.True);
-        Assert.That(runtime.Actors.IsAlive(actorId), Is.True);
+        Assert.That(host.MainScope.MainActors!.World.IsAlive(actorId), Is.True);
     }
 
     [Test]
@@ -112,9 +112,9 @@ public class ProjectionScopeMigrationTests
         };
 
         using ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
-        runtime.MainActorRuntime.PrepareRuntimeBuild();
+        host.MainScope.MainActors!.PrepareRuntimeBuild();
         RegisterProjectionProbe(actorTypeId: 221);
-        runtime.MainActorRuntime.CompleteRuntimeBuild();
+        host.MainScope.MainActors.CompleteRuntimeBuild();
 
         ScopeRuntime customScope = host.Scopes[1];
         Entity entity = customScope.EcsWorld.Create(
@@ -149,7 +149,7 @@ public class ProjectionScopeMigrationTests
 
         var budget = new RuntimeFrameBudget(0, 0, 0);
         host.MainScope.PumpIngress();
-        runtime.MainActorRuntime.Pump(
+        host.MainScope.MainActors!.Pump(
             deltaTime: 0.016f,
             fixedDeltaTime: 1f / 60f,
             pumpFixedUpdate: true,

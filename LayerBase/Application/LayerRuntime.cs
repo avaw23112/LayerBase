@@ -27,7 +27,7 @@ public sealed partial class LayerRuntime : IDisposable
     #region External Dependencies
     // 核心子系统，在构造时创建，贯穿 Runtime 生命周期。
     internal EventCenter EventCenter => _scopeHost.MainScope.EventCenter;
-    internal ActorWorld Actors => _mainActorRuntime.World;
+    internal ActorWorld Actors => MainActorRuntime.World;
     #endregion
 
     #region Runtime State - Configuration
@@ -38,8 +38,7 @@ public sealed partial class LayerRuntime : IDisposable
     #region Runtime State - Subsystems
     // 各子系统实例，在 Build 过程中创建。
     private LayerChain? _chain;
-    private readonly MainActorRuntime _mainActorRuntime;
-    private readonly ScopeRuntimeHost _scopeHost;
+    private ScopeRuntimeHost _scopeHost;
     private readonly WorkerJobScheduler _workerJobs;
     private FullSnapRuntime? _fullSnap;
     private LayerToolRegistry? _tools;
@@ -55,7 +54,7 @@ public sealed partial class LayerRuntime : IDisposable
     // Runtime 的唯一标识符和释放标记。
     private readonly int _id;
     private readonly int _generation = 1;
-    private readonly ScopeRef<MainScope> _mainScope;
+    private ScopeRef<MainScope> _mainScope;
     private bool _disposed;
     #endregion
 
@@ -80,7 +79,9 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal ScopeRuntimeHost ScopeHost => _scopeHost;
 
-    internal MainActorRuntime MainActorRuntime => _mainActorRuntime;
+    internal MainActorRuntime MainActorRuntime =>
+        _scopeHost.MainScope.MainActors
+        ?? throw new InvalidOperationException("MainScope actor runtime is not initialized.");
 
     internal WorkerJobScheduler WorkerJobs => _workerJobs;
 
@@ -97,7 +98,6 @@ public sealed partial class LayerRuntime : IDisposable
     internal LayerRuntime(int id)
     {
         _id = id;
-        _mainActorRuntime = new MainActorRuntime(this, _generation);
         _scopeHost = ScopeRuntimeHost.CreateMain(this, _id, _generation);
         _workerJobs = new WorkerJobScheduler(WorkerJobSchedulerOptions.Default);
         _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
@@ -181,6 +181,17 @@ public sealed partial class LayerRuntime : IDisposable
         _scopeHost.MainScope.InitializeDelay(options);
     }
 
+    private void InstallScopeHost(ScopeExecutionPlan[] plans)
+    {
+        if (plans == null)
+            throw new ArgumentNullException(nameof(plans));
+
+        ScopeRuntimeHost previousHost = _scopeHost;
+        _scopeHost = ScopeRuntimeHost.Create(this, plans, _id, _generation);
+        _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
+        previousHost.Dispose();
+    }
+
     internal void BuildFullSnapCache()
     {
         _fullSnap = new FullSnapRuntime(this);
@@ -261,7 +272,7 @@ public sealed partial class LayerRuntime : IDisposable
                 ? _fixedUpdateOptions.FixedDeltaTime
                 : 0f;
 
-            _mainActorRuntime.Pump(
+            MainActorRuntime.Pump(
                 deltaTime: deltaTime,
                 fixedDeltaTime: actorFixedDeltaTime,
                 pumpFixedUpdate: pumpActorFixedUpdate,
@@ -410,7 +421,6 @@ public sealed partial class LayerRuntime : IDisposable
         _scopeHost.Dispose();
         _tools?.Dispose();
         _workerJobs.Dispose();
-        _mainActorRuntime.Dispose();
         LayerHub.ClearRuntimeCaches(_id);
         LayerHub.Internal_Unregister(this);
     }
@@ -691,12 +701,13 @@ public sealed partial class LayerRuntime : IDisposable
             if (_layerChain == null) throw new InvalidOperationException("No layers added.");
             _built = true;
 
-            _runtime._scopeHost.MainScope.InstallSynchronizationContext();
-
-            _layerChain.Prebuild();
+            _layerChain.AssignLayerIndexes();
             _runtime.CompositionPlan = RuntimeCompositionPlan.Build(
                 _layerChain.GetNodes().ToArray(),
                 _assemblyModules);
+            _runtime.InstallScopeHost(_runtime.CompositionPlan.Scopes);
+            _runtime._scopeHost.MainScope.InstallSynchronizationContext();
+            _layerChain.Prebuild();
             _runtime._tools = new LayerToolRegistry(_runtime, _runtime.CompositionPlan.Tools);
             _runtime.BuildLocalCallRegistry();
 
@@ -704,9 +715,9 @@ public sealed partial class LayerRuntime : IDisposable
             _runtime.InitializeScheduler(_postOptions);
             _runtime.InitializeTimer(_timerOptions);
             _runtime.InitializeDelay(_delayOptions);
-            _runtime._mainActorRuntime.PrepareRuntimeBuild();
+            _runtime.MainActorRuntime.PrepareRuntimeBuild();
             _layerChain.Build(1024, true);
-            _runtime._mainActorRuntime.CompleteRuntimeBuild();
+            _runtime.MainActorRuntime.CompleteRuntimeBuild();
             _runtime.BuildFullSnapCache();
             _runtime.PolicyTable.Freeze();
 

@@ -50,7 +50,7 @@ internal sealed class ScopeRuntime : IDisposable
         _runtimeId = runtimeId;
         _generation = generation;
         if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
-            _mainActors = runtime.MainActorRuntime;
+            _mainActors = new MainActorRuntime(runtime, generation);
         Transport = new ScopeTransport(
             new ScopeAddress(runtimeId, generation, Descriptor.ScopeId));
         EventCenter = new EventCenter();
@@ -95,6 +95,8 @@ internal sealed class ScopeRuntime : IDisposable
         _hasActorAccessor
             ? _actors
             : throw new InvalidOperationException("Scope actor accessor is not initialized.");
+
+    public MainActorRuntime? MainActors => _mainActors;
 
     public ScopeEcsScheduler EcsScheduler { get; }
 
@@ -802,6 +804,7 @@ internal sealed class ScopeRuntime : IDisposable
         }
 
         RunLifecycleDispose();
+        _mainActors?.Dispose();
         ReleaseCallInbox();
         ReleaseEventInbox();
         LocalCalls.Clear();

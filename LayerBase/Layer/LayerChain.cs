@@ -66,6 +66,11 @@ internal sealed class LayerChain
                 yield return _indexedLayers[i]!;
     }
 
+    internal void AssignLayerIndexes()
+    {
+        AssignEventBus();
+    }
+
     /// <summary>
     /// 向责任链末尾添加一个节点。
     /// </summary>

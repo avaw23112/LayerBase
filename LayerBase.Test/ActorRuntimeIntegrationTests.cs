@@ -215,7 +215,7 @@ public class ActorRuntimeIntegrationTests
 
         var budget = new RuntimeFrameBudget(0, 0, 0);
         host.MainScope.PumpIngress();
-        fixture.Runtime.MainActorRuntime.Pump(
+        host.MainScope.MainActors!.Pump(
             deltaTime: 0.016f,
             fixedDeltaTime: 1f / 60f,
             pumpFixedUpdate: true,
@@ -241,7 +241,7 @@ public class ActorRuntimeIntegrationTests
 
         var budget = new RuntimeFrameBudget(0, 0, 0);
         host.MainScope.PumpIngress();
-        fixture.Runtime.MainActorRuntime.Pump(
+        host.MainScope.MainActors!.Pump(
             deltaTime: 0.016f,
             fixedDeltaTime: 1f / 60f,
             pumpFixedUpdate: true,
@@ -359,8 +359,8 @@ public class ActorRuntimeIntegrationTests
         };
 
         ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
-        runtime.MainActorRuntime.PrepareRuntimeBuild();
-        runtime.MainActorRuntime.CompleteRuntimeBuild();
+        host.MainScope.MainActors!.PrepareRuntimeBuild();
+        host.MainScope.MainActors.CompleteRuntimeBuild();
         return new ScopeRuntimeHostFixture(runtime, host);
     }
 
