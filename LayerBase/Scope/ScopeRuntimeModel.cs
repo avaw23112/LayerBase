@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using LayerBase.Layers;
 using LayerBase.ECS;
 
@@ -371,26 +372,26 @@ internal sealed class ScopeLifecyclePlan
         }
     }
 
+    public bool HasUpdate => Update.Length != 0;
+
+    public bool HasFixedUpdate => FixedUpdate.Length != 0;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PumpUpdate(float deltaTime)
     {
-        for (int layerIndex = 0; layerIndex < Layers.Length; layerIndex++)
-        {
-            var slice = Layers[layerIndex];
-            int end = slice.UpdateStart + slice.UpdateCount;
-            for (int i = slice.UpdateStart; i < end; i++)
-                Update[i](deltaTime);
-        }
+        UpdateInvoker[] invokers = Update;
+
+        for (int i = 0; i < invokers.Length; i++)
+            invokers[i](deltaTime);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PumpFixedUpdate(float fixedDeltaTime)
     {
-        for (int layerIndex = 0; layerIndex < Layers.Length; layerIndex++)
-        {
-            var slice = Layers[layerIndex];
-            int end = slice.FixedUpdateStart + slice.FixedUpdateCount;
-            for (int i = slice.FixedUpdateStart; i < end; i++)
-                FixedUpdate[i](fixedDeltaTime);
-        }
+        FixedUpdateInvoker[] invokers = FixedUpdate;
+
+        for (int i = 0; i < invokers.Length; i++)
+            invokers[i](fixedDeltaTime);
     }
 
     public void RunRuntimeStopReverse()

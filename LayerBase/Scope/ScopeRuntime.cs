@@ -426,8 +426,12 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void PumpFixedUpdate(FixedUpdateOptions options, float deltaTime)
     {
-        if (!options.Enabled || !CanPumpLifecycle())
+        if (!options.Enabled ||
+            !LifecyclePlan.HasFixedUpdate ||
+            !CanPumpLifecycle())
+        {
             return;
+        }
 
         try
         {
@@ -449,7 +453,7 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void PumpUpdate(float deltaTime)
     {
-        if (!CanPumpLifecycle())
+        if (!LifecyclePlan.HasUpdate || !CanPumpLifecycle())
             return;
 
         try
