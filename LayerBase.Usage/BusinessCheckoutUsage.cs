@@ -23,7 +23,7 @@ public static class BusinessScenarioUsage
 
         using var runtime = LayerHub.CreateLayers()
                                     .Push(commerceLayer)
-                                    .AddAssemblyModule(new BusinessFulfillmentModule())
+                                    .AddAssemblyModule(BusinessFulfillmentModule.Instance)
                                     .SetDebug()
                                     .Build();
 

@@ -16,6 +16,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     private const string ModuleIgnoreAttributeName = "LayerBase.Modules.ModuleIgnoreAttribute";
     private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
     private const string OwnerServiceAttributeName = "LayerBase.DI.Options.OwnerServiceAttribute";
+    private const string LayerToolAttributeName = "LayerBase.Tools.LayerToolAttribute";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
     private const string ILayerContextMetadataName = "LayerBase.DI.ILayerContext";
     private const string EventHandlerMetadataName = "LayerBase.Core.EventHandler.IEventHandler`1";
@@ -52,15 +53,33 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                                               static (ctx, _) => CreateOwnerServiceContexts(ctx))
                                           .SelectMany(static (items, _) => items);
 
-        var combined = context.CompilationProvider.Combine(modules.Collect()
-                                                                  .Combine(ownerLayerContributions.Collect()
-                                                                                                  .Combine(ownerServiceContexts.Collect())));
+        var layerToolContributions = context.SyntaxProvider
+                                            .ForAttributeWithMetadataName(
+                                                LayerToolAttributeName,
+                                                static (node, _) => node is ClassDeclarationSyntax,
+                                                static (ctx, _) => CreateLayerToolContributions(ctx))
+                                            .SelectMany(static (items, _) => items);
+
+        var ownerServiceAndTools = ownerServiceContexts.Collect()
+                                                       .Combine(layerToolContributions.Collect());
+        var ownerLayerAndService = ownerLayerContributions.Collect()
+                                                         .Combine(ownerServiceAndTools);
+        var moduleData = modules.Collect().Combine(ownerLayerAndService);
+        var combined = context.CompilationProvider.Combine(moduleData);
 
         context.RegisterSourceOutput(combined, static (spc, source) =>
         {
             var compilation = source.Left;
-            var data = source.Right;
-            Execute(spc, compilation, data.Left, data.Right.Left, data.Right.Right);
+            var modulesAndContributions = source.Right;
+            var ownerLayerAndServiceData = modulesAndContributions.Right;
+            var ownerServiceAndToolsData = ownerLayerAndServiceData.Right;
+            Execute(
+                spc,
+                compilation,
+                modulesAndContributions.Left,
+                ownerLayerAndServiceData.Left,
+                ownerServiceAndToolsData.Left,
+                ownerServiceAndToolsData.Right);
         });
     }
 
@@ -69,7 +88,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         Compilation compilation,
         ImmutableArray<ModuleInfo> modules,
         ImmutableArray<OwnerLayerContributionInfo> ownerLayerContributions,
-        ImmutableArray<OwnerServiceContextInfo> ownerServiceContexts)
+        ImmutableArray<OwnerServiceContextInfo> ownerServiceContexts,
+        ImmutableArray<LayerToolDeclarationInfo> layerToolContributions)
     {
         var moduleList = modules.OrderBy(static module => module.ModuleId, StringComparer.Ordinal)
                                 .ThenBy(static module => module.TypeName, StringComparer.Ordinal)
@@ -84,6 +104,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         var fallbackContexts = new List<ContextContributionInfo>();
         var fallbackLocalCalls = new List<LocalCallContributionInfo>();
         var fallbackEventHandlers = new List<EventHandlerContributionInfo>();
+        var fallbackTools = new List<LayerToolContributionInfo>();
         foreach (var contribution in ownerLayerContributions)
         {
             if (SymbolEqualityComparer.Default.Equals(contribution.OwnerLayerType.ContainingAssembly, compilation.Assembly))
@@ -228,6 +249,42 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             }
         }
 
+        foreach (var tool in layerToolContributions)
+        {
+            if (SymbolEqualityComparer.Default.Equals(tool.OwnerLayerType.ContainingAssembly, compilation.Assembly))
+            {
+                continue;
+            }
+
+            if (moduleList.Length == 0)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.LayerToolRequiresModule,
+                    tool.Location,
+                    tool.ImplementationType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    tool.ContractType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
+                continue;
+            }
+
+            if (moduleList.Length > 1)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.CrossAssemblyOwnerLayerRequiresSingleModule,
+                    tool.Location,
+                    tool.ImplementationType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    string.Join(", ", moduleList.Select(static module =>
+                        module.TypeSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)))));
+                continue;
+            }
+
+            fallbackTools.Add(new LayerToolContributionInfo(
+                ToTypeName(tool.OwnerLayerType),
+                ToTypeName(tool.ContractType),
+                ToTypeName(tool.ImplementationType),
+                tool.LocalKey,
+                tool.Cache));
+        }
+
         foreach (var module in moduleList)
         {
             GenerateModule(
@@ -236,7 +293,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                 moduleList.Length == 1 ? fallbackServices : Array.Empty<ServiceContributionInfo>(),
                 moduleList.Length == 1 ? fallbackContexts : Array.Empty<ContextContributionInfo>(),
                 moduleList.Length == 1 ? fallbackLocalCalls : Array.Empty<LocalCallContributionInfo>(),
-                moduleList.Length == 1 ? fallbackEventHandlers : Array.Empty<EventHandlerContributionInfo>());
+                moduleList.Length == 1 ? fallbackEventHandlers : Array.Empty<EventHandlerContributionInfo>(),
+                moduleList.Length == 1 ? fallbackTools : Array.Empty<LayerToolContributionInfo>());
         }
     }
 
@@ -320,13 +378,53 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         return builder.ToImmutable();
     }
 
+    private static ImmutableArray<LayerToolDeclarationInfo> CreateLayerToolContributions(
+        GeneratorAttributeSyntaxContext context)
+    {
+        var implementationSymbol = (INamedTypeSymbol)context.TargetSymbol;
+        if (HasAttribute(implementationSymbol, ModuleIgnoreAttributeName))
+        {
+            return ImmutableArray<LayerToolDeclarationInfo>.Empty;
+        }
+
+        var builder = ImmutableArray.CreateBuilder<LayerToolDeclarationInfo>();
+
+        foreach (var attribute in context.Attributes)
+        {
+            if (!IsAttribute(attribute, LayerToolAttributeName)) continue;
+            if (attribute.ConstructorArguments.Length < 2) continue;
+            if (attribute.ConstructorArguments[0].Value is not INamedTypeSymbol ownerLayerType) continue;
+            if (attribute.ConstructorArguments[1].Value is not INamedTypeSymbol contractType) continue;
+
+            var localKey = ReadStringArgument(attribute, 2);
+            if (string.IsNullOrWhiteSpace(localKey))
+            {
+                localKey = "default";
+            }
+
+            var cache = ReadBoolNamedArgument(attribute, nameof(LayerToolDeclarationInfo.Cache)) ?? true;
+            var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
+
+            builder.Add(new LayerToolDeclarationInfo(
+                implementationSymbol,
+                contractType,
+                ownerLayerType,
+                localKey!,
+                cache,
+                location));
+        }
+
+        return builder.ToImmutable();
+    }
+
     private static void GenerateModule(
         SourceProductionContext spc,
         ModuleInfo module,
         IReadOnlyList<ServiceContributionInfo> fallbackServices,
         IReadOnlyList<ContextContributionInfo> fallbackContexts,
         IReadOnlyList<LocalCallContributionInfo> fallbackLocalCalls,
-        IReadOnlyList<EventHandlerContributionInfo> fallbackEventHandlers)
+        IReadOnlyList<EventHandlerContributionInfo> fallbackEventHandlers,
+        IReadOnlyList<LayerToolContributionInfo> fallbackTools)
     {
         var services = fallbackServices.OrderBy(static service => service.OwnerLayerType, StringComparer.Ordinal)
                                        .ThenBy(static service => service.OwnerScopeType, StringComparer.Ordinal)
@@ -350,6 +448,11 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                                                  .ThenBy(static handler => handler.HandlerType, StringComparer.Ordinal)
                                                  .ThenBy(static handler => handler.OwnerServiceType, StringComparer.Ordinal)
                                                  .ToImmutableArray();
+        var tools = fallbackTools.OrderBy(static tool => tool.OwnerLayerType, StringComparer.Ordinal)
+                                 .ThenBy(static tool => tool.ContractType, StringComparer.Ordinal)
+                                 .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal)
+                                 .ThenBy(static tool => tool.ImplementationType, StringComparer.Ordinal)
+                                 .ToImmutableArray();
 
         var source = new StringBuilder();
         source.AppendLine("// <auto-generated/>");
@@ -375,7 +478,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         AppendContextArray(source, indent, contexts);
         AppendLocalCallArray(source, indent, localCalls);
         AppendEventHandlerArray(source, indent, eventHandlers);
-        source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LayerToolContribution>());");
+        AppendLayerToolArray(source, indent, tools);
         source.AppendLine();
 
         source.Append(indent).Append("    public static ").Append(module.TypeName).Append(" Instance { get; } = new ")
@@ -501,6 +604,33 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         }
 
         source.Append(indent).AppendLine("            },");
+    }
+
+    private static void AppendLayerToolArray(
+        StringBuilder source,
+        string indent,
+        ImmutableArray<LayerToolContributionInfo> tools)
+    {
+        if (tools.IsDefaultOrEmpty)
+        {
+            source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LayerToolContribution>());");
+            return;
+        }
+
+        source.Append(indent).AppendLine("            new global::LayerBase.Modules.LayerToolContribution[]");
+        source.Append(indent).AppendLine("            {");
+
+        foreach (var tool in tools)
+        {
+            source.Append(indent).AppendLine("                global::LayerBase.Modules.LayerToolContribution.ForTypes(");
+            source.Append(indent).Append("                    typeof(").Append(tool.ContractType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(tool.ImplementationType).AppendLine("),");
+            source.Append(indent).Append("                    \"").Append(Escape(tool.LocalKey)).AppendLine("\",");
+            source.Append(indent).Append("                    typeof(").Append(tool.OwnerLayerType).AppendLine("),");
+            source.Append(indent).Append("                    ").Append(tool.Cache ? "true" : "false").AppendLine("),");
+        }
+
+        source.Append(indent).AppendLine("            });");
     }
 
     private static INamedTypeSymbol? ReadScopeType(INamedTypeSymbol symbol)
@@ -638,6 +768,19 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             : null;
     }
 
+    private static bool? ReadBoolNamedArgument(AttributeData attribute, string name)
+    {
+        foreach (var argument in attribute.NamedArguments)
+        {
+            if (argument.Key == name && argument.Value.Value is bool value)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
     private static string ToTypeName(ITypeSymbol symbol)
     {
         return symbol.ToDisplayString(FullyQualifiedTypeFormat);
@@ -710,6 +853,15 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                 "LBMOD004",
                 "Cross-assembly OwnerService module fallback only supports layer contexts and event handlers",
                 "Type '{0}' targets external owner service '{1}', but the current AssemblyModule OwnerService fallback only supports ILayerContext and IEventHandler",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor LayerToolRequiresModule =
+            new(
+                "LBMOD005",
+                "LayerTool contribution requires AssemblyModule",
+                "LayerTool implementation '{0}' for contract '{1}' requires an [AssemblyModule] root in the same assembly",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -860,6 +1012,64 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         public string ResponseType { get; }
 
         public string HandlerType { get; }
+    }
+
+    private sealed class LayerToolDeclarationInfo
+    {
+        public LayerToolDeclarationInfo(
+            INamedTypeSymbol implementationType,
+            INamedTypeSymbol contractType,
+            INamedTypeSymbol ownerLayerType,
+            string localKey,
+            bool cache,
+            Location? location)
+        {
+            ImplementationType = implementationType;
+            ContractType = contractType;
+            OwnerLayerType = ownerLayerType;
+            LocalKey = localKey;
+            Cache = cache;
+            Location = location;
+        }
+
+        public INamedTypeSymbol ImplementationType { get; }
+
+        public INamedTypeSymbol ContractType { get; }
+
+        public INamedTypeSymbol OwnerLayerType { get; }
+
+        public string LocalKey { get; }
+
+        public bool Cache { get; }
+
+        public Location? Location { get; }
+    }
+
+    private sealed class LayerToolContributionInfo
+    {
+        public LayerToolContributionInfo(
+            string ownerLayerType,
+            string contractType,
+            string implementationType,
+            string localKey,
+            bool cache)
+        {
+            OwnerLayerType = ownerLayerType;
+            ContractType = contractType;
+            ImplementationType = implementationType;
+            LocalKey = localKey;
+            Cache = cache;
+        }
+
+        public string OwnerLayerType { get; }
+
+        public string ContractType { get; }
+
+        public string ImplementationType { get; }
+
+        public string LocalKey { get; }
+
+        public bool Cache { get; }
     }
 
     private sealed class EventHandlerContributionInfo

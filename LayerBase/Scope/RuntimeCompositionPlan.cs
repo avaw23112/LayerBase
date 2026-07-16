@@ -1,6 +1,7 @@
 using LayerBase.Call;
 using LayerBase.Layers;
 using LayerBase.Modules;
+using LayerBase.Tools;
 
 namespace LayerBase.Scope;
 
@@ -69,6 +70,7 @@ internal sealed class RuntimeCompositionPlan
         var layerContributionBuilders = new List<LayerScopeContributionBuilder>[layerPlans.Length];
         var scopeIdsByType = new Dictionary<Type, int>();
         scopeIdsByType[typeof(MainScope)] = ScopeDefinitionIds.Main;
+        CollectLocalScopeTypes(pushedLayers, scopeIdsByType);
 
         var services = ResolveServices(contributions.Services, layerTypeIndex, scopeIdsByType);
         for (int serviceIndex = 0; serviceIndex < services.Length; serviceIndex++)
@@ -102,12 +104,73 @@ internal sealed class RuntimeCompositionPlan
                 .AddEventHandler(eventHandlerIndex);
         }
 
-        var tools = ResolveTools(contributions.Tools, layerTypeIndex);
+        var localTools = CollectLocalLayerTools(pushedLayers);
+        var tools = ResolveTools(contributions.Tools.Concat(localTools).ToArray(), layerTypeIndex);
 
         ApplyScopeContributions(layerPlans, layerContributionBuilders);
 
         var scopes = BuildScopeExecutionPlans(layerPlans, scopeIdsByType);
         return new RuntimeCompositionPlan(layerPlans, scopes, services, contexts, localCalls, eventHandlers, tools);
+    }
+
+    private static void CollectLocalScopeTypes(
+        IReadOnlyList<Layer> pushedLayers,
+        Dictionary<Type, int> scopeIdsByType)
+    {
+        foreach (var layer in pushedLayers)
+        {
+            if (layer is not IGeneratedScopeDefinitionProvider provider)
+            {
+                continue;
+            }
+
+            foreach (var scopeType in provider.__GetScopeDefinitionTypes())
+            {
+                var scopeIdField = scopeType.GetField("ScopeId");
+                if (scopeIdField == null || scopeIdField.FieldType != typeof(int) || !scopeIdField.IsStatic)
+                {
+                    continue;
+                }
+
+                ResolveScopeId(scopeType, scopeIdsByType);
+            }
+        }
+    }
+
+    private static LayerToolContributionPlan[] CollectLocalLayerTools(IReadOnlyList<Layer> pushedLayers)
+    {
+        var moduleId = new AssemblyModuleId("__local_layer_tools");
+        var plans = new List<LayerToolContributionPlan>();
+        foreach (var layer in pushedLayers)
+        {
+            if (layer is not IGeneratedLayerToolProvider provider)
+            {
+                continue;
+            }
+
+            foreach (var contribution in provider.__GetLayerToolContributions())
+            {
+                if (contribution.OwnerLayerType == null)
+                    throw new InvalidOperationException(
+                        $"LayerTool contribution `{contribution.ContractType.FullName}` must declare an owner layer.");
+
+                if (!contribution.ContractType.IsAssignableFrom(contribution.ImplementationType))
+                    throw new InvalidOperationException(
+                        $"LayerTool implementation `{contribution.ImplementationType.FullName}` must implement contract `{contribution.ContractType.FullName}`.");
+
+                plans.Add(new LayerToolContributionPlan(
+                    moduleId,
+                    contribution.ContractType,
+                    contribution.ImplementationType,
+                    contribution.LocalKey,
+                    contribution.OwnerLayerType,
+                    contribution.Cache,
+                    contribution.Factory,
+                    plans.Count));
+            }
+        }
+
+        return plans.ToArray();
     }
 
     private static ResolvedServiceContribution[] ResolveServices(

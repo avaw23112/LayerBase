@@ -3,7 +3,7 @@ using LayerBase.Call;
 using LayerBase.DI;
 using LayerBase.Layers;
 using LayerBase.Modules;
-using LayerBase.Scope;
+using LayerBase.Tools;
 
 namespace LayerBase.Usage;
 
@@ -27,43 +27,12 @@ public sealed partial class BusinessFulfillmentReporter : IService
     }
 }
 
-public sealed class BusinessInventoryScopeActivator : IService
+[AssemblyModule("business-fulfillment")]
+public sealed partial class BusinessFulfillmentModule
 {
-    public void ConfigureServices(IServiceCollection services)
-    {
-    }
 }
 
-public sealed class BusinessFulfillmentModule : IAssemblyModule
-{
-    private static readonly AssemblyModuleId s_id = new("business-fulfillment");
-
-    public AssemblyModuleId Id => s_id;
-
-    public AssemblyModuleManifest Manifest { get; } = new(
-        s_id,
-        new[]
-        {
-            ServiceContribution.ForTypes(
-                typeof(BusinessInventoryScopeActivator),
-                typeof(BusinessInventoryScopeActivator),
-                typeof(BusinessCommerceLayer),
-                typeof(BusinessInventoryScope),
-                ServiceLifetime.Singleton)
-        },
-        Array.Empty<ContextContribution>(),
-        Array.Empty<LocalCallContribution>(),
-        Array.Empty<EventHandlerContribution>(),
-        new[]
-        {
-            LayerToolContribution.ForTypes(
-                typeof(IBusinessShippingLabelTool),
-                typeof(BusinessShippingLabelTool),
-                "default",
-                typeof(BusinessCommerceLayer))
-        });
-}
-
+[LayerTool(typeof(BusinessCommerceLayer), typeof(IBusinessShippingLabelTool))]
 public sealed class BusinessShippingLabelTool : IBusinessShippingLabelTool
 {
     public string CreateLabel(string orderId, string carrier)

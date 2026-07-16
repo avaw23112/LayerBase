@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -15,6 +16,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
     private const string OwnerServiceAttributeName = "LayerBase.DI.Options.OwnerServiceAttribute";
     private const string MountAttributeName = "LayerBase.DI.Options.MountAttribute";
+    private const string LayerToolAttributeName = "LayerBase.Tools.LayerToolAttribute";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
     private const string ILayerContextMetadataName = "LayerBase.DI.ILayerContext";
     private const string LayerMetadataName = "LayerBase.Layers.Layer";
@@ -47,9 +49,18 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                                           or PropertyDeclarationSyntax,
                                       static (ctx, _) => ctx.TargetSymbol);
 
+        var layerToolRegistrations = context.SyntaxProvider
+                                            .ForAttributeWithMetadataName(
+                                                LayerToolAttributeName,
+                                                static (node, _) => node is ClassDeclarationSyntax,
+                                                static (ctx, _) => CreateLayerToolRegistrations(ctx))
+                                            .SelectMany(static (items, _) => items);
+
+        var serviceAndMountData = ownerServiceRegistrations.Collect()
+                                                          .Combine(mountMembers.Collect()
+                                                                              .Combine(layerToolRegistrations.Collect()));
         var combined = ownerLayerRegistrations.Collect()
-                                              .Combine(ownerServiceRegistrations.Collect()
-                                                       .Combine(mountMembers.Collect()));
+                                              .Combine(serviceAndMountData);
 
         var compilationAndData = context.CompilationProvider.Combine(combined);
 
@@ -59,16 +70,18 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             var data = source.Right;
             var ownerLayerList = data.Left;
             var ownerServiceList = data.Right.Left;
-            var mountMemberList = data.Right.Right;
+            var mountMemberList = data.Right.Right.Left;
+            var layerToolList = data.Right.Right.Right;
 
-            Execute(spc, compilation, ownerLayerList, ownerServiceList, mountMemberList);
+            Execute(spc, compilation, ownerLayerList, ownerServiceList, mountMemberList, layerToolList);
         });
     }
 
     private static void Execute(SourceProductionContext spc, Compilation compilation,
                                 ImmutableArray<ServiceRegistration> ownerLayers,
                                 ImmutableArray<ServiceContextRegistration> ownerServices,
-                                ImmutableArray<ISymbol> mountMembers)
+                                ImmutableArray<ISymbol> mountMembers,
+                                ImmutableArray<LayerToolRegistration> layerTools)
     {
         var iServiceSymbol = compilation.GetTypeByMetadataName(IServiceMetadataName);
         var iLayerContextSymbol = compilation.GetTypeByMetadataName(ILayerContextMetadataName);
@@ -120,6 +133,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         var callHandlerRegistrations = new List<CallHandlerRegistration>();
         var validatedOwnerLayerRegistrations = new List<ServiceRegistration>();
         var validatedOwnerServiceRegistrations = new List<ServiceContextRegistration>();
+        var validatedLayerToolRegistrations = new List<LayerToolRegistration>();
 
         foreach (var info in classMap.Values)
         {
@@ -286,7 +300,49 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             }
         }
 
+        foreach (var tool in layerTools)
+        {
+            if (!SymbolEqualityComparer.Default.Equals(tool.OwnerLayerType.ContainingAssembly, compilation.Assembly))
+            {
+                continue;
+            }
+
+            GetOrAddClass(tool.OwnerLayerType);
+
+            if (!InheritsFromLayer(tool.OwnerLayerType, layerSymbol))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LayerMustInheritLayer,
+                    tool.Location ?? tool.OwnerLayerType.Locations.FirstOrDefault(),
+                    tool.OwnerLayerType.ToDisplayString()));
+                continue;
+            }
+
+            if (!IsPartial(tool.OwnerLayerType))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LayerMustBePartial,
+                    tool.Location ?? tool.OwnerLayerType.Locations.FirstOrDefault(),
+                    tool.OwnerLayerType.ToDisplayString()));
+                continue;
+            }
+
+            if (!IsAssignableFrom(tool.ContractType, tool.ImplementationType))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.LayerToolImplementationNotAssignable,
+                    tool.Location ?? tool.ImplementationType.Locations.FirstOrDefault(),
+                    tool.ImplementationType.ToDisplayString(),
+                    tool.ContractType.ToDisplayString()));
+                continue;
+            }
+
+            validatedLayerToolRegistrations.Add(tool);
+        }
+
         var layerGroups = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
+        var layerToolGroups = validatedLayerToolRegistrations
+                              .GroupBy(static registration => registration.OwnerLayerType, SymbolEqualityComparer.Default)
+                              .ToDictionary(static group => group.Key,
+                                  static group => group.ToList(),
+                                  SymbolEqualityComparer.Default);
 
         foreach (var info in classMap.Values)
         {
@@ -314,6 +370,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                                         .Distinct(SymbolEqualityComparer.Default)
                                         .Cast<INamedTypeSymbol>()
                                         .ToList();
+            layerToolGroups.TryGetValue(layerType, out var ownerLayerTools);
+            ownerLayerTools ??= new List<LayerToolRegistration>();
 
             var injectServices = new List<MountedContext>();
             if (classMap.TryGetValue(layerType, out var layerInfo))
@@ -321,7 +379,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 injectServices.AddRange(layerInfo.LayerMountedServices);
             }
 
-            if (injectServices.Count == 0 && ownerLayerServices.Count == 0)
+            if (injectServices.Count == 0 && ownerLayerServices.Count == 0 && ownerLayerTools.Count == 0)
             {
                 continue;
             }
@@ -338,7 +396,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             var mountInjections = layerInfo?.ProcessedMountInjections ?? new List<MountInjection>();
             var sourceText = GenerateLayerPartial(layerType, injectServices, ownerLayerServices, mountInjections,
-                iServiceSymbol, callHandlerSymbol, classMap);
+                ownerLayerTools, iServiceSymbol, callHandlerSymbol, classMap);
             if (!string.IsNullOrEmpty(sourceText))
             {
                 spc.AddSource(CreateHintName(layerType), SourceText.From(sourceText, Encoding.UTF8));
@@ -768,6 +826,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private static string GenerateLayerPartial(INamedTypeSymbol layerType, List<MountedContext> injectServices,
                                                List<INamedTypeSymbol> ownerLayerServices,
                                                List<MountInjection> mountInjections,
+                                               IReadOnlyList<LayerToolRegistration> ownerLayerTools,
                                                INamedTypeSymbol iServiceSymbol, INamedTypeSymbol? callHandlerSymbol,
                                                Dictionary<INamedTypeSymbol, ClassInfo> classMap)
     {
@@ -783,6 +842,14 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         builder.AppendLine("using LayerBase.Layers;");
         builder.AppendLine("using LayerBase.DI;");
 
+        var ownerScopeTypes = ownerLayerServices
+                              .Select(service => GetEffectiveScope(service, classMap))
+                              .Where(static scope => scope != null)
+                              .Distinct(SymbolEqualityComparer.Default)
+                              .Cast<INamedTypeSymbol>()
+                              .OrderBy(static scope => scope.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
+                              .ToList();
+
         if (!string.IsNullOrEmpty(@namespace))
         {
             builder.Append("namespace ").Append(@namespace).AppendLine();
@@ -790,7 +857,17 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         }
 
         builder.Append("partial class ").Append(layerIdentifier)
-               .AppendLine(" : global::LayerBase.DI.IAutoLayerMount, global::LayerBase.DI.IGeneratedMountInject");
+               .Append(" : global::LayerBase.DI.IAutoLayerMount, global::LayerBase.DI.IGeneratedMountInject");
+        if (ownerLayerTools.Count > 0)
+        {
+            builder.Append(", global::LayerBase.Tools.IGeneratedLayerToolProvider");
+        }
+        if (ownerScopeTypes.Count > 0)
+        {
+            builder.Append(", global::LayerBase.Scope.IGeneratedScopeDefinitionProvider");
+        }
+
+        builder.AppendLine();
         builder.AppendLine("{");
 
         builder.AppendLine(
@@ -854,6 +931,16 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
         EmitMountInjectionMethod(builder, mountInjections);
 
+        if (ownerLayerTools.Count > 0)
+        {
+            EmitLayerToolContributionProvider(builder, layerDisplayName, ownerLayerTools);
+        }
+
+        if (ownerScopeTypes.Count > 0)
+        {
+            EmitScopeDefinitionProvider(builder, ownerScopeTypes);
+        }
+
         builder.AppendLine("}");
 
         if (!string.IsNullOrEmpty(@namespace)) builder.AppendLine("}");
@@ -907,6 +994,56 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         return builder.ToString();
     }
 
+    private static void EmitScopeDefinitionProvider(
+        StringBuilder builder,
+        IReadOnlyList<INamedTypeSymbol> ownerScopeTypes)
+    {
+        builder.AppendLine();
+        builder.AppendLine("    global::System.Type[] global::LayerBase.Scope.IGeneratedScopeDefinitionProvider.__GetScopeDefinitionTypes()");
+        builder.AppendLine("    {");
+        builder.AppendLine("        return new global::System.Type[]");
+        builder.AppendLine("        {");
+
+        foreach (var scopeType in ownerScopeTypes)
+        {
+            var scopeDisplay = scopeType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            builder.Append("            typeof(").Append(scopeDisplay).AppendLine("),");
+        }
+
+        builder.AppendLine("        };");
+        builder.AppendLine("    }");
+    }
+
+    private static void EmitLayerToolContributionProvider(
+        StringBuilder builder,
+        string layerDisplayName,
+        IReadOnlyList<LayerToolRegistration> ownerLayerTools)
+    {
+        builder.AppendLine();
+        builder.AppendLine(
+            "    global::LayerBase.Modules.LayerToolContribution[] global::LayerBase.Tools.IGeneratedLayerToolProvider.__GetLayerToolContributions()");
+        builder.AppendLine("    {");
+        builder.AppendLine("        return new global::LayerBase.Modules.LayerToolContribution[]");
+        builder.AppendLine("        {");
+
+        foreach (var tool in ownerLayerTools.OrderBy(static tool => tool.ContractType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
+                                            .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal)
+                                            .ThenBy(static tool => tool.ImplementationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal))
+        {
+            var contractDisplay = tool.ContractType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var implementationDisplay = tool.ImplementationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            builder.AppendLine("            global::LayerBase.Modules.LayerToolContribution.ForTypes(");
+            builder.Append("                typeof(").Append(contractDisplay).AppendLine("),");
+            builder.Append("                typeof(").Append(implementationDisplay).AppendLine("),");
+            builder.Append("                \"").Append(Escape(tool.LocalKey)).AppendLine("\",");
+            builder.Append("                typeof(").Append(layerDisplayName).AppendLine("),");
+            builder.Append("                ").Append(tool.Cache ? "true" : "false").AppendLine("),");
+        }
+
+        builder.AppendLine("        };");
+        builder.AppendLine("    }");
+    }
+
     private static void EmitMountInjectionMethod(StringBuilder builder, List<MountInjection> mountInjections)
     {
         builder.AppendLine();
@@ -933,6 +1070,11 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         var sanitized = new StringBuilder(name.Length);
         foreach (var ch in name) sanitized.Append(char.IsLetterOrDigit(ch) ? ch : '_');
         return $"{sanitized}.AutoMount.g.cs";
+    }
+
+    private static string Escape(string value)
+    {
+        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
     }
 
     private static ImmutableArray<ServiceRegistration> CreateRegistrations(GeneratorAttributeSyntaxContext context)
@@ -965,6 +1107,49 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
             builder.Add(new ServiceContextRegistration(contextType, serviceType, location));
+        }
+
+        return builder.ToImmutable();
+    }
+
+    private static ImmutableArray<LayerToolRegistration> CreateLayerToolRegistrations(
+        GeneratorAttributeSyntaxContext context)
+    {
+        var implementationType = (INamedTypeSymbol)context.TargetSymbol;
+        var builder = ImmutableArray.CreateBuilder<LayerToolRegistration>();
+
+        foreach (var attribute in context.Attributes)
+        {
+            if (attribute.ConstructorArguments.Length < 2) continue;
+            if (attribute.ConstructorArguments[0].Value is not INamedTypeSymbol ownerLayerType) continue;
+            if (attribute.ConstructorArguments[1].Value is not INamedTypeSymbol contractType) continue;
+
+            var localKey = attribute.ConstructorArguments.Length > 2
+                ? attribute.ConstructorArguments[2].Value as string
+                : null;
+            if (string.IsNullOrWhiteSpace(localKey))
+            {
+                localKey = "default";
+            }
+
+            var cache = true;
+            foreach (var argument in attribute.NamedArguments)
+            {
+                if (argument.Key == "Cache" && argument.Value.Value is bool value)
+                {
+                    cache = value;
+                    break;
+                }
+            }
+
+            var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
+            builder.Add(new LayerToolRegistration(
+                implementationType,
+                ownerLayerType,
+                contractType,
+                localKey!,
+                cache,
+                location));
         }
 
         return builder.ToImmutable();
@@ -1230,6 +1415,15 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 DiagnosticSeverity.Error,
                 true);
 
+        public static readonly DiagnosticDescriptor LayerToolImplementationNotAssignable =
+            new(
+                "LBTOOL001",
+                "LayerTool implementation must implement contract",
+                "LayerTool implementation '{0}' must implement contract '{1}'",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
         public static readonly DiagnosticDescriptor OwnerServiceTargetMustImplementIService =
             new(
                 "LBOS001",
@@ -1318,6 +1512,37 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
         public INamedTypeSymbol ContextType { get; }
         public INamedTypeSymbol ServiceType { get; }
+        public Location? Location { get; }
+    }
+
+    private sealed class LayerToolRegistration
+    {
+        public LayerToolRegistration(
+            INamedTypeSymbol implementationType,
+            INamedTypeSymbol ownerLayerType,
+            INamedTypeSymbol contractType,
+            string localKey,
+            bool cache,
+            Location? location)
+        {
+            ImplementationType = implementationType;
+            OwnerLayerType = ownerLayerType;
+            ContractType = contractType;
+            LocalKey = localKey;
+            Cache = cache;
+            Location = location;
+        }
+
+        public INamedTypeSymbol ImplementationType { get; }
+
+        public INamedTypeSymbol OwnerLayerType { get; }
+
+        public INamedTypeSymbol ContractType { get; }
+
+        public string LocalKey { get; }
+
+        public bool Cache { get; }
+
         public Location? Location { get; }
     }
 

@@ -535,6 +535,151 @@ public class AssemblyModuleGeneratorTests
     }
 
     [Test]
+    public void Cross_assembly_layer_tool_is_transferred_to_single_assembly_module()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class CommerceLayer : Layer
+                                                       {
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+                              using LayerBase.Tools;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("fulfillment")]
+                              public sealed partial class FulfillmentModule
+                              {
+                              }
+
+                              public interface IShippingLabelTool
+                              {
+                              }
+
+                              [LayerTool(typeof(CommerceLayer), typeof(IShippingLabelTool), "labels")]
+                              public sealed class ShippingLabelTool : IShippingLabelTool
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FulfillmentModule"));
+
+        Assert.That(generatedModule, Does.Contain("global::LayerBase.Modules.LayerToolContribution.ForTypes("));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.IShippingLabelTool)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.ShippingLabelTool)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.CommerceLayer)"));
+        Assert.That(generatedModule, Does.Contain("\"labels\""));
+    }
+
+    [Test]
+    public void Same_assembly_layer_tool_is_not_transferred_to_assembly_module()
+    {
+        const string source = """
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+                              using LayerBase.Tools;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("fulfillment")]
+                              public sealed partial class FulfillmentModule
+                              {
+                              }
+
+                              public sealed class CommerceLayer : Layer
+                              {
+                              }
+
+                              public interface IShippingLabelTool
+                              {
+                              }
+
+                              [LayerTool(typeof(CommerceLayer), typeof(IShippingLabelTool))]
+                              public sealed class ShippingLabelTool : IShippingLabelTool
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new AssemblyModuleGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FulfillmentModule"));
+
+        Assert.That(generatedModule, Does.Not.Contain("LayerToolContribution.ForTypes"));
+        Assert.That(generatedModule, Does.Not.Contain("typeof(global::FeaturePack.ShippingLabelTool)"));
+    }
+
+    [Test]
+    public void Layer_service_generator_emits_local_layer_tool_provider_for_same_assembly_layer_tool()
+    {
+        const string source = """
+                              using LayerBase.Layers;
+                              using LayerBase.Tools;
+
+                              namespace FeaturePack;
+
+                              public sealed partial class CommerceLayer : Layer
+                              {
+                              }
+
+                              public interface IShippingLabelTool
+                              {
+                              }
+
+                              [LayerTool(typeof(CommerceLayer), typeof(IShippingLabelTool), "labels")]
+                              public sealed class ShippingLabelTool : IShippingLabelTool
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        var generatedLayer = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class CommerceLayer"));
+
+        Assert.That(generatedLayer, Does.Contain("global::LayerBase.Tools.IGeneratedLayerToolProvider"));
+        Assert.That(generatedLayer, Does.Contain("global::LayerBase.Modules.LayerToolContribution.ForTypes("));
+        Assert.That(generatedLayer, Does.Contain("typeof(global::FeaturePack.IShippingLabelTool)"));
+        Assert.That(generatedLayer, Does.Contain("typeof(global::FeaturePack.ShippingLabelTool)"));
+        Assert.That(generatedLayer, Does.Contain("typeof(global::FeaturePack.CommerceLayer)"));
+        Assert.That(generatedLayer, Does.Contain("\"labels\""));
+    }
+
+    [Test]
     public void Assembly_module_generator_does_not_emit_runtime_ownership_or_instance_creation()
     {
         var aotReference = CreateReference("AotGame", """
