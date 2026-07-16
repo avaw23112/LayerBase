@@ -1,5 +1,12 @@
 namespace LayerBase.Core.Event;
 
+public enum PayloadDiagnosticsMode : byte
+{
+    Disabled = 0,
+    Local = 1,
+    Atomic = 2
+}
+
 public readonly struct PostSchedulerOptions
 {
     public readonly int ReadyCapacity;
@@ -10,6 +17,7 @@ public readonly struct PostSchedulerOptions
     public readonly int TimeCheckInterval;
     public readonly int MaxCompletionsPerPump;
     public readonly BackpressurePolicy DefaultBackpressure;
+    public readonly PayloadDiagnosticsMode PayloadDiagnostics;
 
     public PostSchedulerOptions(
         int                readyCapacity,
@@ -19,7 +27,8 @@ public readonly struct PostSchedulerOptions
         int                maxWavesPerPump,
         int                timeCheckInterval,
         BackpressurePolicy defaultBackpressure,
-        int                maxCompletionsPerPump = 0)
+        int                maxCompletionsPerPump = 0,
+        PayloadDiagnosticsMode payloadDiagnostics = PayloadDiagnosticsMode.Local)
     {
         ReadyCapacity = readyCapacity;
         NextCapacity = nextCapacity;
@@ -29,6 +38,7 @@ public readonly struct PostSchedulerOptions
         TimeCheckInterval = timeCheckInterval <= 0 ? 64 : timeCheckInterval;
         MaxCompletionsPerPump = maxCompletionsPerPump;
         DefaultBackpressure = defaultBackpressure;
+        PayloadDiagnostics = payloadDiagnostics;
     }
 
     public static PostSchedulerOptions Default => new(
@@ -39,5 +49,6 @@ public readonly struct PostSchedulerOptions
         maxWavesPerPump: 1,
         timeCheckInterval: 64,
         maxCompletionsPerPump: 0,
-        defaultBackpressure: BackpressurePolicy.RejectNew);
+        defaultBackpressure: BackpressurePolicy.RejectNew,
+        payloadDiagnostics: PayloadDiagnosticsMode.Local);
 }

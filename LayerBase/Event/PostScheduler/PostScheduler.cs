@@ -63,7 +63,9 @@ public sealed class PostScheduler : IDisposable
         _defaultBackpressure = options.DefaultBackpressure;
         _readyQueue = new RingBuffer<PostItem>(options.ReadyCapacity);
         _nextQueue = new RingBuffer<PostItem>(options.NextCapacity);
-        _payloadStorage = new EventPayloadStorage();
+        _payloadStorage = new EventPayloadStorage(
+            useRuntimeCache: true,
+            diagnosticsMode: options.PayloadDiagnostics);
 
         for (int i = 0; i < _latestBuffer.Length; i++) _latestBuffer[i] = PayloadHandle.Invalid;
     }
@@ -154,6 +156,15 @@ public sealed class PostScheduler : IDisposable
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private long NextSequenceId()
+    {
+        unchecked
+        {
+            return ++_sequenceCounter;
+        }
+    }
+
     private void RebuildPostBitmap()
     {
         _postBitmap.Build(_postPlans);
@@ -230,7 +241,7 @@ public sealed class PostScheduler : IDisposable
     {
         var store = _payloadStorage.GetStoreFast<T>(_runtimeId);
         var handle = store.Add(in value);
-        var sequenceId = Interlocked.Increment(ref _sequenceCounter);
+        var sequenceId = NextSequenceId();
         var item = new PostItem(typeId, handle, sequenceId, _defaultBackpressure);
 
         var targetQueue = _isPumping ? _nextQueue : _readyQueue;
@@ -372,7 +383,7 @@ public sealed class PostScheduler : IDisposable
             ref T current = ref _payloadStorage.GetRef<T>(_runtimeId, slot.PayloadHandle);
             if (meta != null && meta.TryMergePostEvent(ref current, in value))
             {
-                slot.LastSequenceId = Interlocked.Increment(ref _sequenceCounter);
+                slot.LastSequenceId = NextSequenceId();
                 slot.MergeCount++;
                 _coalescedBuffer[slotKey] = slot;
                 return PostResult.Coalesced();
@@ -398,7 +409,7 @@ public sealed class PostScheduler : IDisposable
         {
             // New slot
             var handle = _payloadStorage.Store(_runtimeId, value);
-            var seq = Interlocked.Increment(ref _sequenceCounter);
+            var seq = NextSequenceId();
             var newSlot = new CoalescedSlot
             {
                 Key = slotKey,

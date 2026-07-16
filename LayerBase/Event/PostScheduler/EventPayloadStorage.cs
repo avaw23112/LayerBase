@@ -63,8 +63,13 @@ internal sealed class EventStore<T> : IEventStore where T : struct
     private long _peakOutstanding;
     private bool _disposed;
 
-    public EventStore(int initialCapacity = 256)
+    private readonly PayloadDiagnosticsMode _diagnosticsMode;
+
+    public EventStore(
+        int initialCapacity = 256,
+        PayloadDiagnosticsMode diagnosticsMode = PayloadDiagnosticsMode.Atomic)
     {
+        _diagnosticsMode = diagnosticsMode;
         _capacity = initialCapacity;
         _buffer = new T[initialCapacity];
         _versions = new int[initialCapacity];
@@ -92,11 +97,62 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
             _buffer[index] = value;
             int version = _versions[index];
-            Interlocked.Increment(ref _rented);
-            long outstanding = Interlocked.Increment(ref _outstanding);
-            UpdatePeakOutstanding(outstanding);
+
+            RecordRent();
 
             return new PayloadHandle(EventTypeId<T>.Id, index, version);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void RecordRent()
+    {
+        switch (_diagnosticsMode)
+        {
+            case PayloadDiagnosticsMode.Disabled:
+                return;
+
+            case PayloadDiagnosticsMode.Local:
+                _rented++;
+                _outstanding++;
+
+                if (_outstanding > _peakOutstanding)
+                    _peakOutstanding = _outstanding;
+
+                return;
+
+            case PayloadDiagnosticsMode.Atomic:
+                Interlocked.Increment(ref _rented);
+                long outstanding = Interlocked.Increment(ref _outstanding);
+
+                UpdatePeakOutstanding(outstanding);
+                return;
+
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void RecordReturn()
+    {
+        switch (_diagnosticsMode)
+        {
+            case PayloadDiagnosticsMode.Disabled:
+                return;
+
+            case PayloadDiagnosticsMode.Local:
+                _returned++;
+                _outstanding--;
+                return;
+
+            case PayloadDiagnosticsMode.Atomic:
+                Interlocked.Increment(ref _returned);
+                Interlocked.Decrement(ref _outstanding);
+                return;
+
+            default:
+                throw new ArgumentOutOfRangeException();
         }
     }
 
@@ -136,8 +192,8 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
             _nextFree[index] = _freeHead;
             _freeHead = index;
-            Interlocked.Increment(ref _returned);
-            Interlocked.Decrement(ref _outstanding);
+
+            RecordReturn();
         }
     }
 
@@ -229,7 +285,17 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 internal sealed class EventPayloadStorage : IDisposable
 {
     private readonly object _gate = new();
+    private readonly bool _useRuntimeCache;
+    private readonly PayloadDiagnosticsMode _diagnosticsMode;
     private IEventStore?[] _typeIdStores = new IEventStore[256];
+
+    public EventPayloadStorage(
+        bool useRuntimeCache = true,
+        PayloadDiagnosticsMode diagnosticsMode = PayloadDiagnosticsMode.Atomic)
+    {
+        _useRuntimeCache = useRuntimeCache;
+        _diagnosticsMode = diagnosticsMode;
+    }
 
     public PayloadHandle Store<T>(int runtimeId, in T payload) where T : struct
     {
@@ -258,10 +324,39 @@ internal sealed class EventPayloadStorage : IDisposable
             if ((uint)typeId < (uint)_typeIdStores.Length && _typeIdStores[typeId] is EventStore<T> cached)
                 return cached;
 
-            var store = GetOrCreateStoreGlobal<T>(runtimeId);
+            EventStore<T> store;
+
+            if (_useRuntimeCache)
+            {
+                store = GetOrCreateRuntimeCachedStore<T>(runtimeId);
+            }
+            else
+            {
+                store = new EventStore<T>(diagnosticsMode: _diagnosticsMode);
+            }
+
             RegisterStoreLocal(typeId, store);
             return store;
         }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private EventStore<T> GetOrCreateRuntimeCachedStore<T>(int runtimeId) where T : struct
+    {
+        if ((uint)runtimeId < 1024)
+        {
+            lock (PayloadStoreCache<T>.Gate)
+            {
+                var store = PayloadStoreCache<T>.Stores[runtimeId];
+                if (store != null) return store;
+
+                store = new EventStore<T>(diagnosticsMode: PayloadDiagnosticsMode.Atomic);
+                PayloadStoreCache<T>.Stores[runtimeId] = store;
+                return store;
+            }
+        }
+
+        return new EventStore<T>(diagnosticsMode: _diagnosticsMode);
     }
 
     private void RegisterStoreLocal(int typeId, IEventStore store)
@@ -272,25 +367,6 @@ internal sealed class EventPayloadStorage : IDisposable
         }
 
         _typeIdStores[typeId] = store;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private EventStore<T> GetOrCreateStoreGlobal<T>(int runtimeId) where T : struct
-    {
-        if ((uint)runtimeId < 1024)
-        {
-            lock (PayloadStoreCache<T>.Gate)
-            {
-                var store = PayloadStoreCache<T>.Stores[runtimeId];
-                if (store != null) return store;
-
-                store = new EventStore<T>();
-                PayloadStoreCache<T>.Stores[runtimeId] = store;
-                return store;
-            }
-        }
-
-        return new EventStore<T>();
     }
 
     public ref T GetRef<T>(int runtimeId, PayloadHandle handle) where T : struct
