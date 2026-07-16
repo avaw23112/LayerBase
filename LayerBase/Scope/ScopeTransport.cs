@@ -57,7 +57,7 @@ internal sealed class ScopeTransport : IDisposable
         where TEvent : struct
     {
         return EnqueueEvent(
-            EventTypeId<TEvent>.Id,
+            ScopeRemoteEventRouteId<TEvent>.Id,
             ScopeEventClass.Business,
             in value);
     }
@@ -92,6 +92,21 @@ internal sealed class ScopeTransport : IDisposable
         where TRequest : struct
         where TResponse : struct
     {
+        return EnqueueCall<TRequest, TResponse>(
+            ScopeRemoteCallRouteId<TRequest, TResponse>.Id,
+            ScopeCallClass.BusinessRequest,
+            in request,
+            cancellationToken);
+    }
+
+    internal LBTask<TResponse> EnqueueCall<TRequest, TResponse>(
+        int routeId,
+        ScopeCallClass callClass,
+        in TRequest request,
+        CancellationToken cancellationToken = default)
+        where TRequest : struct
+        where TResponse : struct
+    {
         if (_disposed)
             return LBTask<TResponse>.FromException(new ObjectDisposedException(nameof(ScopeTransport)));
         if (cancellationToken.IsCancellationRequested)
@@ -105,10 +120,10 @@ internal sealed class ScopeTransport : IDisposable
         var payload = _callPayloadStorage.Store(Endpoint.Address.RuntimeId, in queuedCall);
         var envelope = new ScopeCallEnvelope(
             ScopeCallEnvelopeKind.Request,
-            ScopeCallClass.BusinessRequest,
+            callClass,
             NextCallToken(),
             Endpoint.Address,
-            ScopeLocalCallRouteId<TRequest, TResponse>.Id,
+            routeId,
             payload,
             ScopeCallResult.None,
             completion);

@@ -61,6 +61,8 @@ internal sealed class ScopeRuntime : IDisposable
             new ScopeAddress(runtimeId, generation, Descriptor.ScopeId));
         EventCenter = new EventCenter();
         LocalCalls = new ScopeLocalCallRegistry(Descriptor.ScopeId);
+        RemoteCalls = new ScopeRemoteCallRegistry(Descriptor.ScopeId);
+        RemoteEvents = new ScopeRemoteEventRegistry(Descriptor.ScopeId);
         if (_mainActors != null)
         {
             _mainActors.BindProjectionSink();
@@ -111,6 +113,10 @@ internal sealed class ScopeRuntime : IDisposable
     public LayerBaseSynchronizationContext? SynchronizationContext { get; private set; }
 
     public ScopeLocalCallRegistry LocalCalls { get; }
+
+    public ScopeRemoteCallRegistry RemoteCalls { get; }
+
+    public ScopeRemoteEventRegistry RemoteEvents { get; }
 
     public LayerProviderRuntime[] LayerProviders { get; }
 
@@ -254,7 +260,10 @@ internal sealed class ScopeRuntime : IDisposable
             return false;
 
         IScopeEventWriter? writer = endpoint.EventWriter;
-        return writer != null && writer.Post(in value).IsAccepted;
+        return writer != null && writer.PostInternal(
+            EventTypeId<TEvent>.Id,
+            ScopeEventClass.Internal,
+            in value).IsAccepted;
     }
 
     public LBTask<TResponse> CallLocalAsync<TRequest, TResponse>(
@@ -388,6 +397,8 @@ internal sealed class ScopeRuntime : IDisposable
     public void ClearLocalCallRegistry()
     {
         LocalCalls.Clear();
+        RemoteCalls.Clear();
+        RemoteEvents.Clear();
     }
 
     public void SetLifecyclePlan(ScopeLifecyclePlan lifecyclePlan)
@@ -509,6 +520,12 @@ internal sealed class ScopeRuntime : IDisposable
                         envelope,
                         Transport.CallPayloadStorage))
                 {
+                    continue;
+                }
+
+                if (envelope.Class == ScopeCallClass.BusinessRequest)
+                {
+                    RemoteCalls.Dispatch(_runtimeId, envelope, Transport.CallPayloadStorage);
                     continue;
                 }
 
@@ -926,6 +943,12 @@ internal sealed class ScopeRuntime : IDisposable
                     continue;
                 }
 
+                if (envelope.Class == ScopeEventClass.Business)
+                {
+                    RemoteEvents.TryDispatch(_runtimeId, envelope, Transport.EventPayloadStorage);
+                    continue;
+                }
+
                 if (scheduler != null)
                     Transport.EventPayloadStorage.Post(envelope.Payload, scheduler);
             }
@@ -1129,6 +1152,8 @@ internal sealed class ScopeRuntime : IDisposable
         ReleaseCallInbox();
         ReleaseEventInbox();
         LocalCalls.Clear();
+        RemoteCalls.Clear();
+        RemoteEvents.Clear();
         ReleaseDelayPublishers();
         DelayManager?.Clear();
         DelayManager = null;

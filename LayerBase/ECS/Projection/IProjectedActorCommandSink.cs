@@ -1,5 +1,6 @@
 using LayerBase.Actor;
 using Arch.Core;
+using LayerBase.Core.Event;
 using LayerBase.ECS.Projection.Flow;
 using LayerBase.Scope;
 
@@ -150,7 +151,7 @@ internal sealed class ScopeEventProjectedActorCommandSink : IProjectedActorComma
             entity,
             actorTypeId,
             nowTicks);
-        ScopePostResult result = _mainScope.Post(new ActorProjectionCommandBatchScopeEvent(command));
+        ScopePostResult result = PostInternal(new ActorProjectionCommandBatchScopeEvent(command));
         return ProjectedActorEnsureResult.Pending(result.IsAccepted);
     }
 
@@ -161,13 +162,13 @@ internal sealed class ScopeEventProjectedActorCommandSink : IProjectedActorComma
     public bool EnableIfDisabled(Entity entity, int actorTypeId, ActorId actorId, long nowTicks)
     {
         var command = ProjectedActorScopeCommand.Enable(_originScopeId, entity, actorTypeId, actorId, nowTicks);
-        return _mainScope.Post(new ActorProjectionCommandBatchScopeEvent(command)).IsAccepted;
+        return PostInternal(new ActorProjectionCommandBatchScopeEvent(command)).IsAccepted;
     }
 
     public bool Disable(Entity entity, int actorTypeId, ActorId actorId, long nowTicks)
     {
         var command = ProjectedActorScopeCommand.Disable(_originScopeId, entity, actorTypeId, actorId, nowTicks);
-        return _mainScope.Post(new ActorProjectionCommandBatchScopeEvent(command)).IsAccepted;
+        return PostInternal(new ActorProjectionCommandBatchScopeEvent(command)).IsAccepted;
     }
 
     public bool Release(
@@ -178,7 +179,7 @@ internal sealed class ScopeEventProjectedActorCommandSink : IProjectedActorComma
         long nowTicks)
     {
         var command = ProjectedActorScopeCommand.Release(_originScopeId, entity, actorTypeId, actorId, releasePolicy, nowTicks);
-        return _mainScope.Post(new ActorProjectionCommandBatchScopeEvent(command)).IsAccepted;
+        return PostInternal(new ActorProjectionCommandBatchScopeEvent(command)).IsAccepted;
     }
 
     public void PostTo<TEvent>(ActorId actorId, in TEvent value)
@@ -187,7 +188,10 @@ internal sealed class ScopeEventProjectedActorCommandSink : IProjectedActorComma
         ActorCommandDispatcherRegistry.EnsurePostRegistered<TEvent>();
         var handle = ActorHandle.FromActorId(actorId, _runtimeGeneration);
         var batch = new ActorCommandBatch<TEvent>(_originScopeId, handle, in value);
-        _mainScope.Post(in batch);
+        _mainScope.PostInternal(
+            EventTypeId<ActorCommandBatch<TEvent>>.Id,
+            ScopeEventClass.Internal,
+            in batch);
     }
 
     public void PostBatch<TEvent>(ref ProjectionBatchBuffer<TEvent> batch)
@@ -198,9 +202,20 @@ internal sealed class ScopeEventProjectedActorCommandSink : IProjectedActorComma
 
         ActorProjectionScopeEventDispatcher.EnsurePostBatchRegistered<TEvent>();
         ActorPostBatchScopeEvent<TEvent> value = batch.DetachToScopeEvent();
-        ScopePostResult result = _mainScope.Post(in value);
+        ScopePostResult result = _mainScope.PostInternal(
+            EventTypeId<ActorPostBatchScopeEvent<TEvent>>.Id,
+            ScopeEventClass.Internal,
+            in value);
         if (!result.IsAccepted)
             value.Dispose();
+    }
+
+    private ScopePostResult PostInternal(in ActorProjectionCommandBatchScopeEvent value)
+    {
+        return _mainScope.PostInternal(
+            EventTypeId<ActorProjectionCommandBatchScopeEvent>.Id,
+            ScopeEventClass.Internal,
+            in value);
     }
 }
 

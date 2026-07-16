@@ -238,6 +238,12 @@ internal interface IActorProjectionPostBatchDispatcher
         int runtimeId,
         PayloadHandle payload,
         EventPayloadStorage payloadStorage);
+
+    void Enqueue(
+        MainActorRuntime runtime,
+        int runtimeId,
+        PayloadHandle payload,
+        EventPayloadStorage payloadStorage);
 }
 
 internal sealed class ActorProjectionPostBatchDispatcher<TEvent> : IActorProjectionPostBatchDispatcher
@@ -260,6 +266,18 @@ internal sealed class ActorProjectionPostBatchDispatcher<TEvent> : IActorProject
         {
             batch.Dispose();
         }
+    }
+
+    public void Enqueue(
+        MainActorRuntime runtime,
+        int runtimeId,
+        PayloadHandle payload,
+        EventPayloadStorage payloadStorage)
+    {
+        if (!payloadStorage.TryGet<ActorPostBatchScopeEvent<TEvent>>(runtimeId, payload, out var batch))
+            return;
+
+        runtime.EnqueueProjectionPostBatch(batch);
     }
 }
 
@@ -296,6 +314,24 @@ internal static class ActorProjectionScopeEventDispatcher
         return true;
     }
 
+    public static bool TryEnqueueCommand(
+        int routeId,
+        MainActorRuntime mainActors,
+        ScopeRuntime scope,
+        int runtimeId,
+        PayloadHandle payload,
+        EventPayloadStorage payloadStorage)
+    {
+        if (routeId != EventTypeId<ActorProjectionCommandBatchScopeEvent>.Id)
+            return TryEnqueuePostBatch(routeId, mainActors, runtimeId, payload, payloadStorage);
+
+        if (!payloadStorage.TryGet<ActorProjectionCommandBatchScopeEvent>(runtimeId, payload, out var batch))
+            return true;
+
+        mainActors.EnqueueProjectionCommand(scope, batch.Command);
+        return true;
+    }
+
     private static bool TryDispatchPostBatch(
         int routeId,
         ActorWorld actorWorld,
@@ -307,6 +343,20 @@ internal static class ActorProjectionScopeEventDispatcher
             return false;
 
         dispatcher.Dispatch(actorWorld, runtimeId, payload, payloadStorage);
+        return true;
+    }
+
+    private static bool TryEnqueuePostBatch(
+        int routeId,
+        MainActorRuntime runtime,
+        int runtimeId,
+        PayloadHandle payload,
+        EventPayloadStorage payloadStorage)
+    {
+        if (!s_postBatchDispatchers.TryGetValue(routeId, out IActorProjectionPostBatchDispatcher? dispatcher))
+            return false;
+
+        dispatcher.Enqueue(runtime, runtimeId, payload, payloadStorage);
         return true;
     }
 
@@ -329,7 +379,7 @@ internal static class ActorProjectionScopeEventDispatcher
         return true;
     }
 
-    private static ProjectedActorScopeResult Execute(
+    internal static ProjectedActorScopeResult Execute(
         ActorWorld actorWorld,
         ProjectedActorScopeCommand command)
     {

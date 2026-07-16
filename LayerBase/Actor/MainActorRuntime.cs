@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LayerBase.Core.Event;
 using LayerBase.ECS.Projection;
 using LayerBase.Scope;
@@ -8,6 +9,7 @@ internal sealed class MainActorRuntime : IDisposable
 {
     private readonly ActorWorld _world;
     private readonly int _generation;
+    private readonly Queue<IProjectionWork> _projectionWorks = new();
     private MainActorRuntimeState _state = MainActorRuntimeState.Created;
     private long _pumpCount;
 
@@ -48,6 +50,12 @@ internal sealed class MainActorRuntime : IDisposable
         ref RuntimeFrameBudget budget)
     {
         _pumpCount++;
+        PumpProjectionWorks(ref budget);
+        if (!CanContinue(ref budget))
+        {
+            return;
+        }
+
         _world.Pump(
             deltaTime: deltaTime,
             fixedDeltaTime: fixedDeltaTime,
@@ -97,13 +105,101 @@ internal sealed class MainActorRuntime : IDisposable
         PayloadHandle payload,
         EventPayloadStorage payloadStorage)
     {
-        return ActorProjectionScopeEventDispatcher.TryDispatchCommand(
+        return ActorProjectionScopeEventDispatcher.TryEnqueueCommand(
             routeId,
+            this,
             scope,
-            _world,
             runtimeId,
             payload,
             payloadStorage);
+    }
+
+    internal void EnqueueProjectionCommand(
+        ScopeRuntime scope,
+        ProjectedActorScopeCommand command)
+    {
+        _projectionWorks.Enqueue(new ProjectionCommandWork(scope, command));
+    }
+
+    internal void EnqueueProjectionPostBatch<TEvent>(ActorPostBatchScopeEvent<TEvent> batch)
+        where TEvent : struct
+    {
+        _projectionWorks.Enqueue(new ProjectionPostBatchWork<TEvent>(batch));
+    }
+
+    private void PumpProjectionWorks(ref RuntimeFrameBudget budget)
+    {
+        while (_projectionWorks.Count > 0 && CanContinue(ref budget))
+        {
+            IProjectionWork work = _projectionWorks.Dequeue();
+            work.Execute(this);
+            budget.ConsumeEvent();
+        }
+    }
+
+    private static bool CanContinue(ref RuntimeFrameBudget budget)
+    {
+        return budget.HasRemainingEventBudget()
+               && budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp());
+    }
+
+    private interface IProjectionWork : IDisposable
+    {
+        void Execute(MainActorRuntime runtime);
+    }
+
+    private sealed class ProjectionCommandWork : IProjectionWork
+    {
+        private readonly ScopeRuntime _scope;
+        private readonly ProjectedActorScopeCommand _command;
+
+        public ProjectionCommandWork(ScopeRuntime scope, ProjectedActorScopeCommand command)
+        {
+            _scope = scope;
+            _command = command;
+        }
+
+        public void Execute(MainActorRuntime runtime)
+        {
+            ProjectedActorScopeResult result = ActorProjectionScopeEventDispatcher.Execute(
+                runtime._world,
+                _command);
+            _scope.TryPostEventToScope(
+                _command.OriginScopeId,
+                new ActorProjectionResultBatchScopeEvent(result));
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class ProjectionPostBatchWork<TEvent> : IProjectionWork
+        where TEvent : struct
+    {
+        private readonly ActorPostBatchScopeEvent<TEvent> _batch;
+
+        public ProjectionPostBatchWork(ActorPostBatchScopeEvent<TEvent> batch)
+        {
+            _batch = batch;
+        }
+
+        public void Execute(MainActorRuntime runtime)
+        {
+            try
+            {
+                _batch.PostTo(runtime._world);
+            }
+            finally
+            {
+                _batch.Dispose();
+            }
+        }
+
+        public void Dispose()
+        {
+            _batch.Dispose();
+        }
     }
 
     public bool TryDispatchCommand(
@@ -123,6 +219,11 @@ internal sealed class MainActorRuntime : IDisposable
     public void Dispose()
     {
         _state = MainActorRuntimeState.Disposed;
+        while (_projectionWorks.Count > 0)
+        {
+            _projectionWorks.Dequeue().Dispose();
+        }
+
         _world.Dispose();
     }
 }

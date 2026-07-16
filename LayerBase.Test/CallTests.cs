@@ -3,6 +3,7 @@ using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.DI;
 using LayerBase.Layers;
+using LayerBase.Scope;
 
 namespace EventsTest;
 
@@ -391,6 +392,27 @@ public sealed partial class AudioLayerServicesModule : IService
 
 public partial class CoreLayer : Layer
 {
+    [SubscribeScopeCall]
+    public async LBTask<SwitchSceneResponse> HandleRemoteSwitchSceneAsync(
+        SwitchSceneRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await LBTask.CompletedTask;
+        GetService<SceneService>().SwitchTo(request.SceneName);
+        return new SwitchSceneResponse(true, request.SceneName);
+    }
+
+    [SubscribeScopeCall]
+    public async LBTask<ScopeDeferredCallResponse> HandleRemoteDeferredSceneAsync(
+        ScopeDeferredCallRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await LBTask.CompletedTask;
+        GetService<SceneService>().SwitchTo(request.SceneName);
+        return new ScopeDeferredCallResponse(request.SceneName);
+    }
 }
 
 public class UiLayer : Layer

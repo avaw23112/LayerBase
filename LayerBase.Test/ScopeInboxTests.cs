@@ -148,6 +148,49 @@ public sealed class ScopeInboxTests
         Assert.That(inbox.TryDequeue(out _), Is.False);
     }
 
+    [Test]
+    public void Scope_inbox_accepts_multiple_producers_and_single_consumer_drains_all_items()
+    {
+        const int producerCount = 4;
+        const int itemsPerProducer = 128;
+        var inbox = ScopeBoundedInbox<int>.CreateEventInbox(
+            new ScopeEventInboxOptions(
+                capacity: producerCount * itemsPerProducer,
+                reservedForInternal: 0,
+                reservedForCritical: 0));
+        var accepted = 0;
+
+        Parallel.For(
+            0,
+            producerCount,
+            producer =>
+            {
+                for (var i = 0; i < itemsPerProducer; i++)
+                {
+                    var value = producer * itemsPerProducer + i;
+                    if (inbox.TryEnqueue(value, ScopeAdmissionClass.Business) == ScopeEnqueueResult.Accepted)
+                    {
+                        Interlocked.Increment(ref accepted);
+                    }
+                }
+            });
+
+        Assert.That(accepted, Is.EqualTo(producerCount * itemsPerProducer));
+
+        var seen = new bool[producerCount * itemsPerProducer];
+        var drained = 0;
+        while (inbox.TryDequeue(out var value))
+        {
+            Assert.That(value, Is.InRange(0, seen.Length - 1));
+            Assert.That(seen[value], Is.False);
+            seen[value] = true;
+            drained++;
+        }
+
+        Assert.That(drained, Is.EqualTo(producerCount * itemsPerProducer));
+        Assert.That(seen, Is.All.True);
+    }
+
     private static void AssertDequeues(ScopeBoundedInbox<int> inbox, int expected)
     {
         Assert.That(inbox.TryDequeue(out var actual), Is.True);

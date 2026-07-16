@@ -24,6 +24,14 @@ internal interface IScopeCallWriter
         CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct;
+
+    LBTask<TResponse> CallInternal<TRequest, TResponse>(
+        int routeId,
+        ScopeCallClass callClass,
+        in TRequest request,
+        CancellationToken cancellationToken = default)
+        where TRequest : struct
+        where TResponse : struct;
 }
 
 internal sealed class RuntimeScopeEventWriter : IScopeEventWriter
@@ -69,5 +77,16 @@ internal sealed class RuntimeScopeCallWriter : IScopeCallWriter
         where TResponse : struct
     {
         return _transport.EnqueueCall<TRequest, TResponse>(in request, cancellationToken);
+    }
+
+    public LBTask<TResponse> CallInternal<TRequest, TResponse>(
+        int routeId,
+        ScopeCallClass callClass,
+        in TRequest request,
+        CancellationToken cancellationToken = default)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        return _transport.EnqueueCall<TRequest, TResponse>(routeId, callClass, in request, cancellationToken);
     }
 }

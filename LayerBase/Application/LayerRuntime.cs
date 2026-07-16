@@ -566,6 +566,26 @@ public sealed partial class LayerRuntime : IDisposable
 
             ownerScope.LocalCalls.Register(entry);
         }
+
+        foreach (var layer in _chain.GetNodes())
+        foreach (var entry in layer.ScopeCallRouteEntries)
+        {
+            if (!_scopeHost.TryGetRuntime(entry.OwnerScopeId, out var ownerScope))
+                throw new InvalidOperationException(
+                    $"ScopeCall route `{entry.RequestType.FullName}` -> `{entry.ResponseType.FullName}` targets unknown scope {entry.OwnerScopeId}.");
+
+            ownerScope.RemoteCalls.Register(entry);
+        }
+
+        foreach (var layer in _chain.GetNodes())
+        foreach (var entry in layer.ScopeEventRouteEntries)
+        {
+            if (!_scopeHost.TryGetRuntime(entry.OwnerScopeId, out var ownerScope))
+                throw new InvalidOperationException(
+                    $"ScopeEvent route `{entry.EventType.FullName}` targets unknown scope {entry.OwnerScopeId}.");
+
+            ownerScope.RemoteEvents.Register(entry);
+        }
     }
 
     #endregion

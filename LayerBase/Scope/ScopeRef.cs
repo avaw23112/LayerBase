@@ -41,4 +41,31 @@ public readonly struct ScopeRef<TScope>
             : LBTask<TResponse>.FromException(
                 new InvalidOperationException("Scope endpoint is not available."));
     }
+
+    internal ScopePostResult PostInternal<TEvent>(
+        int routeId,
+        ScopeEventClass eventClass,
+        in TEvent value)
+        where TEvent : struct
+    {
+        var writer = _endpoint.EventWriter;
+        return writer != null
+            ? writer.PostInternal(routeId, eventClass, in value)
+            : ScopePostResult.StaleEndpoint;
+    }
+
+    internal LBTask<TResponse> CallInternal<TRequest, TResponse>(
+        int routeId,
+        ScopeCallClass callClass,
+        in TRequest request,
+        CancellationToken cancellationToken = default)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        var writer = _endpoint.CallWriter;
+        return writer != null
+            ? writer.CallInternal<TRequest, TResponse>(routeId, callClass, in request, cancellationToken)
+            : LBTask<TResponse>.FromException(
+                new InvalidOperationException("Scope endpoint is not available."));
+    }
 }

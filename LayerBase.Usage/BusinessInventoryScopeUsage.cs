@@ -18,7 +18,7 @@ public sealed partial class BusinessInventoryLedger : IService
         services.AddSingleton(this);
     }
 
-    [Call]
+    [SubscribeScopeCall]
     public async LBTask<BusinessReserveInventoryResponse> ReserveAsync(
         BusinessReserveInventoryRequest request,
         CancellationToken cancellationToken = default)
@@ -41,7 +41,7 @@ public sealed partial class BusinessInventoryLedger : IService
         return new BusinessReserveInventoryResponse(orderId, sku, accepted: true, quantity: quantity, remaining: remaining);
     }
 
-    [Subscribe]
+    [SubscribeScopeEvent]
     public void OnInventoryRestocked(in BusinessInventoryRestockedEvent value)
     {
         _stock.TryGetValue(value.Sku, out var current);

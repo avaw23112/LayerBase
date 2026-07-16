@@ -267,7 +267,7 @@ public sealed class ScopeArchitectureAcceptanceTests
     }
 
     [Test]
-    public void Main_scope_ref_try_post_uses_runtime_local_post_path()
+    public void Main_scope_ref_try_post_uses_scope_event_inbox_path()
     {
         LayerHub.Reset();
 
@@ -397,7 +397,7 @@ public sealed class ScopeArchitectureAcceptanceTests
     }
 
     [Test]
-    public async Task Main_scope_ref_call_uses_runtime_local_call_registry()
+    public async Task Main_scope_ref_call_uses_subscribe_scope_call_registry()
     {
         LayerHub.Reset();
 
@@ -541,7 +541,7 @@ public sealed class ScopeArchitectureAcceptanceTests
         return scope;
     }
 
-    private sealed class ScopeArchitectureLayer : Layer
+    private sealed class ScopeArchitectureLayer : Layer, IAutoScopeEndpointBinder
     {
         public int LastValue { get; private set; }
 
@@ -550,9 +550,32 @@ public sealed class ScopeArchitectureAcceptanceTests
             Subscribe<ScopeArchitectureEvent>(OnEvent);
         }
 
+        void IAutoScopeEndpointBinder.AutoBindScopeEndpoints(Layer layer)
+        {
+            ScopeEventRegistrationBridge.RegisterForOwner(
+                layer,
+                this,
+                new ScopeArchitectureEventHandler(this));
+        }
+
         private void OnEvent(in ScopeArchitectureEvent value)
         {
             LastValue = value.Value;
+        }
+
+        private sealed class ScopeArchitectureEventHandler : IScopeEventHandler<ScopeArchitectureEvent>
+        {
+            private readonly ScopeArchitectureLayer _owner;
+
+            public ScopeArchitectureEventHandler(ScopeArchitectureLayer owner)
+            {
+                _owner = owner;
+            }
+
+            public void Handle(in ScopeArchitectureEvent value)
+            {
+                _owner.OnEvent(in value);
+            }
         }
     }
 

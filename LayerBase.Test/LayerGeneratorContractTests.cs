@@ -162,6 +162,110 @@ public class LayerGeneratorContractTests
     }
 
     [Test]
+    public void Service_method_marked_with_SubscribeScopeCall_generates_without_errors()
+    {
+        const string source = """
+                              using System.Threading;
+                              using LayerBase.Async;
+                              using LayerBase.DI;
+                              using LayerBase.Layers;
+                              using LayerBase.Scope;
+
+                              public readonly struct InventoryScope : IScopeDefinition
+                              {
+                                  public const int ScopeId = 71;
+                              }
+
+                              public readonly struct TestRequest
+                              {
+                              }
+
+                              public readonly struct TestResponse
+                              {
+                              }
+
+                              public sealed partial class CommerceLayer : Layer
+                              {
+                              }
+
+                              [OwnerLayer(typeof(CommerceLayer))]
+                              [Scope<InventoryScope>]
+                              public sealed partial class InventoryService : IService
+                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
+
+                                  [SubscribeScopeCall]
+                                  private async LBTask<TestResponse> ReserveAsync(
+                                      TestRequest request,
+                                      CancellationToken cancellationToken = default)
+                                  {
+                                      await LBTask.CompletedTask;
+                                      return default;
+                                  }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeEndpointAutoBindGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+    }
+
+    [Test]
+    public void Service_method_marked_with_SubscribeScopeEvent_generates_without_errors()
+    {
+        const string source = """
+                              using LayerBase.DI;
+                              using LayerBase.Layers;
+                              using LayerBase.Scope;
+
+                              public readonly struct InventoryScope : IScopeDefinition
+                              {
+                                  public const int ScopeId = 72;
+                              }
+
+                              public readonly struct StockArrived
+                              {
+                              }
+
+                              public sealed partial class CommerceLayer : Layer
+                              {
+                              }
+
+                              [OwnerLayer(typeof(CommerceLayer))]
+                              [Scope<InventoryScope>]
+                              public sealed partial class InventoryService : IService
+                              {
+                                  public void ConfigureServices(IServiceCollection services) { }
+
+                                  [SubscribeScopeEvent]
+                                  private void OnStockArrived(in StockArrived value)
+                                  {
+                                  }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeEndpointAutoBindGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+    }
+
+    [Test]
     public void Call_attribute_method_without_async_reports_analyzer_diagnostic()
     {
         const string source = """
@@ -214,6 +318,37 @@ public class LayerGeneratorContractTests
                                   public LBTask<TestResponse> HandleAsync(
                                       TestRequest request,
                                       CancellationToken cancellationToken = default)
+                                  {
+                                      return LBTask<TestResponse>.FromResult(default);
+                                  }
+                              }
+                              """;
+
+        var diagnostics = RunCallAnalyzer(source);
+
+        Assert.That(diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBG305"),
+            string.Join(Environment.NewLine, diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void SubscribeScopeCall_attribute_method_without_async_reports_analyzer_diagnostic()
+    {
+        const string source = """
+                              using LayerBase.Async;
+                              using LayerBase.Scope;
+
+                              public readonly struct TestRequest
+                              {
+                              }
+
+                              public readonly struct TestResponse
+                              {
+                              }
+
+                              public sealed partial class TestService
+                              {
+                                  [SubscribeScopeCall]
+                                  private LBTask<TestResponse> Handle(TestRequest request)
                                   {
                                       return LBTask<TestResponse>.FromResult(default);
                                   }

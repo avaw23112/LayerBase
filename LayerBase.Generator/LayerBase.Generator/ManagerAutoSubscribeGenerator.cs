@@ -70,6 +70,7 @@ public sealed class ManagerAutoSubscribeGenerator : IIncrementalGenerator
             {
                 var subscribeAttributes = method.GetAttributes()
                                                 .Where(a => a.AttributeClass?.Name.StartsWith("Subscribe") == true)
+                                                .Where(a => a.AttributeClass?.Name.StartsWith("SubscribeScope") != true)
                                                 .ToList();
 
                 if (subscribeAttributes.Count > 1)

@@ -1,4 +1,6 @@
 using LayerBase.Async;
+using LayerBase.Call;
+using LayerBase.Core.Event;
 using LayerBase.Scope;
 
 namespace LayerBase.Actor;
@@ -210,7 +212,10 @@ public readonly struct RemoteActorAccessor
         EnsureEndpoint();
         ActorCommandDispatcherRegistry.EnsurePostRegistered<TEvent>();
         var batch = new ActorCommandBatch<TEvent>(_originScopeId, target, in value);
-        return _mainScope.Post(in batch);
+        return _mainScope.PostInternal(
+            EventTypeId<ActorCommandBatch<TEvent>>.Id,
+            ScopeEventClass.Internal,
+            in batch);
     }
 
     public void PostTo<TEvent>(ActorHandle target, in TEvent value)
@@ -231,7 +236,9 @@ public readonly struct RemoteActorAccessor
         EnsureEndpoint();
         ActorCallDispatcherRegistry.EnsureRegistered<TRequest, TResponse>();
         var actorRequest = new ActorCallRequest<TRequest, TResponse>(_originScopeId, target, in request);
-        return _mainScope.Call<ActorCallRequest<TRequest, TResponse>, TResponse>(
+        return _mainScope.CallInternal<ActorCallRequest<TRequest, TResponse>, TResponse>(
+            ScopeLocalCallRouteId<ActorCallRequest<TRequest, TResponse>, TResponse>.Id,
+            ScopeCallClass.BusinessRequest,
             in actorRequest,
             cancellationToken);
     }
@@ -241,7 +248,10 @@ public readonly struct RemoteActorAccessor
         EnsureEndpoint();
         ActorCommandDispatcherRegistry.EnsureDestroyRegistered();
         var command = new ActorDestroyCommand(_originScopeId, target);
-        return _mainScope.TryPost(in command);
+        return _mainScope.PostInternal(
+            EventTypeId<ActorDestroyCommand>.Id,
+            ScopeEventClass.Internal,
+            in command).IsAccepted;
     }
 
     private void EnsureEndpoint()
