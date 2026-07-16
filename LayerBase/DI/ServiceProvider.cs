@@ -3,13 +3,15 @@ using System.Reflection;
 using LayerBase;
 using LayerBase.DI.Options;
 using LayerBase.Layers;
+using LayerBase.Scope;
 
 namespace LayerBase.DI;
 
 internal sealed class ServiceProvider : IServiceProvider, IDisposable
 {
-    private readonly ConcurrentDictionary<Type, Lazy<object>> _instances = new();
-    private readonly ConcurrentDictionary<Type, ServiceDescriptor> _map;
+    private readonly ConcurrentDictionary<ServiceKey, Lazy<object>> _instances = new();
+    private readonly ConcurrentDictionary<ServiceKey, ServiceDescriptor> _map;
+    private readonly Dictionary<Type, ServiceDescriptor[]> _descriptorsByType;
     private readonly LayerRuntime _runtime;
     private readonly Layer _ownerLayer;
     private ResolutionContext? _activeResolutionContext;
@@ -25,9 +27,16 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         if (descriptors == null)
             throw new ArgumentNullException(nameof(descriptors));
 
-        _map = new ConcurrentDictionary<Type, ServiceDescriptor>();
-        foreach (var descriptor in descriptors)
-            _map[descriptor.ServiceType] = descriptor;
+        var descriptorArray = descriptors.ToArray();
+        _map = new ConcurrentDictionary<ServiceKey, ServiceDescriptor>();
+        foreach (var descriptor in descriptorArray)
+            _map[new ServiceKey(descriptor.OwnerScopeId, descriptor.ServiceType)] = descriptor;
+
+        _descriptorsByType = descriptorArray
+            .GroupBy(static descriptor => descriptor.ServiceType)
+            .ToDictionary(
+                static group => group.Key,
+                static group => group.ToArray());
     }
 
     public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
@@ -47,7 +56,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
     public object? GetService(Type serviceType)
     {
         var context = _activeResolutionContext ?? new ResolutionContext();
-        return GetServiceInternal(serviceType, context);
+        return GetServiceInternal(serviceType, ScopeDefinitionIds.Main, context);
     }
 
     public T Get<T>()
@@ -59,6 +68,21 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         return (T)service;
     }
 
+    internal T Get<T>(int ownerScopeId)
+    {
+        var service = GetService(typeof(T), ownerScopeId);
+        if (service == null)
+            throw new InvalidOperationException($"Service not registered in scope {ownerScopeId}: {typeof(T)}");
+
+        return (T)service;
+    }
+
+    internal object? GetService(Type serviceType, int ownerScopeId)
+    {
+        var context = _activeResolutionContext ?? new ResolutionContext();
+        return GetServiceInternal(serviceType, ownerScopeId, context);
+    }
+
     internal List<IAutoSubscribe> InitializeAutoSubscriptions(
         Layer owner,
         IEnumerable<ServiceDescriptor> orderedDescriptors)
@@ -66,7 +90,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         var discovered = new List<IAutoSubscribe>();
         foreach (var descriptor in orderedDescriptors)
         {
-            var instance = GetService(descriptor.ServiceType);
+            var instance = GetService(descriptor.ServiceType, descriptor.OwnerScopeId);
             if (instance is IAutoSubscribe auto)
             {
                 auto.AutoBind(owner);
@@ -82,7 +106,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         var resolved = new List<ResolvedService>();
         foreach (var descriptor in orderedDescriptors)
         {
-            var instance = GetService(descriptor.ServiceType);
+            var instance = GetService(descriptor.ServiceType, descriptor.OwnerScopeId);
             if (instance != null)
                 resolved.Add(new ResolvedService(descriptor, instance));
         }
@@ -95,16 +119,39 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         InjectMembers(instance, new ResolutionContext());
     }
 
-    private object? GetServiceInternal(Type serviceType, ResolutionContext context)
+    private object? GetServiceInternal(Type serviceType, int ownerScopeId, ResolutionContext context)
     {
         if (IsDisposed)
             throw new ObjectDisposedException(nameof(ServiceProvider));
         if (serviceType == null)
             throw new ArgumentNullException(nameof(serviceType));
 
-        return _map.TryGetValue(serviceType, out var descriptor)
+        return TryResolveDescriptor(serviceType, ownerScopeId, out var descriptor)
             ? Resolve(descriptor, context)
             : null;
+    }
+
+    private bool TryResolveDescriptor(Type serviceType, int ownerScopeId, out ServiceDescriptor descriptor)
+    {
+        if (_map.TryGetValue(new ServiceKey(ownerScopeId, serviceType), out descriptor!))
+        {
+            return true;
+        }
+
+        if (_map.TryGetValue(new ServiceKey(ScopeDefinitionIds.Main, serviceType), out descriptor!))
+        {
+            return true;
+        }
+
+        if (_descriptorsByType.TryGetValue(serviceType, out var candidates) &&
+            candidates.Select(static candidate => candidate.OwnerScopeId).Distinct().Count() == 1)
+        {
+            descriptor = candidates[^1];
+            return true;
+        }
+
+        descriptor = default!;
+        return false;
     }
 
     private object Resolve(ServiceDescriptor descriptor, ResolutionContext context)
@@ -144,7 +191,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
             throw new InvalidOperationException($"Circular dependency detected: {implementationType}");
 
         var lazy = _instances.GetOrAdd(
-            descriptor.ServiceType,
+            new ServiceKey(descriptor.OwnerScopeId, descriptor.ServiceType),
             _ => new Lazy<object>(
                 () => CreateInstance(descriptor, context),
                 LazyThreadSafetyMode.ExecutionAndPublication));
@@ -155,7 +202,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         }
         catch
         {
-            _instances.TryRemove(descriptor.ServiceType, out _);
+            _instances.TryRemove(new ServiceKey(descriptor.OwnerScopeId, descriptor.ServiceType), out _);
             throw;
         }
     }
@@ -184,7 +231,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
             var args = new object?[parameters.Length];
             for (var i = 0; i < parameters.Length; i++)
             {
-                var dependency = GetServiceInternal(parameters[i].ParameterType, context);
+                var dependency = GetServiceInternal(parameters[i].ParameterType, descriptor.OwnerScopeId, context);
                 if (dependency == null)
                     throw new InvalidOperationException(
                         $"Unable to resolve dependency {parameters[i].ParameterType} for {descriptor.ImplType}");
@@ -252,6 +299,34 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
     private sealed class ResolutionContext
     {
         public readonly HashSet<Type> CallStack = new();
+    }
+
+    private readonly struct ServiceKey : IEquatable<ServiceKey>
+    {
+        private readonly int _ownerScopeId;
+        private readonly Type _serviceType;
+
+        public ServiceKey(int ownerScopeId, Type serviceType)
+        {
+            _ownerScopeId = ownerScopeId;
+            _serviceType = serviceType ?? throw new ArgumentNullException(nameof(serviceType));
+        }
+
+        public bool Equals(ServiceKey other)
+        {
+            return _ownerScopeId == other._ownerScopeId &&
+                   _serviceType == other._serviceType;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is ServiceKey other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(_ownerScopeId, _serviceType);
+        }
     }
 
     internal readonly struct ResolvedService

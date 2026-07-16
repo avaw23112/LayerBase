@@ -342,7 +342,8 @@ public static class ServiceExtensions
         EventHandleDelegate<TValue> handler)
         where TValue : struct
     {
-        ServiceLayerBinder.RequireLayer(service.GetBinding()).SubscribeFlow(handler);
+        var binding = service.GetBinding();
+        ServiceLayerBinder.RequireLayer(binding).SubscribeFlow(handler, binding.OwnerScope);
     }
 
     public static void SubscribeAsync<TValue>(
@@ -350,7 +351,8 @@ public static class ServiceExtensions
         EventHandleDelegateAsync<TValue> handler)
         where TValue : struct
     {
-        ServiceLayerBinder.RequireLayer(service.GetBinding()).SubscribeAsync(handler);
+        var binding = service.GetBinding();
+        ServiceLayerBinder.RequireLayer(binding).SubscribeAsync(handler, binding.OwnerScope);
     }
 
     public static void Subscribe<TValue>(
@@ -358,7 +360,8 @@ public static class ServiceExtensions
         EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
-        ServiceLayerBinder.RequireLayer(service.GetBinding()).Subscribe(handler);
+        var binding = service.GetBinding();
+        ServiceLayerBinder.RequireLayer(binding).Subscribe(handler, binding.OwnerScope);
     }
 
     public static LayerEventStream<TValue> OnEvent<TValue>(
@@ -374,10 +377,10 @@ public static class ServiceExtensions
         var binding = service.GetBinding();
         if (binding.Layer != null)
         {
-            return binding.Layer.GetService<T>();
+            return binding.Layer.GetService<T>(binding.OwnerScope.ScopeId);
         }
 
-        return ServiceLayerBinder.RequireLayer(binding).GetService<T>();
+        return ServiceLayerBinder.RequireLayer(binding).GetService<T>(binding.OwnerScope.ScopeId);
     }
 }
 
@@ -627,7 +630,8 @@ public static class LayerContextExtensions
         EventHandleDelegate<TValue> handler)
         where TValue : struct
     {
-        ServiceLayerBinder.RequireLayer(context.GetBinding()).SubscribeFlow(handler);
+        var binding = context.GetBinding();
+        ServiceLayerBinder.RequireLayer(binding).SubscribeFlow(handler, binding.OwnerScope);
     }
 
     public static void SubscribeAsync<TValue>(
@@ -635,7 +639,8 @@ public static class LayerContextExtensions
         EventHandleDelegateAsync<TValue> handler)
         where TValue : struct
     {
-        ServiceLayerBinder.RequireLayer(context.GetBinding()).SubscribeAsync(handler);
+        var binding = context.GetBinding();
+        ServiceLayerBinder.RequireLayer(binding).SubscribeAsync(handler, binding.OwnerScope);
     }
 
     public static void Subscribe<TValue>(
@@ -643,7 +648,8 @@ public static class LayerContextExtensions
         EventNotifyDelegate<TValue> handler)
         where TValue : struct
     {
-        ServiceLayerBinder.RequireLayer(context.GetBinding()).Subscribe(handler);
+        var binding = context.GetBinding();
+        ServiceLayerBinder.RequireLayer(binding).Subscribe(handler, binding.OwnerScope);
     }
 
     public static LayerEventStream<TValue> OnEvent<TValue>(
@@ -665,9 +671,9 @@ public static class LayerContextExtensions
         var binding = context.GetBinding();
         if (binding.Layer != null)
         {
-            return binding.Layer.GetService<T>();
+            return binding.Layer.GetService<T>(binding.OwnerScope.ScopeId);
         }
 
-        return ServiceLayerBinder.RequireLayer(binding).GetService<T>();
+        return ServiceLayerBinder.RequireLayer(binding).GetService<T>(binding.OwnerScope.ScopeId);
     }
 }

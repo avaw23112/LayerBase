@@ -29,7 +29,8 @@ public static class ScopeLocalCallHandlerExtensions
     public static TService Get<TService>(this IScopeLocalCallHandler handler) where TService : class
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
-        return ServiceLayerBinder.Require(handler).GetService<TService>();
+        var binding = ServiceLayerBinder.RequireBinding(handler);
+        return ServiceLayerBinder.RequireLayer(binding).GetService<TService>(binding.OwnerScope.ScopeId);
     }
 
     public static LBTask<TResponse> Call<TRequest, TResponse>(

@@ -47,12 +47,8 @@ public sealed class ScopeAttributeApiMigrationTests
                                     .Build();
 
         Assert.That(layer.GetService<AttributeApiInventoryService>(), Is.InstanceOf<IAutoScopeEndpointBinder>());
-        Assert.That(layer.ScopeCallRouteEntries.Any(static entry =>
-            entry.OwnerScopeId == AttributeApiScope.ScopeId &&
-            entry.RequestType == typeof(AttributeApiReserveStock) &&
-            entry.ResponseType == typeof(AttributeApiReserveStockResult)), Is.True,
-            string.Join(", ", layer.ScopeCallRouteEntries.Select(static entry =>
-                $"{entry.OwnerScopeId}:{entry.RequestType.Name}->{entry.ResponseType.Name}:{entry.HandlerType.Name}")));
+        Assert.That(ServiceLayerBinder.GetBinding(layer.GetService<AttributeApiInventoryService>())?.OwnerScope.ScopeId,
+            Is.EqualTo(AttributeApiScope.ScopeId));
 
         var task = runtime.GetScope<AttributeApiScope>()
                           .Call<AttributeApiReserveStock, AttributeApiReserveStockResult>(
@@ -74,10 +70,8 @@ public sealed class ScopeAttributeApiMigrationTests
                                     .AddAssemblyModule(new AttributeApiModule())
                                     .Build();
 
-        Assert.That(layer.LocalCallRouteEntries.Any(static entry =>
-            entry.OwnerScopeId == AttributeApiScope.ScopeId &&
-            entry.RequestType == typeof(AttributeApiLocalPriceQuery) &&
-            entry.ResponseType == typeof(AttributeApiLocalPriceQuote)), Is.True);
+        Assert.That(ServiceLayerBinder.GetBinding(layer.GetService<AttributeApiInventoryService>())?.OwnerScope.ScopeId,
+            Is.EqualTo(AttributeApiScope.ScopeId));
 
         var task = runtime.GetScope<AttributeApiScope>()
                           .Call<AttributeApiLocalPriceQuery, AttributeApiLocalPriceQuote>(

@@ -25,8 +25,8 @@ public abstract class Layer : Node, IDisposable
     #endregion
 
     #region Runtime State - Service Management
-    // 已注册的服务类型集合，用于去重。
-    private readonly HashSet<Type> _registeredServiceTypes = new();
+    // 已注册的服务集合，用于按 OwnerScope + ServiceType 去重。
+    private readonly HashSet<RegisteredServiceKey> _registeredServiceTypes = new();
     // 手动注册的服务列表（用户通过 RegisterService 注册）。
     private readonly List<RegisteredService> _manualServices = new();
     // 构建过程中收集到的活跃服务。
@@ -252,7 +252,7 @@ public abstract class Layer : Node, IDisposable
 
         foreach (var registration in _manualServices)
         {
-            _registeredServiceTypes.Add(registration.ServiceType);
+            _registeredServiceTypes.Add(new RegisteredServiceKey(registration.OwnerScopeId, registration.ServiceType));
             AddActiveService(registration);
         }
 
@@ -455,7 +455,7 @@ public abstract class Layer : Node, IDisposable
             throw new InvalidOperationException(
                 "RegisterService must be called before the layer is built. Register services before LayerHub.CreateLayers().Push(...).Build().");
 
-        if (!_registeredServiceTypes.Add(serviceType)) return;
+        if (!_registeredServiceTypes.Add(new RegisteredServiceKey(ownerScopeId, serviceType))) return;
 
         if (OwnerContext != null && OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
             ServiceLayerBinder.AttachScopeObject(service, this, ownerScope);
@@ -479,6 +479,11 @@ public abstract class Layer : Node, IDisposable
     public T GetService<T>() where T : class
     {
         return _serviceProvider?.Get<T>() ?? throw new InvalidOperationException("Layer 尚未构建。");
+    }
+
+    internal T GetService<T>(int ownerScopeId) where T : class
+    {
+        return _serviceProvider?.Get<T>(ownerScopeId) ?? throw new InvalidOperationException("Layer 尚未构建。");
     }
     #endregion
 
@@ -528,6 +533,22 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
+    internal void SubscribeFlow<T>(EventHandleDelegate<T> handler, ScopeRuntime ownerScope) where T : struct
+    {
+        ThrowIfDisposed();
+        if (ownerScope == null) throw new ArgumentNullException(nameof(ownerScope));
+        if (RouteIndex != -1 && OwnerContext != null)
+        {
+            var center = ownerScope.EventCenter;
+            center.SubscribeFlow(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Flow));
+        }
+        else
+        {
+            _pendingOps.Enqueue(l => l.SubscribeFlow(handler, ownerScope));
+        }
+    }
+
     /// <summary>订阅 Notify 类型的事件通知。</summary>
     public void SubscribeNotify<T>(EventNotifyDelegate<T> handler) where T : struct
     {
@@ -541,6 +562,22 @@ public abstract class Layer : Node, IDisposable
         else
         {
             _pendingOps.Enqueue(l => l.SubscribeNotify(handler));
+        }
+    }
+
+    internal void SubscribeNotify<T>(EventNotifyDelegate<T> handler, ScopeRuntime ownerScope) where T : struct
+    {
+        ThrowIfDisposed();
+        if (ownerScope == null) throw new ArgumentNullException(nameof(ownerScope));
+        if (RouteIndex != -1 && OwnerContext != null)
+        {
+            var center = ownerScope.EventCenter;
+            center.SubscribeNotify(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Notify));
+        }
+        else
+        {
+            _pendingOps.Enqueue(l => l.SubscribeNotify(handler, ownerScope));
         }
     }
 
@@ -560,6 +597,22 @@ public abstract class Layer : Node, IDisposable
         }
     }
 
+    internal void Subscribe<T>(EventNotifyDelegate<T> handler, ScopeRuntime ownerScope) where T : struct
+    {
+        ThrowIfDisposed();
+        if (ownerScope == null) throw new ArgumentNullException(nameof(ownerScope));
+        if (RouteIndex != -1 && OwnerContext != null)
+        {
+            var center = ownerScope.EventCenter;
+            center.Subscribe(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Subscribe));
+        }
+        else
+        {
+            _pendingOps.Enqueue(l => l.Subscribe(handler, ownerScope));
+        }
+    }
+
     /// <summary>订阅异步事件处理器。</summary>
     public void SubscribeAsync<T>(EventHandleDelegateAsync<T> handler) where T : struct
     {
@@ -573,6 +626,22 @@ public abstract class Layer : Node, IDisposable
         else
         {
             _pendingOps.Enqueue(l => l.SubscribeAsync(handler));
+        }
+    }
+
+    internal void SubscribeAsync<T>(EventHandleDelegateAsync<T> handler, ScopeRuntime ownerScope) where T : struct
+    {
+        ThrowIfDisposed();
+        if (ownerScope == null) throw new ArgumentNullException(nameof(ownerScope));
+        if (RouteIndex != -1 && OwnerContext != null)
+        {
+            var center = ownerScope.EventCenter;
+            center.SubscribeAsync(RouteIndex, handler);
+            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Async));
+        }
+        else
+        {
+            _pendingOps.Enqueue(l => l.SubscribeAsync(handler, ownerScope));
         }
     }
 
@@ -790,6 +859,17 @@ public abstract class Layer : Node, IDisposable
     {
         _sharedFields.Add((providerServiceType, key, fieldType, isProvider));
     }
+
+    internal void ReleaseScopeRouteEntries()
+    {
+        lock (_callRouteLock)
+        {
+            _callHandlers.Clear();
+            _localCallRouteEntries.Clear();
+            _scopeCallRouteEntries.Clear();
+            _scopeEventRouteEntries.Clear();
+        }
+    }
     #endregion
 
     #region Internal - Shared Field & Snap
@@ -996,6 +1076,34 @@ public abstract class Layer : Node, IDisposable
 
         /// <summary>服务所属运行 Scope 的 ID。</summary>
         public int OwnerScopeId { get; }
+    }
+
+    private readonly struct RegisteredServiceKey : IEquatable<RegisteredServiceKey>
+    {
+        private readonly int _ownerScopeId;
+        private readonly Type _serviceType;
+
+        public RegisteredServiceKey(int ownerScopeId, Type serviceType)
+        {
+            _ownerScopeId = ownerScopeId;
+            _serviceType = serviceType ?? throw new ArgumentNullException(nameof(serviceType));
+        }
+
+        public bool Equals(RegisteredServiceKey other)
+        {
+            return _ownerScopeId == other._ownerScopeId &&
+                   _serviceType == other._serviceType;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is RegisteredServiceKey other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(_ownerScopeId, _serviceType);
+        }
     }
 
     /// <summary>

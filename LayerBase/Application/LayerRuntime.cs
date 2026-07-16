@@ -584,6 +584,9 @@ public sealed partial class LayerRuntime : IDisposable
 
             ownerScope.RemoteEvents.Register(entry);
         }
+
+        foreach (var layer in _chain.GetNodes())
+            layer.ReleaseScopeRouteEntries();
     }
 
     #endregion
