@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
@@ -99,9 +100,23 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
 
         try
         {
-            CompleteAsync(
-                _invoker(queuedCall.Request, queuedCall.CancellationToken),
-                queuedCall.Completion);
+            LBTask<TResponse> task =
+                _invoker(
+                    queuedCall.Request,
+                    queuedCall.CancellationToken);
+
+            if (task.GetAwaiter().IsCompleted)
+            {
+                CompleteSynchronously(
+                    task,
+                    queuedCall.Completion);
+            }
+            else
+            {
+                PendingScopeCallObservation.Observe(
+                    task,
+                    queuedCall.Completion);
+            }
         }
         catch (Exception ex)
         {
@@ -109,13 +124,14 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
         }
     }
 
-    private static async void CompleteAsync(
+    private static void CompleteSynchronously(
         LBTask<TResponse> task,
         ScopeCallCompletion<TResponse> completion)
     {
         try
         {
-            completion.TrySetResult(await task);
+            TResponse response = task.GetAwaiter().GetResult();
+            completion.TrySetResult(response);
         }
         catch (OperationCanceledException ex)
         {
@@ -124,6 +140,82 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
         catch (Exception ex)
         {
             completion.TrySetException(ex);
+        }
+    }
+
+    private sealed class PendingScopeCallObservation
+    {
+        private const int MaxPoolSize = 1024;
+
+        private static readonly ConcurrentQueue<PendingScopeCallObservation> Pool = new();
+
+        private static int _poolCount;
+
+        private readonly Action _continuation;
+
+        private LBTask<TResponse> _task;
+        private ScopeCallCompletion<TResponse>? _completion;
+
+        private PendingScopeCallObservation()
+        {
+            _continuation = Complete;
+        }
+
+        public static void Observe(
+            LBTask<TResponse> task,
+            ScopeCallCompletion<TResponse> completion)
+        {
+            if (!Pool.TryDequeue(out var observation))
+            {
+                observation = new PendingScopeCallObservation();
+            }
+            else
+            {
+                Interlocked.Decrement(ref _poolCount);
+            }
+
+            observation._task = task;
+            observation._completion = completion;
+
+            task.GetAwaiter().OnCompleted(
+                observation._continuation);
+        }
+
+        private void Complete()
+        {
+            ScopeCallCompletion<TResponse>? completion =
+                _completion;
+
+            try
+            {
+                TResponse response =
+                    _task.GetAwaiter().GetResult();
+
+                completion?.TrySetResult(response);
+            }
+            catch (OperationCanceledException ex)
+            {
+                completion?.TrySetCanceled(
+                    ex.CancellationToken);
+            }
+            catch (Exception ex)
+            {
+                completion?.TrySetException(ex);
+            }
+            finally
+            {
+                _task = default;
+                _completion = null;
+
+                if (Interlocked.Increment(ref _poolCount) <= MaxPoolSize)
+                {
+                    Pool.Enqueue(this);
+                }
+                else
+                {
+                    Interlocked.Decrement(ref _poolCount);
+                }
+            }
         }
     }
 }
