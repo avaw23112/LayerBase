@@ -358,9 +358,14 @@ public sealed partial class LayerRuntime : IDisposable
 
         // 2. OwnerScope continuations
         var policy = IsDebugMode ? CompletionExceptionPolicy.Throw : CompletionExceptionPolicy.ReportAndContinue;
-        _scopeHost.MainScope.PumpSynchronizationContext(
-            policy,
-            ex => ReportLayerEventError(-1, "System", "Completion", ex));
+        var mainContext = _scopeHost.MainScope.SynchronizationContext;
+
+        if (mainContext?.HasPendingWork == true)
+        {
+            _scopeHost.MainScope.PumpSynchronizationContext(
+                policy,
+                ex => ReportLayerEventError(-1, "System", "Completion", ex));
+        }
 
         // 3. Time and delay tick
         _scopeHost.MainScope.TickTimer(deltaTime);
@@ -373,8 +378,17 @@ public sealed partial class LayerRuntime : IDisposable
             Stopwatch.GetTimestamp());
 
         // 5. Local post pump
-        PostPumpStats postStats = scheduler?.Pump()
-                                  ?? new PostPumpStats(0, 0, 0, 0);
+        PostPumpStats postStats;
+
+        if (scheduler?.HasPendingWork == true)
+        {
+            postStats = scheduler.Pump();
+        }
+        else
+        {
+            postStats = new PostPumpStats(0, 0, 0, 0);
+        }
+
         runtimeBudget.Consume(postStats.ProcessedCount);
 
         // 6. Scope-local FixedUpdate accumulator

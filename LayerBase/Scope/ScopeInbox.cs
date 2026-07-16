@@ -82,6 +82,7 @@ internal sealed class ScopeBoundedInbox<T> : IScopeInbox<T>
     private readonly T[] _items;
     private readonly int _businessLimit;
     private readonly int _internalLimit;
+    private Action? _onAccepted;
     private int _head;
     private int _count;
     private long _accepted;
@@ -90,34 +91,39 @@ internal sealed class ScopeBoundedInbox<T> : IScopeInbox<T>
     private bool _businessClosed;
     private bool _allClosed;
 
-    private ScopeBoundedInbox(int capacity, int businessLimit, int internalLimit)
+    private ScopeBoundedInbox(int capacity, int businessLimit, int internalLimit, Action? onAccepted = null)
     {
         _items = new T[capacity];
         _businessLimit = businessLimit;
         _internalLimit = internalLimit;
+        _onAccepted = onAccepted;
     }
 
-    public static ScopeBoundedInbox<T> CreateCallInbox(ScopeCallInboxOptions options)
+    public static ScopeBoundedInbox<T> CreateCallInbox(ScopeCallInboxOptions options, Action? onAccepted = null)
     {
         var businessLimit = options.Capacity - options.ReservedForResponseAndControl;
         return new ScopeBoundedInbox<T>(
             options.Capacity,
             businessLimit,
-            options.Capacity);
+            options.Capacity,
+            onAccepted);
     }
 
-    public static ScopeBoundedInbox<T> CreateEventInbox(ScopeEventInboxOptions options)
+    public static ScopeBoundedInbox<T> CreateEventInbox(ScopeEventInboxOptions options, Action? onAccepted = null)
     {
         var businessLimit = options.Capacity - options.ReservedForInternal - options.ReservedForCritical;
         var internalLimit = options.Capacity - options.ReservedForCritical;
         return new ScopeBoundedInbox<T>(
             options.Capacity,
             businessLimit,
-            internalLimit);
+            internalLimit,
+            onAccepted);
     }
 
     public ScopeEnqueueResult TryEnqueue(in T item, ScopeAdmissionClass admission)
     {
+        bool accepted = false;
+
         lock (_gate)
         {
             if (_allClosed)
@@ -145,8 +151,14 @@ internal sealed class ScopeBoundedInbox<T> : IScopeInbox<T>
             _accepted++;
             if (_count > _highWatermark)
                 _highWatermark = _count;
-            return ScopeEnqueueResult.Accepted;
+
+            accepted = true;
         }
+
+        if (accepted)
+            _onAccepted?.Invoke();
+
+        return ScopeEnqueueResult.Accepted;
     }
 
     public ScopeInboxDiagnosticsSnapshot CaptureDiagnostics()
@@ -194,6 +206,7 @@ internal sealed class ScopeBoundedInbox<T> : IScopeInbox<T>
         {
             _allClosed = true;
             _businessClosed = true;
+            _onAccepted = null;
         }
     }
 

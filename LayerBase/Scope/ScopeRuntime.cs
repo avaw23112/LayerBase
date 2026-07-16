@@ -33,6 +33,7 @@ internal sealed class ScopeRuntime : IDisposable
     private bool _lifecycleDisposeRun;
     private bool _disposeRequestedFromControl;
     private int _ownerThreadId;
+    private int _hasIngress;
     private long _tickCount;
     private long _faultCount;
     private ScopeCallCompletion<ScopeDisposeResponse>? _pendingDisposeCompletion;
@@ -54,7 +55,8 @@ internal sealed class ScopeRuntime : IDisposable
         _runtimeId = runtimeId;
         _generation = generation;
         Transport = new ScopeTransport(
-            new ScopeAddress(runtimeId, generation, Descriptor.ScopeId));
+            new ScopeAddress(runtimeId, generation, Descriptor.ScopeId),
+            SignalIngress);
         EventCenter = new EventCenter();
         LocalCalls = new ScopeLocalCallRegistry(Descriptor.ScopeId);
         CallRoutes = new ScopeCallRouteTable(Descriptor.ScopeId);
@@ -353,12 +355,20 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void PumpIngress()
     {
+        if (Interlocked.Exchange(ref _hasIngress, 0) == 0)
+            return;
+
         DrainCallInbox();
         DisposeAfterControlIfNeeded();
+
         if (_state == ScopeRuntimeState.Disposed)
             return;
+
         if (ShouldYieldBusinessForSafePoint())
+        {
+            Volatile.Write(ref _hasIngress, 1);
             return;
+        }
 
         DrainEventInbox();
         DisposeAfterControlIfNeeded();
@@ -1046,6 +1056,14 @@ internal sealed class ScopeRuntime : IDisposable
         targetTransport.EventPayloadStorage.Release(payload);
         return ScopeTransport.ToPostResult(result);
     }
+
+    private void SignalIngress()
+    {
+        Volatile.Write(ref _hasIngress, 1);
+    }
+
+    internal bool HasIngress =>
+        Volatile.Read(ref _hasIngress) != 0;
 
     internal bool IsOwnerThread
     {

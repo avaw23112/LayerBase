@@ -12,12 +12,14 @@ internal sealed class ScopeTransport : IDisposable
     private bool _businessAdmissionClosed;
     private bool _disposed;
 
-    public ScopeTransport(ScopeAddress address)
+    public ScopeTransport(ScopeAddress address, Action? onIngressAccepted = null)
     {
         EventInbox = ScopeBoundedInbox<ScopeEventEnvelope>.CreateEventInbox(
-            new ScopeEventInboxOptions(capacity: 1024, reservedForInternal: 128, reservedForCritical: 16));
+            new ScopeEventInboxOptions(capacity: 1024, reservedForInternal: 128, reservedForCritical: 16),
+            onIngressAccepted);
         CallInbox = ScopeBoundedInbox<ScopeCallEnvelope>.CreateCallInbox(
-            new ScopeCallInboxOptions(capacity: 1024, reservedForResponseAndControl: 128));
+            new ScopeCallInboxOptions(capacity: 1024, reservedForResponseAndControl: 128),
+            onIngressAccepted);
         Endpoint = new ScopeEndpoint(address, this);
     }
 
