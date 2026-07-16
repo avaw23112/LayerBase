@@ -86,17 +86,32 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
 
     public void SetResult()
     {
-        Complete(null, default);
+        TrySetResult(Version);
     }
 
     public void SetException(Exception ex)
     {
-        Complete(ex, default);
+        TrySetException(Version, ex);
     }
 
     public void SetCanceled(CancellationToken token)
     {
-        Complete(new OperationCanceledException(token), token);
+        TrySetCanceled(Version, token);
+    }
+
+    internal bool TrySetResult(int version)
+    {
+        return TryComplete(version, null, default);
+    }
+
+    internal bool TrySetException(int version, Exception ex)
+    {
+        return TryComplete(version, ex, default);
+    }
+
+    internal bool TrySetCanceled(int version, CancellationToken token)
+    {
+        return TryComplete(version, new OperationCanceledException(token), token);
     }
 
     public void GetResult(int token)
@@ -159,21 +174,23 @@ internal sealed class LBTaskSource : ILBTaskSource, IContextDisposeCancellable
         return Rent(SynchronizationContext.Current);
     }
 
-    private void Complete(Exception? ex, CancellationToken canceledToken)
+    private bool TryComplete(int version, Exception? ex, CancellationToken canceledToken)
     {
-        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
+        if (version != Version || Volatile.Read(ref _released) != 0) return false;
+        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return false;
         _exception = ex;
         _canceledToken = canceledToken;
         Volatile.Write(ref _status, 1);
 
         var cont = Interlocked.Exchange(ref _continuation, null);
         if (cont != null) Schedule(cont);
+        return true;
     }
 
     public void CancelFromContext(Exception reason)
     {
         _registeredContext = null;
-        Complete(reason, default);
+        TrySetException(Version, reason);
     }
 
     private void Schedule(Action continuation)
@@ -248,21 +265,36 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
 
     public void SetResult(T value)
     {
-        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
-        _result = value;
-        CompleteCore(null, default);
+        TrySetResult(Version, value);
     }
 
     public void SetException(Exception ex)
     {
-        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
-        CompleteCore(ex, default);
+        TrySetException(Version, ex);
     }
 
     public void SetCanceled(CancellationToken token)
     {
-        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
-        CompleteCore(new OperationCanceledException(token), token);
+        TrySetCanceled(Version, token);
+    }
+
+    internal bool TrySetResult(int version, T value)
+    {
+        if (version != Version || Volatile.Read(ref _released) != 0) return false;
+        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return false;
+        _result = value;
+        CompleteCore(null, default);
+        return true;
+    }
+
+    internal bool TrySetException(int version, Exception ex)
+    {
+        return TryComplete(version, ex, default);
+    }
+
+    internal bool TrySetCanceled(int version, CancellationToken token)
+    {
+        return TryComplete(version, new OperationCanceledException(token), token);
     }
 
     public T GetResult(int token)
@@ -329,10 +361,12 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
         return Rent(SynchronizationContext.Current);
     }
 
-    private void Complete(Exception? ex, CancellationToken canceledToken)
+    private bool TryComplete(int version, Exception? ex, CancellationToken canceledToken)
     {
-        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return;
+        if (version != Version || Volatile.Read(ref _released) != 0) return false;
+        if (Interlocked.CompareExchange(ref _status, -1, 0) != 0) return false;
         CompleteCore(ex, canceledToken);
+        return true;
     }
 
     private void CompleteCore(Exception? ex, CancellationToken canceledToken)
@@ -348,7 +382,7 @@ internal sealed class LBTaskSource<T> : ILBTaskSource<T>, IContextDisposeCancell
     public void CancelFromContext(Exception reason)
     {
         _registeredContext = null;
-        Complete(reason, default);
+        TrySetException(Version, reason);
     }
 
     private void Schedule(Action continuation)

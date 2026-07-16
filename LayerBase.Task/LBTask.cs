@@ -16,6 +16,12 @@ public readonly struct LBTask
         Version = source?.Version ?? 0;
     }
 
+    internal LBTask(ILBTaskSource? source, int version)
+    {
+        Source = source;
+        Version = source == null ? 0 : version;
+    }
+
     public Awaiter GetAwaiter()
     {
         return new Awaiter(Source, Version);
@@ -243,13 +249,18 @@ public readonly struct LBTask
         private static readonly ObjectPool<DelayWorkItem> Pool = new(() => new DelayWorkItem());
 
         public static readonly WaitCallback OnTimer = static state =>
-            ((DelayWorkItem)state!).TryComplete(false);
+        {
+            var lease = (DelayWorkItemLease)state!;
+            lease.Work.TryComplete(false, lease.LeaseVersion);
+        };
 
         private int _completed;
         private long _dueTimestamp;
+        private int _leaseVersion;
         private int _registrationInitializing;
         private int _returnPending;
         private LBTaskSource? _source;
+        private int _sourceVersion;
         private CancellationToken _token;
 
         public CancellationTokenRegistration CancellationRegistration;
@@ -263,7 +274,14 @@ public readonly struct LBTask
         public static DelayWorkItem Rent(LBTaskSource source, CancellationToken token)
         {
             var work = Pool.Rent();
+            unchecked
+            {
+                work._leaseVersion++;
+                if (work._leaseVersion == 0) work._leaseVersion = 1;
+            }
+
             work._source = source;
+            work._sourceVersion = source.Version;
             work._token = token;
             work._dueTimestamp = 0;
             work._completed = 0;
@@ -278,7 +296,11 @@ public readonly struct LBTask
             if (!_token.CanBeCanceled) return;
 
             Volatile.Write(ref _registrationInitializing, 1);
-            var registration = _token.Register(static state => ((DelayWorkItem)state!).TryCancel(), this);
+            var registration = _token.Register(static state =>
+            {
+                var lease = (DelayWorkItemLease)state!;
+                lease.Work.TryCancel(lease.LeaseVersion);
+            }, new DelayWorkItemLease(this, Volatile.Read(ref _leaseVersion)));
             CancellationRegistration = registration;
             Volatile.Write(ref _registrationInitializing, 0);
 
@@ -291,23 +313,25 @@ public readonly struct LBTask
             if (Interlocked.Exchange(ref _returnPending, 0) == 1) ReturnToPool();
         }
 
-        private void TryCancel()
+        private void TryCancel(int leaseVersion)
         {
+            if (leaseVersion != Volatile.Read(ref _leaseVersion)) return;
             DelayScheduler.Cancel(this);
-            TryComplete(true);
+            TryComplete(true, leaseVersion);
         }
 
-        private void TryComplete(bool canceled)
+        private void TryComplete(bool canceled, int leaseVersion)
         {
+            if (leaseVersion != Volatile.Read(ref _leaseVersion)) return;
             if (Interlocked.Exchange(ref _completed, 1) != 0) return;
 
             try
             {
                 CancellationRegistration.Dispose();
                 if (canceled)
-                    _source!.SetCanceled(_token);
+                    _source!.TrySetCanceled(_sourceVersion, _token);
                 else
-                    _source!.SetResult();
+                    _source!.TrySetResult(_sourceVersion);
             }
             finally
             {
@@ -321,6 +345,7 @@ public readonly struct LBTask
         private void ReturnToPool()
         {
             _source = null;
+            _sourceVersion = 0;
             _token = default;
             _dueTimestamp = 0;
             _registrationInitializing = 0;
@@ -328,6 +353,23 @@ public readonly struct LBTask
             CancellationRegistration = default;
             Pool.Return(this);
         }
+
+        public DelayWorkItemLease CaptureLease()
+        {
+            return new DelayWorkItemLease(this, Volatile.Read(ref _leaseVersion));
+        }
+    }
+
+    private sealed class DelayWorkItemLease
+    {
+        public DelayWorkItemLease(DelayWorkItem work, int leaseVersion)
+        {
+            Work = work;
+            LeaseVersion = leaseVersion;
+        }
+
+        public DelayWorkItem Work { get; }
+        public int LeaseVersion { get; }
     }
 
     private static class DelayScheduler
@@ -392,7 +434,7 @@ public readonly struct LBTask
                     dueWork = HeapPop();
                 }
 
-                if (dueWork != null) ThreadPool.QueueUserWorkItem(DelayWorkItem.OnTimer, dueWork);
+                if (dueWork != null) ThreadPool.QueueUserWorkItem(DelayWorkItem.OnTimer, dueWork.CaptureLease());
             }
         }
 
@@ -603,6 +645,14 @@ public readonly struct LBTask<T>
         Result = default;
         HasResult = false;
         Version = source?.Version ?? 0;
+    }
+
+    internal LBTask(ILBTaskSource<T>? source, int version)
+    {
+        Source = source;
+        Result = default;
+        HasResult = false;
+        Version = source == null ? 0 : version;
     }
 
     internal LBTask(T result)

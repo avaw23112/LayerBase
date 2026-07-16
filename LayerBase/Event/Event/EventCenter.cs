@@ -557,7 +557,8 @@ public sealed class EventCenter
                 _singleSubscribeHandler = null;
             }
 
-            _isSmallNotifyFanoutOnly = _notifyCountTotal + _notifySafeCountTotal is >= 2 and <= 8 &&
+            _isSmallNotifyFanoutOnly = _notifyCountTotal is >= 2 and <= 8 &&
+                                       _notifySafeCountTotal == 0 &&
                                        _asyncCountTotal == 0 && _syncCountTotal == 0;
         }
 
@@ -846,7 +847,21 @@ public sealed class EventCenter
             var hs = _asyncHandlers;
             var ft = _faultTable;
             for (var i = start; i < end; i++)
-                AsyncFaultContext<T>.Observe(this, ft, FaultKind.Async, i, in value, hs[i](value));
+            {
+                var faultSlot = ft.AsyncFaults[i];
+                LBTask task;
+                try
+                {
+                    task = hs[i](value);
+                }
+                catch (Exception e)
+                {
+                    HandleFault(faultSlot, ft.EventNameId, in value, e);
+                    continue;
+                }
+
+                AsyncFaultContext<T>.Observe(this, faultSlot, ft.EventNameId, in value, task);
+            }
         }
 
         internal void HandleFault(FaultKind kind, int index, in T value, Exception e)
@@ -856,23 +871,31 @@ public sealed class EventCenter
 
         internal void HandleFault(FaultTable<T> faultTable, FaultKind kind, int index, in T value, Exception e)
         {
+            var slot = GetFaultSlot(faultTable, kind, index);
+            HandleFault(slot, faultTable.EventNameId, in value, e);
+        }
+
+        internal void HandleFault(FaultSlot slot, int eventNameId, in T value, Exception e)
+        {
             EventMetaDataHandler.OnEventExpectation(value, e);
-
-            var slot = kind switch
-                       {
-                           FaultKind.Sync      => faultTable.SyncFaults[index],
-                           FaultKind.Async     => faultTable.AsyncFaults[index],
-                           FaultKind.Subscribe => faultTable.SubscribeFaults[index],
-                           _                   => default
-                       };
-
             if (slot.Circuit == null || !slot.Circuit.TryDisable()) return;
 
             var handlerName = EventDiagnosticSymbols.Resolve(slot.HandlerNameId);
-            var eventName = EventDiagnosticSymbols.Resolve(faultTable.EventNameId);
+            var eventName = EventDiagnosticSymbols.Resolve(eventNameId);
 
             LayerHub.ReportLayerEventError(slot.LayerIndex, handlerName, eventName, e);
             MarkDirty();
+        }
+
+        private static FaultSlot GetFaultSlot(FaultTable<T> faultTable, FaultKind kind, int index)
+        {
+            return kind switch
+                   {
+                       FaultKind.Sync      => faultTable.SyncFaults[index],
+                       FaultKind.Async     => faultTable.AsyncFaults[index],
+                       FaultKind.Subscribe => faultTable.SubscribeFaults[index],
+                       _                   => default
+                   };
         }
 
         private HandlerBucket<T> GetOrCreate(int layerIndex)
@@ -900,9 +923,9 @@ public sealed class EventCenter
         private static int s_poolCount;
         private readonly Action _continuation;
         private EventBucket<T>? _owner;
-        private FaultTable<T>? _capturedFaultTable;
-        private FaultKind _kind;
-        private int _faultIndex;
+        private FaultSlot _faultSlot;
+        private int _eventNameId;
+        private int _active;
         private T _payload;
         private LBTask _task;
 
@@ -911,39 +934,40 @@ public sealed class EventCenter
             _continuation = Complete;
         }
 
-        public static void Observe(EventBucket<T> owner,   FaultTable<T> faultTable, FaultKind kind, int faultIndex,
-                                   in T           payload, LBTask        task)
+        public static void Observe(EventBucket<T> owner, FaultSlot faultSlot, int eventNameId, in T payload,
+                                   LBTask         task)
         {
             if (!s_pool.TryDequeue(out var context)) context = new AsyncFaultContext<T>();
             else Interlocked.Decrement(ref s_poolCount);
             context._owner = owner;
-            context._capturedFaultTable = faultTable;
-            context._kind = kind;
-            context._faultIndex = faultIndex;
+            context._faultSlot = faultSlot;
+            context._eventNameId = eventNameId;
             context._payload = payload;
             context._task = task;
+            Volatile.Write(ref context._active, 1);
             task.GetAwaiter().OnCompleted(context._continuation);
         }
 
         private void Complete()
         {
+            if (Interlocked.Exchange(ref _active, 0) == 0) return;
+
             try
             {
                 _task.GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
-                if (_owner != null && _capturedFaultTable != null)
+                if (_owner != null)
                 {
-                    _owner.HandleFault(_capturedFaultTable, _kind, _faultIndex, in _payload, ex);
+                    _owner.HandleFault(_faultSlot, _eventNameId, in _payload, ex);
                 }
             }
             finally
             {
                 _owner = null;
-                _capturedFaultTable = null;
-                _kind = default;
-                _faultIndex = -1;
+                _faultSlot = default;
+                _eventNameId = 0;
                 _payload = default;
                 _task = default;
                 if (Interlocked.Increment(ref s_poolCount) <= MAX_POOL_SIZE) s_pool.Enqueue(this);

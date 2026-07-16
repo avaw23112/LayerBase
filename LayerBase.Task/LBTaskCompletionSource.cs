@@ -4,14 +4,16 @@
 public sealed class LBTaskCompletionSource : IDisposable
 {
     private readonly LBTaskSource _source;
+    private readonly int _version;
     private int _disposed;
 
     public LBTaskCompletionSource()
     {
         _source = LBTaskSource.Rent();
+        _version = _source.Version;
     }
 
-    public LBTask Task => new(_source);
+    public LBTask Task => new(_source, _version);
 
     public void Dispose()
     {
@@ -20,63 +22,41 @@ public sealed class LBTaskCompletionSource : IDisposable
 
     public void SetResult()
     {
-        _source.SetResult();
+        if (!TrySetResult())
+            throw new InvalidOperationException("LBTask source is already completed or belongs to another lease.");
     }
 
     public void SetException(Exception ex)
     {
-        _source.SetException(ex);
+        if (!TrySetException(ex))
+            throw new InvalidOperationException("LBTask source is already completed or belongs to another lease.");
     }
 
     public void SetCanceled(CancellationToken token = default)
     {
-        _source.SetCanceled(token);
+        if (!TrySetCanceled(token))
+            throw new InvalidOperationException("LBTask source is already completed or belongs to another lease.");
     }
 
     public bool TrySetResult()
     {
-        try
-        {
-            _source.SetResult();
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        return _source.TrySetResult(_version);
     }
 
     public bool TrySetException(Exception ex)
     {
-        try
-        {
-            _source.SetException(ex);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        return _source.TrySetException(_version, ex);
     }
 
     public bool TrySetCanceled(CancellationToken token = default)
     {
-        try
-        {
-            _source.SetCanceled(token);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        return _source.TrySetCanceled(_version, token);
     }
 
     private void DisposeInternal()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            if (!_source.IsCompleted(_source.Version))
-                _source.SetCanceled(default);
+            TrySetCanceled(default);
     }
 }
 
@@ -84,14 +64,16 @@ public sealed class LBTaskCompletionSource : IDisposable
 public sealed class LBTaskCompletionSource<T> : IDisposable
 {
     private readonly LBTaskSource<T> _source;
+    private readonly int _version;
     private int _disposed;
 
     public LBTaskCompletionSource()
     {
         _source = LBTaskSource<T>.Rent();
+        _version = _source.Version;
     }
 
-    public LBTask<T> Task => new(_source);
+    public LBTask<T> Task => new(_source, _version);
 
     public void Dispose()
     {
@@ -100,62 +82,40 @@ public sealed class LBTaskCompletionSource<T> : IDisposable
 
     public void SetResult(T value)
     {
-        _source.SetResult(value);
+        if (!TrySetResult(value))
+            throw new InvalidOperationException("LBTask source is already completed or belongs to another lease.");
     }
 
     public void SetException(Exception ex)
     {
-        _source.SetException(ex);
+        if (!TrySetException(ex))
+            throw new InvalidOperationException("LBTask source is already completed or belongs to another lease.");
     }
 
     public void SetCanceled(CancellationToken token = default)
     {
-        _source.SetCanceled(token);
+        if (!TrySetCanceled(token))
+            throw new InvalidOperationException("LBTask source is already completed or belongs to another lease.");
     }
 
     public bool TrySetResult(T value)
     {
-        try
-        {
-            _source.SetResult(value);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        return _source.TrySetResult(_version, value);
     }
 
     public bool TrySetException(Exception ex)
     {
-        try
-        {
-            _source.SetException(ex);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        return _source.TrySetException(_version, ex);
     }
 
     public bool TrySetCanceled(CancellationToken token = default)
     {
-        try
-        {
-            _source.SetCanceled(token);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        return _source.TrySetCanceled(_version, token);
     }
 
     private void DisposeInternal()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            if (!_source.IsCompleted(_source.Version))
-                _source.SetCanceled(default);
+            TrySetCanceled(default);
     }
 }
