@@ -53,15 +53,26 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                                               static (ctx, _) => CreateOwnerServiceContexts(ctx))
                                           .SelectMany(static (items, _) => items);
 
-        var layerToolContributions = context.SyntaxProvider
-                                            .ForAttributeWithMetadataName(
-                                                LayerToolAttributeName,
-                                                static (node, _) => node is ClassDeclarationSyntax,
-                                                static (ctx, _) => CreateLayerToolContributions(ctx))
-                                            .SelectMany(static (items, _) => items);
+        var layerToolAttributes = context.SyntaxProvider
+                                         .ForAttributeWithMetadataName(
+                                             LayerToolAttributeName,
+                                             static (node, _) => node is ClassDeclarationSyntax,
+                                             static (ctx, _) => CreateLayerToolAttributeInfo(ctx))
+                                         .Where(static item => item is not null)
+                                         .Select(static (item, _) => item!);
+
+        var layerToolCandidates = context.SyntaxProvider
+                                         .CreateSyntaxProvider(
+                                             static (node, _) => node is ClassDeclarationSyntax { AttributeLists.Count: > 0 },
+                                             static (ctx, _) => ctx.SemanticModel.GetDeclaredSymbol((ClassDeclarationSyntax)ctx.Node))
+                                         .Where(static symbol => symbol is INamedTypeSymbol)
+                                         .Select(static (symbol, _) => (INamedTypeSymbol)symbol!);
+
+        var layerToolData = layerToolAttributes.Collect()
+                                              .Combine(layerToolCandidates.Collect());
 
         var ownerServiceAndTools = ownerServiceContexts.Collect()
-                                                       .Combine(layerToolContributions.Collect());
+                                                       .Combine(layerToolData);
         var ownerLayerAndService = ownerLayerContributions.Collect()
                                                          .Combine(ownerServiceAndTools);
         var moduleData = modules.Collect().Combine(ownerLayerAndService);
@@ -79,7 +90,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                 modulesAndContributions.Left,
                 ownerLayerAndServiceData.Left,
                 ownerServiceAndToolsData.Left,
-                ownerServiceAndToolsData.Right);
+                ownerServiceAndToolsData.Right.Left,
+                ownerServiceAndToolsData.Right.Right);
         });
     }
 
@@ -89,7 +101,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         ImmutableArray<ModuleInfo> modules,
         ImmutableArray<OwnerLayerContributionInfo> ownerLayerContributions,
         ImmutableArray<OwnerServiceContextInfo> ownerServiceContexts,
-        ImmutableArray<LayerToolDeclarationInfo> layerToolContributions)
+        ImmutableArray<LayerToolAttributeInfo> layerToolAttributes,
+        ImmutableArray<INamedTypeSymbol> layerToolCandidates)
     {
         var moduleList = modules.OrderBy(static module => module.ModuleId, StringComparer.Ordinal)
                                 .ThenBy(static module => module.TypeName, StringComparer.Ordinal)
@@ -99,6 +112,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         var eventHandlerSymbol = compilation.GetTypeByMetadataName(EventHandlerMetadataName);
         var asyncEventHandlerSymbol = compilation.GetTypeByMetadataName(AsyncEventHandlerMetadataName);
         var callHandlerSymbol = compilation.GetTypeByMetadataName(CallHandlerMetadataName);
+        var layerToolContributions = CreateLayerToolContributions(layerToolAttributes, layerToolCandidates);
 
         var fallbackServices = new List<ServiceContributionInfo>();
         var fallbackContexts = new List<ContextContributionInfo>();
@@ -279,6 +293,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
 
             fallbackTools.Add(new LayerToolContributionInfo(
                 ToTypeName(tool.OwnerLayerType),
+                ToTypeName(tool.OwnerScopeType),
                 ToTypeName(tool.ContractType),
                 ToTypeName(tool.ImplementationType),
                 tool.LocalKey,
@@ -378,40 +393,91 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         return builder.ToImmutable();
     }
 
-    private static ImmutableArray<LayerToolDeclarationInfo> CreateLayerToolContributions(
-        GeneratorAttributeSyntaxContext context)
+    private static LayerToolAttributeInfo? CreateLayerToolAttributeInfo(GeneratorAttributeSyntaxContext context)
     {
-        var implementationSymbol = (INamedTypeSymbol)context.TargetSymbol;
-        if (HasAttribute(implementationSymbol, ModuleIgnoreAttributeName))
+        if (context.TargetSymbol is not INamedTypeSymbol attributeType)
+        {
+            return null;
+        }
+
+        var layerToolAttribute = context.Attributes.FirstOrDefault(static attribute =>
+            IsAttribute(attribute, LayerToolAttributeName));
+        if (layerToolAttribute == null)
+        {
+            return null;
+        }
+
+        var contractType = ReadTypeNamedArgument(layerToolAttribute, "Contract");
+        var keyProperty = ReadStringNamedArgument(layerToolAttribute, "DefaultKeyProperty");
+        if (string.IsNullOrWhiteSpace(keyProperty))
+        {
+            keyProperty = "Key";
+        }
+
+        var allowCache = ReadBoolNamedArgument(layerToolAttribute, "AllowCache") ?? true;
+        var location = layerToolAttribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
+        return new LayerToolAttributeInfo(attributeType, contractType, keyProperty!, allowCache, location);
+    }
+
+    private static ImmutableArray<LayerToolDeclarationInfo> CreateLayerToolContributions(
+        ImmutableArray<LayerToolAttributeInfo> toolAttributes,
+        ImmutableArray<INamedTypeSymbol> candidateTypes)
+    {
+        if (toolAttributes.IsDefaultOrEmpty || candidateTypes.IsDefaultOrEmpty)
         {
             return ImmutableArray<LayerToolDeclarationInfo>.Empty;
         }
 
         var builder = ImmutableArray.CreateBuilder<LayerToolDeclarationInfo>();
-
-        foreach (var attribute in context.Attributes)
+        foreach (var implementationType in candidateTypes)
         {
-            if (!IsAttribute(attribute, LayerToolAttributeName)) continue;
-            if (attribute.ConstructorArguments.Length < 2) continue;
-            if (attribute.ConstructorArguments[0].Value is not INamedTypeSymbol ownerLayerType) continue;
-            if (attribute.ConstructorArguments[1].Value is not INamedTypeSymbol contractType) continue;
-
-            var localKey = ReadStringArgument(attribute, 2);
-            if (string.IsNullOrWhiteSpace(localKey))
+            if (HasAttribute(implementationType, ModuleIgnoreAttributeName))
             {
-                localKey = "default";
+                continue;
             }
 
-            var cache = ReadBoolNamedArgument(attribute, nameof(LayerToolDeclarationInfo.Cache)) ?? true;
-            var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
+            foreach (var attribute in implementationType.GetAttributes())
+            {
+                var toolInfo = FindLayerToolAttribute(toolAttributes, attribute.AttributeClass);
+                if (toolInfo == null)
+                {
+                    continue;
+                }
 
-            builder.Add(new LayerToolDeclarationInfo(
-                implementationSymbol,
-                contractType,
-                ownerLayerType,
-                localKey!,
-                cache,
-                location));
+                var ownerLayerType = ReadTypeValue(attribute, "Layer")
+                                     ?? ReadTypeValue(attribute, "OwnerLayer")
+                                     ?? ReadTypeValue(attribute, "OwnerLayerType")
+                                     ?? ReadTypeConstructorArgument(attribute, 0);
+                var ownerScopeType = ReadTypeValue(attribute, "OwnerScope")
+                                     ?? ReadTypeValue(attribute, "Scope")
+                                     ?? ReadTypeValue(attribute, "OwnerScopeType")
+                                     ?? ReadTypeConstructorArgument(attribute, 1);
+                if (ownerLayerType == null || ownerScopeType == null)
+                {
+                    continue;
+                }
+
+                var contractType = toolInfo.ContractType ?? implementationType;
+                var localKey = ReadStringValue(attribute, toolInfo.KeyProperty)
+                               ?? ReadStringValue(attribute, "LocalKey")
+                               ?? "default";
+                if (string.IsNullOrWhiteSpace(localKey))
+                {
+                    localKey = "default";
+                }
+
+                var cache = toolInfo.AllowCache && (ReadBoolNamedArgument(attribute, "Cache") ?? true);
+                var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
+
+                builder.Add(new LayerToolDeclarationInfo(
+                    implementationType,
+                    contractType,
+                    ownerLayerType,
+                    ownerScopeType,
+                    localKey!,
+                    cache,
+                    location));
+            }
         }
 
         return builder.ToImmutable();
@@ -449,6 +515,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                                                  .ThenBy(static handler => handler.OwnerServiceType, StringComparer.Ordinal)
                                                  .ToImmutableArray();
         var tools = fallbackTools.OrderBy(static tool => tool.OwnerLayerType, StringComparer.Ordinal)
+                                 .ThenBy(static tool => tool.OwnerScopeType, StringComparer.Ordinal)
                                  .ThenBy(static tool => tool.ContractType, StringComparer.Ordinal)
                                  .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal)
                                  .ThenBy(static tool => tool.ImplementationType, StringComparer.Ordinal)
@@ -627,6 +694,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             source.Append(indent).Append("                    typeof(").Append(tool.ImplementationType).AppendLine("),");
             source.Append(indent).Append("                    \"").Append(Escape(tool.LocalKey)).AppendLine("\",");
             source.Append(indent).Append("                    typeof(").Append(tool.OwnerLayerType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(tool.OwnerScopeType).AppendLine("),");
             source.Append(indent).Append("                    ").Append(tool.Cache ? "true" : "false").AppendLine("),");
         }
 
@@ -644,14 +712,23 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             }
 
             var original = attributeClass.OriginalDefinition;
-            if (original.MetadataName != ScopeAttributeMetadataName ||
-                original.ContainingNamespace.ToDisplayString() != ScopeAttributeNamespace ||
-                attributeClass.TypeArguments.Length != 1)
+            if (original.ContainingNamespace.ToDisplayString() != ScopeAttributeNamespace)
             {
                 continue;
             }
 
-            return attributeClass.TypeArguments[0] as INamedTypeSymbol;
+            if (original.MetadataName == ScopeAttributeMetadataName &&
+                attributeClass.TypeArguments.Length == 1)
+            {
+                return attributeClass.TypeArguments[0] as INamedTypeSymbol;
+            }
+
+            if (original.MetadataName == "ScopeAttribute" &&
+                attribute.ConstructorArguments.Length == 1 &&
+                attribute.ConstructorArguments[0].Value is INamedTypeSymbol scopeType)
+            {
+                return scopeType;
+            }
         }
 
         return null;
@@ -775,6 +852,82 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             if (argument.Key == name && argument.Value.Value is bool value)
             {
                 return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ReadStringNamedArgument(AttributeData attribute, string name)
+    {
+        foreach (var argument in attribute.NamedArguments)
+        {
+            if (argument.Key == name && argument.Value.Value is string value)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ReadStringValue(AttributeData attribute, string propertyName)
+    {
+        var named = ReadStringNamedArgument(attribute, propertyName);
+        if (named != null)
+        {
+            return named;
+        }
+
+        if (propertyName == "Key" &&
+            attribute.ConstructorArguments.Length > 0 &&
+            attribute.ConstructorArguments[0].Value is string key)
+        {
+            return key;
+        }
+
+        return null;
+    }
+
+    private static INamedTypeSymbol? ReadTypeNamedArgument(AttributeData attribute, string name)
+    {
+        foreach (var argument in attribute.NamedArguments)
+        {
+            if (argument.Key == name && argument.Value.Value is INamedTypeSymbol value)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static INamedTypeSymbol? ReadTypeValue(AttributeData attribute, string propertyName)
+    {
+        return ReadTypeNamedArgument(attribute, propertyName);
+    }
+
+    private static INamedTypeSymbol? ReadTypeConstructorArgument(AttributeData attribute, int index)
+    {
+        return attribute.ConstructorArguments.Length > index
+            ? attribute.ConstructorArguments[index].Value as INamedTypeSymbol
+            : null;
+    }
+
+    private static LayerToolAttributeInfo? FindLayerToolAttribute(
+        ImmutableArray<LayerToolAttributeInfo> toolAttributes,
+        INamedTypeSymbol? attributeType)
+    {
+        if (attributeType == null)
+        {
+            return null;
+        }
+
+        foreach (var toolAttribute in toolAttributes)
+        {
+            if (SymbolEqualityComparer.Default.Equals(toolAttribute.AttributeType, attributeType))
+            {
+                return toolAttribute;
             }
         }
 
@@ -1020,6 +1173,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             INamedTypeSymbol implementationType,
             INamedTypeSymbol contractType,
             INamedTypeSymbol ownerLayerType,
+            INamedTypeSymbol ownerScopeType,
             string localKey,
             bool cache,
             Location? location)
@@ -1027,6 +1181,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             ImplementationType = implementationType;
             ContractType = contractType;
             OwnerLayerType = ownerLayerType;
+            OwnerScopeType = ownerScopeType;
             LocalKey = localKey;
             Cache = cache;
             Location = location;
@@ -1037,6 +1192,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         public INamedTypeSymbol ContractType { get; }
 
         public INamedTypeSymbol OwnerLayerType { get; }
+
+        public INamedTypeSymbol OwnerScopeType { get; }
 
         public string LocalKey { get; }
 
@@ -1049,12 +1206,14 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     {
         public LayerToolContributionInfo(
             string ownerLayerType,
+            string ownerScopeType,
             string contractType,
             string implementationType,
             string localKey,
             bool cache)
         {
             OwnerLayerType = ownerLayerType;
+            OwnerScopeType = ownerScopeType;
             ContractType = contractType;
             ImplementationType = implementationType;
             LocalKey = localKey;
@@ -1063,6 +1222,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
 
         public string OwnerLayerType { get; }
 
+        public string OwnerScopeType { get; }
+
         public string ContractType { get; }
 
         public string ImplementationType { get; }
@@ -1070,6 +1231,33 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         public string LocalKey { get; }
 
         public bool Cache { get; }
+    }
+
+    private sealed class LayerToolAttributeInfo
+    {
+        public LayerToolAttributeInfo(
+            INamedTypeSymbol attributeType,
+            INamedTypeSymbol? contractType,
+            string keyProperty,
+            bool allowCache,
+            Location? location)
+        {
+            AttributeType = attributeType;
+            ContractType = contractType;
+            KeyProperty = keyProperty;
+            AllowCache = allowCache;
+            Location = location;
+        }
+
+        public INamedTypeSymbol AttributeType { get; }
+
+        public INamedTypeSymbol? ContractType { get; }
+
+        public string KeyProperty { get; }
+
+        public bool AllowCache { get; }
+
+        public Location? Location { get; }
     }
 
     private sealed class EventHandlerContributionInfo

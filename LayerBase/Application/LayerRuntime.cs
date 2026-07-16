@@ -313,11 +313,9 @@ public sealed partial class LayerRuntime : IDisposable
 
         foreach (var attribute in nodeType.GetCustomAttributes(false))
         {
-            Type attributeType = attribute.GetType();
-            if (attributeType.IsGenericType &&
-                attributeType.GetGenericTypeDefinition() == typeof(ScopeAttribute<>))
+            if (attribute is ScopeAttribute scopeAttribute)
             {
-                int attributeScopeId = ScopeDefinitionIds.Resolve(attributeType.GetGenericArguments()[0]);
+                int attributeScopeId = ScopeDefinitionIds.Resolve(scopeAttribute.ScopeType);
                 if (_scopeHost.TryGetRuntime(attributeScopeId, out _))
                     return attributeScopeId;
             }

@@ -172,12 +172,8 @@ public sealed class ReflectionAssemblyModule : IAssemblyModule
     {
         foreach (var attribute in type.GetCustomAttributes(false))
         {
-            var attributeType = attribute.GetType();
-            if (attributeType.IsGenericType &&
-                attributeType.GetGenericTypeDefinition() == typeof(ScopeAttribute<>))
-            {
-                return attributeType.GetGenericArguments()[0];
-            }
+            if (attribute is ScopeAttribute scopeAttribute)
+                return scopeAttribute.ScopeType;
         }
 
         return typeof(MainScope);

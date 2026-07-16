@@ -336,14 +336,14 @@ public sealed class LayerToolRegistryTests
     }
 
     [Test]
-    public void Tool_contribution_has_no_owner_scope()
+    public void Tool_contribution_keeps_owner_scope()
     {
         var properties = typeof(LayerToolContribution)
             .GetProperties()
             .Select(static property => property.Name)
             .ToArray();
 
-        Assert.That(properties, Does.Not.Contain("OwnerScopeType"));
+        Assert.That(properties, Does.Contain(nameof(LayerToolContribution.OwnerScopeType)));
     }
 
     private static LayerRuntime BuildRuntime(string moduleId)

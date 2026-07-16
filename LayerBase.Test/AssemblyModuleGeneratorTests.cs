@@ -60,6 +60,7 @@ public class AssemblyModuleGeneratorTests
                                                        """);
 
         const string source = """
+                              using System;
                               using AotGame;
                               using LayerBase.DI;
                               using LayerBase.Layers;
@@ -120,6 +121,7 @@ public class AssemblyModuleGeneratorTests
                                                        """);
 
         const string source = """
+                              using System;
                               using AotGame;
                               using LayerBase.DI;
                               using LayerBase.Layers;
@@ -548,9 +550,11 @@ public class AssemblyModuleGeneratorTests
                                                        """);
 
         const string source = """
+                              using System;
                               using AotGame;
                               using LayerBase.Layers;
                               using LayerBase.Modules;
+                              using LayerBase.Scope;
                               using LayerBase.Tools;
 
                               namespace FeaturePack;
@@ -564,7 +568,28 @@ public class AssemblyModuleGeneratorTests
                               {
                               }
 
-                              [LayerTool(typeof(CommerceLayer), typeof(IShippingLabelTool), "labels")]
+                              public sealed class FulfillmentScope : IScopeDefinition
+                              {
+                                  public const int ScopeId = 16;
+                              }
+
+                              [LayerTool("shipping.label", Contract = typeof(IShippingLabelTool))]
+                              [AttributeUsage(AttributeTargets.Class, Inherited = false)]
+                              public sealed class ShippingToolAttribute : Attribute
+                              {
+                                  public ShippingToolAttribute(Type layer, Type ownerScope)
+                                  {
+                                      Layer = layer;
+                                      OwnerScope = ownerScope;
+                                  }
+
+                                  public Type Layer { get; }
+                                  public Type OwnerScope { get; }
+                                  public string Key { get; set; } = "default";
+                                  public bool Cache { get; set; } = true;
+                              }
+
+                              [ShippingTool(typeof(CommerceLayer), typeof(FulfillmentScope), Key = "labels")]
                               public sealed class ShippingLabelTool : IShippingLabelTool
                               {
                               }
@@ -589,6 +614,7 @@ public class AssemblyModuleGeneratorTests
         Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.IShippingLabelTool)"));
         Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.ShippingLabelTool)"));
         Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.CommerceLayer)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.FulfillmentScope)"));
         Assert.That(generatedModule, Does.Contain("\"labels\""));
     }
 
@@ -596,8 +622,10 @@ public class AssemblyModuleGeneratorTests
     public void Same_assembly_layer_tool_is_not_transferred_to_assembly_module()
     {
         const string source = """
+                              using System;
                               using LayerBase.Layers;
                               using LayerBase.Modules;
+                              using LayerBase.Scope;
                               using LayerBase.Tools;
 
                               namespace FeaturePack;
@@ -615,7 +643,27 @@ public class AssemblyModuleGeneratorTests
                               {
                               }
 
-                              [LayerTool(typeof(CommerceLayer), typeof(IShippingLabelTool))]
+                              public sealed class FulfillmentScope : IScopeDefinition
+                              {
+                                  public const int ScopeId = 16;
+                              }
+
+                              [LayerTool("shipping.label", Contract = typeof(IShippingLabelTool))]
+                              [AttributeUsage(AttributeTargets.Class, Inherited = false)]
+                              public sealed class ShippingToolAttribute : Attribute
+                              {
+                                  public ShippingToolAttribute(Type layer, Type ownerScope)
+                                  {
+                                      Layer = layer;
+                                      OwnerScope = ownerScope;
+                                  }
+
+                                  public Type Layer { get; }
+                                  public Type OwnerScope { get; }
+                                  public string Key { get; set; } = "default";
+                              }
+
+                              [ShippingTool(typeof(CommerceLayer), typeof(FulfillmentScope))]
                               public sealed class ShippingLabelTool : IShippingLabelTool
                               {
                               }
@@ -637,7 +685,9 @@ public class AssemblyModuleGeneratorTests
     public void Layer_service_generator_emits_local_layer_tool_provider_for_same_assembly_layer_tool()
     {
         const string source = """
+                              using System;
                               using LayerBase.Layers;
+                              using LayerBase.Scope;
                               using LayerBase.Tools;
 
                               namespace FeaturePack;
@@ -650,7 +700,27 @@ public class AssemblyModuleGeneratorTests
                               {
                               }
 
-                              [LayerTool(typeof(CommerceLayer), typeof(IShippingLabelTool), "labels")]
+                              public sealed class FulfillmentScope : IScopeDefinition
+                              {
+                                  public const int ScopeId = 16;
+                              }
+
+                              [LayerTool("shipping.label", Contract = typeof(IShippingLabelTool))]
+                              [AttributeUsage(AttributeTargets.Class, Inherited = false)]
+                              public sealed class ShippingToolAttribute : Attribute
+                              {
+                                  public ShippingToolAttribute(Type layer, Type ownerScope)
+                                  {
+                                      Layer = layer;
+                                      OwnerScope = ownerScope;
+                                  }
+
+                                  public Type Layer { get; }
+                                  public Type OwnerScope { get; }
+                                  public string Key { get; set; } = "default";
+                              }
+
+                              [ShippingTool(typeof(CommerceLayer), typeof(FulfillmentScope), Key = "labels")]
                               public sealed class ShippingLabelTool : IShippingLabelTool
                               {
                               }
@@ -676,7 +746,46 @@ public class AssemblyModuleGeneratorTests
         Assert.That(generatedLayer, Does.Contain("typeof(global::FeaturePack.IShippingLabelTool)"));
         Assert.That(generatedLayer, Does.Contain("typeof(global::FeaturePack.ShippingLabelTool)"));
         Assert.That(generatedLayer, Does.Contain("typeof(global::FeaturePack.CommerceLayer)"));
+        Assert.That(generatedLayer, Does.Contain("typeof(global::FeaturePack.FulfillmentScope)"));
         Assert.That(generatedLayer, Does.Contain("\"labels\""));
+    }
+
+    [Test]
+    public void Layer_service_generator_emits_scope_provider_for_non_generic_scope_attribute()
+    {
+        const string source = """
+                              using LayerBase.DI;
+                              using LayerBase.Layers;
+                              using LayerBase.Scope;
+
+                              namespace FeaturePack;
+
+                              public sealed partial class CommerceLayer : Layer
+                              {
+                              }
+
+                              public sealed class FulfillmentScope : IScopeDefinition
+                              {
+                                  public const int ScopeId = 16;
+                              }
+
+                              [OwnerLayer(typeof(CommerceLayer))]
+                              [Scope(typeof(FulfillmentScope))]
+                              public sealed partial class FulfillmentService : IService
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new LayerServiceGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var generatedLayer = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class CommerceLayer"));
+
+        Assert.That(generatedLayer, Does.Contain("global::LayerBase.Scope.IGeneratedScopeDefinitionProvider"));
+        Assert.That(generatedLayer, Does.Contain("typeof(global::FeaturePack.FulfillmentScope)"));
     }
 
     [Test]

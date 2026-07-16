@@ -2,23 +2,21 @@ using System;
 
 namespace LayerBase.Tools;
 
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 public sealed class LayerToolAttribute : Attribute
 {
-    public LayerToolAttribute(Type ownerLayerType, Type contractType, string localKey = "default")
+    public LayerToolAttribute(string toolId)
     {
-        OwnerLayerType = ownerLayerType ?? throw new ArgumentNullException(nameof(ownerLayerType));
-        ContractType = contractType ?? throw new ArgumentNullException(nameof(contractType));
-        LocalKey = string.IsNullOrWhiteSpace(localKey)
-            ? throw new ArgumentException("Layer tool local key is required.", nameof(localKey))
-            : localKey;
+        ToolId = string.IsNullOrWhiteSpace(toolId)
+            ? throw new ArgumentException("Layer tool id is required.", nameof(toolId))
+            : toolId;
     }
 
-    public Type OwnerLayerType { get; }
+    public string ToolId { get; }
 
-    public Type ContractType { get; }
+    public Type? Contract { get; set; }
 
-    public string LocalKey { get; }
+    public string? DefaultKeyProperty { get; set; } = "Key";
 
-    public bool Cache { get; set; } = true;
+    public bool AllowCache { get; set; } = true;
 }

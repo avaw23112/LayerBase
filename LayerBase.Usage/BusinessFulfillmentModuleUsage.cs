@@ -3,6 +3,7 @@ using LayerBase.Call;
 using LayerBase.DI;
 using LayerBase.Layers;
 using LayerBase.Modules;
+using LayerBase.Scope;
 using LayerBase.Tools;
 
 namespace LayerBase.Usage;
@@ -32,7 +33,26 @@ public sealed partial class BusinessFulfillmentModule
 {
 }
 
-[LayerTool(typeof(BusinessCommerceLayer), typeof(IBusinessShippingLabelTool))]
+[LayerTool("business.shipping-label", Contract = typeof(IBusinessShippingLabelTool))]
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+public sealed class BusinessShippingLabelToolAttribute : Attribute
+{
+    public BusinessShippingLabelToolAttribute(Type layer, Type ownerScope)
+    {
+        Layer = layer;
+        OwnerScope = ownerScope;
+    }
+
+    public Type Layer { get; }
+
+    public Type OwnerScope { get; }
+
+    public string Key { get; set; } = "default";
+
+    public bool Cache { get; set; } = true;
+}
+
+[BusinessShippingLabelTool(typeof(BusinessCommerceLayer), typeof(MainScope))]
 public sealed class BusinessShippingLabelTool : IBusinessShippingLabelTool
 {
     public string CreateLabel(string orderId, string carrier)

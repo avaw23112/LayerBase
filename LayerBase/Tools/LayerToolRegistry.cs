@@ -26,6 +26,7 @@ public sealed class LayerToolRegistry : IDisposable
         _entries = tools.Select((tool, index) => new LayerToolDescriptor(
             index,
             tool.OwnerLayerIndex,
+            tool.OwnerScopeId,
             tool.ContractType,
             tool.ImplementationType,
             tool.LocalKey,
@@ -409,6 +410,7 @@ public readonly struct LayerToolDescriptor
     internal LayerToolDescriptor(
         int slot,
         int ownerLayerIndex,
+        int ownerScopeId,
         Type contractType,
         Type implementationType,
         string key,
@@ -417,6 +419,7 @@ public readonly struct LayerToolDescriptor
     {
         Slot = slot;
         OwnerLayerIndex = ownerLayerIndex;
+        OwnerScopeId = ownerScopeId;
         ContractType = contractType ?? throw new ArgumentNullException(nameof(contractType));
         ImplementationType = implementationType ?? throw new ArgumentNullException(nameof(implementationType));
         Key = key ?? throw new ArgumentNullException(nameof(key));
@@ -427,6 +430,8 @@ public readonly struct LayerToolDescriptor
     public int Slot { get; }
 
     public int OwnerLayerIndex { get; }
+
+    public int OwnerScopeId { get; }
 
     public Type ContractType { get; }
 

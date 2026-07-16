@@ -934,12 +934,10 @@ public abstract class Layer : Node, IDisposable
         if (handlerType == null)
             throw new ArgumentNullException(nameof(handlerType));
 
-        foreach (var attribute in System.Reflection.CustomAttributeData.GetCustomAttributes(handlerType))
+        foreach (var attribute in handlerType.GetCustomAttributes(false))
         {
-            var attributeType = attribute.AttributeType;
-            if (attributeType.IsGenericType &&
-                attributeType.GetGenericTypeDefinition() == typeof(ScopeAttribute<>))
-                return attributeType.GetGenericArguments()[0];
+            if (attribute is ScopeAttribute scopeAttribute)
+                return scopeAttribute.ScopeType;
         }
 
         return typeof(MainScope);

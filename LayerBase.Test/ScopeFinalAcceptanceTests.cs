@@ -121,6 +121,7 @@ public sealed class ScopeFinalAcceptanceTests
             .ToArray();
 
         Assert.That(descriptorProperties, Does.Contain(nameof(LayerToolDescriptor.OwnerLayerIndex)));
+        Assert.That(descriptorProperties, Does.Contain(nameof(LayerToolDescriptor.OwnerScopeId)));
         Assert.That(descriptorProperties, Does.Contain(nameof(LayerToolDescriptor.Cache)));
         Assert.That(descriptorProperties, Does.Not.Contain("ScopeRuntime"));
         Assert.That(descriptorProperties, Does.Not.Contain("ServiceProvider"));

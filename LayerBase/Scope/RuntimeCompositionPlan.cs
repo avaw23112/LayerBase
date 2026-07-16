@@ -105,7 +105,7 @@ internal sealed class RuntimeCompositionPlan
         }
 
         var localTools = CollectLocalLayerTools(pushedLayers);
-        var tools = ResolveTools(contributions.Tools.Concat(localTools).ToArray(), layerTypeIndex);
+        var tools = ResolveTools(contributions.Tools.Concat(localTools).ToArray(), layerTypeIndex, scopeIdsByType);
 
         ApplyScopeContributions(layerPlans, layerContributionBuilders);
 
@@ -154,6 +154,14 @@ internal sealed class RuntimeCompositionPlan
                     throw new InvalidOperationException(
                         $"LayerTool contribution `{contribution.ContractType.FullName}` must declare an owner layer.");
 
+                if (contribution.OwnerScopeType == null)
+                    throw new InvalidOperationException(
+                        $"LayerTool contribution `{contribution.ContractType.FullName}` must declare an owner scope.");
+
+                if (!typeof(IScopeDefinition).IsAssignableFrom(contribution.OwnerScopeType))
+                    throw new InvalidOperationException(
+                        $"Owner scope `{contribution.OwnerScopeType.FullName}` must implement {nameof(IScopeDefinition)}.");
+
                 if (!contribution.ContractType.IsAssignableFrom(contribution.ImplementationType))
                     throw new InvalidOperationException(
                         $"LayerTool implementation `{contribution.ImplementationType.FullName}` must implement contract `{contribution.ContractType.FullName}`.");
@@ -164,6 +172,7 @@ internal sealed class RuntimeCompositionPlan
                     contribution.ImplementationType,
                     contribution.LocalKey,
                     contribution.OwnerLayerType,
+                    contribution.OwnerScopeType,
                     contribution.Cache,
                     contribution.Factory,
                     plans.Count));
@@ -288,7 +297,8 @@ internal sealed class RuntimeCompositionPlan
 
     private static ResolvedLayerToolContribution[] ResolveTools(
         LayerToolContributionPlan[] tools,
-        LayerTypeIndex layerTypeIndex)
+        LayerTypeIndex layerTypeIndex,
+        Dictionary<Type, int> scopeIdsByType)
     {
         var seen = new HashSet<LayerToolKey>();
         var implementationTypes = new HashSet<Type>();
@@ -300,6 +310,7 @@ internal sealed class RuntimeCompositionPlan
                 tool.ContractType,
                 tool.OwnerLayerType,
                 layerTypeIndex);
+            int ownerScopeId = ResolveScopeId(tool.OwnerScopeType, scopeIdsByType);
             var key = new LayerToolKey(tool.ContractType, tool.LocalKey);
             if (!seen.Add(key))
                 throw new InvalidOperationException(
@@ -312,6 +323,7 @@ internal sealed class RuntimeCompositionPlan
             resolved.Add(new ResolvedLayerToolContribution(
                 tool.ModuleId,
                 ownerLayerIndex,
+                ownerScopeId,
                 tool.ContractType,
                 tool.ImplementationType,
                 tool.LocalKey,
@@ -320,6 +332,7 @@ internal sealed class RuntimeCompositionPlan
         }
 
         return resolved.OrderBy(static tool => tool.OwnerLayerIndex)
+                       .ThenBy(static tool => tool.OwnerScopeId)
                        .ThenBy(static tool => tool.ContractType.FullName, StringComparer.Ordinal)
                        .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal)
                        .ToArray();
@@ -857,6 +870,7 @@ internal readonly struct ResolvedLayerToolContribution
     public ResolvedLayerToolContribution(
         AssemblyModuleId moduleId,
         int ownerLayerIndex,
+        int ownerScopeId,
         Type contractType,
         Type implementationType,
         string localKey,
@@ -865,6 +879,7 @@ internal readonly struct ResolvedLayerToolContribution
     {
         ModuleId = moduleId;
         OwnerLayerIndex = ownerLayerIndex;
+        OwnerScopeId = ownerScopeId;
         ContractType = contractType ?? throw new ArgumentNullException(nameof(contractType));
         ImplementationType = implementationType ?? throw new ArgumentNullException(nameof(implementationType));
         LocalKey = localKey ?? throw new ArgumentNullException(nameof(localKey));
@@ -875,6 +890,8 @@ internal readonly struct ResolvedLayerToolContribution
     public AssemblyModuleId ModuleId { get; }
 
     public int OwnerLayerIndex { get; }
+
+    public int OwnerScopeId { get; }
 
     public Type ContractType { get; }
 
