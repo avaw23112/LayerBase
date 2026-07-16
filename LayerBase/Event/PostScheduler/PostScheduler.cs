@@ -298,7 +298,7 @@ public sealed class PostScheduler : IDisposable
 
         var store = _payloadStorage.GetStoreFast<T>(_runtimeId);
         var handle = store.Add(in value);
-        var sequenceId = Interlocked.Increment(ref _sequenceCounter);
+        var sequenceId = NextSequenceId();
         var item = new PostItem(typeId, handle, sequenceId, plan.Backpressure);
 
         var result = EnqueueItemWithPolicy(in item);
@@ -450,7 +450,7 @@ public sealed class PostScheduler : IDisposable
             case MergeFailurePolicy.FallbackToLatest:
                 _payloadStorage.Release(slot.PayloadHandle);
                 slot.PayloadHandle = _payloadStorage.Store(_runtimeId, value);
-                slot.LastSequenceId = Interlocked.Increment(ref _sequenceCounter);
+                slot.LastSequenceId = NextSequenceId();
                 slot.MergeCount = 1;
                 slot.Active = true;
                 _coalescedBuffer[slotKey] = slot;
