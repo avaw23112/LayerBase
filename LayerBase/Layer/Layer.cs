@@ -257,15 +257,12 @@ public abstract class Layer : Node, IDisposable
 
         var subscribers = new List<IAutoSubscribe>();
         var boundSubscriberInstances = new HashSet<object>(ObjectReferenceComparer.Instance);
-        var boundInterfaceHandlerInstances = new HashSet<object>(ObjectReferenceComparer.Instance);
         if (this is IAutoSubscribe layerAutoSubscribe)
         {
             layerAutoSubscribe.AutoBind(this);
             subscribers.Add(layerAutoSubscribe);
             boundSubscriberInstances.Add(layerAutoSubscribe);
         }
-        if (boundInterfaceHandlerInstances.Add(this))
-            BindInterfaceEventHandlers(this);
 
         foreach (var resolved in _resolvedServices)
         {
@@ -273,13 +270,6 @@ public abstract class Layer : Node, IDisposable
             if (!boundSubscriberInstances.Add(auto)) continue;
             auto.AutoBind(this);
             subscribers.Add(auto);
-        }
-
-        foreach (var resolved in _resolvedServices)
-        {
-            if (resolved.Instance is IAutoSubscribe) continue;
-            if (!boundInterfaceHandlerInstances.Add(resolved.Instance)) continue;
-            BindInterfaceEventHandlers(resolved.Instance);
         }
 
         DiscoveredSubscribers = subscribers;
@@ -502,7 +492,24 @@ public abstract class Layer : Node, IDisposable
         {
             var center = ResolveSubscriptionEventCenter(handler.Target);
             center.SubscribeFlow(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Flow));
+            _subscriptions.Add(SubscriptionToken<EventHandleDelegate<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.UnsubscribeFlow(i, h)));
+        }
+        else
+        {
+            _pendingOps.Enqueue(l => l.SubscribeFlow(handler));
+        }
+    }
+
+    public void SubscribeFlow<T>(IEventHandler<T> handler) where T : struct
+    {
+        ThrowIfDisposed();
+        if (RouteIndex != -1 && OwnerContext != null)
+        {
+            var center = ResolveSubscriptionEventCenter(handler);
+            center.SubscribeFlow(RouteIndex, handler);
+            _subscriptions.Add(SubscriptionToken<IEventHandler<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.UnsubscribeFlow(i, h)));
         }
         else
         {
@@ -518,7 +525,8 @@ public abstract class Layer : Node, IDisposable
         {
             var center = ownerScope.EventCenter;
             center.SubscribeFlow(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Flow));
+            _subscriptions.Add(SubscriptionToken<EventHandleDelegate<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.UnsubscribeFlow(i, h)));
         }
         else
         {
@@ -534,11 +542,29 @@ public abstract class Layer : Node, IDisposable
         {
             var center = ResolveSubscriptionEventCenter(handler.Target);
             center.SubscribeNotify(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Notify));
+            _subscriptions.Add(SubscriptionToken<EventNotifyDelegate<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.UnsubscribeNotify(i, h)));
         }
         else
         {
             _pendingOps.Enqueue(l => l.SubscribeNotify(handler));
+        }
+    }
+
+    internal void SubscribeFlow<T>(IEventHandler<T> handler, ScopeRuntime ownerScope) where T : struct
+    {
+        ThrowIfDisposed();
+        if (ownerScope == null) throw new ArgumentNullException(nameof(ownerScope));
+        if (RouteIndex != -1 && OwnerContext != null)
+        {
+            var center = ownerScope.EventCenter;
+            center.SubscribeFlow(RouteIndex, handler);
+            _subscriptions.Add(SubscriptionToken<IEventHandler<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.UnsubscribeFlow(i, h)));
+        }
+        else
+        {
+            _pendingOps.Enqueue(l => l.SubscribeFlow(handler, ownerScope));
         }
     }
 
@@ -550,7 +576,8 @@ public abstract class Layer : Node, IDisposable
         {
             var center = ownerScope.EventCenter;
             center.SubscribeNotify(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Notify));
+            _subscriptions.Add(SubscriptionToken<EventNotifyDelegate<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.UnsubscribeNotify(i, h)));
         }
         else
         {
@@ -566,7 +593,8 @@ public abstract class Layer : Node, IDisposable
         {
             var center = ResolveSubscriptionEventCenter(handler.Target);
             center.Subscribe(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Subscribe));
+            _subscriptions.Add(SubscriptionToken<EventNotifyDelegate<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.Unsubscribe(i, h)));
         }
         else
         {
@@ -582,7 +610,8 @@ public abstract class Layer : Node, IDisposable
         {
             var center = ownerScope.EventCenter;
             center.Subscribe(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Subscribe));
+            _subscriptions.Add(SubscriptionToken<EventNotifyDelegate<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.Unsubscribe(i, h)));
         }
         else
         {
@@ -598,7 +627,24 @@ public abstract class Layer : Node, IDisposable
         {
             var center = ResolveSubscriptionEventCenter(handler.Target);
             center.SubscribeAsync(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Async));
+            _subscriptions.Add(SubscriptionToken<EventHandleDelegateAsync<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.UnsubscribeAsync(i, h)));
+        }
+        else
+        {
+            _pendingOps.Enqueue(l => l.SubscribeAsync(handler));
+        }
+    }
+
+    public void SubscribeAsync<T>(IEventHandlerAsync<T> handler) where T : struct
+    {
+        ThrowIfDisposed();
+        if (RouteIndex != -1 && OwnerContext != null)
+        {
+            var center = ResolveSubscriptionEventCenter(handler);
+            center.SubscribeAsync(RouteIndex, handler);
+            _subscriptions.Add(SubscriptionToken<IEventHandlerAsync<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.UnsubscribeAsync(i, h)));
         }
         else
         {
@@ -614,7 +660,25 @@ public abstract class Layer : Node, IDisposable
         {
             var center = ownerScope.EventCenter;
             center.SubscribeAsync(RouteIndex, handler);
-            _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Async));
+            _subscriptions.Add(SubscriptionToken<EventHandleDelegateAsync<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.UnsubscribeAsync(i, h)));
+        }
+        else
+        {
+            _pendingOps.Enqueue(l => l.SubscribeAsync(handler, ownerScope));
+        }
+    }
+
+    internal void SubscribeAsync<T>(IEventHandlerAsync<T> handler, ScopeRuntime ownerScope) where T : struct
+    {
+        ThrowIfDisposed();
+        if (ownerScope == null) throw new ArgumentNullException(nameof(ownerScope));
+        if (RouteIndex != -1 && OwnerContext != null)
+        {
+            var center = ownerScope.EventCenter;
+            center.SubscribeAsync(RouteIndex, handler);
+            _subscriptions.Add(SubscriptionToken<IEventHandlerAsync<T>, T>.Rent(
+                center, RouteIndex, handler, static (c, i, h) => c.UnsubscribeAsync(i, h)));
         }
         else
         {
@@ -885,35 +949,6 @@ public abstract class Layer : Node, IDisposable
             autoScopeEndpointBinder.AutoBindScopeEndpoints(this);
     }
 
-    private void BindInterfaceEventHandlers(object instance)
-    {
-        foreach (var iface in instance.GetType().GetInterfaces())
-        {
-            if (!iface.IsGenericType) continue;
-            var genericDefinition = iface.GetGenericTypeDefinition();
-            var typeArguments = iface.GetGenericArguments();
-            if (typeArguments.Length != 1 || !typeArguments[0].IsValueType) continue;
-
-            if (genericDefinition == typeof(IEventHandler<>))
-            {
-                var binding = ServiceLayerBinder.GetBinding(instance);
-                var center = binding?.OwnerScope.EventCenter ?? OwnerContext.ScopeHost.MainScope.EventCenter;
-                center.SubscribeFlow(RouteIndex, instance, typeArguments[0]);
-                _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Flow));
-                RecordSubscribedEvent(typeArguments[0]);
-                continue;
-            }
-            if (genericDefinition == typeof(IEventHandlerAsync<>))
-            {
-                var binding = ServiceLayerBinder.GetBinding(instance);
-                var center = binding?.OwnerScope.EventCenter ?? OwnerContext.ScopeHost.MainScope.EventCenter;
-                center.SubscribeAsync(RouteIndex, instance, typeArguments[0]);
-                _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Async));
-                RecordSubscribedEvent(typeArguments[0]);
-            }
-        }
-    }
-
     private void AddActiveService(RegisteredService registration)
     {
         _activeServices.Add(registration);
@@ -1057,54 +1092,40 @@ public abstract class Layer : Node, IDisposable
         public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
     }
 
-    private enum UnsubscribeKind { Flow, Async, Notify, Subscribe }
-
-    /// <summary>
-    /// 非泛型 UnsubscribeToken，避免 IL2CPP 环境下的 MakeGenericMethod 问题。
-    /// Dispose 时根据 Kind 调用 EventCenter 对应的非泛型 Unsubscribe 方法。
-    /// </summary>
-    private sealed class UnsubscribeToken : IDisposable
+    private sealed class SubscriptionToken<THandler, TEvent> : IDisposable
+        where THandler : class
+        where TEvent : struct
     {
-        private static readonly ConcurrentBag<UnsubscribeToken> Pool = new();
+        private static readonly ConcurrentBag<SubscriptionToken<THandler, TEvent>> Pool = new();
         private EventCenter? _center;
         private int _layerIndex;
-        private object? _handler;
-        private Type? _eventType;
-        private UnsubscribeKind _kind;
+        private THandler? _handler;
+        private Action<EventCenter, int, THandler>? _unsubscribe;
         private int _disposed;
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            switch (_kind)
-            {
-                case UnsubscribeKind.Flow:
-                    _center?.UnsubscribeFlow(_layerIndex, _handler!, _eventType!);
-                    break;
-                case UnsubscribeKind.Async:
-                    _center?.UnsubscribeAsync(_layerIndex, _handler!, _eventType!);
-                    break;
-                case UnsubscribeKind.Notify:
-                    _center?.UnsubscribeNotify(_layerIndex, _handler!, _eventType!);
-                    break;
-                case UnsubscribeKind.Subscribe:
-                    _center?.Unsubscribe(_layerIndex, _handler!, _eventType!);
-                    break;
-            }
+            if (_center != null && _handler != null && _unsubscribe != null)
+                _unsubscribe(_center, _layerIndex, _handler);
+
             _center = null;
             _handler = null;
-            _eventType = null;
+            _unsubscribe = null;
             Pool.Add(this);
         }
 
-        public static UnsubscribeToken Rent(EventCenter c, int l, object handler, Type eventType, UnsubscribeKind kind)
+        public static SubscriptionToken<THandler, TEvent> Rent(
+            EventCenter center,
+            int layerIndex,
+            THandler handler,
+            Action<EventCenter, int, THandler> unsubscribe)
         {
-            if (!Pool.TryTake(out var t)) t = new UnsubscribeToken();
-            t._center = c;
-            t._layerIndex = l;
+            if (!Pool.TryTake(out var t)) t = new SubscriptionToken<THandler, TEvent>();
+            t._center = center;
+            t._layerIndex = layerIndex;
             t._handler = handler;
-            t._eventType = eventType;
-            t._kind = kind;
+            t._unsubscribe = unsubscribe;
             t._disposed = 0;
             return t;
         }

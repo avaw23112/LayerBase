@@ -8,18 +8,6 @@ namespace LayerBase.Core.Event;
 /// 非泛型事件桶接口，用于 IL2CPP 安全的非泛型订阅路径。
 /// 避免运行时 MakeGenericMethod，所有 EventBucket&lt;T&gt; 都实现此接口。
 /// </summary>
-internal interface IEventBucketNonGeneric
-{
-    void AddFlow(int layerIndex, object handler);
-    void AddAsync(int layerIndex, object handler);
-    void AddNotify(int layerIndex, object handler);
-    void AddSubscribe(int layerIndex, object handler);
-    void RemoveFlow(int layerIndex, object handler);
-    void RemoveAsync(int layerIndex, object handler);
-    void RemoveNotify(int layerIndex, object handler);
-    void RemoveSubscribe(int layerIndex, object handler);
-}
-
 internal interface IHandlerBucket
 {
     void Reset();
@@ -43,7 +31,6 @@ internal sealed class HandlerCircuit
 
 internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
 {
-    private readonly object _lock = new();
     private readonly Action _onDirty;
     internal List<NotifyHandlerEntry<T>> MasterNotify = new();
     internal List<OrderedHandlerEntry<T>> MasterOrdered = new();
@@ -60,143 +47,93 @@ internal sealed class HandlerBucket<T> : IHandlerBucket where T : struct
 
     public void Reset()
     {
-        lock (_lock)
-        {
-            foreach (var h in MasterOrdered) h.Circuit.Reset();
-            foreach (var h in MasterUnordered) h.Circuit.Reset();
-            foreach (var h in MasterNotify) h.Circuit.Reset();
-            foreach (var h in MasterSubscribe) h.Circuit.Reset();
-        }
+        foreach (var h in MasterOrdered) h.Circuit.Reset();
+        foreach (var h in MasterUnordered) h.Circuit.Reset();
+        foreach (var h in MasterNotify) h.Circuit.Reset();
+        foreach (var h in MasterSubscribe) h.Circuit.Reset();
     }
 
     public void Add(IEventHandler<T> h)
     {
-        lock (_lock)
-        {
-            MasterUnordered = CopyWith(MasterUnordered, UnorderedHandlerEntry<T>.Create(h));
-            _onDirty();
-        }
+        MasterUnordered.Add(UnorderedHandlerEntry<T>.Create(h));
+        _onDirty();
     }
 
     public void Add(IEventHandlerAsync<T> h)
     {
-        lock (_lock)
-        {
-            MasterUnordered = CopyWith(MasterUnordered, UnorderedHandlerEntry<T>.Create(h));
-            _onDirty();
-        }
+        MasterUnordered.Add(UnorderedHandlerEntry<T>.Create(h));
+        _onDirty();
     }
 
     public void AddNotify(EventNotifyDelegate<T> h)
     {
-        lock (_lock)
-        {
-            MasterNotify = CopyWith(MasterNotify, NotifyHandlerEntry<T>.Create(h));
-            _onDirty();
-        }
+        MasterNotify.Add(NotifyHandlerEntry<T>.Create(h));
+        _onDirty();
     }
 
     public void AddSubscribe(EventNotifyDelegate<T> h)
     {
-        lock (_lock)
-        {
-            MasterSubscribe = CopyWith(MasterSubscribe, NotifyHandlerEntry<T>.Create(h));
-            _onDirty();
-        }
+        MasterSubscribe.Add(NotifyHandlerEntry<T>.Create(h));
+        _onDirty();
     }
 
 
     public void Add(EventHandleDelegate<T> h)
     {
-        lock (_lock)
-        {
-            MasterOrdered = CopyWith(MasterOrdered, OrderedHandlerEntry<T>.Create(h));
-            _onDirty();
-        }
+        MasterOrdered.Add(OrderedHandlerEntry<T>.Create(h));
+        _onDirty();
     }
 
     public void Add(EventHandleDelegateAsync<T> h)
     {
-        lock (_lock)
-        {
-            MasterOrdered = CopyWith(MasterOrdered, OrderedHandlerEntry<T>.Create(h));
-            _onDirty();
-        }
+        MasterOrdered.Add(OrderedHandlerEntry<T>.Create(h));
+        _onDirty();
     }
 
 
     public void Remove(IEventHandler<T> h)
     {
-        lock (_lock)
-        {
-            MasterUnordered = CopyWithout(MasterUnordered, x => x.Source == h);
-            _onDirty();
-        }
+        RemoveAll(MasterUnordered, x => x.Source == h);
+        _onDirty();
     }
 
     public void Remove(IEventHandlerAsync<T> h)
     {
-        lock (_lock)
-        {
-            MasterUnordered = CopyWithout(MasterUnordered, x => x.Source == h);
-            _onDirty();
-        }
+        RemoveAll(MasterUnordered, x => x.Source == h);
+        _onDirty();
     }
 
     public void Remove(EventHandleDelegate<T> h)
     {
-        lock (_lock)
-        {
-            MasterOrdered = CopyWithout(MasterOrdered, x => x.SyncHandler == h);
-            _onDirty();
-        }
+        RemoveAll(MasterOrdered, x => x.SyncHandler == h);
+        _onDirty();
     }
 
     public void Remove(EventHandleDelegateAsync<T> h)
     {
-        lock (_lock)
-        {
-            MasterOrdered = CopyWithout(MasterOrdered, x => x.AsyncHandler == h);
-            _onDirty();
-        }
+        RemoveAll(MasterOrdered, x => x.AsyncHandler == h);
+        _onDirty();
     }
 
     public void RemoveSubscribe(EventNotifyDelegate<T> h)
     {
-        lock (_lock)
-        {
-            MasterSubscribe = CopyWithout(MasterSubscribe, x => x.Handler == h);
-            _onDirty();
-        }
+        RemoveAll(MasterSubscribe, x => x.Handler == h);
+        _onDirty();
     }
 
     public void RemoveNotify(EventNotifyDelegate<T> h)
     {
-        lock (_lock)
-        {
-            MasterNotify = CopyWithout(MasterNotify, x => x.Handler == h);
-            _onDirty();
-        }
+        RemoveAll(MasterNotify, x => x.Handler == h);
+        _onDirty();
     }
 
-    private static List<TEntry> CopyWith<TEntry>(List<TEntry> source, TEntry entry)
+    private static void RemoveAll<TEntry>(List<TEntry> source, Predicate<TEntry> remove)
     {
-        var next = new List<TEntry>(source.Count + 1);
-        next.AddRange(source);
-        next.Add(entry);
-        return next;
-    }
-
-    private static List<TEntry> CopyWithout<TEntry>(List<TEntry> source, Predicate<TEntry> remove)
-    {
-        var next = new List<TEntry>(source.Count);
-        for (var i = 0; i < source.Count; i++)
+        for (var i = source.Count - 1; i >= 0; i--)
         {
-            var item = source[i];
-            if (!remove(item)) next.Add(item);
+            if (remove(source[i]))
+                source.RemoveAt(i);
         }
-
-        return next;
     }
 }
 

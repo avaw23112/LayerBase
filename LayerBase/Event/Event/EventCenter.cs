@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LayerBase.Async;
@@ -14,116 +13,69 @@ namespace LayerBase.Core.Event;
 /// </summary>
 public sealed class EventCenter
 {
-    private readonly ConcurrentDictionary<int, Action> _bucketCacheResetters = new();
-    private readonly ConcurrentDictionary<int, IEventBucketNonGeneric> _eventBuckets = new();
-    private readonly object _lock = new();
-    private int _isResetting;
+    private EventBucketBase?[] _eventBuckets = Array.Empty<EventBucketBase?>();
 
     internal PostScheduler? PostScheduler { get; set; }
 
     internal void SubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
-        GetBucket<T>().Add(layerIndex, handler);
+        GetOrCreateBucket<T>().Add(layerIndex, handler);
     }
 
     internal void SubscribeAsync<T>(int layerIndex, IEventHandlerAsync<T> handler) where T : struct
     {
-        GetBucket<T>().Add(layerIndex, handler);
+        GetOrCreateBucket<T>().Add(layerIndex, handler);
     }
 
     internal void SubscribeFlow<T>(int layerIndex, EventHandleDelegate<T> handleDelegate) where T : struct
     {
-        GetBucket<T>().Add(layerIndex, handleDelegate);
+        GetOrCreateBucket<T>().Add(layerIndex, handleDelegate);
     }
 
     internal void SubscribeAsync<T>(int layerIndex, EventHandleDelegateAsync<T> handleDelegate) where T : struct
     {
-        GetBucket<T>().Add(layerIndex, handleDelegate);
+        GetOrCreateBucket<T>().Add(layerIndex, handleDelegate);
     }
 
     internal void SubscribeNotify<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
-        GetBucket<T>().AddNotify(layerIndex, handler);
+        GetOrCreateBucket<T>().AddNotify(layerIndex, handler);
     }
 
     internal void Subscribe<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
-        GetBucket<T>().AddSubscribe(layerIndex, handler);
+        GetOrCreateBucket<T>().AddSubscribe(layerIndex, handler);
     }
 
     internal void UnsubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
-        GetBucket<T>().Remove(layerIndex, handler);
+        TryGetBucket<T>()?.Remove(layerIndex, handler);
     }
 
     internal void UnsubscribeAsync<T>(int layerIndex, IEventHandlerAsync<T> handler) where T : struct
     {
-        GetBucket<T>().Remove(layerIndex, handler);
+        TryGetBucket<T>()?.Remove(layerIndex, handler);
     }
 
     internal void UnsubscribeNotify<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
-        GetBucket<T>().RemoveNotify(layerIndex, handler);
+        TryGetBucket<T>()?.RemoveNotify(layerIndex, handler);
     }
 
     internal void Unsubscribe<T>(int layerIndex, EventNotifyDelegate<T> handler) where T : struct
     {
-        GetBucket<T>().RemoveSubscribe(layerIndex, handler);
+        TryGetBucket<T>()?.RemoveSubscribe(layerIndex, handler);
     }
 
     internal void UnsubscribeFlow<T>(int layerIndex, EventHandleDelegate<T> handleDelegate) where T : struct
     {
-        GetBucket<T>().Remove(layerIndex, handleDelegate);
+        TryGetBucket<T>()?.Remove(layerIndex, handleDelegate);
     }
 
     internal void UnsubscribeAsync<T>(int layerIndex, EventHandleDelegateAsync<T> handleDelegate) where T : struct
     {
-        GetBucket<T>().Remove(layerIndex, handleDelegate);
+        TryGetBucket<T>()?.Remove(layerIndex, handleDelegate);
     }
-
-    #region Non-generic subscription path (IL2CPP-safe)
-
-    internal void SubscribeFlow(int layerIndex, object handler, Type eventType)
-    {
-        GetBucket(eventType).AddFlow(layerIndex, handler);
-    }
-
-    internal void SubscribeAsync(int layerIndex, object handler, Type eventType)
-    {
-        GetBucket(eventType).AddAsync(layerIndex, handler);
-    }
-
-    internal void SubscribeNotify(int layerIndex, object handler, Type eventType)
-    {
-        GetBucket(eventType).AddNotify(layerIndex, handler);
-    }
-
-    internal void Subscribe(int layerIndex, object handler, Type eventType)
-    {
-        GetBucket(eventType).AddSubscribe(layerIndex, handler);
-    }
-
-    internal void UnsubscribeFlow(int layerIndex, object handler, Type eventType)
-    {
-        GetBucket(eventType).RemoveFlow(layerIndex, handler);
-    }
-
-    internal void UnsubscribeAsync(int layerIndex, object handler, Type eventType)
-    {
-        GetBucket(eventType).RemoveAsync(layerIndex, handler);
-    }
-
-    internal void UnsubscribeNotify(int layerIndex, object handler, Type eventType)
-    {
-        GetBucket(eventType).RemoveNotify(layerIndex, handler);
-    }
-
-    internal void Unsubscribe(int layerIndex, object handler, Type eventType)
-    {
-        GetBucket(eventType).RemoveSubscribe(layerIndex, handler);
-    }
-
-    #endregion
 
     /// <summary>
     /// 派发同步事件。
@@ -132,10 +84,8 @@ public sealed class EventCenter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal EventHandledState Send<T>(in T value) where T : struct
     {
-        if (Volatile.Read(ref _isResetting) == 1) return EventHandledState.Continue;
-        var cached = BucketCache<T>.Instance;
-        if (cached != null && cached.Owner == this) return cached.Dispatch(in value);
-        return GetBucket<T>().Dispatch(in value);
+        var bucket = TryGetBucket<T>();
+        return bucket == null ? EventHandledState.Continue : bucket.Dispatch(in value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -150,19 +100,11 @@ public sealed class EventCenter
 
     internal void Reset()
     {
-        if (Interlocked.Exchange(ref _isResetting, 1) == 1) return;
-
-        lock (_lock)
+        for (var i = 0; i < _eventBuckets.Length; i++)
         {
-            foreach (var bucket in _eventBuckets.Values)
-                if (bucket is IDisposable b)
-                    b.Dispose();
-            _eventBuckets.Clear();
-            foreach (var resetter in _bucketCacheResetters.Values) resetter();
-            _bucketCacheResetters.Clear();
+            _eventBuckets[i]?.Dispose();
+            _eventBuckets[i] = null;
         }
-
-        Volatile.Write(ref _isResetting, 0);
     }
 
     /// <summary>
@@ -186,13 +128,13 @@ public sealed class EventCenter
         if ((options.Targets & LayerPrewarmTargets.Bucket) != 0 ||
             (options.Targets & LayerPrewarmTargets.DispatchTable) != 0)
         {
-            bucket = GetBucket<TEvent>();
+            bucket = GetOrCreateBucket<TEvent>();
         }
 
         // 3. 预热派发表
         if ((options.Targets & LayerPrewarmTargets.DispatchTable) != 0)
         {
-            bucket ??= GetBucket<TEvent>();
+            bucket ??= GetOrCreateBucket<TEvent>();
             bucket.PrewarmDispatchTable();
         }
 
@@ -204,48 +146,47 @@ public sealed class EventCenter
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private EventBucket<T> GetBucket<T>() where T : struct
+    private EventBucket<T>? TryGetBucket<T>() where T : struct
     {
-        var cached = BucketCache<T>.Instance;
-        if (cached != null && cached.Owner == this) return cached;
         var typeId = EventTypeId<T>.Id;
-        _bucketCacheResetters.TryAdd(typeId, static () => BucketCache<T>.Instance = null);
-        var bucket = (EventBucket<T>)_eventBuckets.GetOrAdd(typeId, _ => new EventBucket<T>(this));
-        BucketCache<T>.Instance = bucket;
-        return bucket;
+        if ((uint)typeId >= (uint)_eventBuckets.Length) return null;
+        return (EventBucket<T>?)_eventBuckets[typeId];
     }
 
-    private IEventBucketNonGeneric GetBucket(Type eventType)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private EventBucket<T> GetOrCreateBucket<T>() where T : struct
     {
-        var typeId = GetEventTypeId(eventType);
-        return _eventBuckets.GetOrAdd(typeId, _ =>
+        var typeId = EventTypeId<T>.Id;
+        if ((uint)typeId < (uint)_eventBuckets.Length &&
+            _eventBuckets[typeId] is EventBucket<T> existing)
         {
-            var bucketType = typeof(EventBucket<>).MakeGenericType(eventType);
-            return (IEventBucketNonGeneric)Activator.CreateInstance(bucketType, this);
-        });
+            return existing;
+        }
+
+        EnsureBucketCapacity(typeId);
+        var created = new EventBucket<T>();
+        _eventBuckets[typeId] = created;
+        return created;
     }
 
-    private static int GetEventTypeId(Type eventType)
+    private void EnsureBucketCapacity(int typeId)
     {
-        var idType = typeof(EventTypeId<>).MakeGenericType(eventType);
-        var idField = idType.GetField("Id", BindingFlags.Public | BindingFlags.Static);
-        return (int)idField!.GetValue(null)!;
+        if ((uint)typeId < (uint)_eventBuckets.Length) return;
+
+        var nextSize = _eventBuckets.Length == 0 ? 4 : _eventBuckets.Length;
+        while (nextSize <= typeId)
+            nextSize <<= 1;
+
+        Array.Resize(ref _eventBuckets, nextSize);
     }
 
-    private static class BucketCache<T> where T : struct
+    private abstract class EventBucketBase : IDisposable
     {
-        public static EventBucket<T>? Instance;
+        public abstract void Dispose();
     }
 
-    private interface IResetable : IDisposable
+    private sealed class EventBucket<T> : EventBucketBase where T : struct
     {
-        void Reset();
-    }
-
-    private sealed class EventBucket<T> : IResetable, IEventBucketNonGeneric where T : struct
-    {
-        private readonly object _lock = new();
-        public readonly EventCenter? Owner;
         private bool _disposed;
         private int _isDirty;
 
@@ -279,11 +220,6 @@ public sealed class EventCenter
         private ulong _notifyMask;
         private ulong _notifySafeMask;
 
-        public EventBucket(EventCenter center)
-        {
-            Owner = center;
-        }
-
         /// <summary>
         /// 预热当前事件类型的派发表。
         /// </summary>
@@ -293,30 +229,11 @@ public sealed class EventCenter
             EnsureClean();
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
-            lock (_lock)
-            {
-                if (_disposed) return;
-                _disposed = true;
-                ReturnArrays();
-            }
-        }
-
-        public void Reset()
-        {
-            HandlerBucket<T>?[] snapshot;
-            lock (_lock)
-            {
-                snapshot = new HandlerBucket<T>?[_buckets.Length];
-                Array.Copy(_buckets, snapshot, _buckets.Length);
-            }
-
-            foreach (var b in snapshot) b?.Reset();
-            lock (_lock)
-            {
-                Rebuild();
-            }
+            if (_disposed) return;
+            _disposed = true;
+            ReturnArrays();
         }
 
         private void ReturnArrays()
@@ -380,15 +297,8 @@ public sealed class EventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void EnsureClean()
         {
-            if (Volatile.Read(ref _isDirty) == 1)
-                lock (_lock)
-                {
-                    if (_isDirty == 1)
-                    {
-                        Rebuild();
-                        Volatile.Write(ref _isDirty, 0);
-                    }
-                }
+            if (Volatile.Read(ref _isDirty) == 0) return;
+            if (Interlocked.Exchange(ref _isDirty, 0) != 0) Rebuild();
         }
 
         private void Rebuild()
@@ -741,61 +651,6 @@ public sealed class EventCenter
             }
         }
 
-        #region IEventBucketNonGeneric
-        void IEventBucketNonGeneric.AddFlow(int layerIndex, object handler)
-        {
-            if (handler is IEventHandler<T> h)
-                Add(layerIndex, h);
-            else
-                Add(layerIndex, (EventHandleDelegate<T>)handler);
-        }
-
-        void IEventBucketNonGeneric.AddAsync(int layerIndex, object handler)
-        {
-            if (handler is IEventHandlerAsync<T> h)
-                Add(layerIndex, h);
-            else
-                Add(layerIndex, (EventHandleDelegateAsync<T>)handler);
-        }
-
-        void IEventBucketNonGeneric.AddNotify(int layerIndex, object handler)
-        {
-            AddNotify(layerIndex, (EventNotifyDelegate<T>)handler);
-        }
-
-        void IEventBucketNonGeneric.AddSubscribe(int layerIndex, object handler)
-        {
-            AddSubscribe(layerIndex, (EventNotifyDelegate<T>)handler);
-        }
-
-        void IEventBucketNonGeneric.RemoveFlow(int layerIndex, object handler)
-        {
-            if (handler is IEventHandler<T> h)
-                Remove(layerIndex, h);
-            else if (handler is EventHandleDelegate<T> d)
-                Remove(layerIndex, d);
-        }
-
-        void IEventBucketNonGeneric.RemoveAsync(int layerIndex, object handler)
-        {
-            if (handler is IEventHandlerAsync<T> h)
-                Remove(layerIndex, h);
-            else if (handler is EventHandleDelegateAsync<T> d)
-                Remove(layerIndex, d);
-        }
-
-        void IEventBucketNonGeneric.RemoveNotify(int layerIndex, object handler)
-        {
-            RemoveNotify(layerIndex, (EventNotifyDelegate<T>)handler);
-        }
-
-        void IEventBucketNonGeneric.RemoveSubscribe(int layerIndex, object handler)
-        {
-            RemoveSubscribe(layerIndex, (EventNotifyDelegate<T>)handler);
-        }
-
-        #endregion
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public EventHandledState Dispatch(in T value)
         {
@@ -1023,22 +878,16 @@ public sealed class EventCenter
         private HandlerBucket<T> GetOrCreate(int layerIndex)
         {
             if (layerIndex >= _buckets.Length)
-                lock (_lock)
-                {
-                    if (layerIndex >= _buckets.Length)
-                    {
-                        var next = new HandlerBucket<T>?[Math.Max(layerIndex + 1, _buckets.Length * 2)];
-                        Array.Copy(_buckets, next, _buckets.Length);
-                        _buckets = next;
-                    }
-                }
+            {
+                var nextSize = _buckets.Length == 0 ? 4 : _buckets.Length;
+                while (nextSize <= layerIndex)
+                    nextSize <<= 1;
+                Array.Resize(ref _buckets, nextSize);
+            }
 
             var b = _buckets[layerIndex];
             if (b == null)
-                lock (_lock)
-                {
-                    b = _buckets[layerIndex] ??= new HandlerBucket<T>(MarkDirty);
-                }
+                b = _buckets[layerIndex] = new HandlerBucket<T>(MarkDirty);
 
             return b;
         }
