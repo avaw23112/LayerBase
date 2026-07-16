@@ -5,6 +5,9 @@ namespace LayerBase.Scope;
 internal sealed class ScopeRuntimeHost : IDisposable
 {
     private readonly ScopeRuntime[] _scopes;
+    private readonly ScopeRuntime[] _inlineScopes;
+    private readonly ScopeRuntime?[] _scopeById;
+    private readonly ScopeEndpoint?[] _endpointById;
     private readonly ScopeWorker[] _workers;
     private bool _disposed;
 
@@ -16,7 +19,39 @@ internal sealed class ScopeRuntimeHost : IDisposable
         if (scopes[0].Descriptor.ScopeId != ScopeDefinitionIds.Main)
             throw new InvalidOperationException("MainScope must be the first scope runtime.");
 
+        int maxScopeId = 0;
+        for (int i = 0; i < scopes.Length; i++)
+        {
+            int scopeId = scopes[i].ScopeId;
+            if (scopeId < 0)
+                throw new InvalidOperationException($"Scope id cannot be negative: {scopeId}.");
+
+            if (scopeId > maxScopeId)
+                maxScopeId = scopeId;
+        }
+
+        _scopeById = new ScopeRuntime?[maxScopeId + 1];
+        _endpointById = new ScopeEndpoint?[maxScopeId + 1];
+
+        var inlineScopes = new List<ScopeRuntime>();
+
+        for (int i = 0; i < scopes.Length; i++)
+        {
+            ScopeRuntime scope = scopes[i];
+            int scopeId = scope.ScopeId;
+
+            if (_scopeById[scopeId] != null)
+                throw new InvalidOperationException($"Duplicate scope id: {scopeId}.");
+
+            _scopeById[scopeId] = scope;
+            _endpointById[scopeId] = scope.Endpoint;
+
+            if (scope.Options.Threading == ScopeThreadingMode.Inline)
+                inlineScopes.Add(scope);
+        }
+
         _scopes = scopes;
+        _inlineScopes = inlineScopes.ToArray();
         _workers = workers ?? Array.Empty<ScopeWorker>();
 
         var mainEndpoint = _scopes[0].Endpoint;
@@ -24,7 +59,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
         {
             _scopes[i].BindHost(this);
             _scopes[i].BindMainActorEndpoint(mainEndpoint);
-            _scopes[i].BindScopeEndpoints(_scopes);
+            _scopes[i].BindScopeEndpoints(_endpointById);
         }
     }
 
@@ -43,11 +78,13 @@ internal sealed class ScopeRuntimeHost : IDisposable
     public bool TryGetRuntime(int scopeId, out ScopeRuntime scope)
     {
         ThrowIfDisposed();
-        for (int i = 0; i < _scopes.Length; i++)
+
+        if ((uint)scopeId < (uint)_scopeById.Length)
         {
-            if (_scopes[i].ScopeId == scopeId)
+            ScopeRuntime? runtime = _scopeById[scopeId];
+            if (runtime != null)
             {
-                scope = _scopes[i];
+                scope = runtime;
                 return true;
             }
         }
@@ -144,15 +181,13 @@ internal sealed class ScopeRuntimeHost : IDisposable
         Action<Exception>? reportException)
     {
         ThrowIfDisposed();
-        for (int i = 1; i < _scopes.Length; i++)
-        {
-            var scope = _scopes[i];
-            if (scope.Options.Threading != ScopeThreadingMode.Inline)
-                continue;
 
-            scope.PumpIngress();
-            scope.PumpSynchronizationContext(exceptionPolicy, reportException);
-            scope.PumpScopeResources(deltaTime);
+        for (int i = 0; i < _inlineScopes.Length; i++)
+        {
+            _inlineScopes[i].PumpScopeResources(
+                deltaTime,
+                exceptionPolicy,
+                reportException);
         }
     }
 

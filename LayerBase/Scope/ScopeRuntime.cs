@@ -27,8 +27,7 @@ internal sealed class ScopeRuntime : IDisposable
     private long _safePointToken;
     private ScopeSnapPlan _snapPlan = ScopeSnapPlan.Empty;
     private ScopeTimerSink? _timerSink;
-    private IReadOnlyDictionary<int, ScopeEndpoint> _scopeEndpoints =
-        new Dictionary<int, ScopeEndpoint>();
+    private ScopeEndpoint?[] _scopeEndpoints = Array.Empty<ScopeEndpoint?>();
     private float _fixedUpdateAccumulator;
     private bool _runtimeStopRun;
     private bool _lifecycleDisposeRun;
@@ -245,20 +244,26 @@ internal sealed class ScopeRuntime : IDisposable
         _hasActorClient = true;
     }
 
-    public void BindScopeEndpoints(IReadOnlyList<ScopeRuntime> scopes)
+    public void BindScopeEndpoints(ScopeEndpoint?[] endpoints)
     {
-        var endpoints = new Dictionary<int, ScopeEndpoint>(scopes.Count);
-        for (int i = 0; i < scopes.Count; i++)
-        {
-            endpoints[scopes[i].ScopeId] = scopes[i].Endpoint;
-        }
-
-        _scopeEndpoints = endpoints;
+        _scopeEndpoints = endpoints
+            ?? throw new ArgumentNullException(nameof(endpoints));
     }
 
     internal bool TryGetScopeEndpoint(int scopeId, out ScopeEndpoint endpoint)
     {
-        return _scopeEndpoints.TryGetValue(scopeId, out endpoint);
+        if ((uint)scopeId < (uint)_scopeEndpoints.Length)
+        {
+            ScopeEndpoint? candidate = _scopeEndpoints[scopeId];
+            if (candidate.HasValue)
+            {
+                endpoint = candidate.Value;
+                return true;
+            }
+        }
+
+        endpoint = default;
+        return false;
     }
 
     public bool TryPostEventToScope<TEvent>(
@@ -266,7 +271,7 @@ internal sealed class ScopeRuntime : IDisposable
         in TEvent value)
         where TEvent : struct
     {
-        if (!_scopeEndpoints.TryGetValue(scopeId, out ScopeEndpoint endpoint))
+        if (!TryGetScopeEndpoint(scopeId, out ScopeEndpoint endpoint))
             return false;
 
         return endpoint.Transport != null && endpoint.Transport.EnqueueEvent(
@@ -359,21 +364,27 @@ internal sealed class ScopeRuntime : IDisposable
         DisposeAfterControlIfNeeded();
     }
 
-    public void PumpScopeResources(float deltaTime)
+    public void PumpScopeResources(
+        float deltaTime,
+        CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
+        Action<Exception>? reportException = null)
     {
         BindOwnerThreadIfNeeded();
         var context = SynchronizationContext;
         if (context != null)
         {
             using var scope = context.EnterScope();
-            PumpScopeResourcesCore(deltaTime);
+            PumpScopeResourcesCore(deltaTime, exceptionPolicy, reportException);
             return;
         }
 
-        PumpScopeResourcesCore(deltaTime);
+        PumpScopeResourcesCore(deltaTime, exceptionPolicy, reportException);
     }
 
-    private void PumpScopeResourcesCore(float deltaTime)
+    private void PumpScopeResourcesCore(
+        float deltaTime,
+        CompletionExceptionPolicy exceptionPolicy,
+        Action<Exception>? reportException)
     {
         _tickCount++;
         PumpIngress();
@@ -381,8 +392,8 @@ internal sealed class ScopeRuntime : IDisposable
             return;
 
         PumpSynchronizationContext(
-            CompletionExceptionPolicy.Throw,
-            null);
+            exceptionPolicy,
+            reportException);
         TickTimer(deltaTime);
         DelayManager?.Tick(deltaTime);
         PostScheduler?.Pump();
@@ -1006,7 +1017,7 @@ internal sealed class ScopeRuntime : IDisposable
             return;
         }
 
-        if (_scopeEndpoints.TryGetValue(ScopeDefinitionIds.Main, out var mainEndpoint))
+        if (TryGetScopeEndpoint(ScopeDefinitionIds.Main, out var mainEndpoint))
             _ = EnqueueScopeFaultEvent(mainEndpoint, record);
     }
 
