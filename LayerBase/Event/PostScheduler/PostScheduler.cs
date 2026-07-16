@@ -18,13 +18,9 @@ public sealed class PostScheduler : IDisposable
 
     private EventBuildPolicyTable _policyTable;
 
-    // Optimized Buffers
-    private ulong[] _dirtyPendingBits = Array.Empty<ulong>();
-    private ulong[] _latestPendingBits = Array.Empty<ulong>();
-
-    // Snapshot Buffers for Reentrancy Safety
-    private ulong[] _dirtySnapshotBits = Array.Empty<ulong>();
-    private ulong[] _latestSnapshotBits = Array.Empty<ulong>();
+    // Sparse special post bitmaps
+    private readonly SparsePendingBitSet _dirtyBits = new();
+    private readonly SparsePendingBitSet _latestBits = new();
     private readonly List<CoalescedSlot> _snapshotCoalesced = new();
     private PayloadHandle[] _latestSnapshotBuffer = new PayloadHandle[256];
 
@@ -46,6 +42,16 @@ public sealed class PostScheduler : IDisposable
     private readonly BackpressurePolicy _defaultBackpressure;
 
     internal int PendingCount => _readyQueue.Count + _nextQueue.Count + _pendingCoalesced.Count;
+
+    internal bool HasSpecialPending =>
+        _dirtyBits.HasPending ||
+        _latestBits.HasPending ||
+        _pendingCoalesced.Count != 0;
+
+    internal bool HasPendingWork =>
+        HasSpecialPending ||
+        !_readyQueue.IsEmpty ||
+        !_nextQueue.IsEmpty;
 
     public PostScheduler(int                   runtimeId, EventCenter eventCenter, PostSchedulerOptions options,
                          EventBuildPolicyTable policyTable)
@@ -134,12 +140,8 @@ public sealed class PostScheduler : IDisposable
             _latestSnapshotBuffer = newLatestSnapshot;
         }
 
-        var requiredSegments = (typeId >> 6) + 1;
-
-        EnsureUlongArrayCapacity(ref _dirtyPendingBits, requiredSegments);
-        EnsureUlongArrayCapacity(ref _latestPendingBits, requiredSegments);
-        EnsureUlongArrayCapacity(ref _dirtySnapshotBits, requiredSegments);
-        EnsureUlongArrayCapacity(ref _latestSnapshotBits, requiredSegments);
+        _dirtyBits.EnsureBitCapacity(requiredLength);
+        _latestBits.EnsureBitCapacity(requiredLength);
 
         if (typeId > _sealedMaxEventTypeId)
         {
@@ -150,18 +152,6 @@ public sealed class PostScheduler : IDisposable
         {
             RebuildPostBitmap();
         }
-    }
-
-    private static void EnsureUlongArrayCapacity(ref ulong[] array, int requiredLength)
-    {
-        if (array.Length >= requiredLength)
-        {
-            return;
-        }
-
-        var newArray = new ulong[BitHelper.NextPowerOfTwo(requiredLength)];
-        Array.Copy(array, newArray, array.Length);
-        array = newArray;
     }
 
     private void RebuildPostBitmap()
@@ -322,17 +312,8 @@ public sealed class PostScheduler : IDisposable
         if (!IsKnownEventType(typeId))
             return FailEventTypeNotRegistered<T>();
 
-        var segment = typeId >> 6;
-        var bit = 1UL << (typeId & 63);
-
-        if (segment >= _dirtyPendingBits.Length)
-            return PostResult.Failure();
-
-        if ((FastArray.At(_dirtyPendingBits, segment) & bit) == 0)
-        {
-            FastArray.At(_dirtyPendingBits, segment) |= bit;
+        if (_dirtyBits.Set(typeId))
             _payloadStorage.EnsureStore<T>(_runtimeId);
-        }
 
         return PostResult.Coalesced();
     }
@@ -360,9 +341,6 @@ public sealed class PostScheduler : IDisposable
 
     private PostResult EnqueueLatestInternal<T>(int typeId, in T value) where T : struct
     {
-        var segment = typeId >> 6;
-        var bit = 1UL << (typeId & 63);
-
         if (typeId < _latestBuffer.Length)
         {
             ref var handleRef = ref FastArray.At(_latestBuffer, typeId);
@@ -372,10 +350,7 @@ public sealed class PostScheduler : IDisposable
             }
 
             handleRef = _payloadStorage.Store(_runtimeId, value);
-            if (segment < _latestPendingBits.Length)
-            {
-                FastArray.At(_latestPendingBits, segment) |= bit;
-            }
+            _latestBits.Set(typeId);
 
             return PostResult.Success;
         }
@@ -533,13 +508,15 @@ public sealed class PostScheduler : IDisposable
 
     private int FlushBuffers()
     {
+        if (!HasSpecialPending)
+            return 0;
+
         int count = 0;
 
         // 1. Take Snapshots
 
         // Dirty Signals Snapshot
-        Array.Copy(_dirtyPendingBits, _dirtySnapshotBits, _dirtyPendingBits.Length);
-        Array.Clear(_dirtyPendingBits, 0, _dirtyPendingBits.Length);
+        _dirtyBits.TakeSnapshot();
 
         // Coalesced Snapshot
         if (_pendingCoalesced.Count > 0)
@@ -556,18 +533,23 @@ public sealed class PostScheduler : IDisposable
         }
 
         // Latest Snapshot
-        Array.Copy(_latestPendingBits, _latestSnapshotBits, _latestPendingBits.Length);
-        Array.Clear(_latestPendingBits, 0, _latestPendingBits.Length);
+        _latestBits.TakeSnapshot();
 
-        for (int i = 0; i < _latestSnapshotBits.Length; i++)
+        ReadOnlySpan<int> latestWords = _latestBits.SnapshotWords;
+
+        for (int i = 0; i < latestWords.Length; i++)
         {
-            var bits = _latestSnapshotBits[i];
+            int wordIndex = latestWords[i];
+            ulong bits = _latestBits.GetSnapshotBits(wordIndex);
+
             while (bits != 0)
             {
-                var bitIndex = BitHelper.TrailingZeroCount(bits);
-                var typeId = (i << 6) + bitIndex;
+                int bitIndex = BitHelper.TrailingZeroCount(bits);
+                int typeId = (wordIndex << 6) + bitIndex;
+
                 _latestSnapshotBuffer[typeId] = _latestBuffer[typeId];
                 _latestBuffer[typeId] = PayloadHandle.Invalid;
+
                 bits &= bits - 1;
             }
         }
@@ -582,36 +564,37 @@ public sealed class PostScheduler : IDisposable
         }
         finally
         {
-            // 兜底释放。各 DispatchXXX 内部已经释放过的 handle 会被置 Invalid，
-            // 所以这里不会重复释放。
-            Array.Clear(_dirtySnapshotBits, 0, _dirtySnapshotBits.Length);
+            _dirtyBits.ClearSnapshot();
             ReleaseRemainingCoalescedSnapshot();
             _snapshotCoalesced.Clear();
             ReleaseRemainingLatestSnapshot();
+            _latestBits.ClearSnapshot();
         }
     }
 
     private int DispatchDirtySnapshotSafely()
     {
         var processed = 0;
-        try
+
+        ReadOnlySpan<int> words = _dirtyBits.SnapshotWords;
+
+        for (int i = 0; i < words.Length; i++)
         {
-            for (int i = 0; i < _dirtySnapshotBits.Length; i++)
+            int wordIndex = words[i];
+            ulong bits = _dirtyBits.GetSnapshotBits(wordIndex);
+
+            while (bits != 0)
             {
-                var bits = _dirtySnapshotBits[i];
-                while (bits != 0)
-                {
-                    var bitIndex = BitHelper.TrailingZeroCount(bits);
-                    var typeId = (i << 6) + bitIndex;
-                    _payloadStorage.DispatchDefault(typeId, _eventCenter);
-                    processed++;
-                    bits &= bits - 1;
-                }
+                int bitIndex = BitHelper.TrailingZeroCount(bits);
+                int typeId = (wordIndex << 6) + bitIndex;
+
+                _payloadStorage.DispatchDefault(typeId, _eventCenter);
+
+                processed++;
+                bits &= bits - 1;
             }
-        }
-        finally
-        {
-            Array.Clear(_dirtySnapshotBits, 0, _dirtySnapshotBits.Length);
+
+            _dirtyBits.ClearSnapshotWord(wordIndex);
         }
 
         return processed;
@@ -665,38 +648,36 @@ public sealed class PostScheduler : IDisposable
     private int DispatchLatestSnapshotSafely()
     {
         var processed = 0;
-        try
+
+        ReadOnlySpan<int> words = _latestBits.SnapshotWords;
+
+        for (int i = 0; i < words.Length; i++)
         {
-            for (int i = 0; i < _latestSnapshotBits.Length; i++)
+            int wordIndex = words[i];
+            ulong bits = _latestBits.GetSnapshotBits(wordIndex);
+
+            while (bits != 0)
             {
-                var bits = _latestSnapshotBits[i];
-                while (bits != 0)
+                int bitIndex = BitHelper.TrailingZeroCount(bits);
+                int typeId = (wordIndex << 6) + bitIndex;
+                bits &= bits - 1;
+
+                var handle = _latestSnapshotBuffer[typeId];
+                if (handle.IsInvalid) continue;
+
+                try
                 {
-                    var bitIndex = BitHelper.TrailingZeroCount(bits);
-                    var typeId = (i << 6) + bitIndex;
-                    bits &= bits - 1; // Clear bit now so if Dispatch fails, outer finally clears others
-
-                    var handle = _latestSnapshotBuffer[typeId];
-                    if (handle.IsInvalid) continue;
-
-                    try
-                    {
-                        _payloadStorage.Dispatch(handle, _eventCenter);
-                        processed++;
-                    }
-                    finally
-                    {
-                        _payloadStorage.Release(handle);
-                        _latestSnapshotBuffer[typeId] = PayloadHandle.Invalid;
-                    }
+                    _payloadStorage.Dispatch(handle, _eventCenter);
+                    processed++;
                 }
-
-                _latestSnapshotBits[i] = 0;
+                finally
+                {
+                    _payloadStorage.Release(handle);
+                    _latestSnapshotBuffer[typeId] = PayloadHandle.Invalid;
+                }
             }
-        }
-        finally
-        {
-            ReleaseRemainingLatestSnapshot();
+
+            _latestBits.ClearSnapshotWord(wordIndex);
         }
 
         return processed;
@@ -704,13 +685,17 @@ public sealed class PostScheduler : IDisposable
 
     private void ReleaseRemainingLatestSnapshot()
     {
-        for (int i = 0; i < _latestSnapshotBits.Length; i++)
+        ReadOnlySpan<int> words = _latestBits.SnapshotWords;
+
+        for (int i = 0; i < words.Length; i++)
         {
-            var bits = _latestSnapshotBits[i];
+            int wordIndex = words[i];
+            ulong bits = _latestBits.GetSnapshotBits(wordIndex);
+
             while (bits != 0)
             {
-                var bitIndex = BitHelper.TrailingZeroCount(bits);
-                var typeId = (i << 6) + bitIndex;
+                int bitIndex = BitHelper.TrailingZeroCount(bits);
+                int typeId = (wordIndex << 6) + bitIndex;
                 var handle = _latestSnapshotBuffer[typeId];
                 if (!handle.IsInvalid)
                 {
@@ -720,8 +705,6 @@ public sealed class PostScheduler : IDisposable
 
                 bits &= bits - 1;
             }
-
-            _latestSnapshotBits[i] = 0;
         }
     }
 
@@ -840,17 +823,27 @@ public sealed class PostScheduler : IDisposable
         _snapshotCoalesced.Clear();
         ReleaseRemainingLatestSnapshot();
 
-        for (int i = 0; i < _latestPendingBits.Length; i++)
+        ReadOnlySpan<int> latestPendingWords = _latestBits.PendingWords;
+
+        for (int i = 0; i < latestPendingWords.Length; i++)
         {
-            var bits = FastArray.At(_latestPendingBits, i);
+            int wordIndex = latestPendingWords[i];
+            ulong bits = _latestBits.GetPendingBits(wordIndex);
+
             while (bits != 0)
             {
-                var bitIndex = BitHelper.TrailingZeroCount(bits);
-                var typeId = (i << 6) + bitIndex;
+                int bitIndex = BitHelper.TrailingZeroCount(bits);
+                int typeId = (wordIndex << 6) + bitIndex;
                 _payloadStorage.Release(_latestBuffer[typeId]);
                 bits &= bits - 1;
             }
         }
+
+        _latestBits.ClearPending();
+        _latestBits.ClearSnapshot();
+
+        _dirtyBits.ClearPending();
+        _dirtyBits.ClearSnapshot();
 
         foreach (var key in _pendingCoalesced)
         {
