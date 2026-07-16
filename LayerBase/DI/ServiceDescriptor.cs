@@ -1,3 +1,5 @@
+using LayerBase.Scope;
+
 namespace LayerBase.DI;
 
 /// <summary>
@@ -18,7 +20,8 @@ public sealed class ServiceDescriptor
 {
     public ServiceDescriptor(Type                            serviceType, Type?   implType, ServiceLifetime lifetime,
                              Func<IServiceProvider, object>? factory,     object? instance,
-                             int                             registrationScopeId = 0)
+                             int                             registrationScopeId = 0,
+                             int                             ownerScopeId = ScopeDefinitionIds.Main)
     {
         ServiceType = serviceType ?? throw new ArgumentNullException(nameof(serviceType));
         ImplType = implType;
@@ -26,6 +29,7 @@ public sealed class ServiceDescriptor
         Factory = factory;
         Instance = instance;
         RegistrationScopeId = registrationScopeId;
+        OwnerScopeId = ownerScopeId;
     }
 
     public Type ServiceType { get; }
@@ -34,6 +38,7 @@ public sealed class ServiceDescriptor
     public Func<IServiceProvider, object>? Factory { get; }
     public object? Instance { get; }
     public int RegistrationScopeId { get; }
+    public int OwnerScopeId { get; }
 
     public static ServiceDescriptor Singleton<TService, TImpl>() where TImpl : TService
     {
@@ -74,6 +79,13 @@ public sealed class ServiceDescriptor
     {
         if (RegistrationScopeId == registrationScopeId) return this;
 
-        return new ServiceDescriptor(ServiceType, ImplType, Lifetime, Factory, Instance, registrationScopeId);
+        return new ServiceDescriptor(ServiceType, ImplType, Lifetime, Factory, Instance, registrationScopeId, OwnerScopeId);
+    }
+
+    internal ServiceDescriptor WithOwnerScope(int ownerScopeId)
+    {
+        if (OwnerScopeId == ownerScopeId) return this;
+
+        return new ServiceDescriptor(ServiceType, ImplType, Lifetime, Factory, Instance, RegistrationScopeId, ownerScopeId);
     }
 }

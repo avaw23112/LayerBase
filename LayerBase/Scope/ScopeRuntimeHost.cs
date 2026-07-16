@@ -1,3 +1,5 @@
+using LayerBase.Async;
+
 namespace LayerBase.Scope;
 
 internal sealed class ScopeRuntimeHost : IDisposable
@@ -117,6 +119,24 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
         scope = default;
         return false;
+    }
+
+    public void PumpInlineScopes(
+        float deltaTime,
+        CompletionExceptionPolicy exceptionPolicy,
+        Action<Exception>? reportException)
+    {
+        ThrowIfDisposed();
+        for (int i = 1; i < _scopes.Length; i++)
+        {
+            var scope = _scopes[i];
+            if (scope.Options.Threading != ScopeThreadingMode.Inline)
+                continue;
+
+            scope.PumpIngress();
+            scope.PumpSynchronizationContext(exceptionPolicy, reportException);
+            scope.PumpScopeResources(deltaTime);
+        }
     }
 
     public void Dispose()

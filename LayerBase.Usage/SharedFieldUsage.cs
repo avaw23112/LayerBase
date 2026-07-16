@@ -63,7 +63,7 @@ public sealed partial class InventoryStateModule : ILayerContext
 
 public sealed partial class InventoryHudModule : ILayerContext
 {
-    [From(typeof(SharedFieldLayer), "equip-state")]
+    [From(typeof(SharedStatePublisherService), "equip-state")]
     private readonly IReadOnlyDictionary<string, bool> _equipped = default!;
 
     public bool IsEquipped(string itemName)
@@ -99,6 +99,6 @@ public static class SharedFieldUsage
         state.SetEquipped("Sword", true);
 
         Console.WriteLine($"[Service Scope] Item count: {query.Count()}");
-        Console.WriteLine($"[Layer Scope] Sword equipped: {hud.IsEquipped("Sword")}");
+        Console.WriteLine($"[Service Scope] Sword equipped: {hud.IsEquipped("Sword")}");
     }
 }

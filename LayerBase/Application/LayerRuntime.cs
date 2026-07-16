@@ -176,17 +176,21 @@ public sealed partial class LayerRuntime : IDisposable
                 effectivePolicy.MaxPending, options.DefaultBackpressure, effectivePolicy.MergeFailure));
         }
 
-        _scopeHost.MainScope.InitializeOrUpdateScheduler(options, policyTable, plans.ToArray());
+        var planArray = plans.ToArray();
+        foreach (var scope in _scopeHost.Scopes)
+            scope.InitializeOrUpdateScheduler(options, policyTable, planArray);
     }
 
     internal void InitializeTimer(TimeSchedulerOptions options)
     {
-        _scopeHost.MainScope.InitializeTimer(options);
+        foreach (var scope in _scopeHost.Scopes)
+            scope.InitializeTimer(options);
     }
 
     internal void InitializeDelay(DelayBufferOptions options)
     {
-        _scopeHost.MainScope.InitializeDelay(options);
+        foreach (var scope in _scopeHost.Scopes)
+            scope.InitializeDelay(options);
     }
 
     internal void InstallScopeHost(ScopeExecutionPlan[] plans)
@@ -391,6 +395,11 @@ public sealed partial class LayerRuntime : IDisposable
 
             EcsWorld.SweepProjectedActors();
         }
+
+        _scopeHost.PumpInlineScopes(
+            deltaTime,
+            policy,
+            ex => ReportLayerEventError(-1, "System", "ScopeCompletion", ex));
     }
     #endregion
 
@@ -864,7 +873,12 @@ public sealed partial class LayerRuntime : IDisposable
                     _assemblyModules);
                 _runtime.InstallScopeHost(_runtime.CompositionPlan.Scopes);
                 _runtime._scopeHost.MainScope.InstallSynchronizationContext();
+                _runtime._fixedUpdateOptions = _fixedUpdateOptions;
+                _runtime.InitializeScheduler(_postOptions);
+                _runtime.InitializeTimer(_timerOptions);
+                _runtime.InitializeDelay(_delayOptions);
                 _layerChain.Prebuild();
+                _runtime.RebuildEventPolicies();
                 _runtime.RunTopologyAudit();
                 _runtime._state = RuntimeState.Built;
 
@@ -872,10 +886,6 @@ public sealed partial class LayerRuntime : IDisposable
                 _runtime._tools = new LayerToolRegistry(_runtime, _runtime.CompositionPlan.Tools);
                 _runtime.BuildLocalCallRegistry();
 
-                _runtime._fixedUpdateOptions = _fixedUpdateOptions;
-                _runtime.InitializeScheduler(_postOptions);
-                _runtime.InitializeTimer(_timerOptions);
-                _runtime.InitializeDelay(_delayOptions);
                 _runtime.MainActorRuntime.PrepareRuntimeBuild();
                 _layerChain.Build(1024, true, () =>
                 {

@@ -127,7 +127,13 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
                 $"Service instance {instance.GetType().Name} is already bound to another Layer provider.");
         }
 
-        ServiceLayerBinder.AttachLayer(instance, _ownerLayer);
+        if (!_runtime.ScopeHost.TryGetRuntime(descriptor.OwnerScopeId, out var ownerScope))
+        {
+            throw new InvalidOperationException(
+                $"Service `{descriptor.ServiceType.FullName}` targets unknown scope id {descriptor.OwnerScopeId}.");
+        }
+
+        ServiceLayerBinder.AttachScopeObject(instance, _ownerLayer, ownerScope);
         return instance;
     }
 

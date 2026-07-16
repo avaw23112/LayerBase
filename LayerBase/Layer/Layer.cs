@@ -271,15 +271,21 @@ public abstract class Layer : Node, IDisposable
         BindAutoCallHandlers();
 
         var subscribers = new List<IAutoSubscribe>();
+        var boundSubscriberInstances = new HashSet<object>(ObjectReferenceComparer.Instance);
+        var boundInterfaceHandlerInstances = new HashSet<object>(ObjectReferenceComparer.Instance);
         if (this is IAutoSubscribe layerAutoSubscribe)
         {
             layerAutoSubscribe.AutoBind(this);
             subscribers.Add(layerAutoSubscribe);
+            boundSubscriberInstances.Add(layerAutoSubscribe);
         }
+        if (boundInterfaceHandlerInstances.Add(this))
+            BindInterfaceEventHandlers(this);
 
         foreach (var resolved in _resolvedServices)
         {
             if (resolved.Instance is not IAutoSubscribe auto) continue;
+            if (!boundSubscriberInstances.Add(auto)) continue;
             auto.AutoBind(this);
             subscribers.Add(auto);
         }
@@ -287,6 +293,7 @@ public abstract class Layer : Node, IDisposable
         foreach (var resolved in _resolvedServices)
         {
             if (resolved.Instance is IAutoSubscribe) continue;
+            if (!boundInterfaceHandlerInstances.Add(resolved.Instance)) continue;
             BindInterfaceEventHandlers(resolved.Instance);
         }
 
@@ -431,10 +438,17 @@ public abstract class Layer : Node, IDisposable
 
         if (!_registeredServiceTypes.Add(serviceType)) return;
 
-        if (OwnerContext != null)
+        int ownerScopeId = ResolveServiceOwnerScopeId(service.GetType());
+        if (OwnerContext != null && OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
+            ServiceLayerBinder.AttachScopeObject(service, this, ownerScope);
+        else if (OwnerContext != null)
             ServiceLayerBinder.Attach(service, this);
 
-        var registration = new RegisteredService(serviceType, service, Interlocked.Increment(ref _nextServiceScopeId));
+        var registration = new RegisteredService(
+            serviceType,
+            service,
+            Interlocked.Increment(ref _nextServiceScopeId),
+            ownerScopeId);
         if (_collectingGeneratedServices)
         {
             AddActiveService(registration);
@@ -736,7 +750,8 @@ public abstract class Layer : Node, IDisposable
 
             if (genericDefinition == typeof(IEventHandler<>))
             {
-                var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+                var binding = ServiceLayerBinder.GetBinding(instance);
+                var center = binding?.OwnerScope.EventCenter ?? OwnerContext.ScopeHost.MainScope.EventCenter;
                 center.SubscribeFlow(RouteIndex, instance, typeArguments[0]);
                 _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Flow));
                 RecordSubscribedEvent(typeArguments[0]);
@@ -744,7 +759,8 @@ public abstract class Layer : Node, IDisposable
             }
             if (genericDefinition == typeof(IEventHandlerAsync<>))
             {
-                var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+                var binding = ServiceLayerBinder.GetBinding(instance);
+                var center = binding?.OwnerScope.EventCenter ?? OwnerContext.ScopeHost.MainScope.EventCenter;
                 center.SubscribeAsync(RouteIndex, instance, typeArguments[0]);
                 _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, instance, typeArguments[0], UnsubscribeKind.Async));
                 RecordSubscribedEvent(typeArguments[0]);
@@ -755,13 +771,16 @@ public abstract class Layer : Node, IDisposable
     private void AddActiveService(RegisteredService registration)
     {
         _activeServices.Add(registration);
-        ServiceLayerBinder.Attach(registration.Service, this);
+        if (OwnerContext != null && OwnerContext.ScopeHost.TryGetRuntime(registration.OwnerScopeId, out var ownerScope))
+            ServiceLayerBinder.AttachScopeObject(registration.Service, this, ownerScope);
+        else
+            ServiceLayerBinder.Attach(registration.Service, this);
 
         _serviceCollection.Add(new ServiceDescriptor(
             registration.ServiceType, null, ServiceLifetime.Scoped,
-            _ => registration.Service, null, registration.ScopeId));
+            _ => registration.Service, null, registration.ScopeId, registration.OwnerScopeId));
 
-        using var _ = _serviceCollection.PushRegistrationScope(registration.ScopeId);
+        using var _ = _serviceCollection.PushRegistrationScope(registration.ScopeId, registration.OwnerScopeId);
 
         if (registration.Service is IAutoServiceMount autoMount)
             autoMount.__AutoMountContexts(_serviceCollection);
@@ -798,15 +817,32 @@ public abstract class Layer : Node, IDisposable
 
         return typeof(MainScope);
     }
+
+    private static int ResolveServiceOwnerScopeId(Type serviceType)
+    {
+        var ownerScopeType = ResolveOwnerScopeType(serviceType);
+        if (ownerScopeType == typeof(MainScope))
+            return ScopeDefinitionIds.Main;
+
+        try
+        {
+            return ScopeDefinitionIds.Resolve(ownerScopeType);
+        }
+        catch (InvalidOperationException)
+        {
+            return ScopeDefinitionIds.Main;
+        }
+    }
     #endregion
     #region Nested Types
     internal readonly struct RegisteredService
     {
-        public RegisteredService(Type serviceType, IService service, int scopeId)
+        public RegisteredService(Type serviceType, IService service, int scopeId, int ownerScopeId)
         {
             ServiceType = serviceType;
             Service = service;
             ScopeId = scopeId;
+            OwnerScopeId = ownerScopeId;
         }
 
         /// <summary>服务注册时声明的类型（通常为接口）。</summary>
@@ -817,6 +853,9 @@ public abstract class Layer : Node, IDisposable
 
         /// <summary>服务在 Layer 内的作用域 ID。</summary>
         public int ScopeId { get; }
+
+        /// <summary>服务所属运行 Scope 的 ID。</summary>
+        public int OwnerScopeId { get; }
     }
 
     /// <summary>

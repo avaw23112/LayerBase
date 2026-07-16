@@ -8,10 +8,14 @@ public class ServiceCollection : IServiceCollection
 {
     private readonly List<ServiceDescriptor> _descriptors = new();
     private int _currentRegistrationScopeId;
+    private int _currentOwnerScopeId = LayerBase.Scope.ScopeDefinitionIds.Main;
 
     public IServiceCollection Add(ServiceDescriptor descriptor)
     {
-        _descriptors.Add(descriptor.WithRegistrationScope(_currentRegistrationScopeId));
+        _descriptors.Add(
+            descriptor
+                .WithRegistrationScope(_currentRegistrationScopeId)
+                .WithOwnerScope(_currentOwnerScopeId));
         return this;
     }
 
@@ -78,32 +82,43 @@ public class ServiceCollection : IServiceCollection
     {
         _descriptors.Clear();
         _currentRegistrationScopeId = 0;
+        _currentOwnerScopeId = LayerBase.Scope.ScopeDefinitionIds.Main;
     }
 
-    internal IDisposable PushRegistrationScope(int registrationScopeId)
+    internal IDisposable PushRegistrationScope(
+        int registrationScopeId,
+        int ownerScopeId = LayerBase.Scope.ScopeDefinitionIds.Main)
     {
-        var previous = _currentRegistrationScopeId;
+        var previousRegistrationScopeId = _currentRegistrationScopeId;
+        var previousOwnerScopeId = _currentOwnerScopeId;
         _currentRegistrationScopeId = registrationScopeId;
-        return new RegistrationScope(this, previous);
+        _currentOwnerScopeId = ownerScopeId;
+        return new RegistrationScope(this, previousRegistrationScopeId, previousOwnerScopeId);
     }
 
     private sealed class RegistrationScope : IDisposable
     {
         private readonly ServiceCollection _owner;
-        private readonly int _previousScopeId;
+        private readonly int _previousRegistrationScopeId;
+        private readonly int _previousOwnerScopeId;
         private bool _disposed;
 
-        public RegistrationScope(ServiceCollection owner, int previousScopeId)
+        public RegistrationScope(
+            ServiceCollection owner,
+            int previousRegistrationScopeId,
+            int previousOwnerScopeId)
         {
             _owner = owner;
-            _previousScopeId = previousScopeId;
+            _previousRegistrationScopeId = previousRegistrationScopeId;
+            _previousOwnerScopeId = previousOwnerScopeId;
         }
 
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            _owner._currentRegistrationScopeId = _previousScopeId;
+            _owner._currentRegistrationScopeId = _previousRegistrationScopeId;
+            _owner._currentOwnerScopeId = _previousOwnerScopeId;
         }
     }
 }
