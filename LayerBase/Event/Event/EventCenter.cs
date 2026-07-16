@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LayerBase.Async;
@@ -844,23 +845,55 @@ public sealed class EventCenter
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DispatchAsync(int start, int end, in T value)
         {
-            var hs = _asyncHandlers;
-            var ft = _faultTable;
-            for (var i = start; i < end; i++)
+            EventHandleDelegateAsync<T>[] handlers = _asyncHandlers;
+            FaultTable<T> faultTable = _faultTable;
+
+            for (int i = start; i < end; i++)
             {
-                var faultSlot = ft.AsyncFaults[i];
                 LBTask task;
+
                 try
                 {
-                    task = hs[i](value);
+                    task = handlers[i](value);
                 }
-                catch (Exception e)
+                catch (Exception ex)
                 {
-                    HandleFault(faultSlot, ft.EventNameId, in value, e);
+                    HandleFault(
+                        faultTable,
+                        FaultKind.Async,
+                        i,
+                        in value,
+                        ex);
                     continue;
                 }
 
-                AsyncFaultContext<T>.Observe(this, faultSlot, ft.EventNameId, in value, task);
+                var awaiter = task.GetAwaiter();
+
+                if (awaiter.IsCompleted)
+                {
+                    try
+                    {
+                        awaiter.GetResult();
+                    }
+                    catch (Exception ex)
+                    {
+                        HandleFault(
+                            faultTable,
+                            FaultKind.Async,
+                            i,
+                            in value,
+                            ex);
+                    }
+
+                    continue;
+                }
+
+                AsyncFaultContext<T>.ObserveIncomplete(
+                    this,
+                    faultTable.AsyncFaults[i],
+                    faultTable.EventNameId,
+                    in value,
+                    task);
             }
         }
 
@@ -934,11 +967,22 @@ public sealed class EventCenter
             _continuation = Complete;
         }
 
-        public static void Observe(EventBucket<T> owner, FaultSlot faultSlot, int eventNameId, in T payload,
-                                   LBTask         task)
+        public static void ObserveIncomplete(
+            EventBucket<T> owner,
+            FaultSlot faultSlot,
+            int eventNameId,
+            in T payload,
+            LBTask task)
         {
-            if (!s_pool.TryDequeue(out var context)) context = new AsyncFaultContext<T>();
-            else Interlocked.Decrement(ref s_poolCount);
+            Debug.Assert(
+                !task.GetAwaiter().IsCompleted,
+                "ObserveIncomplete must only receive an incomplete LBTask.");
+
+            if (!s_pool.TryDequeue(out var context))
+                context = new AsyncFaultContext<T>();
+            else
+                Interlocked.Decrement(ref s_poolCount);
+
             context._owner = owner;
             context._faultSlot = faultSlot;
             context._eventNameId = eventNameId;
