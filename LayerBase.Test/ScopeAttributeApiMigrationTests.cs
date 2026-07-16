@@ -2,6 +2,7 @@ using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
 using LayerBase.DI;
+using LayerBase.DI.Options;
 using LayerBase.Layers;
 using LayerBase.Modules;
 using LayerBase.Scope;
@@ -86,6 +87,37 @@ public sealed class ScopeAttributeApiMigrationTests
         var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await task);
         Assert.That(exception!.Message, Does.Contain("ScopeCall handler"));
     }
+
+    [Test]
+    public async Task Scope_endpoint_attributes_on_layer_context_are_auto_bound()
+    {
+        var layer = new AttributeApiContextLayer();
+        using var runtime = LayerHub.CreateLayers()
+                                    .Push(layer)
+                                    .AddAssemblyModule(new AttributeApiContextModule())
+                                    .Build();
+
+        runtime.GetScope<AttributeApiContextScope>().Post(new AttributeApiContextStockArrived("sku-context", 8));
+        runtime.Pump(0.016f);
+
+        var context = layer.GetService<AttributeApiContextService>().Context;
+        Assert.That(context, Is.InstanceOf<IAutoScopeEndpointBinder>());
+        Assert.That(context.LastSku, Is.EqualTo("sku-context"));
+        Assert.That(context.Available, Is.EqualTo(8));
+
+        var reservedTask = runtime.GetScope<AttributeApiContextScope>()
+                                  .Call<AttributeApiContextReserveStock, AttributeApiContextReserveStockResult>(
+                                      new AttributeApiContextReserveStock("sku-context", 2));
+        runtime.Pump(0.016f);
+
+        var reserved = await reservedTask;
+        Assert.That(reserved.Accepted, Is.True);
+        Assert.That(context.Reserved, Is.EqualTo(2));
+
+        var quote = await context.Call<AttributeApiContextLocalPriceQuery, AttributeApiContextLocalPriceQuote>(
+            new AttributeApiContextLocalPriceQuery("sku-context"));
+        Assert.That(quote.Price, Is.EqualTo("sku-context".Length));
+    }
 }
 
 public readonly struct AttributeApiScope : IScopeDefinition
@@ -95,6 +127,154 @@ public readonly struct AttributeApiScope : IScopeDefinition
 
 public sealed partial class AttributeApiLayer : Layer
 {
+}
+
+public readonly struct AttributeApiContextScope : IScopeDefinition
+{
+    public const int ScopeId = 62;
+}
+
+public sealed partial class AttributeApiContextLayer : Layer
+{
+}
+
+public sealed class AttributeApiContextModule : IAssemblyModule
+{
+    private static readonly AssemblyModuleId s_id = new("attribute-api-context-endpoints");
+
+    public AttributeApiContextModule()
+    {
+        Manifest = new AssemblyModuleManifest(
+            s_id,
+            new[]
+            {
+                ServiceContribution.ForTypes(
+                    typeof(AttributeApiContextService),
+                    typeof(AttributeApiContextService),
+                    typeof(AttributeApiContextLayer),
+                    typeof(AttributeApiContextScope),
+                    ServiceLifetime.Singleton)
+            },
+            Array.Empty<ContextContribution>(),
+            Array.Empty<LocalCallContribution>(),
+            Array.Empty<EventHandlerContribution>(),
+            Array.Empty<LayerToolContribution>());
+    }
+
+    public AssemblyModuleId Id => s_id;
+
+    public AssemblyModuleManifest Manifest { get; }
+}
+
+[OwnerLayer(typeof(AttributeApiContextLayer))]
+[Scope<AttributeApiContextScope>]
+public sealed partial class AttributeApiContextService : IService
+{
+    [Mount] private AttributeApiInventoryContext _context = null!;
+
+    public AttributeApiInventoryContext Context => _context;
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton(this);
+    }
+}
+
+public readonly struct AttributeApiContextStockArrived
+{
+    public AttributeApiContextStockArrived(string sku, int quantity)
+    {
+        Sku = sku;
+        Quantity = quantity;
+    }
+
+    public string Sku { get; }
+
+    public int Quantity { get; }
+}
+
+public readonly struct AttributeApiContextReserveStock
+{
+    public AttributeApiContextReserveStock(string sku, int quantity)
+    {
+        Sku = sku;
+        Quantity = quantity;
+    }
+
+    public string Sku { get; }
+
+    public int Quantity { get; }
+}
+
+public readonly struct AttributeApiContextReserveStockResult
+{
+    public AttributeApiContextReserveStockResult(bool accepted, string reservedSku)
+    {
+        Accepted = accepted;
+        ReservedSku = reservedSku;
+    }
+
+    public bool Accepted { get; }
+
+    public string ReservedSku { get; }
+}
+
+public readonly struct AttributeApiContextLocalPriceQuery
+{
+    public AttributeApiContextLocalPriceQuery(string sku)
+    {
+        Sku = sku;
+    }
+
+    public string Sku { get; }
+}
+
+public readonly struct AttributeApiContextLocalPriceQuote
+{
+    public AttributeApiContextLocalPriceQuote(decimal price)
+    {
+        Price = price;
+    }
+
+    public decimal Price { get; }
+}
+
+[OwnerService(typeof(AttributeApiContextService))]
+public sealed partial class AttributeApiInventoryContext : ILayerContext
+{
+    public int Available { get; private set; }
+
+    public int Reserved { get; private set; }
+
+    public string LastSku { get; private set; } = string.Empty;
+
+    [SubscribeScopeEvent]
+    public void OnStockArrived(in AttributeApiContextStockArrived value)
+    {
+        LastSku = value.Sku;
+        Available += value.Quantity;
+    }
+
+    [SubscribeScopeCall]
+    public async LBTask<AttributeApiContextReserveStockResult> ReserveAsync(
+        AttributeApiContextReserveStock request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await LBTask.CompletedTask;
+        Reserved += request.Quantity;
+        return new AttributeApiContextReserveStockResult(true, request.Sku);
+    }
+
+    [Call]
+    public async LBTask<AttributeApiContextLocalPriceQuote> QuoteLocalPriceAsync(
+        AttributeApiContextLocalPriceQuery request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await LBTask.CompletedTask;
+        return new AttributeApiContextLocalPriceQuote(request.Sku.Length);
+    }
 }
 
 public sealed class AttributeApiModule : IAssemblyModule

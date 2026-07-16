@@ -117,6 +117,46 @@ public class LayerGeneratorContractTests
                            .ToImmutableArray();
 
         Assert.That(errors, Is.Empty,
+                           string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+    }
+
+    [Test]
+    public void LayerContext_method_marked_with_Call_generates_without_errors()
+    {
+        const string source = """
+                              using LayerBase.Async;
+                              using LayerBase.Call;
+                              using LayerBase.DI;
+
+                              public readonly struct TestRequest
+                              {
+                              }
+
+                              public readonly struct TestResponse
+                              {
+                              }
+
+                              public sealed partial class CommerceContext : ILayerContext
+                              {
+                                  [Call]
+                                  private async LBTask<TestResponse> Handle(TestRequest request)
+                                  {
+                                      await LBTask.CompletedTask;
+                                      return default;
+                                  }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new CallAutoBindGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
             string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
     }
 
@@ -219,6 +259,49 @@ public class LayerGeneratorContractTests
     }
 
     [Test]
+    public void LayerContext_method_marked_with_SubscribeScopeCall_generates_without_errors()
+    {
+        const string source = """
+                              using System.Threading;
+                              using LayerBase.Async;
+                              using LayerBase.DI;
+                              using LayerBase.Scope;
+
+                              public readonly struct TestRequest
+                              {
+                              }
+
+                              public readonly struct TestResponse
+                              {
+                              }
+
+                              public sealed partial class InventoryContext : ILayerContext
+                              {
+                                  [SubscribeScopeCall]
+                                  private async LBTask<TestResponse> ReserveAsync(
+                                      TestRequest request,
+                                      CancellationToken cancellationToken = default)
+                                  {
+                                      await LBTask.CompletedTask;
+                                      return default;
+                                  }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeEndpointAutoBindGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+    }
+
+    [Test]
     public void Service_method_marked_with_SubscribeScopeEvent_generates_without_errors()
     {
         const string source = """
@@ -245,6 +328,39 @@ public class LayerGeneratorContractTests
                               {
                                   public void ConfigureServices(IServiceCollection services) { }
 
+                                  [SubscribeScopeEvent]
+                                  private void OnStockArrived(in StockArrived value)
+                                  {
+                                  }
+                              }
+                              """;
+
+        var result = RunGenerators(source, new ScopeEndpointAutoBindGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+    }
+
+    [Test]
+    public void LayerContext_method_marked_with_SubscribeScopeEvent_generates_without_errors()
+    {
+        const string source = """
+                              using LayerBase.DI;
+                              using LayerBase.Scope;
+
+                              public readonly struct StockArrived
+                              {
+                              }
+
+                              public sealed partial class InventoryContext : ILayerContext
+                              {
                                   [SubscribeScopeEvent]
                                   private void OnStockArrived(in StockArrived value)
                                   {

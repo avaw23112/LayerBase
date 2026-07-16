@@ -411,7 +411,7 @@ public sealed class ScopeEndpointAutoBindGenerator : IIncrementalGenerator
             new(
                 "LBG352",
                 "Unsupported Scope endpoint owner",
-                "Type '{0}' uses a Scope endpoint attribute on a method but Scope endpoint methods are only supported on Layer, IService, or ILayerContext types.",
+                "Type '{0}' uses a Scope endpoint attribute on a method but Scope endpoint methods are supported on IService or ILayerContext owners, with Layer owners kept for compatibility",
                 Category,
                 DiagnosticSeverity.Error,
                 true);

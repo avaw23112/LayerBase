@@ -308,7 +308,7 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
             new(
                 "LBG302",
                 "Unsupported [Call] owner",
-                "Type '{0}' uses [Call] on a method but [Call] methods are only supported on Layer, IService, or ILayerContext types.",
+                "Type '{0}' uses [Call] on a method but [Call] methods are supported on IService or ILayerContext owners, with Layer owners kept for compatibility",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
