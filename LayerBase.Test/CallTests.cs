@@ -408,23 +408,25 @@ public partial class DuplicateLayer : Layer
 public partial class LayerMethodLayer : Layer
 {
     [Call]
-    public LBTask<LayerMethodResponse> HandleLayerMethodAsync(LayerMethodRequest request)
+    public async LBTask<LayerMethodResponse> HandleLayerMethodAsync(LayerMethodRequest request)
     {
+        await LBTask.CompletedTask;
         GetService<SceneService>().SwitchTo(request.SceneName);
-        return LBTask<LayerMethodResponse>.FromResult(new LayerMethodResponse(request.SceneName));
+        return new LayerMethodResponse(request.SceneName);
     }
 }
 
 [OwnerLayer(typeof(CoreLayer))]
 public sealed class SwitchSceneCallHandler : IScopeLocalCallHandler<SwitchSceneRequest, SwitchSceneResponse>
 {
-    public LBTask<SwitchSceneResponse> HandleAsync(SwitchSceneRequest request,
-                                                   CancellationToken  cancellationToken = default)
+    public async LBTask<SwitchSceneResponse> HandleAsync(SwitchSceneRequest request,
+                                                         CancellationToken  cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        await LBTask.CompletedTask;
         var sceneService = this.Get<SceneService>();
         sceneService.SwitchTo(request.SceneName);
-        return LBTask<SwitchSceneResponse>.FromResult(new SwitchSceneResponse(true, request.SceneName));
+        return new SwitchSceneResponse(true, request.SceneName);
     }
 }
 
@@ -459,32 +461,35 @@ public sealed class CrossLayerAccessCallHandler : IScopeLocalCallHandler<CrossLa
 public sealed class DirectCrossLayerAccessCallHandler
     : IScopeLocalCallHandler<DirectCrossLayerAccessRequest, DirectCrossLayerAccessResponse>
 {
-    public LBTask<DirectCrossLayerAccessResponse> HandleAsync(DirectCrossLayerAccessRequest request,
-                                                              CancellationToken             cancellationToken = default)
+    public async LBTask<DirectCrossLayerAccessResponse> HandleAsync(
+        DirectCrossLayerAccessRequest request,
+        CancellationToken             cancellationToken = default)
     {
+        await LBTask.CompletedTask;
         var audioService = this.Get<AudioScopedService>();
-        return LBTask<DirectCrossLayerAccessResponse>.FromResult(
-            new DirectCrossLayerAccessResponse(audioService.MixerName));
+        return new DirectCrossLayerAccessResponse(audioService.MixerName);
     }
 }
 
 [OwnerLayer(typeof(AudioLayer))]
 public sealed class AudioMixerQueryCallHandler : IScopeLocalCallHandler<AudioMixerQueryRequest, AudioMixerQueryResponse>
 {
-    public LBTask<AudioMixerQueryResponse> HandleAsync(AudioMixerQueryRequest request,
-                                                       CancellationToken      cancellationToken = default)
+    public async LBTask<AudioMixerQueryResponse> HandleAsync(AudioMixerQueryRequest request,
+                                                             CancellationToken      cancellationToken = default)
     {
+        await LBTask.CompletedTask;
         var audioService = this.Get<AudioScopedService>();
-        return LBTask<AudioMixerQueryResponse>.FromResult(new AudioMixerQueryResponse(audioService.MixerName));
+        return new AudioMixerQueryResponse(audioService.MixerName);
     }
 }
 
 public sealed class NoOwnerLayerCallHandler : IScopeLocalCallHandler<NoOwnerLayerRequest, NoOwnerLayerResponse>
 {
-    public LBTask<NoOwnerLayerResponse> HandleAsync(NoOwnerLayerRequest request,
-                                                    CancellationToken   cancellationToken = default)
+    public async LBTask<NoOwnerLayerResponse> HandleAsync(NoOwnerLayerRequest request,
+                                                          CancellationToken   cancellationToken = default)
     {
-        return LBTask<NoOwnerLayerResponse>.FromResult(new NoOwnerLayerResponse("ShouldNotRegister"));
+        await LBTask.CompletedTask;
+        return new NoOwnerLayerResponse("ShouldNotRegister");
     }
 }
 
@@ -493,21 +498,22 @@ public sealed class CancellationEchoCallHandler : IScopeLocalCallHandler<Cancell
 {
     public static CancellationToken LastToken;
 
-    public LBTask<CancellationEchoResponse> HandleAsync(CancellationEchoRequest request,
-                                                        CancellationToken       cancellationToken = default)
+    public async LBTask<CancellationEchoResponse> HandleAsync(CancellationEchoRequest request,
+                                                              CancellationToken       cancellationToken = default)
     {
+        await LBTask.CompletedTask;
         LastToken = cancellationToken;
-        return LBTask<CancellationEchoResponse>.FromResult(
-            new CancellationEchoResponse(cancellationToken.CanBeCanceled));
+        return new CancellationEchoResponse(cancellationToken.CanBeCanceled);
     }
 }
 
 [OwnerLayer(typeof(CoreLayer))]
 public sealed class ThrowingCallHandler : IScopeLocalCallHandler<ThrowingRequest, ThrowingResponse>
 {
-    public LBTask<ThrowingResponse> HandleAsync(ThrowingRequest   request,
-                                                CancellationToken cancellationToken = default)
+    public async LBTask<ThrowingResponse> HandleAsync(ThrowingRequest   request,
+                                                      CancellationToken cancellationToken = default)
     {
+        await LBTask.CompletedTask;
         throw new InvalidOperationException("Call exploded.");
     }
 }
@@ -515,9 +521,10 @@ public sealed class ThrowingCallHandler : IScopeLocalCallHandler<ThrowingRequest
 [OwnerLayer(typeof(DuplicateLayer))]
 public sealed class DuplicateCallHandlerA : IScopeLocalCallHandler<DuplicateRequest, DuplicateResponse>
 {
-    public LBTask<DuplicateResponse> HandleAsync(DuplicateRequest  request,
-                                                 CancellationToken cancellationToken = default)
+    public async LBTask<DuplicateResponse> HandleAsync(DuplicateRequest  request,
+                                                       CancellationToken cancellationToken = default)
     {
-        return LBTask<DuplicateResponse>.FromResult(new DuplicateResponse("A"));
+        await LBTask.CompletedTask;
+        return new DuplicateResponse("A");
     }
 }

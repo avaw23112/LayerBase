@@ -191,11 +191,12 @@ public class AssemblyModuleGeneratorTests
                               public sealed class OpenInventoryCallHandler
                                   : IScopeLocalCallHandler<OpenInventoryRequest, OpenInventoryResponse>
                               {
-                                  public LBTask<OpenInventoryResponse> HandleAsync(
+                                  public async LBTask<OpenInventoryResponse> HandleAsync(
                                       OpenInventoryRequest request,
                                       CancellationToken cancellationToken = default)
                                   {
-                                      return LBTask<OpenInventoryResponse>.FromResult(new OpenInventoryResponse());
+                                      await LBTask.CompletedTask;
+                                      return new OpenInventoryResponse();
                                   }
                               }
                               """;

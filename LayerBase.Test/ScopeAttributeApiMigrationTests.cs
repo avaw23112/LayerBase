@@ -170,13 +170,13 @@ public sealed partial class AttributeApiInventoryService : IService
     }
 
     [Call]
-    public LBTask<AttributeApiReserveStockResult> ReserveAsync(
+    public async LBTask<AttributeApiReserveStockResult> ReserveAsync(
         AttributeApiReserveStock request,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        await LBTask.CompletedTask;
         Reserved += request.Quantity;
-        return LBTask<AttributeApiReserveStockResult>.FromResult(
-            new AttributeApiReserveStockResult(true, request.Sku));
+        return new AttributeApiReserveStockResult(true, request.Sku);
     }
 }

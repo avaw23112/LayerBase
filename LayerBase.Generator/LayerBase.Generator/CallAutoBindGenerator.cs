@@ -76,7 +76,7 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
                     Diagnostics.InvalidSignature,
                     location,
                     method.Name,
-                    expectedSignature ?? "LBTask<TResponse> Handle(TRequest request)",
+                    expectedSignature ?? "async LBTask<TResponse> Handle(TRequest request)",
                     ownerType.ToDisplayString()));
                 continue;
             }
@@ -109,7 +109,7 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
         out string? expectedSignature)
     {
         expectedSignature =
-            "LBTask<TResponse> Handle(TRequest request) or LBTask<TResponse> Handle(TRequest request, CancellationToken cancellationToken)";
+            "async LBTask<TResponse> Handle(TRequest request) or async LBTask<TResponse> Handle(TRequest request, CancellationToken cancellationToken)";
         binding = null;
 
         if (method.IsStatic || method.IsGenericMethod || method.ReturnsVoid)
@@ -299,7 +299,7 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
             new(
                 "LBG301",
                 "Invalid [Call] method signature",
-                "Method '{0}' uses [Call] but must match '{1}'. Owner '{2}' supports [Call] only for LBTask<TResponse> request/response methods.",
+                "Method '{0}' uses [Call] but must match '{1}'. Owner '{2}' supports [Call] only for async LBTask<TResponse> request/response methods.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);

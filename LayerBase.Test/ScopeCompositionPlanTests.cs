@@ -574,11 +574,12 @@ public sealed class ScopeCompositionPlanTests
     public sealed partial class ReflectionFeatureCallHandler
         : IScopeLocalCallHandler<ReflectionFeatureRequest, ReflectionFeatureResponse>
     {
-        public LBTask<ReflectionFeatureResponse> HandleAsync(
+        public async LBTask<ReflectionFeatureResponse> HandleAsync(
             ReflectionFeatureRequest request,
             CancellationToken cancellationToken = default)
         {
-            return LBTask<ReflectionFeatureResponse>.FromResult(new ReflectionFeatureResponse());
+            await LBTask.CompletedTask;
+            return new ReflectionFeatureResponse();
         }
     }
 }

@@ -58,10 +58,11 @@ public sealed class SceneStateService
 public partial class SceneLayer : Layer
 {
     [Call]
-    private LBTask<ChangeSceneResponse> HandleChangeSceneAsync(ChangeSceneRequest request)
+    private async LBTask<ChangeSceneResponse> HandleChangeSceneAsync(ChangeSceneRequest request)
     {
+        await LBTask.CompletedTask;
         GetService<SceneStateService>().ChangeScene(request.SceneName);
-        return LBTask<ChangeSceneResponse>.FromResult(new ChangeSceneResponse(request.SceneName));
+        return new ChangeSceneResponse(request.SceneName);
     }
 }
 
@@ -73,14 +74,15 @@ public partial class SceneEchoService : IService
     }
 
     [Call]
-    public LBTask<EchoSceneResponse> EchoSceneAsync(
+    public async LBTask<EchoSceneResponse> EchoSceneAsync(
         EchoSceneRequest request,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        await LBTask.CompletedTask;
         var sceneState = this.GetService<SceneStateService>();
         sceneState.ChangeScene(request.SceneName);
-        return LBTask<EchoSceneResponse>.FromResult(new EchoSceneResponse(request.SceneName));
+        return new EchoSceneResponse(request.SceneName);
     }
 }
 

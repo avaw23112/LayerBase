@@ -592,13 +592,13 @@ public readonly struct ScopeDeferredCallResponse
 public sealed class ScopeDeferredCallHandler
     : IScopeLocalCallHandler<ScopeDeferredCallRequest, ScopeDeferredCallResponse>
 {
-    public LBTask<ScopeDeferredCallResponse> HandleAsync(
+    public async LBTask<ScopeDeferredCallResponse> HandleAsync(
         ScopeDeferredCallRequest request,
         CancellationToken cancellationToken = default)
     {
+        await LBTask.CompletedTask;
         var sceneService = this.Get<SceneService>();
         sceneService.SwitchTo(request.SceneName);
-        return LBTask<ScopeDeferredCallResponse>.FromResult(
-            new ScopeDeferredCallResponse(sceneService.LastScene));
+        return new ScopeDeferredCallResponse(sceneService.LastScene);
     }
 }

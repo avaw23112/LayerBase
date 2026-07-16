@@ -16,14 +16,14 @@ public sealed partial class BusinessFulfillmentReporter : IService
     }
 
     [Call]
-    public LBTask<BusinessQuoteShipmentResponse> QuoteShipmentAsync(
+    public async LBTask<BusinessQuoteShipmentResponse> QuoteShipmentAsync(
         BusinessQuoteShipmentRequest request,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        await LBTask.CompletedTask;
         var price = request.City.Equals("Shanghai", StringComparison.OrdinalIgnoreCase) ? 8.50m : 12.00m;
-        return LBTask<BusinessQuoteShipmentResponse>.FromResult(
-            new BusinessQuoteShipmentResponse(request.OrderId, "LayerExpress", price));
+        return new BusinessQuoteShipmentResponse(request.OrderId, "LayerExpress", price);
     }
 }
 

@@ -140,11 +140,12 @@ public sealed class TopologyAuditTests
     private sealed class PathfindingCallHandler
         : IScopeLocalCallHandler<TopologyRequest, TopologyResponse>
     {
-        public LBTask<TopologyResponse> HandleAsync(
+        public async LBTask<TopologyResponse> HandleAsync(
             TopologyRequest request,
             CancellationToken cancellationToken = default)
         {
-            return LBTask<TopologyResponse>.FromResult(new TopologyResponse());
+            await LBTask.CompletedTask;
+            return new TopologyResponse();
         }
     }
 

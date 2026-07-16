@@ -16,7 +16,7 @@ namespace LayerBase.Generator;
 [Shared]
 public class CallSignatureFixer : CodeFixProvider
 {
-    public sealed override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("LBG301");
+    public sealed override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("LBG301", "LBG305");
 
     public sealed override FixAllProvider GetFixAllProvider()
     {
@@ -77,7 +77,7 @@ public class CallSignatureFixer : CodeFixProvider
                         .WithModifiers(method.Modifiers.Any(SyntaxKind.AsyncKeyword)
                             ? method.Modifiers
                             : method.Modifiers.Add(
-                                SyntaxFactory.Token(SyntaxKind.AsyncKeyword))); // Call handlers often want to be async
+                                SyntaxFactory.Token(SyntaxKind.AsyncKeyword)));
 
         var newRoot = root.ReplaceNode(method, newMethod.WithAdditionalAnnotations(Formatter.Annotation));
         return document.WithSyntaxRoot(newRoot);

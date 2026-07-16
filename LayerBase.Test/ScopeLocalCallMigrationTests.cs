@@ -246,12 +246,12 @@ public partial class DuplicateScopeLocalCallMigrationHandlerLayer : Layer
 public sealed class ScopeLocalCallMigrationHandler
     : IScopeLocalCallHandler<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>
 {
-    public LBTask<ScopeLocalCallMigrationResponse> HandleAsync(
+    public async LBTask<ScopeLocalCallMigrationResponse> HandleAsync(
         ScopeLocalCallMigrationRequest request,
         CancellationToken cancellationToken = default)
     {
-        return LBTask<ScopeLocalCallMigrationResponse>.FromResult(
-            new ScopeLocalCallMigrationResponse("handled:" + request.Value));
+        await LBTask.CompletedTask;
+        return new ScopeLocalCallMigrationResponse("handled:" + request.Value);
     }
 }
 
@@ -259,23 +259,23 @@ public sealed class ScopeLocalCallMigrationHandler
 public sealed class DuplicateScopeLocalCallMigrationHandler
     : IScopeLocalCallHandler<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>
 {
-    public LBTask<ScopeLocalCallMigrationResponse> HandleAsync(
+    public async LBTask<ScopeLocalCallMigrationResponse> HandleAsync(
         ScopeLocalCallMigrationRequest request,
         CancellationToken cancellationToken = default)
     {
-        return LBTask<ScopeLocalCallMigrationResponse>.FromResult(
-            new ScopeLocalCallMigrationResponse("duplicate:" + request.Value));
+        await LBTask.CompletedTask;
+        return new ScopeLocalCallMigrationResponse("duplicate:" + request.Value);
     }
 }
 
 public sealed class SecondaryScopeLocalCallMigrationHandler
     : IScopeLocalCallHandler<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>
 {
-    public LBTask<ScopeLocalCallMigrationResponse> HandleAsync(
+    public async LBTask<ScopeLocalCallMigrationResponse> HandleAsync(
         ScopeLocalCallMigrationRequest request,
         CancellationToken cancellationToken = default)
     {
-        return LBTask<ScopeLocalCallMigrationResponse>.FromResult(
-            new ScopeLocalCallMigrationResponse("secondary:" + request.Value));
+        await LBTask.CompletedTask;
+        return new ScopeLocalCallMigrationResponse("secondary:" + request.Value);
     }
 }

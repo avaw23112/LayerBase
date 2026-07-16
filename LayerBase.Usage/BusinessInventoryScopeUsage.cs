@@ -19,13 +19,13 @@ public sealed partial class BusinessInventoryLedger : IService
     }
 
     [Call]
-    public LBTask<BusinessReserveInventoryResponse> ReserveAsync(
+    public async LBTask<BusinessReserveInventoryResponse> ReserveAsync(
         BusinessReserveInventoryRequest request,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return LBTask<BusinessReserveInventoryResponse>.FromResult(
-            Reserve(request.OrderId, request.Sku, request.Quantity));
+        await LBTask.CompletedTask;
+        return Reserve(request.OrderId, request.Sku, request.Quantity);
     }
 
     private BusinessReserveInventoryResponse Reserve(string orderId, string sku, int quantity)

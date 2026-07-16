@@ -5,6 +5,7 @@ using LayerBase.Generator;
 using LayerBase.Layers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace LayerBase.Test;
 
@@ -42,9 +43,10 @@ public class LayerGeneratorContractTests
                          [OwnerService(typeof(CombatService))]
                          public sealed class BadHandler : IScopeLocalCallHandler<TestRequest, TestResponse>
                          {
-                             public LBTask<TestResponse> HandleAsync(TestRequest request, CancellationToken cancellationToken = default)
+                             public async LBTask<TestResponse> HandleAsync(TestRequest request, CancellationToken cancellationToken = default)
                              {
-                                 return LBTask<TestResponse>.FromResult(default);
+                                 await LBTask.CompletedTask;
+                                 return default;
                              }
                          }
                          """)]
@@ -97,9 +99,10 @@ public class LayerGeneratorContractTests
                                   public void ConfigureServices(IServiceCollection services) { }
 
                                   [Call]
-                                  private LBTask<TestResponse> Handle(TestRequest request)
+                                  private async LBTask<TestResponse> Handle(TestRequest request)
                                   {
-                                      return LBTask<TestResponse>.FromResult(default);
+                                      await LBTask.CompletedTask;
+                                      return default;
                                   }
                               }
                               """;
@@ -137,9 +140,10 @@ public class LayerGeneratorContractTests
                               public sealed partial class TestLayer : Layer
                               {
                                   [Call]
-                                  private LBTask<TestResponse> Handle(TestRequest request)
+                                  private async LBTask<TestResponse> Handle(TestRequest request)
                                   {
-                                      return LBTask<TestResponse>.FromResult(default);
+                                      await LBTask.CompletedTask;
+                                      return default;
                                   }
                               }
                               """;
@@ -155,6 +159,71 @@ public class LayerGeneratorContractTests
 
         Assert.That(errors, Is.Empty,
             string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+    }
+
+    [Test]
+    public void Call_attribute_method_without_async_reports_analyzer_diagnostic()
+    {
+        const string source = """
+                              using LayerBase.Async;
+                              using LayerBase.Call;
+                              using LayerBase.Layers;
+
+                              public readonly struct TestRequest
+                              {
+                              }
+
+                              public readonly struct TestResponse
+                              {
+                              }
+
+                              public sealed partial class TestLayer : Layer
+                              {
+                                  [Call]
+                                  private LBTask<TestResponse> Handle(TestRequest request)
+                                  {
+                                      return LBTask<TestResponse>.FromResult(default);
+                                  }
+                              }
+                              """;
+
+        var diagnostics = RunCallAnalyzer(source);
+
+        Assert.That(diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBG305"),
+            string.Join(Environment.NewLine, diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Test]
+    public void Scope_local_call_handler_without_async_reports_analyzer_diagnostic()
+    {
+        const string source = """
+                              using System.Threading;
+                              using LayerBase.Async;
+                              using LayerBase.Call;
+
+                              public readonly struct TestRequest
+                              {
+                              }
+
+                              public readonly struct TestResponse
+                              {
+                              }
+
+                              public sealed class TestHandler : IScopeLocalCallHandler<TestRequest, TestResponse>
+                              {
+                                  public LBTask<TestResponse> HandleAsync(
+                                      TestRequest request,
+                                      CancellationToken cancellationToken = default)
+                                  {
+                                      return LBTask<TestResponse>.FromResult(default);
+                                  }
+                              }
+                              """;
+
+        var diagnostics = RunCallAnalyzer(source);
+
+        Assert.That(diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBG305"),
+            string.Join(Environment.NewLine, diagnostics.Select(static diagnostic => diagnostic.ToString())));
     }
 
     private static GeneratorTestResult RunGenerators(string source, params IIncrementalGenerator[] generators)
@@ -178,6 +247,24 @@ public class LayerGeneratorContractTests
                                 .ToImmutableArray();
 
         return new GeneratorTestResult(diagnostics, outputCompilation);
+    }
+
+    private static ImmutableArray<Diagnostic> RunCallAnalyzer(string source)
+    {
+        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
+        CSharpCompilation compilation = CSharpCompilation.Create(
+            assemblyName: "CallAnalyzerTests_" + Guid.NewGuid().ToString("N"),
+            syntaxTrees: [syntaxTree],
+            references: GetMetadataReferences(),
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        return compilation
+            .WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(new CallReceiverAnalyzer()))
+            .GetAnalyzerDiagnosticsAsync()
+            .GetAwaiter()
+            .GetResult()
+            .Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning)
+            .ToImmutableArray();
     }
 
     private static IEnumerable<MetadataReference> GetMetadataReferences()

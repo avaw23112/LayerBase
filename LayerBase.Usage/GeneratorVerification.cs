@@ -53,12 +53,13 @@ public partial class VerifyService3 : IService
     }
 
     [Call]
-    public LBTask<ChangeSceneResponse> HandleAsync(
+    public async LBTask<ChangeSceneResponse> HandleAsync(
         ChangeSceneRequest request,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return LBTask<ChangeSceneResponse>.FromResult(new ChangeSceneResponse(request.SceneName));
+        await LBTask.CompletedTask;
+        return new ChangeSceneResponse(request.SceneName);
     }
 }
 
