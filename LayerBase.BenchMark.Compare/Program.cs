@@ -498,9 +498,9 @@ public partial class CompareCallLayer : Layer
 [OwnerLayer(typeof(CompareCallLayer))]
 public sealed class LayerBaseCompareHandler : IScopeLocalCallHandler<CompareRequest, CompareResponse>
 {
-    public LBTask<CompareResponse> HandleAsync(CompareRequest request, CancellationToken cancellationToken = default)
+    public async LBTask<CompareResponse> HandleAsync(CompareRequest request, CancellationToken cancellationToken = default)
     {
-        return LBTask<CompareResponse>.FromResult(new CompareResponse(request.Value + 1));
+        return new CompareResponse(request.Value + 1);
     }
 }
 

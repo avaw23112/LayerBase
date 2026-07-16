@@ -906,9 +906,9 @@ public sealed class CallDirectBaseline
 [OwnerLayer(typeof(CallBenchLayer))]
 public sealed class CallBenchHandler : IScopeLocalCallHandler<CallRequest, CallResponse>
 {
-    public LBTask<CallResponse> HandleAsync(CallRequest request, CancellationToken cancellationToken = default)
+    public async LBTask<CallResponse> HandleAsync(CallRequest request, CancellationToken cancellationToken = default)
     {
-        return LBTask<CallResponse>.FromResult(new CallResponse(request.Value + 1));
+        return new CallResponse(request.Value + 1);
     }
 }
 
