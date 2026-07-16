@@ -3,17 +3,16 @@ using System.Diagnostics;
 
 namespace LayerBase.Async;
 
-/// <summary>
-///     SynchronizationContext that captures continuations and replays them on the main thread via Update().
-/// </summary>
 public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IArchMainThreadPump, IDisposable
 {
-    private readonly List<FrameWorkItem> _frameWork = new();
     private readonly object _lock = new();
     private readonly int _mainThreadId;
     private readonly HashSet<IContextDisposeCancellable> _pendingSources = new();
     private readonly ConcurrentQueue<WorkItem> _queue = new();
+    private readonly FrameDelayWheel<WorkItem> _frameDelayWheel;
     internal MainThreadCompletionQueue CompletionQueue { get; } = new();
+    private int _hasQueuedWork;
+    private int _hasFrameWork;
     private int _allowClosingCancellationPosts;
     private bool _closing;
     private bool _disposed;
@@ -21,7 +20,13 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     private LayerBaseSynchronizationContext(int mainThreadId)
     {
         _mainThreadId = mainThreadId;
+        _frameDelayWheel = new FrameDelayWheel<WorkItem>(EnqueueReadyFrameWork);
     }
+
+    public bool HasPendingWork =>
+        CompletionQueue.HasPending ||
+        Volatile.Read(ref _hasQueuedWork) != 0 ||
+        Volatile.Read(ref _hasFrameWork) != 0;
 
     public int PendingCount
     {
@@ -29,54 +34,57 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         {
             lock (_lock)
             {
-                return _queue.Count + _frameWork.Count + CompletionQueue.Count;
+                return _queue.Count + _frameDelayWheel.Count + CompletionQueue.Count;
             }
         }
     }
 
-    /// <summary>Run queued work and frame-delayed work; call once per frame on the main thread.</summary>
     public void Update(
         int                       maxItems        = 0,
         CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
         Action<Exception>?        reportException = null)
     {
-        if (_disposed) return;
+        if (_disposed || !HasPendingWork)
+            return;
 
-        // Drain completion queue first as per design
         CompletionQueue.Drain(maxItems, exceptionPolicy, reportException);
 
-        lock (_lock)
+        if (Interlocked.Exchange(ref _hasFrameWork, 0) != 0)
         {
-            for (var i = _frameWork.Count - 1; i >= 0; i--)
+            lock (_lock)
             {
-                var item = _frameWork[i].Tick();
-                if (item.ShouldRun)
-                {
-                    _queue.Enqueue(item.Work);
-                    _frameWork.RemoveAt(i);
-                }
-                else
-                {
-                    _frameWork[i] = item;
-                }
+                _frameDelayWheel.Advance();
+
+                if (_frameDelayWheel.Count != 0)
+                    Volatile.Write(ref _hasFrameWork, 1);
             }
         }
 
-        var processed = 0;
-        while (_queue.TryDequeue(out var work))
-        {
-            try
-            {
-                work.Invoke();
-            }
-            catch
-            {
-                throw;
-            }
+        Interlocked.Exchange(ref _hasQueuedWork, 0);
 
-            processed++;
-            if (maxItems > 0 && processed >= maxItems)
-                break;
+        var processed = 0;
+        try
+        {
+            while (_queue.TryDequeue(out var work))
+            {
+                try
+                {
+                    work.Invoke();
+                }
+                catch
+                {
+                    throw;
+                }
+
+                processed++;
+                if (maxItems > 0 && processed >= maxItems)
+                    break;
+            }
+        }
+        finally
+        {
+            if (!_queue.IsEmpty)
+                Volatile.Write(ref _hasQueuedWork, 1);
         }
     }
 
@@ -141,7 +149,8 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
                 return;
 
             _closing = true;
-            _frameWork.Clear();
+            _frameDelayWheel.Clear();
+            Volatile.Write(ref _hasFrameWork, 0);
             pendingSources = _pendingSources.ToArray();
             _pendingSources.Clear();
         }
@@ -149,6 +158,8 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         while (_queue.TryDequeue(out _))
         {
         }
+
+        Volatile.Write(ref _hasQueuedWork, 0);
 
         Volatile.Write(ref _allowClosingCancellationPosts, 1);
         try
@@ -177,12 +188,12 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         return new LayerBaseSynchronizationContext(Thread.CurrentThread.ManagedThreadId);
     }
 
-
     public override void Post(SendOrPostCallback d, object? state)
     {
         if (_disposed) return;
         if (_closing && Volatile.Read(ref _allowClosingCancellationPosts) == 0) return;
         _queue.Enqueue(new WorkItem(d, state));
+        Volatile.Write(ref _hasQueuedWork, 1);
     }
 
     public override void Send(SendOrPostCallback d, object? state)
@@ -198,7 +209,6 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
             "Synchronous Send to another LayerBaseSynchronizationContext thread is not supported.");
     }
 
-    /// <summary>Schedule an action after the specified number of frames.</summary>
     internal void ScheduleInFrames(Action action, int frames)
     {
         ScheduleInFrames(static state => ((Action)state!).Invoke(), action, frames);
@@ -211,13 +221,21 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         if (frames <= 0)
         {
             _queue.Enqueue(workItem);
+            Volatile.Write(ref _hasQueuedWork, 1);
             return;
         }
 
         lock (_lock)
         {
-            _frameWork.Add(new FrameWorkItem(frames, workItem));
+            _frameDelayWheel.Schedule(workItem, frames);
+            Volatile.Write(ref _hasFrameWork, 1);
         }
+    }
+
+    private void EnqueueReadyFrameWork(WorkItem work)
+    {
+        _queue.Enqueue(work);
+        Volatile.Write(ref _hasQueuedWork, 1);
     }
 
     private readonly struct WorkItem
@@ -235,26 +253,6 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         {
             _callback(_state);
         }
-    }
-
-    private readonly struct FrameWorkItem
-    {
-        public readonly WorkItem Work;
-        public readonly int FramesRemaining;
-
-        public FrameWorkItem(int framesRemaining, WorkItem work)
-        {
-            FramesRemaining = framesRemaining;
-            Work = work;
-        }
-
-        public FrameWorkItem Tick()
-        {
-            var next = Math.Max(FramesRemaining - 1, 0);
-            return new FrameWorkItem(next, Work);
-        }
-
-        public bool ShouldRun => FramesRemaining <= 0;
     }
 }
 

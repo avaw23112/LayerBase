@@ -21,17 +21,23 @@ public readonly struct MainThreadCompletionItem
 public sealed class MainThreadCompletionQueue
 {
     private readonly ConcurrentQueue<MainThreadCompletionItem> _queue = new();
+    private int _hasItems;
 
     public int Count => _queue.Count;
+
+    public bool HasPending =>
+        Volatile.Read(ref _hasItems) != 0;
 
     public void Enqueue(MainThreadCompletionItem item)
     {
         _queue.Enqueue(item);
+        Volatile.Write(ref _hasItems, 1);
     }
 
     public void Enqueue(Action action)
     {
         _queue.Enqueue(new MainThreadCompletionItem(action));
+        Volatile.Write(ref _hasItems, 1);
     }
 
     public CompletionDrainStats Drain(
@@ -39,28 +45,39 @@ public sealed class MainThreadCompletionQueue
         CompletionExceptionPolicy exceptionPolicy,
         Action<Exception>?        reportException)
     {
+        if (Interlocked.Exchange(ref _hasItems, 0) == 0)
+            return new CompletionDrainStats(0, 0, 0);
+
         var processed = 0;
         var errors = 0;
 
-        while ((maxCount <= 0 || processed < maxCount) &&
-               _queue.TryDequeue(out var item))
+        try
         {
-            try
+            while ((maxCount <= 0 || processed < maxCount) &&
+                   _queue.TryDequeue(out var item))
             {
-                item.Complete();
-                processed++;
-            }
-            catch (Exception ex)
-            {
-                errors++;
-                if (exceptionPolicy == CompletionExceptionPolicy.Throw)
+                try
                 {
-                    throw;
+                    item.Complete();
+                    processed++;
                 }
+                catch (Exception ex)
+                {
+                    errors++;
+                    if (exceptionPolicy == CompletionExceptionPolicy.Throw)
+                    {
+                        throw;
+                    }
 
-                reportException?.Invoke(ex);
-                processed++; // Count as processed even if it failed
+                    reportException?.Invoke(ex);
+                    processed++;
+                }
             }
+        }
+        finally
+        {
+            if (!_queue.IsEmpty)
+                Volatile.Write(ref _hasItems, 1);
         }
 
         return new CompletionDrainStats(processed - errors, errors, _queue.Count);
