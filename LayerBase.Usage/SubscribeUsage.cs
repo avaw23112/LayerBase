@@ -51,10 +51,10 @@ public class SubscribeUsage
         layer.RegisterService(new OrderService());
 
         // 3. 構建 LayerHub (這會觸發 Build 過程，包含 AutoBind)
-        LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
 
         Console.WriteLine("Dispatching event...");
         // 4. 發送全局事件
-        LayerHub.Send(new AuditLogEvent { Message = "User123 logged in" });
+        runtime.Send(new AuditLogEvent { Message = "User123 logged in" });
     }
 }

@@ -33,7 +33,7 @@ public partial class P0IssueReproductionTests
                               .Build();
 
         // Metadata says DropOldest
-        LayerHub.PostLatest(new P0TestEvent { Value = 1 });
+        runtime.PostLatest(new P0TestEvent { Value = 1 });
 
         // We can check the plan in scheduler
         var scheduler = runtime.Scheduler;
@@ -52,7 +52,7 @@ public partial class P0IssueReproductionTests
                               .Push(new ReentrantLayer())
                               .Build();
 
-        LayerHub.PostCoalesced(new P0TestEvent { Value = 1 });
+        runtime.PostCoalesced(new P0TestEvent { Value = 1 });
 
         // This will trigger FlushBuffers
         runtime.Pump(0.1f);
@@ -114,7 +114,7 @@ public partial class ReentrantLayer : Layer
         if (e.Value < 5)
         {
             // Reentrant call
-            LayerHub.PostCoalesced(new P0TestEvent { Value = e.Value + 1 });
+            TryPost(new P0TestEvent { Value = e.Value + 1 });
         }
     }
 }

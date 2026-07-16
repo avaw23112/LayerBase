@@ -66,6 +66,7 @@ public static class BenchmarkSink
 public class DirectVsFrameworkDispatchBench : EventBenchmarkBase
 {
     private readonly EventNotifyDelegate<NotifyEvent> _directNotify = static (in NotifyEvent _) => { };
+    private LayerRuntime _runtime = null!;
 
     private readonly EventHandleDelegate<BenchEvent> _directSync = static (in BenchEvent _) =>
         EventHandledState.Continue;
@@ -77,7 +78,7 @@ public class DirectVsFrameworkDispatchBench : EventBenchmarkBase
         var layer = new BenchLayer();
         layer.RegisterService(new BenchManager());
         layer.RegisterService(new NotifyBenchManager());
-        LayerHub.CreateLayers().Push(layer).Build();
+        _runtime = LayerHub.CreateLayers().Push(layer).Build();
     }
 
     [Benchmark(Baseline = true, Description = "直接委托调用 (同步) - 100万次")]
@@ -100,19 +101,21 @@ public class DirectVsFrameworkDispatchBench : EventBenchmarkBase
     [BenchmarkCategory("02.Dispatch", "Dispatch.Sync", "Compare.Direct")]
     public void LayerBaseSync()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(BenchEvent.Instance);
     }
 
     [Benchmark(Description = "框架Notify分发 (1�?1订阅) - 100万次")]
     [BenchmarkCategory("02.Dispatch", "Dispatch.Notify", "Compare.Direct")]
     public void LayerBaseNotify()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(NotifyEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(NotifyEvent.Instance);
     }
 }
 
 public class FanoutScalingBench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [Params(1, 4, 16)] public int SubscriberCount { get; set; }
 
     [GlobalSetup]
@@ -126,26 +129,28 @@ public class FanoutScalingBench : EventBenchmarkBase
             layer.RegisterService(new FanoutNotifyManager());
         }
 
-        LayerHub.CreateLayers().Push(layer).Build();
+        _runtime = LayerHub.CreateLayers().Push(layer).Build();
     }
 
     [Benchmark(Baseline = true, Description = "同步扇出扩展 (1�?N订阅) - 100万次")]
     [BenchmarkCategory("02.Dispatch", "Dispatch.Sync", "Dispatch.Fanout")]
     public void StandardSync()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(BenchEvent.Instance);
     }
 
     [Benchmark(Description = "Notify扇出扩展 (1�?N订阅) - 100万次")]
     [BenchmarkCategory("02.Dispatch", "Dispatch.Notify", "Dispatch.Fanout")]
     public void Notify()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(NotifyEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(NotifyEvent.Instance);
     }
 }
 
 public class HandledSemanticsBench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -163,33 +168,34 @@ public class HandledSemanticsBench : EventBenchmarkBase
             layer.RegisterService(new LastHandledContinueManager());
         layer.RegisterService(new LastHandledManager());
 
-        LayerHub.CreateLayers().Push(layer).Build();
+        _runtime = LayerHub.CreateLayers().Push(layer).Build();
     }
 
     [Benchmark(Baseline = true, Description = "全部Continue (32订阅) - 100万次")]
     [BenchmarkCategory("02.Dispatch", "Dispatch.Sync", "Dispatch.Handled")]
     public void AllContinue()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(ContinueOnlyEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(ContinueOnlyEvent.Instance);
     }
 
     [Benchmark(Description = "首个Handled短路 (32订阅) - 100万次")]
     [BenchmarkCategory("02.Dispatch", "Dispatch.Sync", "Dispatch.Handled")]
     public void FirstHandled()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(FirstHandledEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(FirstHandledEvent.Instance);
     }
 
     [Benchmark(Description = "末尾Handled短路 (32订阅) - 100万次")]
     [BenchmarkCategory("02.Dispatch", "Dispatch.Sync", "Dispatch.Handled")]
     public void LastHandled()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(LastHandledEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(LastHandledEvent.Instance);
     }
 }
 
 public class RoutingShapeBench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
     private BenchLayer _tailLayer = null!;
 
     [GlobalSetup]
@@ -201,7 +207,7 @@ public class RoutingShapeBench : EventBenchmarkBase
 
         _tailLayer = new BenchLayer();
         _tailLayer.RegisterService(new RoutedManager());
-        builder.Push(_tailLayer).Build();
+        _runtime = builder.Push(_tailLayer).Build();
     }
 
     [Benchmark(Baseline = true, Description = "定向分发 (目标层1订阅) - 100万次")]
@@ -216,7 +222,7 @@ public class RoutingShapeBench : EventBenchmarkBase
     [BenchmarkCategory("02.Dispatch", "Dispatch.Sync", "Dispatch.Routing")]
     public void GlobalTailHit()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(RoutedEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(RoutedEvent.Instance);
     }
 }
 
@@ -227,6 +233,7 @@ public class CallSubsystemBench : EventBenchmarkBase
     // 2. 它不经过 LayerHub，不做层定位和路由命中�?
     // 3. 作用是提供一个“只保留最小业务处理”的对照组�?
     private readonly CallDirectBaseline _baseline = new();
+    private LayerRuntime _runtime = null!;
 
     // _seed:
     // 1. 用来生成每次循环都不同的请求值�?
@@ -239,7 +246,7 @@ public class CallSubsystemBench : EventBenchmarkBase
     public void Setup()
     {
         LayerHub.Reset();
-        LayerHub.CreateLayers().Push(new CallBenchLayer()).Build();
+        _runtime = LayerHub.CreateLayers().Push(new CallBenchLayer()).Build();
 
         // 初始化一个非零种子�?
         // 这里只是随便给一个固定初始值，不要求“随机质量”，
@@ -286,7 +293,7 @@ public class CallSubsystemBench : EventBenchmarkBase
         _seed = state;
     }
 
-    [Benchmark(Description = "LayerHub.CallAsync (单层单处理器) - 10万次")]
+    [Benchmark(Description = "LayerRuntime.CallAsync (单层单处理器) - 10万次")]
     [BenchmarkCategory("03.Call", "Call", "Compare.Baseline")]
     public void LayerCall()
     {
@@ -299,7 +306,7 @@ public class CallSubsystemBench : EventBenchmarkBase
 
             // 这里�?DirectMethod 的唯一区别�?
             // 1. DirectMethod 直接�?baseline�?
-            // 2. LayerCall 通过 LayerHub 做层定位、路由命中、处理器调度�?
+            // 2. LayerCall 通过 LayerRuntime 做层定位、路由命中、处理器调度�?
             var response = LayerInvoke(request);
 
             Volatile.Write(ref BenchmarkSink.IntValue, response.Value);
@@ -326,15 +333,15 @@ public class CallSubsystemBench : EventBenchmarkBase
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static CallResponse LayerInvoke(CallRequest request)
+    private CallResponse LayerInvoke(CallRequest request)
     {
         // request:
-        // 1. 本次要发送给 LayerHub 的请求对象�?
+        // 1. 本次要发送给 LayerRuntime 的请求对象�?
         //
         // 逻辑说明�?
         // 1. 这里固定命中 CallBenchLayer�?
-        // 2. �?LayerHub 完成层定位、请求类型匹配、处理器调度�?
-        return LayerHub.CallAsync<CallRequest, CallResponse>(request)
+        // 2. �?LayerRuntime 完成层定位、请求类型匹配、处理器调度�?
+        return _runtime.CallAsync<CallRequest, CallResponse>(request)
                        .GetAwaiter()
                        .GetResult();
     }
@@ -358,6 +365,7 @@ public class CallSubsystemBench : EventBenchmarkBase
 
 public class PostPumpBench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
     private PumpDrivenLayer _singleLayer = null!;
 
     [GlobalSetup]
@@ -368,7 +376,7 @@ public class PostPumpBench : EventBenchmarkBase
         _singleLayer = new PumpDrivenLayer();
         _singleLayer.RegisterService(new PumpManager());
 
-        LayerHub.CreateLayers().Push(_singleLayer).Build();
+        _runtime = LayerHub.CreateLayers().Push(_singleLayer).Build();
     }
 
     [Benchmark(Description = "Post后立即Pump排空 (1�?1订阅) - 1万次")]
@@ -377,7 +385,7 @@ public class PostPumpBench : EventBenchmarkBase
     {
         for (var i = 0; i < TenThousand; i++)
         {
-            LayerHub.Post(PumpEvent.Instance);
+            _runtime.Post(PumpEvent.Instance);
             LayerHub.Pump(0.016f);
         }
     }
@@ -387,7 +395,7 @@ public class PostPumpBench : EventBenchmarkBase
     public void BatchPostThenPump()
     {
         for (var i = 0; i < HundredThousand; i++)
-            LayerHub.Post(PumpEvent.Instance);
+            _runtime.Post(PumpEvent.Instance);
 
         LayerHub.Pump(0.016f);
     }
@@ -395,13 +403,15 @@ public class PostPumpBench : EventBenchmarkBase
 
 public class AsyncDispatchBench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
         LayerHub.Reset();
         var layer = new BenchLayer();
         layer.RegisterService(new AsyncBenchManager());
-        LayerHub.CreateLayers().Push(layer).Build();
+        _runtime = LayerHub.CreateLayers().Push(layer).Build();
     }
 
     [Benchmark(Description = "异步事件调度 (1�?1异步订阅) - 10万次")]
@@ -409,12 +419,14 @@ public class AsyncDispatchBench : EventBenchmarkBase
     public void AsyncDispatch()
     {
         for (var i = 0; i < HundredThousand; i++)
-            LayerHub.Send(AsyncBenchEvent.Instance);
+            _runtime.Send(AsyncBenchEvent.Instance);
     }
 }
 
 public class ParallelDispatchBench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -423,7 +435,7 @@ public class ParallelDispatchBench : EventBenchmarkBase
         var layer = new BenchLayer();
         layer.RegisterService(new ParallelNoopManager());
         layer.RegisterService(new ParallelWorkloadManager());
-        LayerHub.CreateLayers().Push(layer).Build();
+        _runtime = LayerHub.CreateLayers().Push(layer).Build();
     }
 
     [Benchmark(Baseline = true, Description = "并行事件入队与排�?(空工�? 1订阅) - 10万次")]
@@ -431,7 +443,7 @@ public class ParallelDispatchBench : EventBenchmarkBase
     public void ParallelDispatchNoop()
     {
         for (var i = 0; i < HundredThousand; i++)
-            LayerHub.Send(ParallelBenchEvent.Instance);
+            _runtime.Send(ParallelBenchEvent.Instance);
     }
 
     [Benchmark(Description = "并行事件入队与排�?(固定CPU工作, 1订阅) - 10万次")]
@@ -439,50 +451,56 @@ public class ParallelDispatchBench : EventBenchmarkBase
     public void ParallelDispatchWithWorkload()
     {
         for (var i = 0; i < HundredThousand; i++)
-            LayerHub.Send(ParallelWorkloadEvent.Instance);
+            _runtime.Send(ParallelWorkloadEvent.Instance);
     }
 }
 
 public class SingleLayer_Low_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
         LayerHub.Reset();
         var l = new BenchLayer();
         l.RegisterService(new BenchManager());
-        LayerHub.CreateLayers().Push(l).Build();
+        _runtime = LayerHub.CreateLayers().Push(l).Build();
     }
 
     [Benchmark(Description = "单层低压 (1�?1订阅) - 100万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Sync", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(BenchEvent.Instance);
     }
 }
 
 public class SingleLayer_Low_Notify_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
         LayerHub.Reset();
         var l = new BenchLayer();
         l.RegisterService(new NotifyBenchManager());
-        LayerHub.CreateLayers().Push(l).Build();
+        _runtime = LayerHub.CreateLayers().Push(l).Build();
     }
 
     [Benchmark(Description = "单层低压 Notify (1�?1订阅) - 100万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Notify", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(NotifyEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(NotifyEvent.Instance);
     }
 }
 
 public class SingleLayer_Low_Comparison_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -490,45 +508,49 @@ public class SingleLayer_Low_Comparison_Bench : EventBenchmarkBase
         var l = new BenchLayer();
         l.RegisterService(new BenchManager());
         l.RegisterService(new NotifyBenchManager());
-        LayerHub.CreateLayers().Push(l).Build();
+        _runtime = LayerHub.CreateLayers().Push(l).Build();
     }
 
     [Benchmark(Baseline = true, Description = "单层低压标准同步 (1�?1订阅) - 100万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Sync", "Scenario.Legacy")]
     public void StandardSync()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(BenchEvent.Instance);
     }
 
     [Benchmark(Description = "单层低压 Notify (1�?1订阅) - 100万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Notify", "Scenario.Legacy")]
     public void NotifyRoute()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(NotifyEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(NotifyEvent.Instance);
     }
 }
 
 public class SingleLayer_High_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
         LayerHub.Reset();
         var l = new BenchLayer();
         for (var i = 0; i < 10; i++) l.RegisterService(new BenchManager());
-        LayerHub.CreateLayers().Push(l).Build();
+        _runtime = LayerHub.CreateLayers().Push(l).Build();
     }
 
     [Benchmark(Description = "单层高压 (1�?10订阅) - 100万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Sync", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(BenchEvent.Instance);
     }
 }
 
 public class MultiLayer_Low_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -537,19 +559,21 @@ public class MultiLayer_Low_Bench : EventBenchmarkBase
         for (var i = 0; i < 9; i++) builder.Push(new BenchLayer());
         var tail = new BenchLayer();
         tail.RegisterService(new BenchManager());
-        builder.Push(tail).Build();
+        _runtime = builder.Push(tail).Build();
     }
 
     [Benchmark(Description = "多层低压 (10�?仅尾�? - 100万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Sync", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(BenchEvent.Instance);
     }
 }
 
 public class MultiLayer_Full_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -562,19 +586,21 @@ public class MultiLayer_Full_Bench : EventBenchmarkBase
             builder.Push(l);
         }
 
-        builder.Build();
+        _runtime = builder.Build();
     }
 
     [Benchmark(Description = "多层高压 (10�?全订�? - 100万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Sync", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(BenchEvent.Instance);
     }
 }
 
 public class MultiLayer_Full_Notify_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -587,14 +613,14 @@ public class MultiLayer_Full_Notify_Bench : EventBenchmarkBase
             builder.Push(l);
         }
 
-        builder.Build();
+        _runtime = builder.Build();
     }
 
     [Benchmark(Description = "多层高压 Notify (10�?全订�? - 100万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Notify", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(FullNotifyEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(FullNotifyEvent.Instance);
     }
 }
 
@@ -618,6 +644,8 @@ public struct FullNotifyEvent
 
 public class MultiLayer_Random_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -630,38 +658,42 @@ public class MultiLayer_Random_Bench : EventBenchmarkBase
             builder.Push(l);
         }
 
-        builder.Build();
+        _runtime = builder.Build();
     }
 
     [Benchmark(Description = "多层随机负载 (10�?5层订�? - 100万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Sync", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(BenchEvent.Instance);
     }
 }
 
 public class Extreme_Empty_64_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
         LayerHub.Reset();
         var builder = LayerHub.CreateLayers();
         for (var i = 0; i < 64; i++) builder.Push(new BenchLayer());
-        builder.Build();
+        _runtime = builder.Build();
     }
 
     [Benchmark(Description = "极限空负�?(64�?0订阅) - 100万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Empty", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < OneMillion; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < OneMillion; i++) _runtime.Send(BenchEvent.Instance);
     }
 }
 
 public class Classic_1ms_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -674,19 +706,21 @@ public class Classic_1ms_Bench : EventBenchmarkBase
             builder.Push(l);
         }
 
-        builder.Build();
+        _runtime = builder.Build();
     }
 
     [Benchmark(Description = "经典 1ms 挑战 (3层全订阅) - 1万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Sync", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < TenThousand; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < TenThousand; i++) _runtime.Send(BenchEvent.Instance);
     }
 }
 
 public class Typical_Heavy_180_Bench : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -700,19 +734,21 @@ public class Typical_Heavy_180_Bench : EventBenchmarkBase
             builder.Push(l);
         }
 
-        builder.Build();
+        _runtime = builder.Build();
     }
 
     [Benchmark(Description = "中重度负�?(180订阅) - 1万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Sync", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < TenThousand; i++) LayerHub.Send(BenchEvent.Instance);
+        for (var i = 0; i < TenThousand; i++) _runtime.Send(BenchEvent.Instance);
     }
 }
 
 public class Typical_Heavy_180_Bench_Notify : EventBenchmarkBase
 {
+    private LayerRuntime _runtime = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -726,14 +762,14 @@ public class Typical_Heavy_180_Bench_Notify : EventBenchmarkBase
             builder.Push(l);
         }
 
-        builder.Build();
+        _runtime = builder.Build();
     }
 
     [Benchmark(Description = "Notify中重度负�?(180订阅) - 1万次")]
     [BenchmarkCategory("90.Scenario.Legacy", "Dispatch.Notify", "Scenario.Legacy")]
     public void Run()
     {
-        for (var i = 0; i < TenThousand; i++) LayerHub.Send(NotifyEvent.Instance);
+        for (var i = 0; i < TenThousand; i++) _runtime.Send(NotifyEvent.Instance);
     }
 }
 

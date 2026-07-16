@@ -120,21 +120,13 @@ public sealed class ScopeArchitectureAcceptanceTests
             "Actors",
             "ServiceProvider",
             "GetService",
-            "Send",
-            "Post",
-            "TryPost",
-            "MarkDirty",
-            "PostLatest",
-            "PostCoalesced",
-            "SchedulePost",
             "CreateActor",
             "AskActor",
             "PostTo",
             "PostToMany",
             "PolicyTable",
             "RebuildEventPolicies",
-            "ReportInfo",
-            "CallAsync"
+            "ReportInfo"
         };
 
         var publicMembers = typeof(LayerRuntime)

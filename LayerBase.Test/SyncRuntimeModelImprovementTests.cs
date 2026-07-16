@@ -104,16 +104,6 @@ public sealed class SyncRuntimeModelImprovementTests
     }
 
     [Test]
-    public void TryPost_reports_missing_primary_runtime()
-    {
-        LayerHub.Reset();
-
-        var result = LayerHub.TryPost(new RuntimeCachePayloadEvent());
-
-        Assert.That(result.IsSuccess, Is.False);
-    }
-
-    [Test]
     public void Layer_dispose_clears_pending_subscription_operations()
     {
         var layer = new CacheCleanupLayer();

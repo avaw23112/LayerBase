@@ -69,11 +69,11 @@ public sealed class ScopeIsolationBoundaryTests
     public async Task Layer_routes_calls_through_scope_owned_registry()
     {
         var layer = new RouteBoundaryLayer();
-        LayerHub.CreateLayers()
-                .Push(layer)
-                .Build();
+        var runtime = LayerHub.CreateLayers()
+                              .Push(layer)
+                              .Build();
 
-        var response = await LayerHub.CallAsync<RouteBoundaryRequest, RouteBoundaryResponse>(
+        var response = await runtime.CallAsync<RouteBoundaryRequest, RouteBoundaryResponse>(
             new RouteBoundaryRequest("ok"));
 
         Assert.That(response.Value, Is.EqualTo("handled:ok"));

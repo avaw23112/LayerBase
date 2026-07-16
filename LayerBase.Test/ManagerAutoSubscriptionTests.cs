@@ -107,9 +107,9 @@ public partial class ManagerAutoSubscriptionTests
         var service = new OrderTestService(_trace);
         layer.RegisterService(service);
 
-        LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
 
-        LayerHub.Send(new OrderEvent());
+        runtime.Send(new OrderEvent());
 
         Assert.That(_trace, Is.EqualTo(new[] { "ManagerA", "ManagerB" }),
             "Subscription order should match registration order in ConfigureServices");

@@ -35,11 +35,11 @@ public static class BasicUsage
 
         // 3. 构建层级拓扑
         var gameplay = new GameplayLayer();
-        LayerHub.CreateLayers()
-                .Push(gameplay)
-                .Build();
+        var runtime = LayerHub.CreateLayers()
+                              .Push(gameplay)
+                              .Build();
 
         // 4. 发送同步事�?
-        LayerHub.Send(new PlayerSpawnEvent { Name = "Hero", Level = 1 });
+        runtime.Send(new PlayerSpawnEvent { Name = "Hero", Level = 1 });
     }
 }

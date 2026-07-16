@@ -43,8 +43,8 @@ public static class ServiceUsage
         LayerHub.Reset();
 
         var layer = new ServiceLayer();
-        LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
 
-        LayerHub.Send(new DataRequestEvent { Query = "Get My Data" });
+        runtime.Send(new DataRequestEvent { Query = "Get My Data" });
     }
 }

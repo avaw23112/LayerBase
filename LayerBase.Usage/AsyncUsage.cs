@@ -31,10 +31,10 @@ public static class AsyncUsage
         LayerHub.Reset();
 
         var resource = new ResourceLayer();
-        LayerHub.CreateLayers().Push(resource).Build();
+        var runtime = LayerHub.CreateLayers().Push(resource).Build();
 
         // 1. 发送异步事�?
-        LayerHub.Send(new AssetLoadRequest { AssetPath = "Textures/Player.png" });
+        runtime.Send(new AssetLoadRequest { AssetPath = "Textures/Player.png" });
 
         // 2. 核心：驱动循�?(Main Loop)
         var timeout = 0;

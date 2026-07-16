@@ -38,9 +38,9 @@ public sealed class CallUsageAnalyzer : IIncrementalGenerator
 
         if (methodSymbol == null) return null;
 
-        // Check if it's LayerHub.CallAsync or IScopeLocalCallHandler.Call
+        // Check if it's LayerRuntime.CallAsync or IScopeLocalCallHandler.Call
         var containingType = methodSymbol.ContainingType.ToDisplayString();
-        if (containingType != "LayerBase.LayerHub" &&
+        if (containingType != "LayerBase.LayerRuntime" &&
             !methodSymbol.ContainingType.AllInterfaces.Any(i => i.ToDisplayString().Contains("IScopeLocalCallHandler")))
             return null;
 
@@ -50,6 +50,7 @@ public sealed class CallUsageAnalyzer : IIncrementalGenerator
             var reqParam =
                 methodSymbol.Parameters.FirstOrDefault(p =>
                     p.Name.Equals("request", StringComparison.OrdinalIgnoreCase));
+            if (reqParam?.Type.TypeKind == TypeKind.TypeParameter) return null;
             if (reqParam != null) return reqParam.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         }
 

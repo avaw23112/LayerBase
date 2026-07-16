@@ -40,11 +40,11 @@ public class NormalPostTests
         var received = 0;
 
         var layer = new TestLayer(e => received = e.Value);
-        LayerHub.CreateLayers()
-                .Push(layer)
-                .Build();
+        var runtime = LayerHub.CreateLayers()
+                              .Push(layer)
+                              .Build();
 
-        var result = LayerHub.TryPost(new TestEvent
+        var result = runtime.TryPost(new TestEvent
         {
             Value = 20
         });

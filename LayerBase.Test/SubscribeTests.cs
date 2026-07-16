@@ -29,7 +29,7 @@ public partial class SubscribeTests
     public void Subscribe_ShouldExecuteInOrder()
     {
         var layer = new TestLayer();
-        LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
 
         var order = new List<string>();
 
@@ -41,7 +41,7 @@ public partial class SubscribeTests
             return EventHandledState.Continue;
         });
 
-        LayerHub.Send(new TestEvent { Order = order });
+        runtime.Send(new TestEvent { Order = order });
 
         Assert.That(order.Count, Is.EqualTo(3));
         Assert.That(order[0], Is.EqualTo("Notify"));
@@ -53,7 +53,7 @@ public partial class SubscribeTests
     public void Subscribe_ExceptionShouldNotInterrupt()
     {
         var layer = new TestLayer();
-        LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
 
         var executed = false;
 
@@ -64,7 +64,7 @@ public partial class SubscribeTests
             return EventHandledState.Continue;
         });
 
-        Assert.DoesNotThrow(() => LayerHub.Send(new TestEvent()));
+        Assert.DoesNotThrow(() => runtime.Send(new TestEvent()));
         Assert.That(executed, Is.True);
     }
 

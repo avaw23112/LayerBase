@@ -73,7 +73,7 @@ public static class LayerHub
     private static readonly ConcurrentBag<Action> s_cacheResetters = new();
     private static readonly ConcurrentBag<Action<int>> s_runtimeCacheResetters = new();
 
-    // Primary runtime for static convenience APIs
+    // Primary runtime for diagnostics and legacy local call routing.
     private static LayerRuntime? s_primaryRuntime;
 
     public static event Action<LayerEventInfo>? OnLayerEventInfo;
@@ -83,20 +83,25 @@ public static class LayerHub
     /// </summary>
     public static LayerRuntime.LayersBuilder CreateLayers()
     {
-        int id;
-        if (s_freeRuntimeIds.Count > 0)
+        LayerRuntime runtime;
+        lock (s_lock)
         {
-            id = s_freeRuntimeIds.Pop();
-        }
-        else
-        {
-            id = s_runtimeIdCounter++;
-            if (id >= 256)
-                throw new InvalidOperationException("Max 256 concurrent LayerRuntimes supported by static caches.");
+            int id;
+            if (s_freeRuntimeIds.Count > 0)
+            {
+                id = s_freeRuntimeIds.Pop();
+            }
+            else
+            {
+                id = s_runtimeIdCounter++;
+                if (id >= 256)
+                    throw new InvalidOperationException("Max 256 concurrent LayerRuntimes supported by static caches.");
+            }
+
+            runtime = new LayerRuntime(id);
+            if (s_primaryRuntime == null) s_primaryRuntime = runtime;
         }
 
-        var runtime = new LayerRuntime(id);
-        if (s_primaryRuntime == null) s_primaryRuntime = runtime;
         new EventPrewarmBootstrapper();
         return new LayerRuntime.LayersBuilder(runtime);
     }
@@ -150,73 +155,6 @@ public static class LayerHub
             EventIdentityRegistry.Reset();
             OnLayerEventInfo = null;
         }
-    }
-
-    /// <summary>
-    /// 便捷 API：向 Primary Runtime 同步发送事件。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void Send<T>(in T value) where T : struct
-    {
-        s_primaryRuntime?.Send(value);
-    }
-
-    /// <summary>
-    /// 便捷 API：向 Primary Runtime 投递事件。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void Post<T>(in T value) where T : struct
-    {
-        _ = TryPost(value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
-    {
-        return s_primaryRuntime != null
-            ? s_primaryRuntime.TryPost(value, policy)
-            : PostResult.Failure();
-    }
-
-    /// <summary>
-    /// 便捷 API：在 Primary Runtime 中将事件类型标记为脏。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void MarkDirty<T>() where T : struct
-    {
-        s_primaryRuntime?.MarkDirty<T>();
-    }
-
-    /// <summary>
-    /// 便捷 API：向 Primary Runtime 投递最新值事件（合并模式）。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void PostLatest<T>(in T value) where T : struct
-    {
-        s_primaryRuntime?.PostLatest(value);
-    }
-
-    /// <summary>
-    /// 便捷 API：向 Primary Runtime 投递合并事件。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void PostCoalesced<T>(in T value) where T : struct
-    {
-        s_primaryRuntime?.PostCoalesced(value);
-    }
-
-    /// <summary>
-    /// 便捷 API：在 Primary Runtime 的当前 Scope 上执行本地调用。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
-                                                                   CancellationToken cancellationToken = default)
-        where TRequest : struct
-        where TResponse : struct
-    {
-        if (s_primaryRuntime == null)
-            throw new InvalidOperationException("No Primary LayerRuntime created. Call CreateLayers().Build() first.");
-        return s_primaryRuntime.CallAsync<TRequest, TResponse>(request, cancellationToken);
     }
 
     internal static void Internal_Register(LayerRuntime runtime)

@@ -466,19 +466,19 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void Send<T>(in T value) where T : struct
+    public void Send<T>(in T value) where T : struct
     {
         EventCenter.Send(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void Post<T>(in T value) where T : struct
+    public void Post<T>(in T value) where T : struct
     {
         _ = TryPost(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
         return policy.HasValue
             ? Scheduler.TryPost(value, policy.Value)
@@ -486,24 +486,24 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void MarkDirty<T>() where T : struct
+    public void MarkDirty<T>() where T : struct
     {
         Scheduler.MarkDirty<T>();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void PostLatest<T>(in T value) where T : struct
+    public void PostLatest<T>(in T value) where T : struct
     {
         Scheduler.TryPostLatest(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void PostCoalesced<T>(in T value) where T : struct
+    public void PostCoalesced<T>(in T value) where T : struct
     {
         Scheduler.TryPostCoalesced(value);
     }
 
-    internal TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
+    public TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
     {
         var eventId = EventTypeId<T>.Id;
         var timerPolicy = PolicyTable.GetTimerPolicy(eventId);
@@ -518,7 +518,7 @@ public sealed partial class LayerRuntime : IDisposable
 
     #region Public API - Cross-Layer Call
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
+    public LBTask<TResponse> CallAsync<TRequest, TResponse>(TRequest request,
                                                             CancellationToken cancellationToken = default)
         where TRequest : struct
         where TResponse : struct

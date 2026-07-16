@@ -13,23 +13,24 @@ public class ConcurrencyStabilityTests
     }
 
     [Test]
-    public void Send_And_Reset_Interleaved_Test()
+    public void Send_Uses_Explicit_Runtime_While_Hub_Rebuilds()
     {
+        var runtime = LayerHub.CreateLayers().Push(new TestLayer()).Build();
         var run = true;
         var task = Task.Run(() =>
         {
             while (run)
             {
-                LayerHub.Send(new StressEvent(1));
+                runtime.Send(new StressEvent(1));
                 Thread.Yield();
             }
         });
 
         for (int i = 0; i < 50; i++)
         {
-            LayerHub.Reset();
             var layer = new TestLayer();
-            LayerHub.CreateLayers().Push(layer).Build();
+            var rebuilt = LayerHub.CreateLayers().Push(layer).Build();
+            rebuilt.Dispose();
             Thread.Sleep(10);
         }
 

@@ -23,9 +23,9 @@ public partial class CallTests
         var coreLayer = new CoreLayer();
         coreLayer.RegisterService(new CoreLayerServicesModule());
 
-        LayerHub.CreateLayers().Push(coreLayer).Build();
+        var runtime = LayerHub.CreateLayers().Push(coreLayer).Build();
 
-        var response = await LayerHub.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
+        var response = await runtime.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
             new SwitchSceneRequest("BattleScene"));
 
         Assert.That(response.SceneName, Is.EqualTo("BattleScene"));
@@ -36,10 +36,10 @@ public partial class CallTests
     [Test]
     public void CallAsync_fails_when_local_route_is_missing()
     {
-        LayerHub.CreateLayers().Push(new UiLayer()).Build();
+        var runtime = LayerHub.CreateLayers().Push(new UiLayer()).Build();
 
         Assert.That(async () =>
-                await LayerHub.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(new SwitchSceneRequest("Missing")),
+                await runtime.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(new SwitchSceneRequest("Missing")),
             Throws.TypeOf<ScopeLocalCallRouteNotFoundException>());
     }
 
@@ -48,10 +48,10 @@ public partial class CallTests
     {
         var coreLayer = new CoreLayer();
         coreLayer.RegisterService(new CoreLayerServicesModule());
-        LayerHub.CreateLayers().Push(coreLayer).Build();
+        var runtime = LayerHub.CreateLayers().Push(coreLayer).Build();
 
         Assert.That(async () =>
-                await LayerHub.CallAsync<UnknownRequest, UnknownResponse>(new UnknownRequest("NoRoute")),
+                await runtime.CallAsync<UnknownRequest, UnknownResponse>(new UnknownRequest("NoRoute")),
             Throws.TypeOf<ScopeLocalCallRouteNotFoundException>());
     }
 
@@ -60,9 +60,9 @@ public partial class CallTests
     {
         var coreLayer = new CoreLayer();
         coreLayer.RegisterService(new CoreLayerServicesModule());
-        LayerHub.CreateLayers().Push(coreLayer).Build();
+        var runtime = LayerHub.CreateLayers().Push(coreLayer).Build();
 
-        var response = await LayerHub.CallAsync<ServiceLookupRequest, ServiceLookupResponse>(
+        var response = await runtime.CallAsync<ServiceLookupRequest, ServiceLookupResponse>(
             new ServiceLookupRequest("LookupValue"));
 
         Assert.That(response.StoredValue, Is.EqualTo("LookupValue"));
@@ -77,9 +77,9 @@ public partial class CallTests
         var audioLayer = new AudioLayer();
         audioLayer.RegisterService(new AudioLayerServicesModule());
 
-        LayerHub.CreateLayers().Push(coreLayer).Push(audioLayer).Build();
+        var runtime = LayerHub.CreateLayers().Push(coreLayer).Push(audioLayer).Build();
 
-        var response = await LayerHub.CallAsync<CrossLayerAccessRequest, CrossLayerAccessResponse>(
+        var response = await runtime.CallAsync<CrossLayerAccessRequest, CrossLayerAccessResponse>(
             new CrossLayerAccessRequest());
 
         Assert.That(response.Value, Is.EqualTo("MainMixer"));
@@ -93,10 +93,10 @@ public partial class CallTests
         var audioLayer = new AudioLayer();
         audioLayer.RegisterService(new AudioLayerServicesModule());
 
-        LayerHub.CreateLayers().Push(coreLayer).Push(audioLayer).Build();
+        var runtime = LayerHub.CreateLayers().Push(coreLayer).Push(audioLayer).Build();
 
         Assert.That(async () =>
-                await LayerHub.CallAsync<DirectCrossLayerAccessRequest, DirectCrossLayerAccessResponse>(
+                await runtime.CallAsync<DirectCrossLayerAccessRequest, DirectCrossLayerAccessResponse>(
                     new DirectCrossLayerAccessRequest()),
             Throws.TypeOf<InvalidOperationException>());
     }
@@ -106,10 +106,10 @@ public partial class CallTests
     {
         var coreLayer = new CoreLayer();
         coreLayer.RegisterService(new CoreLayerServicesModule());
-        LayerHub.CreateLayers().Push(coreLayer).Build();
+        var runtime = LayerHub.CreateLayers().Push(coreLayer).Build();
 
         Assert.That(async () =>
-                await LayerHub.CallAsync<NoOwnerLayerRequest, NoOwnerLayerResponse>(new NoOwnerLayerRequest()),
+                await runtime.CallAsync<NoOwnerLayerRequest, NoOwnerLayerResponse>(new NoOwnerLayerRequest()),
             Throws.TypeOf<ScopeLocalCallRouteNotFoundException>());
     }
 
@@ -118,10 +118,10 @@ public partial class CallTests
     {
         var coreLayer = new CoreLayer();
         coreLayer.RegisterService(new CoreLayerServicesModule());
-        LayerHub.CreateLayers().Push(coreLayer).Build();
+        var runtime = LayerHub.CreateLayers().Push(coreLayer).Build();
 
         using var cts = new CancellationTokenSource();
-        var response = await LayerHub.CallAsync<CancellationEchoRequest, CancellationEchoResponse>(
+        var response = await runtime.CallAsync<CancellationEchoRequest, CancellationEchoResponse>(
             new CancellationEchoRequest(), cts.Token);
 
         Assert.That(response.CanBeCanceled, Is.True);
@@ -133,10 +133,10 @@ public partial class CallTests
     {
         var coreLayer = new CoreLayer();
         coreLayer.RegisterService(new CoreLayerServicesModule());
-        LayerHub.CreateLayers().Push(coreLayer).Build();
+        var runtime = LayerHub.CreateLayers().Push(coreLayer).Build();
 
         Assert.That(async () =>
-                await LayerHub.CallAsync<ThrowingRequest, ThrowingResponse>(new ThrowingRequest()),
+                await runtime.CallAsync<ThrowingRequest, ThrowingResponse>(new ThrowingRequest()),
             Throws.TypeOf<InvalidOperationException>().With.Message.Contains("Call exploded"));
     }
 
@@ -145,9 +145,9 @@ public partial class CallTests
     {
         var coreLayer = new CoreLayer();
         coreLayer.RegisterService(new CoreLayerServicesModule());
-        LayerHub.CreateLayers().Push(coreLayer).Build();
+        var runtime = LayerHub.CreateLayers().Push(coreLayer).Build();
 
-        var response = await LayerHub.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
+        var response = await runtime.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
             new SwitchSceneRequest("TitleScene"));
 
         Assert.That(response.SceneName, Is.EqualTo("TitleScene"));
@@ -158,9 +158,9 @@ public partial class CallTests
     {
         var layer = new LayerMethodLayer();
         layer.RegisterService(new CoreLayerServicesModule());
-        LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
 
-        var response = await LayerHub.CallAsync<LayerMethodRequest, LayerMethodResponse>(
+        var response = await runtime.CallAsync<LayerMethodRequest, LayerMethodResponse>(
             new LayerMethodRequest("LayerScene"));
 
         Assert.That(response.SceneName, Is.EqualTo("LayerScene"));
@@ -173,9 +173,9 @@ public partial class CallTests
         var coreLayer = new CoreLayer();
         coreLayer.RegisterService(new CoreLayerServicesModule());
 
-        LayerHub.CreateLayers().Push(coreLayer).Build();
+        var runtime = LayerHub.CreateLayers().Push(coreLayer).Build();
 
-        var response = await LayerHub.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
+        var response = await runtime.CallAsync<SwitchSceneRequest, SwitchSceneResponse>(
             new SwitchSceneRequest("ScopeLocalScene"));
 
         Assert.That(response.SceneName, Is.EqualTo("ScopeLocalScene"));

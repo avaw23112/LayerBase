@@ -22,9 +22,9 @@ public class NotifyTests
         var manager = new TestNotifyManager();
         layer.RegisterService(manager);
 
-        LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
 
-        LayerHub.Send(new TestEvent { Value = 42 });
+        runtime.Send(new TestEvent { Value = 42 });
 
         Assert.That(manager.ReceivedValue, Is.EqualTo(42));
         Assert.That(manager.CallCount, Is.EqualTo(1));
@@ -36,13 +36,13 @@ public class NotifyTests
         var layer = new TestLayer();
         var trace = new List<string>();
 
-        LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
 
         layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("First"); });
         layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("Second"); });
         layer.SubscribeNotify(static (in TestEvent e) => { e.Trace!.Add("Third"); });
 
-        LayerHub.Send(new TestEvent { Value = 7, Trace = trace });
+        runtime.Send(new TestEvent { Value = 7, Trace = trace });
 
         Assert.That(trace, Is.EqualTo(new[] { "First", "Second", "Third" }));
     }

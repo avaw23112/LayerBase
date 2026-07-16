@@ -30,10 +30,10 @@ public class PerformanceBenchmarks
                 lA.HandledCount++;
                 return EventHandledState.Continue;
             });
-        LayerHub.CreateLayers().Push(lA).Build();
+        var runtimeA = LayerHub.CreateLayers().Push(lA).Build();
 
         var sw = Stopwatch.StartNew();
-        for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
+        for (var i = 0; i < EventCount; i++) runtimeA.Send(new BenchEvent());
         sw.Stop();
         Console.WriteLine($"\n[内存密集�?集中分发] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
 
@@ -51,10 +51,10 @@ public class PerformanceBenchmarks
             builder.Push(l);
         }
 
-        builder.Build();
+        var runtimeB = builder.Build();
 
         sw.Restart();
-        for (var i = 0; i < EventCount; i++) LayerHub.Send(new BenchEvent());
+        for (var i = 0; i < EventCount; i++) runtimeB.Send(new BenchEvent());
         sw.Stop();
         Console.WriteLine($"[内存碎片�?跨桶分发] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
     }

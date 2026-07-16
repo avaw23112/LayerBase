@@ -95,18 +95,18 @@ public static class CallUsage
 
         var layer = new SceneLayer();
         layer.RegisterService(new SceneEchoService());
-        LayerHub.CreateLayers().Push(layer).Build();
+        var runtime = LayerHub.CreateLayers().Push(layer).Build();
 
-        var layerResponse = LayerHub.CallAsync<ChangeSceneRequest, ChangeSceneResponse>(
-                                        new ChangeSceneRequest("Battle"))
-                                    .GetAwaiter()
-                                    .GetResult();
+        var layerResponse = runtime.CallAsync<ChangeSceneRequest, ChangeSceneResponse>(
+                                       new ChangeSceneRequest("Battle"))
+                                   .GetAwaiter()
+                                   .GetResult();
         Console.WriteLine($"[Layer Call] Changed scene to: {layerResponse.SceneName}");
 
-        var serviceResponse = LayerHub.CallAsync<EchoSceneRequest, EchoSceneResponse>(
-                                      new EchoSceneRequest("Settlement"))
-                                  .GetAwaiter()
-                                  .GetResult();
+        var serviceResponse = runtime.CallAsync<EchoSceneRequest, EchoSceneResponse>(
+                                     new EchoSceneRequest("Settlement"))
+                                 .GetAwaiter()
+                                 .GetResult();
         Console.WriteLine($"[Service Call] Echoed scene to: {serviceResponse.SceneName}");
     }
 }

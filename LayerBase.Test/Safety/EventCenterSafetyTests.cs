@@ -46,10 +46,11 @@ public sealed class EventCenterSafetyTests
         var aRuns = 0;
         var bRuns = 0;
         var cRuns = 0;
+        const string failureMessage = "sync async failure";
 
         Action<LayerEventInfo> onInfo = info =>
         {
-            if (info.Type == LayerEventInfoType.Error)
+            if (info.Type == LayerEventInfoType.Error && info.Exception?.Message == failureMessage)
                 errorReported.Set();
         };
 
@@ -64,7 +65,7 @@ public sealed class EventCenterSafetyTests
             center.SubscribeAsync<SafetyEvent>(0, _ =>
             {
                 bRuns++;
-                throw new InvalidOperationException("sync async failure");
+                throw new InvalidOperationException(failureMessage);
             });
             center.SubscribeAsync<SafetyEvent>(0, _ =>
             {
@@ -101,6 +102,7 @@ public sealed class EventCenterSafetyTests
         var aRuns = 0;
         var bRuns = 0;
         var cRuns = 0;
+        const string failureMessage = "delayed async failure";
 
         EventHandleDelegateAsync<SafetyEvent> handlerB = _ =>
         {
@@ -122,7 +124,7 @@ public sealed class EventCenterSafetyTests
 
         Action<LayerEventInfo> onInfo = info =>
         {
-            if (info.Type == LayerEventInfoType.Error)
+            if (info.Type == LayerEventInfoType.Error && info.Exception?.Message == failureMessage)
                 errorReported.Set();
         };
 
@@ -140,7 +142,7 @@ public sealed class EventCenterSafetyTests
             center.SubscribeAsync(0, handlerC);
             center.PrewarmEvent<SafetyEvent>(new LayerPrewarmOptions(LayerPrewarmTargets.DispatchTable));
 
-            firstFault.SetException(new InvalidOperationException("delayed async failure"));
+            firstFault.SetException(new InvalidOperationException(failureMessage));
             Assert.That(errorReported.Wait(TimeSpan.FromSeconds(2)), Is.True);
 
             center.Send(new SafetyEvent());

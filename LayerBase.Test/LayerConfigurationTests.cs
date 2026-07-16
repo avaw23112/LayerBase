@@ -21,9 +21,9 @@ public class LayerConfigurationTests
         var middle = new RecordingLayer<PlainEvent>(EventHandledState.Continue, e => e.Id);
         var bottom = new RecordingLayer<PlainEvent>(EventHandledState.Continue, e => e.Id);
 
-        LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
+        var runtime = LayerHub.CreateLayers().Push(top).Push(middle).Push(bottom).Build();
 
-        LayerHub.Send(new PlainEvent(eventId));
+        runtime.Send(new PlainEvent(eventId));
 
         Assert.That(top.ReceivedIds, Is.EqualTo(new[] { eventId }));
         Assert.That(middle.ReceivedIds, Is.EqualTo(new[] { eventId }));

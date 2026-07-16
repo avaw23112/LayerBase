@@ -34,7 +34,7 @@ public static class ParallelUsage
         LayerHub.InitializeJobScheduler(4);
 
         var compute = new ComputeLayer();
-        LayerHub.CreateLayers().Push(compute).Build();
+        var runtime = LayerHub.CreateLayers().Push(compute).Build();
 
         // 2. 监听全局错误信息（故障隔离演示）
         LayerHub.OnLayerEventInfo += info =>
@@ -44,10 +44,10 @@ public static class ParallelUsage
         };
 
         // 3. 正常分发
-        LayerHub.Send(new HeavyComputeEvent { Data = 100 });
+        runtime.Send(new HeavyComputeEvent { Data = 100 });
 
         // 4. 触发异常分发：该 Handler 会被自动“熔断”并上报，不影响后续分发
-        LayerHub.Send(new HeavyComputeEvent { Data = -1 });
+        runtime.Send(new HeavyComputeEvent { Data = -1 });
 
         Thread.Sleep(200);
     }

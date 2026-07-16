@@ -41,10 +41,10 @@ public static class BusinessScenarioUsage
                 new BusinessReserveInventoryRequest(orderId, sku, quantity: 3)));
         Console.WriteLine($"[Warehouse] Reserved {reservation.Quantity} units, remaining {reservation.Remaining}");
 
-        var shippingQuote = LayerHub.CallAsync<BusinessQuoteShipmentRequest, BusinessQuoteShipmentResponse>(
-                                      new BusinessQuoteShipmentRequest(orderId, "Shanghai"))
-                                  .GetAwaiter()
-                                  .GetResult();
+        var shippingQuote = runtime.CallAsync<BusinessQuoteShipmentRequest, BusinessQuoteShipmentResponse>(
+                                     new BusinessQuoteShipmentRequest(orderId, "Shanghai"))
+                                 .GetAwaiter()
+                                 .GetResult();
         Console.WriteLine($"[Fulfillment] Shipping quote: {shippingQuote.Carrier} {shippingQuote.Price:C}");
 
         var labelTool = runtime.Tools.GetOrCreate<IBusinessShippingLabelTool>();

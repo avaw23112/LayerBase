@@ -213,7 +213,7 @@ public class RequestResponseCompareBench : CompareBenchmarkBase
     private readonly CompareRequest _request = new(123);
     private IRequestHandler<CompareRequest, CompareResponse> _messagePipeHandler = null!;
     private IServiceProvider _provider = null!;
-    private EventCenter _center = null!;
+    private LayerRuntime _runtime = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -225,7 +225,7 @@ public class RequestResponseCompareBench : CompareBenchmarkBase
         _messagePipeHandler = _provider.GetRequiredService<IRequestHandler<CompareRequest, CompareResponse>>();
 
         LayerHub.Reset();
-        LayerHub.CreateLayers().Push(new CompareCallLayer()).Build().Prewarm();
+        _runtime = LayerHub.CreateLayers().Push(new CompareCallLayer()).Build().Prewarm();
     }
 
     [GlobalCleanup]
@@ -256,8 +256,8 @@ public class RequestResponseCompareBench : CompareBenchmarkBase
     public void LayerBase()
     {
         for (var i = 0; i < HundredThousand; i++)
-            CompareSink.IntValue = LayerHub.CallAsync<CompareRequest, CompareResponse>(_request)
-                                           .GetAwaiter().GetResult().Value;
+            CompareSink.IntValue = _runtime.CallAsync<CompareRequest, CompareResponse>(_request)
+                                            .GetAwaiter().GetResult().Value;
     }
 }
 
@@ -266,7 +266,7 @@ public class ManyNotifyFixedBatch32CompareBench : CompareBenchmarkBase
     private List<IDisposable> _messagePipeSubscriptions = null!;
     private IServiceProvider _provider = null!;
     private ManyNotifyBatch32Publishers _publishers = null!;
-    private EventCenter _center = null!;
+    private LayerRuntime _runtime = null!;
 
     [Params(2, 3)] public int SubscribersPerEvent { get; set; }
 
@@ -278,7 +278,7 @@ public class ManyNotifyFixedBatch32CompareBench : CompareBenchmarkBase
         LayerHub.Reset();
         var layer = new CompareLayer();
         ManyNotifyFixedBatchRegistry.RegisterLayerBase32(layer, SubscribersPerEvent);
-        LayerHub.CreateLayers().Push(layer).Build().Prewarm();
+        _runtime = LayerHub.CreateLayers().Push(layer).Build().Prewarm();
 
         var services = new ServiceCollection();
         services.AddMessagePipe();
@@ -308,7 +308,7 @@ public class ManyNotifyFixedBatch32CompareBench : CompareBenchmarkBase
     [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "LayerBase", "Batch32")]
     public void LayerBase()
     {
-        ManyNotifyFixedBatchRegistry.DispatchLayerBase32();
+        ManyNotifyFixedBatchRegistry.DispatchLayerBase32(_runtime);
     }
 
     [Benchmark(Description = "MessagePipe (32事件/每事件2~3订阅)")]
@@ -324,6 +324,7 @@ public class ManyNotifyFixedBatch128CompareBench : CompareBenchmarkBase
     private List<IDisposable> _messagePipeSubscriptions = null!;
     private IServiceProvider _provider = null!;
     private ManyNotifyBatch128Publishers _publishers = null!;
+    private LayerRuntime _runtime = null!;
 
     [Params(2, 3)] public int SubscribersPerEvent { get; set; }
 
@@ -335,7 +336,7 @@ public class ManyNotifyFixedBatch128CompareBench : CompareBenchmarkBase
         LayerHub.Reset();
         var layer = new CompareLayer();
         ManyNotifyFixedBatchRegistry.RegisterLayerBase128(layer, SubscribersPerEvent);
-        LayerHub.CreateLayers().Push(layer).Build().Prewarm();
+        _runtime = LayerHub.CreateLayers().Push(layer).Build().Prewarm();
 
         var services = new ServiceCollection();
         services.AddMessagePipe();
@@ -365,7 +366,7 @@ public class ManyNotifyFixedBatch128CompareBench : CompareBenchmarkBase
     [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "LayerBase", "Batch128")]
     public void LayerBase()
     {
-        ManyNotifyFixedBatchRegistry.DispatchLayerBase128();
+        ManyNotifyFixedBatchRegistry.DispatchLayerBase128(_runtime);
     }
 
     [Benchmark(Description = "MessagePipe (128事件/每事件2~3订阅)")]
@@ -381,6 +382,7 @@ public class ManyNotifyFixedBatch256CompareBench : CompareBenchmarkBase
     private List<IDisposable> _messagePipeSubscriptions = null!;
     private IServiceProvider _provider = null!;
     private ManyNotifyBatch256Publishers _publishers = null!;
+    private LayerRuntime _runtime = null!;
 
     [Params(2, 3)] public int SubscribersPerEvent { get; set; }
 
@@ -392,7 +394,7 @@ public class ManyNotifyFixedBatch256CompareBench : CompareBenchmarkBase
         LayerHub.Reset();
         var layer = new CompareLayer();
         ManyNotifyFixedBatchRegistry.RegisterLayerBase256(layer, SubscribersPerEvent);
-        LayerHub.CreateLayers().Push(layer).Build().Prewarm();
+        _runtime = LayerHub.CreateLayers().Push(layer).Build().Prewarm();
 
         var services = new ServiceCollection();
         services.AddMessagePipe();
@@ -422,7 +424,7 @@ public class ManyNotifyFixedBatch256CompareBench : CompareBenchmarkBase
     [BenchmarkCategory("Compare.ManyEventsFewNotifySubs", "LayerBase", "Batch256")]
     public void LayerBase()
     {
-        ManyNotifyFixedBatchRegistry.DispatchLayerBase256();
+        ManyNotifyFixedBatchRegistry.DispatchLayerBase256(_runtime);
     }
 
     [Benchmark(Description = "MessagePipe (256事件/每事件2~3订阅)")]

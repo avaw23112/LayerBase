@@ -26,7 +26,7 @@ public sealed class ScopeLocalCallMigrationTests
                               .Build();
 
         var before = runtime.Main.Address;
-        var response = await LayerHub.CallAsync<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
+        var response = await runtime.CallAsync<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
             new ScopeLocalCallMigrationRequest("local"));
 
         Assert.That(response.Value, Is.EqualTo("handled:local"));
@@ -51,12 +51,12 @@ public sealed class ScopeLocalCallMigrationTests
     [Test]
     public void Missing_local_handler_does_not_fallback_remote()
     {
-        LayerHub.CreateLayers()
-                .Push(new ScopeLocalCallerLayer())
-                .Build();
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new ScopeLocalCallerLayer())
+                              .Build();
 
         Assert.That(async () =>
-                await LayerHub.CallAsync<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
+                await runtime.CallAsync<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
                     new ScopeLocalCallMigrationRequest("missing")),
             Throws.TypeOf<ScopeLocalCallRouteNotFoundException>());
     }
@@ -120,14 +120,14 @@ public sealed class ScopeLocalCallMigrationTests
     [Test]
     public void Wrong_thread_local_call_fails()
     {
-        LayerHub.CreateLayers()
-                .Push(new ScopeLocalCallerLayer())
-                .Push(new ScopeLocalCallMigrationHandlerLayer())
-                .Build();
+        var runtime = LayerHub.CreateLayers()
+                              .Push(new ScopeLocalCallerLayer())
+                              .Push(new ScopeLocalCallMigrationHandlerLayer())
+                              .Build();
 
         Assert.That(async () =>
                 await Task.Run(async () =>
-                    await LayerHub.CallAsync<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
+                    await runtime.CallAsync<ScopeLocalCallMigrationRequest, ScopeLocalCallMigrationResponse>(
                         new ScopeLocalCallMigrationRequest("wrong-thread"))),
             Throws.InvalidOperationException);
     }

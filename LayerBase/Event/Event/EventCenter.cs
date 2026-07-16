@@ -883,8 +883,8 @@ public sealed class EventCenter
             var handlerName = EventDiagnosticSymbols.Resolve(slot.HandlerNameId);
             var eventName = EventDiagnosticSymbols.Resolve(eventNameId);
 
-            LayerHub.ReportLayerEventError(slot.LayerIndex, handlerName, eventName, e);
             MarkDirty();
+            LayerHub.ReportLayerEventError(slot.LayerIndex, handlerName, eventName, e);
         }
 
         private static FaultSlot GetFaultSlot(FaultTable<T> faultTable, FaultKind kind, int index)
