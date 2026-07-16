@@ -41,6 +41,7 @@ internal readonly struct ScopeLocalCallRouteEntry
 internal sealed class ScopeLocalCallRegistry
 {
     private readonly int _scopeId;
+    private readonly List<ScopeLocalCallRouteEntry> _diagnostics = new();
     private object?[] _invokers = Array.Empty<object?>();
     private IScopeLocalCallDispatcher?[] _dispatchers = Array.Empty<IScopeLocalCallDispatcher?>();
     private Type?[] _handlerTypes = Array.Empty<Type?>();
@@ -51,12 +52,15 @@ internal sealed class ScopeLocalCallRegistry
         _scopeId = scopeId;
     }
 
+    public IReadOnlyList<ScopeLocalCallRouteEntry> Diagnostics => _diagnostics;
+
     public void Clear()
     {
         _invokers = Array.Empty<object?>();
         _dispatchers = Array.Empty<IScopeLocalCallDispatcher?>();
         _handlerTypes = Array.Empty<Type?>();
         _ownerLayerTypes = Array.Empty<Type?>();
+        _diagnostics.Clear();
     }
 
     public void Register(in ScopeLocalCallRouteEntry entry)
@@ -80,6 +84,7 @@ internal sealed class ScopeLocalCallRegistry
         _dispatchers[entry.RouteId] = entry.Dispatcher;
         _handlerTypes[entry.RouteId] = entry.HandlerType;
         _ownerLayerTypes[entry.RouteId] = entry.OwnerLayerType;
+        _diagnostics.Add(entry);
     }
 
     public void Dispatch(

@@ -41,16 +41,6 @@ public abstract class Layer : Node, IDisposable
     private int _nextServiceScopeId;
     #endregion
 
-    #region Runtime State - Call Route
-    // 调用路由的锁，保护构建期自动注册。
-    private readonly object _callRouteLock = new();
-    // 已注册的调用处理器的元数据列表。
-    private readonly List<(Type Req, Type Resp, Type Handler)> _callHandlers = new();
-    private readonly List<ScopeLocalCallRouteEntry> _localCallRouteEntries = new();
-    private readonly List<ScopeRemoteCallRouteEntry> _scopeCallRouteEntries = new();
-    private readonly List<ScopeRemoteEventRouteEntry> _scopeEventRouteEntries = new();
-    #endregion
-
     #region Runtime State - Event & Subscribe
     // 事件订阅的 Dispose Token 列表，用于在 Layer 释放时自动取消订阅。
     private readonly List<IDisposable> _subscriptions = new();
@@ -101,15 +91,6 @@ public abstract class Layer : Node, IDisposable
 
     /// <summary>通过自动绑定发现的事件订阅者列表。</summary>
     public IReadOnlyList<IAutoSubscribe> DiscoveredSubscribers { get; private set; } = Array.Empty<IAutoSubscribe>();
-
-    /// <summary>已注册的所有调用处理器。</summary>
-    public IReadOnlyList<(Type Req, Type Resp, Type Handler)> CallHandlers => _callHandlers;
-
-    internal IReadOnlyList<ScopeLocalCallRouteEntry> LocalCallRouteEntries => _localCallRouteEntries;
-
-    internal IReadOnlyList<ScopeRemoteCallRouteEntry> ScopeCallRouteEntries => _scopeCallRouteEntries;
-
-    internal IReadOnlyList<ScopeRemoteEventRouteEntry> ScopeEventRouteEntries => _scopeEventRouteEntries;
 
     /// <summary>该 Layer 生产（发送/发布）的事件类型列表。</summary>
     public IReadOnlyList<Type> ProducedEvents => _producedEvents;
@@ -241,10 +222,6 @@ public abstract class Layer : Node, IDisposable
         _activeServices.Clear();
         _resolvedServices.Clear();
         _serviceCollection.Reset();
-        _callHandlers.Clear();
-        _localCallRouteEntries.Clear();
-        _scopeCallRouteEntries.Clear();
-        _scopeEventRouteEntries.Clear();
         _producedEvents.Clear();
         _sharedFields.Clear();
         _subscribedEvents.Clear();
@@ -276,7 +253,7 @@ public abstract class Layer : Node, IDisposable
     /// <summary>构建自动绑定：调用路由、事件订阅和延迟发布器。</summary>
     internal void BuildAutoBinding()
     {
-        BindAutoCallHandlers();
+        BindAutoLocalCalls();
 
         var subscribers = new List<IAutoSubscribe>();
         var boundSubscriberInstances = new HashSet<object>(ObjectReferenceComparer.Instance);
@@ -707,31 +684,21 @@ public abstract class Layer : Node, IDisposable
             throw new InvalidOperationException("Layer not attached to a runtime context.");
         if (!OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
             throw new InvalidOperationException(
-                $"Scope `{ownerScopeType.FullName}` is not active in this runtime.");
+                $"Scope `{ownerScopeType.FullName}` (id {ownerScopeId}) is not active in this runtime.");
 
         ServiceLayerBinder.AttachScopeObject(handler, this, ownerScope);
         var routeId = ScopeLocalCallRouteId<TRequest, TResponse>.Id;
         var invoker = (ScopeLocalCallInvoker<TRequest, TResponse>)handler.HandleAsync;
 
-        lock (_callRouteLock)
-        {
-            if (_localCallRouteEntries.Any(entry =>
-                    entry.OwnerScopeId == ownerScopeId &&
-                    entry.RouteId == routeId &&
-                    entry.HandlerType == handler.GetType()))
-                return;
-
-            _callHandlers.Add((typeof(TRequest), typeof(TResponse), handler.GetType()));
-            _localCallRouteEntries.Add(new ScopeLocalCallRouteEntry(
-                ownerScopeId,
-                routeId,
-                typeof(TRequest),
-                typeof(TResponse),
-                handler.GetType(),
-                GetType(),
-                invoker,
-                new ScopeLocalCallDispatcher<TRequest, TResponse>(invoker)));
-        }
+        ownerScope.LocalCalls.Register(new ScopeLocalCallRouteEntry(
+            ownerScopeId,
+            routeId,
+            typeof(TRequest),
+            typeof(TResponse),
+            handler.GetType(),
+            GetType(),
+            invoker,
+            new ScopeLocalCallDispatcher<TRequest, TResponse>(invoker)));
     }
 
     internal void RegisterCallHandlerForOwner<TRequest, TResponse>(
@@ -771,30 +738,21 @@ public abstract class Layer : Node, IDisposable
             throw new InvalidOperationException("Layer not attached to a runtime context.");
         if (!OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
             throw new InvalidOperationException(
-                $"Scope `{ownerScopeType.FullName}` is not active in this runtime.");
+                $"Scope `{ownerScopeType.FullName}` (id {ownerScopeId}) is not active in this runtime.");
 
         ServiceLayerBinder.AttachScopeObject(handler, this, ownerScope);
         var routeId = ScopeRemoteCallRouteId<TRequest, TResponse>.Id;
         var invoker = (ScopeRemoteCallInvoker<TRequest, TResponse>)handler.HandleAsync;
 
-        lock (_callRouteLock)
-        {
-            if (_scopeCallRouteEntries.Any(entry =>
-                    entry.OwnerScopeId == ownerScopeId &&
-                    entry.RouteId == routeId &&
-                    entry.HandlerType == handler.GetType()))
-                return;
-
-            _scopeCallRouteEntries.Add(new ScopeRemoteCallRouteEntry(
-                ownerScopeId,
-                routeId,
-                typeof(TRequest),
-                typeof(TResponse),
-                handler.GetType(),
-                GetType(),
-                invoker,
-                new ScopeLocalCallDispatcher<TRequest, TResponse>(handler.HandleAsync)));
-        }
+        ownerScope.RemoteCalls.Register(new ScopeRemoteCallRouteEntry(
+            ownerScopeId,
+            routeId,
+            typeof(TRequest),
+            typeof(TResponse),
+            handler.GetType(),
+            GetType(),
+            invoker,
+            new ScopeLocalCallDispatcher<TRequest, TResponse>(handler.HandleAsync)));
     }
 
     public void RegisterScopeEventHandlerForOwner<TEvent>(
@@ -814,29 +772,20 @@ public abstract class Layer : Node, IDisposable
             throw new InvalidOperationException("Layer not attached to a runtime context.");
         if (!OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
             throw new InvalidOperationException(
-                $"Scope `{ownerScopeType.FullName}` is not active in this runtime.");
+                $"Scope `{ownerScopeType.FullName}` (id {ownerScopeId}) is not active in this runtime.");
 
         ServiceLayerBinder.AttachScopeObject(handler, this, ownerScope);
         var routeId = ScopeRemoteEventRouteId<TEvent>.Id;
         var invoker = (ScopeRemoteEventInvoker<TEvent>)handler.Handle;
 
-        lock (_callRouteLock)
-        {
-            if (_scopeEventRouteEntries.Any(entry =>
-                    entry.OwnerScopeId == ownerScopeId &&
-                    entry.RouteId == routeId &&
-                    entry.HandlerType == handler.GetType()))
-                return;
-
-            _scopeEventRouteEntries.Add(new ScopeRemoteEventRouteEntry(
-                ownerScopeId,
-                routeId,
-                typeof(TEvent),
-                handler.GetType(),
-                GetType(),
-                invoker,
-                new ScopeRemoteEventDispatcher<TEvent>(invoker)));
-        }
+        ownerScope.RemoteEvents.Register(new ScopeRemoteEventRouteEntry(
+            ownerScopeId,
+            routeId,
+            typeof(TEvent),
+            handler.GetType(),
+            GetType(),
+            invoker,
+            new ScopeRemoteEventDispatcher<TEvent>(invoker)));
     }
     #endregion
 
@@ -860,16 +809,6 @@ public abstract class Layer : Node, IDisposable
         _sharedFields.Add((providerServiceType, key, fieldType, isProvider));
     }
 
-    internal void ReleaseScopeRouteEntries()
-    {
-        lock (_callRouteLock)
-        {
-            _callHandlers.Clear();
-            _localCallRouteEntries.Clear();
-            _scopeCallRouteEntries.Clear();
-            _scopeEventRouteEntries.Clear();
-        }
-    }
     #endregion
 
     #region Internal - Shared Field & Snap
@@ -927,17 +866,17 @@ public abstract class Layer : Node, IDisposable
     #endregion
 
     #region Internal - Auto Binding
-    private void BindAutoCallHandlers()
+    private void BindAutoLocalCalls()
     {
         var boundInstances = new HashSet<object>(ObjectReferenceComparer.Instance);
-        BindAutoCallHandler(this, boundInstances);
+        BindAutoLocalCall(this, boundInstances);
         foreach (var registration in _activeServices)
-            BindAutoCallHandler(registration.Service, boundInstances);
+            BindAutoLocalCall(registration.Service, boundInstances);
         foreach (var resolved in _resolvedServices)
-            BindAutoCallHandler(resolved.Instance, boundInstances);
+            BindAutoLocalCall(resolved.Instance, boundInstances);
     }
 
-    private void BindAutoCallHandler(object candidate, HashSet<object> boundInstances)
+    private void BindAutoLocalCall(object candidate, HashSet<object> boundInstances)
     {
         if (!boundInstances.Add(candidate)) return;
         if (candidate is IAutoCallBinder autoCallBinder)

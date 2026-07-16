@@ -547,50 +547,6 @@ public sealed partial class LayerRuntime : IDisposable
     }
     #endregion
 
-    #region Internal - Scope Local Calls
-    internal void BuildLocalCallRegistry()
-    {
-        foreach (var scope in _scopeHost.Scopes)
-            scope.ClearLocalCallRegistry();
-
-        if (_chain == null) return;
-
-        foreach (var layer in _chain.GetNodes())
-        foreach (var entry in layer.LocalCallRouteEntries)
-        {
-            if (!_scopeHost.TryGetRuntime(entry.OwnerScopeId, out var ownerScope))
-                throw new InvalidOperationException(
-                    $"LocalCall route `{entry.RequestType.FullName}` -> `{entry.ResponseType.FullName}` targets unknown scope {entry.OwnerScopeId}.");
-
-            ownerScope.LocalCalls.Register(entry);
-        }
-
-        foreach (var layer in _chain.GetNodes())
-        foreach (var entry in layer.ScopeCallRouteEntries)
-        {
-            if (!_scopeHost.TryGetRuntime(entry.OwnerScopeId, out var ownerScope))
-                throw new InvalidOperationException(
-                    $"ScopeCall route `{entry.RequestType.FullName}` -> `{entry.ResponseType.FullName}` targets unknown scope {entry.OwnerScopeId}.");
-
-            ownerScope.RemoteCalls.Register(entry);
-        }
-
-        foreach (var layer in _chain.GetNodes())
-        foreach (var entry in layer.ScopeEventRouteEntries)
-        {
-            if (!_scopeHost.TryGetRuntime(entry.OwnerScopeId, out var ownerScope))
-                throw new InvalidOperationException(
-                    $"ScopeEvent route `{entry.EventType.FullName}` targets unknown scope {entry.OwnerScopeId}.");
-
-            ownerScope.RemoteEvents.Register(entry);
-        }
-
-        foreach (var layer in _chain.GetNodes())
-            layer.ReleaseScopeRouteEntries();
-    }
-
-    #endregion
-
     #region Diagnostics
     public string GetTopologySummary() => _chain?.GetTopologySummary() ?? "No layers built.";
 
@@ -711,12 +667,11 @@ public sealed partial class LayerRuntime : IDisposable
             hasCalls = true;
         }
 
-        foreach (var layer in _chain.GetNodes().OfType<Layer>())
-        foreach (var entry in layer.LocalCallRouteEntries.OrderBy(static entry => entry.OwnerScopeId)
-                                                         .ThenBy(static entry => entry.RouteId))
+        foreach (var scope in _scopeHost.Scopes.OrderBy(static scope => scope.ScopeId))
+        foreach (var entry in scope.LocalCalls.Diagnostics.OrderBy(static entry => entry.RouteId))
         {
             sb.AppendLine(
-                $"| {entry.OwnerScopeId} | {entry.RequestType.Name} | {entry.ResponseType.Name} | {layer.GetType().Name} | {entry.HandlerType.Name} | Runtime |");
+                $"| {entry.OwnerScopeId} | {entry.RequestType.Name} | {entry.ResponseType.Name} | {entry.OwnerLayerType.Name} | {entry.HandlerType.Name} | Runtime |");
             hasCalls = true;
         }
 
@@ -761,7 +716,10 @@ public sealed partial class LayerRuntime : IDisposable
         var allLayers = _chain.GetNodes().OfType<Layer>().ToList();
         var allSubscribed = allLayers.SelectMany(l => l.SubscribedEvents).ToHashSet();
         var allProduced = allLayers.SelectMany(l => l.ProducedEvents).ToHashSet();
-        var allCallHandlers = allLayers.SelectMany(l => l.CallHandlers.Select(ch => ch.Req)).ToHashSet();
+        var allCallRequests = CompositionPlan.LocalCalls.Select(static call => call.RequestType)
+            .Concat(_scopeHost.Scopes.SelectMany(static scope =>
+                scope.LocalCalls.Diagnostics.Select(static entry => entry.RequestType)))
+            .ToHashSet();
         var allCallInvoked = CallUsageTracker.GetUsedRequestTypes().ToHashSet();
         var allProvideKeys = allLayers.SelectMany(l =>
             l.SharedFields.Where(f => f.IsProvider).Select(f => $"{f.ProviderServiceType.FullName}_{f.Key}")).ToHashSet();
@@ -779,7 +737,7 @@ public sealed partial class LayerRuntime : IDisposable
                 issues.Add($"- **Unused Producer**: Event `{evt.Name}` is produced but has no subscribers.");
 
 
-        foreach (var req in allCallHandlers)
+        foreach (var req in allCallRequests)
             if (!allCallInvoked.Contains(req))
                 issues.Add(
                     $"- **Dead Call Route**: Request `{req.Name}` has a handler but is never invoked via `CallAsync`.");
@@ -905,7 +863,6 @@ public sealed partial class LayerRuntime : IDisposable
 
                 _runtime._state = RuntimeState.Activating;
                 _runtime._tools = new LayerToolRegistry(_runtime, _runtime.CompositionPlan.Tools);
-                _runtime.BuildLocalCallRegistry();
 
                 _runtime.MainActorRuntime.PrepareRuntimeBuild();
                 _layerChain.Build(1024, true, () =>

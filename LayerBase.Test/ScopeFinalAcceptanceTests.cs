@@ -113,6 +113,43 @@ public sealed class ScopeFinalAcceptanceTests
     }
 
     [Test]
+    public void Layer_and_runtime_do_not_keep_scope_route_staging_structures()
+    {
+        var root = RepositoryRoot();
+        var inspectedFiles = new[]
+        {
+            "LayerBase/Layer/Layer.cs",
+            "LayerBase/Application/LayerRuntime.cs"
+        };
+        string[] forbidden =
+        {
+            "_callHandlers",
+            "_localCallRouteEntries",
+            "_scopeCallRouteEntries",
+            "_scopeEventRouteEntries",
+            "CallHandlers",
+            "LocalCallRouteEntries",
+            "ScopeCallRouteEntries",
+            "ScopeEventRouteEntries",
+            "ReleaseScopeRouteEntries",
+            "BuildLocalCallRegistry"
+        };
+
+        var matches = inspectedFiles
+            .Select(file => Path.Combine(root, file.Replace('/', Path.DirectorySeparatorChar)))
+            .SelectMany(file =>
+            {
+                string text = File.ReadAllText(file);
+                return forbidden
+                    .Where(token => text.Contains(token, StringComparison.Ordinal))
+                    .Select(token => Path.GetRelativePath(root, file) + ": " + token);
+            })
+            .ToArray();
+
+        Assert.That(matches, Is.Empty);
+    }
+
+    [Test]
     public void Layer_tool_metadata_keeps_owner_layer_and_cache_state_without_public_runtime_objects()
     {
         var descriptorProperties = typeof(LayerToolDescriptor)

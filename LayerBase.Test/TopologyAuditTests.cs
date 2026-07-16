@@ -27,7 +27,7 @@ public sealed class TopologyAuditTests
                     .Push(new BrokenLocalCallLayer())
                     .Build());
 
-        Assert.That(ex!.Message, Does.Contain("unknown scope"));
+        Assert.That(ex!.Message, Does.Contain("not active"));
         Assert.That(ex.Message, Does.Contain("999"));
     }
 
@@ -102,21 +102,8 @@ public sealed class TopologyAuditTests
         {
             base.ConfigureServices(services);
 
-            var field = typeof(Layer).GetField(
-                "_localCallRouteEntries",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            var entries = (IList<ScopeLocalCallRouteEntry>)field!.GetValue(this)!;
-            entries.Add(new ScopeLocalCallRouteEntry(
-                ownerScopeId: 999,
-                routeId: ScopeLocalCallRouteId<TopologyRequest, TopologyResponse>.Id,
-                requestType: typeof(TopologyRequest),
-                responseType: typeof(TopologyResponse),
-                handlerType: typeof(PathfindingCallHandler),
-                ownerLayerType: typeof(BrokenLocalCallLayer),
-                invoker: new ScopeLocalCallInvoker<TopologyRequest, TopologyResponse>(
-                    static (_, _) => LBTask<TopologyResponse>.FromResult(new TopologyResponse())),
-                dispatcher: new ScopeLocalCallDispatcher<TopologyRequest, TopologyResponse>(
-                    static (_, _) => LBTask<TopologyResponse>.FromResult(new TopologyResponse()))));
+            RegisterCallHandler<TopologyRequest, TopologyResponse, MissingScope>(
+                new PathfindingCallHandler());
         }
     }
 
@@ -127,6 +114,11 @@ public sealed class TopologyAuditTests
     private readonly struct PathfindingScope : IScopeDefinition
     {
         public const int ScopeId = 25;
+    }
+
+    private readonly struct MissingScope : IScopeDefinition
+    {
+        public const int ScopeId = 999;
     }
 
     private readonly struct TopologyRequest

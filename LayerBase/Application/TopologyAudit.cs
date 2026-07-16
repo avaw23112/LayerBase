@@ -56,7 +56,6 @@ internal static class TopologyAudit
         ValidateScopeSlices(plan, scopeIds, layerIndexes, diagnostics);
         ValidateLayerContributions(plan, scopeIds, layerIndexes, diagnostics);
         ValidateResolvedContributions(plan, scopeIds, layerIndexes, diagnostics);
-        ValidateRuntimeLocalCalls(layers, scopeIds, layerIndexes, diagnostics);
 
         var ordered = diagnostics
             .OrderBy(static diagnostic => diagnostic.Severity)
@@ -349,51 +348,6 @@ internal static class TopologyAudit
                     tool.OwnerLayerIndex,
                     $"Tool `{tool.ContractType.FullName}` references missing layer index {tool.OwnerLayerIndex}.");
             }
-        }
-    }
-
-    private static void ValidateRuntimeLocalCalls(
-        IReadOnlyList<Layer> layers,
-        HashSet<int> scopeIds,
-        HashSet<int> layerIndexes,
-        List<TopologyAuditDiagnostic> diagnostics)
-    {
-        foreach (var layer in layers.OrderBy(static layer => layer.RouteIndex))
-        foreach (var entry in layer.LocalCallRouteEntries.OrderBy(static entry => entry.OwnerScopeId)
-                                                         .ThenBy(static entry => entry.RouteId))
-        {
-            if (!scopeIds.Contains(entry.OwnerScopeId))
-            {
-                AddError(
-                    diagnostics,
-                    "LBTOPOLOGY_SCOPE_NOT_INSTALLED",
-                    entry.OwnerScopeId,
-                    layer.RouteIndex,
-                    $"LocalCall route `{entry.RequestType.FullName}` -> `{entry.ResponseType.FullName}` targets unknown scope {entry.OwnerScopeId}.");
-            }
-
-            if (!layerIndexes.Contains(layer.RouteIndex))
-            {
-                AddError(
-                    diagnostics,
-                    "LBTOPOLOGY_LAYER_NOT_PUSHED",
-                    entry.OwnerScopeId,
-                    layer.RouteIndex,
-                    $"LocalCall route `{entry.RequestType.FullName}` -> `{entry.ResponseType.FullName}` belongs to an unpushed layer index {layer.RouteIndex}.");
-            }
-
-            if (entry.RouteId < 0)
-            {
-                AddError(
-                    diagnostics,
-                    "LBTOPOLOGY_ROUTE_ID_INVALID",
-                    entry.OwnerScopeId,
-                    layer.RouteIndex,
-                    $"LocalCall route `{entry.RequestType.FullName}` -> `{entry.ResponseType.FullName}` has invalid route id {entry.RouteId}.");
-            }
-
-            ValidateClosedType(diagnostics, entry.RequestType, entry.OwnerScopeId, layer.RouteIndex, "request");
-            ValidateClosedType(diagnostics, entry.ResponseType, entry.OwnerScopeId, layer.RouteIndex, "response");
         }
     }
 

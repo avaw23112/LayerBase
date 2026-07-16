@@ -394,13 +394,6 @@ internal sealed class ScopeRuntime : IDisposable
             reportException);
     }
 
-    public void ClearLocalCallRegistry()
-    {
-        LocalCalls.Clear();
-        RemoteCalls.Clear();
-        RemoteEvents.Clear();
-    }
-
     public void SetLifecyclePlan(ScopeLifecyclePlan lifecyclePlan)
     {
         LifecyclePlan = lifecyclePlan ?? throw new ArgumentNullException(nameof(lifecyclePlan));

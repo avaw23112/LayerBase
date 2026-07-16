@@ -66,16 +66,12 @@ public sealed class ScopeIsolationBoundaryTests
     }
 
     [Test]
-    public async Task Layer_releases_call_route_entries_after_scope_registration()
+    public async Task Layer_routes_calls_through_scope_owned_registry()
     {
         var layer = new RouteBoundaryLayer();
         LayerHub.CreateLayers()
                 .Push(layer)
                 .Build();
-
-        Assert.That(layer.LocalCallRouteEntries, Is.Empty);
-        Assert.That(layer.ScopeCallRouteEntries, Is.Empty);
-        Assert.That(layer.ScopeEventRouteEntries, Is.Empty);
 
         var response = await LayerHub.CallAsync<RouteBoundaryRequest, RouteBoundaryResponse>(
             new RouteBoundaryRequest("ok"));
