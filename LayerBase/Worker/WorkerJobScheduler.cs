@@ -344,12 +344,12 @@ internal sealed class WorkerJobScheduler : IDisposable
 
             if (_cancellation.IsCancellationRequested)
             {
-                _scheduler.MarkTerminal(_handle, WorkerState.Cancelled);
                 _scheduler.PostFailure(
                     in _origin,
                     _handle,
                     WorkerJobFailureKind.Cancelled,
                     WorkerJobExceptionInfo.None);
+                _scheduler.MarkTerminal(_handle, WorkerState.Cancelled);
                 _cancellation.Dispose();
                 return;
             }
@@ -361,12 +361,12 @@ internal sealed class WorkerJobScheduler : IDisposable
 
                 if (_cancellation.IsCancellationRequested)
                 {
-                    _scheduler.MarkTerminal(_handle, WorkerState.Cancelled);
                     _scheduler.PostFailure(
                         in _origin,
                         _handle,
                         WorkerJobFailureKind.Cancelled,
                         WorkerJobExceptionInfo.None);
+                    _scheduler.MarkTerminal(_handle, WorkerState.Cancelled);
                     return;
                 }
 
@@ -384,7 +384,6 @@ internal sealed class WorkerJobScheduler : IDisposable
                     return;
                 }
 
-                _scheduler.MarkTerminal(_handle, WorkerState.Failed);
                 _scheduler.PostFailure(
                     in _origin,
                     _handle,
@@ -393,15 +392,16 @@ internal sealed class WorkerJobScheduler : IDisposable
                         ? WorkerJobFailureKind.OriginScopeStopped
                         : WorkerJobFailureKind.ResultScopeEventRejected,
                     WorkerJobExceptionInfo.None);
+                _scheduler.MarkTerminal(_handle, WorkerState.Failed);
             }
             catch (Exception ex)
             {
-                _scheduler.MarkTerminal(_handle, WorkerState.Failed);
                 _scheduler.PostFailure(
                     in _origin,
                     _handle,
                     WorkerJobFailureKind.ExecutionFault,
                     WorkerJobExceptionInfo.FromException(ex));
+                _scheduler.MarkTerminal(_handle, WorkerState.Failed);
             }
             finally
             {
@@ -411,13 +411,13 @@ internal sealed class WorkerJobScheduler : IDisposable
 
         public void CancelBeforeRun()
         {
-            _scheduler.MarkTerminal(_handle, WorkerState.Cancelled);
             _cancellation.Cancel();
             _scheduler.PostFailure(
                 in _origin,
                 _handle,
                 WorkerJobFailureKind.Cancelled,
                 WorkerJobExceptionInfo.None);
+            _scheduler.MarkTerminal(_handle, WorkerState.Cancelled);
             _cancellation.Dispose();
         }
     }

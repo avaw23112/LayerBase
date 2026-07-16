@@ -30,7 +30,7 @@ public sealed partial class SharedStateReaderService : IService
 
 public sealed partial class InventoryStorageModule : ILayerContext
 {
-    [Provide(typeof(SharedInventoryService), "items")]
+    [Provide("items")]
     private readonly List<string> _items = new();
 
     public void Add(string item)
@@ -52,7 +52,7 @@ public sealed partial class InventoryQueryModule : ILayerContext
 
 public sealed partial class InventoryStateModule : ILayerContext
 {
-    [Provide(typeof(SharedFieldLayer), "equip-state")]
+    [Provide("equip-state")]
     private readonly Dictionary<string, bool> _equipped = new();
 
     public void SetEquipped(string itemName, bool equipped)
