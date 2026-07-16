@@ -80,7 +80,7 @@ public sealed class RuntimeIsolationTests
     }
 
     [Test]
-    public void All_bound_objects_in_runtime_share_tool_registry()
+    public void Bound_objects_access_runtime_tool_cache_through_views()
     {
         var layer = new IsolationLayer();
         var runtime = LayerHub.CreateLayers()
@@ -89,8 +89,10 @@ public sealed class RuntimeIsolationTests
                               .Build();
         var service = layer.GetService<IsolationService>();
 
-        Assert.That(layer.Tools(), Is.SameAs(runtime.Tools));
-        Assert.That(service.Tools(), Is.SameAs(runtime.Tools));
+        Assert.That(layer.Tools(), Is.Not.SameAs(runtime.Tools));
+        Assert.That(service.Tools(), Is.Not.SameAs(runtime.Tools));
+        Assert.That(layer.Tools().GetOrCreate<IsolationTool>(), Is.SameAs(runtime.Tools.GetOrCreate<IsolationTool>()));
+        Assert.That(service.Tools().GetOrCreate<IsolationTool>(), Is.SameAs(runtime.Tools.GetOrCreate<IsolationTool>()));
     }
 
     [Test]

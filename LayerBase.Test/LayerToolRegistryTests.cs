@@ -42,8 +42,10 @@ public sealed class LayerToolRegistryTests
 
         var service = layer.GetService<ToolService>();
 
-        Assert.That(layer.Tools(), Is.SameAs(runtime.Tools));
-        Assert.That(service.Tools(), Is.SameAs(runtime.Tools));
+        Assert.That(layer.Tools(), Is.Not.SameAs(runtime.Tools));
+        Assert.That(service.Tools(), Is.Not.SameAs(runtime.Tools));
+        Assert.That(layer.Tools().GetOrCreate<RuntimeTool>(), Is.Not.Null);
+        Assert.That(service.Tools().GetOrCreate<RuntimeTool>(), Is.Not.Null);
     }
 
     [Test]
@@ -111,6 +113,53 @@ public sealed class LayerToolRegistryTests
                     .Push(new ToolLayer())
                     .AddAssemblyModule(module)
                     .Build());
+    }
+
+    [Test]
+    public void Bound_tools_are_limited_to_owner_layer_and_scope()
+    {
+        var layer = new ToolLayer();
+        layer.RegisterService(
+            typeof(ScopedToolService),
+            new ScopedToolService(),
+            typeof(SecondaryToolScope));
+        var runtime = LayerHub.CreateLayers()
+                              .Push(layer)
+                              .AddAssemblyModule(new TestAssemblyModule(
+                                  "visibility",
+                                  tools: new[]
+                                  {
+                                      LayerToolContribution.ForTypes(
+                                          typeof(RuntimeTool),
+                                          typeof(RuntimeTool),
+                                          "default",
+                                          typeof(ToolLayer),
+                                          typeof(MainScope)),
+                                      LayerToolContribution.ForTypes(
+                                          typeof(ScopedRuntimeTool),
+                                          typeof(ScopedRuntimeTool),
+                                          "default",
+                                          typeof(ToolLayer),
+                                          typeof(SecondaryToolScope)),
+                                      LayerToolContribution.ForTypes(
+                                          typeof(OtherLayerTool),
+                                          typeof(OtherLayerTool),
+                                          "default",
+                                          typeof(OtherToolLayer),
+                                          typeof(MainScope))
+                                  }))
+                              .Push(new OtherToolLayer())
+                              .Build();
+
+        var mainService = layer.GetService<ToolService>();
+        var scopedService = layer.GetService<ScopedToolService>();
+
+        Assert.That(mainService.Tools().GetOrCreate<RuntimeTool>(), Is.Not.Null);
+        Assert.Throws<InvalidOperationException>(() => mainService.Tools().GetOrCreate<ScopedRuntimeTool>());
+        Assert.Throws<InvalidOperationException>(() => mainService.Tools().GetOrCreate<OtherLayerTool>());
+
+        Assert.That(scopedService.Tools().GetOrCreate<ScopedRuntimeTool>(), Is.Not.Null);
+        Assert.Throws<InvalidOperationException>(() => scopedService.Tools().GetOrCreate<RuntimeTool>());
     }
 
     [Test]
@@ -408,6 +457,10 @@ public sealed class LayerToolRegistryTests
     {
     }
 
+    private sealed class OtherToolLayer : Layer
+    {
+    }
+
     private sealed class ToolService : IService
     {
         public void ConfigureServices(IServiceCollection services)
@@ -470,11 +523,21 @@ public sealed class LayerToolRegistryTests
     {
     }
 
+    [Scope<SecondaryToolScope>]
     private sealed class ScopedToolService : IService
     {
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddSingleton(this);
         }
+    }
+
+    private sealed class ScopedRuntimeTool
+    {
+    }
+
+    private sealed class OtherLayerTool
+    {
     }
 
     private readonly struct SecondaryToolScope : IScopeDefinition

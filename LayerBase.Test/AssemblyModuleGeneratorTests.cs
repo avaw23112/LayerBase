@@ -573,23 +573,15 @@ public class AssemblyModuleGeneratorTests
                                   public const int ScopeId = 16;
                               }
 
-                              [LayerTool("shipping.label", Contract = typeof(IShippingLabelTool))]
+                              [LayerTool("shipping.label", typeof(CommerceLayer), typeof(FulfillmentScope), Contract = typeof(IShippingLabelTool))]
                               [AttributeUsage(AttributeTargets.Class, Inherited = false)]
                               public sealed class ShippingToolAttribute : Attribute
                               {
-                                  public ShippingToolAttribute(Type layer, Type ownerScope)
-                                  {
-                                      Layer = layer;
-                                      OwnerScope = ownerScope;
-                                  }
-
-                                  public Type Layer { get; }
-                                  public Type OwnerScope { get; }
                                   public string Key { get; set; } = "default";
                                   public bool Cache { get; set; } = true;
                               }
 
-                              [ShippingTool(typeof(CommerceLayer), typeof(FulfillmentScope), Key = "labels")]
+                              [ShippingTool(Key = "labels")]
                               public sealed class ShippingLabelTool : IShippingLabelTool
                               {
                               }
@@ -648,22 +640,14 @@ public class AssemblyModuleGeneratorTests
                                   public const int ScopeId = 16;
                               }
 
-                              [LayerTool("shipping.label", Contract = typeof(IShippingLabelTool))]
+                              [LayerTool("shipping.label", typeof(CommerceLayer), typeof(FulfillmentScope), Contract = typeof(IShippingLabelTool))]
                               [AttributeUsage(AttributeTargets.Class, Inherited = false)]
                               public sealed class ShippingToolAttribute : Attribute
                               {
-                                  public ShippingToolAttribute(Type layer, Type ownerScope)
-                                  {
-                                      Layer = layer;
-                                      OwnerScope = ownerScope;
-                                  }
-
-                                  public Type Layer { get; }
-                                  public Type OwnerScope { get; }
                                   public string Key { get; set; } = "default";
                               }
 
-                              [ShippingTool(typeof(CommerceLayer), typeof(FulfillmentScope))]
+                              [ShippingTool]
                               public sealed class ShippingLabelTool : IShippingLabelTool
                               {
                               }
@@ -705,22 +689,14 @@ public class AssemblyModuleGeneratorTests
                                   public const int ScopeId = 16;
                               }
 
-                              [LayerTool("shipping.label", Contract = typeof(IShippingLabelTool))]
+                              [LayerTool("shipping.label", typeof(CommerceLayer), typeof(FulfillmentScope), Contract = typeof(IShippingLabelTool))]
                               [AttributeUsage(AttributeTargets.Class, Inherited = false)]
                               public sealed class ShippingToolAttribute : Attribute
                               {
-                                  public ShippingToolAttribute(Type layer, Type ownerScope)
-                                  {
-                                      Layer = layer;
-                                      OwnerScope = ownerScope;
-                                  }
-
-                                  public Type Layer { get; }
-                                  public Type OwnerScope { get; }
                                   public string Key { get; set; } = "default";
                               }
 
-                              [ShippingTool(typeof(CommerceLayer), typeof(FulfillmentScope), Key = "labels")]
+                              [ShippingTool(Key = "labels")]
                               public sealed class ShippingLabelTool : IShippingLabelTool
                               {
                               }

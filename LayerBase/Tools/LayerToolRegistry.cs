@@ -14,6 +14,9 @@ public sealed class LayerToolRegistry : IDisposable
     private readonly object[] _locks;
     private readonly List<int> _creationOrder = new();
     private readonly object _orderLock = new();
+    private readonly LayerToolRegistry? _root;
+    private readonly int? _accessLayerIndex;
+    private readonly int? _accessScopeId;
     private int _disposed;
     private int _createdCount;
     private int _createFailureCount;
@@ -44,24 +47,56 @@ public sealed class LayerToolRegistry : IDisposable
         }
     }
 
-    public int Count => _entries.Length;
+    private LayerToolRegistry Root => _root ?? this;
 
-    public IReadOnlyList<LayerToolDescriptor> Diagnostics => _entries;
+    internal LayerToolRegistry CreateView(int ownerLayerIndex, int ownerScopeId)
+    {
+        if (ownerLayerIndex < 0)
+            throw new ArgumentOutOfRangeException(nameof(ownerLayerIndex));
+
+        return new LayerToolRegistry(this, ownerLayerIndex, ownerScopeId);
+    }
+
+    private LayerToolRegistry(LayerToolRegistry source, int ownerLayerIndex, int ownerScopeId)
+    {
+        var root = source.Root;
+        _runtime = root._runtime;
+        _entries = root._entries;
+        _lookup = root._lookup;
+        _cache = root._cache;
+        _locks = root._locks;
+        _creationOrder = root._creationOrder;
+        _orderLock = root._orderLock;
+        _root = root;
+        _accessLayerIndex = ownerLayerIndex;
+        _accessScopeId = ownerScopeId;
+    }
+
+    public int Count => HasAccessFilter
+        ? _entries.Count(IsAccessible)
+        : _entries.Length;
+
+    public IReadOnlyList<LayerToolDescriptor> Diagnostics => HasAccessFilter
+        ? _entries.Where(IsAccessible).ToArray()
+        : _entries;
+
+    private bool HasAccessFilter => _accessLayerIndex.HasValue && _accessScopeId.HasValue;
 
     internal ToolDiagnosticsSnapshot CaptureDiagnostics()
     {
+        var root = Root;
         var cachedCount = 0;
-        for (int i = 0; i < _cache.Length; i++)
+        for (int i = 0; i < root._cache.Length; i++)
         {
-            if (Volatile.Read(ref _cache[i]) != null)
+            if (Volatile.Read(ref root._cache[i]) != null)
                 cachedCount++;
         }
 
         return new ToolDiagnosticsSnapshot(
-            _entries.Length,
+            root._entries.Length,
             cachedCount,
-            Volatile.Read(ref _createdCount),
-            Volatile.Read(ref _createFailureCount));
+            Volatile.Read(ref root._createdCount),
+            Volatile.Read(ref root._createFailureCount));
     }
 
     public LayerToolSlot ResolveSlot<T>(string key = "default")
@@ -194,16 +229,30 @@ public sealed class LayerToolRegistry : IDisposable
 
     public void ClearAllCaches()
     {
-        if (Interlocked.CompareExchange(ref _disposed, 0, 0) != 0)
+        var root = Root;
+        if (Interlocked.CompareExchange(ref root._disposed, 0, 0) != 0)
         {
             return;
         }
 
-        int[] order;
-        lock (_orderLock)
+        if (HasAccessFilter)
         {
-            order = _creationOrder.ToArray();
-            _creationOrder.Clear();
+            for (var i = 0; i < _entries.Length; i++)
+            {
+                if (IsAccessible(_entries[i]))
+                {
+                    ClearCacheAt(i);
+                }
+            }
+
+            return;
+        }
+
+        int[] order;
+        lock (root._orderLock)
+        {
+            order = root._creationOrder.ToArray();
+            root._creationOrder.Clear();
         }
 
         for (var i = order.Length - 1; i >= 0; i--)
@@ -214,6 +263,11 @@ public sealed class LayerToolRegistry : IDisposable
 
     public void Dispose()
     {
+        if (_root != null)
+        {
+            return;
+        }
+
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
             return;
@@ -275,7 +329,7 @@ public sealed class LayerToolRegistry : IDisposable
                 var context = new LayerToolCreateContext(_runtime.Id, _runtime.Generation, this);
                 var created = entry.Factory(in context);
                 var validated = ValidateCreated(entry, created);
-                Interlocked.Increment(ref _createdCount);
+                IncrementCreatedCount();
                 return validated;
             }
 
@@ -283,12 +337,12 @@ public sealed class LayerToolRegistry : IDisposable
                            ?? throw new InvalidOperationException(
                                $"LayerTool `{entry.ImplementationType.FullName}` factory returned null.");
             var validatedInstance = ValidateCreated(entry, instance);
-            Interlocked.Increment(ref _createdCount);
+            IncrementCreatedCount();
             return validatedInstance;
         }
         catch
         {
-            Interlocked.Increment(ref _createFailureCount);
+            IncrementCreateFailureCount();
             throw;
         }
         finally
@@ -322,6 +376,18 @@ public sealed class LayerToolRegistry : IDisposable
         return created;
     }
 
+    private void IncrementCreatedCount()
+    {
+        var registryRoot = Root;
+        Interlocked.Increment(ref registryRoot._createdCount);
+    }
+
+    private void IncrementCreateFailureCount()
+    {
+        var registryRoot = Root;
+        Interlocked.Increment(ref registryRoot._createFailureCount);
+    }
+
     private int ResolveIndex(Type contractType, string key)
     {
         if (contractType == null) throw new ArgumentNullException(nameof(contractType));
@@ -330,6 +396,7 @@ public sealed class LayerToolRegistry : IDisposable
 
         if (_lookup.TryGetValue(new LayerToolKey(contractType, key), out var index))
         {
+            ValidateAccess(_entries[index]);
             return index;
         }
 
@@ -349,15 +416,35 @@ public sealed class LayerToolRegistry : IDisposable
             throw new InvalidOperationException("LayerTool slot does not match this registry.");
         }
 
+        ValidateAccess(entry);
         return slot.Index;
     }
 
     private void ThrowIfDisposed()
     {
-        if (Interlocked.CompareExchange(ref _disposed, 0, 0) != 0)
+        var root = Root;
+        if (Interlocked.CompareExchange(ref root._disposed, 0, 0) != 0)
         {
             throw new ObjectDisposedException(nameof(LayerToolRegistry));
         }
+    }
+
+    private bool IsAccessible(LayerToolDescriptor entry)
+    {
+        return !HasAccessFilter ||
+               (entry.OwnerLayerIndex == _accessLayerIndex!.Value &&
+                entry.OwnerScopeId == _accessScopeId!.Value);
+    }
+
+    private void ValidateAccess(LayerToolDescriptor entry)
+    {
+        if (IsAccessible(entry))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"LayerTool `{entry.ContractType.FullName}` with key `{entry.Key}` is not visible from the current Layer/Scope.");
     }
 
     private readonly struct LayerToolKey : IEquatable<LayerToolKey>

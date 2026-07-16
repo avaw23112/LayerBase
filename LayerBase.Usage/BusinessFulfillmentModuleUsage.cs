@@ -33,26 +33,16 @@ public sealed partial class BusinessFulfillmentModule
 {
 }
 
-[LayerTool("business.shipping-label", Contract = typeof(IBusinessShippingLabelTool))]
+[LayerTool("business.shipping-label", typeof(BusinessCommerceLayer), typeof(MainScope), Contract = typeof(IBusinessShippingLabelTool))]
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class BusinessShippingLabelToolAttribute : Attribute
 {
-    public BusinessShippingLabelToolAttribute(Type layer, Type ownerScope)
-    {
-        Layer = layer;
-        OwnerScope = ownerScope;
-    }
-
-    public Type Layer { get; }
-
-    public Type OwnerScope { get; }
-
     public string Key { get; set; } = "default";
 
     public bool Cache { get; set; } = true;
 }
 
-[BusinessShippingLabelTool(typeof(BusinessCommerceLayer), typeof(MainScope))]
+[BusinessShippingLabelTool]
 public sealed class BusinessShippingLabelTool : IBusinessShippingLabelTool
 {
     public string CreateLabel(string orderId, string carrier)

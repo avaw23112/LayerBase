@@ -1153,6 +1153,13 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             return null;
         }
 
+        var ownerLayerType = ReadTypeConstructorArgument(layerToolAttribute, 1);
+        var ownerScopeType = ReadTypeConstructorArgument(layerToolAttribute, 2);
+        if (ownerLayerType == null || ownerScopeType == null)
+        {
+            return null;
+        }
+
         var contractType = ReadTypeNamedArgument(layerToolAttribute, "Contract");
         var keyProperty = ReadStringNamedArgument(layerToolAttribute, "DefaultKeyProperty");
         if (string.IsNullOrWhiteSpace(keyProperty))
@@ -1162,7 +1169,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
         var allowCache = ReadBoolNamedArgument(layerToolAttribute, "AllowCache") ?? true;
         var location = layerToolAttribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
-        return new LayerToolAttributeInfo(attributeType, contractType, keyProperty!, allowCache, location);
+        return new LayerToolAttributeInfo(attributeType, ownerLayerType, ownerScopeType, contractType, keyProperty!, allowCache, location);
     }
 
     private static ImmutableArray<LayerToolRegistration> CreateLayerToolRegistrations(
@@ -1185,19 +1192,6 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                var ownerLayerType = ReadTypeValue(attribute, "Layer")
-                                     ?? ReadTypeValue(attribute, "OwnerLayer")
-                                     ?? ReadTypeValue(attribute, "OwnerLayerType")
-                                     ?? ReadTypeConstructorArgument(attribute, 0);
-                var ownerScopeType = ReadTypeValue(attribute, "OwnerScope")
-                                     ?? ReadTypeValue(attribute, "Scope")
-                                     ?? ReadTypeValue(attribute, "OwnerScopeType")
-                                     ?? ReadTypeConstructorArgument(attribute, 1);
-                if (ownerLayerType == null || ownerScopeType == null)
-                {
-                    continue;
-                }
-
                 var contractType = toolInfo.ContractType ?? implementationType;
                 var localKey = ReadStringValue(attribute, toolInfo.KeyProperty)
                                ?? ReadStringValue(attribute, "LocalKey")
@@ -1211,8 +1205,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                 var location = attribute.ApplicationSyntaxReference?.GetSyntax()?.GetLocation();
                 builder.Add(new LayerToolRegistration(
                     implementationType,
-                    ownerLayerType,
-                    ownerScopeType,
+                    toolInfo.OwnerLayerType,
+                    toolInfo.OwnerScopeType,
                     contractType,
                     localKey,
                     cache,
@@ -1716,12 +1710,16 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     {
         public LayerToolAttributeInfo(
             INamedTypeSymbol attributeType,
+            INamedTypeSymbol ownerLayerType,
+            INamedTypeSymbol ownerScopeType,
             INamedTypeSymbol? contractType,
             string keyProperty,
             bool allowCache,
             Location? location)
         {
             AttributeType = attributeType;
+            OwnerLayerType = ownerLayerType;
+            OwnerScopeType = ownerScopeType;
             ContractType = contractType;
             KeyProperty = keyProperty;
             AllowCache = allowCache;
@@ -1729,6 +1727,10 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         }
 
         public INamedTypeSymbol AttributeType { get; }
+
+        public INamedTypeSymbol OwnerLayerType { get; }
+
+        public INamedTypeSymbol OwnerScopeType { get; }
 
         public INamedTypeSymbol? ContractType { get; }
 
