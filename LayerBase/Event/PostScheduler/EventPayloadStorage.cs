@@ -16,6 +16,7 @@ internal interface IEventStore : IDisposable
 
 internal static class PayloadStoreCache<T> where T : struct
 {
+    public static readonly object Gate = new();
     public static readonly EventStore<T>?[] Stores = new EventStore<T>[1024];
 
     static PayloadStoreCache()
@@ -26,10 +27,13 @@ internal static class PayloadStoreCache<T> where T : struct
 
     private static void Reset()
     {
-        for (int i = 0; i < 1024; i++)
+        lock (Gate)
         {
-            Stores[i]?.Dispose();
-            Stores[i] = null;
+            for (int i = 0; i < 1024; i++)
+            {
+                Stores[i]?.Dispose();
+                Stores[i] = null;
+            }
         }
     }
 
@@ -37,8 +41,11 @@ internal static class PayloadStoreCache<T> where T : struct
     {
         if ((uint)runtimeId >= (uint)Stores.Length) return;
 
-        Stores[runtimeId]?.Dispose();
-        Stores[runtimeId] = null;
+        lock (Gate)
+        {
+            Stores[runtimeId]?.Dispose();
+            Stores[runtimeId] = null;
+        }
     }
 }
 
@@ -75,31 +82,37 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
     public PayloadHandle Add(in T value)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(EventStore<T>));
-        if (_freeHead == -1) Grow();
+        lock (_lock)
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(EventStore<T>));
+            if (_freeHead == -1) Grow();
 
-        int index = _freeHead;
-        _freeHead = _nextFree[index];
+            int index = _freeHead;
+            _freeHead = _nextFree[index];
 
-        _buffer[index] = value;
-        int version = _versions[index];
-        Interlocked.Increment(ref _rented);
-        long outstanding = Interlocked.Increment(ref _outstanding);
-        UpdatePeakOutstanding(outstanding);
+            _buffer[index] = value;
+            int version = _versions[index];
+            Interlocked.Increment(ref _rented);
+            long outstanding = Interlocked.Increment(ref _outstanding);
+            UpdatePeakOutstanding(outstanding);
 
-        return new PayloadHandle(EventTypeId<T>.Id, index, version);
+            return new PayloadHandle(EventTypeId<T>.Id, index, version);
+        }
     }
 
     public bool TryGet(PayloadHandle handle, out T value)
     {
-        if (_disposed || handle.Index < 0 || handle.Index >= _capacity || _versions[handle.Index] != handle.Version)
+        lock (_lock)
         {
-            value = default;
-            return false;
-        }
+            if (_disposed || handle.Index < 0 || handle.Index >= _capacity || _versions[handle.Index] != handle.Version)
+            {
+                value = default;
+                return false;
+            }
 
-        value = _buffer[handle.Index];
-        return true;
+            value = _buffer[handle.Index];
+            return true;
+        }
     }
 
     public ref T GetRef(int index, int version)
@@ -113,16 +126,19 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
     public void Release(int index, int version)
     {
-        if (_disposed || index < 0 || index >= _capacity || _versions[index] != version) return;
+        lock (_lock)
+        {
+            if (_disposed || index < 0 || index >= _capacity || _versions[index] != version) return;
 
-        _buffer[index] = default;
-        _versions[index]++;
-        if (_versions[index] == 0) _versions[index] = 1;
+            _buffer[index] = default;
+            _versions[index]++;
+            if (_versions[index] == 0) _versions[index] = 1;
 
-        _nextFree[index] = _freeHead;
-        _freeHead = index;
-        Interlocked.Increment(ref _returned);
-        Interlocked.Decrement(ref _outstanding);
+            _nextFree[index] = _freeHead;
+            _freeHead = index;
+            Interlocked.Increment(ref _returned);
+            Interlocked.Decrement(ref _outstanding);
+        }
     }
 
     public void Dispatch(int index, int version, EventCenter center)
@@ -191,24 +207,28 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _disposed = true;
 
-        Array.Clear(_buffer, 0, _buffer.Length);
-        Array.Clear(_versions, 0, _versions.Length);
-        Array.Clear(_nextFree, 0, _nextFree.Length);
+            Array.Clear(_buffer, 0, _buffer.Length);
+            Array.Clear(_versions, 0, _versions.Length);
+            Array.Clear(_nextFree, 0, _nextFree.Length);
 
-        _buffer = Array.Empty<T>();
-        _versions = Array.Empty<int>();
-        _nextFree = Array.Empty<int>();
+            _buffer = Array.Empty<T>();
+            _versions = Array.Empty<int>();
+            _nextFree = Array.Empty<int>();
 
-        _freeHead = -1;
-        _capacity = 0;
+            _freeHead = -1;
+            _capacity = 0;
+        }
     }
 }
 
 internal sealed class EventPayloadStorage : IDisposable
 {
+    private readonly object _gate = new();
     private IEventStore?[] _typeIdStores = new IEventStore[256];
 
     public PayloadHandle Store<T>(int runtimeId, in T payload) where T : struct
@@ -233,19 +253,15 @@ internal sealed class EventPayloadStorage : IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private EventStore<T> GetStoreFastSlow<T>(int runtimeId, int typeId) where T : struct
     {
-        EventStore<T>? store = null;
-        if ((uint)runtimeId < 1024)
+        lock (_gate)
         {
-            store = PayloadStoreCache<T>.Stores[runtimeId];
-        }
+            if ((uint)typeId < (uint)_typeIdStores.Length && _typeIdStores[typeId] is EventStore<T> cached)
+                return cached;
 
-        if (store == null)
-        {
-            store = CreateStoreGlobal<T>(runtimeId);
+            var store = GetOrCreateStoreGlobal<T>(runtimeId);
+            RegisterStoreLocal(typeId, store);
+            return store;
         }
-
-        RegisterStoreLocal(typeId, store);
-        return store;
     }
 
     private void RegisterStoreLocal(int typeId, IEventStore store)
@@ -259,23 +275,22 @@ internal sealed class EventPayloadStorage : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private EventStore<T> CreateStoreGlobal<T>(int runtimeId) where T : struct
+    private EventStore<T> GetOrCreateStoreGlobal<T>(int runtimeId) where T : struct
     {
-        EventStore<T>? store = null;
         if ((uint)runtimeId < 1024)
         {
-            store = PayloadStoreCache<T>.Stores[runtimeId];
-            if (store != null) return store;
+            lock (PayloadStoreCache<T>.Gate)
+            {
+                var store = PayloadStoreCache<T>.Stores[runtimeId];
+                if (store != null) return store;
 
-            store = new EventStore<T>();
-            PayloadStoreCache<T>.Stores[runtimeId] = store;
-        }
-        else
-        {
-            store = new EventStore<T>();
+                store = new EventStore<T>();
+                PayloadStoreCache<T>.Stores[runtimeId] = store;
+                return store;
+            }
         }
 
-        return store;
+        return new EventStore<T>();
     }
 
     public ref T GetRef<T>(int runtimeId, PayloadHandle handle) where T : struct
@@ -381,9 +396,10 @@ internal sealed class EventPayloadStorage : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private IEventStore? GetStoreByTypeId(int typeId)
     {
-        if ((uint)typeId < (uint)_typeIdStores.Length)
+        var stores = _typeIdStores;
+        if ((uint)typeId < (uint)stores.Length)
         {
-            return _typeIdStores[typeId];
+            return stores[typeId];
         }
 
         return null;
@@ -391,6 +407,6 @@ internal sealed class EventPayloadStorage : IDisposable
 
     public void Dispose()
     {
-        Array.Clear(_typeIdStores, 0, _typeIdStores.Length);
+        // Keep the local store table alive so late rejected envelopes can release their payload handles.
     }
 }
