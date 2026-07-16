@@ -6,17 +6,25 @@ namespace LayerBase;
 
 public static class LayerActorExtensions
 {
-    /// <summary>
-    /// Gets the actor accessor bound to the current layer scope.
-    /// </summary>
-    public static ActorAccessor Actors(this Layer layer)
+    public static ActorClient ActorClient(this Layer layer)
     {
         if (layer == null)
         {
             throw new ArgumentNullException(nameof(layer));
         }
 
-        return layer.OwnerContext?.ScopeHost.MainScope.Actors
+        return layer.OwnerContext?.ScopeHost.MainScope.ActorClient
+               ?? throw new InvalidOperationException("Layer not attached to LayerRuntime.");
+    }
+
+    public static ActorFactory ActorFactory(this Layer layer)
+    {
+        if (layer == null)
+        {
+            throw new ArgumentNullException(nameof(layer));
+        }
+
+        return layer.OwnerContext?.ScopeHost.MainScope.ActorFactory
                ?? throw new InvalidOperationException("Layer not attached to LayerRuntime.");
     }
 
@@ -28,12 +36,12 @@ public static class LayerActorExtensions
         where TRequest : struct
         where TResponse : struct
     {
-        return layer.Actors().Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
+        return layer.ActorClient().Call<TRequest, TResponse>(actorId, in request, cancellationToken);
     }
 
     public static TActor CreateActor<TActor>(this Layer layer, bool usePool = false)
         where TActor : class, IActor, new()
     {
-        return layer.Actors().CreateActor<TActor>(usePool);
+        return layer.ActorFactory().Create<TActor>(usePool);
     }
 }

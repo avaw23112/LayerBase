@@ -11,7 +11,7 @@ internal readonly struct WorkerJobOrigin
 
     public ScopeEndpoint Endpoint { get; }
 
-    public bool CanSubmit => Endpoint.EventWriter?.AcceptsWorkerJobs == true;
+    public bool CanSubmit => Endpoint.Transport != null && Endpoint.Transport.AcceptsWorkerJobs;
 }
 
 internal sealed class WorkerJobScheduler : IDisposable
@@ -290,7 +290,7 @@ internal sealed class WorkerJobScheduler : IDisposable
         WorkerJobExceptionInfo error)
     {
         var failedEvent = new WorkerEventJobFailedScopeEvent(handle, kind, error);
-        origin.Endpoint.EventWriter?.PostInternal(
+        origin.Endpoint.Transport.EnqueueEvent(
             WorkerScopeEventRouteIds.Failure,
             ScopeEventClass.Internal,
             in failedEvent);
@@ -373,12 +373,12 @@ internal sealed class WorkerJobScheduler : IDisposable
                 var resultEvent = new WorkerEventJobResultScopeEvent(
                     _handle,
                     new WorkerEventJobResult<TEvent>(result, _options.ResultPostPolicy));
-                var postResult = _origin.Endpoint.EventWriter?.PostInternal(
+                var postResult = _origin.Endpoint.Transport.EnqueueEvent(
                     WorkerScopeEventRouteIds.Result,
                     ScopeEventClass.Internal,
                     in resultEvent);
 
-                if (postResult.HasValue && postResult.Value.IsAccepted)
+                if (postResult.IsAccepted)
                 {
                     _scheduler.MarkTerminal(_handle, WorkerState.Completed);
                     return;
@@ -387,8 +387,7 @@ internal sealed class WorkerJobScheduler : IDisposable
                 _scheduler.PostFailure(
                     in _origin,
                     _handle,
-                    postResult.HasValue &&
-                    postResult.Value.Status == ScopePostStatus.RuntimeDisposed
+                    postResult.Status == ScopePostStatus.RuntimeDisposed
                         ? WorkerJobFailureKind.OriginScopeStopped
                         : WorkerJobFailureKind.ResultScopeEventRejected,
                     WorkerJobExceptionInfo.None);

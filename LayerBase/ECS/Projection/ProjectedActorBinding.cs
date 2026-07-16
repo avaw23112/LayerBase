@@ -15,17 +15,12 @@ internal static class ProjectedActorBinding
         long nowTicks)
     {
         ProjectedActorEnsureResult result = world.ProjectedActorCommands.Ensure(entity, meta.ActorTypeId, nowTicks);
-        if (!result.CompletedSynchronously)
+        if (result.Accepted)
         {
-            meta.EnsurePending = result.Accepted;
+            meta.EnsurePending = true;
             return ActorId.Invalid;
         }
 
-        if (!result.IsValid)
-            return ActorId.Invalid;
-
-        ProjectedActorBindingUtility.Bind(world, entity, ref meta, result.ActorId, nowTicks);
-        world.AddActiveProjectedActor(entity, ref meta);
         return result.ActorId;
     }
 
@@ -38,9 +33,9 @@ internal static class ProjectedActorBinding
         long nowTicks)
     {
         ProjectedActorEnsureResult result = world.ProjectedActorCommands.Ensure(entity, meta.ActorTypeId, nowTicks);
-        if (!result.CompletedSynchronously)
+        if (result.Accepted)
         {
-            meta.EnsurePending = result.Accepted;
+            meta.EnsurePending = true;
             return ActorId.Invalid;
         }
 
@@ -63,10 +58,10 @@ internal static class ProjectedActorBinding
         long nowTicks)
     {
         ProjectedActorEnsureResult result = world.ProjectedActorCommands.Ensure(entity, actorRef.ActorTypeId, nowTicks);
-        if (!result.CompletedSynchronously)
+        if (result.Accepted)
         {
             ref ProjectedActorMeta pendingMeta = ref world.GetProjectionMeta(entity);
-            pendingMeta.EnsurePending = result.Accepted;
+            pendingMeta.EnsurePending = true;
             return ActorId.Invalid;
         }
 
@@ -192,8 +187,7 @@ internal static class ProjectedActorBinding
                 return false;
             }
 
-            if (!world.ProjectedActorCommands.CompletesSynchronously)
-                actorMeta.EnablePending = true;
+            actorMeta.EnablePending = true;
 
             RefreshDeadline(ref actorRef, nowTicks);
             return true;

@@ -27,7 +27,7 @@ public sealed partial class LayerRuntime : IDisposable
     #region External Dependencies
     // 核心子系统，在构造时创建，贯穿 Runtime 生命周期。
     internal EventCenter EventCenter => _scopeHost.MainScope.EventCenter;
-    internal ActorWorld Actors => MainActorRuntime.World;
+    internal ActorWorld Actors => _mainActorRuntime.World;
     #endregion
 
     #region Runtime State - Configuration
@@ -39,6 +39,7 @@ public sealed partial class LayerRuntime : IDisposable
     // 各子系统实例，在 Build 过程中创建。
     private LayerChain? _chain;
     private ScopeRuntimeHost _scopeHost;
+    private readonly MainActorRuntime _mainActorRuntime;
     private readonly WorkerJobScheduler _workerJobs;
     private FullSnapRuntime? _fullSnap;
     private LayerToolRegistry? _tools;
@@ -85,9 +86,7 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal ScopeRuntimeHost ScopeHost => _scopeHost;
 
-    internal MainActorRuntime MainActorRuntime =>
-        _scopeHost.MainScope.MainActors
-        ?? throw new InvalidOperationException("MainScope actor runtime is not initialized.");
+    internal MainActorRuntime MainActorRuntime => _mainActorRuntime;
 
     internal WorkerJobScheduler WorkerJobs => _workerJobs;
 
@@ -106,6 +105,7 @@ public sealed partial class LayerRuntime : IDisposable
     internal LayerRuntime(int id)
     {
         _id = id;
+        _mainActorRuntime = new MainActorRuntime(this, _generation);
         _scopeHost = ScopeRuntimeHost.CreateMain(this, _id, _generation);
         _workerJobs = new WorkerJobScheduler(WorkerJobSchedulerOptions.Default);
         _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
@@ -366,33 +366,35 @@ public sealed partial class LayerRuntime : IDisposable
         _scopeHost.MainScope.TickTimer(deltaTime);
         _scopeHost.MainScope.DelayManager?.Tick(deltaTime);
 
-        // 4. Local post pump
+        // 4. Unified runtime budget starts before post/update/projection/actor work.
         var scheduler = _scopeHost.MainScope.PostScheduler;
+        RuntimeFrameBudget runtimeBudget = CreateRuntimeBudget(
+            scheduler?.Options ?? PostSchedulerOptions.Default,
+            Stopwatch.GetTimestamp());
+
+        // 5. Local post pump
         PostPumpStats postStats = scheduler?.Pump()
                                   ?? new PostPumpStats(0, 0, 0, 0);
+        runtimeBudget.Consume(postStats.ProcessedCount);
 
-        // 5. Scope-local FixedUpdate accumulator
+        // 6. Scope-local FixedUpdate accumulator
         _scopeHost.MainScope.PumpFixedUpdate(_fixedUpdateOptions, deltaTime);
 
-        // 6. Layer lifecycle update
+        // 7. Layer lifecycle update
         _scopeHost.MainScope.PumpUpdate(deltaTime);
 
-        if (scheduler != null)
-        {
-            RuntimeFrameBudget actorBudget = CreateActorBudget(scheduler.Options, postStats);
-            bool pumpActorFixedUpdate = _fixedUpdateOptions.Enabled;
-            float actorFixedDeltaTime = _fixedUpdateOptions.Enabled
-                ? _fixedUpdateOptions.FixedDeltaTime
-                : 0f;
+        bool pumpActorFixedUpdate = _fixedUpdateOptions.Enabled;
+        float actorFixedDeltaTime = _fixedUpdateOptions.Enabled
+            ? _fixedUpdateOptions.FixedDeltaTime
+            : 0f;
 
-            MainActorRuntime.Pump(
-                deltaTime: deltaTime,
-                fixedDeltaTime: actorFixedDeltaTime,
-                pumpFixedUpdate: pumpActorFixedUpdate,
-                budget: ref actorBudget);
+        MainActorRuntime.Pump(
+            deltaTime: deltaTime,
+            fixedDeltaTime: actorFixedDeltaTime,
+            pumpFixedUpdate: pumpActorFixedUpdate,
+            budget: ref runtimeBudget);
 
-            EcsWorld.SweepProjectedActors();
-        }
+        EcsWorld.SweepProjectedActors(ref runtimeBudget);
 
         _scopeHost.PumpInlineScopes(
             deltaTime,
@@ -402,19 +404,19 @@ public sealed partial class LayerRuntime : IDisposable
     #endregion
 
     #region Public API - Event Send / Post
-    private static RuntimeFrameBudget CreateActorBudget(PostSchedulerOptions options, PostPumpStats postStats)
+    private static RuntimeFrameBudget CreateRuntimeBudget(PostSchedulerOptions options, long startTicks)
     {
         long deadlineTicks = 0;
 
         if (options.MaxMillisecondsPerPump > 0)
         {
             long budgetTicks = (long)(Stopwatch.Frequency * options.MaxMillisecondsPerPump / 1000.0);
-            deadlineTicks = Stopwatch.GetTimestamp() + budgetTicks;
+            deadlineTicks = startTicks + budgetTicks;
         }
 
         return new RuntimeFrameBudget(
             maxEvents: options.MaxEventsPerPump,
-            usedEvents: postStats.ProcessedCount,
+            usedEvents: 0,
             deadlineTicks: deadlineTicks);
     }
     internal void ReportInfo(LayerEventInfo info)
@@ -534,11 +536,13 @@ public sealed partial class LayerRuntime : IDisposable
 
         _state = RuntimeState.Stopping;
         _scopeHost.MainScope.RunRuntimeStop();
+        _mainActorRuntime.RuntimeStop();
         _workerJobs.BeginStop();
         _chain?.DisposeLayers();
         _chain = null;
         _state = RuntimeState.Disposing;
         _scopeHost.Dispose();
+        _mainActorRuntime.Dispose();
         _tools?.Dispose();
         _workerJobs.Dispose();
         LayerHub.ClearRuntimeCaches(_id);

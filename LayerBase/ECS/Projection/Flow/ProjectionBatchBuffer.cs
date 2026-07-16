@@ -94,29 +94,36 @@ internal struct ProjectionBatchBuffer<TEvent> : IDisposable
         _events = newEvents;
     }
 
-    public void PostTo(IProjectedActorCommandSink commandSink)
-    {
-        int i = 0;
-        int length = Count;
-        int unrolledLength = length - (length % 4);
-        
-        for (; i < unrolledLength; i += 4)
-        {
-            commandSink.PostTo(_actorIds[i], in _events[i]);
-            commandSink.PostTo(_actorIds[i + 1], in _events[i + 1]);
-            commandSink.PostTo(_actorIds[i + 2], in _events[i + 2]);
-            commandSink.PostTo(_actorIds[i + 3], in _events[i + 3]);
-        }
-        for (; i < length; i++)
-        {
-            commandSink.PostTo(_actorIds[i], in _events[i]);
-        }
-    }
-
     public void FlushTo(IProjectedActorCommandSink commandSink)
     {
+        int capacity = _actorIds.Length;
+        IProjectedActorCommandSink? autoFlushSink = _autoFlushSink;
+        int autoFlushLimit = _autoFlushLimit;
         commandSink.PostBatch(ref this);
+        if (_actorIds.Length == 0)
+        {
+            int safeCapacity = capacity <= 0 ? 64 : capacity;
+            _actorIds = ArrayPool<ActorId>.Shared.Rent(safeCapacity);
+            _events = ArrayPool<TEvent>.Shared.Rent(safeCapacity);
+        }
+
+        _autoFlushSink = autoFlushSink;
+        _autoFlushLimit = autoFlushLimit;
         Count = 0;
+    }
+
+    internal ProjectionBatchLease<TEvent> Detach()
+    {
+        var value = new ProjectionBatchLease<TEvent>(
+            _actorIds,
+            _events,
+            Count);
+        _actorIds = Array.Empty<ActorId>();
+        _events = Array.Empty<TEvent>();
+        _autoFlushSink = null;
+        _autoFlushLimit = 0;
+        Count = 0;
+        return value;
     }
 
     internal ActorPostBatchScopeEvent<TEvent> DetachToScopeEvent()

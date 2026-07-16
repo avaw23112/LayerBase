@@ -22,6 +22,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
         var mainEndpoint = _scopes[0].Endpoint;
         for (int i = 0; i < _scopes.Length; i++)
         {
+            _scopes[i].BindHost(this);
             _scopes[i].BindMainActorEndpoint(mainEndpoint);
             _scopes[i].BindScopeEndpoints(_scopes);
         }
@@ -101,6 +102,22 @@ internal sealed class ScopeRuntimeHost : IDisposable
         ThrowIfDisposed();
         for (int i = 0; i < _workers.Length; i++)
             _workers[i].Start();
+    }
+
+    public void ApplyFaultPolicy(in ScopeFaultRecord record)
+    {
+        if (!TryGetRuntime(record.SourceScopeId, out var sourceScope))
+            return;
+
+        switch (sourceScope.Options.FaultPolicy)
+        {
+            case ScopeFaultPolicy.StopScope:
+                _ = sourceScope.RequestStopAsync();
+                break;
+            case ScopeFaultPolicy.StopRuntime:
+                _ = MainScope.RequestStopAsync();
+                break;
+        }
     }
 
     public bool TryGetScope<TScope>(out ScopeRef<TScope> scope)

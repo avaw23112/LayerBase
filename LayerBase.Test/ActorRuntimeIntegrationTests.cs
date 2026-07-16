@@ -193,14 +193,15 @@ public class ActorRuntimeIntegrationTests
     }
 
     [Test]
-    public void Scope_actor_accessor_is_local_only_for_main_scope()
+    public void Scope_actor_capabilities_are_split_by_scope()
     {
         using var fixture = BuildMainAndCustomScopeHost();
         ScopeRuntimeHost host = fixture.Host;
 
-        Assert.That(host.MainScope.Actors.IsLocal, Is.True);
-        Assert.That(host.Scopes[1].Actors.IsLocal, Is.False);
-        Assert.That(host.Scopes[1].Actors.Remote, Is.TypeOf<RemoteActorAccessor>());
+        Assert.DoesNotThrow(() => _ = host.MainScope.ActorFactory);
+        Assert.DoesNotThrow(() => _ = host.MainScope.ActorClient);
+        Assert.DoesNotThrow(() => _ = host.Scopes[1].ActorClient);
+        Assert.Throws<InvalidOperationException>(() => _ = host.Scopes[1].ActorFactory);
     }
 
     [Test]
@@ -208,14 +209,14 @@ public class ActorRuntimeIntegrationTests
     {
         using var fixture = BuildMainAndCustomScopeHost();
         ScopeRuntimeHost host = fixture.Host;
-        IntegrationActor actor = host.MainScope.Actors.CreateActor<IntegrationActor>();
+        IntegrationActor actor = host.MainScope.ActorFactory.Create<IntegrationActor>();
         ActorHandle handle = ActorHandle.FromActorId(actor.GetActorId(), runtimeGeneration: 1);
 
-        host.Scopes[1].Actors.PostTo(handle, new RuntimeActorEvent(42));
+        host.Scopes[1].ActorClient.Post(handle, new RuntimeActorEvent(42));
 
         var budget = new RuntimeFrameBudget(0, 0, 0);
         host.MainScope.PumpIngress();
-        host.MainScope.MainActors!.Pump(
+        fixture.Runtime.MainActorRuntime.Pump(
             deltaTime: 0.016f,
             fixedDeltaTime: 1f / 60f,
             pumpFixedUpdate: true,
@@ -230,10 +231,10 @@ public class ActorRuntimeIntegrationTests
         ActorCallRuntimeTrace.Reset();
         using var fixture = BuildMainAndCustomScopeHost();
         ScopeRuntimeHost host = fixture.Host;
-        ActorCallRuntimeActor actor = host.MainScope.Actors.CreateActor<ActorCallRuntimeActor>();
+        ActorCallRuntimeActor actor = host.MainScope.ActorFactory.Create<ActorCallRuntimeActor>();
         ActorHandle handle = ActorHandle.FromActorId(actor.GetActorId(), runtimeGeneration: 1);
 
-        var task = host.Scopes[1].Actors.Ask<ActorCallRuntimeRequest, ActorCallRuntimeResponse>(
+        var task = host.Scopes[1].ActorClient.Call<ActorCallRuntimeRequest, ActorCallRuntimeResponse>(
             handle,
             new ActorCallRuntimeRequest(6));
 
@@ -241,7 +242,7 @@ public class ActorRuntimeIntegrationTests
 
         var budget = new RuntimeFrameBudget(0, 0, 0);
         host.MainScope.PumpIngress();
-        host.MainScope.MainActors!.Pump(
+        fixture.Runtime.MainActorRuntime.Pump(
             deltaTime: 0.016f,
             fixedDeltaTime: 1f / 60f,
             pumpFixedUpdate: true,
@@ -359,8 +360,8 @@ public class ActorRuntimeIntegrationTests
         };
 
         ScopeRuntimeHost host = ScopeRuntimeHost.Create(runtime, plans, runtime.Id, generation: 1);
-        host.MainScope.MainActors!.PrepareRuntimeBuild();
-        host.MainScope.MainActors.CompleteRuntimeBuild();
+        runtime.MainActorRuntime.PrepareRuntimeBuild();
+        runtime.MainActorRuntime.CompleteRuntimeBuild();
         return new ScopeRuntimeHostFixture(runtime, host);
     }
 

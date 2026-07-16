@@ -135,6 +135,9 @@ public class ProjectedActorProjectionTests
             new ProjectionVelocityComponent { X = 3f, Y = 4f },new ProjectedActorRef());
         runtime.EcsWorld.WithProjectedActor(entity, actorTypeId: 1, keepAliveOverrideTicks: ProjectedActorTime.SecondsToTicks(0.5f), releasePolicy: ProjectedActorReleasePolicy.ReturnToPool);
 
+        runtime.EcsWorld.Query().TouchProjectedActor();
+        PumpActors(runtime);
+
         runtime.EcsWorld
                .Query<ProjectionPositionComponent, ProjectionVelocityComponent>()
                .Where(static (in Entity                      _, in ProjectionPositionComponent __,
@@ -154,7 +157,7 @@ public class ProjectedActorProjectionTests
                .Batch()
                .Post();
 
-        runtime.Pump(0.016f);
+        PumpActors(runtime);
 
         ProjectionPositionComponent position = runtime.EcsWorld.Get<ProjectionPositionComponent>(entity);
         ActorId actorId = runtime.EcsWorld.GetProjectionMeta(entity).ActorId;
@@ -185,13 +188,15 @@ public class ProjectedActorProjectionTests
                .Where(static (in Entity _, in ProjectionPositionComponent __, in ProjectionAoiComponent aoi) =>
                    aoi.IsVisible)
                .TouchProjectedActor();
+        PumpActors(runtime);
 
         ActorId actorId = runtime.EcsWorld.GetProjectionMeta(entity).ActorId;
         Assert.That(actorId.IsValid, Is.True);
         Assert.That(ProjectionProbeActor.Received, Is.Empty);
 
         Thread.Sleep(30);
-        runtime.Pump(0.016f);
+        runtime.EcsWorld.SweepProjectedActors();
+        PumpActors(runtime);
 
         Assert.That(runtime.EcsWorld.GetProjectionMeta(entity).ActorId.IsValid, Is.False);
         Assert.That(ProjectionProbeActor.ReturnCount, Is.EqualTo(1));
@@ -244,6 +249,16 @@ public class ProjectedActorProjectionTests
             static actorWorld => actorWorld.CreateProjectedActor<ProjectionProbeActor>());
     }
 
+    private static void PumpActors(LayerRuntime runtime)
+    {
+        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
+        runtime.MainActorRuntime.Pump(
+            deltaTime: 0.016f,
+            fixedDeltaTime: 1f / 60f,
+            pumpFixedUpdate: true,
+            budget: ref budget);
+    }
+
     private static IEnumerable<MetadataReference> ActorGeneratorTests_GetMetadataReferences()
     {
         string trustedPlatformAssemblies = (string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!;
@@ -277,6 +292,7 @@ public class ProjectedActorProjectionTests
         runtime.EcsWorld
                .Query()
                .TouchProjectedActor();
+        PumpActors(runtime);
 
         ref ProjectedActorMeta meta =
             ref runtime.EcsWorld.GetProjectionMeta(entity);

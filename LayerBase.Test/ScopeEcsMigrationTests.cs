@@ -396,8 +396,6 @@ internal sealed class RecordingProjectedActorSink : IProjectedActorCommandSink
 
     public int BatchCount { get; private set; }
 
-    public bool CompletesSynchronously => true;
-
     public ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks)
     {
         return ProjectedActorEnsureResult.Invalid;
@@ -429,7 +427,16 @@ internal sealed class RecordingProjectedActorSink : IProjectedActorCommandSink
         where TEvent : struct
     {
         BatchCount++;
-        batch.PostTo(this);
+        ProjectionBatchLease<TEvent> lease = batch.Detach();
+        try
+        {
+            for (int i = 0; i < lease.Count; i++)
+                PostTo(lease.ActorIds[i], in lease.Events[i]);
+        }
+        finally
+        {
+            lease.Dispose();
+        }
     }
 }
 

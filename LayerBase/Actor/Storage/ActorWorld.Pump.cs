@@ -84,7 +84,7 @@ public sealed partial class ActorWorld
             return;
         }
 
-        while (budget.HasRemainingEventBudget())
+        while (budget.HasRemainingWork())
         {
             if (_dirtyCallBuckets.Count == 0)
             {
@@ -111,7 +111,7 @@ public sealed partial class ActorWorld
 
             var options = ActorMailPumpOptions.Default;
             var stats = new ActorMailPumpStatsBuilder();
-            int maxEvents = budget.RemainingEventBudget;
+            int maxEvents = budget.RemainingWorkItems;
 
             ActorPumpManyResult result = bucket.PumpMany(
                 ref budget,
@@ -154,14 +154,14 @@ public sealed partial class ActorWorld
                 continue;
             }
 
-            int maxCount = budget.RemainingEventBudget;
+            int maxCount = budget.RemainingWorkItems;
             if (maxCount <= 0)
             {
                 break;
             }
 
             int processed = runtime.Pump(maxCount);
-            budget.UsedEvents += processed;
+            budget.Consume(processed);
 
             if (!CanContinue(ref budget))
             {
@@ -173,7 +173,6 @@ public sealed partial class ActorWorld
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool CanContinue(ref RuntimeFrameBudget budget)
     {
-        return budget.HasRemainingEventBudget()
-               && budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp());
+        return budget.CanContinue(Stopwatch.GetTimestamp());
     }
 }

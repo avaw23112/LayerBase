@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using LayerBase;
+using LayerBase.Actor;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 
@@ -76,7 +78,22 @@ public partial class World
 
     internal void SweepProjectedActors(int maxCount = 512)
     {
-        _activeProjectedActors.Sweep(this, maxCount);
+        var budget = new RuntimeFrameBudget(0, 0, 0);
+        SweepProjectedActors(ref budget, maxCount);
+    }
+
+    internal int SweepProjectedActors(ref RuntimeFrameBudget budget, int maxSliceItems = 512)
+    {
+        if (!budget.CanContinue(Stopwatch.GetTimestamp()))
+            return 0;
+
+        int allowed = Math.Min(maxSliceItems, budget.RemainingWorkItems);
+        if (allowed <= 0)
+            return 0;
+
+        int processed = _activeProjectedActors.Sweep(this, allowed, budget.DeadlineTicks);
+        budget.Consume(processed);
+        return processed;
     }
 
     internal void ApplyProjectedActorResult(

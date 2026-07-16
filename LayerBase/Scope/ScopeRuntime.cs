@@ -17,9 +17,11 @@ internal sealed class ScopeRuntime : IDisposable
     private readonly int _runtimeId;
     private readonly int _generation;
     private readonly LayerRuntime _runtime;
-    private readonly MainActorRuntime? _mainActors;
-    private ActorAccessor _actors;
-    private bool _hasActorAccessor;
+    private ScopeRuntimeHost? _host;
+    private ActorClient _actorClient;
+    private ActorFactory _actorFactory;
+    private bool _hasActorClient;
+    private bool _hasActorFactory;
     private ScopeRuntimeState _state = ScopeRuntimeState.Created;
     private ScopeSafePointState _safePointState = ScopeSafePointState.Running;
     private long _safePointToken;
@@ -27,9 +29,6 @@ internal sealed class ScopeRuntime : IDisposable
     private ScopeTimerSink? _timerSink;
     private IReadOnlyDictionary<int, ScopeEndpoint> _scopeEndpoints =
         new Dictionary<int, ScopeEndpoint>();
-    private IReadOnlyDictionary<int, ScopeRuntime> _scopeRuntimes =
-        new Dictionary<int, ScopeRuntime>();
-    private ScopeRuntime? _mainScopeRuntime;
     private float _fixedUpdateAccumulator;
     private bool _runtimeStopRun;
     private bool _lifecycleDisposeRun;
@@ -55,19 +54,18 @@ internal sealed class ScopeRuntime : IDisposable
         _runtime = runtime;
         _runtimeId = runtimeId;
         _generation = generation;
-        if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
-            _mainActors = new MainActorRuntime(runtime, generation);
         Transport = new ScopeTransport(
             new ScopeAddress(runtimeId, generation, Descriptor.ScopeId));
         EventCenter = new EventCenter();
         LocalCalls = new ScopeLocalCallRegistry(Descriptor.ScopeId);
-        RemoteCalls = new ScopeRemoteCallRegistry(Descriptor.ScopeId);
-        RemoteEvents = new ScopeRemoteEventRegistry(Descriptor.ScopeId);
-        if (_mainActors != null)
+        CallRoutes = new ScopeCallRouteTable(Descriptor.ScopeId);
+        EventRoutes = new ScopeEventRouteTable(Descriptor.ScopeId);
+        if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
         {
-            _mainActors.BindProjectionSink();
-            _actors = _mainActors.Accessor;
-            _hasActorAccessor = true;
+            _actorClient = _runtime.MainActorRuntime.Client;
+            _actorFactory = _runtime.MainActorRuntime.Factory;
+            _hasActorClient = true;
+            _hasActorFactory = true;
         }
         EcsScheduler = new ScopeEcsScheduler(
             _generation,
@@ -77,8 +75,16 @@ internal sealed class ScopeRuntime : IDisposable
         EcsWorld = EcsScheduler.World;
         EcsWorld.BindRuntime(runtime);
         EcsWorld.BindEcsScheduler(EcsScheduler);
-        if (_mainActors != null)
-            EcsWorld.BindProjectedActorCommandSink(_mainActors.ProjectedActorCommandSink);
+        if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
+        {
+            _runtime.MainActorRuntime.BindProjectionWorld(EcsWorld);
+            EcsWorld.BindProjectedActorCommandSink(_runtime.MainActorRuntime.ProjectedActorCommandSink);
+        }
+    }
+
+    internal void BindHost(ScopeRuntimeHost host)
+    {
+        _host = host ?? throw new ArgumentNullException(nameof(host));
     }
 
     public ScopeDescriptor Descriptor { get; }
@@ -99,12 +105,15 @@ internal sealed class ScopeRuntime : IDisposable
 
     public DelayPublisherManager? DelayManager { get; private set; }
 
-    public ActorAccessor Actors =>
-        _hasActorAccessor
-            ? _actors
+    public ActorClient ActorClient =>
+        _hasActorClient
+            ? _actorClient
             : throw new InvalidOperationException("Scope actor accessor is not initialized.");
 
-    public MainActorRuntime? MainActors => _mainActors;
+    public ActorFactory ActorFactory =>
+        _hasActorFactory
+            ? _actorFactory
+            : throw new InvalidOperationException("Scope actor factory is only available on MainScope.");
 
     public ScopeEcsScheduler EcsScheduler { get; }
 
@@ -114,9 +123,9 @@ internal sealed class ScopeRuntime : IDisposable
 
     public ScopeLocalCallRegistry LocalCalls { get; }
 
-    public ScopeRemoteCallRegistry RemoteCalls { get; }
+    public ScopeCallRouteTable CallRoutes { get; }
 
-    public ScopeRemoteEventRegistry RemoteEvents { get; }
+    public ScopeEventRouteTable EventRoutes { get; }
 
     public LayerProviderRuntime[] LayerProviders { get; }
 
@@ -213,42 +222,43 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void BindMainActorEndpoint(ScopeEndpoint mainEndpoint)
     {
-        if (_mainActors != null)
+        if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
         {
-            _mainActors.BindProjectionSink();
-            _actors = _mainActors.Accessor;
-            EcsWorld.BindProjectedActorCommandSink(_mainActors.ProjectedActorCommandSink);
+            _actorClient = _runtime.MainActorRuntime.Client;
+            _actorFactory = _runtime.MainActorRuntime.Factory;
+            _hasActorFactory = true;
+            _runtime.MainActorRuntime.BindProjectionWorld(EcsWorld);
+            EcsWorld.BindProjectedActorCommandSink(_runtime.MainActorRuntime.ProjectedActorCommandSink);
         }
         else
         {
-            _actors = new ActorAccessor(new RemoteActorAccessor(
+            _actorClient = new ActorClient(
                 new ScopeRef<MainScope>(mainEndpoint),
                 Descriptor.ScopeId,
-                _generation));
+                _generation);
             EcsWorld.BindProjectedActorCommandSink(new ScopeEventProjectedActorCommandSink(
                 new ScopeRef<MainScope>(mainEndpoint),
                 Descriptor.ScopeId,
                 _generation));
         }
 
-        _hasActorAccessor = true;
+        _hasActorClient = true;
     }
 
     public void BindScopeEndpoints(IReadOnlyList<ScopeRuntime> scopes)
     {
         var endpoints = new Dictionary<int, ScopeEndpoint>(scopes.Count);
-        var runtimes = new Dictionary<int, ScopeRuntime>(scopes.Count);
         for (int i = 0; i < scopes.Count; i++)
         {
             endpoints[scopes[i].ScopeId] = scopes[i].Endpoint;
-            runtimes[scopes[i].ScopeId] = scopes[i];
         }
 
         _scopeEndpoints = endpoints;
-        _scopeRuntimes = runtimes;
-        _mainScopeRuntime = runtimes.TryGetValue(ScopeDefinitionIds.Main, out var mainScope)
-            ? mainScope
-            : null;
+    }
+
+    internal bool TryGetScopeEndpoint(int scopeId, out ScopeEndpoint endpoint)
+    {
+        return _scopeEndpoints.TryGetValue(scopeId, out endpoint);
     }
 
     public bool TryPostEventToScope<TEvent>(
@@ -259,8 +269,7 @@ internal sealed class ScopeRuntime : IDisposable
         if (!_scopeEndpoints.TryGetValue(scopeId, out ScopeEndpoint endpoint))
             return false;
 
-        IScopeEventWriter? writer = endpoint.EventWriter;
-        return writer != null && writer.PostInternal(
+        return endpoint.Transport != null && endpoint.Transport.EnqueueEvent(
             EventTypeId<TEvent>.Id,
             ScopeEventClass.Internal,
             in value).IsAccepted;
@@ -485,7 +494,6 @@ internal sealed class ScopeRuntime : IDisposable
 
         _runtimeStopRun = true;
         LifecyclePlan.RunRuntimeStopReverse();
-        _mainActors?.RuntimeStop();
     }
 
     public void RunLifecycleDispose()
@@ -503,11 +511,11 @@ internal sealed class ScopeRuntime : IDisposable
         {
             try
             {
-                if (TryDispatchLifecycleControl(envelope))
+                if (DispatchLifecycleControlIfMatched(envelope))
                     continue;
 
-                if (_mainActors != null &&
-                    _mainActors.TryDispatchCall(
+                if (Descriptor.ScopeId == ScopeDefinitionIds.Main &&
+                    _runtime.MainActorRuntime.DispatchCallRoute(
                         envelope.RouteId,
                         _runtimeId,
                         envelope,
@@ -518,7 +526,7 @@ internal sealed class ScopeRuntime : IDisposable
 
                 if (envelope.Class == ScopeCallClass.BusinessRequest)
                 {
-                    RemoteCalls.Dispatch(_runtimeId, envelope, Transport.CallPayloadStorage);
+                    CallRoutes.Dispatch(_runtimeId, envelope, Transport.CallPayloadStorage);
                     continue;
                 }
 
@@ -531,7 +539,7 @@ internal sealed class ScopeRuntime : IDisposable
         }
     }
 
-    private bool TryDispatchLifecycleControl(ScopeCallEnvelope envelope)
+    private bool DispatchLifecycleControlIfMatched(ScopeCallEnvelope envelope)
     {
         if (envelope.Kind != ScopeCallEnvelopeKind.Request ||
             envelope.Class != ScopeCallClass.Control)
@@ -892,11 +900,11 @@ internal sealed class ScopeRuntime : IDisposable
         {
             try
             {
-                if (TryDispatchScopeFaultEvent(envelope))
+                if (DispatchScopeFaultEventIfMatched(envelope))
                     continue;
 
-                if (_mainActors != null &&
-                    _mainActors.TryDispatchProjectionCommand(
+                if (Descriptor.ScopeId == ScopeDefinitionIds.Main &&
+                    _runtime.MainActorRuntime.DispatchProjectionRoute(
                         envelope.RouteId,
                         this,
                         _runtimeId,
@@ -906,7 +914,7 @@ internal sealed class ScopeRuntime : IDisposable
                     continue;
                 }
 
-                if (ActorProjectionScopeEventDispatcher.TryDispatchResult(
+                if (ActorProjectionScopeEventDispatcher.DispatchResultRoute(
                         envelope.RouteId,
                         EcsWorld,
                         _runtimeId,
@@ -926,8 +934,8 @@ internal sealed class ScopeRuntime : IDisposable
                     continue;
                 }
 
-                if (_mainActors != null &&
-                    _mainActors.TryDispatchCommand(
+                if (Descriptor.ScopeId == ScopeDefinitionIds.Main &&
+                    _runtime.MainActorRuntime.DispatchCommandRoute(
                         envelope.RouteId,
                         _runtimeId,
                         envelope.Payload,
@@ -938,7 +946,7 @@ internal sealed class ScopeRuntime : IDisposable
 
                 if (envelope.Class == ScopeEventClass.Business)
                 {
-                    RemoteEvents.TryDispatch(_runtimeId, envelope, Transport.EventPayloadStorage);
+                    EventRoutes.TryDispatch(_runtimeId, envelope, Transport.EventPayloadStorage);
                     continue;
                 }
 
@@ -952,7 +960,7 @@ internal sealed class ScopeRuntime : IDisposable
         }
     }
 
-    private bool TryDispatchScopeFaultEvent(ScopeEventEnvelope envelope)
+    private bool DispatchScopeFaultEventIfMatched(ScopeEventEnvelope envelope)
     {
         if (envelope.RouteId != ScopeFaultRouteIds.FaultEvent)
             return false;
@@ -966,7 +974,7 @@ internal sealed class ScopeRuntime : IDisposable
         }
 
         _runtime.ReportScopeFault(faultEvent.Record);
-        ApplyFaultPolicy(faultEvent.Record);
+        RequireHost().ApplyFaultPolicy(faultEvent.Record);
         return true;
     }
 
@@ -994,51 +1002,34 @@ internal sealed class ScopeRuntime : IDisposable
         if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
         {
             _runtime.ReportScopeFault(record);
-            ApplyFaultPolicy(record);
+            RequireHost().ApplyFaultPolicy(record);
             return;
         }
 
-        ScopeRuntime? mainScope = _mainScopeRuntime;
-        if (mainScope != null)
-            _ = mainScope.EnqueueScopeFaultEvent(record);
+        if (_scopeEndpoints.TryGetValue(ScopeDefinitionIds.Main, out var mainEndpoint))
+            _ = EnqueueScopeFaultEvent(mainEndpoint, record);
     }
 
-    private ScopePostResult EnqueueScopeFaultEvent(in ScopeFaultRecord record)
+    private ScopePostResult EnqueueScopeFaultEvent(ScopeEndpoint targetEndpoint, in ScopeFaultRecord record)
     {
         if (_state == ScopeRuntimeState.Disposed)
             return ScopePostResult.RuntimeDisposed;
 
         var faultEvent = new ScopeFaultEvent(record);
-        var payload = Transport.EventPayloadStorage.Store(_runtimeId, in faultEvent);
+        ScopeTransport targetTransport = targetEndpoint.Transport;
+        var payload = targetTransport.EventPayloadStorage.Store(_runtimeId, in faultEvent);
         var envelope = new ScopeEventEnvelope(
             new ScopeAddress(record.RuntimeId, record.RuntimeGeneration, record.SourceScopeId),
             ScopeFaultRouteIds.FaultEvent,
             ScopeEventClass.Critical,
             payload);
 
-        var result = Transport.EventInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
+        var result = targetTransport.EventInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
         if (result == ScopeEnqueueResult.Accepted)
             return ScopePostResult.Accepted;
 
-        Transport.EventPayloadStorage.Release(payload);
+        targetTransport.EventPayloadStorage.Release(payload);
         return ScopeTransport.ToPostResult(result);
-    }
-
-    private void ApplyFaultPolicy(in ScopeFaultRecord record)
-    {
-        if (!_scopeRuntimes.TryGetValue(record.SourceScopeId, out var sourceScope))
-            return;
-
-        switch (sourceScope.Options.FaultPolicy)
-        {
-            case ScopeFaultPolicy.StopScope:
-                _ = sourceScope.RequestStopAsync();
-                break;
-            case ScopeFaultPolicy.StopRuntime:
-                if (_scopeRuntimes.TryGetValue(ScopeDefinitionIds.Main, out var mainScope))
-                    _ = mainScope.RequestStopAsync();
-                break;
-        }
     }
 
     internal bool IsOwnerThread
@@ -1048,6 +1039,11 @@ internal sealed class ScopeRuntime : IDisposable
             int ownerThreadId = Volatile.Read(ref _ownerThreadId);
             return ownerThreadId != 0 && Environment.CurrentManagedThreadId == ownerThreadId;
         }
+    }
+
+    private ScopeRuntimeHost RequireHost()
+    {
+        return _host ?? _runtime.ScopeHost;
     }
 
     internal ScopeDiagnosticsSnapshot CaptureDiagnostics()
@@ -1141,12 +1137,11 @@ internal sealed class ScopeRuntime : IDisposable
         }
 
         RunLifecycleDispose();
-        _mainActors?.Dispose();
         ReleaseCallInbox();
         ReleaseEventInbox();
         LocalCalls.Clear();
-        RemoteCalls.Clear();
-        RemoteEvents.Clear();
+        CallRoutes.Clear();
+        EventRoutes.Clear();
         ReleaseDelayPublishers();
         DelayManager?.Clear();
         DelayManager = null;

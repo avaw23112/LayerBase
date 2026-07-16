@@ -23,9 +23,8 @@ public readonly struct ScopeRef<TScope>
     public ScopePostResult Post<TEvent>(in TEvent value)
         where TEvent : struct
     {
-        var writer = _endpoint.EventWriter;
-        return writer != null
-            ? writer.Post(in value)
+        return _endpoint.Transport != null
+            ? _endpoint.Transport.EnqueueEvent(in value)
             : ScopePostResult.StaleEndpoint;
     }
 
@@ -35,9 +34,8 @@ public readonly struct ScopeRef<TScope>
         where TRequest : struct
         where TResponse : struct
     {
-        var writer = _endpoint.CallWriter;
-        return writer != null
-            ? writer.Call<TRequest, TResponse>(in request, cancellationToken)
+        return _endpoint.Transport != null
+            ? _endpoint.Transport.EnqueueCall<TRequest, TResponse>(in request, cancellationToken)
             : LBTask<TResponse>.FromException(
                 new InvalidOperationException("Scope endpoint is not available."));
     }
@@ -48,9 +46,8 @@ public readonly struct ScopeRef<TScope>
         in TEvent value)
         where TEvent : struct
     {
-        var writer = _endpoint.EventWriter;
-        return writer != null
-            ? writer.PostInternal(routeId, eventClass, in value)
+        return _endpoint.Transport != null
+            ? _endpoint.Transport.EnqueueEvent(routeId, eventClass, in value)
             : ScopePostResult.StaleEndpoint;
     }
 
@@ -62,9 +59,8 @@ public readonly struct ScopeRef<TScope>
         where TRequest : struct
         where TResponse : struct
     {
-        var writer = _endpoint.CallWriter;
-        return writer != null
-            ? writer.CallInternal<TRequest, TResponse>(routeId, callClass, in request, cancellationToken)
+        return _endpoint.Transport != null
+            ? _endpoint.Transport.EnqueueCall<TRequest, TResponse>(routeId, callClass, in request, cancellationToken)
             : LBTask<TResponse>.FromException(
                 new InvalidOperationException("Scope endpoint is not available."));
     }

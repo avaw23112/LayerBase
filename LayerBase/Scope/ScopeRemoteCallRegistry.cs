@@ -6,9 +6,9 @@ using LayerBase.Layers;
 
 namespace LayerBase.Scope;
 
-internal readonly struct ScopeRemoteCallRouteEntry
+internal readonly struct ScopeCallRouteEntry
 {
-    public ScopeRemoteCallRouteEntry(
+    public ScopeCallRouteEntry(
         int ownerScopeId,
         int routeId,
         Type requestType,
@@ -38,7 +38,7 @@ internal readonly struct ScopeRemoteCallRouteEntry
     public IScopeLocalCallDispatcher Dispatcher { get; }
 }
 
-internal sealed class ScopeRemoteCallRegistry
+internal sealed class ScopeCallRouteTable
 {
     private readonly int _scopeId;
     private object?[] _invokers = Array.Empty<object?>();
@@ -46,7 +46,7 @@ internal sealed class ScopeRemoteCallRegistry
     private Type?[] _handlerTypes = Array.Empty<Type?>();
     private Type?[] _ownerLayerTypes = Array.Empty<Type?>();
 
-    public ScopeRemoteCallRegistry(int scopeId)
+    public ScopeCallRouteTable(int scopeId)
     {
         _scopeId = scopeId;
     }
@@ -59,7 +59,7 @@ internal sealed class ScopeRemoteCallRegistry
         _ownerLayerTypes = Array.Empty<Type?>();
     }
 
-    public void Register(in ScopeRemoteCallRouteEntry entry)
+    public void Register(in ScopeCallRouteEntry entry)
     {
         EnsureCapacity(entry.RouteId);
 

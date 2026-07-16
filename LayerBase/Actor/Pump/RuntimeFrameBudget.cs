@@ -1,55 +1,79 @@
-using System.Runtime.CompilerServices;
-
 namespace LayerBase.Actor;
 
-public ref struct RuntimeFrameBudget
+public struct RuntimeFrameBudget
 {
-    public int MaxEvents;
-    public int UsedEvents;
+    public int MaxWorkItems;
+    public int UsedWorkItems;
     public long DeadlineTicks;
-
 
     public RuntimeFrameBudget(int maxEvents, int usedEvents, long deadlineTicks)
     {
-        MaxEvents = maxEvents;
-        UsedEvents = usedEvents;
+        MaxWorkItems = maxEvents;
+        UsedWorkItems = usedEvents;
         DeadlineTicks = deadlineTicks;
     }
 
-    public bool HasRemainingEventBudget()
+    public int MaxEvents
     {
-        return MaxEvents <= 0 || UsedEvents < MaxEvents;
+        get => MaxWorkItems;
+        set => MaxWorkItems = value;
     }
 
-    public bool HasRemainingTimeBudget(long nowTicks)
+    public int UsedEvents
+    {
+        get => UsedWorkItems;
+        set => UsedWorkItems = value;
+    }
+
+    public int RemainingWorkItems
+    {
+        get
+        {
+            if (MaxWorkItems <= 0)
+                return int.MaxValue;
+
+            int remaining = MaxWorkItems - UsedWorkItems;
+            return remaining > 0 ? remaining : 0;
+        }
+    }
+
+    public bool HasRemainingWork()
+    {
+        return MaxWorkItems <= 0 || UsedWorkItems < MaxWorkItems;
+    }
+
+    public bool HasRemainingTime(long nowTicks)
     {
         return DeadlineTicks <= 0 || nowTicks < DeadlineTicks;
     }
 
+    public bool CanContinue(long nowTicks)
+    {
+        return HasRemainingWork() && HasRemainingTime(nowTicks);
+    }
+
+    public void Consume(int count)
+    {
+        if (count <= 0)
+            return;
+
+        UsedWorkItems += count;
+    }
+
+    public bool HasRemainingEventBudget()
+    {
+        return HasRemainingWork();
+    }
+
+    public bool HasRemainingTimeBudget(long nowTicks)
+    {
+        return HasRemainingTime(nowTicks);
+    }
+
     public void ConsumeEvent()
     {
-        UsedEvents++;
+        Consume(1);
     }
 
-    /// <summary>
-    /// 获取剩余事件预算。
-    ///
-    /// 返回值：
-    /// 如果 MaxEvents <= 0（无限制），返回 int.MaxValue。
-    /// 否则返回剩余可处理事件数量，最小为 0。
-    /// </summary>
-    public int RemainingEventBudget
-    {
-        [System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get
-        {
-            if (MaxEvents <= 0)
-            {
-                return int.MaxValue;
-            }
-
-            int remaining = MaxEvents - UsedEvents;
-            return remaining > 0 ? remaining : 0;
-        }
-    }
+    public int RemainingEventBudget => RemainingWorkItems;
 }

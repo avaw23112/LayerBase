@@ -15,7 +15,7 @@ public sealed class ScopePublicApiRoutingTests
     }
 
     [Test]
-    public void Custom_scope_service_actor_api_uses_owner_scope_remote_accessor()
+    public void Custom_scope_service_actor_api_uses_owner_scope_actor_client()
     {
         using var runtime = new LayerRuntime(10101);
         using var host = ScopeRuntimeHost.Create(
@@ -27,15 +27,14 @@ public sealed class ScopePublicApiRoutingTests
 
         AttachScopeRuntime(service, runtime, host.Scopes[1]);
 
-        ActorAccessor accessor = service.Actors();
+        ActorClient client = service.ActorClient();
 
-        Assert.That(accessor.IsLocal, Is.False);
-        Assert.DoesNotThrow(() => _ = accessor.Remote);
-        Assert.Throws<InvalidOperationException>(() => accessor.Local.ToString());
+        Assert.That(client.RuntimeGeneration, Is.EqualTo(1));
+        Assert.Throws<InvalidOperationException>(() => _ = service.ActorFactory());
     }
 
     [Test]
-    public void Custom_scope_context_actor_api_uses_owner_scope_remote_accessor()
+    public void Custom_scope_context_actor_api_uses_owner_scope_actor_client()
     {
         using var runtime = new LayerRuntime(10102);
         using var host = ScopeRuntimeHost.Create(
@@ -47,11 +46,10 @@ public sealed class ScopePublicApiRoutingTests
 
         AttachScopeRuntime(context, runtime, host.Scopes[1]);
 
-        ActorAccessor accessor = context.Actors();
+        ActorClient client = context.ActorClient();
 
-        Assert.That(accessor.IsLocal, Is.False);
-        Assert.DoesNotThrow(() => _ = accessor.Remote);
-        Assert.Throws<InvalidOperationException>(() => accessor.Local.ToString());
+        Assert.That(client.RuntimeGeneration, Is.EqualTo(1));
+        Assert.Throws<InvalidOperationException>(() => _ = context.ActorFactory());
     }
 
     [Test]

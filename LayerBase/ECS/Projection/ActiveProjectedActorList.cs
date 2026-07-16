@@ -26,18 +26,22 @@ internal sealed class ActiveProjectedActorList
         meta.ActiveListIndex = index;
     }
 
-    public void Sweep(
+    public int Sweep(
         World world,
-        int maxCount = 512)
+        int maxCount = 512,
+        long deadlineTicks = 0)
     {
         if (_count == 0 || maxCount <= 0)
-            return;
+            return 0;
 
         long nowTicks = Stopwatch.GetTimestamp();
         int inspected = 0;
 
         for (int i = 0; i < _count && inspected < maxCount;)
         {
+            if (deadlineTicks > 0 && Stopwatch.GetTimestamp() >= deadlineTicks)
+                break;
+
             int index = (_sweepCursor + i) % _count;
             inspected++;
 
@@ -84,6 +88,7 @@ internal sealed class ActiveProjectedActorList
         _sweepCursor = _count == 0
             ? 0
             : (_sweepCursor + inspected) % _count;
+        return inspected;
     }
 
     private void RetireProjectedActor(
@@ -102,9 +107,7 @@ internal sealed class ActiveProjectedActorList
                         meta.ActorId,
                         nowTicks))
                 {
-                    meta.State = world.ProjectedActorCommands.CompletesSynchronously
-                        ? ProjectedActorState.Disabled
-                        : ProjectedActorState.DisablePending;
+                    meta.State = ProjectedActorState.DisablePending;
                     actorRef.ExpireAtTicks = long.MaxValue;
                 }
                 return;
@@ -140,16 +143,8 @@ internal sealed class ActiveProjectedActorList
                 break;
         }
 
-        if (!world.ProjectedActorCommands.CompletesSynchronously)
-        {
-            meta.State = ProjectedActorState.ReleasePending;
-            actorRef.ExpireAtTicks = long.MaxValue;
-            return;
-        }
-
-        ProjectedActorBindingUtility.Clear(world, entity, ref meta);
-        actorRef.ClearActor();
-        RemoveAt(world, meta.ActiveListIndex, ref meta);
+        meta.State = ProjectedActorState.ReleasePending;
+        actorRef.ExpireAtTicks = long.MaxValue;
     }
 
     private void RemoveAt(

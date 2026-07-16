@@ -88,14 +88,14 @@ internal sealed class ActorLifecycleMethodFreeList
 
         while (checkedCount < maxCount)
         {
-            if (!budget.HasRemainingEventBudget())
+            if (!budget.HasRemainingWork())
             {
                 return;
             }
 
             if (processedSinceTimeCheck <= 0)
             {
-                if (!budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp()))
+                if (!budget.HasRemainingTime(Stopwatch.GetTimestamp()))
                 {
                     return;
                 }
@@ -119,7 +119,7 @@ internal sealed class ActorLifecycleMethodFreeList
             }
 
             entry.Invoker(entry.Actor, state.DeltaTime);
-            budget.ConsumeEvent();
+            budget.Consume(1);
             processedSinceTimeCheck--;
         }
     }

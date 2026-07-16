@@ -148,7 +148,7 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
 
         while (checkedCount < maxCount)
         {
-            if (!budget.HasRemainingEventBudget())
+            if (!budget.HasRemainingWork())
             {
                 return;
             }
@@ -158,7 +158,7 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
             // 这样可以减少 Stopwatch.GetTimestamp() 的调用频率。
             if (processedSinceTimeCheck <= 0)
             {
-                if (!budget.HasRemainingTimeBudget(Stopwatch.GetTimestamp()))
+                if (!budget.HasRemainingTime(Stopwatch.GetTimestamp()))
                 {
                     return;
                 }
@@ -190,9 +190,7 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
                 instance: entry.Instance,
                 deltaTime: state.DeltaTime);
 
-            // 每调用一个生命周期方法，消耗一个预算单元。
-            // 当前 RuntimeFrameBudget 叫 Event，但这里实际作为 WorkUnit 使用。
-            budget.ConsumeEvent();
+            budget.Consume(1);
             processedSinceTimeCheck--;
         }
     }

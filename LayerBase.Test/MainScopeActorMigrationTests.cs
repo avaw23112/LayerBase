@@ -17,7 +17,7 @@ public sealed class MainScopeActorMigrationTests
     }
 
     [Test]
-    public void Layer_runtime_does_not_store_actor_world_or_main_actor_runtime()
+    public void Layer_runtime_owns_main_actor_runtime_not_actor_world_directly()
     {
         Type[] runtimeFieldTypes = typeof(LayerRuntime)
             .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
@@ -25,24 +25,22 @@ public sealed class MainScopeActorMigrationTests
             .ToArray();
 
         Assert.That(runtimeFieldTypes, Does.Not.Contain(typeof(ActorWorld)));
-        Assert.That(runtimeFieldTypes, Does.Not.Contain(typeof(MainActorRuntime)));
+        Assert.That(runtimeFieldTypes.Count(static type => type == typeof(MainActorRuntime)), Is.EqualTo(1));
     }
 
     [Test]
-    public void Main_scope_owns_local_actor_runtime()
+    public void Main_scope_exposes_actor_client_and_factory_without_owning_runtime()
     {
         using var runtime = new LayerRuntime(9401);
 
         ScopeRuntime mainScope = runtime.ScopeHost.MainScope;
 
-        Assert.That(mainScope.MainActors, Is.Not.Null);
-        Assert.That(runtime.MainActorRuntime, Is.SameAs(mainScope.MainActors));
-        Assert.That(mainScope.Actors.IsLocal, Is.True);
-        Assert.DoesNotThrow(() => _ = mainScope.Actors.Local);
+        Assert.DoesNotThrow(() => _ = mainScope.ActorClient);
+        Assert.DoesNotThrow(() => _ = mainScope.ActorFactory);
     }
 
     [Test]
-    public void Custom_scope_uses_remote_actor_accessor_to_main_scope()
+    public void Custom_scope_exposes_actor_client_without_factory()
     {
         using var runtime = new LayerRuntime(9402);
         using var host = ScopeRuntimeHost.Create(
@@ -59,10 +57,8 @@ public sealed class MainScopeActorMigrationTests
 
         ScopeRuntime customScope = host.Scopes.Single(static scope => scope.ScopeId == ActorWorkerScope.ScopeId);
 
-        Assert.That(customScope.MainActors, Is.Null);
-        Assert.That(customScope.Actors.IsLocal, Is.False);
-        Assert.DoesNotThrow(() => _ = customScope.Actors.Remote);
-        Assert.Throws<InvalidOperationException>(() => customScope.Actors.Local.ToString());
+        Assert.DoesNotThrow(() => _ = customScope.ActorClient);
+        Assert.Throws<InvalidOperationException>(() => _ = customScope.ActorFactory);
     }
 
     [Test]
@@ -93,7 +89,8 @@ public sealed class MainScopeActorMigrationTests
             Assert.That(runtime.TryGetScope<ActorWorkerScope>(out var scope), Is.True);
             Assert.That(scope.Address.ScopeId, Is.EqualTo(ActorWorkerScope.ScopeId));
             Assert.That(runtime.ScopeHost.Scopes.Any(static item => item.ScopeId == ActorWorkerScope.ScopeId), Is.True);
-            Assert.That(runtime.ScopeHost.MainScope.MainActors, Is.SameAs(runtime.MainActorRuntime));
+            Assert.DoesNotThrow(() => _ = runtime.ScopeHost.MainScope.ActorClient);
+            Assert.DoesNotThrow(() => _ = runtime.ScopeHost.MainScope.ActorFactory);
         }
         finally
         {

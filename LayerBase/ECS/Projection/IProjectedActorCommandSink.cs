@@ -1,5 +1,5 @@
-using LayerBase.Actor;
 using Arch.Core;
+using LayerBase.Actor;
 using LayerBase.Core.Event;
 using LayerBase.ECS.Projection.Flow;
 using LayerBase.Scope;
@@ -8,8 +8,6 @@ namespace LayerBase.ECS.Projection;
 
 internal interface IProjectedActorCommandSink
 {
-    bool CompletesSynchronously { get; }
-
     ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks);
 
     bool Exists(ActorId actorId);
@@ -36,93 +34,23 @@ internal interface IProjectedActorCommandSink
 
 internal readonly struct ProjectedActorEnsureResult
 {
-    public ProjectedActorEnsureResult(
-        ActorId actorId,
-        bool accepted = true,
-        bool completedSynchronously = true)
+    public ProjectedActorEnsureResult(ActorId actorId, bool accepted = true)
     {
         ActorId = actorId;
         Accepted = accepted;
-        CompletedSynchronously = completedSynchronously;
     }
 
     public ActorId ActorId { get; }
 
     public bool Accepted { get; }
 
-    public bool CompletedSynchronously { get; }
-
     public bool IsValid => ActorId.IsValid;
 
-    public static ProjectedActorEnsureResult Invalid => new(ActorId.Invalid, accepted: false, completedSynchronously: false);
+    public static ProjectedActorEnsureResult Invalid => new(ActorId.Invalid, accepted: false);
 
     public static ProjectedActorEnsureResult Pending(bool accepted)
     {
-        return new ProjectedActorEnsureResult(ActorId.Invalid, accepted, completedSynchronously: false);
-    }
-}
-
-internal sealed class MainScopeProjectedActorCommandSink : IProjectedActorCommandSink
-{
-    private readonly ActorWorld _actorWorld;
-
-    public MainScopeProjectedActorCommandSink(ActorWorld actorWorld)
-    {
-        _actorWorld = actorWorld ?? throw new ArgumentNullException(nameof(actorWorld));
-    }
-
-    public bool CompletesSynchronously => true;
-
-    public ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks)
-    {
-        ProjectedActorHandle handle =
-            ProjectedActorTypeRegistry.CreateActorByTypeId(_actorWorld, actorTypeId);
-
-        return handle.IsValid
-            ? new ProjectedActorEnsureResult(handle.ActorId)
-            : ProjectedActorEnsureResult.Invalid;
-    }
-
-    public bool Exists(ActorId actorId)
-    {
-        return _actorWorld.TryGetPooledActor(actorId, out _);
-    }
-
-    public bool IsDisabled(ActorId actorId)
-    {
-        return _actorWorld.IsProjectedActorDisabled(actorId);
-    }
-
-    public bool EnableIfDisabled(Entity entity, int actorTypeId, ActorId actorId, long nowTicks)
-    {
-        return _actorWorld.EnableProjectedActorIfDisabled(actorId);
-    }
-
-    public bool Disable(Entity entity, int actorTypeId, ActorId actorId, long nowTicks)
-    {
-        return _actorWorld.DisableProjectedActor(actorId);
-    }
-
-    public bool Release(
-        Entity entity,
-        int actorTypeId,
-        ActorId actorId,
-        ProjectedActorReleasePolicy releasePolicy,
-        long nowTicks)
-    {
-        return _actorWorld.ReleaseProjectedActor(actorId, releasePolicy);
-    }
-
-    public void PostTo<TEvent>(ActorId actorId, in TEvent value)
-        where TEvent : struct
-    {
-        _actorWorld.PostTo(actorId, in value);
-    }
-
-    public void PostBatch<TEvent>(ref ProjectionBatchBuffer<TEvent> batch)
-        where TEvent : struct
-    {
-        batch.PostTo(this);
+        return new ProjectedActorEnsureResult(ActorId.Invalid, accepted);
     }
 }
 
@@ -141,8 +69,6 @@ internal sealed class ScopeEventProjectedActorCommandSink : IProjectedActorComma
         _originScopeId = originScopeId;
         _runtimeGeneration = runtimeGeneration;
     }
-
-    public bool CompletesSynchronously => false;
 
     public ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks)
     {
@@ -226,8 +152,6 @@ internal sealed class RejectingProjectedActorCommandSink : IProjectedActorComman
     private RejectingProjectedActorCommandSink()
     {
     }
-
-    public bool CompletesSynchronously => false;
 
     public ProjectedActorEnsureResult Ensure(Entity entity, int actorTypeId, long nowTicks) => ProjectedActorEnsureResult.Invalid;
 

@@ -3,16 +3,16 @@ using LayerBase.Layers;
 
 namespace LayerBase.Scope;
 
-internal readonly struct ScopeRemoteEventRouteEntry
+internal readonly struct ScopeEventRouteEntry
 {
-    public ScopeRemoteEventRouteEntry(
+    public ScopeEventRouteEntry(
         int ownerScopeId,
         int routeId,
         Type eventType,
         Type handlerType,
         Type ownerLayerType,
         object invoker,
-        IScopeRemoteEventDispatcher dispatcher)
+        IScopeEventRouteInvoker dispatcher)
     {
         OwnerScopeId = ownerScopeId;
         RouteId = routeId;
@@ -29,10 +29,10 @@ internal readonly struct ScopeRemoteEventRouteEntry
     public Type HandlerType { get; }
     public Type OwnerLayerType { get; }
     public object Invoker { get; }
-    public IScopeRemoteEventDispatcher Dispatcher { get; }
+    public IScopeEventRouteInvoker Dispatcher { get; }
 }
 
-internal interface IScopeRemoteEventDispatcher
+internal interface IScopeEventRouteInvoker
 {
     void Dispatch(
         int runtimeId,
@@ -40,12 +40,12 @@ internal interface IScopeRemoteEventDispatcher
         EventPayloadStorage payloadStorage);
 }
 
-internal sealed class ScopeRemoteEventDispatcher<TEvent> : IScopeRemoteEventDispatcher
+internal sealed class ScopeEventRouteInvoker<TEvent> : IScopeEventRouteInvoker
     where TEvent : struct
 {
     private readonly ScopeRemoteEventInvoker<TEvent> _invoker;
 
-    public ScopeRemoteEventDispatcher(ScopeRemoteEventInvoker<TEvent> invoker)
+    public ScopeEventRouteInvoker(ScopeRemoteEventInvoker<TEvent> invoker)
     {
         _invoker = invoker;
     }
@@ -62,16 +62,16 @@ internal sealed class ScopeRemoteEventDispatcher<TEvent> : IScopeRemoteEventDisp
     }
 }
 
-internal sealed class ScopeRemoteEventRegistry
+internal sealed class ScopeEventRouteTable
 {
     private readonly int _scopeId;
     private object?[] _invokers = Array.Empty<object?>();
-    private IScopeRemoteEventDispatcher?[] _dispatchers = Array.Empty<IScopeRemoteEventDispatcher?>();
+    private IScopeEventRouteInvoker?[] _dispatchers = Array.Empty<IScopeEventRouteInvoker?>();
     private Type?[] _eventTypes = Array.Empty<Type?>();
     private Type?[] _handlerTypes = Array.Empty<Type?>();
     private Type?[] _ownerLayerTypes = Array.Empty<Type?>();
 
-    public ScopeRemoteEventRegistry(int scopeId)
+    public ScopeEventRouteTable(int scopeId)
     {
         _scopeId = scopeId;
     }
@@ -79,13 +79,13 @@ internal sealed class ScopeRemoteEventRegistry
     public void Clear()
     {
         _invokers = Array.Empty<object?>();
-        _dispatchers = Array.Empty<IScopeRemoteEventDispatcher?>();
+        _dispatchers = Array.Empty<IScopeEventRouteInvoker?>();
         _eventTypes = Array.Empty<Type?>();
         _handlerTypes = Array.Empty<Type?>();
         _ownerLayerTypes = Array.Empty<Type?>();
     }
 
-    public void Register(in ScopeRemoteEventRouteEntry entry)
+    public void Register(in ScopeEventRouteEntry entry)
     {
         EnsureCapacity(entry.RouteId);
 

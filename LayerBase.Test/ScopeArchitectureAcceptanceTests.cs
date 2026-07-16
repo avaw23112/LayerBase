@@ -1,5 +1,6 @@
 using System.Reflection;
 using LayerBase;
+using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
@@ -213,16 +214,85 @@ public sealed class ScopeArchitectureAcceptanceTests
     }
 
     [Test]
-    public void Scope_endpoint_writers_do_not_hold_scope_runtime_references()
+    public void Scope_endpoint_exposes_transport_without_writer_bridge()
     {
-        AssertNoRuntimeReferenceFields(typeof(RuntimeScopeEventWriter));
-        AssertNoRuntimeReferenceFields(typeof(RuntimeScopeCallWriter));
+        var assembly = typeof(ScopeEndpoint).Assembly;
 
-        AssertNoMethodNamed(typeof(RuntimeScopeEventWriter), "Attach");
-        AssertNoMethodNamed(typeof(RuntimeScopeEventWriter), "Detach");
-        AssertNoMethodNamed(typeof(RuntimeScopeCallWriter), "Attach");
-        AssertNoMethodNamed(typeof(RuntimeScopeCallWriter), "Detach");
+        Assert.That(assembly.GetType("LayerBase.Scope.IScopeEventWriter"), Is.Null);
+        Assert.That(assembly.GetType("LayerBase.Scope.IScopeCallWriter"), Is.Null);
+        Assert.That(assembly.GetType("LayerBase.Scope.RuntimeScopeEventWriter"), Is.Null);
+        Assert.That(assembly.GetType("LayerBase.Scope.RuntimeScopeCallWriter"), Is.Null);
+
+        var endpointFields = typeof(ScopeEndpoint)
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Select(field => field.FieldType)
+            .ToArray();
+
+        Assert.That(endpointFields, Has.Member(typeof(ScopeTransport)));
+        Assert.That(endpointFields.All(type => !type.Name.Contains("Writer")), Is.True);
+
         AssertNoMethodNamed(typeof(ScopeTransport), "AttachRuntime");
+    }
+
+    [Test]
+    public void Runtime_owner_boundaries_are_single_entry()
+    {
+        var scopeRuntimeType = typeof(ScopeRuntime);
+        var scopeRuntimeFields = scopeRuntimeType
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Select(field => field.FieldType)
+            .ToArray();
+
+        Assert.That(scopeRuntimeFields, Has.No.EqualTo(typeof(MainActorRuntime)));
+        Assert.That(scopeRuntimeFields, Has.None.Matches<Type>(type =>
+            type == typeof(ScopeRuntime) ||
+            (type.IsGenericType && type.GetGenericArguments().Any(argument => argument == typeof(ScopeRuntime)))));
+
+        var layerRuntimeFields = typeof(LayerRuntime)
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Where(field => field.FieldType == typeof(MainActorRuntime))
+            .ToArray();
+
+        Assert.That(layerRuntimeFields.Length, Is.EqualTo(1),
+            "LayerRuntime must be the single owner of MainActorRuntime.");
+    }
+
+    [Test]
+    public void Runtime_hot_paths_do_not_keep_try_dispatch_chains_or_projection_work_queue()
+    {
+        AssertNoMethodNameContaining(typeof(ScopeRuntime), "TryDispatch");
+        AssertNoMethodNameContaining(typeof(MainActorRuntime), "TryDispatch");
+        Assert.That(typeof(MainActorRuntime).Assembly.GetType("LayerBase.Actor.ActorCallTaskBridge"),
+            Is.Null,
+            "Actor call task completion should stay inside the owning call column.");
+        Assert.That(typeof(MainActorRuntime).Assembly.GetType("LayerBase.Actor.ActorAccessor"), Is.Null);
+        Assert.That(typeof(MainActorRuntime).Assembly.GetType("LayerBase.Actor.LocalActorAccessor"), Is.Null);
+        Assert.That(typeof(MainActorRuntime).Assembly.GetType("LayerBase.Actor.RemoteActorAccessor"), Is.Null);
+
+        var mainActorFields = typeof(MainActorRuntime)
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Select(field => field.FieldType)
+            .ToArray();
+
+        Assert.That(mainActorFields, Has.None.Matches<Type>(type =>
+            type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Queue<>)));
+
+        Assert.That(typeof(MainActorRuntime)
+                .GetNestedTypes(BindingFlags.NonPublic)
+                .Any(type => type.Name.Contains("ProjectionWork")),
+            Is.False,
+            "MainActorRuntime must use a same-thread command buffer, not IProjectionWork bridge objects.");
+    }
+
+    [Test]
+    public void Runtime_scope_routes_are_tables_not_remote_registries()
+    {
+        var assembly = typeof(ScopeRuntime).Assembly;
+
+        Assert.That(assembly.GetType("LayerBase.Scope.ScopeRemoteEventRegistry"), Is.Null);
+        Assert.That(assembly.GetType("LayerBase.Scope.ScopeRemoteCallRegistry"), Is.Null);
+        Assert.That(assembly.GetType("LayerBase.Scope.ScopeEventRouteTable"), Is.Not.Null);
+        Assert.That(assembly.GetType("LayerBase.Scope.ScopeCallRouteTable"), Is.Not.Null);
     }
 
     [Test]
@@ -492,6 +562,17 @@ public sealed class ScopeArchitectureAcceptanceTests
             .FirstOrDefault(method => method.Name == methodName);
 
         Assert.That(method, Is.Null, $"{type.Name} still contains {methodName}.");
+    }
+
+    private static void AssertNoMethodNameContaining(Type type, string pattern)
+    {
+        var methods = type
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance)
+            .Where(method => method.Name.Contains(pattern, StringComparison.Ordinal))
+            .Select(method => method.Name)
+            .ToArray();
+
+        Assert.That(methods, Is.Empty, $"{type.Name} still contains hot-path methods: {string.Join(", ", methods)}.");
     }
 
     private static void AssertNoFieldNamed(Type type, string fieldName)

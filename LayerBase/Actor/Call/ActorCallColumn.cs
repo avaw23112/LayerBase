@@ -124,7 +124,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
             }
 
             Dispatch(actor, in value);
-            budget.ConsumeEvent();
+            budget.Consume(1);
             if (options.MaxMailsPerActorPerPump > 0)
             {
                 stats.RecordActorProcessed(actorKey);
@@ -178,7 +178,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
             }
 
             Dispatch(actor, in value);
-            budget.ConsumeEvent();
+            budget.Consume(1);
 
             if (mail.Count == 0)
             {
@@ -208,11 +208,43 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         try
         {
             LBTask<TResponse> task = _invoker(actor, in mail.Request, mail.CancellationToken);
-            ActorCallTaskBridge.Forward(task, mail.Source);
+            Forward(task, mail.Source);
         }
         catch (Exception exception)
         {
             mail.Source.SetException(exception);
+        }
+    }
+
+    private static void Forward(
+        LBTask<TResponse>                 task,
+        LBTaskCompletionSource<TResponse> target)
+    {
+        var awaiter = task.GetAwaiter();
+        if (awaiter.IsCompleted)
+        {
+            CompleteImmediately(awaiter, target);
+            return;
+        }
+
+        awaiter.OnCompleted(() => { CompleteImmediately(task.GetAwaiter(), target); });
+    }
+
+    private static void CompleteImmediately(
+        LBTask<TResponse>.Awaiter         awaiter,
+        LBTaskCompletionSource<TResponse> target)
+    {
+        try
+        {
+            target.SetResult(awaiter.GetResult());
+        }
+        catch (OperationCanceledException exception)
+        {
+            target.SetCanceled(exception.CancellationToken);
+        }
+        catch (Exception exception)
+        {
+            target.SetException(exception);
         }
     }
 

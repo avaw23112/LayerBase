@@ -160,6 +160,9 @@ public class QueryBringJobTests
             new JobAoiComponent { IsVisible = true });
         runtime.EcsWorld.WithProjectedActor<JobProbeActor>(entity, keepAliveSeconds: 0.5f);
 
+        runtime.EcsWorld.Query().TouchProjectedActor();
+        PumpActors(runtime);
+
         var job = new UpdateEnemyViewJob();
         runtime.EcsWorld
                .Query<JobPositionComponent, JobVelocityComponent, JobAoiComponent>()
@@ -168,7 +171,7 @@ public class QueryBringJobTests
                .Batch()
                .Post();
 
-        runtime.Pump(0.016f);
+        PumpActors(runtime);
 
         JobPositionComponent position = runtime.EcsWorld.Get<JobPositionComponent>(entity);
         ActorId actorId = runtime.EcsWorld.GetProjectionMeta(entity).ActorId;
@@ -309,6 +312,16 @@ public class QueryBringJobTests
         return LayerHub.CreateLayers()
                        .Push(new JobTestLayer())
                        .Build();
+    }
+
+    private static void PumpActors(LayerRuntime runtime)
+    {
+        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
+        runtime.MainActorRuntime.Pump(
+            deltaTime: 0.016f,
+            fixedDeltaTime: 1f / 60f,
+            pumpFixedUpdate: true,
+            budget: ref budget);
     }
 
     #endregion

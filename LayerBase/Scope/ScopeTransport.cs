@@ -6,8 +6,6 @@ namespace LayerBase.Scope;
 
 internal sealed class ScopeTransport : IDisposable
 {
-    private readonly RuntimeScopeEventWriter _eventWriter;
-    private readonly RuntimeScopeCallWriter _callWriter;
     private readonly EventPayloadStorage _eventPayloadStorage = new();
     private readonly EventPayloadStorage _callPayloadStorage = new();
     private int _callSequence;
@@ -20,12 +18,7 @@ internal sealed class ScopeTransport : IDisposable
             new ScopeEventInboxOptions(capacity: 1024, reservedForInternal: 128, reservedForCritical: 16));
         CallInbox = ScopeBoundedInbox<ScopeCallEnvelope>.CreateCallInbox(
             new ScopeCallInboxOptions(capacity: 1024, reservedForResponseAndControl: 128));
-        _eventWriter = new RuntimeScopeEventWriter(this);
-        _callWriter = new RuntimeScopeCallWriter(this);
-        Endpoint = new ScopeEndpoint(
-            address,
-            _eventWriter,
-            _callWriter);
+        Endpoint = new ScopeEndpoint(address, this);
     }
 
     public ScopeEndpoint Endpoint { get; }

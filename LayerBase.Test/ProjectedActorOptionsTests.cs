@@ -275,12 +275,14 @@ public class ProjectedActorOptionsTests
         runtime.EcsWorld
                .Query<ProjectedActorRef>()
                .TouchProjectedActor();
+        PumpActors(runtime);
 
         Assert.That(DisablePolicyProbeActor.RentCount, Is.EqualTo(1));
 
         // Act - 等待超过 KeepAlive 时间（1.0f 秒）后 Sweep
         System.Threading.Thread.Sleep(1100);
         runtime.EcsWorld.SweepProjectedActors();
+        PumpActors(runtime);
 
         // Assert - 应该调用 OnDisable，不调用 OnReturn
         Assert.That(DisablePolicyProbeActor.DisableCount, Is.EqualTo(1));
@@ -309,12 +311,14 @@ public class ProjectedActorOptionsTests
         runtime.EcsWorld
                .Query<ProjectedActorRef>()
                .TouchProjectedActor();
+        PumpActors(runtime);
 
         Assert.That(ReturnToPoolPolicyProbeActor.RentCount, Is.EqualTo(1));
 
         // Act - 等待超过 KeepAlive 时间（0.5f 秒）后 Sweep
         System.Threading.Thread.Sleep(600);
         runtime.EcsWorld.SweepProjectedActors();
+        PumpActors(runtime);
 
         // Assert - 应该调用 OnReturn
         Assert.That(ReturnToPoolPolicyProbeActor.ReturnCount, Is.EqualTo(1));
@@ -340,10 +344,12 @@ public class ProjectedActorOptionsTests
         runtime.EcsWorld
                .Query()
                .TouchProjectedActor();
+        PumpActors(runtime);
 
         // 等待 Disable
         System.Threading.Thread.Sleep(1100);
         runtime.EcsWorld.SweepProjectedActors();
+        PumpActors(runtime);
 
         Assert.That(DisablePolicyProbeActor.DisableCount, Is.EqualTo(1));
 
@@ -351,6 +357,7 @@ public class ProjectedActorOptionsTests
         runtime.EcsWorld
                .Query()
                .TouchProjectedActor();
+        PumpActors(runtime);
 
         // Assert - 应该调用 OnEnable
         Assert.That(DisablePolicyProbeActor.EnableCount, Is.EqualTo(1));
@@ -373,6 +380,7 @@ public class ProjectedActorOptionsTests
         runtime.EcsWorld
                .Query()
                .TouchProjectedActor();
+        PumpActors(runtime);
 
         // 记录当前 ExpireAtTicks
         ref ProjectedActorRef actorRef = ref runtime.EcsWorld.Get<ProjectedActorRef>(entity);
@@ -427,5 +435,15 @@ public class ProjectedActorOptionsTests
             actorTypeId,
             typeof(TActor),
             static actorWorld => actorWorld.CreateProjectedActor<TActor>());
+    }
+
+    private static void PumpActors(LayerRuntime runtime)
+    {
+        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
+        runtime.MainActorRuntime.Pump(
+            deltaTime: 0.016f,
+            fixedDeltaTime: 1f / 60f,
+            pumpFixedUpdate: true,
+            budget: ref budget);
     }
 }

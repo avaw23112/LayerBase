@@ -74,10 +74,13 @@ public sealed class QueryInputRuntimeTests
 
         Entity entity = CreateEntity(runtime.EcsWorld, position: 7f, scale: 2f);
         runtime.EcsWorld.WithProjectedActor<QueryInputRuntimeActor>(entity);
+        ref ProjectedActorMeta meta = ref runtime.EcsWorld.GetProjectionMeta(entity);
+        ProjectedActorBinding.EnsureProjectedActor(runtime.EcsWorld, entity, ref meta, nowTicks: 0);
+        PumpActors(runtime);
 
         var frame = new QueryInputFrame(4f);
         layer.Service.Project(in frame);
-        runtime.Pump(0.1f);
+        PumpActors(runtime);
 
         Assert.That(runtime.EcsWorld.Get<QueryInputPosition>(entity).Value, Is.EqualTo(15f));
         Assert.That(QueryInputRuntimeActor.Received.Select(static evt => evt.Value), Is.EqualTo(new[] { 15f }));
@@ -132,6 +135,16 @@ public sealed class QueryInputRuntimeTests
 
         Assert.That(method, Is.Not.Null);
         method!.Invoke(null, [target, runtime, scope]);
+    }
+
+    private static void PumpActors(LayerRuntime runtime)
+    {
+        var budget = new RuntimeFrameBudget(maxEvents: 0, usedEvents: 0, deadlineTicks: 0);
+        runtime.MainActorRuntime.Pump(
+            deltaTime: 0.016f,
+            fixedDeltaTime: 1f / 60f,
+            pumpFixedUpdate: true,
+            budget: ref budget);
     }
 }
 

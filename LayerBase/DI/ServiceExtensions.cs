@@ -312,8 +312,8 @@ public static class ServiceExtensions
         service
             .GetBinding()
             .OwnerScope
-            .Actors
-            .PostTo(actorId, in value);
+            .ActorClient
+            .Post(actorId, in value);
     }
 
     public static void PostToMany<TEvent>(
@@ -325,8 +325,8 @@ public static class ServiceExtensions
         service
             .GetBinding()
             .OwnerScope
-            .Actors
-            .PostToMany(actorIds, in value);
+            .ActorClient
+            .PostMany(actorIds, in value);
     }
 
     public static WorkerJobAccessor WorkerJobs(this IService service)
@@ -600,8 +600,8 @@ public static class LayerContextExtensions
         context
             .GetBinding()
             .OwnerScope
-            .Actors
-            .PostTo(actorId, in value);
+            .ActorClient
+            .Post(actorId, in value);
     }
 
     public static void PostToMany<TEvent>(
@@ -613,8 +613,8 @@ public static class LayerContextExtensions
         context
             .GetBinding()
             .OwnerScope
-            .Actors
-            .PostToMany(actorIds, in value);
+            .ActorClient
+            .PostMany(actorIds, in value);
     }
 
     public static WorkerJobAccessor WorkerJobs(this ILayerContext context)

@@ -6,17 +6,24 @@ namespace LayerBase;
 
 public static class ServiceActorExtensions
 {
-    /// <summary>
-    /// Gets the actor accessor bound to the current service scope.
-    /// </summary>
-    public static ActorAccessor Actors(this IService service)
+    public static ActorClient ActorClient(this IService service)
     {
         if (service == null)
         {
             throw new ArgumentNullException(nameof(service));
         }
 
-        return ServiceLayerBinder.RequireBinding(service).OwnerScope.Actors;
+        return ServiceLayerBinder.RequireBinding(service).OwnerScope.ActorClient;
+    }
+
+    public static ActorFactory ActorFactory(this IService service)
+    {
+        if (service == null)
+        {
+            throw new ArgumentNullException(nameof(service));
+        }
+
+        return ServiceLayerBinder.RequireBinding(service).OwnerScope.ActorFactory;
     }
 
     public static LBTask<TResponse> AskActor<TRequest, TResponse>(
@@ -27,12 +34,12 @@ public static class ServiceActorExtensions
         where TRequest : struct
         where TResponse : struct
     {
-        return service.Actors().Ask<TRequest, TResponse>(actorId, in request, cancellationToken);
+        return service.ActorClient().Call<TRequest, TResponse>(actorId, in request, cancellationToken);
     }
 
     public static TActor CreateActor<TActor>(this IService service, bool usePool = false)
         where TActor : class, IActor, new()
     {
-        return service.Actors().CreateActor<TActor>(usePool);
+        return service.ActorFactory().Create<TActor>(usePool);
     }
 }

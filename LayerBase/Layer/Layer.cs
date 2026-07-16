@@ -744,7 +744,7 @@ public abstract class Layer : Node, IDisposable
         var routeId = ScopeRemoteCallRouteId<TRequest, TResponse>.Id;
         var invoker = (ScopeRemoteCallInvoker<TRequest, TResponse>)handler.HandleAsync;
 
-        ownerScope.RemoteCalls.Register(new ScopeRemoteCallRouteEntry(
+        ownerScope.CallRoutes.Register(new ScopeCallRouteEntry(
             ownerScopeId,
             routeId,
             typeof(TRequest),
@@ -778,14 +778,14 @@ public abstract class Layer : Node, IDisposable
         var routeId = ScopeRemoteEventRouteId<TEvent>.Id;
         var invoker = (ScopeRemoteEventInvoker<TEvent>)handler.Handle;
 
-        ownerScope.RemoteEvents.Register(new ScopeRemoteEventRouteEntry(
+        ownerScope.EventRoutes.Register(new ScopeEventRouteEntry(
             ownerScopeId,
             routeId,
             typeof(TEvent),
             handler.GetType(),
             GetType(),
             invoker,
-            new ScopeRemoteEventDispatcher<TEvent>(invoker)));
+            new ScopeEventRouteInvoker<TEvent>(invoker)));
     }
     #endregion
 

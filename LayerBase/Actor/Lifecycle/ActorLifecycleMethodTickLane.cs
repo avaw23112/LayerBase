@@ -59,14 +59,14 @@ internal sealed class ActorLifecycleMethodTickLane
         int                     timeCheckInterval)
     {
         _hot.PumpBudgeted(ref state, ref budget, timeCheckInterval);
-        if (!budget.HasRemainingEventBudget())
+        if (!budget.HasRemainingWork())
         {
             return;
         }
 
         _warm[GetFrameBucketIndex(frameIndex, _warm.Length)]
             .PumpBudgeted(ref state, ref budget, timeCheckInterval);
-        if (!budget.HasRemainingEventBudget())
+        if (!budget.HasRemainingWork())
         {
             return;
         }
