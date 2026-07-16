@@ -338,7 +338,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
 
             var mountInjections = layerInfo?.ProcessedMountInjections ?? new List<MountInjection>();
             var sourceText = GenerateLayerPartial(layerType, injectServices, ownerLayerServices, mountInjections,
-                iServiceSymbol, callHandlerSymbol);
+                iServiceSymbol, callHandlerSymbol, classMap);
             if (!string.IsNullOrEmpty(sourceText))
             {
                 spc.AddSource(CreateHintName(layerType), SourceText.From(sourceText, Encoding.UTF8));
@@ -768,7 +768,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private static string GenerateLayerPartial(INamedTypeSymbol layerType, List<MountedContext> injectServices,
                                                List<INamedTypeSymbol> ownerLayerServices,
                                                List<MountInjection> mountInjections,
-                                               INamedTypeSymbol iServiceSymbol, INamedTypeSymbol? callHandlerSymbol)
+                                               INamedTypeSymbol iServiceSymbol, INamedTypeSymbol? callHandlerSymbol,
+                                               Dictionary<INamedTypeSymbol, ClassInfo> classMap)
     {
         var layerDisplayName = layerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var layerIdentifier = layerType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
@@ -801,6 +802,8 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         {
             var serviceDisplay = exposedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var implDisplay = implType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var ownerScope = GetEffectiveScope(implType, classMap);
+            var ownerScopeDisplay = ownerScope?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             if (ImplementsInterface(implType, iServiceSymbol) || ImplementsInterfaceByMetadataName(implType, IServiceMetadataName))
             {
@@ -808,7 +811,15 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                        .Append(serviceDisplay)
                        .Append("), (global::LayerBase.DI.IService)new ")
                        .Append(implDisplay)
-                       .AppendLine("());");
+                       .Append("()");
+                if (ownerScopeDisplay != null)
+                {
+                    builder.Append(", typeof(")
+                           .Append(ownerScopeDisplay)
+                           .Append(")");
+                }
+
+                builder.AppendLine(");");
             }
             else if (callHandlerSymbol != null)
             {

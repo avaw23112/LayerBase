@@ -71,16 +71,14 @@ public partial class SceneEchoService : IService
     {
         services.AddScoped<SceneStateService, SceneStateService>();
     }
-}
 
-[OwnerLayer(typeof(SceneLayer))]
-public sealed class EchoSceneCallHandler : IScopeLocalCallHandler<EchoSceneRequest, EchoSceneResponse>
-{
-    public LBTask<EchoSceneResponse> HandleAsync(EchoSceneRequest request,
-                                                 CancellationToken cancellationToken = default)
+    [Call]
+    public LBTask<EchoSceneResponse> EchoSceneAsync(
+        EchoSceneRequest request,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var sceneState = this.Get<SceneStateService>();
+        var sceneState = this.GetService<SceneStateService>();
         sceneState.ChangeScene(request.SceneName);
         return LBTask<EchoSceneResponse>.FromResult(new EchoSceneResponse(request.SceneName));
     }

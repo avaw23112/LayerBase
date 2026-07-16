@@ -14,6 +14,8 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
 {
     private const string CallAttributeMetadataName = "LayerBase.Call.CallAttribute";
     private const string LayerMetadataName = "LayerBase.Layers.Layer";
+    private const string IServiceMetadataName = "LayerBase.DI.IService";
+    private const string ILayerContextMetadataName = "LayerBase.DI.ILayerContext";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -35,6 +37,8 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
 
         var layerSymbol = compilation.GetTypeByMetadataName(LayerMetadataName);
         if (layerSymbol == null) return;
+        var serviceSymbol = compilation.GetTypeByMetadataName(IServiceMetadataName);
+        var layerContextSymbol = compilation.GetTypeByMetadataName(ILayerContextMetadataName);
 
         var diagnostics = new List<Diagnostic>();
         var validBindings = new List<CallMethodBinding>();
@@ -59,7 +63,7 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var ownerKind = GetOwnerKind(ownerType, layerSymbol);
+            var ownerKind = GetOwnerKind(ownerType, layerSymbol, serviceSymbol, layerContextSymbol);
             if (ownerKind == CallOwnerKind.Invalid)
             {
                 diagnostics.Add(Diagnostic.Create(Diagnostics.UnsupportedOwner, location, ownerType.ToDisplayString()));
@@ -152,10 +156,18 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
         return true;
     }
 
-    private static CallOwnerKind GetOwnerKind(INamedTypeSymbol ownerType, INamedTypeSymbol layerSymbol)
+    private static CallOwnerKind GetOwnerKind(
+        INamedTypeSymbol ownerType,
+        INamedTypeSymbol layerSymbol,
+        INamedTypeSymbol? serviceSymbol,
+        INamedTypeSymbol? layerContextSymbol)
     {
         if (InheritsFrom(ownerType, layerSymbol))
             return CallOwnerKind.Layer;
+        if (serviceSymbol != null && ImplementsInterface(ownerType, serviceSymbol))
+            return CallOwnerKind.Service;
+        if (layerContextSymbol != null && ImplementsInterface(ownerType, layerContextSymbol))
+            return CallOwnerKind.LayerContext;
 
         return CallOwnerKind.Invalid;
     }
@@ -167,6 +179,12 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
                 return true;
 
         return false;
+    }
+
+    private static bool ImplementsInterface(INamedTypeSymbol ownerType, INamedTypeSymbol interfaceType)
+    {
+        return ownerType.AllInterfaces.Any(candidate =>
+            SymbolEqualityComparer.Default.Equals(candidate, interfaceType));
     }
 
     private static bool IsPartial(INamedTypeSymbol type)
@@ -207,11 +225,11 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
         builder.AppendLine("    {");
 
         foreach (var binding in bindings)
-            builder.Append("        global::LayerBase.Call.ScopeLocalCallRegistrationBridge.Register<")
+            builder.Append("        global::LayerBase.Call.ScopeLocalCallRegistrationBridge.RegisterForOwner<")
                    .Append(binding.RequestDisplay)
                    .Append(", ")
                    .Append(binding.ResponseDisplay)
-                   .Append(">(layer, new __GeneratedCallHandler_")
+                   .Append(">(layer, this, new __GeneratedCallHandler_")
                    .Append(binding.GeneratedIdentifier)
                    .Append("(this));")
                    .AppendLine();
@@ -290,7 +308,7 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
             new(
                 "LBG302",
                 "Unsupported [Call] owner",
-                "Type '{0}' uses [Call] on a method but [Call] methods are only supported on Layer types. IService and ILayerContext modules must not declare [Call]. Use an explicit IScopeLocalCallHandler<TRequest, TResponse> with [OwnerLayer] for Layer-level functional slices.",
+                "Type '{0}' uses [Call] on a method but [Call] methods are only supported on Layer, IService, or ILayerContext types.",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
@@ -357,6 +375,8 @@ public sealed class CallAutoBindGenerator : IIncrementalGenerator
     private enum CallOwnerKind
     {
         Invalid = 0,
-        Layer = 1
+        Layer = 1,
+        Service = 2,
+        LayerContext = 3
     }
 }

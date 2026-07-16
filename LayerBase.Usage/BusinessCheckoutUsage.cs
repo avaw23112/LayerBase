@@ -1,7 +1,6 @@
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
-using LayerBase.Core.EventHandler;
 using LayerBase.DI;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
@@ -95,12 +94,6 @@ public static class BusinessScenarioUsage
 }
 
 public sealed partial class BusinessCommerceLayer : Layer
-    , IEventHandler<BusinessOrderAcceptedEvent>
-    , IEventHandler<BusinessOrderProjectionEvent>
-    , IEventHandler<BusinessFraudScoreCalculatedEvent>
-    , IEventHandler<BusinessShipmentQueuedEvent>
-    , IEventHandler<BusinessBillingReminderEvent>
-    , IEventHandler<WorkerJobFailedEvent>
 {
     [SubscribeDelay]
     public IDelayPublisher<BusinessInvoiceAvailableEvent> DelayedInvoices { get; set; } = default!;
@@ -113,36 +106,42 @@ public sealed partial class BusinessCommerceLayer : Layer
 
     public int ReminderCount { get; private set; }
 
-    void IEventHandler<BusinessOrderAcceptedEvent>.Deal(in BusinessOrderAcceptedEvent value)
+    [Subscribe]
+    public void OnOrderAccepted(in BusinessOrderAcceptedEvent value)
     {
         AcceptedOrders++;
         Console.WriteLine($"[Checkout] Order accepted: {value.OrderId}, total: {value.Total:C}");
     }
 
-    void IEventHandler<BusinessOrderProjectionEvent>.Deal(in BusinessOrderProjectionEvent value)
+    [Subscribe]
+    public void OnOrderProjection(in BusinessOrderProjectionEvent value)
     {
         Console.WriteLine($"[Checkout] Order projection: {value.OrderId} -> {value.State}");
     }
 
-    void IEventHandler<BusinessFraudScoreCalculatedEvent>.Deal(in BusinessFraudScoreCalculatedEvent value)
+    [Subscribe]
+    public void OnFraudScoreCalculated(in BusinessFraudScoreCalculatedEvent value)
     {
         FraudScores++;
         Console.WriteLine($"[Risk] Fraud score: {value.OrderId} -> {value.Score}");
     }
 
-    void IEventHandler<BusinessShipmentQueuedEvent>.Deal(in BusinessShipmentQueuedEvent value)
+    [Subscribe]
+    public void OnShipmentQueued(in BusinessShipmentQueuedEvent value)
     {
         Shipments++;
         Console.WriteLine($"[Fulfillment] Shipment queued: {value.OrderId}, label: {value.Label}");
     }
 
-    void IEventHandler<BusinessBillingReminderEvent>.Deal(in BusinessBillingReminderEvent value)
+    [Subscribe]
+    public void OnBillingReminder(in BusinessBillingReminderEvent value)
     {
         ReminderCount++;
         Console.WriteLine($"[Billing] Payment reminder scheduled for {value.OrderId}");
     }
 
-    void IEventHandler<WorkerJobFailedEvent>.Deal(in WorkerJobFailedEvent value)
+    [Subscribe]
+    public void OnWorkerJobFailed(in WorkerJobFailedEvent value)
     {
         Console.WriteLine($"[Risk] Worker job failed: {value.Kind} {value.Error.Message}");
     }

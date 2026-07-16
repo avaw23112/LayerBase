@@ -8,10 +8,15 @@ using LayerBase.Scope;
 namespace LayerBase.Usage;
 
 [OwnerLayer(typeof(BusinessCommerceLayer))]
-public sealed class BusinessQuoteShipmentHandler
-    : IScopeLocalCallHandler<BusinessQuoteShipmentRequest, BusinessQuoteShipmentResponse>
+public sealed partial class BusinessFulfillmentReporter : IService
 {
-    public LBTask<BusinessQuoteShipmentResponse> HandleAsync(
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton(this);
+    }
+
+    [Call]
+    public LBTask<BusinessQuoteShipmentResponse> QuoteShipmentAsync(
         BusinessQuoteShipmentRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -22,11 +27,10 @@ public sealed class BusinessQuoteShipmentHandler
     }
 }
 
-public sealed class BusinessFulfillmentReporter : IService
+public sealed class BusinessInventoryScopeActivator : IService
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton(this);
     }
 }
 
@@ -41,34 +45,14 @@ public sealed class BusinessFulfillmentModule : IAssemblyModule
         new[]
         {
             ServiceContribution.ForTypes(
-                typeof(BusinessInventoryLedger),
-                typeof(BusinessInventoryLedger),
+                typeof(BusinessInventoryScopeActivator),
+                typeof(BusinessInventoryScopeActivator),
                 typeof(BusinessCommerceLayer),
                 typeof(BusinessInventoryScope),
-                ServiceLifetime.Singleton),
-            ServiceContribution.ForTypes(
-                typeof(BusinessFulfillmentReporter),
-                typeof(BusinessFulfillmentReporter),
-                typeof(BusinessCommerceLayer),
-                typeof(MainScope),
                 ServiceLifetime.Singleton)
         },
         Array.Empty<ContextContribution>(),
-        new[]
-        {
-            LocalCallContribution.ForTypes(
-                typeof(BusinessReserveInventoryRequest),
-                typeof(BusinessReserveInventoryResponse),
-                typeof(BusinessReserveInventoryHandler),
-                typeof(BusinessCommerceLayer),
-                typeof(BusinessInventoryScope)),
-            LocalCallContribution.ForTypes(
-                typeof(BusinessQuoteShipmentRequest),
-                typeof(BusinessQuoteShipmentResponse),
-                typeof(BusinessQuoteShipmentHandler),
-                typeof(BusinessCommerceLayer),
-                typeof(MainScope))
-        },
+        Array.Empty<LocalCallContribution>(),
         Array.Empty<EventHandlerContribution>(),
         new[]
         {

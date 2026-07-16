@@ -51,14 +51,13 @@ public partial class VerifyService3 : IService
     public void OnVerify(in ChangeSceneRequest @event)
     {
     }
-}
 
-[OwnerLayer(typeof(VerifyLayer))]
-public partial class VerifyCallHandler : IScopeLocalCallHandler<ChangeSceneRequest, ChangeSceneResponse>
-{
-    public LBTask<ChangeSceneResponse> HandleAsync(ChangeSceneRequest request,
-                                                   CancellationToken  cancellationToken = default)
+    [Call]
+    public LBTask<ChangeSceneResponse> HandleAsync(
+        ChangeSceneRequest request,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         return LBTask<ChangeSceneResponse>.FromResult(new ChangeSceneResponse(request.SceneName));
     }
 }

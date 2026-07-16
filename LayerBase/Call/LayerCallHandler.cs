@@ -85,4 +85,18 @@ public static class ScopeLocalCallRegistrationBridge
 
         layer.RegisterCallHandler(handler);
     }
+
+    public static void RegisterForOwner<TRequest, TResponse>(
+        Layer layer,
+        object owner,
+        IScopeLocalCallHandler<TRequest, TResponse> handler)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        if (layer == null) throw new ArgumentNullException(nameof(layer));
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+        if (handler == null) throw new ArgumentNullException(nameof(handler));
+
+        layer.RegisterCallHandlerForOwner(owner, handler);
+    }
 }

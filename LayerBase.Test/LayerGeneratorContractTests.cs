@@ -77,7 +77,7 @@ public class LayerGeneratorContractTests
     }
 
     [Test]
-    public void Service_method_marked_with_Call_reports_expected_diagnostic()
+    public void Service_method_marked_with_Call_generates_without_errors()
     {
         const string source = """
                               using LayerBase.Async;
@@ -106,8 +106,15 @@ public class LayerGeneratorContractTests
 
         var result = RunGenerators(source, new CallAutoBindGenerator());
 
-        Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id), Does.Contain("LBG302"),
+        Assert.That(result.Diagnostics, Is.Empty,
             string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
     }
 
     [Test]

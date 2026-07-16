@@ -430,6 +430,17 @@ public abstract class Layer : Node, IDisposable
     /// <summary>手动注册一个服务到当前 Layer，并指定其暴露的服务类型。必须在 Build 之前调用。</summary>
     public void RegisterService(Type serviceType, IService service)
     {
+        RegisterService(serviceType, service, ResolveServiceOwnerScopeId(service.GetType()));
+    }
+
+    public void RegisterService(Type serviceType, IService service, Type ownerScopeType)
+    {
+        if (ownerScopeType == null) throw new ArgumentNullException(nameof(ownerScopeType));
+        RegisterService(serviceType, service, ResolveServiceOwnerScopeId(ownerScopeType));
+    }
+
+    private void RegisterService(Type serviceType, IService service, int ownerScopeId)
+    {
         if (service == null) throw new ArgumentNullException(nameof(service));
         if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
         if (_serviceProvider != null)
@@ -438,7 +449,6 @@ public abstract class Layer : Node, IDisposable
 
         if (!_registeredServiceTypes.Add(serviceType)) return;
 
-        int ownerScopeId = ResolveServiceOwnerScopeId(service.GetType());
         if (OwnerContext != null && OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
             ServiceLayerBinder.AttachScopeObject(service, this, ownerScope);
         else if (OwnerContext != null)
@@ -500,7 +510,7 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+            var center = ResolveSubscriptionEventCenter(handler.Target);
             center.SubscribeFlow(RouteIndex, handler);
             _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Flow));
         }
@@ -516,7 +526,7 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+            var center = ResolveSubscriptionEventCenter(handler.Target);
             center.SubscribeNotify(RouteIndex, handler);
             _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Notify));
         }
@@ -532,7 +542,7 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+            var center = ResolveSubscriptionEventCenter(handler.Target);
             center.Subscribe(RouteIndex, handler);
             _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Subscribe));
         }
@@ -548,7 +558,7 @@ public abstract class Layer : Node, IDisposable
         ThrowIfDisposed();
         if (RouteIndex != -1 && OwnerContext != null)
         {
-            var center = OwnerContext.ScopeHost.MainScope.EventCenter;
+            var center = ResolveSubscriptionEventCenter(handler.Target);
             center.SubscribeAsync(RouteIndex, handler);
             _subscriptions.Add(UnsubscribeToken.Rent(center, RouteIndex, handler, typeof(T), UnsubscribeKind.Async));
         }
@@ -646,6 +656,25 @@ public abstract class Layer : Node, IDisposable
                 new ScopeLocalCallDispatcher<TRequest, TResponse>(invoker)));
         }
     }
+
+    internal void RegisterCallHandlerForOwner<TRequest, TResponse>(
+        object owner,
+        IScopeLocalCallHandler<TRequest, TResponse> handler)
+        where TRequest : struct
+        where TResponse : struct
+    {
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+        if (handler == null) throw new ArgumentNullException(nameof(handler));
+
+        var binding = ServiceLayerBinder.GetBinding(owner);
+        if (binding != null)
+        {
+            RegisterCallHandler(handler, binding.OwnerScope.Descriptor.ScopeType);
+            return;
+        }
+
+        RegisterCallHandler(handler, ResolveOwnerScopeType(handler.GetType()));
+    }
     #endregion
 
     #region Public API - Metadata Recording
@@ -730,6 +759,8 @@ public abstract class Layer : Node, IDisposable
         BindAutoCallHandler(this, boundInstances);
         foreach (var registration in _activeServices)
             BindAutoCallHandler(registration.Service, boundInstances);
+        foreach (var resolved in _resolvedServices)
+            BindAutoCallHandler(resolved.Instance, boundInstances);
     }
 
     private void BindAutoCallHandler(object candidate, HashSet<object> boundInstances)
@@ -776,11 +807,11 @@ public abstract class Layer : Node, IDisposable
         else
             ServiceLayerBinder.Attach(registration.Service, this);
 
+        using var _ = _serviceCollection.PushRegistrationScope(registration.ScopeId, registration.OwnerScopeId);
+
         _serviceCollection.Add(new ServiceDescriptor(
             registration.ServiceType, null, ServiceLifetime.Scoped,
             _ => registration.Service, null, registration.ScopeId, registration.OwnerScopeId));
-
-        using var _ = _serviceCollection.PushRegistrationScope(registration.ScopeId, registration.OwnerScopeId);
 
         if (registration.Service is IAutoServiceMount autoMount)
             autoMount.__AutoMountContexts(_serviceCollection);
@@ -807,9 +838,9 @@ public abstract class Layer : Node, IDisposable
         if (handlerType == null)
             throw new ArgumentNullException(nameof(handlerType));
 
-        foreach (var attribute in handlerType.GetCustomAttributes(false))
+        foreach (var attribute in System.Reflection.CustomAttributeData.GetCustomAttributes(handlerType))
         {
-            var attributeType = attribute.GetType();
+            var attributeType = attribute.AttributeType;
             if (attributeType.IsGenericType &&
                 attributeType.GetGenericTypeDefinition() == typeof(ScopeAttribute<>))
                 return attributeType.GetGenericArguments()[0];
@@ -820,7 +851,9 @@ public abstract class Layer : Node, IDisposable
 
     private static int ResolveServiceOwnerScopeId(Type serviceType)
     {
-        var ownerScopeType = ResolveOwnerScopeType(serviceType);
+        var ownerScopeType = typeof(IScopeDefinition).IsAssignableFrom(serviceType)
+            ? serviceType
+            : ResolveOwnerScopeType(serviceType);
         if (ownerScopeType == typeof(MainScope))
             return ScopeDefinitionIds.Main;
 
@@ -832,6 +865,19 @@ public abstract class Layer : Node, IDisposable
         {
             return ScopeDefinitionIds.Main;
         }
+    }
+
+    private EventCenter ResolveSubscriptionEventCenter(object? handlerTarget)
+    {
+        if (handlerTarget != null)
+        {
+            var binding = ServiceLayerBinder.GetBinding(handlerTarget);
+            if (binding != null)
+                return binding.OwnerScope.EventCenter;
+        }
+
+        return OwnerContext?.ScopeHost.MainScope.EventCenter
+               ?? throw new InvalidOperationException("Layer not attached to a runtime context.");
     }
     #endregion
     #region Nested Types
