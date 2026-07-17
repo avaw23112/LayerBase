@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using LayerBase.Actor;
@@ -151,33 +152,35 @@ public sealed partial class LayerRuntime : IDisposable
 
     private void BuildEventPolicies(PostSchedulerOptions options)
     {
-        foreach (var scope in _scopeHost.Scopes)
-        {
-            BuildScopeEventPolicies(scope, options);
-        }
-
-        var legacyMetaData = LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData().ToList();
-        if (legacyMetaData.Count == 0)
-            return;
+        var legacyMetaData = LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData()
+            .OrderBy(static item => item.MetaData.EventId)
+            .ThenBy(static item => item.Type.FullName, StringComparer.Ordinal)
+            .ToArray();
 
         foreach (var scope in _scopeHost.Scopes)
         {
-            BuildScopeEventPoliciesLegacy(scope, options, legacyMetaData);
+            BuildScopeEventPolicies(scope, options, legacyMetaData);
         }
     }
 
-    private void BuildScopeEventPolicies(ScopeRuntime scope, PostSchedulerOptions options)
+    private void BuildScopeEventPolicies(
+        ScopeRuntime scope,
+        PostSchedulerOptions options,
+        IReadOnlyList<(Type Type, IEventMetaData MetaData)> legacyMetaData)
     {
-        EventBuildPolicyTable policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
+        var effectiveMetaDataByEventId = new Dictionary<int, IEventMetaData>();
+
+        for (int i = 0; i < legacyMetaData.Count; i++)
+        {
+            IEventMetaData metaData = legacyMetaData[i].MetaData;
+            effectiveMetaDataByEventId[metaData.EventId] = metaData;
+        }
 
         ReadOnlySpan<EventMetaDataBuildPlan> eventPlans = CompositionPlan.GetEventMetaDataPlans(scope.ScopeId);
-
-        var postPlans = new List<PostTypePlan>();
 
         for (int i = 0; i < eventPlans.Length; i++)
         {
             ref readonly EventMetaDataBuildPlan plan = ref eventPlans[i];
-
             IEventMetaData metaData = plan.MetaDataFactory();
 
             if (metaData == null)
@@ -188,21 +191,15 @@ public sealed partial class LayerRuntime : IDisposable
                 throw new InvalidOperationException(
                     $"Event metadata factory for `{plan.EventType.FullName}` returned metadata with mismatched EventId.");
 
-            ApplyMetaDataToTable(policyTable, metaData, plan.EventId, options, postPlans);
+            effectiveMetaDataByEventId[plan.EventId] = metaData;
         }
 
-        scope.InitializeOrUpdateScheduler(options, policyTable, postPlans.ToArray());
-    }
+        var policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
+        var postPlans = new List<PostTypePlan>(effectiveMetaDataByEventId.Count);
 
-    private void BuildScopeEventPoliciesLegacy(ScopeRuntime scope, PostSchedulerOptions options, List<(Type Type, IEventMetaData MetaData)> legacyMetaData)
-    {
-        EventBuildPolicyTable policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
-        var postPlans = new List<PostTypePlan>();
-
-        foreach (var (type, meta) in legacyMetaData)
+        foreach (KeyValuePair<int, IEventMetaData> entry in effectiveMetaDataByEventId.OrderBy(static item => item.Key))
         {
-            int eventId = meta.EventId;
-            ApplyMetaDataToTable(policyTable, meta, eventId, options, postPlans);
+            ApplyMetaDataToTable(policyTable, entry.Value, entry.Key, options, postPlans);
         }
 
         scope.InitializeOrUpdateScheduler(options, policyTable, postPlans.ToArray());
