@@ -38,6 +38,12 @@ public enum LayerPrewarmTargets
     PostQueue = 1 << 3,
 
     /// <summary>
+    /// 预热定时器 Payload 存储。
+    /// 提前为指定事件类型创建 PostTimerScheduler payload store。
+    /// </summary>
+    TimerPayload = 1 << 4,
+
+    /// <summary>
     /// 推荐默认预热目标。
     /// </summary>
     Default = EventTypeId | Bucket | DispatchTable,
@@ -45,7 +51,7 @@ public enum LayerPrewarmTargets
     /// <summary>
     /// 完整预热目标。
     /// </summary>
-    All = EventTypeId | Bucket | DispatchTable | PostQueue
+    All = EventTypeId | Bucket | DispatchTable | PostQueue | TimerPayload
 }
 
 /// <summary>

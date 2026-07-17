@@ -75,7 +75,7 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal PostScheduler Scheduler => _scopeHost.MainScope.PostScheduler ?? throw new InvalidOperationException("Runtime not built.");
 
-    internal TimeScheduler<ITimerAction> Timer => _scopeHost.MainScope.Timer ?? throw new InvalidOperationException("Runtime not built.");
+    internal PostTimerScheduler Timer => _scopeHost.MainScope.Timer ?? throw new InvalidOperationException("Runtime not built.");
 
     public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
 
@@ -458,6 +458,11 @@ public sealed partial class LayerRuntime : IDisposable
         // 7. Layer lifecycle update
         _scopeHost.MainScope.PumpUpdate(deltaTime);
 
+        _scopeHost.PumpInlineScopes(
+            deltaTime,
+            policy,
+            _scopeCompletionExceptionReporter);
+        
         bool pumpActorFixedUpdate = _fixedUpdateOptions.Enabled;
         float actorFixedDeltaTime = _fixedUpdateOptions.Enabled
             ? _fixedUpdateOptions.FixedDeltaTime
@@ -470,11 +475,6 @@ public sealed partial class LayerRuntime : IDisposable
             budget: ref runtimeBudget);
 
         EcsWorld.SweepProjectedActors(ref runtimeBudget);
-
-        _scopeHost.PumpInlineScopes(
-            deltaTime,
-            policy,
-            _scopeCompletionExceptionReporter);
     }
     #endregion
 
@@ -571,23 +571,14 @@ public sealed partial class LayerRuntime : IDisposable
         return Scheduler.TryPost(value);
     }
 
-    public TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
+    public TimerHandle SchedulePost<T>(in T value, float delaySeconds, int repeatCount = 0, float intervalSeconds = 0) where T : struct
     {
         RequireOwnerThreadDebug();
-        var eventId = EventTypeId<T>.Id;
-        var timerPolicy = PolicyTable.GetTimerPolicy(eventId);
-
-        PostTypePlan? plan = null;
-        if (timerPolicy?.ExpiredPostPolicy != null)
-        {
-            plan = PostTypePlan.FromPolicy(eventId, timerPolicy.Value.ExpiredPostPolicy.Value, Scheduler.Options.DefaultBackpressure);
-        }
-
         return Timer.Schedule(
-            new PostEventAction<T>(value, plan),
-            delaySeconds, repeatCount: 0, intervalSeconds: 0,
-            repeatMode: timerPolicy?.RepeatMode,
-            catchUpPolicy: timerPolicy?.CatchUpPolicy);
+            in value,
+            delaySeconds,
+            repeatCount,
+            intervalSeconds);
     }
     #endregion
 

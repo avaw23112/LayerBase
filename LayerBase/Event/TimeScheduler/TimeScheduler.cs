@@ -1,8 +1,14 @@
+using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using LayerBase.Core.DataStruct;
 
 namespace LayerBase.Core.Event;
+
+internal interface ITimerPayloadReleaser<TPayload>
+{
+    void Release(in TPayload payload);
+}
 
 public sealed class TimeScheduler<TPayload> : IDisposable
 {
@@ -11,6 +17,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     private readonly int[] _wheel;
     private readonly LongTimerHeap _longHeap;
     private readonly IntStack _freeList;
+    private readonly ITimerPayloadReleaser<TPayload>? _payloadReleaser;
 
     private int _poolSize;
     private long _currentTick;
@@ -23,13 +30,22 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     private readonly float _tickDurationReciprocal;
     private readonly int _maxPromotePerTick;
     private readonly int _maxExpiredPerTick;
+    private readonly long _longTimerThresholdTicks;
     private readonly TimerFlags _defaultRepeatFlags;
 
     internal int PendingCount => _poolSize - _freeList.Count;
 
     public TimeScheduler(TimeSchedulerOptions options)
+        : this(options, payloadReleaser: null)
+    {
+    }
+
+    internal TimeScheduler(
+        TimeSchedulerOptions options,
+        ITimerPayloadReleaser<TPayload>? payloadReleaser)
     {
         _options = options;
+        _payloadReleaser = payloadReleaser;
 
         var plan = new TimerWheelPlan(options.WheelSize, options.TickDurationSeconds);
         _wheelSize = plan.WheelSize;
@@ -52,7 +68,15 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         }
 
         _poolSize = options.InitialTimerCapacity;
-        _longHeap = new LongTimerHeap(16);
+        _longHeap = new LongTimerHeap(
+            Math.Max(16, options.InitialTimerCapacity));
+
+        long configuredThresholdTicks = options.LongTimerThresholdSeconds > 0
+            ? Math.Max(1, (long)MathF.Ceiling(options.LongTimerThresholdSeconds * _tickDurationReciprocal))
+            : 0;
+        _longTimerThresholdTicks = configuredThresholdTicks > 0
+            ? Math.Min(configuredThresholdTicks, _wheelSize)
+            : _wheelSize;
 
         _defaultRepeatFlags = TimerFlags.Repeat;
         if (options.DefaultRepeatMode == TimerRepeatMode.FixedRate)
@@ -102,7 +126,6 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 
         entry.Flags = flags;
 
-
         entry.RemainingRepeatCount = repeatCount;
         entry.ExpireTick = _currentTick + NormalizeDelayTicks(delaySeconds);
         entry.IntervalTicks = repeatCount == 0 ? 0 : NormalizeDelayTicks(intervalSeconds);
@@ -120,11 +143,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         if ((entry.Flags & TimerFlags.Active) == 0 || entry.Version != handle.Version) return false;
 
         RemoveFromStructure(handle.Index);
-        entry.Flags = TimerFlags.None;
-        entry.Payload = default!;
-        entry.Version++;
-        if (entry.Version == 0) entry.Version = 1;
-        _freeList.Push(handle.Index);
+        ReleaseTimer(handle.Index, ref entry);
 
         return true;
     }
@@ -180,9 +199,8 @@ public sealed class TimeScheduler<TPayload> : IDisposable
                     if ((entry.Flags & TimerFlags.Active) != 0 &&
                         entry.Version == version &&
                         entry.ExpireTick == expireTick &&
-                        entry.SlotIndex < 0)
+                        _longHeap.GetHeapPosition(index) < 0)
                     {
-                        entry.SlotIndex = -1;
                         PlaceInWheel(index);
                         promoted++;
                     }
@@ -293,14 +311,27 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         return Math.Max(1, (long)MathF.Ceiling(seconds * _tickDurationReciprocal));
     }
 
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void ReleaseTimer(int index, ref TimerEntry<TPayload> entry)
     {
+        if ((entry.Flags & TimerFlags.Active) == 0)
+            return;
+
+        _payloadReleaser?.Release(in entry.Payload);
+
         entry.Flags = TimerFlags.None;
         entry.Payload = default!;
+        entry.ExpireTick = 0;
+        entry.IntervalTicks = 0;
+        entry.RemainingRepeatCount = 0;
+        entry.Next = -1;
+        entry.Prev = -1;
+        entry.SlotIndex = -1;
+
         entry.Version++;
-        if (entry.Version == 0) entry.Version = 1;
+        if (entry.Version == 0)
+            entry.Version = 1;
+
         _freeList.Push(index);
     }
 
@@ -309,7 +340,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         ref var entry = ref FastArray.At(_pool, index);
         long delayTicks = entry.ExpireTick - _currentTick;
 
-        if (delayTicks <= _wheelSize)
+        if (delayTicks <= _longTimerThresholdTicks)
         {
             PlaceInWheel(index);
         }
@@ -356,9 +387,16 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 
             if (entry.Next != -1)
                 FastArray.At(_pool, entry.Next).Prev = entry.Prev;
+
+            return;
+        }
+
+        int heapPos = _longHeap.GetHeapPosition(index);
+        if (heapPos >= 0)
+        {
+            _longHeap.RemoveAt(heapPos);
         }
     }
-
 
     private void GrowPool()
     {
@@ -378,9 +416,18 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+
+        for (int i = 0; i < _poolSize; i++)
+        {
+            ref var entry = ref FastArray.At(_pool, i);
+            if ((entry.Flags & TimerFlags.Active) != 0)
+            {
+                _payloadReleaser?.Release(in entry.Payload);
+            }
+        }
+
         Array.Clear(_wheel, 0, _wheel.Length);
         _longHeap.Clear();
         _freeList.Clear();
-        for (int i = 0; i < _pool.Length; i++) _pool[i].Payload = default!;
     }
 }

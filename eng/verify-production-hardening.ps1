@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 Write-Host "=== Verify Generated Assembly Modules ===" -ForegroundColor Cyan
-pwsh "$PSScriptRoot\verify-generated-assembly-modules.ps1"
+powershell "$PSScriptRoot\verify-generated-assembly-modules.ps1"
 
 Write-Host "=== Build $Configuration ===" -ForegroundColor Cyan
 dotnet build LayerBase.sln --configuration $Configuration --no-restore

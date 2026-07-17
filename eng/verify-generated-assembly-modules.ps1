@@ -9,10 +9,10 @@ $ErrorActionPreference = "Stop"
 $exitCode = 0
 
 $forbiddenPatterns = @(
-    @{ Pattern = ': IAssemblyModule'; Description = 'User-authored IAssemblyModule implementation' },
-    @{ Pattern = 'new AssemblyModuleManifest('; Description = 'User-authored AssemblyModuleManifest construction' },
-    @{ Pattern = 'EventContribution.ForTypes('; Description = 'User-authored EventContribution construction' },
-    @{ Pattern = 'AssemblyModuleManifest Manifest'; Description = 'User-authored Manifest property' },
+    @{ Pattern = [regex]::Escape(': IAssemblyModule'); Description = 'User-authored IAssemblyModule implementation' },
+    @{ Pattern = [regex]::Escape('new AssemblyModuleManifest('); Description = 'User-authored AssemblyModuleManifest construction' },
+    @{ Pattern = [regex]::Escape('EventContribution.ForTypes('); Description = 'User-authored EventContribution construction' },
+    @{ Pattern = [regex]::Escape('AssemblyModuleManifest Manifest'); Description = 'User-authored Manifest property' },
     @{ Pattern = 'static .*Module Instance'; Description = 'User-authored static Module Instance' }
 )
 

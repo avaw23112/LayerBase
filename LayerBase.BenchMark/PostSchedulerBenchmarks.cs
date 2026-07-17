@@ -88,9 +88,9 @@ public partial class PostSchedulerBenchmarks : EventBenchmarkBase
     {
         // Scheduling is more expensive, so we do fewer in benchmark
         for (var i = 0; i < 1000; i++)
+        {
             _runtime.SchedulePost(BenchEvent.Instance, 0.1f);
-
-        // Cleanup
-        _runtime.Pump(0.2f);
+            _runtime.Pump(0.2f);
+        }
     }
 }

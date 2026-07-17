@@ -26,7 +26,6 @@ internal sealed class ScopeRuntime : IDisposable
     private ScopeSafePointState _safePointState = ScopeSafePointState.Running;
     private long _safePointToken;
     private ScopeSnapPlan _snapPlan = ScopeSnapPlan.Empty;
-    private ScopeTimerSink? _timerSink;
     private ScopeEndpoint?[] _scopeEndpoints = Array.Empty<ScopeEndpoint?>();
     private float _fixedUpdateAccumulator;
     private bool _runtimeStopRun;
@@ -127,7 +126,7 @@ internal sealed class ScopeRuntime : IDisposable
 
     public PostScheduler? PostScheduler { get; private set; }
 
-    public TimeScheduler<ITimerAction>? Timer { get; private set; }
+    public PostTimerScheduler? Timer { get; private set; }
 
     public DelayPublisherManager? DelayManager { get; private set; }
 
@@ -198,8 +197,14 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void InitializeTimer(TimeSchedulerOptions options)
     {
-        Timer = new TimeScheduler<ITimerAction>(options);
-        _timerSink = new ScopeTimerSink(RequireScheduler());
+        var scheduler = RequireScheduler();
+        var policyTable = RequirePolicyTable();
+        Timer = new PostTimerScheduler(
+            _runtimeId,
+            options,
+            scheduler.PayloadStorage,
+            scheduler,
+            policyTable);
     }
 
     public void InitializeDelay(DelayBufferOptions options)
@@ -248,7 +253,7 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void TickTimer(float deltaTime)
     {
-        Timer?.Tick(deltaTime, _timerSink!);
+        Timer?.Tick(deltaTime);
     }
 
     public void BindMainActorEndpoint(ScopeEndpoint mainEndpoint)
@@ -431,9 +436,7 @@ internal sealed class ScopeRuntime : IDisposable
         if (!CanPumpLifecycle())
             return;
 
-        PumpSynchronizationContext(
-            exceptionPolicy,
-            reportException);
+        PumpSynchronizationContext( exceptionPolicy, reportException);
         TickTimer(deltaTime);
         DelayManager?.Tick(deltaTime);
         PostScheduler?.Pump();
@@ -1367,18 +1370,4 @@ internal sealed class ScopeRuntime : IDisposable
             Transport.EventPayloadStorage.Release(envelope.Payload);
     }
 
-    private sealed class ScopeTimerSink : IExpiredTimerSink<ITimerAction>
-    {
-        private readonly PostScheduler _scheduler;
-
-        public ScopeTimerSink(PostScheduler scheduler)
-        {
-            _scheduler = scheduler;
-        }
-
-        public bool TryAcceptExpired(in ITimerAction payload, TimerHandle handle)
-        {
-            return payload.Execute(_scheduler);
-        }
-    }
 }

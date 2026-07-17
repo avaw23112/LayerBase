@@ -11,6 +11,7 @@ internal interface IEventStore : IDisposable
     void Dispatch(int                index, int version, EventCenter center);
     void DispatchDefault(EventCenter center);
     PostResult Post(int index, int version, PostScheduler scheduler);
+    PostResult Post(int index, int version, PostScheduler scheduler, in PostTypePlan plan);
     PayloadDiagnosticsSnapshot CaptureDiagnostics();
 }
 
@@ -180,6 +181,14 @@ internal sealed class EventStore<T> : IEventStore where T : struct
     {
         if (TryGet(new PayloadHandle(EventTypeId<T>.Id, index, version), out var value))
             return scheduler.TryPost(value);
+
+        return PostResult.Failure();
+    }
+
+    public PostResult Post(int index, int version, PostScheduler scheduler, in PostTypePlan plan)
+    {
+        if (TryGet(new PayloadHandle(EventTypeId<T>.Id, index, version), out var value))
+            return scheduler.TryPostWithPolicy(in value, in plan);
 
         return PostResult.Failure();
     }
@@ -395,6 +404,13 @@ internal sealed class EventPayloadStorage : IDisposable
         if (handle.IsInvalid) return PostResult.Failure();
         var store = GetStoreByTypeId(handle.EventTypeId);
         return store?.Post(handle.Index, handle.Version, scheduler) ?? PostResult.Failure();
+    }
+
+    public PostResult Post(PayloadHandle handle, PostScheduler scheduler, in PostTypePlan plan)
+    {
+        if (handle.IsInvalid) return PostResult.Failure();
+        var store = GetStoreByTypeId(handle.EventTypeId);
+        return store?.Post(handle.Index, handle.Version, scheduler, in plan) ?? PostResult.Failure();
     }
 
     public void DispatchDefault(int eventTypeId, EventCenter center)

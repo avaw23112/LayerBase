@@ -23,7 +23,7 @@ public static class ServiceExtensions
                ?? throw new InvalidOperationException("Owner scope scheduler is not built.");
     }
 
-    internal static TimeScheduler<ITimerAction> RequireOwnerTimer(ServiceLayerBinding binding)
+    internal static PostTimerScheduler RequireOwnerTimer(ServiceLayerBinding binding)
     {
         return binding.OwnerScope.Timer
                ?? throw new InvalidOperationException("Owner scope timer is not built.");
@@ -44,21 +44,7 @@ public static class ServiceExtensions
         return binding.OwnerScope.SubscribeDelay<TValue>();
     }
 
-    /// <summary>
-    /// ͬ�������¼���
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// �¼��ṹ�����͡�
-    /// </typeparam>
-    /// <param name="service">
-    /// ��ǰ�������
-    /// </param>
-    /// <param name="value">
-    /// Ҫ���͵��¼�ֵ��
-    /// </param>
-    /// <returns>
-    /// �¼���������
-    /// </returns>
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EventHandledState Send<TValue>(
         this IService service,
@@ -71,26 +57,6 @@ public static class ServiceExtensions
                .Send(value);
     }
 
-    /// <summary>
-    /// Ͷ���¼���
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// �¼��ṹ�����͡�
-    /// </typeparam>
-    /// <param name="service">
-    /// ��ǰ�������
-    /// </param>
-    /// <param name="value">
-    /// ҪͶ�ݵ��¼�ֵ��
-    /// </param>
-    /// <param name="policy">
-    /// ����Ͷ��ʹ�õĲ��ԡ�
-    /// ���� default ��ʾʹ���¼�Ԫ���ݻ� Scheduler Ĭ�ϲ��ԡ�
-    /// </param>
-    /// <returns>
-    /// PostResult ��ʾͶ�ݽ����
-    /// ���÷����Ժ��Ը÷���ֵ�Ա���ԭ�е���ϰ�ߡ�
-    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult Post<TValue>(
         this IService    service,
@@ -101,93 +67,21 @@ public static class ServiceExtensions
         return scheduler.TryPost(value);
     }
 
-    /// <summary>
-    /// �ӳ�ָ��ʱ���Ͷ���¼���
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// �¼��ṹ�����͡�
-    /// </typeparam>
-    /// <param name="service">
-    /// ��ǰ�������
-    /// </param>
-    /// <param name="value">
-    /// ���ں�ҪͶ�ݵ��¼�ֵ��
-    /// </param>
-    /// <param name="delaySeconds">
-    /// �ӳ�������
-    /// </param>
-    /// <param name="expiredPostPolicy">
-    /// ��ʱ�����ں�ʹ�õ� Post ���ԡ�
-    /// ���� default ��ʾʹ���¼�Ԫ�����е� TimerPolicy.ExpiredPostPolicy��
-    /// </param>
-    /// <param name="repeatCount">
-    /// �ظ�������
-    /// Ĭ�� 0 ��ʾִֻ��һ�Ρ�
-    /// </param>
-    /// <param name="intervalSeconds">
-    /// �ظ�ִ�м��������
-    /// repeatCount ���� 0 ʱ��Ч��
-    /// </param>
-    /// <param name="repeatMode">
-    /// �ظ�ģʽ��
-    /// ���� default ��ʾʹ���¼�Ԫ�����е� TimerPolicy.RepeatMode��
-    /// </param>
-    /// <param name="catchUpPolicy">
-    /// ��֡���ԡ�
-    /// ���� default ��ʾʹ���¼�Ԫ�����е� TimerPolicy.CatchUpPolicy��
-    /// </param>
-    /// <returns>
-    /// ��ʱ��������
-    /// </returns>
     public static TimerHandle SchedulePost<TValue>(
-        this IService       service,
-        in   TValue         value,
-        float               delaySeconds,
-        EventPostPolicy?    expiredPostPolicy = default,
-        int                 repeatCount       = 0,
-        float               intervalSeconds   = 0,
-        TimerRepeatMode?    repeatMode        = default,
-        TimerCatchUpPolicy? catchUpPolicy     = default)
+        this IService service,
+        in   TValue   value,
+        float         delaySeconds,
+        int           repeatCount     = 0,
+        float         intervalSeconds = 0)
         where TValue : struct
     {
-        var binding = service.GetBinding();
-        var eventId = EventTypeId<TValue>.Id;
-        var timerPolicy = RequireOwnerPolicyTable(binding).GetTimerPolicy(eventId);
-
-        PostTypePlan plan = PostTypePlan.Default(eventId, BackpressurePolicy.RejectNew);
-        if (timerPolicy?.ExpiredPostPolicy != null)
-        {
-            plan = PostTypePlan.FromPolicy(eventId, timerPolicy.Value.ExpiredPostPolicy.Value, plan.DefaultBackpressure);
-        }
-
-        return RequireOwnerTimer(binding).Schedule(
-            new PostEventAction<TValue>(value, plan),
+        return RequireOwnerTimer(service.GetBinding()).Schedule(
+            in value,
             delaySeconds,
-            repeatCount: repeatCount,
-            intervalSeconds: intervalSeconds,
-            repeatMode: repeatMode ?? timerPolicy?.RepeatMode,
-            catchUpPolicy: catchUpPolicy ?? timerPolicy?.CatchUpPolicy);
+            repeatCount,
+            intervalSeconds);
     }
 
-    /// <summary>
-    /// �ӳٷ����¼��� DelayPublisher��
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// �¼��ṹ�����͡�
-    /// </typeparam>
-    /// <param name="service">
-    /// ��ǰ�������
-    /// </param>
-    /// <param name="value">
-    /// Ҫ�ӳٷ������¼�ֵ��
-    /// </param>
-    /// <param name="ttl">
-    /// �¼��� Delay �������еĴ��ʱ�䣬��λΪ�롣
-    /// </param>
-    /// <param name="contractId">
-    /// �ӳ�ͨ�� ID��
-    /// Ĭ�� 0 ��ʾĬ��ͨ����
-    /// </param>
     public static void Delay<TValue>(
         this IService service,
         in   TValue   value,
@@ -288,21 +182,6 @@ public static class LayerContextExtensions
         return ServiceLayerBinder.RequireBinding(context);
     }
 
-    /// <summary>
-    /// ͬ�������¼���
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// �¼��ṹ�����͡�
-    /// </typeparam>
-    /// <param name="context">
-    /// ��ǰ�����Ķ���
-    /// </param>
-    /// <param name="value">
-    /// Ҫ���͵��¼�ֵ��
-    /// </param>
-    /// <returns>
-    /// �¼���������
-    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EventHandledState Send<TValue>(
         this ILayerContext context,
@@ -315,25 +194,6 @@ public static class LayerContextExtensions
                .Send(value);
     }
 
-    /// <summary>
-    /// Ͷ���¼���
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// �¼��ṹ�����͡�
-    /// </typeparam>
-    /// <param name="context">
-    /// ��ǰ�����Ķ���
-    /// </param>
-    /// <param name="value">
-    /// ҪͶ�ݵ��¼�ֵ��
-    /// </param>
-    /// <param name="policy">
-    /// ����Ͷ��ʹ�õĲ��ԡ�
-    /// ���� default ��ʾʹ���¼�Ԫ���ݻ� Scheduler Ĭ�ϲ��ԡ�
-    /// </param>
-    /// <returns>
-    /// PostResult ��ʾͶ�ݽ����
-    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult Post<TValue>(
         this ILayerContext context,
@@ -344,42 +204,21 @@ public static class LayerContextExtensions
         return scheduler.TryPost(value);
     }
 
-    /// <summary>
-    /// �ӳ�ָ��ʱ���Ͷ���¼���
-    /// </summary>
     public static TimerHandle SchedulePost<TValue>(
-        this ILayerContext  context,
-        in   TValue         value,
-        float               delaySeconds,
-        EventPostPolicy?    expiredPostPolicy = default,
-        int                 repeatCount       = 0,
-        float               intervalSeconds   = 0,
-        TimerRepeatMode?    repeatMode        = default,
-        TimerCatchUpPolicy? catchUpPolicy     = default)
+        this ILayerContext context,
+        in   TValue        value,
+        float              delaySeconds,
+        int                repeatCount     = 0,
+        float              intervalSeconds = 0)
         where TValue : struct
     {
-        var binding = context.GetBinding();
-        var eventId = EventTypeId<TValue>.Id;
-        var timerPolicy = ServiceExtensions.RequireOwnerPolicyTable(binding).GetTimerPolicy(eventId);
-
-        PostTypePlan plan = PostTypePlan.Default(eventId, BackpressurePolicy.RejectNew);
-            if (timerPolicy?.ExpiredPostPolicy != null)
-            {
-                plan = PostTypePlan.FromPolicy(eventId, timerPolicy.Value.ExpiredPostPolicy.Value, plan.DefaultBackpressure);
-            }
-
-            return ServiceExtensions.RequireOwnerTimer(binding).Schedule(
-            new PostEventAction<TValue>(value, plan),
+        return ServiceExtensions.RequireOwnerTimer(context.GetBinding()).Schedule(
+            in value,
             delaySeconds,
-            repeatCount: repeatCount,
-            intervalSeconds: intervalSeconds,
-            repeatMode: repeatMode ?? timerPolicy?.RepeatMode,
-            catchUpPolicy: catchUpPolicy ?? timerPolicy?.CatchUpPolicy);
+            repeatCount,
+            intervalSeconds);
     }
 
-    /// <summary>
-    /// �ӳٷ����¼��� DelayPublisher��
-    /// </summary>
     public static void Delay<TValue>(
         this ILayerContext context,
         in   TValue        value,

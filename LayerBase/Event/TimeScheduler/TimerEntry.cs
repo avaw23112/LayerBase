@@ -10,5 +10,5 @@ internal struct TimerEntry<TPayload>
     public int Version;
     public int Next;
     public int Prev;
-    public int SlotIndex; // -1 表示在堆中，>= 0 表示在时间轮槽位中
+    public int SlotIndex;
 }

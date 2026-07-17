@@ -41,6 +41,8 @@ public sealed class PostScheduler : IDisposable
     private bool _isPumping;
     private readonly BackpressurePolicy _defaultBackpressure;
 
+    internal EventPayloadStorage PayloadStorage => _payloadStorage;
+
     internal int PendingCount => _readyQueue.Count + _nextQueue.Count + _pendingCoalesced.Count;
 
     internal bool HasSpecialPending =>

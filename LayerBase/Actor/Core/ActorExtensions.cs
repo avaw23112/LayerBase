@@ -48,33 +48,15 @@ public static class ActorExtensions
     }
 
     public static TimerHandle SchedulePost<TValue>(
-        this IActor         actor,
-        in   TValue         value,
-        float               delaySeconds,
-        EventPostPolicy?    expiredPostPolicy = default,
-        int                 repeatCount       = 0,
-        float               intervalSeconds   = 0,
-        TimerRepeatMode?    repeatMode        = default,
-        TimerCatchUpPolicy? catchUpPolicy     = default)
+        this IActor actor,
+        in   TValue value,
+        float       delaySeconds,
+        int         repeatCount     = 0,
+        float       intervalSeconds = 0)
         where TValue : struct
     {
         var runtime = ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime;
-        var eventId = EventTypeId<TValue>.Id;
-        var timerPolicy = runtime.PolicyTable.GetTimerPolicy(eventId);
-
-        PostTypePlan plan = PostTypePlan.Default(eventId, BackpressurePolicy.RejectNew);
-            if (timerPolicy?.ExpiredPostPolicy != null)
-            {
-                plan = PostTypePlan.FromPolicy(eventId, timerPolicy.Value.ExpiredPostPolicy.Value, plan.DefaultBackpressure);
-            }
-
-            return runtime.Timer.Schedule(
-            new PostEventAction<TValue>(value, plan),
-            delaySeconds,
-            repeatCount: repeatCount,
-            intervalSeconds: intervalSeconds,
-            repeatMode: repeatMode ?? timerPolicy?.RepeatMode,
-            catchUpPolicy: catchUpPolicy ?? timerPolicy?.CatchUpPolicy);
+        return runtime.SchedulePost(in value, delaySeconds, repeatCount, intervalSeconds);
     }
 
     public static LBTask<TResponse> CallAsync<TRequest, TResponse>(this IActor actor, TRequest request,

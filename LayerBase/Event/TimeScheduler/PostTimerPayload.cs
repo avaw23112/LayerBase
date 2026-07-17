@@ -1,13 +1,18 @@
 namespace LayerBase.Core.Event;
 
-public readonly struct PostTimerPayload<TEvent> where TEvent : struct
+internal readonly struct PostTimerPayload
 {
-    public readonly TEvent Event;
-    public readonly EventPostPolicy? PostPolicyOverride;
+    public readonly PayloadHandle PayloadHandle;
+    public readonly PostTypePlan OverridePlan;
+    public readonly bool HasOverridePlan;
 
-    public PostTimerPayload(TEvent eventValue, EventPostPolicy? postPolicyOverride = null)
+    public PostTimerPayload(
+        PayloadHandle payloadHandle,
+        in PostTypePlan overridePlan,
+        bool hasOverridePlan)
     {
-        Event = eventValue;
-        PostPolicyOverride = postPolicyOverride;
+        PayloadHandle = payloadHandle;
+        OverridePlan = overridePlan;
+        HasOverridePlan = hasOverridePlan;
     }
 }
