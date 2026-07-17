@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
@@ -15,6 +16,7 @@ public sealed class EventMetaDataGenerator : IIncrementalGenerator
 {
     private const string EventMetaDataBaseName = "LayerBase.Event.EventMetaData.EventMetaData`1";
     private const string EventMetaDataRegistryName = "LayerBase.Event.EventMetaData.EventMetaDataRegistry";
+    private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -132,6 +134,11 @@ public sealed class EventMetaDataGenerator : IIncrementalGenerator
         var eventType = GetEventType(typeSymbol, eventMetaDataSymbol);
 
         if (eventType == null)
+        {
+            return null;
+        }
+
+        if (HasOwnerLayerAttribute(typeSymbol))
         {
             return null;
         }
@@ -439,6 +446,22 @@ public sealed class EventMetaDataGenerator : IIncrementalGenerator
         {
             builder.Append("    ");
         }
+    }
+
+    private static bool HasOwnerLayerAttribute(INamedTypeSymbol type)
+    {
+        foreach (var attribute in type.GetAttributes())
+        {
+            if (string.Equals(
+                    attribute.AttributeClass?.ToDisplayString(),
+                    OwnerLayerAttributeName,
+                    StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string CreateHintName(string? assemblyName)

@@ -17,6 +17,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
     private const string OwnerServiceAttributeName = "LayerBase.DI.Options.OwnerServiceAttribute";
     private const string MountAttributeName = "LayerBase.DI.Options.MountAttribute";
     private const string LayerToolAttributeName = "LayerBase.Tools.LayerToolAttribute";
+    private const string EventMetaDataBaseName = "LayerBase.Event.EventMetaData.EventMetaData`1";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
     private const string ILayerContextMetadataName = "LayerBase.DI.ILayerContext";
     private const string LayerMetadataName = "LayerBase.Layers.Layer";
@@ -103,6 +104,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         var eventHandlerSymbol = compilation.GetTypeByMetadataName(EventHandlerMetadataName);
         var eventHandlerAsyncSymbol = compilation.GetTypeByMetadataName(EventHandlerAsyncMetadataName);
         var callHandlerSymbol = compilation.GetTypeByMetadataName(CallHandlerMetadataName);
+        var eventMetaDataSymbol = compilation.GetTypeByMetadataName(EventMetaDataBaseName);
         var layerTools = CreateLayerToolRegistrations(layerToolAttributes, layerToolCandidates);
 
         if (iServiceSymbol == null || layerSymbol == null)
@@ -233,6 +235,11 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                             reg.Location ?? info.Symbol.Locations.FirstOrDefault()));
                     }
 
+                    continue;
+                }
+
+                if (IsEventMetaDataType(info.Symbol, eventMetaDataSymbol))
+                {
                     continue;
                 }
 
@@ -1524,6 +1531,23 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             if (reference.GetSyntax() is TypeDeclarationSyntax typeDeclaration &&
                 typeDeclaration.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
                 return true;
+
+        return false;
+    }
+
+    private static bool IsEventMetaDataType(INamedTypeSymbol type, INamedTypeSymbol? eventMetaDataSymbol)
+    {
+        if (eventMetaDataSymbol == null)
+            return false;
+
+        for (INamedTypeSymbol? current = type; current != null; current = current.BaseType)
+        {
+            if (current.IsGenericType &&
+                SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, eventMetaDataSymbol))
+            {
+                return true;
+            }
+        }
 
         return false;
     }

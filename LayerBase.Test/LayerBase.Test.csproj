@@ -28,6 +28,8 @@
         <ProjectReference Include="..\LayerBase.Generator\LayerBase.Generator\LayerBase.Generator.csproj"
                           OutputItemType="Analyzer"
                           ReferenceOutputAssembly="true"/>
+        <ProjectReference Include="..\LayerBase.TestFixtures.PolicyHost\LayerBase.TestFixtures.PolicyHost.csproj"/>
+        <ProjectReference Include="..\LayerBase.TestFixtures.PolicyFeature\LayerBase.TestFixtures.PolicyFeature.csproj"/>
     </ItemGroup>
 
 </Project>

@@ -17,6 +17,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     private const string OwnerLayerAttributeName = "LayerBase.Layers.OwnerLayerAttribute";
     private const string OwnerServiceAttributeName = "LayerBase.DI.Options.OwnerServiceAttribute";
     private const string LayerToolAttributeName = "LayerBase.Tools.LayerToolAttribute";
+    private const string EventMetaDataBaseName = "LayerBase.Event.EventMetaData.EventMetaData`1";
     private const string IServiceMetadataName = "LayerBase.DI.IService";
     private const string ILayerContextMetadataName = "LayerBase.DI.ILayerContext";
     private const string EventHandlerMetadataName = "LayerBase.Core.EventHandler.IEventHandler`1";
@@ -112,15 +113,34 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         var eventHandlerSymbol = compilation.GetTypeByMetadataName(EventHandlerMetadataName);
         var asyncEventHandlerSymbol = compilation.GetTypeByMetadataName(AsyncEventHandlerMetadataName);
         var callHandlerSymbol = compilation.GetTypeByMetadataName(CallHandlerMetadataName);
+        var eventMetaDataSymbol = compilation.GetTypeByMetadataName(EventMetaDataBaseName);
         var layerToolContributions = CreateLayerToolContributions(layerToolAttributes, layerToolCandidates);
 
         var fallbackServices = new List<ServiceContributionInfo>();
+        var fallbackEvents = new List<EventContributionInfo>();
         var fallbackContexts = new List<ContextContributionInfo>();
         var fallbackLocalCalls = new List<LocalCallContributionInfo>();
         var fallbackEventHandlers = new List<EventHandlerContributionInfo>();
         var fallbackTools = new List<LayerToolContributionInfo>();
         foreach (var contribution in ownerLayerContributions)
         {
+            INamedTypeSymbol? evtMetaEventType = GetEventTypeFromMetaData(contribution.TargetType, eventMetaDataSymbol);
+            if (evtMetaEventType != null)
+            {
+                var evtOwnerLayer = ToTypeName(contribution.OwnerLayerType);
+                var evtOwnerScope = contribution.OwnerScopeType == null
+                    ? "global::LayerBase.Scope.MainScope"
+                    : ToTypeName(contribution.OwnerScopeType);
+
+                fallbackEvents.Add(new EventContributionInfo(
+                    evtOwnerLayer,
+                    evtOwnerScope,
+                    ToTypeName(evtMetaEventType),
+                    ToTypeName(contribution.TargetType),
+                    "global::LayerBase.Core.Event.LayerPrewarmTargets.All"));
+                continue;
+            }
+
             if (SymbolEqualityComparer.Default.Equals(contribution.OwnerLayerType.ContainingAssembly, compilation.Assembly))
             {
                 continue;
@@ -309,7 +329,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                 moduleList.Length == 1 ? fallbackContexts : Array.Empty<ContextContributionInfo>(),
                 moduleList.Length == 1 ? fallbackLocalCalls : Array.Empty<LocalCallContributionInfo>(),
                 moduleList.Length == 1 ? fallbackEventHandlers : Array.Empty<EventHandlerContributionInfo>(),
-                moduleList.Length == 1 ? fallbackTools : Array.Empty<LayerToolContributionInfo>());
+                moduleList.Length == 1 ? fallbackTools : Array.Empty<LayerToolContributionInfo>(),
+                moduleList.Length == 1 ? fallbackEvents : Array.Empty<EventContributionInfo>());
         }
     }
 
@@ -484,7 +505,8 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         IReadOnlyList<ContextContributionInfo> fallbackContexts,
         IReadOnlyList<LocalCallContributionInfo> fallbackLocalCalls,
         IReadOnlyList<EventHandlerContributionInfo> fallbackEventHandlers,
-        IReadOnlyList<LayerToolContributionInfo> fallbackTools)
+        IReadOnlyList<LayerToolContributionInfo> fallbackTools,
+        IReadOnlyList<EventContributionInfo> fallbackEvents)
     {
         var services = fallbackServices.OrderBy(static service => service.OwnerLayerType, StringComparer.Ordinal)
                                        .ThenBy(static service => service.OwnerScopeType, StringComparer.Ordinal)
@@ -509,11 +531,17 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                                                  .ThenBy(static handler => handler.OwnerServiceType, StringComparer.Ordinal)
                                                  .ToImmutableArray();
         var tools = fallbackTools.OrderBy(static tool => tool.OwnerLayerType, StringComparer.Ordinal)
-                                 .ThenBy(static tool => tool.OwnerScopeType, StringComparer.Ordinal)
-                                 .ThenBy(static tool => tool.ContractType, StringComparer.Ordinal)
-                                 .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal)
-                                 .ThenBy(static tool => tool.ImplementationType, StringComparer.Ordinal)
-                                 .ToImmutableArray();
+                                  .ThenBy(static tool => tool.OwnerScopeType, StringComparer.Ordinal)
+                                  .ThenBy(static tool => tool.ContractType, StringComparer.Ordinal)
+                                  .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal)
+                                  .ThenBy(static tool => tool.ImplementationType, StringComparer.Ordinal)
+                                  .ToImmutableArray();
+
+        var events = fallbackEvents.OrderBy(static ev => ev.OwnerScopeType, StringComparer.Ordinal)
+                                    .ThenBy(static ev => ev.EventType, StringComparer.Ordinal)
+                                    .ThenBy(static ev => ev.OwnerLayerType, StringComparer.Ordinal)
+                                    .ThenBy(static ev => ev.MetaDataType, StringComparer.Ordinal)
+                                    .ToImmutableArray();
 
         var source = new StringBuilder();
         source.AppendLine("// <auto-generated/>");
@@ -540,6 +568,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         AppendLocalCallArray(source, indent, localCalls);
         AppendEventHandlerArray(source, indent, eventHandlers);
         AppendLayerToolArray(source, indent, tools);
+        AppendEventArray(source, indent, events);
         source.AppendLine();
 
         source.Append(indent).Append("    public static ").Append(module.TypeName).Append(" Instance { get; } = new ")
@@ -674,7 +703,7 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
     {
         if (tools.IsDefaultOrEmpty)
         {
-            source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LayerToolContribution>());");
+            source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.LayerToolContribution>(),");
             return;
         }
 
@@ -692,7 +721,63 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             source.Append(indent).Append("                    ").Append(tool.Cache ? "true" : "false").AppendLine("),");
         }
 
+        source.Append(indent).AppendLine("            },");
+    }
+
+    private static void AppendEventArray(
+        StringBuilder source,
+        string indent,
+        ImmutableArray<EventContributionInfo> events)
+    {
+        if (events.IsDefaultOrEmpty)
+        {
+            source.Append(indent).AppendLine("            global::System.Array.Empty<global::LayerBase.Modules.EventContribution>());");
+            return;
+        }
+
+        source.Append(indent).AppendLine("            new global::LayerBase.Modules.EventContribution[]");
+        source.Append(indent).AppendLine("            {");
+
+        foreach (var ev in events)
+        {
+            source.Append(indent).AppendLine("                global::LayerBase.Modules.EventContribution.ForTypes(");
+            source.Append(indent).Append("                    typeof(").Append(ev.EventType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(ev.OwnerLayerType).AppendLine("),");
+            source.Append(indent).Append("                    typeof(").Append(ev.OwnerScopeType).AppendLine("),");
+            source.Append(indent).Append("                    static () => new ").Append(ev.MetaDataType).AppendLine("(),");
+            source.Append(indent).Append("                    ").Append(ev.PrewarmTargets).AppendLine("),");
+        }
+
         source.Append(indent).AppendLine("            });");
+    }
+
+    private static INamedTypeSymbol? GetEventTypeFromMetaData(
+        INamedTypeSymbol candidate,
+        INamedTypeSymbol? eventMetaDataSymbol)
+    {
+        if (eventMetaDataSymbol == null)
+            return null;
+
+        for (INamedTypeSymbol? current = candidate;
+             current != null;
+             current = current.BaseType)
+        {
+            if (!current.IsGenericType)
+                continue;
+
+            if (!SymbolEqualityComparer.Default.Equals(
+                    current.OriginalDefinition,
+                    eventMetaDataSymbol))
+            {
+                continue;
+            }
+
+            return current.TypeArguments.Length == 1
+                ? current.TypeArguments[0] as INamedTypeSymbol
+                : null;
+        }
+
+        return null;
     }
 
     private static INamedTypeSymbol? ReadScopeType(INamedTypeSymbol symbol)
@@ -1260,6 +1345,33 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
         public bool AllowCache { get; }
 
         public Location? Location { get; }
+    }
+
+    private sealed class EventContributionInfo
+    {
+        public EventContributionInfo(
+            string ownerLayerType,
+            string ownerScopeType,
+            string eventType,
+            string metaDataType,
+            string prewarmTargets)
+        {
+            OwnerLayerType = ownerLayerType;
+            OwnerScopeType = ownerScopeType;
+            EventType = eventType;
+            MetaDataType = metaDataType;
+            PrewarmTargets = prewarmTargets;
+        }
+
+        public string OwnerLayerType { get; }
+
+        public string OwnerScopeType { get; }
+
+        public string EventType { get; }
+
+        public string MetaDataType { get; }
+
+        public string PrewarmTargets { get; }
     }
 
     private sealed class EventHandlerContributionInfo

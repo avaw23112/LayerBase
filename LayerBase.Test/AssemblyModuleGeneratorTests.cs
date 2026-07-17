@@ -806,6 +806,334 @@ public class AssemblyModuleGeneratorTests
         Assert.That(generatedSource, Does.Not.Contain("new global::GameService"));
     }
 
+    [Test]
+    public void Cross_assembly_event_metadata_is_transferred_to_generated_module_manifest()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.Core.Event;
+                              using LayerBase.Event.EventMetaData;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
+                              {
+                              }
+
+                              public partial struct HealthChanged
+                              {
+                                  public int Value;
+                              }
+
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed class HealthChangedMetaData : EventMetaData<HealthChanged>
+                              {
+                                  public override EventPostPolicy? PostPolicy =>
+                                      new EventPostPolicy(PostDeliveryMode.Latest, BackpressurePolicy.RejectNew, 0);
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new EventMetaDataGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FeatureModule"));
+
+        Assert.That(generatedModule, Does.Contain("global::LayerBase.Modules.EventContribution.ForTypes("));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.HealthChanged)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.GameplayLayer)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::LayerBase.Scope.MainScope)"));
+        Assert.That(generatedModule, Does.Contain("static () => new global::FeaturePack.HealthChangedMetaData()"));
+        Assert.That(generatedModule, Does.Contain("global::LayerBase.Core.Event.LayerPrewarmTargets.All"));
+    }
+
+    [Test]
+    public void Same_assembly_event_metadata_is_transferred_to_generated_module_manifest()
+    {
+        const string source = """
+                              using LayerBase.Core.Event;
+                              using LayerBase.Event.EventMetaData;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
+                              {
+                              }
+
+                              public sealed class CommerceLayer : Layer
+                              {
+                              }
+
+                              public partial struct OrderPlaced
+                              {
+                                  public int OrderId;
+                              }
+
+                              [OwnerLayer(typeof(CommerceLayer))]
+                              public sealed class OrderPlacedMetaData : EventMetaData<OrderPlaced>
+                              {
+                                  public override EventPostPolicy? PostPolicy =>
+                                      new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0);
+                              }
+                              """;
+
+        var result = RunGenerators(source, new AssemblyModuleGenerator(), new EventMetaDataGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var errors = result.OutputCompilation.GetDiagnostics()
+                           .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                           .ToImmutableArray();
+
+        Assert.That(errors, Is.Empty,
+            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FeatureModule"));
+
+        Assert.That(generatedModule, Does.Contain("global::LayerBase.Modules.EventContribution.ForTypes("));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.OrderPlaced)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.CommerceLayer)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::LayerBase.Scope.MainScope)"));
+        Assert.That(generatedModule, Does.Contain("static () => new global::FeaturePack.OrderPlacedMetaData()"));
+    }
+
+    [Test]
+    public void Generated_event_module_manifest_uses_generated_contracts()
+    {
+        const string source = """
+                              using LayerBase.Core.Event;
+                              using LayerBase.Event.EventMetaData;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
+                              {
+                              }
+
+                              public sealed class CommerceLayer : Layer
+                              {
+                              }
+
+                              public partial struct ItemSold
+                              {
+                              }
+
+                              [OwnerLayer(typeof(CommerceLayer))]
+                              public sealed class ItemSoldMetaData : EventMetaData<ItemSold>
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new AssemblyModuleGenerator(), new EventMetaDataGenerator());
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FeatureModule"));
+
+        Assert.That(generatedModule, Does.Contain(": global::LayerBase.Modules.IAssemblyModule"));
+        Assert.That(generatedModule, Does.Contain("global::LayerBase.Modules.EventContribution.ForTypes("));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.ItemSold)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::FeaturePack.CommerceLayer)"));
+        Assert.That(generatedModule, Does.Contain("typeof(global::LayerBase.Scope.MainScope)"));
+        Assert.That(generatedModule, Does.Contain("static () => new global::FeaturePack.ItemSoldMetaData()"));
+        Assert.That(generatedModule, Does.Contain("public static FeatureModule Instance { get; } = new FeatureModule();"));
+    }
+
+    [Test]
+    public void Generated_event_contribution_preserves_owner_scope()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+                                                       using LayerBase.Scope;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+
+                                                       public sealed class BattleScope : IScopeDefinition
+                                                       {
+                                                           public const int ScopeId = 71;
+                                                           public ScopeOptions Options => ScopeOptions.Inline;
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.Core.Event;
+                              using LayerBase.Event.EventMetaData;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+                              using LayerBase.Scope;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
+                              {
+                              }
+
+                              public partial struct DamageTaken
+                              {
+                                  public int Amount;
+                              }
+
+                              [Scope<BattleScope>]
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed class DamageTakenMetaData : EventMetaData<DamageTaken>
+                              {
+                                  public override EventPostPolicy? PostPolicy =>
+                                      new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0);
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new EventMetaDataGenerator());
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class FeatureModule"));
+
+        Assert.That(generatedModule, Does.Contain("typeof(global::AotGame.BattleScope)"));
+        Assert.That(generatedModule, Does.Not.Contain("typeof(global::LayerBase.Scope.MainScope)"));
+    }
+
+    [Test]
+    public void Empty_generated_module_emits_empty_event_contribution_array()
+    {
+        const string source = """
+                              using LayerBase.Modules;
+
+                              namespace Sample;
+
+                              [AssemblyModule("gameplay")]
+                              public sealed partial class GameplayModule
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new AssemblyModuleGenerator());
+
+        var generatedModule = result.GeneratedSources.Single(static sourceText =>
+            sourceText.Contains("partial class GameplayModule"));
+
+        Assert.That(generatedModule, Does.Contain("global::System.Array.Empty<global::LayerBase.Modules.EventContribution>()"));
+    }
+
+    [Test]
+    public void Scope_owned_event_metadata_is_not_registered_as_global_metadata()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.Core.Event;
+                              using LayerBase.Event.EventMetaData;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("feature")]
+                              public sealed partial class FeatureModule
+                              {
+                              }
+
+                              public partial struct ScopedEvent
+                              {
+                              }
+
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed class ScopedEventMetaData : EventMetaData<ScopedEvent>
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new EventMetaDataGenerator());
+
+        var generatedSources = result.GeneratedSources;
+
+        var eventMetaDataSources = generatedSources.Where(static s =>
+            s.Contains("EventMetaDataAutoRegister") || s.Contains("RegisterMetaData"));
+
+        foreach (var generated in eventMetaDataSources)
+        {
+            Assert.That(generated, Does.Not.Contain("ScopedEvent"),
+                "ScopedEvent with [OwnerLayer] should not have global metadata registration.");
+        }
+    }
+
+    [Test]
+    public void Unowned_event_metadata_still_generates_global_registration()
+    {
+        const string source = """
+                              using LayerBase.Core.Event;
+                              using LayerBase.Event.EventMetaData;
+
+                              namespace FeaturePack;
+
+                              public partial struct GlobalEvent
+                              {
+                              }
+
+                              public sealed class GlobalEventMetaData : EventMetaData<GlobalEvent>
+                              {
+                                  public override EventPostPolicy? PostPolicy =>
+                                      new EventPostPolicy(PostDeliveryMode.Latest, BackpressurePolicy.RejectNew, 0);
+                              }
+                              """;
+
+        var result = RunGenerators(source, new EventMetaDataGenerator());
+
+        var generatedSources = result.GeneratedSources;
+
+        var eventMetaDataSources = generatedSources.Where(static s =>
+            s.Contains("EventMetaDataAutoRegister") || s.Contains("RegisterMetaData"));
+
+        Assert.That(eventMetaDataSources.Any(static s =>
+            s.Contains("GlobalEvent") && s.Contains("RegisterMetaData")),
+            "Unowned event metadata should still generate global registration.");
+    }
+
     private static GeneratorTestResult RunGenerators(string source, params IIncrementalGenerator[] generators)
     {
         return RunGenerators(source, [], generators);
