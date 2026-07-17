@@ -145,6 +145,7 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal void RebuildEventPolicies()
     {
+        RequireOwnerThreadDebug();
         var scheduler = _scopeHost.MainScope.PostScheduler;
         if (scheduler == null) throw new InvalidOperationException("Runtime not built.");
         BuildEventPolicies(scheduler.Options);
@@ -394,6 +395,7 @@ public sealed partial class LayerRuntime : IDisposable
     #region Lifecycle - Pump
     public void Pump(float deltaTime)
     {
+        RequireOwnerThreadDebug();
         if (_disposed) return;
 
         var context = _scopeHost.MainScope.SynchronizationContext;
@@ -551,18 +553,21 @@ public sealed partial class LayerRuntime : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Send<T>(in T value) where T : struct
     {
+        RequireOwnerThreadDebug();
         EventCenter.Send(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Post<T>(in T value) where T : struct
     {
+        RequireOwnerThreadDebug();
         _ = TryPost(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
     {
+        RequireOwnerThreadDebug();
         return policy.HasValue
             ? Scheduler.TryPost(value, policy.Value)
             : Scheduler.TryPost(value);
@@ -571,23 +576,27 @@ public sealed partial class LayerRuntime : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void MarkDirty<T>() where T : struct
     {
+        RequireOwnerThreadDebug();
         Scheduler.MarkDirty<T>();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostLatest<T>(in T value) where T : struct
     {
+        RequireOwnerThreadDebug();
         Scheduler.TryPostLatest(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PostCoalesced<T>(in T value) where T : struct
     {
+        RequireOwnerThreadDebug();
         Scheduler.TryPostCoalesced(value);
     }
 
     public TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
     {
+        RequireOwnerThreadDebug();
         var eventId = EventTypeId<T>.Id;
         var timerPolicy = PolicyTable.GetTimerPolicy(eventId);
 
@@ -614,6 +623,7 @@ public sealed partial class LayerRuntime : IDisposable
     #region Lifecycle - Dispose
     public void Dispose()
     {
+        RequireOwnerThreadDebug();
         if (_disposed) return;
         _disposed = true;
 
@@ -931,6 +941,7 @@ public sealed partial class LayerRuntime : IDisposable
             _built = true;
 
             _runtime._state = RuntimeState.Building;
+            _runtime.BindOwnerThreadForBuild();
             try
             {
                 _layerChain.AssignLayerIndexes();
