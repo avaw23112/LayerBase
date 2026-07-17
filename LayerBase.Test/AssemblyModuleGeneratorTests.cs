@@ -1108,6 +1108,127 @@ public class AssemblyModuleGeneratorTests
     }
 
     [Test]
+    public void Scope_owned_event_metadata_without_module_reports_error()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.Core.Event;
+                              using LayerBase.Event.EventMetaData;
+                              using LayerBase.Layers;
+
+                              namespace FeaturePack;
+
+                              public partial struct DamageEvent
+                              {
+                              }
+
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed class DamageEventMetaData : EventMetaData<DamageEvent>
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new EventMetaDataGenerator());
+
+        var diagnosticIds = result.Diagnostics
+            .Where(static d => d.Severity == DiagnosticSeverity.Error)
+            .Select(static d => d.Id)
+            .ToImmutableArray();
+
+        Assert.That(diagnosticIds, Does.Contain("LBMOD010"),
+            "Expected LBMOD010 error for scoped event metadata without AssemblyModule.");
+
+        var eventMetaDataSource = result.GeneratedSources
+            .Where(static s => s.Contains("EventMetaDataAutoRegister") || s.Contains("RegisterMetaData"));
+
+        foreach (var genSource in eventMetaDataSource)
+        {
+            Assert.That(genSource, Does.Not.Contain("DamageEvent"),
+                "Scope-owned event should not have global metadata registration.");
+        }
+    }
+
+    [Test]
+    public void Scope_owned_event_metadata_with_multiple_modules_reports_error()
+    {
+        var aotReference = CreateReference("AotGame", """
+                                                       using LayerBase.Layers;
+
+                                                       namespace AotGame;
+
+                                                       public sealed class GameplayLayer : Layer
+                                                       {
+                                                       }
+                                                       """);
+
+        const string source = """
+                              using AotGame;
+                              using LayerBase.Core.Event;
+                              using LayerBase.Event.EventMetaData;
+                              using LayerBase.Layers;
+                              using LayerBase.Modules;
+
+                              namespace FeaturePack;
+
+                              [AssemblyModule("module-a")]
+                              public sealed partial class ModuleA
+                              {
+                              }
+
+                              [AssemblyModule("module-b")]
+                              public sealed partial class ModuleB
+                              {
+                              }
+
+                              public partial struct DamageEvent
+                              {
+                              }
+
+                              [OwnerLayer(typeof(GameplayLayer))]
+                              public sealed class DamageEventMetaData : EventMetaData<DamageEvent>
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new EventMetaDataGenerator());
+
+        var diagnosticIds = result.Diagnostics
+            .Where(static d => d.Severity == DiagnosticSeverity.Error)
+            .Select(static d => d.Id)
+            .ToImmutableArray();
+
+        Assert.That(diagnosticIds, Does.Contain("LBMOD011"),
+            "Expected LBMOD011 error for scoped event metadata with multiple AssemblyModules.");
+
+        var generatedSources = result.GeneratedSources;
+
+        var moduleASource = generatedSources.FirstOrDefault(static s => s.Contains("partial class ModuleA"));
+        var moduleBSource = generatedSources.FirstOrDefault(static s => s.Contains("partial class ModuleB"));
+
+        if (moduleASource != null)
+        {
+            Assert.That(moduleASource, Does.Not.Contain("EventContribution.ForTypes"),
+                "ModuleA should not contain event contributions when multiple modules exist.");
+        }
+
+        if (moduleBSource != null)
+        {
+            Assert.That(moduleBSource, Does.Not.Contain("EventContribution.ForTypes"),
+                "ModuleB should not contain event contributions when multiple modules exist.");
+        }
+    }
+
+    [Test]
     public void Unowned_event_metadata_still_generates_global_registration()
     {
         const string source = """

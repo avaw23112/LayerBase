@@ -127,6 +127,30 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
             INamedTypeSymbol? evtMetaEventType = GetEventTypeFromMetaData(contribution.TargetType, eventMetaDataSymbol);
             if (evtMetaEventType != null)
             {
+                if (moduleList.Length == 0)
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.ScopedEventMetadataRequiresModule,
+                        contribution.Location,
+                        contribution.TargetType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                        evtMetaEventType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                        contribution.OwnerLayerType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
+                    continue;
+                }
+
+                if (moduleList.Length > 1)
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.ScopedEventMetadataRequiresSingleModule,
+                        contribution.Location,
+                        contribution.TargetType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                        evtMetaEventType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                        contribution.OwnerLayerType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                        string.Join(", ", moduleList.Select(static module =>
+                            module.TypeSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)))));
+                    continue;
+                }
+
                 var evtOwnerLayer = ToTypeName(contribution.OwnerLayerType);
                 var evtOwnerScope = contribution.OwnerScopeType == null
                     ? "global::LayerBase.Scope.MainScope"
@@ -1085,6 +1109,24 @@ public sealed class AssemblyModuleGenerator : IIncrementalGenerator
                 "LBMOD004",
                 "Cross-assembly OwnerService module fallback only supports layer contexts and event handlers",
                 "Type '{0}' targets external owner service '{1}', but the current AssemblyModule OwnerService fallback only supports ILayerContext and IEventHandler",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor ScopedEventMetadataRequiresModule =
+            new(
+                "LBMOD010",
+                "Scoped event metadata requires exactly one AssemblyModule",
+                "EventMetaData '{0}' for event '{1}' with OwnerLayer '{2}' requires exactly one [AssemblyModule] in the same assembly, but none was found",
+                Category,
+                DiagnosticSeverity.Error,
+                true);
+
+        public static readonly DiagnosticDescriptor ScopedEventMetadataRequiresSingleModule =
+            new(
+                "LBMOD011",
+                "Scoped event metadata cannot be assigned because multiple AssemblyModules exist",
+                "EventMetaData '{0}' for event '{1}' with OwnerLayer '{2}' has multiple candidate modules: {3}. Keep one module root or split the feature assembly",
                 Category,
                 DiagnosticSeverity.Error,
                 true);
