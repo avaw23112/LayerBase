@@ -71,19 +71,94 @@ public sealed class PostScheduler : IDisposable
 
     public void BuildPlans(ReadOnlySpan<PostTypePlan> plans)
     {
-        var maxId = EventTypeIdAllocator.MaxId;
-        if (maxId >= 0)
+        if (_disposed)
         {
-            EnsureEventCapacity(maxId, rebuildBitmap: false);
+            throw new ObjectDisposedException(nameof(PostScheduler));
         }
 
-        foreach (var p in plans)
+        if (HasPendingWork)
         {
-            EnsureEventCapacity(p.EventTypeId, rebuildBitmap: false);
-            _postPlans[p.EventTypeId] = p;
+            throw new InvalidOperationException(
+                "PostScheduler plans cannot be replaced while pending work exists.");
         }
 
+        int maxEventTypeId = Math.Max(
+            EventTypeIdAllocator.MaxId,
+            FindMaxEventTypeId(plans));
+
+        if (maxEventTypeId < 0)
+        {
+            RebuildPostBitmap();
+            return;
+        }
+
+        EnsureEventCapacity(maxEventTypeId, rebuildBitmap: false);
+
+        for (int i = 0; i <= maxEventTypeId && i < _postPlans.Length; i++)
+        {
+            _postPlans[i] = PostTypePlan.Default(i, _defaultBackpressure);
+        }
+
+        if (maxEventTypeId < _pendingCount.Length)
+        {
+            Array.Clear(_pendingCount, 0, maxEventTypeId + 1);
+        }
+
+        for (int i = 0; i < _latestBuffer.Length && i <= maxEventTypeId; i++)
+        {
+            _latestBuffer[i] = PayloadHandle.Invalid;
+        }
+
+        ClearPostBitmaps();
+
+        var seenEventIds = new HashSet<int>();
+
+        for (int i = 0; i < plans.Length; i++)
+        {
+            PostTypePlan plan = plans[i];
+
+            if (plan.EventTypeId < 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(plans),
+                    $"EventTypeId cannot be negative: {plan.EventTypeId}.");
+            }
+
+            if (!seenEventIds.Add(plan.EventTypeId))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate PostTypePlan for EventId={plan.EventTypeId}.");
+            }
+
+            EnsureEventCapacity(plan.EventTypeId, rebuildBitmap: false);
+            _postPlans[plan.EventTypeId] = plan;
+        }
+
+        _sealedMaxEventTypeId = maxEventTypeId;
         RebuildPostBitmap();
+    }
+
+    private static int FindMaxEventTypeId(ReadOnlySpan<PostTypePlan> plans)
+    {
+        int maxEventTypeId = -1;
+
+        for (int i = 0; i < plans.Length; i++)
+        {
+            maxEventTypeId = Math.Max(maxEventTypeId, plans[i].EventTypeId);
+        }
+
+        return maxEventTypeId;
+    }
+
+    private void ClearPostBitmaps()
+    {
+        _dirtyBits.ClearPending();
+        _dirtyBits.ClearSnapshot();
+        _latestBits.ClearPending();
+        _latestBits.ClearSnapshot();
+        _pendingCoalesced.Clear();
+        _coalescedBuffer.Clear();
+        _snapshotCoalesced.Clear();
     }
 
     private void EnsureEventCapacity(int typeId, bool rebuildBitmap = true)
