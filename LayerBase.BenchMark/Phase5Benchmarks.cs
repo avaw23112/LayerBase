@@ -66,9 +66,7 @@ public partial class Phase5Benchmarks
     {
         for (int i = 0; i < 100000; i++)
         {
-            // Merging into 10 different slots
-            _scheduler.TryPost(new BenchEvent { Value = i },
-                new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0));
+            _scheduler.TryPost(new BenchEvent { Value = i });
         }
 
         _scheduler.Pump();

@@ -45,19 +45,19 @@ public static class ServiceExtensions
     }
 
     /// <summary>
-    /// 同步发送事件。
+    /// ͬ�������¼���
     /// </summary>
     /// <typeparam name="TValue">
-    /// 事件结构体类型。
+    /// �¼��ṹ�����͡�
     /// </typeparam>
     /// <param name="service">
-    /// 当前服务对象。
+    /// ��ǰ�������
     /// </param>
     /// <param name="value">
-    /// 要发送的事件值。
+    /// Ҫ���͵��¼�ֵ��
     /// </param>
     /// <returns>
-    /// 事件处理结果。
+    /// �¼���������
     /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EventHandledState Send<TValue>(
@@ -72,180 +72,72 @@ public static class ServiceExtensions
     }
 
     /// <summary>
-    /// 投递事件。
+    /// Ͷ���¼���
     /// </summary>
     /// <typeparam name="TValue">
-    /// 事件结构体类型。
+    /// �¼��ṹ�����͡�
     /// </typeparam>
     /// <param name="service">
-    /// 当前服务对象。
+    /// ��ǰ�������
     /// </param>
     /// <param name="value">
-    /// 要投递的事件值。
+    /// ҪͶ�ݵ��¼�ֵ��
     /// </param>
     /// <param name="policy">
-    /// 本次投递使用的策略。
-    /// 传入 default 表示使用事件元数据或 Scheduler 默认策略。
+    /// ����Ͷ��ʹ�õĲ��ԡ�
+    /// ���� default ��ʾʹ���¼�Ԫ���ݻ� Scheduler Ĭ�ϲ��ԡ�
     /// </param>
     /// <returns>
-    /// PostResult 表示投递结果。
-    /// 调用方可以忽略该返回值以保持原有调用习惯。
+    /// PostResult ��ʾͶ�ݽ����
+    /// ���÷����Ժ��Ը÷���ֵ�Ա���ԭ�е���ϰ�ߡ�
     /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult Post<TValue>(
         this IService    service,
-        in   TValue      value,
-        EventPostPolicy? policy = default)
+        in   TValue      value)
         where TValue : struct
     {
         var scheduler = RequireOwnerScheduler(service.GetBinding());
-
-        return policy.HasValue
-            ? scheduler.TryPost(value, policy.Value)
-            : scheduler.TryPost(value);
+        return scheduler.TryPost(value);
     }
 
     /// <summary>
-    /// 标记某种事件为脏。
-    ///
-    /// DirtySignal 表示只记录“这个事件类型需要刷新一次”，不保存事件负载。
+    /// �ӳ�ָ��ʱ���Ͷ���¼���
     /// </summary>
     /// <typeparam name="TValue">
-    /// 事件结构体类型。
+    /// �¼��ṹ�����͡�
     /// </typeparam>
     /// <param name="service">
-    /// 当前服务对象。
-    /// </param>
-    /// <returns>
-    /// PostResult 表示标记结果。
-    /// </returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static PostResult MarkDirty<TValue>(this IService service)
-        where TValue : struct
-    {
-        return RequireOwnerScheduler(service.GetBinding())
-               .MarkDirty<TValue>();
-    }
-
-    /// <summary>
-    /// 以 Latest 模式投递事件。
-    ///
-    /// Latest 表示同一事件类型只保留最后一次投递的值。
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// 事件结构体类型。
-    /// </typeparam>
-    /// <param name="service">
-    /// 当前服务对象。
+    /// ��ǰ�������
     /// </param>
     /// <param name="value">
-    /// 要投递的最新事件值。
-    /// </param>
-    /// <param name="backpressure">
-    /// 队列满或无法接收新事件时的背压策略。
-    /// </param>
-    /// <param name="capacity">
-    /// 策略容量参数。
-    /// 默认 0 表示沿用当前策略约定。
-    /// </param>
-    /// <returns>
-    /// PostResult 表示投递结果。
-    /// </returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static PostResult PostLatest<TValue>(
-        this IService      service,
-        in   TValue        value,
-        BackpressurePolicy backpressure = BackpressurePolicy.RejectNew,
-        int                capacity     = 0)
-        where TValue : struct
-    {
-        return RequireOwnerScheduler(service.GetBinding())
-               .TryPost(
-                   value,
-                   new EventPostPolicy(
-                       PostDeliveryMode.Latest,
-                       backpressure,
-                       capacity));
-    }
-
-    /// <summary>
-    /// 以 Coalesced 模式投递事件。
-    ///
-    /// Coalesced 表示多个同类事件可以按合并规则合成一个事件。
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// 事件结构体类型。
-    /// </typeparam>
-    /// <param name="service">
-    /// 当前服务对象。
-    /// </param>
-    /// <param name="value">
-    /// 要投递并尝试合并的事件值。
-    /// </param>
-    /// <param name="backpressure">
-    /// 队列满或无法接收新事件时的背压策略。
-    /// </param>
-    /// <param name="capacity">
-    /// 策略容量参数。
-    /// 默认 0 表示沿用当前策略约定。
-    /// </param>
-    /// <returns>
-    /// PostResult 表示投递结果。
-    /// </returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static PostResult PostCoalesced<TValue>(
-        this IService      service,
-        in   TValue        value,
-        BackpressurePolicy backpressure = BackpressurePolicy.RejectNew,
-        int                capacity     = 0)
-        where TValue : struct
-    {
-        return RequireOwnerScheduler(service.GetBinding())
-               .TryPost(
-                   value,
-                   new EventPostPolicy(
-                       PostDeliveryMode.Coalesced,
-                       backpressure,
-                       capacity));
-    }
-
-    /// <summary>
-    /// 延迟指定时间后投递事件。
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// 事件结构体类型。
-    /// </typeparam>
-    /// <param name="service">
-    /// 当前服务对象。
-    /// </param>
-    /// <param name="value">
-    /// 到期后要投递的事件值。
+    /// ���ں�ҪͶ�ݵ��¼�ֵ��
     /// </param>
     /// <param name="delaySeconds">
-    /// 延迟秒数。
+    /// �ӳ�������
     /// </param>
     /// <param name="expiredPostPolicy">
-    /// 定时器到期后使用的 Post 策略。
-    /// 传入 default 表示使用事件元数据中的 TimerPolicy.ExpiredPostPolicy。
+    /// ��ʱ�����ں�ʹ�õ� Post ���ԡ�
+    /// ���� default ��ʾʹ���¼�Ԫ�����е� TimerPolicy.ExpiredPostPolicy��
     /// </param>
     /// <param name="repeatCount">
-    /// 重复次数。
-    /// 默认 0 表示只执行一次。
+    /// �ظ�������
+    /// Ĭ�� 0 ��ʾִֻ��һ�Ρ�
     /// </param>
     /// <param name="intervalSeconds">
-    /// 重复执行间隔秒数。
-    /// repeatCount 大于 0 时生效。
+    /// �ظ�ִ�м��������
+    /// repeatCount ���� 0 ʱ��Ч��
     /// </param>
     /// <param name="repeatMode">
-    /// 重复模式。
-    /// 传入 default 表示使用事件元数据中的 TimerPolicy.RepeatMode。
+    /// �ظ�ģʽ��
+    /// ���� default ��ʾʹ���¼�Ԫ�����е� TimerPolicy.RepeatMode��
     /// </param>
     /// <param name="catchUpPolicy">
-    /// 补帧策略。
-    /// 传入 default 表示使用事件元数据中的 TimerPolicy.CatchUpPolicy。
+    /// ��֡���ԡ�
+    /// ���� default ��ʾʹ���¼�Ԫ�����е� TimerPolicy.CatchUpPolicy��
     /// </param>
     /// <returns>
-    /// 定时任务句柄。
+    /// ��ʱ��������
     /// </returns>
     public static TimerHandle SchedulePost<TValue>(
         this IService       service,
@@ -262,10 +154,14 @@ public static class ServiceExtensions
         var eventId = EventTypeId<TValue>.Id;
         var timerPolicy = RequireOwnerPolicyTable(binding).GetTimerPolicy(eventId);
 
+        PostTypePlan plan = PostTypePlan.Default(eventId, BackpressurePolicy.RejectNew);
+        if (timerPolicy?.ExpiredPostPolicy != null)
+        {
+            plan = PostTypePlan.FromPolicy(eventId, timerPolicy.Value.ExpiredPostPolicy.Value, plan.DefaultBackpressure);
+        }
+
         return RequireOwnerTimer(binding).Schedule(
-            new PostEventAction<TValue>(
-                value,
-                expiredPostPolicy ?? timerPolicy?.ExpiredPostPolicy),
+            new PostEventAction<TValue>(value, plan),
             delaySeconds,
             repeatCount: repeatCount,
             intervalSeconds: intervalSeconds,
@@ -274,23 +170,23 @@ public static class ServiceExtensions
     }
 
     /// <summary>
-    /// 延迟发布事件到 DelayPublisher。
+    /// �ӳٷ����¼��� DelayPublisher��
     /// </summary>
     /// <typeparam name="TValue">
-    /// 事件结构体类型。
+    /// �¼��ṹ�����͡�
     /// </typeparam>
     /// <param name="service">
-    /// 当前服务对象。
+    /// ��ǰ�������
     /// </param>
     /// <param name="value">
-    /// 要延迟发布的事件值。
+    /// Ҫ�ӳٷ������¼�ֵ��
     /// </param>
     /// <param name="ttl">
-    /// 事件在 Delay 缓冲区中的存活时间，单位为秒。
+    /// �¼��� Delay �������еĴ��ʱ�䣬��λΪ�롣
     /// </param>
     /// <param name="contractId">
-    /// 延迟通道 ID。
-    /// 默认 0 表示默认通道。
+    /// �ӳ�ͨ�� ID��
+    /// Ĭ�� 0 ��ʾĬ��ͨ����
     /// </param>
     public static void Delay<TValue>(
         this IService service,
@@ -393,19 +289,19 @@ public static class LayerContextExtensions
     }
 
     /// <summary>
-    /// 同步发送事件。
+    /// ͬ�������¼���
     /// </summary>
     /// <typeparam name="TValue">
-    /// 事件结构体类型。
+    /// �¼��ṹ�����͡�
     /// </typeparam>
     /// <param name="context">
-    /// 当前上下文对象。
+    /// ��ǰ�����Ķ���
     /// </param>
     /// <param name="value">
-    /// 要发送的事件值。
+    /// Ҫ���͵��¼�ֵ��
     /// </param>
     /// <returns>
-    /// 事件处理结果。
+    /// �¼���������
     /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EventHandledState Send<TValue>(
@@ -420,136 +316,36 @@ public static class LayerContextExtensions
     }
 
     /// <summary>
-    /// 投递事件。
+    /// Ͷ���¼���
     /// </summary>
     /// <typeparam name="TValue">
-    /// 事件结构体类型。
+    /// �¼��ṹ�����͡�
     /// </typeparam>
     /// <param name="context">
-    /// 当前上下文对象。
+    /// ��ǰ�����Ķ���
     /// </param>
     /// <param name="value">
-    /// 要投递的事件值。
+    /// ҪͶ�ݵ��¼�ֵ��
     /// </param>
     /// <param name="policy">
-    /// 本次投递使用的策略。
-    /// 传入 default 表示使用事件元数据或 Scheduler 默认策略。
+    /// ����Ͷ��ʹ�õĲ��ԡ�
+    /// ���� default ��ʾʹ���¼�Ԫ���ݻ� Scheduler Ĭ�ϲ��ԡ�
     /// </param>
     /// <returns>
-    /// PostResult 表示投递结果。
+    /// PostResult ��ʾͶ�ݽ����
     /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static PostResult Post<TValue>(
         this ILayerContext context,
-        in   TValue        value,
-        EventPostPolicy?   policy = default)
+        in   TValue        value)
         where TValue : struct
     {
         var scheduler = ServiceExtensions.RequireOwnerScheduler(context.GetBinding());
-
-        return policy.HasValue
-            ? scheduler.TryPost(value, policy.Value)
-            : scheduler.TryPost(value);
+        return scheduler.TryPost(value);
     }
 
     /// <summary>
-    /// 标记某种事件为脏。
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// 事件结构体类型。
-    /// </typeparam>
-    /// <param name="context">
-    /// 当前上下文对象。
-    /// </param>
-    /// <returns>
-    /// PostResult 表示标记结果。
-    /// </returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static PostResult MarkDirty<TValue>(this ILayerContext context)
-        where TValue : struct
-    {
-        return ServiceExtensions.RequireOwnerScheduler(context.GetBinding())
-               .MarkDirty<TValue>();
-    }
-
-    /// <summary>
-    /// 以 Latest 模式投递事件。
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// 事件结构体类型。
-    /// </typeparam>
-    /// <param name="context">
-    /// 当前上下文对象。
-    /// </param>
-    /// <param name="value">
-    /// 要投递的最新事件值。
-    /// </param>
-    /// <param name="backpressure">
-    /// 背压策略。
-    /// </param>
-    /// <param name="capacity">
-    /// 容量。
-    /// </param>
-    /// <returns>
-    /// PostResult 表示投递结果。
-    /// </returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static PostResult PostLatest<TValue>(
-        this ILayerContext context,
-        in   TValue        value,
-        BackpressurePolicy backpressure = BackpressurePolicy.RejectNew,
-        int                capacity     = 0)
-        where TValue : struct
-    {
-        return ServiceExtensions.RequireOwnerScheduler(context.GetBinding())
-               .TryPost(
-                   value,
-                   new EventPostPolicy(
-                       PostDeliveryMode.Latest,
-                       backpressure,
-                       capacity));
-    }
-
-    /// <summary>
-    /// 以 Coalesced 模式投递事件。
-    /// </summary>
-    /// <typeparam name="TValue">
-    /// 事件结构体类型。
-    /// </typeparam>
-    /// <param name="context">
-    /// 当前上下文对象。
-    /// </param>
-    /// <param name="value">
-    /// 要投递并尝试合并的事件值。
-    /// </param>
-    /// <param name="backpressure">
-    /// 背压策略。
-    /// </param>
-    /// <param name="capacity">
-    /// 容量。
-    /// </param>
-    /// <returns>
-    /// PostResult 表示投递结果。
-    /// </returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static PostResult PostCoalesced<TValue>(
-        this ILayerContext context,
-        in   TValue        value,
-        BackpressurePolicy backpressure = BackpressurePolicy.RejectNew,
-        int                capacity     = 0)
-        where TValue : struct
-    {
-        return ServiceExtensions.RequireOwnerScheduler(context.GetBinding())
-               .TryPost(
-                   value,
-                   new EventPostPolicy(
-                       PostDeliveryMode.Coalesced,
-                       backpressure,
-                       capacity));
-    }
-
-    /// <summary>
-    /// 延迟指定时间后投递事件。
+    /// �ӳ�ָ��ʱ���Ͷ���¼���
     /// </summary>
     public static TimerHandle SchedulePost<TValue>(
         this ILayerContext  context,
@@ -566,10 +362,14 @@ public static class LayerContextExtensions
         var eventId = EventTypeId<TValue>.Id;
         var timerPolicy = ServiceExtensions.RequireOwnerPolicyTable(binding).GetTimerPolicy(eventId);
 
-        return ServiceExtensions.RequireOwnerTimer(binding).Schedule(
-            new PostEventAction<TValue>(
-                value,
-                expiredPostPolicy ?? timerPolicy?.ExpiredPostPolicy),
+        PostTypePlan plan = PostTypePlan.Default(eventId, BackpressurePolicy.RejectNew);
+            if (timerPolicy?.ExpiredPostPolicy != null)
+            {
+                plan = PostTypePlan.FromPolicy(eventId, timerPolicy.Value.ExpiredPostPolicy.Value, plan.DefaultBackpressure);
+            }
+
+            return ServiceExtensions.RequireOwnerTimer(binding).Schedule(
+            new PostEventAction<TValue>(value, plan),
             delaySeconds,
             repeatCount: repeatCount,
             intervalSeconds: intervalSeconds,
@@ -578,7 +378,7 @@ public static class LayerContextExtensions
     }
 
     /// <summary>
-    /// 延迟发布事件到 DelayPublisher。
+    /// �ӳٷ����¼��� DelayPublisher��
     /// </summary>
     public static void Delay<TValue>(
         this ILayerContext context,
@@ -677,3 +477,4 @@ public static class LayerContextExtensions
         return ServiceLayerBinder.RequireLayer(binding).GetService<T>(binding.OwnerScope.ScopeId);
     }
 }
+

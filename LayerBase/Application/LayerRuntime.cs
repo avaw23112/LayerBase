@@ -565,33 +565,10 @@ public sealed partial class LayerRuntime : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    public PostResult TryPost<T>(in T value) where T : struct
     {
         RequireOwnerThreadDebug();
-        return policy.HasValue
-            ? Scheduler.TryPost(value, policy.Value)
-            : Scheduler.TryPost(value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void MarkDirty<T>() where T : struct
-    {
-        RequireOwnerThreadDebug();
-        Scheduler.MarkDirty<T>();
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostLatest<T>(in T value) where T : struct
-    {
-        RequireOwnerThreadDebug();
-        Scheduler.TryPostLatest(value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PostCoalesced<T>(in T value) where T : struct
-    {
-        RequireOwnerThreadDebug();
-        Scheduler.TryPostCoalesced(value);
+        return Scheduler.TryPost(value);
     }
 
     public TimerHandle SchedulePost<T>(in T value, float delaySeconds) where T : struct
@@ -600,8 +577,14 @@ public sealed partial class LayerRuntime : IDisposable
         var eventId = EventTypeId<T>.Id;
         var timerPolicy = PolicyTable.GetTimerPolicy(eventId);
 
+        PostTypePlan? plan = null;
+        if (timerPolicy?.ExpiredPostPolicy != null)
+        {
+            plan = PostTypePlan.FromPolicy(eventId, timerPolicy.Value.ExpiredPostPolicy.Value, Scheduler.Options.DefaultBackpressure);
+        }
+
         return Timer.Schedule(
-            new PostEventAction<T>(value, timerPolicy?.ExpiredPostPolicy),
+            new PostEventAction<T>(value, plan),
             delaySeconds, repeatCount: 0, intervalSeconds: 0,
             repeatMode: timerPolicy?.RepeatMode,
             catchUpPolicy: timerPolicy?.CatchUpPolicy);

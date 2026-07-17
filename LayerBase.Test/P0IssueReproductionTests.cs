@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using LayerBase.Core.Event;
 using LayerBase.Core.DataStruct;
 using LayerBase.Event.EventMetaData;
@@ -33,7 +33,7 @@ public partial class P0IssueReproductionTests
                               .Build();
 
         // Metadata says DropOldest
-        runtime.PostLatest(new P0TestEvent { Value = 1 });
+        runtime.Post(new P0TestEvent { Value = 1 });
 
         // We can check the plan in scheduler
         var scheduler = runtime.Scheduler;
@@ -52,7 +52,7 @@ public partial class P0IssueReproductionTests
                               .Push(new ReentrantLayer())
                               .Build();
 
-        runtime.PostCoalesced(new P0TestEvent { Value = 1 });
+        runtime.Post(new P0TestEvent { Value = 1 });
 
         // This will trigger FlushBuffers
         runtime.Pump(0.1f);

@@ -472,14 +472,12 @@ public abstract class Layer : Node, IDisposable
 
     /// <summary>尝试投递事件到调度队列，返回投递结果。</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPost<T>(in T value, EventPostPolicy? policy = default) where T : struct
+    public PostResult TryPost<T>(in T value) where T : struct
     {
         if (OwnerContext == null) return PostResult.Failure();
         var scheduler = OwnerContext.ScopeHost.MainScope.PostScheduler;
         if (scheduler == null) return PostResult.Failure();
-        return policy.HasValue
-            ? scheduler.TryPost(value, policy.Value)
-            : scheduler.TryPost(value);
+        return scheduler.TryPost(value);
     }
     #endregion
 

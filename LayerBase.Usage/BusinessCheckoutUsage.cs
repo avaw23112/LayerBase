@@ -1,4 +1,4 @@
-using LayerBase.Async;
+﻿using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
 using LayerBase.DI;
@@ -163,7 +163,7 @@ public sealed partial class BusinessCheckoutService : IService
         var projection = this.GetService<BusinessOrderProjectionContext>();
 
         this.Post(new BusinessOrderAcceptedEvent(orderId, sku, quantity, total: quantity * 18m + shippingPrice));
-        this.PostLatest(new BusinessOrderProjectionEvent(orderId, projection.Describe(orderId)));
+        this.Post(new BusinessOrderProjectionEvent(orderId, projection.Describe(orderId)));
         this.SchedulePost(new BusinessBillingReminderEvent(orderId), delaySeconds: 0.05f);
         this.Delay(new BusinessInvoiceAvailableEvent(orderId), ttl: 1.0f);
 

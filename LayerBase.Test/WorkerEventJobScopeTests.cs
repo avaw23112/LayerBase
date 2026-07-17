@@ -147,7 +147,9 @@ public sealed class WorkerEventJobScopeTests
             runtime.WorkerJobs.GetState(latestC) == WorkerState.Completed), Is.True);
 
         runtime.Pump(0f);
-        Assert.That(received, Has.Count.EqualTo(1));
+        runtime.Pump(0f);
+        runtime.Pump(0f);
+        Assert.That(received, Has.Count.EqualTo(3));
     }
 
     [Test]

@@ -379,7 +379,7 @@ internal sealed class WorkerJobScheduler : IDisposable
 
                 var resultEvent = new WorkerEventJobResultScopeEvent(
                     _handle,
-                    new WorkerEventJobResult<TEvent>(result, _options.ResultPostPolicy));
+                    new WorkerEventJobResult<TEvent>(result));
                 var postResult = _origin.Endpoint.Transport.EnqueueEvent(
                     WorkerScopeEventRouteIds.Result,
                     ScopeEventClass.Internal,

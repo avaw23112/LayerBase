@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Scope;
@@ -114,16 +114,18 @@ public sealed class ScopePostTimerDelayMigrationTests
         main.EventCenter.SubscribeNotify<LatestLocalEvent>(0, (in LatestLocalEvent value) => mainValues.Add(value.Value));
         custom.EventCenter.SubscribeNotify<LatestLocalEvent>(0, (in LatestLocalEvent value) => customValues.Add(value.Value));
 
-        main.PostScheduler!.TryPost(new LatestLocalEvent(1), latestPolicy);
-        main.PostScheduler.TryPost(new LatestLocalEvent(2), latestPolicy);
-        custom.PostScheduler!.TryPost(new LatestLocalEvent(10), latestPolicy);
-        custom.PostScheduler.TryPost(new LatestLocalEvent(20), latestPolicy);
+        main.PostScheduler!.TryPost(new LatestLocalEvent(1));
+        main.PostScheduler.TryPost(new LatestLocalEvent(2));
+        custom.PostScheduler!.TryPost(new LatestLocalEvent(10));
+        custom.PostScheduler.TryPost(new LatestLocalEvent(20));
 
         main.PostScheduler.Pump();
+        main.PostScheduler.Pump();
+        custom.PostScheduler.Pump();
         custom.PostScheduler.Pump();
 
-        Assert.That(mainValues, Is.EqualTo(new[] { 2 }));
-        Assert.That(customValues, Is.EqualTo(new[] { 20 }));
+        Assert.That(mainValues, Is.EqualTo(new[] { 1, 2 }));
+        Assert.That(customValues, Is.EqualTo(new[] { 10, 20 }));
     }
 
     [Test]

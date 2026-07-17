@@ -1,4 +1,4 @@
-using LayerBase.Core.Event;
+﻿using LayerBase.Core.Event;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
@@ -89,8 +89,8 @@ public partial class Phase5Tests
         int callCount = 0;
         runtime.EventCenter.SubscribeNotify<Phase5DirtySignalEvent>(0, (in Phase5DirtySignalEvent _) => callCount++);
 
-        runtime.MarkDirty<Phase5DirtySignalEvent>();
-        runtime.MarkDirty<Phase5DirtySignalEvent>();
+        runtime.Post(default(Phase5DirtySignalEvent));
+        runtime.Post(default(Phase5DirtySignalEvent));
 
         runtime.Pump(0);
 
@@ -114,9 +114,9 @@ public partial class Phase5Tests
             lastValue = e.Value;
         });
 
-        runtime.PostCoalesced(new Phase5CoalescedEvent { Value = 1 });
-        runtime.PostCoalesced(new Phase5CoalescedEvent { Value = 2 });
-        runtime.PostCoalesced(new Phase5CoalescedEvent { Value = 3 });
+        runtime.Post(new Phase5CoalescedEvent { Value = 1 });
+        runtime.Post(new Phase5CoalescedEvent { Value = 2 });
+        runtime.Post(new Phase5CoalescedEvent { Value = 3 });
 
         runtime.Pump(0);
 

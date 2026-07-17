@@ -15,19 +15,19 @@ public class testManager : ILayerContext
 {
 }
 
-public struct PositionComponent :¡¡IComponent
+public struct PositionComponent :IComponent
 {
     public float X;
     public float Y;
 }
 
-public struct VelocityComponent :¡¡IComponent
+public struct VelocityComponent :IComponent
 {
     public float X;
     public float Y;
 }
 
-public struct AoiComponent :¡¡IComponent
+public struct AoiComponent :IComponent
 {
     public bool IsVisible;
 }
@@ -158,7 +158,7 @@ public class QueryBringTests
         runtime.Pump(0.1f);
         PositionComponent position = runtime.EcsWorld.Get<PositionComponent>(entity);
 
-        // ECS Êý¾ÝÐÞ¸Ä
+        // ECS ï¿½ï¿½ï¿½ï¿½ï¿½Þ¸ï¿½
         Assert.That(position.X, Is.EqualTo(16f));
         Assert.That(position.Y, Is.EqualTo(28f));
         Assert.That(ProbeActor.Received, !Is.Empty);

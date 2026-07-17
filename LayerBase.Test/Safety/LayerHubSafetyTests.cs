@@ -40,8 +40,8 @@ public sealed class LayerHubSafetyTests
         Assert.That(runtimeMethods, Does.Contain("Send"));
         Assert.That(runtimeMethods, Does.Contain("Post"));
         Assert.That(runtimeMethods, Does.Contain("TryPost"));
-        Assert.That(runtimeMethods, Does.Contain("PostLatest"));
-        Assert.That(runtimeMethods, Does.Contain("PostCoalesced"));
         Assert.That(runtimeMethods, Does.Contain("CallAsync"));
+        Assert.That(runtimeMethods, Does.Not.Contain("PostLatest"));
+        Assert.That(runtimeMethods, Does.Not.Contain("PostCoalesced"));
     }
 }

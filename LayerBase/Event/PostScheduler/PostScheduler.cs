@@ -264,7 +264,7 @@ public sealed class PostScheduler : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PostResult TryPost<T>(in T value, EventPostPolicy? policyOverride = null) where T : struct
+    public PostResult TryPost<T>(in T value) where T : struct
     {
         if (_disposed) return FailSchedulerDisposed();
 
@@ -276,9 +276,6 @@ public sealed class PostScheduler : IDisposable
                 _sealedMaxEventTypeId = typeId;
         }
 
-        if (policyOverride.HasValue)
-            return TryPostOverride(in value, policyOverride.Value);
-
         if (!_postBitmap.IsSpecial(typeId))
             return EnqueueNormalFast(typeId, in value);
 
@@ -286,16 +283,16 @@ public sealed class PostScheduler : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private PostResult TryPostOverride<T>(in T value, EventPostPolicy policy) where T : struct
+    internal PostResult TryPostWithPolicy<T>(in T value, in PostTypePlan plan) where T : struct
     {
-        EventPostPolicyRules.Validate(in policy, nameof(policy));
+        if (_disposed) return FailSchedulerDisposed();
 
         var typeId = EventTypeId<T>.Id;
         EnsureEventCapacity(typeId, rebuildBitmap: false);
+        if (typeId > _sealedMaxEventTypeId)
+            _sealedMaxEventTypeId = typeId;
 
-        PostTypePlan plan = PostTypePlan.FromPolicy(typeId, in policy, _defaultBackpressure);
-
-        switch (policy.Mode)
+        switch (plan.Mode)
         {
             case PostDeliveryMode.Normal:
                 return EnqueueNormalWithPlan(typeId, in value, in plan);

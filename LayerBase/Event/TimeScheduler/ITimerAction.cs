@@ -8,16 +8,18 @@ public interface ITimerAction
 internal sealed class PostEventAction<TEvent> : ITimerAction where TEvent : struct
 {
     public TEvent Event;
-    public EventPostPolicy? PolicyOverride;
+    public PostTypePlan? Plan;
 
-    public PostEventAction(TEvent @event, EventPostPolicy? policyOverride = null)
+    public PostEventAction(TEvent @event, PostTypePlan? plan = null)
     {
         Event = @event;
-        PolicyOverride = policyOverride;
+        Plan = plan;
     }
 
     public bool Execute(PostScheduler scheduler)
     {
-        return scheduler.TryPost(Event, PolicyOverride).IsSuccess;
+        return Plan.HasValue
+            ? scheduler.TryPostWithPolicy(Event, Plan.Value).IsSuccess
+            : scheduler.TryPost(Event).IsSuccess;
     }
 }

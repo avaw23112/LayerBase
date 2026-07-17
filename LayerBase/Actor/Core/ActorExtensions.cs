@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Layers;
@@ -30,14 +30,14 @@ public static class ActorExtensions
     public static void PostLastest<TEvent>(this IActor actor, in TEvent value)
         where TEvent : struct
     {
-        ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime.PostLatest(in value);
+        ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime.Post(in value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void PostCoalesced<TEvent>(this IActor actor, in TEvent value)
         where TEvent : struct
     {
-        ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime.PostCoalesced(in value);
+        ActorGeneratedAccess.RequireGenerated(actor).Context.Runtime.Post(in value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -62,10 +62,14 @@ public static class ActorExtensions
         var eventId = EventTypeId<TValue>.Id;
         var timerPolicy = runtime.PolicyTable.GetTimerPolicy(eventId);
 
-        return runtime.Timer.Schedule(
-            new PostEventAction<TValue>(
-                value,
-                expiredPostPolicy ?? timerPolicy?.ExpiredPostPolicy),
+        PostTypePlan plan = PostTypePlan.Default(eventId, BackpressurePolicy.RejectNew);
+            if (timerPolicy?.ExpiredPostPolicy != null)
+            {
+                plan = PostTypePlan.FromPolicy(eventId, timerPolicy.Value.ExpiredPostPolicy.Value, plan.DefaultBackpressure);
+            }
+
+            return runtime.Timer.Schedule(
+            new PostEventAction<TValue>(value, plan),
             delaySeconds,
             repeatCount: repeatCount,
             intervalSeconds: intervalSeconds,

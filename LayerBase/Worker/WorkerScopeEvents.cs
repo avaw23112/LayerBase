@@ -20,21 +20,17 @@ internal sealed class WorkerEventJobResult<TEvent> : IWorkerEventJobResult
     where TEvent : struct
 {
     private readonly TEvent _value;
-    private readonly EventPostPolicy? _postPolicy;
 
-    public WorkerEventJobResult(TEvent value, EventPostPolicy? postPolicy)
+    public WorkerEventJobResult(TEvent value)
     {
         _value = value;
-        _postPolicy = postPolicy;
     }
 
     public Type EventType => typeof(TEvent);
 
     public PostResult PostTo(PostScheduler scheduler)
     {
-        return _postPolicy.HasValue
-            ? scheduler.TryPost(_value, _postPolicy.Value)
-            : scheduler.TryPost(_value);
+        return scheduler.TryPost(_value);
     }
 }
 

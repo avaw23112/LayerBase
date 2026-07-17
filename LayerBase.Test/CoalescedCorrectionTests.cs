@@ -1,4 +1,4 @@
-using LayerBase.Core.Event;
+﻿using LayerBase.Core.Event;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 using NUnit.Framework;
@@ -59,9 +59,9 @@ public partial class CoalescedCorrectionTests
         var received = new List<DamageEvent>();
         runtime.EventCenter.SubscribeNotify<DamageEvent>(0, (in DamageEvent e) => received.Add(e));
 
-        runtime.PostCoalesced(new DamageEvent { TargetId = 1, Amount = 10 });
-        runtime.PostCoalesced(new DamageEvent { TargetId = 2, Amount = 20 });
-        runtime.PostCoalesced(new DamageEvent { TargetId = 1, Amount = 15 });
+        runtime.Post(new DamageEvent { TargetId = 1, Amount = 10 });
+        runtime.Post(new DamageEvent { TargetId = 2, Amount = 20 });
+        runtime.Post(new DamageEvent { TargetId = 1, Amount = 15 });
 
         runtime.Pump(0);
 
@@ -81,9 +81,9 @@ public partial class CoalescedCorrectionTests
         int callCount = 0;
         runtime.EventCenter.SubscribeNotify<DirtyEvent>(0, (in DirtyEvent _) => callCount++);
 
-        runtime.MarkDirty<DirtyEvent>();
-        runtime.MarkDirty<DirtyEvent>();
-        runtime.MarkDirty<DirtyEvent>();
+        runtime.Post(default(DirtyEvent));
+        runtime.Post(default(DirtyEvent));
+        runtime.Post(default(DirtyEvent));
 
         runtime.Pump(0);
 

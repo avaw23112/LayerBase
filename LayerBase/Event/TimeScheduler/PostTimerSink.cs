@@ -11,6 +11,6 @@ public struct PostTimerSink<TEvent> : IExpiredTimerSink<PostTimerPayload<TEvent>
 
     public bool TryAcceptExpired(in PostTimerPayload<TEvent> payload, TimerHandle handle)
     {
-        return _postScheduler.TryPost(payload.Event, payload.PostPolicyOverride).IsSuccess;
+        return _postScheduler.TryPost(payload.Event).IsSuccess;
     }
 }

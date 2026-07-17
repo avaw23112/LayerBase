@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
@@ -95,9 +95,10 @@ public sealed class SyncRuntimeModelImprovementTests
     {
         var runtime = LayerHub.CreateLayers().Push(new CacheCleanupLayer()).Build();
 
-        var result = runtime.Scheduler.MarkDirty<UnknownAfterBuildDirtyEvent>();
+        var result = runtime.Scheduler.TryPost(default(UnknownAfterBuildDirtyEvent));
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.IsSuccess, Is.True,
+            "Unregistered events should use default normal plan.");
     }
 
     [Test]
