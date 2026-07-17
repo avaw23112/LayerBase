@@ -115,31 +115,32 @@ public class AssemblyModuleGeneratorTests
                                                        {
                                                        }
 
-                                                       public readonly struct BattleScope : IScopeDefinition
+                                                       public sealed class BattleScope : IScopeDefinition
                                                        {
+                                                           public ScopeOptions Options => ScopeOptions.Inline;
                                                        }
                                                        """);
 
         const string source = """
-                              using System;
-                              using AotGame;
-                              using LayerBase.DI;
-                              using LayerBase.Layers;
-                              using LayerBase.Modules;
-                              using LayerBase.Scope;
+                               using System;
+                               using AotGame;
+                               using LayerBase.DI;
+                               using LayerBase.Layers;
+                               using LayerBase.Modules;
+                               using LayerBase.Scope;
 
-                              [AssemblyModule("feature")]
-                              public sealed partial class FeatureModule
-                              {
-                              }
+                               [AssemblyModule("feature")]
+                               public sealed partial class FeatureModule
+                               {
+                               }
 
-                              [Scope<BattleScope>]
-                              [OwnerLayer(typeof(GameplayLayer))]
-                              public sealed partial class InventoryService : IService
-                              {
-                                  public void ConfigureServices(IServiceCollection services) { }
-                              }
-                              """;
+                               [Scope<BattleScope>]
+                               [OwnerLayer(typeof(GameplayLayer))]
+                               public sealed partial class InventoryService : IService
+                               {
+                                   public void ConfigureServices(IServiceCollection services) { }
+                               }
+                               """;
 
         var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator(), new LayerServiceGenerator());
 
@@ -242,8 +243,9 @@ public class AssemblyModuleGeneratorTests
                                                        {
                                                        }
 
-                                                       public readonly struct BattleScope : IScopeDefinition
+                                                       public sealed class BattleScope : IScopeDefinition
                                                        {
+                                                           public ScopeOptions Options => ScopeOptions.Inline;
                                                        }
 
                                                        [Scope<BattleScope>]
@@ -255,7 +257,7 @@ public class AssemblyModuleGeneratorTests
                                                        """);
 
         const string source = """
-                              using AotGame;
+                               using AotGame;
                               using LayerBase.DI;
                               using LayerBase.DI.Options;
                               using LayerBase.Modules;
@@ -550,42 +552,43 @@ public class AssemblyModuleGeneratorTests
                                                        """);
 
         const string source = """
-                              using System;
-                              using AotGame;
-                              using LayerBase.Layers;
-                              using LayerBase.Modules;
-                              using LayerBase.Scope;
-                              using LayerBase.Tools;
+                               using System;
+                               using AotGame;
+                               using LayerBase.Layers;
+                               using LayerBase.Modules;
+                               using LayerBase.Scope;
+                               using LayerBase.Tools;
 
-                              namespace FeaturePack;
+                               namespace FeaturePack;
 
-                              [AssemblyModule("fulfillment")]
-                              public sealed partial class FulfillmentModule
-                              {
-                              }
+                               [AssemblyModule("fulfillment")]
+                               public sealed partial class FulfillmentModule
+                               {
+                               }
 
-                              public interface IShippingLabelTool
-                              {
-                              }
+                               public interface IShippingLabelTool
+                               {
+                               }
 
-                              public sealed class FulfillmentScope : IScopeDefinition
-                              {
-                                  public const int ScopeId = 16;
-                              }
+                               public sealed class FulfillmentScope : IScopeDefinition
+                               {
+                                   public const int ScopeId = 16;
+                                   public ScopeOptions Options => ScopeOptions.Inline;
+                               }
 
-                              [LayerTool("shipping.label", typeof(CommerceLayer), typeof(FulfillmentScope), Contract = typeof(IShippingLabelTool))]
-                              [AttributeUsage(AttributeTargets.Class, Inherited = false)]
-                              public sealed class ShippingToolAttribute : Attribute
-                              {
-                                  public string Key { get; set; } = "default";
-                                  public bool Cache { get; set; } = true;
-                              }
+                               [LayerTool("shipping.label", typeof(CommerceLayer), typeof(FulfillmentScope), Contract = typeof(IShippingLabelTool))]
+                               [AttributeUsage(AttributeTargets.Class, Inherited = false)]
+                               public sealed class ShippingToolAttribute : Attribute
+                               {
+                                   public string Key { get; set; } = "default";
+                                   public bool Cache { get; set; } = true;
+                               }
 
-                              [ShippingTool(Key = "labels")]
-                              public sealed class ShippingLabelTool : IShippingLabelTool
-                              {
-                              }
-                              """;
+                               [ShippingTool(Key = "labels")]
+                               public sealed class ShippingLabelTool : IShippingLabelTool
+                               {
+                               }
+                               """;
 
         var result = RunGenerators(source, [aotReference], new AssemblyModuleGenerator());
 
@@ -669,38 +672,39 @@ public class AssemblyModuleGeneratorTests
     public void Layer_service_generator_emits_local_layer_tool_provider_for_same_assembly_layer_tool()
     {
         const string source = """
-                              using System;
-                              using LayerBase.Layers;
-                              using LayerBase.Scope;
-                              using LayerBase.Tools;
+                               using System;
+                               using LayerBase.Layers;
+                               using LayerBase.Scope;
+                               using LayerBase.Tools;
 
-                              namespace FeaturePack;
+                               namespace FeaturePack;
 
-                              public sealed partial class CommerceLayer : Layer
-                              {
-                              }
+                               public sealed partial class CommerceLayer : Layer
+                               {
+                               }
 
-                              public interface IShippingLabelTool
-                              {
-                              }
+                               public interface IShippingLabelTool
+                               {
+                               }
 
-                              public sealed class FulfillmentScope : IScopeDefinition
-                              {
-                                  public const int ScopeId = 16;
-                              }
+                               public sealed class FulfillmentScope : IScopeDefinition
+                               {
+                                   public const int ScopeId = 16;
+                                   public ScopeOptions Options => ScopeOptions.Inline;
+                               }
 
-                              [LayerTool("shipping.label", typeof(CommerceLayer), typeof(FulfillmentScope), Contract = typeof(IShippingLabelTool))]
-                              [AttributeUsage(AttributeTargets.Class, Inherited = false)]
-                              public sealed class ShippingToolAttribute : Attribute
-                              {
-                                  public string Key { get; set; } = "default";
-                              }
+                               [LayerTool("shipping.label", typeof(CommerceLayer), typeof(FulfillmentScope), Contract = typeof(IShippingLabelTool))]
+                               [AttributeUsage(AttributeTargets.Class, Inherited = false)]
+                               public sealed class ShippingToolAttribute : Attribute
+                               {
+                                   public string Key { get; set; } = "default";
+                               }
 
-                              [ShippingTool(Key = "labels")]
-                              public sealed class ShippingLabelTool : IShippingLabelTool
-                              {
-                              }
-                              """;
+                               [ShippingTool(Key = "labels")]
+                               public sealed class ShippingLabelTool : IShippingLabelTool
+                               {
+                               }
+                               """;
 
         var result = RunGenerators(source, new LayerServiceGenerator());
 
@@ -730,27 +734,28 @@ public class AssemblyModuleGeneratorTests
     public void Layer_service_generator_emits_scope_provider_for_non_generic_scope_attribute()
     {
         const string source = """
-                              using LayerBase.DI;
-                              using LayerBase.Layers;
-                              using LayerBase.Scope;
+                                using LayerBase.DI;
+                                using LayerBase.Layers;
+                                using LayerBase.Scope;
 
-                              namespace FeaturePack;
+                                namespace FeaturePack;
 
-                              public sealed partial class CommerceLayer : Layer
-                              {
-                              }
+                                public sealed partial class CommerceLayer : Layer
+                                {
+                                }
 
-                              public sealed class FulfillmentScope : IScopeDefinition
-                              {
-                                  public const int ScopeId = 16;
-                              }
+                                public sealed class FulfillmentScope : IScopeDefinition
+                                {
+                                    public const int ScopeId = 16;
+                                    public ScopeOptions Options => ScopeOptions.Inline;
+                                }
 
-                              [OwnerLayer(typeof(CommerceLayer))]
-                              [Scope(typeof(FulfillmentScope))]
-                              public sealed partial class FulfillmentService : IService
-                              {
-                              }
-                              """;
+                                [OwnerLayer(typeof(CommerceLayer))]
+                               [Scope(typeof(FulfillmentScope))]
+                               public sealed partial class FulfillmentService : IService
+                               {
+                               }
+                               """;
 
         var result = RunGenerators(source, new LayerServiceGenerator());
 
