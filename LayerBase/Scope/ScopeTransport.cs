@@ -8,9 +8,10 @@ internal sealed class ScopeTransport : IDisposable
 {
     private readonly EventPayloadStorage _eventPayloadStorage = new();
     private readonly EventPayloadStorage _callPayloadStorage = new();
+    private readonly ScopeIngressWriterGate _writerGate = new();
     private int _callSequence;
     private bool _businessAdmissionClosed;
-    private bool _disposed;
+    private int _disposed;
 
     public ScopeTransport(ScopeAddress address, Action? onIngressAccepted = null)
     {
@@ -33,7 +34,7 @@ internal sealed class ScopeTransport : IDisposable
 
     internal EventPayloadStorage CallPayloadStorage => _callPayloadStorage;
 
-    internal bool AcceptsWorkerJobs => !_disposed && !_businessAdmissionClosed;
+    internal bool AcceptsWorkerJobs => Volatile.Read(ref _disposed) == 0 && !_businessAdmissionClosed;
 
     internal PayloadDiagnosticsSnapshot CapturePayloadDiagnostics()
     {
@@ -63,22 +64,28 @@ internal sealed class ScopeTransport : IDisposable
         in TEvent value)
         where TEvent : struct
     {
-        if (_disposed)
+        if (!_writerGate.TryEnter(out var lease))
             return ScopePostResult.RuntimeDisposed;
 
-        var payload = _eventPayloadStorage.Store(Endpoint.Address.RuntimeId, in value);
-        var envelope = new ScopeEventEnvelope(
-            Endpoint.Address,
-            routeId,
-            eventClass,
-            payload);
+        using (lease)
+        {
+            if (Volatile.Read(ref _disposed) != 0)
+                return ScopePostResult.RuntimeDisposed;
 
-        var result = EventInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
-        if (result == ScopeEnqueueResult.Accepted)
-            return ScopePostResult.Accepted;
+            var payload = _eventPayloadStorage.Store(Endpoint.Address.RuntimeId, in value);
+            var envelope = new ScopeEventEnvelope(
+                Endpoint.Address,
+                routeId,
+                eventClass,
+                payload);
 
-        _eventPayloadStorage.Release(payload);
-        return ToPostResult(result);
+            var result = EventInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
+            if (result == ScopeEnqueueResult.Accepted)
+                return ScopePostResult.Accepted;
+
+            _eventPayloadStorage.Release(payload);
+            return ToPostResult(result);
+        }
     }
 
     internal LBTask<TResponse> EnqueueCall<TRequest, TResponse>(
@@ -102,34 +109,41 @@ internal sealed class ScopeTransport : IDisposable
         where TRequest : struct
         where TResponse : struct
     {
-        if (_disposed)
+        if (!_writerGate.TryEnter(out var lease))
             return LBTask<TResponse>.FromException(new ObjectDisposedException(nameof(ScopeTransport)));
-        if (cancellationToken.IsCancellationRequested)
-            return LBTask<TResponse>.FromCanceled(cancellationToken);
 
-        var completion = new ScopeCallCompletion<TResponse>();
-        var queuedCall = new ScopeQueuedCall<TRequest, TResponse>(
-            request,
-            completion,
-            cancellationToken);
-        var payload = _callPayloadStorage.Store(Endpoint.Address.RuntimeId, in queuedCall);
-        var envelope = new ScopeCallEnvelope(
-            ScopeCallEnvelopeKind.Request,
-            callClass,
-            NextCallToken(),
-            Endpoint.Address,
-            routeId,
-            payload,
-            ScopeCallResult.None,
-            completion);
+        using (lease)
+        {
+            if (Volatile.Read(ref _disposed) != 0)
+                return LBTask<TResponse>.FromException(new ObjectDisposedException(nameof(ScopeTransport)));
 
-        var result = CallInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
-        if (result == ScopeEnqueueResult.Accepted)
+            if (cancellationToken.IsCancellationRequested)
+                return LBTask<TResponse>.FromCanceled(cancellationToken);
+
+            var completion = new ScopeCallCompletion<TResponse>();
+            var queuedCall = new ScopeQueuedCall<TRequest, TResponse>(
+                request,
+                completion,
+                cancellationToken);
+            var payload = _callPayloadStorage.Store(Endpoint.Address.RuntimeId, in queuedCall);
+            var envelope = new ScopeCallEnvelope(
+                ScopeCallEnvelopeKind.Request,
+                callClass,
+                NextCallToken(),
+                Endpoint.Address,
+                routeId,
+                payload,
+                ScopeCallResult.None,
+                completion);
+
+            var result = CallInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
+            if (result == ScopeEnqueueResult.Accepted)
+                return completion.Task;
+
+            _callPayloadStorage.Release(payload);
+            completion.TrySetException(new InvalidOperationException($"Scope call enqueue failed: {result}."));
             return completion.Task;
-
-        _callPayloadStorage.Release(payload);
-        completion.TrySetException(new InvalidOperationException($"Scope call enqueue failed: {result}."));
-        return completion.Task;
+        }
     }
 
     internal ScopeCallToken NextCallToken()
@@ -159,15 +173,23 @@ internal sealed class ScopeTransport : IDisposable
         CallInbox.CloseBusinessAdmission();
     }
 
+    internal void CloseAllAdmissionAndWaitForWriters()
+    {
+        _writerGate.CloseAndWait();
+        EventInbox.CloseAllAdmission();
+        CallInbox.CloseAllAdmission();
+    }
+
     public void Dispose()
     {
-        if (_disposed)
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        _disposed = true;
+        _writerGate.MarkDisposed();
         EventInbox.CloseAllAdmission();
         CallInbox.CloseAllAdmission();
         _callPayloadStorage.Dispose();
         _eventPayloadStorage.Dispose();
+        _writerGate.Dispose();
     }
 }

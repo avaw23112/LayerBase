@@ -1312,6 +1312,7 @@ internal sealed class ScopeRuntime : IDisposable
         }
 
         RunLifecycleDispose();
+        Transport.CloseAllAdmissionAndWaitForWriters();
         ReleaseCallInbox();
         ReleaseEventInbox();
         LocalCalls.Clear();
