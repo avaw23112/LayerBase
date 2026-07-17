@@ -871,6 +871,14 @@ public sealed partial class LayerRuntime : IDisposable
                 _runtime.InstallScopeHost(_runtime.CompositionPlan.Scopes);
                 _runtime._scopeHost.MainScope.InstallSynchronizationContext();
                 _runtime._fixedUpdateOptions = _fixedUpdateOptions;
+
+                GeneratedEventBootstrapDiscovery
+                    .EnsureLoadedAssembliesInitialized();
+
+                LayerBase.Event.EventMetaData
+                    .EventMetaDataBootstrapRegistry
+                    .ReplayAll();
+
                 _runtime.InitializeScheduler(_postOptions);
                 _runtime.InitializeTimer(_timerOptions);
                 _runtime.InitializeDelay(_delayOptions);
