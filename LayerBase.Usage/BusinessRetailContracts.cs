@@ -4,13 +4,11 @@ namespace LayerBase.Usage;
 
 public sealed class BusinessInventoryScope : IScopeDefinition
 {
-    public const int ScopeId = 200;
     public ScopeOptions Options => ScopeOptions.Inline;
 }
 
 public sealed class BusinessPaymentScope : IScopeDefinition
 {
-    public const int ScopeId = 201;
     public ScopeOptions Options => ScopeOptions.Inline;
 }
 
