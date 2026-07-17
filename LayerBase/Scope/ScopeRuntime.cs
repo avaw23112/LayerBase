@@ -41,6 +41,8 @@ internal sealed class ScopeRuntime : IDisposable
 
     private readonly Action<Exception> _eventExpectationFaultReporter;
 
+    private Action? _signalWorker;
+
     public ScopeRuntime(LayerRuntime runtime, ScopeExecutionPlan plan, int runtimeId, int generation)
     {
         if (runtime == null)
@@ -89,6 +91,26 @@ internal sealed class ScopeRuntime : IDisposable
     internal void BindHost(ScopeRuntimeHost host)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
+    }
+
+    internal void BindWorkerWakeSignal(Action signalWorker)
+    {
+        if (signalWorker == null)
+            throw new ArgumentNullException(nameof(signalWorker));
+
+        if (Options.Threading != ScopeThreadingMode.Worker)
+        {
+            throw new InvalidOperationException(
+                "Only Worker Scope may bind a wake signal.");
+        }
+
+        if (_signalWorker != null)
+        {
+            throw new InvalidOperationException(
+                "Worker wake signal is already bound.");
+        }
+
+        _signalWorker = signalWorker;
     }
 
     public ScopeDescriptor Descriptor { get; }
@@ -146,7 +168,11 @@ internal sealed class ScopeRuntime : IDisposable
     public void InstallSynchronizationContext()
     {
         BindOwnerThreadIfNeeded();
-        SynchronizationContext ??= LayerBaseSynchronizationContext.Install();
+        if (SynchronizationContext == null)
+        {
+            SynchronizationContext = LayerBaseSynchronizationContext.Install(
+                Options.Threading == ScopeThreadingMode.Worker ? _signalWorker : null);
+        }
     }
 
     public void InitializeOrUpdateScheduler(
@@ -413,6 +439,74 @@ internal sealed class ScopeRuntime : IDisposable
         PostScheduler?.Pump();
         PumpEventExpectations();
         PumpUpdate(deltaTime);
+    }
+
+    internal void PumpWorkerImmediateWork(
+        CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
+        Action<Exception>? reportException = null)
+    {
+        RequireOwnerThread();
+        var context = SynchronizationContext;
+        if (context != null)
+        {
+            using var scope = context.EnterScope();
+            PumpWorkerImmediateWorkCore(exceptionPolicy, reportException);
+            return;
+        }
+
+        PumpWorkerImmediateWorkCore(exceptionPolicy, reportException);
+    }
+
+    private void PumpWorkerImmediateWorkCore(
+        CompletionExceptionPolicy exceptionPolicy,
+        Action<Exception>? reportException)
+    {
+        PumpIngress();
+        if (!CanPumpLifecycle())
+            return;
+
+        PumpSynchronizationContext(
+            exceptionPolicy,
+            reportException);
+        PostScheduler?.Pump();
+        PumpEventExpectations();
+    }
+
+    internal void PumpWorkerScheduledTick(
+        float fixedDeltaTime,
+        CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
+        Action<Exception>? reportException = null)
+    {
+        RequireOwnerThread();
+        var context = SynchronizationContext;
+        if (context != null)
+        {
+            using var scope = context.EnterScope();
+            PumpWorkerScheduledTickCore(fixedDeltaTime, exceptionPolicy, reportException);
+            return;
+        }
+
+        PumpWorkerScheduledTickCore(fixedDeltaTime, exceptionPolicy, reportException);
+    }
+
+    private void PumpWorkerScheduledTickCore(
+        float fixedDeltaTime,
+        CompletionExceptionPolicy exceptionPolicy,
+        Action<Exception>? reportException)
+    {
+        _tickCount++;
+        PumpIngress();
+        if (!CanPumpLifecycle())
+            return;
+
+        PumpSynchronizationContext(
+            exceptionPolicy,
+            reportException);
+        TickTimer(fixedDeltaTime);
+        DelayManager?.Tick(fixedDeltaTime);
+        PostScheduler?.Pump();
+        PumpEventExpectations();
+        PumpUpdate(fixedDeltaTime);
     }
 
     public void PumpSynchronizationContext(
@@ -1084,10 +1178,31 @@ internal sealed class ScopeRuntime : IDisposable
     private void SignalIngress()
     {
         Volatile.Write(ref _hasIngress, 1);
+        _signalWorker?.Invoke();
     }
 
     internal bool HasIngress =>
         Volatile.Read(ref _hasIngress) != 0;
+
+    internal bool HasImmediateWork
+    {
+        get
+        {
+            if (Volatile.Read(ref _hasIngress) != 0)
+                return true;
+
+            LayerBaseSynchronizationContext? context =
+                SynchronizationContext;
+
+            if (context != null && context.HasReadyWork)
+                return true;
+
+            PostScheduler? scheduler = PostScheduler;
+
+            return scheduler != null &&
+                   scheduler.HasPendingWork;
+        }
+    }
 
     internal bool IsOwnerThread
     {
@@ -1097,6 +1212,9 @@ internal sealed class ScopeRuntime : IDisposable
             return ownerThreadId != 0 && Environment.CurrentManagedThreadId == ownerThreadId;
         }
     }
+
+    internal int OwnerThreadId =>
+        Volatile.Read(ref _ownerThreadId);
 
     private ScopeRuntimeHost RequireHost()
     {

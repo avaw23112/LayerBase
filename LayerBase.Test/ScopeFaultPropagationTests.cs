@@ -158,7 +158,7 @@ public sealed class ScopeFaultPropagationTests
         var stopScopeOptions = new ScopeOptions(
             ScopeThreadingMode.Inline,
             ScopeClockMode.RuntimePump,
-            tickRateHz: 0,
+            ScopeTickOptions.None,
             ScopeFaultPolicy.StopScope);
         using var host = ScopeRuntimeHost.Create(
             runtime,
@@ -186,7 +186,7 @@ public sealed class ScopeFaultPropagationTests
         var stopRuntimeOptions = new ScopeOptions(
             ScopeThreadingMode.Inline,
             ScopeClockMode.RuntimePump,
-            tickRateHz: 0,
+            ScopeTickOptions.None,
             ScopeFaultPolicy.StopRuntime);
         using var host = ScopeRuntimeHost.Create(
             runtime,

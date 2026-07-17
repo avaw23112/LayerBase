@@ -21,7 +21,14 @@ public readonly struct MainThreadCompletionItem
 public sealed class MainThreadCompletionQueue
 {
     private readonly ConcurrentQueue<MainThreadCompletionItem> _queue = new();
+    private readonly Action? _onWorkAvailable;
     private int _hasItems;
+
+    public MainThreadCompletionQueue(
+        Action? onWorkAvailable = null)
+    {
+        _onWorkAvailable = onWorkAvailable;
+    }
 
     public int Count => _queue.Count;
 
@@ -32,12 +39,14 @@ public sealed class MainThreadCompletionQueue
     {
         _queue.Enqueue(item);
         Volatile.Write(ref _hasItems, 1);
+        _onWorkAvailable?.Invoke();
     }
 
     public void Enqueue(Action action)
     {
         _queue.Enqueue(new MainThreadCompletionItem(action));
         Volatile.Write(ref _hasItems, 1);
+        _onWorkAvailable?.Invoke();
     }
 
     public CompletionDrainStats Drain(

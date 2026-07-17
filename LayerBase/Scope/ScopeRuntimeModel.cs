@@ -46,21 +46,65 @@ internal enum ScopeClockMode
     FixedRate = 2
 }
 
+internal enum ScopeTickOverrunPolicy : byte
+{
+    Skip = 0,
+    CatchUpLimited = 1
+}
+
+internal readonly struct ScopeTickOptions
+{
+    public ScopeTickOptions(
+        int rateHz,
+        ScopeTickOverrunPolicy overrunPolicy,
+        int maxCatchUpTicks)
+    {
+        if (rateHz < 0)
+            throw new ArgumentOutOfRangeException(nameof(rateHz));
+
+        if (overrunPolicy == ScopeTickOverrunPolicy.CatchUpLimited &&
+            maxCatchUpTicks <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxCatchUpTicks));
+        }
+
+        if (overrunPolicy == ScopeTickOverrunPolicy.Skip &&
+            maxCatchUpTicks != 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxCatchUpTicks));
+        }
+
+        RateHz = rateHz;
+        OverrunPolicy = overrunPolicy;
+        MaxCatchUpTicks = maxCatchUpTicks;
+    }
+
+    public int RateHz { get; }
+
+    public ScopeTickOverrunPolicy OverrunPolicy { get; }
+
+    public int MaxCatchUpTicks { get; }
+
+    public bool IsEnabled => RateHz > 0;
+
+    public static ScopeTickOptions None { get; } =
+        new(0, ScopeTickOverrunPolicy.Skip, 0);
+}
+
 internal readonly struct ScopeOptions
 {
     public ScopeOptions(
         ScopeThreadingMode threading,
         ScopeClockMode clock,
-        int tickRateHz,
+        ScopeTickOptions tick,
         ScopeFaultPolicy faultPolicy = ScopeFaultPolicy.ReportAndContinue,
         EcsRuntimeOptions? ecsRuntime = null)
     {
-        if (tickRateHz < 0)
-            throw new ArgumentOutOfRangeException(nameof(tickRateHz));
-
         Threading = threading;
         Clock = clock;
-        TickRateHz = tickRateHz;
+        Tick = tick;
         FaultPolicy = faultPolicy;
         EcsRuntime = ecsRuntime ?? EcsRuntimeOptions.Default;
     }
@@ -69,24 +113,32 @@ internal readonly struct ScopeOptions
 
     public ScopeClockMode Clock { get; }
 
-    public int TickRateHz { get; }
+    public ScopeTickOptions Tick { get; }
+
+    public int TickRateHz => Tick.RateHz;
 
     public ScopeFaultPolicy FaultPolicy { get; }
 
     public EcsRuntimeOptions EcsRuntime { get; }
 
-    public static ScopeOptions Main { get; } = new(ScopeThreadingMode.Main, ScopeClockMode.RuntimePump, 0);
+    public static ScopeOptions Main { get; } = new(ScopeThreadingMode.Main, ScopeClockMode.RuntimePump, ScopeTickOptions.None);
 
-    public static ScopeOptions Inline { get; } = new(ScopeThreadingMode.Inline, ScopeClockMode.RuntimePump, 0);
+    public static ScopeOptions Inline { get; } = new(ScopeThreadingMode.Inline, ScopeClockMode.RuntimePump, ScopeTickOptions.None);
 
-    public static ScopeOptions Worker(int tickRateHz = 60)
+    public static ScopeOptions Worker(
+        int tickRateHz = 60,
+        ScopeTickOverrunPolicy overrunPolicy = ScopeTickOverrunPolicy.CatchUpLimited,
+        int maxCatchUpTicks = 2)
     {
-        return new ScopeOptions(ScopeThreadingMode.Worker, ScopeClockMode.FixedRate, tickRateHz);
+        return new ScopeOptions(
+            ScopeThreadingMode.Worker,
+            ScopeClockMode.FixedRate,
+            new ScopeTickOptions(tickRateHz, overrunPolicy, maxCatchUpTicks));
     }
 
     public ScopeOptions WithEcsRuntime(EcsRuntimeOptions ecsRuntime)
     {
-        return new ScopeOptions(Threading, Clock, TickRateHz, FaultPolicy, ecsRuntime);
+        return new ScopeOptions(Threading, Clock, Tick, FaultPolicy, ecsRuntime);
     }
 }
 

@@ -10,23 +10,30 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     private readonly HashSet<IContextDisposeCancellable> _pendingSources = new();
     private readonly ConcurrentQueue<WorkItem> _queue = new();
     private readonly FrameDelayWheel<WorkItem> _frameDelayWheel;
-    internal MainThreadCompletionQueue CompletionQueue { get; } = new();
+    private readonly Action? _onWorkAvailable;
+    internal MainThreadCompletionQueue CompletionQueue { get; }
     private int _hasQueuedWork;
     private int _hasFrameWork;
     private int _allowClosingCancellationPosts;
     private bool _closing;
     private bool _disposed;
 
-    private LayerBaseSynchronizationContext(int mainThreadId)
+    private LayerBaseSynchronizationContext(int mainThreadId, Action? onWorkAvailable = null)
     {
         _mainThreadId = mainThreadId;
+        _onWorkAvailable = onWorkAvailable;
         _frameDelayWheel = new FrameDelayWheel<WorkItem>(EnqueueReadyFrameWork);
+        CompletionQueue = new MainThreadCompletionQueue(onWorkAvailable);
     }
 
     public bool HasPendingWork =>
         CompletionQueue.HasPending ||
         Volatile.Read(ref _hasQueuedWork) != 0 ||
         Volatile.Read(ref _hasFrameWork) != 0;
+
+    public bool HasReadyWork =>
+        CompletionQueue.HasPending ||
+        Volatile.Read(ref _hasQueuedWork) != 0;
 
     public int PendingCount
     {
@@ -183,9 +190,10 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         Update(maxItems, exceptionPolicy, reportException);
     }
 
-    public static LayerBaseSynchronizationContext Install()
+    public static LayerBaseSynchronizationContext Install(
+        Action? onWorkAvailable = null)
     {
-        return new LayerBaseSynchronizationContext(Thread.CurrentThread.ManagedThreadId);
+        return new LayerBaseSynchronizationContext(Thread.CurrentThread.ManagedThreadId, onWorkAvailable);
     }
 
     public override void Post(SendOrPostCallback d, object? state)
@@ -194,6 +202,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         if (_closing && Volatile.Read(ref _allowClosingCancellationPosts) == 0) return;
         _queue.Enqueue(new WorkItem(d, state));
         Volatile.Write(ref _hasQueuedWork, 1);
+        _onWorkAvailable?.Invoke();
     }
 
     public override void Send(SendOrPostCallback d, object? state)
@@ -222,6 +231,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
         {
             _queue.Enqueue(workItem);
             Volatile.Write(ref _hasQueuedWork, 1);
+            _onWorkAvailable?.Invoke();
             return;
         }
 
@@ -236,6 +246,7 @@ public sealed class LayerBaseSynchronizationContext : SynchronizationContext, IA
     {
         _queue.Enqueue(work);
         Volatile.Write(ref _hasQueuedWork, 1);
+        _onWorkAvailable?.Invoke();
     }
 
     private readonly struct WorkItem
