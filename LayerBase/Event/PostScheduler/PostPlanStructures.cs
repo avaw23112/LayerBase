@@ -45,6 +45,20 @@ public readonly struct PostTypePlan
         return new PostTypePlan(eventTypeId, defaultBackpressure);
     }
 
+    public static PostTypePlan FromPolicy(
+        int eventTypeId,
+        in EventPostPolicy policy,
+        BackpressurePolicy defaultBackpressure)
+    {
+        return new PostTypePlan(
+            eventTypeId,
+            policy.Mode,
+            policy.Backpressure,
+            policy.MaxPending,
+            defaultBackpressure,
+            policy.MergeFailure);
+    }
+
     public bool TrackPending => MaxPending > 0;
     public bool HasCustomBackpressure => Backpressure != DefaultBackpressure;
 }

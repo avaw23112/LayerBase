@@ -288,19 +288,23 @@ public sealed class PostScheduler : IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private PostResult TryPostOverride<T>(in T value, EventPostPolicy policy) where T : struct
     {
+        EventPostPolicyRules.Validate(in policy, nameof(policy));
+
         var typeId = EventTypeId<T>.Id;
+        EnsureEventCapacity(typeId, rebuildBitmap: false);
+
+        PostTypePlan plan = PostTypePlan.FromPolicy(typeId, in policy, _defaultBackpressure);
+
         switch (policy.Mode)
         {
             case PostDeliveryMode.Normal:
-                var plan = new PostTypePlan(typeId, policy.Mode, policy.Backpressure, policy.MaxPending,
-                    _defaultBackpressure, policy.MergeFailure);
                 return EnqueueNormalWithPlan(typeId, in value, in plan);
             case PostDeliveryMode.DirtySignal:
                 if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
                 return MarkDirtyById<T>(typeId);
             case PostDeliveryMode.Coalesced:
                 if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
-                return EnqueueCoalescedInternal(typeId, in value);
+                return EnqueueCoalescedWithPlan(typeId, in value, in plan);
             case PostDeliveryMode.Latest:
                 if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
                 return EnqueueLatestInternal(typeId, in value);
@@ -450,12 +454,18 @@ public sealed class PostScheduler : IDisposable
 
     private PostResult EnqueueCoalescedInternal<T>(int typeId, in T value) where T : struct
     {
+        ref readonly var planRef = ref GetPlan(typeId);
+        return EnqueueCoalescedWithPlan(typeId, in value, in planRef);
+    }
+
+    private PostResult EnqueueCoalescedWithPlan<T>(int typeId, in T value, in PostTypePlan plan) where T : struct
+    {
         var meta = _policyTable.GetMetaData<T>(typeId);
         int coalesceKey = meta?.GetPostCoalesceKey(value) ?? 0;
         var slotKey = new CoalescedSlotKey(typeId, coalesceKey);
 
         bool fallbackToNormal = false;
-        PostTypePlan fallbackPlan = default;
+        PostTypePlan fallbackPlan = plan;
 
         if (_coalescedBuffer.TryGetValue(slotKey, out var slot))
         {
@@ -468,10 +478,7 @@ public sealed class PostScheduler : IDisposable
                 return PostResult.Coalesced();
             }
 
-            // Merge failed
-            ref readonly var planRef = ref GetPlan(typeId);
-            fallbackPlan = planRef;
-
+            // Merge failed - use the provided plan (override or compiled)
             var result = HandleMergeFailureInternalLocked(
                 slotKey: slotKey,
                 slot: slot,
