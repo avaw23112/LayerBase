@@ -2,11 +2,16 @@ using LayerBase.Scope;
 
 namespace LayerBase.Usage;
 
-    public sealed class BusinessInventoryScope : IScopeDefinition
+public sealed class BusinessInventoryScope : IScopeDefinition
 {
     public const int ScopeId = 200;
     public ScopeOptions Options => ScopeOptions.Inline;
-    
+}
+
+public sealed class BusinessPaymentScope : IScopeDefinition
+{
+    public const int ScopeId = 201;
+    public ScopeOptions Options => ScopeOptions.Inline;
 }
 
 public readonly struct BusinessOrderAcceptedEvent
