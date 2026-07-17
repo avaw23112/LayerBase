@@ -111,6 +111,27 @@ public sealed class AssemblyModuleManifest
         EventHandlerContribution[] eventHandlers,
         LayerToolContribution[] tools,
         EventContribution[] events)
+        : this(
+            moduleId,
+            services,
+            contexts,
+            localCalls,
+            eventHandlers,
+            tools,
+            events,
+            Array.Empty<GeneratedScopeDefinition>())
+    {
+    }
+
+    public AssemblyModuleManifest(
+        AssemblyModuleId moduleId,
+        ServiceContribution[] services,
+        ContextContribution[] contexts,
+        LocalCallContribution[] localCalls,
+        EventHandlerContribution[] eventHandlers,
+        LayerToolContribution[] tools,
+        EventContribution[] events,
+        GeneratedScopeDefinition[] scopeDefinitions)
     {
         ModuleId = moduleId;
         Services = Array.AsReadOnly((services ?? Array.Empty<ServiceContribution>()).ToArray());
@@ -119,6 +140,8 @@ public sealed class AssemblyModuleManifest
         EventHandlers = Array.AsReadOnly((eventHandlers ?? Array.Empty<EventHandlerContribution>()).ToArray());
         Tools = Array.AsReadOnly((tools ?? Array.Empty<LayerToolContribution>()).ToArray());
         Events = Array.AsReadOnly((events ?? Array.Empty<EventContribution>()).ToArray());
+        ScopeDefinitions = Array.AsReadOnly(
+            (scopeDefinitions ?? Array.Empty<GeneratedScopeDefinition>()).ToArray());
     }
 
     public AssemblyModuleId ModuleId { get; }
@@ -134,6 +157,8 @@ public sealed class AssemblyModuleManifest
     public IReadOnlyList<LayerToolContribution> Tools { get; }
 
     public IReadOnlyList<EventContribution> Events { get; }
+
+    public IReadOnlyList<GeneratedScopeDefinition> ScopeDefinitions { get; }
 
     public static AssemblyModuleManifest Empty(AssemblyModuleId moduleId)
     {
@@ -448,6 +473,25 @@ internal sealed class CompositionContributions
         EventHandlerContributionPlan[] eventHandlers,
         LayerToolContributionPlan[] tools,
         EventContributionPlan[] events)
+        : this(
+            services,
+            contexts,
+            localCalls,
+            eventHandlers,
+            tools,
+            events,
+            Array.Empty<ScopeDefinitionContributionPlan>())
+    {
+    }
+
+    public CompositionContributions(
+        ServiceContributionPlan[] services,
+        ContextContributionPlan[] contexts,
+        LocalCallContributionPlan[] localCalls,
+        EventHandlerContributionPlan[] eventHandlers,
+        LayerToolContributionPlan[] tools,
+        EventContributionPlan[] events,
+        ScopeDefinitionContributionPlan[] scopeDefinitions)
     {
         Services = services ?? throw new ArgumentNullException(nameof(services));
         Contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
@@ -455,6 +499,7 @@ internal sealed class CompositionContributions
         EventHandlers = eventHandlers ?? throw new ArgumentNullException(nameof(eventHandlers));
         Tools = tools ?? throw new ArgumentNullException(nameof(tools));
         Events = events ?? throw new ArgumentNullException(nameof(events));
+        ScopeDefinitions = scopeDefinitions ?? throw new ArgumentNullException(nameof(scopeDefinitions));
     }
 
     public ServiceContributionPlan[] Services { get; }
@@ -469,6 +514,8 @@ internal sealed class CompositionContributions
 
     public EventContributionPlan[] Events { get; }
 
+    public ScopeDefinitionContributionPlan[] ScopeDefinitions { get; }
+
     public static CompositionContributions Empty { get; } =
         new(
             Array.Empty<ServiceContributionPlan>(),
@@ -476,7 +523,23 @@ internal sealed class CompositionContributions
             Array.Empty<LocalCallContributionPlan>(),
             Array.Empty<EventHandlerContributionPlan>(),
             Array.Empty<LayerToolContributionPlan>(),
-            Array.Empty<EventContributionPlan>());
+            Array.Empty<EventContributionPlan>(),
+            Array.Empty<ScopeDefinitionContributionPlan>());
+}
+
+internal readonly struct ScopeDefinitionContributionPlan
+{
+    public ScopeDefinitionContributionPlan(
+        AssemblyModuleId moduleId,
+        GeneratedScopeDefinition definition)
+    {
+        ModuleId = moduleId;
+        Definition = definition;
+    }
+
+    public AssemblyModuleId ModuleId { get; }
+
+    public GeneratedScopeDefinition Definition { get; }
 }
 
 internal readonly struct ServiceContributionPlan
@@ -684,6 +747,7 @@ internal static class AssemblyModuleComposer
         var eventHandlerPlans = new List<EventHandlerContributionPlan>();
         var toolPlans = new List<LayerToolContributionPlan>();
         var eventPlans = new List<EventContributionPlan>();
+        var scopeDefinitionPlans = new List<ScopeDefinitionContributionPlan>();
         foreach (var module in modules.OrderBy(static module => module.Id))
         {
             var manifest = module.Manifest ?? throw new InvalidOperationException(
@@ -784,6 +848,16 @@ internal static class AssemblyModuleComposer
                     contribution.PrewarmTargets,
                     eventPlans.Count));
             }
+
+            foreach (var definition in manifest.ScopeDefinitions
+                         .OrderBy(static d => d.ScopeId)
+                         .ThenBy(static d => d.Identity, StringComparer.Ordinal))
+            {
+                scopeDefinitionPlans.Add(
+                    new ScopeDefinitionContributionPlan(
+                        moduleId: module.Id,
+                        definition: definition));
+            }
         }
 
         return new CompositionContributions(
@@ -792,7 +866,8 @@ internal static class AssemblyModuleComposer
             localCallPlans.ToArray(),
             eventHandlerPlans.ToArray(),
             toolPlans.ToArray(),
-            eventPlans.ToArray());
+            eventPlans.ToArray(),
+            scopeDefinitionPlans.ToArray());
     }
 
     private static void ValidateOwner(
