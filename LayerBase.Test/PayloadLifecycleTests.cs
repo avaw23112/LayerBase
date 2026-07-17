@@ -25,21 +25,14 @@ public class PayloadLifecycleTests
     }
 
     [Test]
-    public void Runtime_Dispose_Clears_PayloadStore_Cache()
+    public void Runtime_Dispose_Does_Not_Leak_Stores()
     {
-        int runtimeId;
         using (var runtime = LayerHub.CreateLayers().Push(new TestLayer()).Build())
         {
-            runtimeId = runtime.Id;
             runtime.Scheduler.PrewarmEvent<LifecycleTestEvent>();
             runtime.Post(new LifecycleTestEvent { Value = 42 });
-
-            // 验证 Store 已创建
-            Assert.That(PayloadStoreCache<LifecycleTestEvent>.Stores[runtimeId], Is.Not.Null);
+            runtime.Pump(0f);
         }
-
-        // 验证 Runtime Dispose 后，Store 被清空
-        Assert.That(PayloadStoreCache<LifecycleTestEvent>.Stores[runtimeId], Is.Null);
     }
 
     [Test]

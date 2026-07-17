@@ -64,7 +64,6 @@ public sealed class PostScheduler : IDisposable
         _readyQueue = new RingBuffer<PostItem>(options.ReadyCapacity);
         _nextQueue = new RingBuffer<PostItem>(options.NextCapacity);
         _payloadStorage = new EventPayloadStorage(
-            useRuntimeCache: true,
             diagnosticsMode: options.PayloadDiagnostics);
 
         for (int i = 0; i < _latestBuffer.Length; i++) _latestBuffer[i] = PayloadHandle.Invalid;
@@ -195,7 +194,12 @@ public sealed class PostScheduler : IDisposable
         if (_disposed) return FailSchedulerDisposed();
 
         var typeId = EventTypeId<T>.Id;
-        if (!IsKnownEventType(typeId)) return FailEventTypeNotRegistered<T>();
+        if (!IsKnownEventType(typeId))
+        {
+            EnsureEventCapacity(typeId, rebuildBitmap: false);
+            if (typeId > _sealedMaxEventTypeId)
+                _sealedMaxEventTypeId = typeId;
+        }
 
         if (policyOverride.HasValue)
             return TryPostOverride(in value, policyOverride.Value);
@@ -239,7 +243,7 @@ public sealed class PostScheduler : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private PostResult EnqueueNormalFast<T>(int typeId, in T value) where T : struct
     {
-        var store = _payloadStorage.GetStoreFast<T>(_runtimeId);
+        var store = _payloadStorage.GetStoreFast<T>();
         var handle = store.Add(in value);
         var sequenceId = NextSequenceId();
         var item = new PostItem(typeId, handle, sequenceId, _defaultBackpressure);
@@ -296,7 +300,7 @@ public sealed class PostScheduler : IDisposable
             FastArray.At(_pendingCount, typeId)++;
         }
 
-        var store = _payloadStorage.GetStoreFast<T>(_runtimeId);
+        var store = _payloadStorage.GetStoreFast<T>();
         var handle = store.Add(in value);
         var sequenceId = NextSequenceId();
         var item = new PostItem(typeId, handle, sequenceId, plan.Backpressure);

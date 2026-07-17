@@ -14,41 +14,6 @@ internal interface IEventStore : IDisposable
     PayloadDiagnosticsSnapshot CaptureDiagnostics();
 }
 
-internal static class PayloadStoreCache<T> where T : struct
-{
-    public static readonly object Gate = new();
-    public static readonly EventStore<T>?[] Stores = new EventStore<T>[1024];
-
-    static PayloadStoreCache()
-    {
-        LayerHub.RegisterCacheResetter(Reset);
-        LayerHub.RegisterRuntimeCacheResetter(ResetRuntime);
-    }
-
-    private static void Reset()
-    {
-        lock (Gate)
-        {
-            for (int i = 0; i < 1024; i++)
-            {
-                Stores[i]?.Dispose();
-                Stores[i] = null;
-            }
-        }
-    }
-
-    private static void ResetRuntime(int runtimeId)
-    {
-        if ((uint)runtimeId >= (uint)Stores.Length) return;
-
-        lock (Gate)
-        {
-            Stores[runtimeId]?.Dispose();
-            Stores[runtimeId] = null;
-        }
-    }
-}
-
 internal sealed class EventStore<T> : IEventStore where T : struct
 {
     private T[] _buffer;
@@ -285,26 +250,23 @@ internal sealed class EventStore<T> : IEventStore where T : struct
 internal sealed class EventPayloadStorage : IDisposable
 {
     private readonly object _gate = new();
-    private readonly bool _useRuntimeCache;
     private readonly PayloadDiagnosticsMode _diagnosticsMode;
     private IEventStore?[] _typeIdStores = new IEventStore[256];
 
     public EventPayloadStorage(
-        bool useRuntimeCache = true,
         PayloadDiagnosticsMode diagnosticsMode = PayloadDiagnosticsMode.Atomic)
     {
-        _useRuntimeCache = useRuntimeCache;
         _diagnosticsMode = diagnosticsMode;
     }
 
     public PayloadHandle Store<T>(int runtimeId, in T payload) where T : struct
     {
-        var store = GetStoreFast<T>(runtimeId);
+        var store = GetStoreFast<T>();
         return store.Add(in payload);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EventStore<T> GetStoreFast<T>(int runtimeId) where T : struct
+    public EventStore<T> GetStoreFast<T>() where T : struct
     {
         var typeId = EventTypeId<T>.Id;
         if ((uint)typeId < (uint)_typeIdStores.Length)
@@ -313,77 +275,44 @@ internal sealed class EventPayloadStorage : IDisposable
             if (s != null) return (EventStore<T>)s;
         }
 
-        return GetStoreFastSlow<T>(runtimeId, typeId);
+        return GetStoreFastSlow<T>(typeId);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private EventStore<T> GetStoreFastSlow<T>(int runtimeId, int typeId) where T : struct
+    private EventStore<T> GetStoreFastSlow<T>(int typeId) where T : struct
     {
         lock (_gate)
         {
             if ((uint)typeId < (uint)_typeIdStores.Length && _typeIdStores[typeId] is EventStore<T> cached)
                 return cached;
 
-            EventStore<T> store;
+            var store = new EventStore<T>(diagnosticsMode: _diagnosticsMode);
 
-            if (_useRuntimeCache)
+            if (typeId >= _typeIdStores.Length)
             {
-                store = GetOrCreateRuntimeCachedStore<T>(runtimeId);
-            }
-            else
-            {
-                store = new EventStore<T>(diagnosticsMode: _diagnosticsMode);
+                Array.Resize(ref _typeIdStores, Math.Max(typeId + 1, _typeIdStores.Length * 2));
             }
 
-            RegisterStoreLocal(typeId, store);
+            _typeIdStores[typeId] = store;
             return store;
         }
     }
 
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private EventStore<T> GetOrCreateRuntimeCachedStore<T>(int runtimeId) where T : struct
-    {
-        if ((uint)runtimeId < 1024)
-        {
-            lock (PayloadStoreCache<T>.Gate)
-            {
-                var store = PayloadStoreCache<T>.Stores[runtimeId];
-                if (store != null) return store;
-
-                store = new EventStore<T>(diagnosticsMode: PayloadDiagnosticsMode.Atomic);
-                PayloadStoreCache<T>.Stores[runtimeId] = store;
-                return store;
-            }
-        }
-
-        return new EventStore<T>(diagnosticsMode: _diagnosticsMode);
-    }
-
-    private void RegisterStoreLocal(int typeId, IEventStore store)
-    {
-        if (typeId >= _typeIdStores.Length)
-        {
-            Array.Resize(ref _typeIdStores, Math.Max(typeId + 1, _typeIdStores.Length * 2));
-        }
-
-        _typeIdStores[typeId] = store;
-    }
-
     public ref T GetRef<T>(int runtimeId, PayloadHandle handle) where T : struct
     {
-        var store = GetStoreFast<T>(runtimeId);
+        var store = GetStoreFast<T>();
         return ref store.GetRef(handle.Index, handle.Version);
     }
 
     public bool TryGet<T>(int runtimeId, PayloadHandle handle, out T value) where T : struct
     {
-        var store = GetStoreFast<T>(runtimeId);
+        var store = GetStoreFast<T>();
         return store.TryGet(handle, out value);
     }
 
     public void EnsureStore<T>(int runtimeId) where T : struct
     {
-        GetStoreFast<T>(runtimeId);
+        GetStoreFast<T>();
     }
 
     public void Release(PayloadHandle handle)

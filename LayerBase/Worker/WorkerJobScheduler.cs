@@ -124,7 +124,6 @@ internal sealed class WorkerJobScheduler : IDisposable
 
     public bool Cancel(WorkerHandle handle)
     {
-        CancellationTokenSource? cts = null;
         lock (_gate)
         {
             if (!IsKnownHandleLocked(handle))
@@ -134,12 +133,10 @@ internal sealed class WorkerJobScheduler : IDisposable
             if (slot.State is WorkerState.Completed or WorkerState.Failed or WorkerState.Cancelled)
                 return false;
 
-            slot.State = WorkerState.Cancelled;
-            cts = slot.Cancellation;
+            slot.Cancellation?.Cancel();
+            MarkTerminalLocked(handle, WorkerState.Cancelled);
+            return true;
         }
-
-        cts?.Cancel();
-        return true;
     }
 
     public void BeginStop()
@@ -209,6 +206,7 @@ internal sealed class WorkerJobScheduler : IDisposable
 
         _states[index].Version = version;
         _states[index].State = WorkerState.Pending;
+        _states[index].InUse = true;
         _states[index].Cancellation?.Dispose();
         _states[index].Cancellation = cts;
         return new WorkerHandle(index, version);
@@ -243,7 +241,16 @@ internal sealed class WorkerJobScheduler : IDisposable
         if (!IsKnownHandleLocked(handle))
             return;
 
-        _states[handle.Index].State = state;
+        ref var slot = ref _states[handle.Index];
+        if (!slot.InUse)
+            return;
+
+        slot.State = state;
+        slot.InUse = false;
+        slot.Cancellation?.Dispose();
+        slot.Cancellation = null;
+
+        _free[_freeCount++] = handle.Index;
     }
 
     private bool IsKnownHandleLocked(WorkerHandle handle)
@@ -425,6 +432,7 @@ internal sealed class WorkerJobScheduler : IDisposable
     {
         public int Version;
         public WorkerState State;
+        public bool InUse;
         public CancellationTokenSource? Cancellation;
     }
 }

@@ -23,6 +23,8 @@ internal sealed class ActorLifecycleMethodFreeList
         {
             _freeCount--;
             index = _free[_freeCount];
+            if (index >= _count)
+                _count = index + 1;
         }
         else
         {
@@ -30,6 +32,9 @@ internal sealed class ActorLifecycleMethodFreeList
             _count++;
             EnsureCapacity(index + 1);
         }
+
+        if (_count == 1)
+            _cursor = 0;
 
         _entries[index] = new ActorLifecycleMethodEntry(actorId, actor, invoker);
         _occupied[index] = true;
@@ -137,6 +142,9 @@ internal sealed class ActorLifecycleMethodFreeList
             _entries[last] = default;
             _count--;
         }
+
+        if (_count == 0 || _cursor >= _count)
+            _cursor = 0;
     }
 
     private void EnsureCapacity(int required)

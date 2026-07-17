@@ -67,21 +67,38 @@ public sealed class PayloadStorageSafetyTests
     }
 
     [Test]
+    public void PayloadStorage_EachInstanceHasOwnStore()
+    {
+        var storage1 = new EventPayloadStorage();
+        var storage2 = new EventPayloadStorage();
+
+        var handle1 = storage1.Store(0, new PayloadRaceEvent(1));
+        var handle2 = storage2.Store(0, new PayloadRaceEvent(2));
+
+        Assert.That(storage1.TryGet<PayloadRaceEvent>(0, handle1, out var val1), Is.True);
+        Assert.That(val1.Value, Is.EqualTo(1));
+
+        Assert.That(storage2.TryGet<PayloadRaceEvent>(0, handle2, out var val2), Is.True);
+        Assert.That(val2.Value, Is.EqualTo(2));
+
+        Assert.That(storage1.CaptureDiagnostics().Outstanding, Is.EqualTo(1));
+        Assert.That(storage2.CaptureDiagnostics().Outstanding, Is.EqualTo(1));
+    }
+
+    [Test]
     public void ScopeDisposeRace_ReleasesRejectedPayloads()
     {
         const int runtimeId = 78;
 
         using var storage = new EventPayloadStorage();
         var handle = storage.Store(runtimeId, new PayloadRaceEvent(1));
-        var store = PayloadStoreCache<PayloadRaceEvent>.Stores[runtimeId];
 
-        Assert.That(store, Is.Not.Null);
-        Assert.That(store!.CaptureDiagnostics().Outstanding, Is.EqualTo(1));
+        Assert.That(storage.CaptureDiagnostics().Outstanding, Is.EqualTo(1));
 
         storage.Dispose();
         storage.Release(handle);
 
-        Assert.That(store.CaptureDiagnostics().Outstanding, Is.EqualTo(0));
+        Assert.That(storage.CaptureDiagnostics().Outstanding, Is.EqualTo(0));
     }
 
     private readonly struct PayloadRaceEvent

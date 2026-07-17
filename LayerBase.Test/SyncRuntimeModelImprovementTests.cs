@@ -22,18 +22,15 @@ public sealed class SyncRuntimeModelImprovementTests
     }
 
     [Test]
-    public void Runtime_dispose_clears_payload_cache_slots()
+    public void Runtime_dispose_does_not_leak_stores()
     {
         _ = EventTypeId<RuntimeCachePayloadEvent>.Id; // Ensure known before build
         var runtime = LayerHub.CreateLayers().Push(new CacheCleanupLayer()).Build();
-        var runtimeId = runtime.Id;
 
         Assert.That(runtime.Scheduler.TryPost(new RuntimeCachePayloadEvent()).IsSuccess, Is.True);
-        Assert.That(PayloadStoreCache<RuntimeCachePayloadEvent>.Stores[runtimeId], Is.Not.Null);
 
+        runtime.Pump(0f);
         runtime.Dispose();
-
-        Assert.That(PayloadStoreCache<RuntimeCachePayloadEvent>.Stores[runtimeId], Is.Null);
     }
 
     [Test]

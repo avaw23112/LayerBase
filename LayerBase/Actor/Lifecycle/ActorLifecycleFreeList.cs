@@ -23,6 +23,8 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
         {
             _freeCount--;
             index = _free[_freeCount];
+            if (index >= _count)
+                _count = index + 1;
         }
         else
         {
@@ -30,6 +32,9 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
             _count++;
             EnsureCapacity(index + 1);
         }
+
+        if (_count == 1)
+            _cursor = 0;
 
         _entries[index] = new ActorLifecycleEntry<TLifecycle>(actorId, instance);
         _occupied[index] = true;
@@ -108,6 +113,9 @@ internal sealed class ActorLifecycleFreeList<TLifecycle>
             _entries[last] = default;
             _count--;
         }
+
+        if (_count == 0 || _cursor >= _count)
+            _cursor = 0;
     }
 
     public void ForEach<TState>(
