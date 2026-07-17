@@ -81,9 +81,16 @@ public sealed class ScopeIsolationBoundaryTests
 
     private sealed class ScopeBoundaryLayer : Layer, IGeneratedScopeDefinitionProvider
     {
-        public Type[] __GetScopeDefinitionTypes()
+        public GeneratedScopeDefinition[] __GetScopeDefinitions()
         {
-            return new[] { typeof(SecondaryBoundaryScope) };
+            return new[]
+            {
+                new GeneratedScopeDefinition(
+                    scopeId: ScopeDefinitionIds.FromType(typeof(SecondaryBoundaryScope)),
+                    identity: "scope-key:test.secondary",
+                    scopeType: typeof(SecondaryBoundaryScope),
+                    factory: static () => new SecondaryBoundaryScope())
+            };
         }
     }
 

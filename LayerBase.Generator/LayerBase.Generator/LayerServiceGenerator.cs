@@ -1114,19 +1114,47 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
         StringBuilder builder,
         IReadOnlyList<INamedTypeSymbol> ownerScopeTypes)
     {
-        builder.AppendLine();
-        builder.AppendLine("    global::System.Type[] global::LayerBase.Scope.IGeneratedScopeDefinitionProvider.__GetScopeDefinitionTypes()");
-        builder.AppendLine("    {");
-        builder.AppendLine("        return new global::System.Type[]");
-        builder.AppendLine("        {");
+        var definitions = new List<(string TypeName, string Identity, int ScopeId)>();
 
         foreach (var scopeType in ownerScopeTypes)
         {
-            var scopeDisplay = scopeType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            builder.Append("            typeof(").Append(scopeDisplay).AppendLine("),");
+            string typeName = scopeType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            string identity = ScopeDefinitionCodeGen.BuildIdentity(scopeType);
+            int scopeId = ScopeDefinitionCodeGen.ComputeScopeId(identity);
+            definitions.Add((typeName, identity, scopeId));
         }
 
-        builder.AppendLine("        };");
+        definitions.Sort(static (a, b) =>
+        {
+            int cmp = a.ScopeId.CompareTo(b.ScopeId);
+            if (cmp != 0) return cmp;
+            cmp = string.Compare(a.Identity, b.Identity, StringComparison.Ordinal);
+            if (cmp != 0) return cmp;
+            return string.Compare(a.TypeName, b.TypeName, StringComparison.Ordinal);
+        });
+
+        builder.AppendLine();
+        builder.AppendLine(
+            "    private static readonly global::LayerBase.Scope.GeneratedScopeDefinition[] __LayerBaseScopeDefinitions =");
+        builder.AppendLine("    {");
+
+        foreach (var (typeName, identity, scopeId) in definitions)
+        {
+            builder.Append("        new global::LayerBase.Scope.GeneratedScopeDefinition(");
+            builder.Append("scopeId: ").Append(scopeId).Append(", ");
+            builder.Append("identity: \"").Append(identity).Append("\", ");
+            builder.Append("scopeType: typeof(").Append(typeName).Append("), ");
+            builder.Append("factory: static () => new ").Append(typeName).Append("())");
+            builder.AppendLine(",");
+        }
+
+        builder.AppendLine("    };");
+        builder.AppendLine();
+        builder.AppendLine(
+            "    global::LayerBase.Scope.GeneratedScopeDefinition[] " +
+            "global::LayerBase.Scope.IGeneratedScopeDefinitionProvider.__GetScopeDefinitions()");
+        builder.AppendLine("    {");
+        builder.AppendLine("        return __LayerBaseScopeDefinitions;");
         builder.AppendLine("    }");
     }
 

@@ -188,15 +188,9 @@ internal sealed class RuntimeCompositionPlan
                 continue;
             }
 
-            foreach (var scopeType in provider.__GetScopeDefinitionTypes())
+            foreach (var definition in provider.__GetScopeDefinitions())
             {
-                var scopeIdField = scopeType.GetField("ScopeId");
-                if (scopeIdField == null || scopeIdField.FieldType != typeof(int) || !scopeIdField.IsStatic)
-                {
-                    continue;
-                }
-
-                ResolveScopeId(scopeType, scopeIdsByType);
+                ResolveScopeId(definition.ScopeType, scopeIdsByType);
             }
         }
     }

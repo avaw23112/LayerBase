@@ -211,10 +211,7 @@ public class LayerGeneratorContractTests
                               using LayerBase.Layers;
                               using LayerBase.Scope;
 
-                              public readonly struct InventoryScope : IScopeDefinition
-                              {
-                                  public const int ScopeId = 71;
-                              }
+                              public sealed class InventoryScope : IScopeDefinition{public const int ScopeId = 71;public ScopeOptions Options => ScopeOptions.Inline;}
 
                               public readonly struct TestRequest
                               {
@@ -309,10 +306,7 @@ public class LayerGeneratorContractTests
                               using LayerBase.Layers;
                               using LayerBase.Scope;
 
-                              public readonly struct InventoryScope : IScopeDefinition
-                              {
-                                  public const int ScopeId = 72;
-                              }
+                              public sealed class InventoryScope : IScopeDefinition{public const int ScopeId = 71;public ScopeOptions Options => ScopeOptions.Inline;}
 
                               public readonly struct StockArrived
                               {

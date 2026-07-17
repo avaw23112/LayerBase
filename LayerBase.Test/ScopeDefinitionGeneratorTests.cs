@@ -14,15 +14,31 @@ public sealed class ScopeDefinitionGeneratorTests
     {
         const string original = """
             using LayerBase.Scope;
+            using LayerBase.DI;
+            using LayerBase.Layers;
 
             public sealed class InventoryScope : IScopeDefinition
             {
                 public ScopeOptions Options => ScopeOptions.Inline;
             }
+
+            [Scope<InventoryScope>]
+            [OwnerLayer(typeof(TestLayer))]
+            public sealed partial class InventoryService : IService
+            {
+                public void ConfigureServices(IServiceCollection services) { }
+            }
+
+            public sealed partial class TestLayer : Layer
+            {
+                public override void ConfigureServices(IServiceCollection services) { }
+            }
             """;
 
         const string withAnotherScope = """
             using LayerBase.Scope;
+            using LayerBase.DI;
+            using LayerBase.Layers;
 
             public sealed class AlphaScope : IScopeDefinition
             {
@@ -32,6 +48,18 @@ public sealed class ScopeDefinitionGeneratorTests
             public sealed class InventoryScope : IScopeDefinition
             {
                 public ScopeOptions Options => ScopeOptions.Inline;
+            }
+
+            [Scope<InventoryScope>]
+            [OwnerLayer(typeof(TestLayer))]
+            public sealed partial class InventoryService : IService
+            {
+                public void ConfigureServices(IServiceCollection services) { }
+            }
+
+            public sealed partial class TestLayer : Layer
+            {
+                public override void ConfigureServices(IServiceCollection services) { }
             }
             """;
 
@@ -186,10 +214,24 @@ public sealed class ScopeDefinitionGeneratorTests
 
         return $$"""
             using LayerBase.Scope;
+            using LayerBase.DI;
+            using LayerBase.Layers;
 
             {{attribute}}public sealed class {{typeName}} : IScopeDefinition
             {
                 public ScopeOptions Options => ScopeOptions.Inline;
+            }
+
+            [Scope<{{typeName}}>]
+            [OwnerLayer(typeof(TestLayer))]
+            public sealed partial class TestService : IService
+            {
+                public void ConfigureServices(IServiceCollection services) { }
+            }
+
+            public sealed partial class TestLayer : Layer
+            {
+                public override void ConfigureServices(IServiceCollection services) { }
             }
             """;
     }
@@ -209,7 +251,10 @@ public sealed class ScopeDefinitionGeneratorTests
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
-            [new ScopeDefinitionGenerator().AsSourceGenerator()],
+            [
+                new ScopeDefinitionGenerator().AsSourceGenerator(),
+                new LayerServiceGenerator().AsSourceGenerator()
+            ],
             parseOptions: new CSharpParseOptions(LanguageVersion.Preview));
 
         driver = driver.RunGeneratorsAndUpdateCompilation(
@@ -225,6 +270,9 @@ public sealed class ScopeDefinitionGeneratorTests
 
         paths.Add(typeof(object).Assembly.Location);
         paths.Add(typeof(IScopeDefinition).Assembly.Location);
+        paths.Add(typeof(LayerBase.Layers.Layer).Assembly.Location);
+        paths.Add(typeof(LayerBase.DI.IService).Assembly.Location);
+        paths.Add(typeof(LayerBase.Generator.LayerServiceGenerator).Assembly.Location);
 
         foreach (string path in paths)
             yield return MetadataReference.CreateFromFile(path);
