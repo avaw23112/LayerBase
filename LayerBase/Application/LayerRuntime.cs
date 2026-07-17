@@ -45,6 +45,9 @@ public sealed partial class LayerRuntime : IDisposable
     private LayerToolRegistry? _tools;
     private TopologyAuditDiagnostic[] _topologyDiagnostics = Array.Empty<TopologyAuditDiagnostic>();
     internal DelayPublisherManager? DelayManager => _scopeHost.MainScope.DelayManager;
+
+    private readonly Action<Exception> _completionExceptionReporter;
+    private readonly Action<Exception> _scopeCompletionExceptionReporter;
     #endregion
 
     #region Runtime State - Layer Bindings
@@ -110,6 +113,9 @@ public sealed partial class LayerRuntime : IDisposable
         _workerJobs = new WorkerJobScheduler(WorkerJobSchedulerOptions.Default);
         _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
         LayerHub.Internal_Register(this);
+
+        _completionExceptionReporter = ReportCompletionException;
+        _scopeCompletionExceptionReporter = ReportScopeCompletionException;
     }
 
     public ScopeRef<TScope> GetScope<TScope>()
@@ -364,7 +370,7 @@ public sealed partial class LayerRuntime : IDisposable
         {
             _scopeHost.MainScope.PumpSynchronizationContext(
                 policy,
-                ex => ReportLayerEventError(-1, "System", "Completion", ex));
+                _completionExceptionReporter);
         }
 
         // 3. Time and delay tick
@@ -416,7 +422,7 @@ public sealed partial class LayerRuntime : IDisposable
         _scopeHost.PumpInlineScopes(
             deltaTime,
             policy,
-            ex => ReportLayerEventError(-1, "System", "ScopeCompletion", ex));
+            _scopeCompletionExceptionReporter);
     }
     #endregion
 
@@ -460,6 +466,16 @@ public sealed partial class LayerRuntime : IDisposable
                 // Fault callbacks are host-side diagnostics; they must not become a recursive fault channel.
             }
         }
+    }
+
+    private void ReportCompletionException(Exception exception)
+    {
+        ReportLayerEventError(-1, "System", "Completion", exception);
+    }
+
+    private void ReportScopeCompletionException(Exception exception)
+    {
+        ReportLayerEventError(-1, "System", "ScopeCompletion", exception);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

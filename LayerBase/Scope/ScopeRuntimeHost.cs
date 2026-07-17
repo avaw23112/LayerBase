@@ -175,6 +175,9 @@ internal sealed class ScopeRuntimeHost : IDisposable
         return false;
     }
 
+    public bool HasInlineScopes =>
+        _inlineScopes.Length > 0;
+
     public void PumpInlineScopes(
         float deltaTime,
         CompletionExceptionPolicy exceptionPolicy,
