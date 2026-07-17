@@ -252,6 +252,7 @@ internal sealed class EventPayloadStorage : IDisposable
     private readonly object _gate = new();
     private readonly PayloadDiagnosticsMode _diagnosticsMode;
     private IEventStore?[] _typeIdStores = new IEventStore[256];
+    private int _disposed;
 
     public EventPayloadStorage(
         PayloadDiagnosticsMode diagnosticsMode = PayloadDiagnosticsMode.Atomic)
@@ -268,6 +269,11 @@ internal sealed class EventPayloadStorage : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EventStore<T> GetStoreFast<T>() where T : struct
     {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return ThrowDisposed<T>();
+        }
+
         var typeId = EventTypeId<T>.Id;
         if ((uint)typeId < (uint)_typeIdStores.Length)
         {
@@ -276,6 +282,12 @@ internal sealed class EventPayloadStorage : IDisposable
         }
 
         return GetStoreFastSlow<T>(typeId);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static EventStore<T> ThrowDisposed<T>() where T : struct
+    {
+        throw new ObjectDisposedException(nameof(EventPayloadStorage));
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -317,7 +329,7 @@ internal sealed class EventPayloadStorage : IDisposable
 
     public void Release(PayloadHandle handle)
     {
-        if (handle.IsInvalid) return;
+        if (handle.IsInvalid || Volatile.Read(ref _disposed) != 0) return;
         var store = GetStoreByTypeId(handle.EventTypeId);
         store?.Release(handle.Index, handle.Version);
     }
@@ -412,6 +424,31 @@ internal sealed class EventPayloadStorage : IDisposable
 
     public void Dispose()
     {
-        // Keep the local store table alive so late rejected envelopes can release their payload handles.
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        IEventStore?[] stores;
+
+        lock (_gate)
+        {
+            stores = _typeIdStores;
+            _typeIdStores = Array.Empty<IEventStore?>();
+        }
+
+        var uniqueStores = new HashSet<IEventStore>();
+
+        for (int i = 0; i < stores.Length; i++)
+        {
+            IEventStore? store = stores[i];
+            if (store != null)
+            {
+                uniqueStores.Add(store);
+            }
+        }
+
+        foreach (IEventStore store in uniqueStores)
+        {
+            store.Dispose();
+        }
     }
 }
