@@ -27,22 +27,22 @@ public partial class PrewarmTests
     [Test]
     public void TestDefaultPrewarm()
     {
-        // 验证默认预热不报错。
-        // 它会调用生成的 Registry，由于 TestLayer 有订阅，所以会预热 TestEvent。
+        // 验证默认预热不报错�?
+        // 它会调用生成�?Registry，由�?TestLayer 有订阅，所以会预热 TestEvent�?
         Assert.DoesNotThrow(() => _runtime.Prewarm());
     }
 
     [Test]
     public void TestAllPrewarm()
     {
-        // 验证全量预热不报错。
+        // 验证全量预热不报错�?
         Assert.DoesNotThrow(() => _runtime.Prewarm(new LayerPrewarmOptions(LayerPrewarmTargets.All)));
     }
 
     [Test]
     public void TestManualPrewarmEvent()
     {
-        // 验证手动调用 PrewarmEvent 不报错。
+        // 验证手动调用 PrewarmEvent 不报错�?
         Assert.DoesNotThrow(() => _runtime.EventCenter.PrewarmEvent<TestEvent>(LayerPrewarmOptions.Default));
     }
 }

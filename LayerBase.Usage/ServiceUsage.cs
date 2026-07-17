@@ -1,15 +1,15 @@
-锘縰sing LayerBase.Core.Event;
+using LayerBase.Core.Event;
 using LayerBase.Layers;
 
 namespace LayerBase.Usage;
 
-// 1. 瀹氫箟鏈嶅姟鎺ュ彛
+// 1. 定义服务接口
 public interface IDataService
 {
     string GetData();
 }
 
-// 2. 瀹炵幇鏈嶅姟
+// 2. 实现服务
 public class DataService : IDataService
 {
     public string GetData()
@@ -28,7 +28,7 @@ public partial class ServiceLayer : Layer
     [SubscribeFlow]
     private EventHandledState OnRequest(in DataRequestEvent req)
     {
-        // 4. 鑾峰彇鏈嶅姟瀹炰緥
+        // 4. 获取服务实例
         var service = GetService<IDataService>();
         Console.WriteLine($"[ServiceLayer] Handled: {req.Query}, Service says: {service.GetData()}");
         return EventHandledState.Continue;

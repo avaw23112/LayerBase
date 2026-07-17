@@ -147,9 +147,11 @@ public sealed class EventCenterScopeMigrationTests
     {
     }
 
-    private readonly struct ScopedEventScope : IScopeDefinition
+    private sealed class ScopedEventScope : IScopeDefinition
     {
         public const int ScopeId = 17;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
     private readonly struct OrderedEvent

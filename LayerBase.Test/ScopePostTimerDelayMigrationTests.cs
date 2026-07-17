@@ -185,9 +185,11 @@ public sealed class ScopePostTimerDelayMigrationTests
         }
     }
 
-    private readonly struct ScopePostTimerDelayScope : IScopeDefinition
+    private sealed class ScopePostTimerDelayScope : IScopeDefinition
     {
         public const int ScopeId = 18;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
     private readonly struct ScopePostEvent

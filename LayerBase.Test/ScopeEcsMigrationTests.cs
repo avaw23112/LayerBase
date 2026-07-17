@@ -343,8 +343,10 @@ public class ScopeEcsMigrationTests
     }
 }
 
-internal readonly struct ScopeEcsCustomScope : IScopeDefinition
+internal sealed class ScopeEcsCustomScope : IScopeDefinition
 {
+
+public ScopeOptions Options => ScopeOptions.Inline;
 }
 
 internal sealed class ScopeEcsProbeService : IService

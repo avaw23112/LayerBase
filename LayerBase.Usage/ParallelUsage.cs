@@ -1,4 +1,4 @@
-ï»¿using LayerBase.Core.Event;
+using LayerBase.Core.Event;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 
@@ -18,7 +18,7 @@ public partial class ComputeLayer : Layer
     [Subscribe]
     private void DoWork(in HeavyComputeEvent e)
     {
-        if (e.Data < 0) throw new Exception("Compute Error!"); // æ•…æ„åˆ¶é€ å¼‚ï¿½?
+        if (e.Data < 0) throw new Exception("Compute Error!"); // ¹ÊÒâÖÆÔìÒì??
 
         Console.WriteLine($"[Parallel] Processing data: {e.Data} on thread {Thread.CurrentThread.ManagedThreadId}");
     }
@@ -30,23 +30,23 @@ public static class ParallelUsage
     {
         Console.WriteLine("--- Parallel Usage ---");
 
-        // 1. åˆå§‹åŒ–å¹¶è¡Œè°ƒåº¦å™¨ï¼ˆæŒ‡å®šå·¥ä½œçº¿ç¨‹æ•°ï¿½?
+        // 1. ³õÊ¼»¯²¢ĞĞµ÷¶ÈÆ÷£¨Ö¸¶¨¹¤×÷Ïß³ÌÊı??
         LayerHub.InitializeJobScheduler(4);
 
         var compute = new ComputeLayer();
         var runtime = LayerHub.CreateLayers().Push(compute).Build();
 
-        // 2. ç›‘å¬å…¨å±€é”™è¯¯ä¿¡æ¯ï¼ˆæ•…éšœéš”ç¦»æ¼”ç¤ºï¼‰
+        // 2. ¼àÌıÈ«¾Ö´íÎóĞÅÏ¢£¨¹ÊÕÏ¸ôÀëÑİÊ¾£©
         LayerHub.OnLayerEventInfo += info =>
         {
             if (info.Type == LayerEventInfoType.Error)
                 Console.WriteLine($"[ALERT] Fault Detected in {info.Source}: {info.Message}");
         };
 
-        // 3. æ­£å¸¸åˆ†å‘
+        // 3. Õı³£·Ö·¢
         runtime.Send(new HeavyComputeEvent { Data = 100 });
 
-        // 4. è§¦å‘å¼‚å¸¸åˆ†å‘ï¼šè¯¥ Handler ä¼šè¢«è‡ªåŠ¨â€œç†”æ–­â€å¹¶ä¸ŠæŠ¥ï¼Œä¸å½±å“åç»­åˆ†å‘
+        // 4. ´¥·¢Òì³£·Ö·¢£º¸Ã Handler »á±»×Ô¶¯¡°ÈÛ¶Ï¡±²¢ÉÏ±¨£¬²»Ó°ÏìºóĞø·Ö·¢
         runtime.Send(new HeavyComputeEvent { Data = -1 });
 
         Thread.Sleep(200);

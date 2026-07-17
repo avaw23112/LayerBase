@@ -467,6 +467,8 @@ public class ProjectionScopeMigrationTests
     }
 }
 
-internal readonly struct ProjectionCustomScope : IScopeDefinition
+internal sealed class ProjectionCustomScope : IScopeDefinition
 {
+
+public ScopeOptions Options => ScopeOptions.Inline;
 }

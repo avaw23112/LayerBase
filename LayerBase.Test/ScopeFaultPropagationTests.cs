@@ -158,7 +158,7 @@ public sealed class ScopeFaultPropagationTests
         var stopScopeOptions = new ScopeOptions(
             ScopeThreadingMode.Inline,
             ScopeClockMode.RuntimePump,
-            ScopeTickOptions.None,
+            tickRateHz: 0,
             ScopeFaultPolicy.StopScope);
         using var host = ScopeRuntimeHost.Create(
             runtime,
@@ -186,7 +186,7 @@ public sealed class ScopeFaultPropagationTests
         var stopRuntimeOptions = new ScopeOptions(
             ScopeThreadingMode.Inline,
             ScopeClockMode.RuntimePump,
-            ScopeTickOptions.None,
+            tickRateHz: 0,
             ScopeFaultPolicy.StopRuntime);
         using var host = ScopeRuntimeHost.Create(
             runtime,
@@ -247,8 +247,10 @@ public sealed class ScopeFaultPropagationTests
                 Array.Empty<LifecycleInvoker>()));
     }
 
-    private readonly struct FaultScope : IScopeDefinition
+    private sealed class FaultScope : IScopeDefinition
     {
+    
+    public ScopeOptions Options => ScopeOptions.Inline;
     }
 
     private readonly struct FaultCallRequest

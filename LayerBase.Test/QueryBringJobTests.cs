@@ -15,19 +15,19 @@ namespace LayerBase.Test;
 
 #region Test Components and Events
 
-public struct JobPositionComponent :　IComponent
+public struct JobPositionComponent : IComponent
 {
     public float X;
     public float Y;
 }
 
-public struct JobVelocityComponent :　IComponent
+public struct JobVelocityComponent :IComponent
 {
     public float X;
     public float Y;
 }
 
-public struct JobAoiComponent :　IComponent
+public struct JobAoiComponent :IComponent
 {
     public bool IsVisible;
 }
@@ -104,9 +104,9 @@ public class QueryBringJobTests
     [Test]
     public void QueryWithoutBring_ForEach_ExecutesAndMutatesComponent()
     {
-        // 逻辑说明：
-        // 验证纯 Query + Job ForEach 能正确遍历并修改组件数据。
-        // 不创建 Actor，不 Touch Actor，不 Post ActorEvent。
+        // ?
+        // ?Query + Job ForEach ?
+        // ?Actor Touch Actor Post ActorEvent?
 
         LayerRuntime runtime = CreateRuntime();
 
@@ -145,11 +145,11 @@ public class QueryBringJobTests
     [Test]
     public void QueryWithBring_Success_MutatesEcsTouchesActorAndPostsEvent()
     {
-        // 逻辑说明：
-        // 验证 Query + Bring + Job 在 ProjectResult.Success 时：
-        // 1. 修改 ECS 数据
+        // ?
+        //  Query + Bring + Job ?ProjectResult.Success 
+        // 1.  ECS 
         // 2. Touch/Ensure Actor
-        // 3. Add Event 到 Batch
+        // 3. Add Event ?Batch
         // 4. Post ActorEvent
 
         LayerRuntime runtime = CreateRuntime();
@@ -224,17 +224,17 @@ public class QueryBringJobTests
     [Test]
     public void QueryWithBring_Touch_TouchesActorButDoesNotPostEvent()
     {
-        // 逻辑说明：
-        // 验证 Query + Bring + Job 在 ProjectResult.Touch 时：
+        // ?
+        //  Query + Bring + Job ?ProjectResult.Touch 
         // 1. Touch/Ensure Actor
-        // 2. 不 Add Event 到 Batch
-        // 3. 不 Post ActorEvent
+        // 2. ?Add Event ?Batch
+        // 3. ?Post ActorEvent
 
         LayerRuntime runtime = CreateRuntime();
 
         Entity entity = runtime.EcsWorld.Create(
             new JobPositionComponent { X = 10f, Y = 20f },
-            new JobVelocityComponent { X = 0f, Y = 0f }, // 零速度 -> Touch
+            new JobVelocityComponent { X = 0f, Y = 0f }, //  -> Touch
             new JobAoiComponent { IsVisible = true });
         runtime.EcsWorld.WithProjectedActor<JobProbeActor>(entity, keepAliveSeconds: 0.5f);
 
@@ -251,13 +251,13 @@ public class QueryBringJobTests
         JobPositionComponent position = runtime.EcsWorld.Get<JobPositionComponent>(entity);
         ActorId actorId = runtime.EcsWorld.GetProjectionMeta(entity).ActorId;
 
-        // ECS 数据未修改（零速度时不修改位置）
+        // ECS ?
         Assert.That(position.X, Is.EqualTo(10f));
         Assert.That(position.Y, Is.EqualTo(20f));
-        // Actor 被 Touch/Ensure
+        // Actor ?Touch/Ensure
         Assert.That(actorId.IsValid, Is.True);
         Assert.That(runtime.Actors.IsAlive(actorId), Is.True);
-        // 没有 Post 事件
+        //  Post 
         Assert.That(JobProbeActor.Received, Is.Empty);
     }
 
@@ -268,17 +268,17 @@ public class QueryBringJobTests
     [Test]
     public void QueryWithBring_Fail_DoesNotTouchActorAndDoesNotPostEvent()
     {
-        // 逻辑说明：
-        // 验证 Query + Bring + Job 在 ProjectResult.Fail 时：
-        // 1. 不 Touch Actor
-        // 2. 不 Add Event 到 Batch
-        // 3. 不 Post ActorEvent
+        // ?
+        //  Query + Bring + Job ?ProjectResult.Fail 
+        // 1. ?Touch Actor
+        // 2. ?Add Event ?Batch
+        // 3. ?Post ActorEvent
 
         LayerRuntime runtime = CreateRuntime();
         Entity entity = runtime.EcsWorld.Create(
             new JobPositionComponent { X = 10f, Y = 20f },
             new JobVelocityComponent { X = 3f, Y = 4f },
-            new JobAoiComponent { IsVisible = false }); // 不可见 -> Fail
+            new JobAoiComponent { IsVisible = false }); // ?-> Fail
         runtime.EcsWorld.WithProjectedActor<JobProbeActor>(entity, keepAliveSeconds: 0.5f);
 
         var job = new UpdateEnemyViewJob();
@@ -294,12 +294,12 @@ public class QueryBringJobTests
         JobPositionComponent position = runtime.EcsWorld.Get<JobPositionComponent>(entity);
         ActorId actorId = runtime.EcsWorld.GetProjectionMeta(entity).ActorId;
 
-        // ECS 数据未修改（Fail 时不修改位置）
+        // ECS Fail ?
         Assert.That(position.X, Is.EqualTo(10f));
         Assert.That(position.Y, Is.EqualTo(20f));
-        // Actor 不被 Touch（会因超时被回收）
+        // Actor  Touch?
         Assert.That(actorId.IsValid, Is.False);
-        // 没有 Post 事件
+        //  Post 
         Assert.That(JobProbeActor.Received, Is.Empty);
     }
 

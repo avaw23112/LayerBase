@@ -1,4 +1,4 @@
-ï»¿using LayerBase.Core.Event;
+using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
@@ -10,7 +10,7 @@ public struct NotificationEvent
     public string Msg;
 }
 
-// 1. å®šä¹‰ Service è´Ÿè´£ä¸šåŠ¡é€»è¾‘
+// 1. ¶¨Òå Service ¸ºÔğÒµÎñÂß¼­
 public partial class NotifyManager : IService
 {
     public void ConfigureServices(IServiceCollection services)
@@ -20,14 +20,14 @@ public partial class NotifyManager : IService
 
     public void RequestNotification(string message, float delay)
     {
-        // ğŸš€ ï¿½?Service ä¸­è°ƒç”¨æ‰©å±•æ–¹æ³•ï¼Œå®‰å…¨ä¸”ç¬¦åˆæ¶ï¿½?
+        // ?? ??Service ÖĞµ÷ÓÃÀ©Õ¹·½·¨£¬°²È«ÇÒ·ûºÏ¼Ü??
         this.Delay(new NotificationEvent { Msg = message }, delay);
     }
 }
 
 public partial class NotifyLayer : Layer
 {
-    // [SubscribeDelay] å…è®¸å±‚çº§æŒæœ‰å»¶è¿Ÿå‘å¸ƒçš„å¼•ï¿½?
+    // [SubscribeDelay] ÔÊĞí²ã¼¶³ÖÓĞÑÓ³Ù·¢²¼µÄÒı??
     [SubscribeDelay] public IDelayPublisher<NotificationEvent> DelayNotify { get; set; }
 
     public bool HasReceived { get; private set; }
@@ -51,17 +51,17 @@ public static class DelayUsage
         var layer = new NotifyLayer();
         var manager = new NotifyManager();
 
-        // 2. æ³¨å†Œ Service
+        // 2. ×¢²á Service
         layer.RegisterService(manager);
 
         LayerHub.CreateLayers().Push(layer).Build();
 
         Console.WriteLine($"Setting delay for 0.5s at {DateTime.Now:HH:mm:ss.fff}");
 
-        // 3. é€šè¿‡è·å–åˆ°çš„ Service å®ä¾‹å‘èµ·è¯·æ±‚
+        // 3. Í¨¹ı»ñÈ¡µ½µÄ Service ÊµÀı·¢ÆğÇëÇó
         layer.GetService<NotifyManager>().RequestNotification("Delayed Message", 0.5f);
 
-        // 4. é©±åŠ¨ä¸»å¾ªï¿½?
+        // 4. Çı¶¯Ö÷Ñ­??
         var timeout = 0;
         while (!layer.HasReceived && timeout < 20)
         {

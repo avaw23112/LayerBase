@@ -13,7 +13,7 @@ public class ScopeAttribute : Attribute
 
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 public sealed class ScopeAttribute<TScope> : ScopeAttribute
-    where TScope : IScopeDefinition
+    where TScope : class, IScopeDefinition
 {
     public ScopeAttribute()
         : base(typeof(TScope))

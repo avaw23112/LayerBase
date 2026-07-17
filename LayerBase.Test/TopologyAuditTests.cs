@@ -111,14 +111,18 @@ public sealed class TopologyAuditTests
     {
     }
 
-    private readonly struct PathfindingScope : IScopeDefinition
+    private sealed class PathfindingScope : IScopeDefinition
     {
         public const int ScopeId = 25;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
-    private readonly struct MissingScope : IScopeDefinition
+    private sealed class MissingScope : IScopeDefinition
     {
         public const int ScopeId = 999;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
     private readonly struct TopologyRequest

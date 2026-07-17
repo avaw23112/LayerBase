@@ -307,8 +307,10 @@ public sealed class WorkerEventJobScopeTests
     {
     }
 
-    private readonly struct WorkerProbeCustomScope : IScopeDefinition
+    private sealed class WorkerProbeCustomScope : IScopeDefinition
     {
+    
+    public ScopeOptions Options => ScopeOptions.Inline;
     }
 
     private sealed class WorkerProbeService : IService

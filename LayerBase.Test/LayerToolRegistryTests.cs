@@ -540,9 +540,11 @@ public sealed class LayerToolRegistryTests
     {
     }
 
-    private readonly struct SecondaryToolScope : IScopeDefinition
+    private sealed class SecondaryToolScope : IScopeDefinition
     {
         public const int ScopeId = 9;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
     private sealed class FailingTool

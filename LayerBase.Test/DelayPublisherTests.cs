@@ -26,8 +26,8 @@ public partial class DelayPublisherTests
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            // 🚀 关键：Service 必须注册自己或被注册，才能在 Build 后被获取。
-            // 使用 Scoped 确保服务绑定到 Layer，从而可以使用 Layer-only API (Delay)。
+            // 🚀 关键：Service 必须注册自己或被注册，才能在 Build 后被获取�?
+            // 使用 Scoped 确保服务绑定�?Layer，从而可以使�?Layer-only API (Delay)�?
             services.AddScoped<DelayTestService>(_ => this);
         }
 

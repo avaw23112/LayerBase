@@ -1,4 +1,4 @@
-ï»¿using System.Diagnostics;
+using System.Diagnostics;
 using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.Layers;
@@ -21,7 +21,7 @@ public class PerformanceBenchmarks
     {
         const int totalHandlers = 10;
 
-        // åœºæ™¯ A: é›†ä¸­ï¿½?(1ï¿½?x 10ä¸ªHandler) - å†…å­˜æè‡´è¿ç»­
+        // ³¡¾° A: ¼¯ÖĞ??(1??x 10¸öHandler) - ÄÚ´æ¼«ÖÂÁ¬Ğø
         LayerHub.Reset();
         var lA = new BenchLayer();
         for (var i = 0; i < totalHandlers; i++)
@@ -35,9 +35,9 @@ public class PerformanceBenchmarks
         var sw = Stopwatch.StartNew();
         for (var i = 0; i < EventCount; i++) runtimeA.Send(new BenchEvent());
         sw.Stop();
-        Console.WriteLine($"\n[å†…å­˜å¯†é›†ï¿½?é›†ä¸­åˆ†å‘] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
+        Console.WriteLine($"\n[ÄÚ´æÃÜ¼¯??¼¯ÖĞ·Ö·¢] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
 
-        // åœºæ™¯ B: ç¢ç‰‡ï¿½?(10ï¿½?x 1ä¸ªHandler) - è·¨å¯¹è±¡è·³ï¿½?
+        // ³¡¾° B: ËéÆ¬??(10??x 1¸öHandler) - ¿ç¶ÔÏóÌø??
         LayerHub.Reset();
         var builder = LayerHub.CreateLayers();
         for (var i = 0; i < totalHandlers; i++)
@@ -56,7 +56,7 @@ public class PerformanceBenchmarks
         sw.Restart();
         for (var i = 0; i < EventCount; i++) runtimeB.Send(new BenchEvent());
         sw.Stop();
-        Console.WriteLine($"[å†…å­˜ç¢ç‰‡ï¿½?è·¨æ¡¶åˆ†å‘] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
+        Console.WriteLine($"[ÄÚ´æËéÆ¬??¿çÍ°·Ö·¢] TPS: {EventCount / sw.Elapsed.TotalSeconds:N0}");
     }
 
     private class BenchLayer : Layer

@@ -743,7 +743,7 @@ public abstract class Layer : Node, IDisposable
         if (handler == null) throw new ArgumentNullException(nameof(handler));
         if (ownerScopeType == null) throw new ArgumentNullException(nameof(ownerScopeType));
 
-        int ownerScopeId = ScopeDefinitionIds.Resolve(ownerScopeType);
+        int ownerScopeId = ScopeDefinitionIds.FromType(ownerScopeType);
         if (OwnerContext == null)
             throw new InvalidOperationException("Layer not attached to a runtime context.");
         if (!OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
@@ -797,7 +797,7 @@ public abstract class Layer : Node, IDisposable
         var binding = ServiceLayerBinder.GetBinding(owner);
         var ownerScopeType = binding?.OwnerScope.Descriptor.ScopeType ??
                              (owner is Layer ? typeof(MainScope) : ResolveOwnerScopeType(owner.GetType()));
-        int ownerScopeId = ScopeDefinitionIds.Resolve(ownerScopeType);
+        int ownerScopeId = ScopeDefinitionIds.FromType(ownerScopeType);
         if (OwnerContext == null)
             throw new InvalidOperationException("Layer not attached to a runtime context.");
         if (!OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
@@ -831,7 +831,7 @@ public abstract class Layer : Node, IDisposable
         var binding = ServiceLayerBinder.GetBinding(owner);
         var ownerScopeType = binding?.OwnerScope.Descriptor.ScopeType ??
                              (owner is Layer ? typeof(MainScope) : ResolveOwnerScopeType(owner.GetType()));
-        int ownerScopeId = ScopeDefinitionIds.Resolve(ownerScopeType);
+        int ownerScopeId = ScopeDefinitionIds.FromType(ownerScopeType);
         if (OwnerContext == null)
             throw new InvalidOperationException("Layer not attached to a runtime context.");
         if (!OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
@@ -1007,7 +1007,7 @@ public abstract class Layer : Node, IDisposable
 
         try
         {
-            return ScopeDefinitionIds.Resolve(ownerScopeType);
+            return ScopeDefinitionIds.FromType(ownerScopeType);
         }
         catch (InvalidOperationException)
         {

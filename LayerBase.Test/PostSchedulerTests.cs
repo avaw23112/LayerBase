@@ -328,19 +328,19 @@ public class PostSchedulerTests
         var scheduler = new PostScheduler(0, _eventCenter, options,
             new EventBuildPolicyTable(options.DefaultBackpressure));
 
-        // 初始状态没有注册事件
+        // 初始状态没有注册事�?
 
         // Prewarm 一个高 ID 事件 (强制扩容)
         // EventTypeIdAllocator.MaxId 可能会影响结果，我们直接用一个新类型
         scheduler.PrewarmEvent<TestPostEvent>();
 
-        // 验证基本投递
+        // 验证基本投�?
         Assert.That(scheduler.TryPost(new TestPostEvent()).IsSuccess, Is.True);
 
-        // 验证 Latest 投递 (应扩容 latest buffer)
+        // 验证 Latest 投�?(应扩�?latest buffer)
         Assert.That(scheduler.TryPostLatest(new TestPostEvent()).IsSuccess, Is.True);
 
-        // 验证 MarkDirty (应扩容 dirty bits)
+        // 验证 MarkDirty (应扩�?dirty bits)
         Assert.That(scheduler.MarkDirty<TestPostEvent>().IsSuccess, Is.True);
     }
 

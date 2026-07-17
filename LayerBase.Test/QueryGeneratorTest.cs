@@ -1,4 +1,4 @@
-Ôªøusing Arch.Core;
+using Arch.Core;
 using LayerBase;
 using LayerBase.Actor;
 using LayerBase.Core;
@@ -15,19 +15,19 @@ public class testManager : ILayerContext
 {
 }
 
-public struct PositionComponent :„ÄÄIComponent
+public struct PositionComponent :°°IComponent
 {
     public float X;
     public float Y;
 }
 
-public struct VelocityComponent :„ÄÄIComponent
+public struct VelocityComponent :°°IComponent
 {
     public float X;
     public float Y;
 }
 
-public struct AoiComponent :„ÄÄIComponent
+public struct AoiComponent :°°IComponent
 {
     public bool IsVisible;
 }
@@ -158,7 +158,7 @@ public class QueryBringTests
         runtime.Pump(0.1f);
         PositionComponent position = runtime.EcsWorld.Get<PositionComponent>(entity);
 
-        // ECS Êï∞ÊçÆ‰øÆÊîπ
+        // ECS  ˝æ›–ﬁ∏ƒ
         Assert.That(position.X, Is.EqualTo(16f));
         Assert.That(position.Y, Is.EqualTo(28f));
         Assert.That(ProbeActor.Received, !Is.Empty);

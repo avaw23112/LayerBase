@@ -98,9 +98,11 @@ public sealed class MainScopeActorMigrationTests
         }
     }
 
-    public readonly struct ActorWorkerScope : IScopeDefinition
+    private sealed class ActorWorkerScope : IScopeDefinition
     {
         public const int ScopeId = 21;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
     private sealed class ActorWorkerLayer : Layer

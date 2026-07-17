@@ -2,28 +2,30 @@ namespace LayerBase.Scope;
 
 public interface IScopeDefinition
 {
+    ScopeOptions Options { get; }
 }
 
-public readonly struct MainScope : IScopeDefinition
+public sealed class MainScope : IScopeDefinition
 {
     public const int ScopeId = 0;
+
+    public ScopeOptions Options => ScopeOptions.Main;
 }
 
 internal static class ScopeDefinitionIds
 {
     public const int Main = MainScope.ScopeId;
 
-    public static int Resolve(Type scopeType)
+    public const string MainIdentity =
+        "scope:LayerBase:LayerBase.Scope.MainScope";
+
+    public static int FromType(Type scopeType)
     {
-        if (scopeType == null)
-            throw new ArgumentNullException(nameof(scopeType));
-        if (!typeof(IScopeDefinition).IsAssignableFrom(scopeType))
-            throw new InvalidOperationException($"Scope type `{scopeType.FullName}` must implement {nameof(IScopeDefinition)}.");
+        if (scopeType == typeof(MainScope))
+            return Main;
 
-        var field = scopeType.GetField("ScopeId");
-        if (field == null || field.FieldType != typeof(int) || !field.IsStatic)
-            throw new InvalidOperationException($"Scope type `{scopeType.FullName}` must declare a public static int ScopeId.");
-
-        return (int)field.GetValue(null)!;
+        throw new NotSupportedException(
+            $"Scope type '{scopeType.FullName}' must be resolved through " +
+            "the ScopeDefinitionRegistry. Direct resolution is no longer supported.");
     }
 }

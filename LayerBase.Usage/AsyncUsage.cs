@@ -1,4 +1,4 @@
-ï»¿using LayerBase.Async;
+using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Layers;
 
@@ -33,10 +33,10 @@ public static class AsyncUsage
         var resource = new ResourceLayer();
         var runtime = LayerHub.CreateLayers().Push(resource).Build();
 
-        // 1. å‘é€å¼‚æ­¥äº‹ï¿½?
+        // 1. ·¢ËÍÒì²½ÊÂ??
         runtime.Send(new AssetLoadRequest { AssetPath = "Textures/Player.png" });
 
-        // 2. æ ¸å¿ƒï¼šé©±åŠ¨å¾ªï¿½?(Main Loop)
+        // 2. ºËĞÄ£ºÇı¶¯Ñ­??(Main Loop)
         var timeout = 0;
         while (!resource.IsLoadFinished && timeout < 20)
         {

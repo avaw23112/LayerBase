@@ -1,4 +1,4 @@
-锘縩amespace LayerBase.Usage;
+namespace LayerBase.Usage;
 
 internal static class Program
 {
@@ -34,7 +34,7 @@ internal static class Program
         Console.WriteLine();
 
         Console.WriteLine("=== Showcase Finished ===");
-        // 9. 楠岃瘉鐢熸垚鍣ㄩ�昏緫
+        // 9. 验证生成器逻辑
         GeneratorVerification.Run();
     }
 }

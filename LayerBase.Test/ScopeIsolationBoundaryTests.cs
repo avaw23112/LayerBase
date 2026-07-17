@@ -87,9 +87,11 @@ public sealed class ScopeIsolationBoundaryTests
         }
     }
 
-    private readonly struct SecondaryBoundaryScope : IScopeDefinition
+    private sealed class SecondaryBoundaryScope : IScopeDefinition
     {
         public const int ScopeId = 73;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
     private interface IScopedBoundaryService

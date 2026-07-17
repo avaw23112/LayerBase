@@ -32,27 +32,27 @@ public enum ScopeSafePointState : byte
     Faulted = 5
 }
 
-internal enum ScopeThreadingMode
+public enum ScopeThreadingMode
 {
     Main = 0,
     Inline = 1,
     Worker = 2
 }
 
-internal enum ScopeClockMode
+public enum ScopeClockMode
 {
     RuntimePump = 0,
     Manual = 1,
     FixedRate = 2
 }
 
-internal enum ScopeTickOverrunPolicy : byte
+public enum ScopeTickOverrunPolicy : byte
 {
     Skip = 0,
     CatchUpLimited = 1
 }
 
-internal readonly struct ScopeTickOptions
+public readonly struct ScopeTickOptions
 {
     public ScopeTickOptions(
         int rateHz,
@@ -93,17 +93,61 @@ internal readonly struct ScopeTickOptions
         new(0, ScopeTickOverrunPolicy.Skip, 0);
 }
 
-internal readonly struct ScopeOptions
+public readonly struct ScopeOptions
 {
     public ScopeOptions(
         ScopeThreadingMode threading,
         ScopeClockMode clock,
-        ScopeTickOptions tick,
+        int tickRateHz,
         ScopeFaultPolicy faultPolicy = ScopeFaultPolicy.ReportAndContinue,
         EcsRuntimeOptions? ecsRuntime = null)
     {
+        if (tickRateHz < 0)
+            throw new ArgumentOutOfRangeException(nameof(tickRateHz));
+
+        if (threading == ScopeThreadingMode.Worker &&
+            clock != ScopeClockMode.FixedRate)
+        {
+            throw new ArgumentException(
+                "Worker Scope must use FixedRate clock mode.",
+                nameof(clock));
+        }
+
+        if (clock == ScopeClockMode.FixedRate && tickRateHz <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(tickRateHz),
+                "FixedRate Scope requires a positive tick rate.");
+        }
+
+        if (clock != ScopeClockMode.FixedRate && tickRateHz != 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(tickRateHz),
+                "Only FixedRate Scope may declare a non-zero tick rate.");
+        }
+
         Threading = threading;
         Clock = clock;
+        TickRateHz = tickRateHz;
+        Tick = tickRateHz > 0
+            ? new ScopeTickOptions(tickRateHz, ScopeTickOverrunPolicy.Skip, 0)
+            : ScopeTickOptions.None;
+        FaultPolicy = faultPolicy;
+        EcsRuntime = ecsRuntime ?? EcsRuntimeOptions.Default;
+    }
+
+    internal ScopeOptions(
+        ScopeThreadingMode threading,
+        ScopeClockMode clock,
+        int tickRateHz,
+        ScopeTickOptions tick,
+        ScopeFaultPolicy faultPolicy,
+        EcsRuntimeOptions? ecsRuntime)
+    {
+        Threading = threading;
+        Clock = clock;
+        TickRateHz = tickRateHz;
         Tick = tick;
         FaultPolicy = faultPolicy;
         EcsRuntime = ecsRuntime ?? EcsRuntimeOptions.Default;
@@ -113,32 +157,58 @@ internal readonly struct ScopeOptions
 
     public ScopeClockMode Clock { get; }
 
-    public ScopeTickOptions Tick { get; }
+    internal ScopeTickOptions Tick { get; }
 
-    public int TickRateHz => Tick.RateHz;
+    public int TickRateHz { get; }
 
     public ScopeFaultPolicy FaultPolicy { get; }
 
     public EcsRuntimeOptions EcsRuntime { get; }
 
-    public static ScopeOptions Main { get; } = new(ScopeThreadingMode.Main, ScopeClockMode.RuntimePump, ScopeTickOptions.None);
+    public static ScopeOptions Main { get; } = new(
+        ScopeThreadingMode.Main,
+        ScopeClockMode.RuntimePump,
+        tickRateHz: 0);
 
-    public static ScopeOptions Inline { get; } = new(ScopeThreadingMode.Inline, ScopeClockMode.RuntimePump, ScopeTickOptions.None);
+    public static ScopeOptions Inline { get; } = new(
+        ScopeThreadingMode.Inline,
+        ScopeClockMode.RuntimePump,
+        tickRateHz: 0);
+
+    public static ScopeOptions Manual(
+        ScopeFaultPolicy faultPolicy = ScopeFaultPolicy.ReportAndContinue,
+        EcsRuntimeOptions? ecsRuntime = null)
+    {
+        return new ScopeOptions(
+            ScopeThreadingMode.Inline,
+            ScopeClockMode.Manual,
+            tickRateHz: 0,
+            faultPolicy: faultPolicy,
+            ecsRuntime: ecsRuntime);
+    }
 
     public static ScopeOptions Worker(
         int tickRateHz = 60,
-        ScopeTickOverrunPolicy overrunPolicy = ScopeTickOverrunPolicy.CatchUpLimited,
-        int maxCatchUpTicks = 2)
+        ScopeFaultPolicy faultPolicy = ScopeFaultPolicy.ReportAndContinue,
+        EcsRuntimeOptions? ecsRuntime = null)
     {
         return new ScopeOptions(
             ScopeThreadingMode.Worker,
             ScopeClockMode.FixedRate,
-            new ScopeTickOptions(tickRateHz, overrunPolicy, maxCatchUpTicks));
+            tickRateHz: tickRateHz,
+            faultPolicy: faultPolicy,
+            ecsRuntime: ecsRuntime);
     }
 
     public ScopeOptions WithEcsRuntime(EcsRuntimeOptions ecsRuntime)
     {
-        return new ScopeOptions(Threading, Clock, Tick, FaultPolicy, ecsRuntime);
+        return new ScopeOptions(
+            Threading,
+            Clock,
+            TickRateHz,
+            Tick,
+            FaultPolicy,
+            ecsRuntime);
     }
 }
 
@@ -467,5 +537,4 @@ internal sealed class ScopeLifecyclePlan
                 Dispose[i]();
         }
     }
-
 }

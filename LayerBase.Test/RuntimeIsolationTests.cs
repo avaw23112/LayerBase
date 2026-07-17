@@ -295,8 +295,10 @@ public sealed class RuntimeIsolationTests
         }
     }
 
-    private readonly struct IsolationScope : IScopeDefinition
+    private sealed class IsolationScope : IScopeDefinition
     {
         public const int ScopeId = 16;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 }

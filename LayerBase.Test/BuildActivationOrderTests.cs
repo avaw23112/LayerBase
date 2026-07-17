@@ -207,9 +207,11 @@ public sealed class BuildActivationOrderTests
     {
     }
 
-    private readonly struct BuildOrderScope : IScopeDefinition
+    private sealed class BuildOrderScope : IScopeDefinition
     {
         public const int ScopeId = 26;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
     private sealed class TestAssemblyModule : IAssemblyModule

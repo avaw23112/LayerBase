@@ -148,8 +148,10 @@ public sealed class QueryInputRuntimeTests
     }
 }
 
-internal readonly struct QueryInputRuntimeScope : IScopeDefinition
+internal sealed class QueryInputRuntimeScope : IScopeDefinition
 {
+
+public ScopeOptions Options => ScopeOptions.Inline;
 }
 
 internal sealed partial class QueryInputRuntimeLayer : Layer

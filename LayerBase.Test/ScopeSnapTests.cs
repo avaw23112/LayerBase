@@ -217,14 +217,18 @@ public class ScopeSnapTests
     }
 }
 
-public readonly struct ScopeSnapCustomScope : IScopeDefinition
+public sealed class ScopeSnapCustomScope : IScopeDefinition
 {
     public const int ScopeId = 240;
+    public ScopeOptions Options => ScopeOptions.Inline;
+    
 }
 
-public readonly struct ScopeSnapWorkerScope : IScopeDefinition
+public sealed class ScopeSnapWorkerScope : IScopeDefinition
 {
     public const int ScopeId = 241;
+    public ScopeOptions Options => ScopeOptions.Inline;
+    
 }
 
 public partial class ScopeSnapLayer : Layer, IFullSnap

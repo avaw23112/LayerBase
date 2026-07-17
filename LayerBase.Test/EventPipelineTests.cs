@@ -1,4 +1,4 @@
-ï»¿using LayerBase;
+using LayerBase;
 using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Layers;
@@ -74,7 +74,7 @@ public class EventPipelineTests
         LayerHub.OnLayerEventInfo += handler;
         try
         {
-            // æ³¨å†Œä¸€ä¸ªä¼šæŠ¥é”™ï¿½?Handler å’Œä¸€ä¸ªå®‰å…¨çš„ Handler
+            // ×¢²áÒ»¸ö»á±¨´í??Handler ºÍÒ»¸ö°²È«µÄ Handler
             layer.SubscribeFlow((in TestEvent e) => throw new Exception("Boom"));
             layer.SubscribeFlow((in TestEvent e) =>
             {
@@ -83,17 +83,17 @@ public class EventPipelineTests
             });
             var runtime = LayerHub.CreateLayers().Push(layer).Build();
 
-            // ç¬¬ä¸€æ¬¡åˆ†å‘ï¼š
-            // try-catch åœ¨å¾ªç¯å¤–ï¼ŒæŠ¥é”™ä¼šç«‹å³ä¸­æ–­å½“å‰å¾ªç¯çš„æ‰§è¡Œæµï¿½?
+            // µÚÒ»´Î·Ö·¢£º
+            // try-catch ÔÚÑ­»·Íâ£¬±¨´í»áÁ¢¼´ÖĞ¶Ïµ±Ç°Ñ­»·µÄÖ´ĞĞÁ÷??
             runtime.Send(new TestEvent());
             Assert.That(errorCount, Is.EqualTo(1));
-            // é¢„æœŸï¼šåªæœ‰ç¬¬ä¸€ä¸ªï¼ˆTraceLayerè‡ªå¸¦çš„è®¢é˜…ï¼‰è·‘åˆ°äº†ï¼Œä¹‹åæˆ‘ä»¬æ‰‹åŠ¨åŠ çš„é‚£ä¸ªæŠ¥é”™äº†ï¼ŒSafe æ²¡è·‘åˆ°ï¿½?
-            // æ³¨æ„ï¼šTraceLayer æ„é€ å‡½æ•°é‡Œé»˜è®¤è®¢é˜…äº†ä¸€ï¿½?TestEvent
+            // Ô¤ÆÚ£ºÖ»ÓĞµÚÒ»¸ö£¨TraceLayer×Ô´øµÄ¶©ÔÄ£©ÅÜµ½ÁË£¬Ö®ºóÎÒÃÇÊÖ¶¯¼ÓµÄÄÇ¸ö±¨´íÁË£¬Safe Ã»ÅÜµ½??
+            // ×¢Òâ£ºTraceLayer ¹¹Ôìº¯ÊıÀïÄ¬ÈÏ¶©ÔÄÁËÒ»??TestEvent
             Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv" }));
 
             _trace.Clear();
-            // ç¬¬äºŒæ¬¡åˆ†å‘ï¼š
-            // é‡å»ºæ•°ç»„åï¼Œæ•…éšœ Handler æ¶ˆå¤±ï¼ŒSafe ç»ˆäºå¯ä»¥è·‘åˆ°äº†ï¿½?
+            // µÚ¶ş´Î·Ö·¢£º
+            // ÖØ½¨Êı×éºó£¬¹ÊÕÏ Handler ÏûÊ§£¬Safe ÖÕÓÚ¿ÉÒÔÅÜµ½ÁË??
             runtime.Send(new TestEvent());
             Assert.That(errorCount, Is.EqualTo(1), "Should fuse and not report again");
             Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv", "Safe" }));

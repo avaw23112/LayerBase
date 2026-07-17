@@ -28,8 +28,10 @@ public struct RuntimeActorEvent
     }
 }
 
-internal readonly struct CustomActorScope : IScopeDefinition
+internal sealed class CustomActorScope : IScopeDefinition
 {
+
+public ScopeOptions Options => ScopeOptions.Inline;
 }
 
 internal static class ActorRuntimeIntegrationTrace

@@ -1,4 +1,4 @@
-锘縰sing System.Diagnostics;
+using System.Diagnostics;
 using LayerBase;
 using LayerBase.Layers;
 
@@ -61,7 +61,7 @@ public class IdleLayerPerformanceBenchmarks
 
         public override void Pump(float deltaTime)
         {
-            // 鍙湁娲昏穬灞傛墠鎵ц涓�鐐圭偣寰皬鐨勯�昏緫
+            // 只有活跃层才执行一点点微小的逻辑
             if (_isActive)
             {
                 /* No-op */

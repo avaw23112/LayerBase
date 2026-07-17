@@ -165,7 +165,7 @@ public partial class DiMultiWorldTests
         layerB.RegisterService(new ManualInstanceModule(sharedCounter));
         var builderB = LayerHub.CreateLayers().Push(layerB);
 
-        // 🚀 关键：跨 Runtime 复用同一个 Singleton / Instance 实例时必须抛异常
+        // 🚀 关键：跨 Runtime 复用同一�?Singleton / Instance 实例时必须抛异常
         Assert.Throws<InvalidOperationException>(() => builderB.Build());
     }
 

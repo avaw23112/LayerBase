@@ -1,4 +1,4 @@
-ï»¿using Arch.Core;
+using Arch.Core;
 using Arch.Core.Extensions;
 using LayerBase.Actor;
 using LayerBase.Core;
@@ -160,9 +160,9 @@ public sealed class BundleBlueprintTests
         public void Config(
             ref EntityBlueprintBuilder builder)
         {
-            // builder å‚æ•°ä½œç”¨ï¼š
-            // å½“å‰å®ä½“è“å›¾æ„å»ºå™¨ã€‚
-            // è¿™é‡Œå£°æ˜ç§»åŠ¨èƒ½åŠ›éœ€è¦çš„ ECS ç»„ä»¶ã€‚
+            // builder ²ÎÊı×÷ÓÃ£º
+            // µ±Ç°ÊµÌåÀ¶Í¼¹¹½¨Æ÷¡£
+            // ÕâÀïÉùÃ÷ÒÆ¶¯ÄÜÁ¦ĞèÒªµÄ ECS ×é¼ş¡£
 
             builder.WithComponent<TestPositionComponent>();
             builder.WithComponent<TestVelocityComponent>();
@@ -176,9 +176,9 @@ public sealed class BundleBlueprintTests
         public void Config(
             ref EntityBlueprintBuilder builder)
         {
-            // builder å‚æ•°ä½œç”¨ï¼š
-            // å½“å‰å®ä½“è“å›¾æ„å»ºå™¨ã€‚
-            // è¿™é‡Œå£°æ˜æˆ˜æ–—èƒ½åŠ›éœ€è¦çš„ ECS ç»„ä»¶ã€‚
+            // builder ²ÎÊı×÷ÓÃ£º
+            // µ±Ç°ÊµÌåÀ¶Í¼¹¹½¨Æ÷¡£
+            // ÕâÀïÉùÃ÷Õ½¶·ÄÜÁ¦ĞèÒªµÄ ECS ×é¼ş¡£
 
             builder.WithComponent<TestHealthComponent>();
         }
@@ -190,9 +190,9 @@ public sealed class BundleBlueprintTests
         public void Config(
             ref EntityBlueprintBuilder builder)
         {
-            // builder å‚æ•°ä½œç”¨ï¼š
-            // å½“å‰å®ä½“è“å›¾æ„å»ºå™¨ã€‚
-            // è¿™é‡Œå£°æ˜ AOI / å¯è§æ€§èƒ½åŠ›éœ€è¦çš„ ECS ç»„ä»¶ã€‚
+            // builder ²ÎÊı×÷ÓÃ£º
+            // µ±Ç°ÊµÌåÀ¶Í¼¹¹½¨Æ÷¡£
+            // ÕâÀïÉùÃ÷ AOI / ¿É¼ûĞÔÄÜÁ¦ĞèÒªµÄ ECS ×é¼ş¡£
 
             builder.WithComponent<TestAoiComponent>();
         }
@@ -204,9 +204,9 @@ public sealed class BundleBlueprintTests
         public void Config(
             ref EntityBlueprintBuilder builder)
         {
-            // builder å‚æ•°ä½œç”¨ï¼š
-            // å½“å‰å®ä½“è“å›¾æ„å»ºå™¨ã€‚
-            // è¿™é‡Œå£°æ˜æ•Œäººå®ä½“çš„å®Œæ•´ç»“æ„ã€‚
+            // builder ²ÎÊı×÷ÓÃ£º
+            // µ±Ç°ÊµÌåÀ¶Í¼¹¹½¨Æ÷¡£
+            // ÕâÀïÉùÃ÷µĞÈËÊµÌåµÄÍêÕû½á¹¹¡£
 
             builder.WithBundle<TestMoveBundle>();
             builder.WithBundle<TestCombatBundle>();
@@ -223,9 +223,9 @@ public sealed class BundleBlueprintTests
         public void Config(
             ref EntityBlueprintBuilder builder)
         {
-            // builder å‚æ•°ä½œç”¨ï¼š
-            // å½“å‰å®ä½“è“å›¾æ„å»ºå™¨ã€‚
-            // è¯¥æµ‹è¯•é€šè¿‡è®¡æ•°éªŒè¯ EntityBlueprintCache<TBlueprint> åªæ„å»ºä¸€æ¬¡ã€‚
+            // builder ²ÎÊı×÷ÓÃ£º
+            // µ±Ç°ÊµÌåÀ¶Í¼¹¹½¨Æ÷¡£
+            // ¸Ã²âÊÔÍ¨¹ı¼ÆÊıÑéÖ¤ EntityBlueprintCache<TBlueprint> Ö»¹¹½¨Ò»´Î¡£
 
             ConfigCallCount++;
 
@@ -242,11 +242,11 @@ public sealed class BundleBlueprintTests
             float x,
             float y)
         {
-            // x å‚æ•°ä½œç”¨ï¼š
-            // æµ‹è¯•ä½ç½®ç»„ä»¶çš„ X åæ ‡ã€‚
+            // x ²ÎÊı×÷ÓÃ£º
+            // ²âÊÔÎ»ÖÃ×é¼şµÄ X ×ø±ê¡£
 
-            // y å‚æ•°ä½œç”¨ï¼š
-            // æµ‹è¯•ä½ç½®ç»„ä»¶çš„ Y åæ ‡ã€‚
+            // y ²ÎÊı×÷ÓÃ£º
+            // ²âÊÔÎ»ÖÃ×é¼şµÄ Y ×ø±ê¡£
 
             X = x;
             Y = y;

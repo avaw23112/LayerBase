@@ -65,7 +65,7 @@ public partial class VerifyService3 : IService
 
 public partial class VerifyLayer : Layer
 {
-    // 证明 1：如果生成器工作，这个字段会被 new VerifyService() 赋值
+    // 证明 1：如果生成器工作，这个字段会�?new VerifyService() 赋�?
     [Mount] public VerifyService2 MountedService2;
     [Mount] public VerifyService3 MountedService3;
     [Mount] public VerifyService1 MountedService1;
@@ -77,12 +77,12 @@ public static class GeneratorVerification
     {
         Console.WriteLine("--- LayerServiceGenerator Deep Verification ---");
 
-        // 初始化环境
+        // 初始化环�?
         LayerHub.Reset();
         var layer = new VerifyLayer();
 
-        // 执行挂载逻辑（模拟正常的 Layer 生命周期）
-        // LayerHub 在 Build 时会触发所有 [SourceGeneratedServiceInit] 标记的方法
+        // 执行挂载逻辑（模拟正常的 Layer 生命周期�?
+        // LayerHub �?Build 时会触发所�?[SourceGeneratedServiceInit] 标记的方�?
         LayerHub.CreateLayers().Push(layer).Build();
     }
 }

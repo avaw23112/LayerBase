@@ -374,7 +374,7 @@ public sealed partial class LayerRuntime : IDisposable
         {
             if (attribute is ScopeAttribute scopeAttribute)
             {
-                int attributeScopeId = ScopeDefinitionIds.Resolve(scopeAttribute.ScopeType);
+                int attributeScopeId = ScopeDefinitionIds.FromType(scopeAttribute.ScopeType);
                 if (_scopeHost.TryGetRuntime(attributeScopeId, out _))
                     return attributeScopeId;
             }

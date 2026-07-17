@@ -1,4 +1,4 @@
-﻿using LayerBase;
+using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.DI.Options;

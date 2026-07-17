@@ -244,14 +244,18 @@ public sealed class ScopeDiagnosticsTests
         public int Value { get; }
     }
 
-    private readonly struct DiagnosticsScope : IScopeDefinition
+    private sealed class DiagnosticsScope : IScopeDefinition
     {
         public const int ScopeId = 27;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
-    private readonly struct WorkerDiagnosticsScope : IScopeDefinition
+    private sealed class WorkerDiagnosticsScope : IScopeDefinition
     {
         public const int ScopeId = 2701;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
     private sealed class TestAssemblyModule : IAssemblyModule

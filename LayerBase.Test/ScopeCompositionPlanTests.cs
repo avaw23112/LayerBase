@@ -532,16 +532,18 @@ public sealed class ScopeCompositionPlanTests
 
     private sealed class PathfindingCallHandler { }
 
-    private readonly struct PathfindingScope : IScopeDefinition
+    public sealed class PathfindingScope : IScopeDefinition
     {
         public const int ScopeId = 7;
+        public ScopeOptions Options => ScopeOptions.Inline;
     }
 
     public sealed partial class ReflectionFeatureLayer : Layer { }
 
-    public readonly struct ReflectionFeatureScope : IScopeDefinition
+    public sealed class ReflectionFeatureScope : IScopeDefinition
     {
         public const int ScopeId = 8;
+        public ScopeOptions Options => ScopeOptions.Inline;
     }
 
     [Scope<ReflectionFeatureScope>]

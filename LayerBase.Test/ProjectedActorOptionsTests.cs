@@ -151,20 +151,20 @@ public class ProjectedActorOptionsTests
     [Test]
     public void RegisterGenerated_CachesOptions_FromAttribute()
     {
-        // 验证：第一次 RegisterGenerated 会反射读取 ActorOptionsAttribute 并缓存
-        //       第二次 RegisterGenerated 不会重复反射（通过 _optionsInitializedById 判断）
+        // 验证：第一�?RegisterGenerated 会反射读�?ActorOptionsAttribute 并缓�?
+        //       第二�?RegisterGenerated 不会重复反射（通过 _optionsInitializedById 判断�?
 
         // Arrange
         int actorTypeId = 100;
         Type actorType = typeof(DisablePolicyProbeActor);
 
-        // Act - 第一次注册
+        // Act - 第一次注�?
         ProjectedActorTypeRegistry.RegisterGenerated(
             actorTypeId,
             actorType,
             static actorWorld => actorWorld.CreateProjectedActor<DisablePolicyProbeActor>());
 
-        // Assert - 验证 options 被正确缓存
+        // Assert - 验证 options 被正确缓�?
         ProjectedActorOptions options = ProjectedActorTypeRegistry.GetOptions(actorTypeId);
         Assert.That(options.RetirePolicy, Is.EqualTo(ProjectedActorRetirePolicy.Disable));
         Assert.That(options.CreatePolicy, Is.EqualTo(ProjectedActorCreatePolicy.Lazy));
@@ -175,7 +175,7 @@ public class ProjectedActorOptionsTests
     [Test]
     public void RegisterGenerated_DoesNotReparseAttribute_OnSecondCall()
     {
-        // 验证：第二次调用 RegisterGenerated 时不会重复解析特性
+        // 验证：第二次调用 RegisterGenerated 时不会重复解析特�?
 
         // Arrange
         int actorTypeId = 101;
@@ -200,7 +200,7 @@ public class ProjectedActorOptionsTests
     [Test]
     public void RegisterGenerated_WithOptions_BypassesReflection()
     {
-        // 验证：带 options 参数的 RegisterGenerated overload 不使用反射
+        // 验证：带 options 参数�?RegisterGenerated overload 不使用反�?
 
         // Arrange
         int actorTypeId = 102;
@@ -211,7 +211,7 @@ public class ProjectedActorOptionsTests
             ProjectedActorTime.SecondsToTicks(2.0f),
             ProjectedActorTime.SecondsToTicks(0.5f));
 
-        // Act - 使用带 options 的 overload
+        // Act - 使用�?options �?overload
         ProjectedActorTypeRegistry.RegisterGenerated(
             actorTypeId,
             actorType,
@@ -246,7 +246,7 @@ public class ProjectedActorOptionsTests
     [Test]
     public void GetOptions_ReturnsDefault_ForUnregisteredTypeId()
     {
-        // 验证：未注册的 actorTypeId 返回默认 options
+        // 验证：未注册�?actorTypeId 返回默认 options
 
         // Arrange
         int unregisteredTypeId = 9999;
@@ -262,7 +262,7 @@ public class ProjectedActorOptionsTests
     [Test]
     public void DisablePolicy_ShouldCallOnDisable_NotOnReturn()
     {
-        // 验证：RetirePolicy.Disable 到期后调用 OnDisable，不调用 OnReturn
+        // 验证：RetirePolicy.Disable 到期后调�?OnDisable，不调用 OnReturn
 
         // Arrange
         LayerRuntime runtime = CreateRuntime();
@@ -279,7 +279,7 @@ public class ProjectedActorOptionsTests
 
         Assert.That(DisablePolicyProbeActor.RentCount, Is.EqualTo(1));
 
-        // Act - 等待超过 KeepAlive 时间（1.0f 秒）后 Sweep
+        // Act - 等待超过 KeepAlive 时间�?.0f 秒）�?Sweep
         System.Threading.Thread.Sleep(1100);
         runtime.EcsWorld.SweepProjectedActors();
         PumpActors(runtime);
@@ -288,7 +288,7 @@ public class ProjectedActorOptionsTests
         Assert.That(DisablePolicyProbeActor.DisableCount, Is.EqualTo(1));
         Assert.That(DisablePolicyProbeActor.ReturnCount, Is.EqualTo(0));
 
-        // 验证 ActorId 仍然有效（Disable 不清理 ActorId）
+        // 验证 ActorId 仍然有效（Disable 不清�?ActorId�?
         ref ProjectedActorMeta meta = ref runtime.EcsWorld.GetProjectionMeta(entity);
         Assert.That(meta.ActorId.IsValid, Is.True);
     }
@@ -296,7 +296,7 @@ public class ProjectedActorOptionsTests
     [Test]
     public void ReturnToPoolPolicy_ShouldCallOnReturn()
     {
-        // 验证：RetirePolicy.ReturnToPool 到期后调用 OnReturn
+        // 验证：RetirePolicy.ReturnToPool 到期后调�?OnReturn
 
         // Arrange
         LayerRuntime runtime = CreateRuntime();
@@ -315,7 +315,7 @@ public class ProjectedActorOptionsTests
 
         Assert.That(ReturnToPoolPolicyProbeActor.RentCount, Is.EqualTo(1));
 
-        // Act - 等待超过 KeepAlive 时间（0.5f 秒）后 Sweep
+        // Act - 等待超过 KeepAlive 时间�?.5f 秒）�?Sweep
         System.Threading.Thread.Sleep(600);
         runtime.EcsWorld.SweepProjectedActors();
         PumpActors(runtime);
@@ -323,7 +323,7 @@ public class ProjectedActorOptionsTests
         // Assert - 应该调用 OnReturn
         Assert.That(ReturnToPoolPolicyProbeActor.ReturnCount, Is.EqualTo(1));
 
-        // 验证 ActorId 被清理
+        // 验证 ActorId 被清�?
         ref ProjectedActorMeta meta = ref runtime.EcsWorld.GetProjectionMeta(entity);
         Assert.That(meta.ActorId.IsValid, Is.False);
     }
@@ -331,7 +331,7 @@ public class ProjectedActorOptionsTests
     [Test]
     public void DisabledActor_ShouldCallOnEnable_WhenTouchedAgain()
     {
-        // 验证：Disabled 状态的 Actor 再次 Touch 时调用 OnEnable
+        // 验证：Disabled 状态的 Actor 再次 Touch 时调�?OnEnable
 
         // Arrange
         LayerRuntime runtime = CreateRuntime();
@@ -361,13 +361,13 @@ public class ProjectedActorOptionsTests
 
         // Assert - 应该调用 OnEnable
         Assert.That(DisablePolicyProbeActor.EnableCount, Is.EqualTo(1));
-        Assert.That(DisablePolicyProbeActor.RentCount, Is.EqualTo(1)); // 不应该再次调用 OnRent
+        Assert.That(DisablePolicyProbeActor.RentCount, Is.EqualTo(1)); // 不应该再次调�?OnRent
     }
 
     [Test]
     public void TouchThrottling_ShouldSkipRefresh_WithinInterval()
     {
-        // 验证：TouchInterval 内重复 Touch 不刷新 ExpireAtTicks
+        // 验证：TouchInterval 内重�?Touch 不刷�?ExpireAtTicks
 
         // Arrange
         LayerRuntime runtime = CreateRuntime();
@@ -386,13 +386,13 @@ public class ProjectedActorOptionsTests
         ref ProjectedActorRef actorRef = ref runtime.EcsWorld.Get<ProjectedActorRef>(entity);
         long firstExpireAt = actorRef.ExpireAtTicks;
 
-        // Act - 立即再次 Touch（在 TouchInterval 0.2f 秒内）
-        System.Threading.Thread.Sleep(50); // 等待 50ms，小于 200ms
+        // Act - 立即再次 Touch（在 TouchInterval 0.2f 秒内�?
+        System.Threading.Thread.Sleep(50); // 等待 50ms，小�?200ms
         runtime.EcsWorld
                .Query()
                .TouchProjectedActor();
 
-        // Assert - ExpireAtTicks 不应该被刷新（因为被节流跳过）
+        // Assert - ExpireAtTicks 不应该被刷新（因为被节流跳过�?
         ref ProjectedActorRef actorRefAfter = ref runtime.EcsWorld.Get<ProjectedActorRef>(entity);
         Assert.That(actorRefAfter.ExpireAtTicks, Is.EqualTo(firstExpireAt));
     }
@@ -409,7 +409,7 @@ public class ProjectedActorOptionsTests
         Entity entity = runtime.EcsWorld.Create(new ProjectedActorRef());
         runtime.EcsWorld.WithProjectedActor<DisablePolicyProbeActor>(entity);
 
-        // Act - 使用 Where(false) 的 Query
+        // Act - 使用 Where(false) �?Query
         runtime.EcsWorld
                .Query<ProjectedActorRef>()
                .Where(static (in Entity _, in ProjectedActorRef __) => false)

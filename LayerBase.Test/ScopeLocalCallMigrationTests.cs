@@ -174,9 +174,11 @@ public sealed class ScopeLocalCallMigrationTests
     {
     }
 
-    public readonly struct SecondaryScope : IScopeDefinition
+    private sealed class SecondaryScope : IScopeDefinition
     {
         public const int ScopeId = 20;
+        public ScopeOptions Options => ScopeOptions.Inline;
+        
     }
 
     private sealed class SameRequestDifferentScopeModule : IAssemblyModule

@@ -38,14 +38,14 @@ public class PayloadLifecycleTests
     [Test]
     public void RuntimeId_Reuse_Does_Not_Leak_Old_Payloads()
     {
-        // 1. 第一个 Runtime
+        // 1. 第一�?Runtime
         var runtime1 = LayerHub.CreateLayers().Push(new TestLayer()).Build();
         var id1 = runtime1.Id;
         runtime1.Scheduler.PrewarmEvent<LifecycleTestEvent>();
         runtime1.Post(new LifecycleTestEvent { Value = 1 });
         runtime1.Dispose();
 
-        // 2. 第二个 Runtime (假设复用了 ID)
+        // 2. 第二�?Runtime (假设复用�?ID)
         LayerHub.Reset();
         var runtime2 = LayerHub.CreateLayers().Push(new TestLayer()).Build();
         Assert.That(runtime2.Id, Is.EqualTo(id1), "Should reuse the same ID after Reset for this test.");
@@ -83,8 +83,8 @@ public class PayloadLifecycleTests
         scheduler.TryPostCoalesced(new LifecycleTestEvent { Value = 3 });
 
         // 获取 Store，记录当前的活跃数量 (这里需要内部访问，或者通过 Release 钩子验证)
-        // 由于没有直接 API，我们通过 Dispose 不报错来验证基础清理流程。
-        // 更严谨的验证需要 Mock EventStore。
+        // 由于没有直接 API，我们通过 Dispose 不报错来验证基础清理流程�?
+        // 更严谨的验证需�?Mock EventStore�?
 
         Assert.DoesNotThrow(() => scheduler.Dispose());
     }
@@ -96,25 +96,25 @@ public class PayloadLifecycleTests
         var table = new EventBuildPolicyTable(options.DefaultBackpressure);
         var scheduler = new PostScheduler(0, _eventCenter, options, table);
 
-        // 配置 Coalesced 和 Latest 策略
+        // 配置 Coalesced �?Latest 策略
         scheduler.AddSpecialPolicy(EventTypeId<LifecycleTestEvent>.Id,
             new EventPostPolicy(PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0));
 
         scheduler.TryPostCoalesced(new LifecycleTestEvent { Value = 1 });
         scheduler.TryPostCoalesced(new LifecycleTestEvent { Value = 2 });
 
-        // 订阅并抛出异常
+        // 订阅并抛出异�?
         _eventCenter.SubscribeNotify<LifecycleTestEvent>(0,
             (in LifecycleTestEvent e) => { throw new Exception("Test Exception"); });
 
-        // 执行 Pump (会调用 FlushBuffers)
+        // 执行 Pump (会调�?FlushBuffers)
         Assert.Throws<Exception>(() => scheduler.Pump());
 
-        // 再次 Pump 不应该重复派发 (因为 snapshot 已清理)
+        // 再次 Pump 不应该重复派�?(因为 snapshot 已清�?
         int callCount = 0;
         _eventCenter.SubscribeNotify<LifecycleTestEvent>(1, (in LifecycleTestEvent e) => callCount++);
 
-        // 清理掉抛异常的订阅，防止第二次也抛
+        // 清理掉抛异常的订阅，防止第二次也�?
         _eventCenter.Reset();
         _eventCenter.SubscribeNotify<LifecycleTestEvent>(1, (in LifecycleTestEvent e) => callCount++);
 

@@ -1,4 +1,4 @@
-ï»¿using LayerBase;
+using LayerBase;
 using LayerBase.Core.Event;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
@@ -22,12 +22,12 @@ public partial class RebuildEventPoliciesRegressionTests
 
         public RebuildCoalescedEvent(int key, int amount)
         {
-            // keyï¼š
-            //   æ™®é€šä¸šåŠ¡é”®ã€‚
+            // key£º
+            //   ÆÕÍ¨ÒµÎñ¼ü¡£
             //
-            // amountï¼š
-            //   ç”¨äº metadata ç”Ÿæˆ coalesce keyã€‚
-            //   æœ¬æµ‹è¯•ä¸­è®©ä¸åŒ amount è¿›å…¥ä¸åŒ coalesced slotã€‚
+            // amount£º
+            //   ÓÃÓÚ metadata Éú³É coalesce key¡£
+            //   ±¾²âÊÔÖĞÈÃ²»Í¬ amount ½øÈë²»Í¬ coalesced slot¡£
             Key = key;
             Amount = amount;
         }
@@ -37,34 +37,34 @@ public partial class RebuildEventPoliciesRegressionTests
     {
         public override EventPostPolicy? PostPolicy =>
             new EventPostPolicy(
-                // modeï¼š
-                //   ä½¿ç”¨ Coalesced æŠ•é€’æ¨¡å¼ã€‚
+                // mode£º
+                //   Ê¹ÓÃ Coalesced Í¶µİÄ£Ê½¡£
                 PostDeliveryMode.Coalesced,
 
-                // backpressureï¼š
-                //   é˜Ÿåˆ—æ»¡æ—¶æ‹’ç»æ–°äº‹ä»¶ã€‚
+                // backpressure£º
+                //   ¶ÓÁĞÂúÊ±¾Ü¾øĞÂÊÂ¼ş¡£
                 BackpressurePolicy.RejectNew,
 
-                // maxPendingï¼š
-                //   0 è¡¨ç¤ºä¸å¯ç”¨ pending ä¸Šé™ã€‚
+                // maxPending£º
+                //   0 ±íÊ¾²»ÆôÓÃ pending ÉÏÏŞ¡£
                 0,
 
-                // mergeFailureï¼š
-                //   åˆå¹¶å¤±è´¥æ—¶æ‹’ç»ã€‚
-                //   å¦‚æœ scheduler ä»ç„¶ä½¿ç”¨æ—§ policyTableï¼Œæ²¡æœ‰ metadataï¼Œ
-                //   ç¬¬äºŒä¸ªäº‹ä»¶ä¼šè¿›å…¥åŒä¸€ä¸ªé»˜è®¤ key=0 slotï¼Œç„¶ååˆå¹¶å¤±è´¥ï¼Œè¢«æ‹’ç»ã€‚
+                // mergeFailure£º
+                //   ºÏ²¢Ê§°ÜÊ±¾Ü¾ø¡£
+                //   Èç¹û scheduler ÈÔÈ»Ê¹ÓÃ¾É policyTable£¬Ã»ÓĞ metadata£¬
+                //   µÚ¶ş¸öÊÂ¼ş»á½øÈëÍ¬Ò»¸öÄ¬ÈÏ key=0 slot£¬È»ºóºÏ²¢Ê§°Ü£¬±»¾Ü¾ø¡£
                 MergeFailurePolicy.Reject);
 
         public override int GetPostCoalesceKey(in RebuildCoalescedEvent value)
         {
-            // Rebuild åçš„æ–° metadataï¼š
-            //   è®© Amount å‚ä¸ coalesce keyã€‚
+            // Rebuild ºóµÄĞÂ metadata£º
+            //   ÈÃ Amount ²ÎÓë coalesce key¡£
             //
-            // è¿™æ ·ä¸¤ä¸ªäº‹ä»¶ï¼š
+            // ÕâÑùÁ½¸öÊÂ¼ş£º
             //   Amount = 10 -> key = 1010
             //   Amount = 20 -> key = 1020
             //
-            // å®ƒä»¬åº”è¯¥è¿›å…¥ä¸¤ä¸ªä¸åŒ coalesced slotï¼Œæœ€ç»ˆæ´¾å‘ 2 æ¬¡ã€‚
+            // ËüÃÇÓ¦¸Ã½øÈëÁ½¸ö²»Í¬ coalesced slot£¬×îÖÕÅÉ·¢ 2 ´Î¡£
             return value.Key * 1000 + value.Amount;
         }
 
@@ -72,14 +72,14 @@ public partial class RebuildEventPoliciesRegressionTests
             ref RebuildCoalescedEvent current,
             in  RebuildCoalescedEvent next)
         {
-            // currentï¼š
-            //   å½“å‰ slot ä¸­å·²æœ‰äº‹ä»¶ã€‚
+            // current£º
+            //   µ±Ç° slot ÖĞÒÑÓĞÊÂ¼ş¡£
             //
-            // nextï¼š
-            //   æ–°æ¥çš„äº‹ä»¶ã€‚
+            // next£º
+            //   ĞÂÀ´µÄÊÂ¼ş¡£
             //
-            // è¿™ä¸ªæµ‹è¯•é‡Œæ­£å¸¸ä¸ä¼šè§¦å‘ mergeï¼Œ
-            // å› ä¸ºä¸¤ä¸ªäº‹ä»¶çš„ coalesce key ä¸åŒã€‚
+            // Õâ¸ö²âÊÔÀïÕı³£²»»á´¥·¢ merge£¬
+            // ÒòÎªÁ½¸öÊÂ¼şµÄ coalesce key ²»Í¬¡£
             current = new RebuildCoalescedEvent(
                 current.Key,
                 current.Amount + next.Amount);
@@ -100,11 +100,11 @@ public partial class RebuildEventPoliciesRegressionTests
 
         private void OnEvent(in RebuildCoalescedEvent e)
         {
-            // Countï¼š
-            //   æ´¾å‘æ¬¡æ•°ã€‚
+            // Count£º
+            //   ÅÉ·¢´ÎÊı¡£
             //
-            // TotalAmountï¼š
-            //   æ‰€æœ‰æ´¾å‘äº‹ä»¶çš„ Amount æ€»å’Œã€‚
+            // TotalAmount£º
+            //   ËùÓĞÅÉ·¢ÊÂ¼şµÄ Amount ×ÜºÍ¡£
             Count++;
             TotalAmount += e.Amount;
         }
@@ -113,10 +113,10 @@ public partial class RebuildEventPoliciesRegressionTests
     [Test]
     public void RebuildEventPolicies_Should_Update_PostScheduler_PolicyTable_When_Metadata_Is_Added_After_Build()
     {
-        // å…³é”®ç‚¹ï¼š
-        //   Build å‰æ²¡æœ‰æ³¨å†Œ RebuildCoalescedEvent çš„ metadataã€‚
-        //   ä½†æå‰è§¦å‘ EventTypeIdï¼Œè®© BuildPlans çš„ EnsureEventCapacity(maxId)
-        //   æŠŠå®ƒä½œä¸ºé»˜è®¤ Normal äº‹ä»¶æ³¨å†Œè¿›å»ã€‚
+        // ¹Ø¼üµã£º
+        //   Build Ç°Ã»ÓĞ×¢²á RebuildCoalescedEvent µÄ metadata¡£
+        //   µ«ÌáÇ°´¥·¢ EventTypeId£¬ÈÃ BuildPlans µÄ EnsureEventCapacity(maxId)
+        //   °ÑËü×÷ÎªÄ¬ÈÏ Normal ÊÂ¼ş×¢²á½øÈ¥¡£
         _ = EventTypeId<RebuildCoalescedEvent>.Id;
 
         var layer = new CaptureLayer();
@@ -125,13 +125,13 @@ public partial class RebuildEventPoliciesRegressionTests
                               .Push(layer)
                               .Build();
 
-        // Build åæ‰æ³¨å†Œ metadataã€‚
-        // è¿™ä¸æ˜¯â€œä¸¤ä¸ª metadata åŒæ—¶å­˜åœ¨â€ï¼Œè€Œæ˜¯ä»æ—  metadata -> æœ‰ metadataã€‚
+        // Build ºó²Å×¢²á metadata¡£
+        // Õâ²»ÊÇ¡°Á½¸ö metadata Í¬Ê±´æÔÚ¡±£¬¶øÊÇ´ÓÎŞ metadata -> ÓĞ metadata¡£
         EventMetaDataHandler.RegisterMetaData<RebuildCoalescedEvent>(
             new RebuildCoalescedMetaData());
 
-        // å…³é”®æ­¥éª¤ï¼š
-        //   RebuildEventPolicies å¿…é¡»è®© PostScheduler å†…éƒ¨ä¹Ÿåˆ‡æ¢åˆ°æ–°çš„ policyTableã€‚
+        // ¹Ø¼ü²½Öè£º
+        //   RebuildEventPolicies ±ØĞëÈÃ PostScheduler ÄÚ²¿Ò²ÇĞ»»µ½ĞÂµÄ policyTable¡£
         runtime.RebuildEventPolicies();
 
         runtime.PostCoalesced(new RebuildCoalescedEvent(
@@ -144,16 +144,16 @@ public partial class RebuildEventPoliciesRegressionTests
 
         runtime.Pump(0.016f);
 
-        // å¦‚æœ PostScheduler å·²ç»ä½¿ç”¨æ–°çš„ metadataï¼š
-        //   ä¸¤ä¸ªäº‹ä»¶ coalesce key åˆ†åˆ«ä¸º 1010 å’Œ 1020ã€‚
-        //   å®ƒä»¬ä¸ä¼šåˆå¹¶ï¼Œåº”æ´¾å‘ 2 æ¬¡ã€‚
+        // Èç¹û PostScheduler ÒÑ¾­Ê¹ÓÃĞÂµÄ metadata£º
+        //   Á½¸öÊÂ¼ş coalesce key ·Ö±ğÎª 1010 ºÍ 1020¡£
+        //   ËüÃÇ²»»áºÏ²¢£¬Ó¦ÅÉ·¢ 2 ´Î¡£
         //
-        // å¦‚æœ PostScheduler ä»ç„¶æŒæœ‰æ—§ policyTableï¼š
-        //   meta == nullï¼Œcoalesce key é»˜è®¤æ˜¯ 0ã€‚
-        //   ç¬¬äºŒä¸ªäº‹ä»¶ä¼šå°è¯•è¿›å…¥åŒä¸€ä¸ª slotã€‚
-        //   å› ä¸ºæ²¡æœ‰ metadataï¼ŒTryMergePostEvent ä¸ä¼šæ‰§è¡Œã€‚
-        //   MergeFailurePolicy.Reject ä¼šæ‹’ç»ç¬¬äºŒä¸ªäº‹ä»¶ã€‚
-        //   æœ€ç»ˆåªä¼šæ´¾å‘ 1 æ¬¡ã€‚
+        // Èç¹û PostScheduler ÈÔÈ»³ÖÓĞ¾É policyTable£º
+        //   meta == null£¬coalesce key Ä¬ÈÏÊÇ 0¡£
+        //   µÚ¶ş¸öÊÂ¼ş»á³¢ÊÔ½øÈëÍ¬Ò»¸ö slot¡£
+        //   ÒòÎªÃ»ÓĞ metadata£¬TryMergePostEvent ²»»áÖ´ĞĞ¡£
+        //   MergeFailurePolicy.Reject »á¾Ü¾øµÚ¶ş¸öÊÂ¼ş¡£
+        //   ×îÖÕÖ»»áÅÉ·¢ 1 ´Î¡£
         Assert.That(
             layer.Count,
             Is.EqualTo(2),

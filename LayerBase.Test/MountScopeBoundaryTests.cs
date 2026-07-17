@@ -19,8 +19,8 @@ public sealed class MountScopeBoundaryGeneratorTests
                              using LayerBase.Layers;
                              using LayerBase.Scope;
 
-                             public readonly struct CombatScope : IScopeDefinition { }
-                             public readonly struct PresentationScope : IScopeDefinition { }
+                             public sealed class CombatScope : IScopeDefinition {  public ScopeOptions Options => ScopeOptions.Inline; }
+                             public sealed class PresentationScope : IScopeDefinition {  public ScopeOptions Options => ScopeOptions.Inline; }
 
                              public sealed partial class GameplayLayer : Layer
                              {
@@ -39,7 +39,7 @@ public sealed class MountScopeBoundaryGeneratorTests
                              using LayerBase.DI.Options;
                              using LayerBase.Scope;
 
-                             public readonly struct CombatScope : IScopeDefinition { }
+                             public sealed class CombatScope : IScopeDefinition {  public ScopeOptions Options => ScopeOptions.Inline; }
 
                              [Scope<CombatScope>]
                              public sealed partial class CombatService : IService
@@ -243,8 +243,10 @@ public partial class MountScopeBoundaryRuntimeTests
     }
 }
 
-public readonly struct MountBoundaryScope : IScopeDefinition
+public sealed class MountBoundaryScope : IScopeDefinition
 {
+
+public ScopeOptions Options => ScopeOptions.Inline;
 }
 
 public sealed partial class MountBoundaryLayer : Layer

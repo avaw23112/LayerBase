@@ -280,8 +280,8 @@ public class ProjectedActorProjectionTests
     [Test]
     public void Query0_TouchProjectedActor_Should_Visit_Entity()
     {
-        // 逻辑说明：
-        // 验证空组件 Query 能命中刚创建的 Entity。
+        // 逻辑说明�?
+        // 验证空组�?Query 能命中刚创建�?Entity�?
 
         LayerRuntime runtime = CreateRuntime();
         RegisterProjectionProbe(runtime, actorTypeId: 10);
@@ -303,8 +303,8 @@ public class ProjectedActorProjectionTests
     [Test]
     public void Query0_Where_False_Should_Not_Create_ProjectedActor()
     {
-        // 逻辑说明：
-        // 验证 Query0 的 Where 可以阻止 Actor 创建。
+        // 逻辑说明�?
+        // 验证 Query0 �?Where 可以阻止 Actor 创建�?
 
         LayerRuntime runtime = CreateRuntime();
         RegisterProjectionProbe(runtime, actorTypeId: 10);

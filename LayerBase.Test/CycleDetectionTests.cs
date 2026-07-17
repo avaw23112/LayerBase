@@ -62,7 +62,7 @@ public partial class CycleDetectionTests
         var layer = new GameLayer();
         layer.RegisterService(new DirectCycleService());
 
-        // 寮哄姏璇婃柇锛氭煡鐪?Generator 鎻愬彇鍑虹殑渚濊禆
+        // 寮哄姏璇婃柇锛氭煡鐪?Generator 鎻愬彇鍑虹殑渚濊�?
         var mgr = new DirectCycleManager();
         var deps = ((IAutoSubscribe)mgr).GetEventDependencies().ToList();
         TestContext.Progress.WriteLine($"[Diagnostic] DirectCycleManager deps count: {deps.Count}");
@@ -82,7 +82,7 @@ public partial class CycleDetectionTests
         var layer = new GameLayer();
         layer.RegisterService(new IndirectCycleService());
 
-        // 寮哄姏璇婃柇锛氭煡鐪嬩袱涓?Manager 鐨勪緷璧?
+        // 寮哄姏璇婃柇锛氭煡鐪嬩袱�?Manager 鐨勪緷璧?
         var mgrA = new IndirectManagerA();
         var depsA = ((IAutoSubscribe)mgrA).GetEventDependencies().ToList();
         TestContext.Progress.WriteLine($"[Diagnostic] IndirectManagerA deps count: {depsA.Count}");

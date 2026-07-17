@@ -1,4 +1,4 @@
-﻿using LayerBase.Async;
+using LayerBase.Async;
 
 namespace EventsTest;
 

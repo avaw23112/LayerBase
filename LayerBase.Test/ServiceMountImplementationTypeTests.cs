@@ -1,4 +1,4 @@
-﻿using LayerBase.DI;
+using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.Layers;
 using NUnit.Framework;

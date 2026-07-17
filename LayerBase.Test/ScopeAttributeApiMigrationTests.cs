@@ -114,18 +114,22 @@ public sealed class ScopeAttributeApiMigrationTests
     }
 }
 
-public readonly struct AttributeApiScope : IScopeDefinition
+public sealed class AttributeApiScope : IScopeDefinition
 {
     public const int ScopeId = 61;
+    public ScopeOptions Options => ScopeOptions.Inline;
+    
 }
 
 public sealed partial class AttributeApiLayer : Layer
 {
 }
 
-public readonly struct AttributeApiContextScope : IScopeDefinition
+public sealed class AttributeApiContextScope : IScopeDefinition
 {
     public const int ScopeId = 62;
+    public ScopeOptions Options => ScopeOptions.Inline;
+    
 }
 
 public sealed partial class AttributeApiContextLayer : Layer

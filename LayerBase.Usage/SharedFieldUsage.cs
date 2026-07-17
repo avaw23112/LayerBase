@@ -1,4 +1,4 @@
-﻿using LayerBase.DI;
+using LayerBase.DI;
 using LayerBase.Layers;
 
 namespace LayerBase.Usage;

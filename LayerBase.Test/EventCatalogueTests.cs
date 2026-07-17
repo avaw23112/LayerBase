@@ -1,4 +1,4 @@
-﻿using LayerBase.Core.EventCatalogue;
+using LayerBase.Core.EventCatalogue;
 
 namespace EventsTest;
 

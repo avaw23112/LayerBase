@@ -565,7 +565,7 @@ internal sealed class RuntimeCompositionPlan
         if (scopeIdsByType.TryGetValue(scopeType, out int existing))
             return existing;
 
-        int scopeId = ScopeDefinitionIds.Resolve(scopeType);
+        int scopeId = ScopeDefinitionIds.FromType(scopeType);
         if (scopeId < 0)
             throw new InvalidOperationException($"Scope `{scopeType.FullName}` has an invalid negative ScopeId.");
 

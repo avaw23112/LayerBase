@@ -1082,20 +1082,28 @@ public sealed class ScopeLifecycleMigrationTests
         }
     }
 
-    private readonly struct InlineTraceScope : IScopeDefinition
+    private sealed class InlineTraceScope : IScopeDefinition
     {
+    
+    public ScopeOptions Options => ScopeOptions.Inline;
     }
 
-    private readonly struct WorkerTraceScope : IScopeDefinition
+    private sealed class WorkerTraceScope : IScopeDefinition
     {
+    
+    public ScopeOptions Options => ScopeOptions.Inline;
     }
 
-    private readonly struct SecondWorkerTraceScope : IScopeDefinition
+    private sealed class SecondWorkerTraceScope : IScopeDefinition
     {
+    
+    public ScopeOptions Options => ScopeOptions.Inline;
     }
 
-    private readonly struct SecondInlineTraceScope : IScopeDefinition
+    private sealed class SecondInlineTraceScope : IScopeDefinition
     {
+    
+    public ScopeOptions Options => ScopeOptions.Inline;
     }
 
     private readonly struct TraceScopeEvent

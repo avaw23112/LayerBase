@@ -317,6 +317,8 @@ public sealed class ScopeWorkerBlockingTests
         Assert.That(continuationDone.Wait(TimeSpan.FromSeconds(2)), Is.True);
 
         var stopTask = workerScope.RequestStopAsync();
+        workerScope.PumpIngress();
+
         Assert.That(stopTask.GetAwaiter().GetResult().State,
             Is.EqualTo(ScopeControlResult.Succeeded));
 
@@ -434,10 +436,7 @@ public sealed class ScopeWorkerBlockingTests
 
         return new ScopeExecutionPlan(
             new ScopeDescriptor(2, nameof(CatchUpScope), typeof(CatchUpScope)),
-            new ScopeOptions(
-                ScopeThreadingMode.Worker,
-                ScopeClockMode.FixedRate,
-                new ScopeTickOptions(100, ScopeTickOverrunPolicy.CatchUpLimited, 2)),
+            ScopeOptions.Worker(tickRateHz: 100),
             lifecyclePlan: new ScopeLifecyclePlan(
                 layers,
                 Array.Empty<LifecycleInvoker>(),
@@ -486,8 +485,8 @@ public sealed class ScopeWorkerBlockingTests
                 Array.Empty<LifecycleInvoker>()));
     }
 
-    private readonly struct SimpleWorkerScope : IScopeDefinition { }
-    private readonly struct OverrunScope : IScopeDefinition { }
-    private readonly struct CatchUpScope : IScopeDefinition { }
-    private readonly struct OwnerThreadScope : IScopeDefinition { }
+    private sealed class SimpleWorkerScope : IScopeDefinition {  public ScopeOptions Options => ScopeOptions.Inline; }
+    private sealed class OverrunScope : IScopeDefinition {  public ScopeOptions Options => ScopeOptions.Inline; }
+    private sealed class CatchUpScope : IScopeDefinition {  public ScopeOptions Options => ScopeOptions.Inline; }
+    private sealed class OwnerThreadScope : IScopeDefinition {  public ScopeOptions Options => ScopeOptions.Inline; }
 }

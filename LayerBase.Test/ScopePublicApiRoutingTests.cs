@@ -136,8 +136,10 @@ public sealed class ScopePublicApiRoutingTests
         method!.Invoke(null, new object[] { target, runtime, scope });
     }
 
-    private readonly struct PublicApiRoutingScope : IScopeDefinition
+    private sealed class PublicApiRoutingScope : IScopeDefinition
     {
+    
+    public ScopeOptions Options => ScopeOptions.Inline;
     }
 
     private sealed class PublicApiRoutingService : IService

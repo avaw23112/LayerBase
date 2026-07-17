@@ -1,25 +1,25 @@
-ï»¿using LayerBase.Core.Event;
+using LayerBase.Core.Event;
 using LayerBase.Layers;
 
 namespace LayerBase.Usage;
 
-// 1. å®šä¹‰äº‹ä»¶ï¼ˆæ¨èä½¿ï¿½?struct ä»¥è·å¾—æè‡´æ€§èƒ½ï¿½?
+// 1. ¶¨ÒåÊÂ¼ş£¨ÍÆ¼öÊ¹??struct ÒÔ»ñµÃ¼«ÖÂĞÔÄÜ??
 public struct PlayerSpawnEvent
 {
     public string Name;
     public int Level;
 }
 
-// 2. å®šä¹‰ Layer å¹¶ä½¿ï¿½?partial å…³é”®å­—å¼€ï¿½?Source Generator ä¼˜åŒ–
+// 2. ¶¨Òå Layer ²¢Ê¹??partial ¹Ø¼ü×Ö¿ª??Source Generator ÓÅ»¯
 public partial class GameplayLayer : Layer
 {
-    // ä½¿ç”¨ [SubscribeFlow] ç‰¹æ€§è‡ªåŠ¨è®¢é˜…ï¿½?
-    // æ–¹æ³•å¿…é¡»ï¿½?partial ç±»çš„ä¸€éƒ¨åˆ†ï¼Œä¸”å»ºè®®å‚æ•°ï¿½?in å…³é”®å­—ä»¥å‡å°‘ç»“æ„ä½“å¤åˆ¶ï¿½?
+    // Ê¹ÓÃ [SubscribeFlow] ÌØĞÔ×Ô¶¯¶©ÔÄ??
+    // ·½·¨±ØĞë??partial ÀàµÄÒ»²¿·Ö£¬ÇÒ½¨Òé²ÎÊı??in ¹Ø¼ü×ÖÒÔ¼õÉÙ½á¹¹Ìå¸´ÖÆ??
     [SubscribeFlow]
     private EventHandledState OnPlayerSpawn(in PlayerSpawnEvent e)
     {
         Console.WriteLine($"[Gameplay] Player {e.Name} spawned at level {e.Level}");
-        // è¿”å› Continue è®©äº‹ä»¶ç»§ç»­æµå‘åï¿½?Layerï¼Œè¿”ï¿½?Handled åˆ™æˆªæ–­äº‹ä»¶æµï¿½?
+        // ·µ»Ø Continue ÈÃÊÂ¼ş¼ÌĞøÁ÷Ïòºó??Layer£¬·µ??Handled Ôò½Ø¶ÏÊÂ¼şÁ÷??
         return EventHandledState.Continue;
     }
 }
@@ -30,16 +30,16 @@ public static class BasicUsage
     {
         Console.WriteLine("--- Basic Usage ---");
 
-        // é‡ç½®/åˆå§‹åŒ–ç¯ï¿½?
+        // ÖØÖÃ/³õÊ¼»¯»·??
         LayerHub.Reset();
 
-        // 3. æ„å»ºå±‚çº§æ‹“æ‰‘
+        // 3. ¹¹½¨²ã¼¶ÍØÆË
         var gameplay = new GameplayLayer();
         var runtime = LayerHub.CreateLayers()
                               .Push(gameplay)
                               .Build();
 
-        // 4. å‘é€åŒæ­¥äº‹ï¿½?
+        // 4. ·¢ËÍÍ¬²½ÊÂ??
         runtime.Send(new PlayerSpawnEvent { Name = "Hero", Level = 1 });
     }
 }
