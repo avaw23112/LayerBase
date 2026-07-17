@@ -4,6 +4,8 @@ using LayerBase.Actor;
 
 namespace LayerBase.Event.EventMetaData;
 
+public delegate IEventMetaData EventMetaDataFactory();
+
 public interface IEventMetaData
 {
     int EventId { get; }

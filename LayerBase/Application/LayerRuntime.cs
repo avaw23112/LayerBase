@@ -5,6 +5,7 @@ using LayerBase.Actor;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
+using LayerBase.Event.EventMetaData;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.Event.Delay;
@@ -150,41 +151,93 @@ public sealed partial class LayerRuntime : IDisposable
 
     private void BuildEventPolicies(PostSchedulerOptions options)
     {
-        var policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
-        var metaData = LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData().ToList();
-        var plans = new List<PostTypePlan>();
-
-        foreach (var (type, meta) in metaData)
+        foreach (var scope in _scopeHost.Scopes)
         {
-            var eventId = meta.EventId;
-            _ = meta.GetIdentity();
-
-            var postPolicy = meta.GetPostPolicy();
-            policyTable.SetMetaData(eventId, meta);
-            if (postPolicy != null)
-                policyTable.SetPostPolicy(eventId, postPolicy.Value);
-
-            var timerPolicy = meta.GetTimerPolicy();
-            if (timerPolicy != null)
-                policyTable.SetTimerPolicy(eventId, timerPolicy.Value);
-
-            var bufferPolicy = meta.GetBufferPolicy();
-            if (bufferPolicy != null)
-                policyTable.SetBufferPolicy(eventId, bufferPolicy.Value);
-
-            var actorMailOptions = meta.GetActorMailOptions();
-            if (actorMailOptions != null)
-                policyTable.SetActorMailOptions(eventId, actorMailOptions.Value);
-
-            var effectivePolicy =
-                postPolicy ?? new EventPostPolicy(PostDeliveryMode.Normal, options.DefaultBackpressure, 0);
-            plans.Add(new PostTypePlan(eventId, effectivePolicy.Mode, effectivePolicy.Backpressure,
-                effectivePolicy.MaxPending, options.DefaultBackpressure, effectivePolicy.MergeFailure));
+            BuildScopeEventPolicies(scope, options);
         }
 
-        var planArray = plans.ToArray();
+        var legacyMetaData = LayerBase.Event.EventMetaData.EventMetaDataHandler.GetAllMetaData().ToList();
+        if (legacyMetaData.Count == 0)
+            return;
+
         foreach (var scope in _scopeHost.Scopes)
-            scope.InitializeOrUpdateScheduler(options, policyTable, planArray);
+        {
+            BuildScopeEventPoliciesLegacy(scope, options, legacyMetaData);
+        }
+    }
+
+    private void BuildScopeEventPolicies(ScopeRuntime scope, PostSchedulerOptions options)
+    {
+        EventBuildPolicyTable policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
+
+        ReadOnlySpan<EventMetaDataBuildPlan> eventPlans = CompositionPlan.GetEventMetaDataPlans(scope.ScopeId);
+
+        var postPlans = new List<PostTypePlan>();
+
+        for (int i = 0; i < eventPlans.Length; i++)
+        {
+            ref readonly EventMetaDataBuildPlan plan = ref eventPlans[i];
+
+            IEventMetaData metaData = plan.MetaDataFactory();
+
+            if (metaData == null)
+                throw new InvalidOperationException(
+                    $"Event metadata factory for `{plan.EventType.FullName}` returned null.");
+
+            if (metaData.EventId != plan.EventId)
+                throw new InvalidOperationException(
+                    $"Event metadata factory for `{plan.EventType.FullName}` returned metadata with mismatched EventId.");
+
+            ApplyMetaDataToTable(policyTable, metaData, plan.EventId, options, postPlans);
+        }
+
+        scope.InitializeOrUpdateScheduler(options, policyTable, postPlans.ToArray());
+    }
+
+    private void BuildScopeEventPoliciesLegacy(ScopeRuntime scope, PostSchedulerOptions options, List<(Type Type, IEventMetaData MetaData)> legacyMetaData)
+    {
+        EventBuildPolicyTable policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
+        var postPlans = new List<PostTypePlan>();
+
+        foreach (var (type, meta) in legacyMetaData)
+        {
+            int eventId = meta.EventId;
+            ApplyMetaDataToTable(policyTable, meta, eventId, options, postPlans);
+        }
+
+        scope.InitializeOrUpdateScheduler(options, policyTable, postPlans.ToArray());
+    }
+
+    private static void ApplyMetaDataToTable(
+        EventBuildPolicyTable policyTable,
+        IEventMetaData metaData,
+        int eventId,
+        PostSchedulerOptions options,
+        List<PostTypePlan> postPlans)
+    {
+        _ = metaData.GetIdentity();
+
+        var postPolicy = metaData.GetPostPolicy();
+        policyTable.SetMetaData(eventId, metaData);
+        if (postPolicy != null)
+            policyTable.SetPostPolicy(eventId, postPolicy.Value);
+
+        var timerPolicy = metaData.GetTimerPolicy();
+        if (timerPolicy != null)
+            policyTable.SetTimerPolicy(eventId, timerPolicy.Value);
+
+        var bufferPolicy = metaData.GetBufferPolicy();
+        if (bufferPolicy != null)
+            policyTable.SetBufferPolicy(eventId, bufferPolicy.Value);
+
+        var actorMailOptions = metaData.GetActorMailOptions();
+        if (actorMailOptions != null)
+            policyTable.SetActorMailOptions(eventId, actorMailOptions.Value);
+
+        var effectivePolicy =
+            postPolicy ?? new EventPostPolicy(PostDeliveryMode.Normal, options.DefaultBackpressure, 0);
+        postPlans.Add(new PostTypePlan(eventId, effectivePolicy.Mode, effectivePolicy.Backpressure,
+            effectivePolicy.MaxPending, options.DefaultBackpressure, effectivePolicy.MergeFailure));
     }
 
     internal void InitializeTimer(TimeSchedulerOptions options)
@@ -890,14 +943,6 @@ public sealed partial class LayerRuntime : IDisposable
                 _runtime.InstallScopeHost(_runtime.CompositionPlan.Scopes);
                 _runtime._scopeHost.MainScope.InstallSynchronizationContext();
                 _runtime._fixedUpdateOptions = _fixedUpdateOptions;
-
-                GeneratedEventBootstrapDiscovery
-                    .EnsureLoadedAssembliesInitialized();
-
-                LayerBase.Event.EventMetaData
-                    .EventMetaDataBootstrapRegistry
-                    .ReplayAll();
-
                 _runtime.InitializeScheduler(_postOptions);
                 _runtime.InitializeTimer(_timerOptions);
                 _runtime.InitializeDelay(_delayOptions);

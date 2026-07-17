@@ -1,9 +1,42 @@
 using LayerBase.Call;
+using LayerBase.Core.Event;
+using LayerBase.Event.EventMetaData;
 using LayerBase.Layers;
 using LayerBase.Modules;
 using LayerBase.Tools;
 
 namespace LayerBase.Scope;
+
+public readonly struct EventMetaDataBuildPlan
+{
+    public EventMetaDataBuildPlan(
+        int eventId,
+        Type eventType,
+        int ownerLayerIndex,
+        int ownerScopeId,
+        EventMetaDataFactory metaDataFactory,
+        LayerPrewarmTargets prewarmTargets)
+    {
+        EventId = eventId;
+        EventType = eventType;
+        OwnerLayerIndex = ownerLayerIndex;
+        OwnerScopeId = ownerScopeId;
+        MetaDataFactory = metaDataFactory;
+        PrewarmTargets = prewarmTargets;
+    }
+
+    public int EventId { get; }
+
+    public Type EventType { get; }
+
+    public int OwnerLayerIndex { get; }
+
+    public int OwnerScopeId { get; }
+
+    public EventMetaDataFactory MetaDataFactory { get; }
+
+    public LayerPrewarmTargets PrewarmTargets { get; }
+}
 
 internal sealed class RuntimeCompositionPlan
 {
@@ -14,7 +47,8 @@ internal sealed class RuntimeCompositionPlan
         ResolvedContextContribution[] contexts,
         ResolvedLocalCallContribution[] localCalls,
         ResolvedEventHandlerContribution[] eventHandlers,
-        ResolvedLayerToolContribution[] tools)
+        ResolvedLayerToolContribution[] tools,
+        EventMetaDataBuildPlan[] events)
     {
         Layers = layers ?? throw new ArgumentNullException(nameof(layers));
         Scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
@@ -23,6 +57,7 @@ internal sealed class RuntimeCompositionPlan
         LocalCalls = localCalls ?? throw new ArgumentNullException(nameof(localCalls));
         EventHandlers = eventHandlers ?? throw new ArgumentNullException(nameof(eventHandlers));
         Tools = tools ?? throw new ArgumentNullException(nameof(tools));
+        Events = events ?? throw new ArgumentNullException(nameof(events));
     }
 
     public LayerBuildPlan[] Layers { get; }
@@ -39,6 +74,8 @@ internal sealed class RuntimeCompositionPlan
 
     public ResolvedLayerToolContribution[] Tools { get; }
 
+    public EventMetaDataBuildPlan[] Events { get; }
+
     public static RuntimeCompositionPlan Empty { get; } =
         new(
             Array.Empty<LayerBuildPlan>(),
@@ -47,7 +84,32 @@ internal sealed class RuntimeCompositionPlan
             Array.Empty<ResolvedContextContribution>(),
             Array.Empty<ResolvedLocalCallContribution>(),
             Array.Empty<ResolvedEventHandlerContribution>(),
-            Array.Empty<ResolvedLayerToolContribution>());
+            Array.Empty<ResolvedLayerToolContribution>(),
+            Array.Empty<EventMetaDataBuildPlan>());
+
+    internal ReadOnlySpan<EventMetaDataBuildPlan> GetEventMetaDataPlans(int scopeId)
+    {
+        if (Events.Length == 0)
+            return ReadOnlySpan<EventMetaDataBuildPlan>.Empty;
+
+        int start = 0;
+        int count = 0;
+
+        for (int i = 0; i < Events.Length; i++)
+        {
+            if (Events[i].OwnerScopeId == scopeId)
+            {
+                if (count == 0)
+                    start = i;
+                count++;
+            }
+        }
+
+        if (count == 0)
+            return ReadOnlySpan<EventMetaDataBuildPlan>.Empty;
+
+        return new ReadOnlySpan<EventMetaDataBuildPlan>(Events, start, count);
+    }
 
     public static RuntimeCompositionPlan Build(
         IReadOnlyList<Layer> pushedLayers,
@@ -107,10 +169,12 @@ internal sealed class RuntimeCompositionPlan
         var localTools = CollectLocalLayerTools(pushedLayers);
         var tools = ResolveTools(contributions.Tools.Concat(localTools).ToArray(), layerTypeIndex, scopeIdsByType);
 
+        var eventPlans = ResolveEventPlans(contributions.Events, layerTypeIndex, scopeIdsByType);
+
         ApplyScopeContributions(layerPlans, layerContributionBuilders);
 
         var scopes = BuildScopeExecutionPlans(layerPlans, scopeIdsByType);
-        return new RuntimeCompositionPlan(layerPlans, scopes, services, contexts, localCalls, eventHandlers, tools);
+        return new RuntimeCompositionPlan(layerPlans, scopes, services, contexts, localCalls, eventHandlers, tools, eventPlans);
     }
 
     private static void CollectLocalScopeTypes(
@@ -335,6 +399,45 @@ internal sealed class RuntimeCompositionPlan
                        .ThenBy(static tool => tool.OwnerScopeId)
                        .ThenBy(static tool => tool.ContractType.FullName, StringComparer.Ordinal)
                        .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal)
+                       .ToArray();
+    }
+
+    private static EventMetaDataBuildPlan[] ResolveEventPlans(
+        EventContributionPlan[] events,
+        LayerTypeIndex layerTypeIndex,
+        Dictionary<Type, int> scopeIdsByType)
+    {
+        var resolved = new List<EventMetaDataBuildPlan>();
+        var seen = new HashSet<(int ScopeId, int EventId)>();
+
+        foreach (var ev in events)
+        {
+            int ownerLayerIndex = ResolveOwnerLayer(
+                ev.ModuleId,
+                ev.EventType,
+                ev.OwnerLayerType,
+                layerTypeIndex);
+            int ownerScopeId = ResolveScopeId(ev.OwnerScopeType, scopeIdsByType);
+
+            int eventId = EventTypeIdAllocator.Resolve(ev.EventType);
+            var key = (ownerScopeId, eventId);
+
+            if (!seen.Add(key))
+                throw new InvalidOperationException(
+                    $"Event `{ev.EventType.FullName}` is already registered for scope `{ev.OwnerScopeType.FullName}`.");
+
+            resolved.Add(new EventMetaDataBuildPlan(
+                eventId,
+                ev.EventType,
+                ownerLayerIndex,
+                ownerScopeId,
+                ev.MetaDataFactory,
+                ev.PrewarmTargets));
+        }
+
+        return resolved.OrderBy(static plan => plan.OwnerScopeId)
+                       .ThenBy(static plan => plan.EventId)
+                       .ThenBy(static plan => plan.OwnerLayerIndex)
                        .ToArray();
     }
 

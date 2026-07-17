@@ -1,4 +1,6 @@
+using LayerBase.Core.Event;
 using LayerBase.DI;
+using LayerBase.Event.EventMetaData;
 using LayerBase.Scope;
 using LayerBase.Tools;
 
@@ -90,6 +92,25 @@ public sealed class AssemblyModuleManifest
         LocalCallContribution[] localCalls,
         EventHandlerContribution[] eventHandlers,
         LayerToolContribution[] tools)
+        : this(
+            moduleId,
+            services,
+            contexts,
+            localCalls,
+            eventHandlers,
+            tools,
+            Array.Empty<EventContribution>())
+    {
+    }
+
+    public AssemblyModuleManifest(
+        AssemblyModuleId moduleId,
+        ServiceContribution[] services,
+        ContextContribution[] contexts,
+        LocalCallContribution[] localCalls,
+        EventHandlerContribution[] eventHandlers,
+        LayerToolContribution[] tools,
+        EventContribution[] events)
     {
         ModuleId = moduleId;
         Services = Array.AsReadOnly((services ?? Array.Empty<ServiceContribution>()).ToArray());
@@ -97,6 +118,7 @@ public sealed class AssemblyModuleManifest
         LocalCalls = Array.AsReadOnly((localCalls ?? Array.Empty<LocalCallContribution>()).ToArray());
         EventHandlers = Array.AsReadOnly((eventHandlers ?? Array.Empty<EventHandlerContribution>()).ToArray());
         Tools = Array.AsReadOnly((tools ?? Array.Empty<LayerToolContribution>()).ToArray());
+        Events = Array.AsReadOnly((events ?? Array.Empty<EventContribution>()).ToArray());
     }
 
     public AssemblyModuleId ModuleId { get; }
@@ -110,6 +132,8 @@ public sealed class AssemblyModuleManifest
     public IReadOnlyList<EventHandlerContribution> EventHandlers { get; }
 
     public IReadOnlyList<LayerToolContribution> Tools { get; }
+
+    public IReadOnlyList<EventContribution> Events { get; }
 
     public static AssemblyModuleManifest Empty(AssemblyModuleId moduleId)
     {
@@ -306,6 +330,43 @@ public readonly struct EventHandlerContribution
     }
 }
 
+public readonly struct EventContribution
+{
+    private EventContribution(
+        Type eventType,
+        Type? ownerLayerType,
+        Type? ownerScopeType,
+        EventMetaDataFactory metaDataFactory,
+        LayerPrewarmTargets prewarmTargets)
+    {
+        EventType = eventType ?? throw new ArgumentNullException(nameof(eventType));
+        OwnerLayerType = ownerLayerType;
+        OwnerScopeType = ownerScopeType;
+        MetaDataFactory = metaDataFactory ?? throw new ArgumentNullException(nameof(metaDataFactory));
+        PrewarmTargets = prewarmTargets;
+    }
+
+    public Type EventType { get; }
+
+    public Type? OwnerLayerType { get; }
+
+    public Type? OwnerScopeType { get; }
+
+    public EventMetaDataFactory MetaDataFactory { get; }
+
+    public LayerPrewarmTargets PrewarmTargets { get; }
+
+    public static EventContribution ForTypes(
+        Type eventType,
+        Type? ownerLayerType,
+        Type? ownerScopeType,
+        EventMetaDataFactory metaDataFactory,
+        LayerPrewarmTargets prewarmTargets = LayerPrewarmTargets.All)
+    {
+        return new EventContribution(eventType, ownerLayerType, ownerScopeType, metaDataFactory, prewarmTargets);
+    }
+}
+
 public readonly struct ServiceContribution
 {
     private ServiceContribution(
@@ -343,6 +404,41 @@ public readonly struct ServiceContribution
     }
 }
 
+internal readonly struct EventContributionPlan
+{
+    public EventContributionPlan(
+        AssemblyModuleId moduleId,
+        Type eventType,
+        Type ownerLayerType,
+        Type ownerScopeType,
+        EventMetaDataFactory metaDataFactory,
+        LayerPrewarmTargets prewarmTargets,
+        int eventIndex)
+    {
+        ModuleId = moduleId;
+        EventType = eventType ?? throw new ArgumentNullException(nameof(eventType));
+        OwnerLayerType = ownerLayerType ?? throw new ArgumentNullException(nameof(ownerLayerType));
+        OwnerScopeType = ownerScopeType ?? throw new ArgumentNullException(nameof(ownerScopeType));
+        MetaDataFactory = metaDataFactory ?? throw new ArgumentNullException(nameof(metaDataFactory));
+        PrewarmTargets = prewarmTargets;
+        EventIndex = eventIndex;
+    }
+
+    public AssemblyModuleId ModuleId { get; }
+
+    public Type EventType { get; }
+
+    public Type OwnerLayerType { get; }
+
+    public Type OwnerScopeType { get; }
+
+    public EventMetaDataFactory MetaDataFactory { get; }
+
+    public LayerPrewarmTargets PrewarmTargets { get; }
+
+    public int EventIndex { get; }
+}
+
 internal sealed class CompositionContributions
 {
     public CompositionContributions(
@@ -350,13 +446,15 @@ internal sealed class CompositionContributions
         ContextContributionPlan[] contexts,
         LocalCallContributionPlan[] localCalls,
         EventHandlerContributionPlan[] eventHandlers,
-        LayerToolContributionPlan[] tools)
+        LayerToolContributionPlan[] tools,
+        EventContributionPlan[] events)
     {
         Services = services ?? throw new ArgumentNullException(nameof(services));
         Contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         LocalCalls = localCalls ?? throw new ArgumentNullException(nameof(localCalls));
         EventHandlers = eventHandlers ?? throw new ArgumentNullException(nameof(eventHandlers));
         Tools = tools ?? throw new ArgumentNullException(nameof(tools));
+        Events = events ?? throw new ArgumentNullException(nameof(events));
     }
 
     public ServiceContributionPlan[] Services { get; }
@@ -369,13 +467,16 @@ internal sealed class CompositionContributions
 
     public LayerToolContributionPlan[] Tools { get; }
 
+    public EventContributionPlan[] Events { get; }
+
     public static CompositionContributions Empty { get; } =
         new(
             Array.Empty<ServiceContributionPlan>(),
             Array.Empty<ContextContributionPlan>(),
             Array.Empty<LocalCallContributionPlan>(),
             Array.Empty<EventHandlerContributionPlan>(),
-            Array.Empty<LayerToolContributionPlan>());
+            Array.Empty<LayerToolContributionPlan>(),
+            Array.Empty<EventContributionPlan>());
 }
 
 internal readonly struct ServiceContributionPlan
@@ -582,6 +683,7 @@ internal static class AssemblyModuleComposer
         var localCallPlans = new List<LocalCallContributionPlan>();
         var eventHandlerPlans = new List<EventHandlerContributionPlan>();
         var toolPlans = new List<LayerToolContributionPlan>();
+        var eventPlans = new List<EventContributionPlan>();
         foreach (var module in modules.OrderBy(static module => module.Id))
         {
             var manifest = module.Manifest ?? throw new InvalidOperationException(
@@ -654,7 +756,7 @@ internal static class AssemblyModuleComposer
             }
 
             foreach (var contribution in manifest.Tools.OrderBy(static tool => tool.ContractType.FullName, StringComparer.Ordinal)
-                                                       .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal))
+                                                        .ThenBy(static tool => tool.LocalKey, StringComparer.Ordinal))
             {
                 ValidateToolOwner(module.Id, contribution.ContractType, contribution.ImplementationType,
                     contribution.OwnerLayerType, contribution.OwnerScopeType);
@@ -669,6 +771,19 @@ internal static class AssemblyModuleComposer
                     contribution.Factory,
                     toolPlans.Count));
             }
+
+            foreach (var contribution in manifest.Events.OrderBy(static ev => ev.EventType.FullName, StringComparer.Ordinal))
+            {
+                ValidateOwner(module.Id, "Event", contribution.EventType, contribution.OwnerLayerType, contribution.OwnerScopeType);
+                eventPlans.Add(new EventContributionPlan(
+                    module.Id,
+                    contribution.EventType,
+                    contribution.OwnerLayerType!,
+                    contribution.OwnerScopeType!,
+                    contribution.MetaDataFactory,
+                    contribution.PrewarmTargets,
+                    eventPlans.Count));
+            }
         }
 
         return new CompositionContributions(
@@ -676,7 +791,8 @@ internal static class AssemblyModuleComposer
             contextPlans.ToArray(),
             localCallPlans.ToArray(),
             eventHandlerPlans.ToArray(),
-            toolPlans.ToArray());
+            toolPlans.ToArray(),
+            eventPlans.ToArray());
     }
 
     private static void ValidateOwner(

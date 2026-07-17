@@ -16,6 +16,7 @@ namespace LayerBase.Core.Event;
 public sealed class EventCenter
 {
     private readonly EventExpectationQueue _expectations = new();
+    private EventBuildPolicyTable? _policyTable;
     private EventBucketBase?[] _eventBuckets = Array.Empty<EventBucketBase?>();
 
     internal PostScheduler? PostScheduler { get; set; }
@@ -99,6 +100,11 @@ public sealed class EventCenter
 #else
         return ref MemoryMarshal.GetReference(array.AsSpan());
 #endif
+    }
+
+    internal void BindPolicyTable(EventBuildPolicyTable policyTable)
+    {
+        _policyTable = policyTable ?? throw new ArgumentNullException(nameof(policyTable));
     }
 
     internal bool HasPendingExpectations =>
@@ -932,14 +938,15 @@ public sealed class EventCenter
 
         internal void HandleFault(FaultSlot slot, int eventNameId, in T value, Exception e)
         {
-            EventMetaData<T>? metaData =
-                EventMetaDataHandler
-                    .ResolveRegisteredMetaData<T>();
+            IEventMetaData? metaData = null;
+            var policyTable = _owner._policyTable;
+            if (policyTable != null)
+                metaData = policyTable.GetMetaData<T>(EventTypeId<T>.Id);
 
             if (metaData != null)
             {
                 _owner._expectations.Enqueue(
-                    metaData,
+                    (EventMetaData<T>)metaData,
                     in value,
                     e);
             }

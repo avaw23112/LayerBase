@@ -36,8 +36,11 @@ public sealed class EventMetaDataBootstrapTests
     }
 
     [Test]
-    public void Build_auto_registers_generated_event_metadata()
+    public void Global_Registry_meta_data_is_loaded_into_policy_table()
     {
+        EventMetaDataRegistry.RegisterMetaData<BootstrapLatestEvent>(
+            new BootstrapLatestEventMetaData());
+
         using var runtime = LayerHub.CreateLayers()
             .Push(new BootstrapLayer())
             .Build();
@@ -49,8 +52,11 @@ public sealed class EventMetaDataBootstrapTests
     }
 
     [Test]
-    public void Reset_then_rebuild_auto_registers_again()
+    public void Global_registry_survives_layer_reset()
     {
+        EventMetaDataRegistry.RegisterMetaData<BootstrapLatestEvent>(
+            new BootstrapLatestEventMetaData());
+
         var runtimeA = LayerHub.CreateLayers()
             .Push(new BootstrapLayer())
             .Build();
@@ -60,6 +66,9 @@ public sealed class EventMetaDataBootstrapTests
 
         runtimeA.Dispose();
         LayerHub.Reset();
+
+        EventMetaDataRegistry.RegisterMetaData<BootstrapLatestEvent>(
+            new BootstrapLatestEventMetaData());
 
         using var runtimeB = LayerHub.CreateLayers()
             .Push(new BootstrapLayer())

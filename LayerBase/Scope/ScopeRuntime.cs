@@ -155,6 +155,7 @@ internal sealed class ScopeRuntime : IDisposable
         PostTypePlan[] plans)
     {
         PolicyTable = policyTable ?? throw new ArgumentNullException(nameof(policyTable));
+        EventCenter.BindPolicyTable(policyTable);
         if (PostScheduler == null)
         {
             PostScheduler = new PostScheduler(_runtimeId, EventCenter, options, policyTable);
