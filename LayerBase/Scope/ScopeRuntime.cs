@@ -39,6 +39,8 @@ internal sealed class ScopeRuntime : IDisposable
     private ScopeCallCompletion<ScopeDisposeResponse>? _pendingDisposeCompletion;
     private readonly ConcurrentDictionary<Type, IDelayPublisherInternal> _delayPublishers = new();
 
+    private readonly Action<Exception> _eventExpectationFaultReporter;
+
     public ScopeRuntime(LayerRuntime runtime, ScopeExecutionPlan plan, int runtimeId, int generation)
     {
         if (runtime == null)
@@ -52,6 +54,7 @@ internal sealed class ScopeRuntime : IDisposable
         LayerSlices = plan.LayerSlices;
         LifecyclePlan = plan.LifecyclePlan;
         _runtime = runtime;
+        _eventExpectationFaultReporter = ReportEventExpectationFault;
         _runtimeId = runtimeId;
         _generation = generation;
         Transport = new ScopeTransport(
@@ -407,6 +410,7 @@ internal sealed class ScopeRuntime : IDisposable
         TickTimer(deltaTime);
         DelayManager?.Tick(deltaTime);
         PostScheduler?.Pump();
+        PumpEventExpectations();
         PumpUpdate(deltaTime);
     }
 
@@ -422,6 +426,15 @@ internal sealed class ScopeRuntime : IDisposable
             PostScheduler?.Options.MaxCompletionsPerPump ?? 0,
             exceptionPolicy,
             reportException);
+    }
+
+    internal void PumpEventExpectations()
+    {
+        if (!EventCenter.HasPendingExpectations)
+            return;
+
+        EventCenter.PumpExpectations(
+            _eventExpectationFaultReporter);
     }
 
     public void SetLifecyclePlan(ScopeLifecyclePlan lifecyclePlan)
@@ -1055,6 +1068,16 @@ internal sealed class ScopeRuntime : IDisposable
 
         targetTransport.EventPayloadStorage.Release(payload);
         return ScopeTransport.ToPostResult(result);
+    }
+
+    private void ReportEventExpectationFault(
+        Exception exception)
+    {
+        _runtime.ReportLayerEventError(
+            layerIndex: -1,
+            source: $"Scope:{Descriptor.Name}",
+            eventName: "EventMetaDataExpectation",
+            exception);
     }
 
     private void SignalIngress()

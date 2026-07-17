@@ -172,7 +172,8 @@ internal sealed class FrequencyQueue<T> : IFrequencyQueue where T : struct
 
     private static void ReportTaskException(TimerTaskKind kind, in T payload, Exception ex)
     {
-        EventMetaDataHandler.OnEventExpectation(payload, ex);
+        var metaData = EventMetaDataHandler.ResolveRegisteredMetaData<T>();
+        metaData?.OnEventExpectation(payload, ex);
         LayerHub.ReportLayerEventError(-1, $"TimerScheduler.Frequency.{kind}", typeof(T).Name, ex);
     }
 }

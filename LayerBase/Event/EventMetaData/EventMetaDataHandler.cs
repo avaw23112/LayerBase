@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using LayerBase.Core.EventCatalogue;
 
 namespace LayerBase.Event.EventMetaData;
@@ -8,7 +7,6 @@ internal static class EventMetaDataHandler
     private static Dictionary<Type, IEventMetaData> s_metaDataByType = new();
     private static readonly object s_lock = new();
     private static int s_registryVersion;
-    private static readonly ConcurrentQueue<IEventExpectation> s_pendingExpectations = new();
 
     static EventMetaDataHandler()
     {
@@ -22,22 +20,6 @@ internal static class EventMetaDataHandler
             Volatile.Write(ref s_metaDataByType, new Dictionary<Type, IEventMetaData>());
             Interlocked.Increment(ref s_registryVersion);
         }
-
-        while (s_pendingExpectations.TryDequeue(out _))
-        {
-        }
-    }
-
-    internal static void PumpExpectations()
-    {
-        while (s_pendingExpectations.TryDequeue(out var expectation))
-            try
-            {
-                expectation.Invoke();
-            }
-            catch
-            {
-            }
     }
 
     public static void RegisterMetaData<EventType>(IEventMetaData metaData)
@@ -72,14 +54,6 @@ internal static class EventMetaDataHandler
     public static Actor.ActorMailOptions? GetActorMailOptions<TEvent>() where TEvent : struct
     {
         return ResolveMetaData<TEvent>()?.GetActorMailOptions();
-    }
-
-    public static void OnEventExpectation<EventType>(EventType e, Exception exception) where EventType : struct
-    {
-        var metaData = ResolveMetaData<EventType>();
-        if (metaData == null) return;
-
-        s_pendingExpectations.Enqueue(new EventExpectation<EventType>(metaData, in e, exception));
     }
 
     internal static bool TryMergePostEvent<TEvent>(
@@ -126,30 +100,6 @@ internal static class EventMetaDataHandler
         MetaDataCache<EventType>.MetaData = metaData;
         MetaDataCache<EventType>.Version = version;
         return metaData;
-    }
-
-    private interface IEventExpectation
-    {
-        void Invoke();
-    }
-
-    private readonly struct EventExpectation<TEvent> : IEventExpectation where TEvent : struct
-    {
-        private readonly IEventMetaData _metaData;
-        private readonly TEvent _eventValue;
-        private readonly Exception _exception;
-
-        public EventExpectation(IEventMetaData metaData, in TEvent eventValue, Exception exception)
-        {
-            _metaData = metaData;
-            _eventValue = eventValue;
-            _exception = exception;
-        }
-
-        public void Invoke()
-        {
-            _metaData.OnEventExpectation(_eventValue, _exception);
-        }
     }
 
     private static class MetaDataCache<TEvent> where TEvent : struct

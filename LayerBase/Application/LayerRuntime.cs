@@ -391,7 +391,10 @@ public sealed partial class LayerRuntime : IDisposable
 
         runtimeBudget.Consume(postStats.ProcessedCount);
 
-        // 6. Scope-local FixedUpdate accumulator
+        // 6. EventMetaData expectations
+        _scopeHost.MainScope.PumpEventExpectations();
+
+        // 7. Scope-local FixedUpdate accumulator
         _scopeHost.MainScope.PumpFixedUpdate(_fixedUpdateOptions, deltaTime);
 
         // 7. Layer lifecycle update

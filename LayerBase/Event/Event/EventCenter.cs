@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using LayerBase.Async;
 using LayerBase.Core.EventHandler;
 using LayerBase.Event.EventMetaData;
+using LayerBase.Scope;
 
 namespace LayerBase.Core.Event;
 
@@ -14,6 +15,7 @@ namespace LayerBase.Core.Event;
 /// </summary>
 public sealed class EventCenter
 {
+    private readonly EventExpectationQueue _expectations = new();
     private EventBucketBase?[] _eventBuckets = Array.Empty<EventBucketBase?>();
 
     internal PostScheduler? PostScheduler { get; set; }
@@ -99,8 +101,22 @@ public sealed class EventCenter
 #endif
     }
 
+    internal bool HasPendingExpectations =>
+        _expectations.HasPending;
+
+    internal void PumpExpectations(
+        Action<Exception>? reportObserverException)
+    {
+        if (!_expectations.HasPending)
+            return;
+
+        _expectations.Pump(reportObserverException);
+    }
+
     internal void Reset()
     {
+        _expectations.Clear();
+
         for (var i = 0; i < _eventBuckets.Length; i++)
         {
             _eventBuckets[i]?.Dispose();
@@ -165,7 +181,7 @@ public sealed class EventCenter
         }
 
         EnsureBucketCapacity(typeId);
-        var created = new EventBucket<T>();
+        var created = new EventBucket<T>(this);
         _eventBuckets[typeId] = created;
         return created;
     }
@@ -188,6 +204,7 @@ public sealed class EventCenter
 
     private sealed class EventBucket<T> : EventBucketBase where T : struct
     {
+        private readonly EventCenter _owner;
         private bool _disposed;
         private int _isDirty;
 
@@ -220,6 +237,11 @@ public sealed class EventCenter
         private ulong _asyncMask;
         private ulong _notifyMask;
         private ulong _notifySafeMask;
+
+        public EventBucket(EventCenter owner)
+        {
+            _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        }
 
         /// <summary>
         /// 预热当前事件类型的派发表。
@@ -910,7 +932,18 @@ public sealed class EventCenter
 
         internal void HandleFault(FaultSlot slot, int eventNameId, in T value, Exception e)
         {
-            EventMetaDataHandler.OnEventExpectation(value, e);
+            EventMetaData<T>? metaData =
+                EventMetaDataHandler
+                    .ResolveRegisteredMetaData<T>();
+
+            if (metaData != null)
+            {
+                _owner._expectations.Enqueue(
+                    metaData,
+                    in value,
+                    e);
+            }
+
             if (slot.Circuit == null || !slot.Circuit.TryDisable()) return;
 
             var handlerName = EventDiagnosticSymbols.Resolve(slot.HandlerNameId);
