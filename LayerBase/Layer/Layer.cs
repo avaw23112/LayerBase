@@ -53,18 +53,7 @@ public abstract class Layer : Node, IDisposable
     #endregion
 
     #region Runtime State - Lifecycle
-    // IInitializable 服务列表，Scope Activate 时按 Layer 顺序调用。
-    private readonly List<IInitializable> _initializables = new();
-    // IUpdate 服务列表，每帧调用。
-    private readonly List<IUpdate> _serviceUpdates = new();
-    // IPostBuild 服务列表，构建完成后调用。
-    private readonly List<IPostBuild> _postBuilds = new();
-    // IRuntimeStart 服务列表，启动时调用。
-    private readonly List<IRuntimeStart> _runtimeStarts = new();
-    // IRuntimeStop 服务列表，停止时调用。
-    private readonly List<IRuntimeStop> _runtimeStops = new();
-    // IFixedUpdate 服务列表，固定步长调用。
-    private readonly List<IFixedUpdate> _fixedUpdates = new();
+    private readonly Dictionary<int, ScopeLayerLifecycleState> _lifecycleByScopeId = new();
     #endregion
 
     #region Runtime State - Delay
@@ -103,7 +92,7 @@ public abstract class Layer : Node, IDisposable
 
     /// <summary>当前 Layer 是否包含活跃逻辑。</summary>
     public virtual bool HasActiveLogic =>
-        _serviceUpdates.Count > 0 || _delayPublishers.Count > 0 || _fixedUpdates.Count > 0;
+        _delayPublishers.Count > 0;
 
     /// <summary>当前 Layer 是否有活跃的延迟发布器。</summary>
     internal bool HasDelayPublisher
@@ -156,7 +145,6 @@ public abstract class Layer : Node, IDisposable
 
         DetachResolvedObjects();
         ReleaseDelayPublishers();
-        _serviceUpdates.Clear();
         _activeServices.Clear();
         _resolvedServices.Clear();
         _serviceProvider?.Dispose();
@@ -213,12 +201,7 @@ public abstract class Layer : Node, IDisposable
         }
 
         ReleaseDelayPublishers();
-        _initializables.Clear();
-        _serviceUpdates.Clear();
-        _postBuilds.Clear();
-        _runtimeStarts.Clear();
-        _runtimeStops.Clear();
-        _fixedUpdates.Clear();
+        _lifecycleByScopeId.Clear();
         _activeServices.Clear();
         _resolvedServices.Clear();
         _serviceCollection.Reset();
@@ -284,46 +267,39 @@ public abstract class Layer : Node, IDisposable
     {
         foreach (var resolved in _resolvedServices)
         {
-            if (resolved.Instance is IInitializable init) _initializables.Add(init);
-            if (resolved.Instance is IUpdate up) _serviceUpdates.Add(up);
-            if (resolved.Instance is IFixedUpdate fixedUpdate) _fixedUpdates.Add(fixedUpdate);
-            if (resolved.Instance is IPostBuild postBuild) _postBuilds.Add(postBuild);
-            if (resolved.Instance is IRuntimeStart runtimeStart) _runtimeStarts.Add(runtimeStart);
-            if (resolved.Instance is IRuntimeStop runtimeStop) _runtimeStops.Add(runtimeStop);
+            int scopeId = resolved.Descriptor.OwnerScopeId;
+            var state = GetOrCreateLifecycleState(scopeId);
+
+            if (resolved.Instance is IInitializable init) state.Initializables.Add(init);
+            if (resolved.Instance is IUpdate up) state.Updates.Add(up);
+            if (resolved.Instance is IFixedUpdate fixedUpdate) state.FixedUpdates.Add(fixedUpdate);
+            if (resolved.Instance is IPostBuild postBuild) state.PostBuilds.Add(postBuild);
+            if (resolved.Instance is IRuntimeStart runtimeStart) state.RuntimeStarts.Add(runtimeStart);
+            if (resolved.Instance is IRuntimeStop runtimeStop) state.RuntimeStops.Add(runtimeStop);
+            if (resolved.Instance is IDisposable disposable) state.Disposables.Add(disposable);
         }
 
-        if (this is IFixedUpdate layerFixedUpdate) _fixedUpdates.Add(layerFixedUpdate);
-        if (this is IInitializable layerInitializable) _initializables.Add(layerInitializable);
-        if (this is IPostBuild layerPostBuild) _postBuilds.Add(layerPostBuild);
-        if (this is IRuntimeStart layerRuntimeStart) _runtimeStarts.Add(layerRuntimeStart);
-        if (this is IRuntimeStop layerRuntimeStop) _runtimeStops.Add(layerRuntimeStop);
+        // Layer self-implements lifecycle methods only belong to MainScope
+        var mainState = GetOrCreateLifecycleState(ScopeDefinitionIds.Main);
+        if (this is IFixedUpdate layerFixedUpdate) mainState.FixedUpdates.Add(layerFixedUpdate);
+        if (this is IInitializable layerInitializable) mainState.Initializables.Add(layerInitializable);
+        if (this is IPostBuild layerPostBuild) mainState.PostBuilds.Add(layerPostBuild);
+        if (this is IRuntimeStart layerRuntimeStart) mainState.RuntimeStarts.Add(layerRuntimeStart);
+        if (this is IRuntimeStop layerRuntimeStop) mainState.RuntimeStops.Add(layerRuntimeStop);
     }
 
-    internal void RunInitialize()
+    private ScopeLayerLifecycleState GetOrCreateLifecycleState(int scopeId)
     {
-        for (var i = 0; i < _initializables.Count; i++)
-            _initializables[i].Initialize();
-    }
-
-    internal void RunPostBuild()
-    {
-        for (var i = 0; i < _postBuilds.Count; i++)
-            _postBuilds[i].PostBuild();
-    }
-
-    internal void RunRuntimeStart()
-    {
-        for (var i = 0; i < _runtimeStarts.Count; i++)
-            _runtimeStarts[i].RuntimeStart();
-    }
-
-    internal void RunRuntimeStop()
-    {
-        for (var i = 0; i < _runtimeStops.Count; i++)
-            _runtimeStops[i].RuntimeStop();
+        if (!_lifecycleByScopeId.TryGetValue(scopeId, out var state))
+        {
+            state = new ScopeLayerLifecycleState();
+            _lifecycleByScopeId[scopeId] = state;
+        }
+        return state;
     }
 
     internal ScopeLayerLifecycleSlice AppendScopeLifecycle(
+        int ownerScopeId,
         List<LifecycleInvoker> initialize,
         List<LifecycleInvoker> postBuild,
         List<LifecycleInvoker> runtimeStart,
@@ -332,6 +308,19 @@ public abstract class Layer : Node, IDisposable
         List<LifecycleInvoker> runtimeStop,
         List<LifecycleInvoker> dispose)
     {
+        if (!_lifecycleByScopeId.TryGetValue(ownerScopeId, out var state))
+        {
+            return new ScopeLayerLifecycleSlice(
+                RouteIndex,
+                initialize.Count, 0,
+                postBuild.Count, 0,
+                runtimeStart.Count, 0,
+                update.Count, 0,
+                fixedUpdate.Count, 0,
+                runtimeStop.Count, 0,
+                dispose.Count, 0);
+        }
+
         var initializeStart = initialize.Count;
         var postBuildStart = postBuild.Count;
         var runtimeStartStart = runtimeStart.Count;
@@ -340,19 +329,29 @@ public abstract class Layer : Node, IDisposable
         var runtimeStopStart = runtimeStop.Count;
         var disposeStart = dispose.Count;
 
-        if (_initializables.Count > 0)
-            initialize.Add(RunInitialize);
-        if (_postBuilds.Count > 0)
-            postBuild.Add(RunPostBuild);
-        if (_runtimeStarts.Count > 0)
-            runtimeStart.Add(RunRuntimeStart);
-        if (HasActiveLogic)
-            update.Add(Pump);
-        if (_fixedUpdates.Count > 0)
-            fixedUpdate.Add(PumpFixed);
-        if (_runtimeStops.Count > 0)
-            runtimeStop.Add(RunRuntimeStop);
-        dispose.Add(Dispose);
+        if (state.Initializables.Count > 0)
+            initialize.Add(state.RunInitialize);
+        if (state.PostBuilds.Count > 0)
+            postBuild.Add(state.RunPostBuild);
+        if (state.RuntimeStarts.Count > 0)
+            runtimeStart.Add(state.RunRuntimeStart);
+        if (state.FixedUpdates.Count > 0)
+            fixedUpdate.Add(state.PumpFixedUpdate);
+        if (state.RuntimeStops.Count > 0)
+            runtimeStop.Add(state.RunRuntimeStop);
+        if (ownerScopeId == ScopeDefinitionIds.Main)
+        {
+            if (state.Updates.Count > 0 || HasActiveLogic)
+                update.Add(Pump);
+            dispose.Add(Dispose);
+        }
+        else
+        {
+            if (state.Updates.Count > 0)
+                update.Add(state.PumpUpdate);
+            if (state.Disposables.Count > 0)
+                dispose.Add(state.RunDispose);
+        }
 
         return new ScopeLayerLifecycleSlice(
             RouteIndex,
@@ -371,21 +370,23 @@ public abstract class Layer : Node, IDisposable
             disposeStart,
             dispose.Count - disposeStart);
     }
+
+    internal void DisposeScopeResources(int ownerScopeId)
+    {
+        if (_lifecycleByScopeId.TryGetValue(ownerScopeId, out var state))
+        {
+            state.RunRuntimeStop();
+            state.RunDispose();
+        }
+    }
     #endregion
 
     #region Lifecycle - Pump
     /// <summary>每帧推进服务更新。子类可重写此方法添加自定义更新逻辑。</summary>
     public virtual void Pump(float deltaTime)
     {
-        for (var i = 0; i < _serviceUpdates.Count; i++)
-            _serviceUpdates[i].Update();
-    }
-
-    /// <summary>以固定时间步长推进固定更新。</summary>
-    internal void PumpFixed(float fixedDeltaTime)
-    {
-        for (var i = 0; i < _fixedUpdates.Count; i++)
-            _fixedUpdates[i].FixedUpdate(fixedDeltaTime);
+        if (_lifecycleByScopeId.TryGetValue(ScopeDefinitionIds.Main, out var mainState))
+            mainState.PumpUpdate(deltaTime);
     }
 
     internal void SetRouteIndex(int routeIndex)

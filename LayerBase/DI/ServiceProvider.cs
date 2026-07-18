@@ -114,6 +114,22 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         return resolved;
     }
 
+    internal void DisposeScope(int ownerScopeId)
+    {
+        var keysToRemove = new List<ServiceKey>();
+        foreach (var kvp in _instances)
+        {
+            if (kvp.Key.OwnerScopeId == ownerScopeId)
+            {
+                if (kvp.Value.IsValueCreated && kvp.Value.Value is IDisposable disposable)
+                    disposable.Dispose();
+                keysToRemove.Add(kvp.Key);
+            }
+        }
+        foreach (var key in keysToRemove)
+            _instances.TryRemove(key, out _);
+    }
+
     internal void InjectMembers(object instance)
     {
         InjectMembers(instance, new ResolutionContext());
@@ -301,7 +317,7 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         public readonly HashSet<Type> CallStack = new();
     }
 
-    private readonly struct ServiceKey : IEquatable<ServiceKey>
+    internal readonly struct ServiceKey : IEquatable<ServiceKey>
     {
         private readonly int _ownerScopeId;
         private readonly Type _serviceType;
@@ -311,6 +327,8 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
             _ownerScopeId = ownerScopeId;
             _serviceType = serviceType ?? throw new ArgumentNullException(nameof(serviceType));
         }
+
+        public int OwnerScopeId => _ownerScopeId;
 
         public bool Equals(ServiceKey other)
         {

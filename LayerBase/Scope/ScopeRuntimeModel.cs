@@ -423,7 +423,7 @@ internal sealed class ScopeLifecyclePlan
             Array.Empty<LifecycleInvoker>());
     }
 
-    public static ScopeLifecyclePlan Build(IReadOnlyList<Layer> layers)
+    public static ScopeLifecyclePlan Build(IReadOnlyList<Layer> layers, int ownerScopeId)
     {
         if (layers == null)
             throw new ArgumentNullException(nameof(layers));
@@ -441,6 +441,7 @@ internal sealed class ScopeLifecyclePlan
         {
             var layer = layers[i];
             slices[i] = layer.AppendScopeLifecycle(
+                ownerScopeId,
                 initialize,
                 postBuild,
                 runtimeStart,

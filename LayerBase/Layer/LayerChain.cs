@@ -84,7 +84,11 @@ internal sealed class LayerChain
     /// </summary>
     internal void DisposeLayers()
     {
-        _owner.ScopeHost.MainScope.RunLifecycleDispose();
+        var scopes = _owner.ScopeHost.Scopes;
+        for (int i = scopes.Count - 1; i >= 0; i--)
+            scopes[i].RunRuntimeStop();
+        for (int i = scopes.Count - 1; i >= 0; i--)
+            scopes[i].RunLifecycleDispose();
     }
 
     /// <summary>
@@ -123,13 +127,25 @@ internal sealed class LayerChain
             if (layer.HasDelayPublisher) _hasDelayMask |= 1UL << layer.RouteIndex;
         }
 
-        var lifecyclePlan = ScopeLifecyclePlan.Build(builtLayers);
-        _owner.ScopeHost.MainScope.SetLifecyclePlan(lifecyclePlan);
+        var compositionScopes = _owner.CompositionPlan.Scopes;
+        for (int i = 0; i < compositionScopes.Length; i++)
+        {
+            var scopePlan = compositionScopes[i];
+            int scopeId = scopePlan.Descriptor.ScopeId;
+            var lifecyclePlan = ScopeLifecyclePlan.Build(builtLayers, scopeId);
+            if (_owner.ScopeHost.TryGetRuntime(scopeId, out var scopeRuntime))
+                scopeRuntime.SetLifecyclePlan(lifecyclePlan);
+        }
+
         EventGraphValidator.Validate(builtLayers, _owner);
-        lifecyclePlan.RunInitialize();
-        lifecyclePlan.RunPostBuild();
+
+        foreach (var scope in _owner.ScopeHost.Scopes)
+            scope.LifecyclePlan.RunInitialize();
+        foreach (var scope in _owner.ScopeHost.Scopes)
+            scope.LifecyclePlan.RunPostBuild();
         afterPostBuild?.Invoke();
-        lifecyclePlan.RunRuntimeStart();
+        foreach (var scope in _owner.ScopeHost.Scopes)
+            scope.LifecyclePlan.RunRuntimeStart();
     }
 
     /// <summary>
