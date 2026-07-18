@@ -14,7 +14,8 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 {
     private readonly TimeSchedulerOptions _options;
     private TimerEntry<TPayload>[] _pool;
-    private readonly int[] _wheel;
+    private readonly int[] _wheelHeads;
+    private readonly int[] _wheelTails;
     private readonly LongTimerHeap _longHeap;
     private readonly IntStack _freeList;
     private readonly ITimerPayloadReleaser<TPayload>? _payloadReleaser;
@@ -23,6 +24,10 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     private long _currentTick;
     private double _accumulator;
     private bool _disposed;
+
+    private int _overdueHead = -1;
+    private int _overdueTail = -1;
+    private const int OverdueSlotIndex = -2;
 
     private readonly int _wheelSize;
     private readonly int _wheelMask;
@@ -57,8 +62,10 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         _maxExpiredPerTick = options.MaxExpiredPerTick;
 
         _pool = new TimerEntry<TPayload>[options.InitialTimerCapacity];
-        _wheel = new int[_wheelSize];
-        Array.Fill(_wheel, -1);
+        _wheelHeads = new int[_wheelSize];
+        _wheelTails = new int[_wheelSize];
+        Array.Fill(_wheelHeads, -1);
+        Array.Fill(_wheelTails, -1);
 
         _freeList = new IntStack(options.InitialTimerCapacity);
         for (int i = options.InitialTimerCapacity - 1; i >= 0; i--)
@@ -218,72 +225,107 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         }
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void ProcessCurrentSlot(IExpiredTimerSink<TPayload> sink)
     {
         int slot = (int)(_currentTick & _wheelMask);
-        ref var wheelSlotRef = ref FastArray.At(_wheel, slot);
-        int current = wheelSlotRef;
-        wheelSlotRef = -1;
+        int current = _wheelHeads[slot];
+        _wheelHeads[slot] = -1;
+        _wheelTails[slot] = -1;
 
+        Exception? firstException = null;
         int processedInTick = 0;
 
-        while (current != -1 && processedInTick < _maxExpiredPerTick)
+        current = ProcessTimerList(current, sink, ref processedInTick, ref firstException);
+
+        if (current != -1)
+            MoveToOverdue(current);
+
+        if (processedInTick < _maxExpiredPerTick)
+            ProcessOverdueQueue(sink, ref processedInTick, ref firstException);
+
+        if (firstException != null)
+            throw firstException;
+    }
+
+    private int ProcessTimerList(int head, IExpiredTimerSink<TPayload> sink, ref int count, ref Exception? firstException)
+    {
+        int current = head;
+        while (current != -1 && count < _maxExpiredPerTick)
         {
             ref var entry = ref FastArray.At(_pool, current);
             int next = entry.Next;
+            entry.Next = -1;
+            entry.Prev = -1;
 
             if ((entry.Flags & TimerFlags.Active) != 0)
             {
-                if (sink.TryAcceptExpired(in entry.Payload, new TimerHandle(current, entry.Version)))
+                try
                 {
-                    processedInTick++;
-
-                    if ((entry.Flags & TimerFlags.Repeat) != 0)
+                    if (sink.TryAcceptExpired(in entry.Payload, new TimerHandle(current, entry.Version)))
                     {
-                        RescheduleRepeatSlow(current, ref entry);
+                        count++;
+
+                        if ((entry.Flags & TimerFlags.Repeat) != 0)
+                            RescheduleRepeatSlow(current, ref entry);
+                        else
+                            ReleaseTimer(current, ref entry);
                     }
                     else
                     {
                         ReleaseTimer(current, ref entry);
                     }
                 }
-                else
+                catch (Exception ex)
                 {
                     ReleaseTimer(current, ref entry);
+                    firstException ??= ex;
                 }
             }
 
             current = next;
         }
+        return current;
+    }
 
-        if (current != -1)
+    private void MoveToOverdue(int head)
+    {
+        int current = head;
+        int tail = -1;
+        while (current != -1)
         {
-            RequeueRemainingForNextTick(current);
+            ref var entry = ref FastArray.At(_pool, current);
+            entry.SlotIndex = OverdueSlotIndex;
+            if (entry.Next == -1)
+            {
+                tail = current;
+                break;
+            }
+            current = entry.Next;
+        }
+
+        if (_overdueTail == -1)
+        {
+            _overdueHead = head;
+            _overdueTail = tail;
+        }
+        else
+        {
+            FastArray.At(_pool, _overdueTail).Next = head;
+            FastArray.At(_pool, head).Prev = _overdueTail;
+            _overdueTail = tail;
         }
     }
 
-    private void RequeueRemainingForNextTick(int head)
+    private void ProcessOverdueQueue(IExpiredTimerSink<TPayload> sink, ref int count, ref Exception? firstException)
     {
-        var targetSlot = (int)((_currentTick + 1) & _wheelMask);
-        FastArray.At(_pool, head).Prev = -1;
+        int current = _overdueHead;
+        _overdueHead = -1;
+        _overdueTail = -1;
 
-        var tail = head;
-        while (true)
-        {
-            FastArray.At(_pool, tail).SlotIndex = targetSlot;
-            if (FastArray.At(_pool, tail).Next == -1) break;
-            tail = FastArray.At(_pool, tail).Next;
-        }
+        int remaining = ProcessTimerList(current, sink, ref count, ref firstException);
 
-        ref var targetHead = ref FastArray.At(_wheel, targetSlot);
-        FastArray.At(_pool, tail).Next = targetHead;
-        if (targetHead != -1)
-        {
-            FastArray.At(_pool, targetHead).Prev = tail;
-        }
-
-        targetHead = head;
+        if (remaining != -1)
+            MoveToOverdue(remaining);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -361,16 +403,17 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         int slot = (int)(entry.ExpireTick & _wheelMask);
 
         entry.SlotIndex = slot;
-        ref var wheelSlotRef = ref FastArray.At(_wheel, slot);
-        entry.Next = wheelSlotRef;
-        entry.Prev = -1;
+        entry.Next = -1;
 
-        if (wheelSlotRef != -1)
-        {
-            FastArray.At(_pool, wheelSlotRef).Prev = index;
-        }
+        int tail = _wheelTails[slot];
+        entry.Prev = tail;
 
-        wheelSlotRef = index;
+        if (tail == -1)
+            _wheelHeads[slot] = index;
+        else
+            FastArray.At(_pool, tail).Next = index;
+
+        _wheelTails[slot] = index;
     }
 
     private void PlaceInHeap(int index)
@@ -388,10 +431,27 @@ public sealed class TimeScheduler<TPayload> : IDisposable
             if (entry.Prev != -1)
                 FastArray.At(_pool, entry.Prev).Next = entry.Next;
             else
-                FastArray.At(_wheel, entry.SlotIndex) = entry.Next;
+                _wheelHeads[entry.SlotIndex] = entry.Next;
 
             if (entry.Next != -1)
                 FastArray.At(_pool, entry.Next).Prev = entry.Prev;
+            else
+                _wheelTails[entry.SlotIndex] = entry.Prev;
+
+            return;
+        }
+
+        if (entry.SlotIndex == OverdueSlotIndex)
+        {
+            if (entry.Prev != -1)
+                FastArray.At(_pool, entry.Prev).Next = entry.Next;
+            else
+                _overdueHead = entry.Next;
+
+            if (entry.Next != -1)
+                FastArray.At(_pool, entry.Next).Prev = entry.Prev;
+            else
+                _overdueTail = entry.Prev;
 
             return;
         }
@@ -431,7 +491,8 @@ public sealed class TimeScheduler<TPayload> : IDisposable
             }
         }
 
-        Array.Clear(_wheel, 0, _wheel.Length);
+        Array.Clear(_wheelHeads, 0, _wheelHeads.Length);
+        Array.Clear(_wheelTails, 0, _wheelTails.Length);
         _longHeap.Clear();
         _freeList.Clear();
     }

@@ -63,7 +63,8 @@ public class PostSchedulerLatestTests
         });
 
         using var payloadStorage = new EventPayloadStorage(PayloadDiagnosticsMode.Atomic);
-        var timer = new PostTimerScheduler(0, TimeSchedulerOptions.Default, payloadStorage, scheduler, policyTable);
+        var timer = new PostTimerScheduler(0, TimeSchedulerOptions.Default, payloadStorage, scheduler);
+        timer.CompilePlans(policyTable, EventTypeIdAllocator.MaxId);
         timer.PrewarmEvent<TestEvent>();
 
         int received = 0, lastValue = 0;
@@ -79,8 +80,8 @@ public class PostSchedulerLatestTests
         Assert.That(stats.ProcessedCount, Is.EqualTo(1),
             string.Format("Processed {0} items, expected 1", stats.ProcessedCount));
         Assert.That(received, Is.EqualTo(1), "Handler should be called once");
-        Assert.That(lastValue, Is.EqualTo(100),
-            string.Format("Handler should receive the first scheduled value (last posted due to LIFO wheel), got {0}", lastValue));
+        Assert.That(lastValue, Is.EqualTo(300),
+            string.Format("Handler should receive the last scheduled value (FIFO wheel), got {0}", lastValue));
     }
 
     [Test]
