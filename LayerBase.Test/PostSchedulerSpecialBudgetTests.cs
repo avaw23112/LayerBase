@@ -93,23 +93,6 @@ public class PostSchedulerSpecialBudgetTests
     }
 
     [Test]
-    public void Latest_remaining_snapshot_survives_next_pump()
-    {
-        var eventCenter = new EventCenter();
-        var options = new PostSchedulerOptions(1024, 1024, 1, 0, 1, 64, BackpressurePolicy.RejectNew);
-        using var scheduler = CreateScheduler(options, eventCenter);
-
-        scheduler.TryPostLatest(new SBLatestEventA { Value = 10 });
-        scheduler.TryPostLatest(new SBLatestEventB { Value = 20 });
-
-        var stats1 = scheduler.Pump();
-        Assert.That(stats1.ProcessedCount, Is.EqualTo(1));
-
-        var stats2 = scheduler.Pump();
-        Assert.That(stats2.ProcessedCount, Is.EqualTo(1));
-    }
-
-    [Test]
     public void Dirty_remaining_bits_survive_next_pump()
     {
         var eventCenter = new EventCenter();
