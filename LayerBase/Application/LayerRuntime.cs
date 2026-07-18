@@ -630,6 +630,44 @@ public sealed partial class LayerRuntime : IDisposable
             _state = RuntimeState.Disposed;
         }
     }
+    internal void AbortBuild()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        try
+        {
+            _state = RuntimeState.Stopping;
+
+            if (_scopeHost.MainScope.PostScheduler != null)
+            {
+                _workerJobs.BeginStop();
+            }
+
+            _chain?.DisposeLayers();
+            _chain = null;
+
+            _state = RuntimeState.Disposing;
+
+            if (_scopeHost.MainScope.State != ScopeRuntimeState.Disposed)
+            {
+                _scopeHost.Dispose();
+            }
+
+            _mainActorRuntime.Dispose();
+            _tools?.Dispose();
+            _workerJobs.Dispose();
+        }
+        finally
+        {
+            LayerHub.ClearRuntimeCaches(_id);
+            LayerHub.Internal_Unregister(this);
+            _state = RuntimeState.Disposed;
+        }
+    }
+
     #endregion
 
     #region Diagnostics
@@ -965,6 +1003,7 @@ public sealed partial class LayerRuntime : IDisposable
             catch
             {
                 _runtime._state = RuntimeState.Faulted;
+                _runtime.AbortBuild();
                 throw;
             }
 
