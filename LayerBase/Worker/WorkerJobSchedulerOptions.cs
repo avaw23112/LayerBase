@@ -17,6 +17,10 @@ internal sealed class WorkerJobSchedulerOptions
 
     public int ShutdownTimeoutMilliseconds { get; init; } = 5000;
 
+    public int ShutdownTotalTimeoutMilliseconds { get; init; } = 15000;
+
+    public int WorkerItemPoolCapacity { get; init; } = 64;
+
     public static WorkerJobSchedulerOptions Default => new(
         workerCount: Math.Max(1, Environment.ProcessorCount - 1),
         stateCapacity: 4096,

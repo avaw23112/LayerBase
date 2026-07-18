@@ -25,12 +25,16 @@ public readonly struct TimeSchedulerOptions
     {
         if (tickDurationSeconds <= 0 || float.IsNaN(tickDurationSeconds) || float.IsInfinity(tickDurationSeconds))
             throw new ArgumentException(nameof(tickDurationSeconds));
+        if (wheelSize <= 0 || wheelSize > (1 << 20))
+            throw new ArgumentException(nameof(wheelSize));
         if (initialTimerCapacity <= 0 || initialTimerCapacity > (1 << 30))
             throw new ArgumentException(nameof(initialTimerCapacity));
         if (maxPromotePerTick <= 0)
             throw new ArgumentException(nameof(maxPromotePerTick));
         if (maxExpiredPerTick <= 0)
             throw new ArgumentException(nameof(maxExpiredPerTick));
+        if (maxCatchUpTicksPerPump < 0)
+            throw new ArgumentException(nameof(maxCatchUpTicksPerPump));
 
         TickDurationSeconds = tickDurationSeconds;
         WheelSize = wheelSize;

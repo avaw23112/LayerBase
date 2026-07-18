@@ -61,7 +61,7 @@ public class RuntimeScopeBudgetTests
         for (int i = 0; i < 10; i++)
             scheduler.TryPost(new BudgetTestEventA { Value = i });
 
-        var budget = new RuntimeFrameBudget(0, 0, 0);
+        var budget = new RuntimeFrameBudget(0, 0, 0, hasPostLimit: false);
         var stats = scheduler.Pump(ref budget);
 
         Assert.That(stats.ProcessedCount, Is.EqualTo(10));
@@ -78,7 +78,7 @@ public class RuntimeScopeBudgetTests
         for (int i = 0; i < 10; i++)
             scheduler.TryPost(new BudgetTestEventA { Value = i });
 
-        var budget = new RuntimeFrameBudget(0, 0, 0, remainingPostCount: 3);
+        var budget = new RuntimeFrameBudget(0, 0, 0, remainingPostCount: 3, hasPostLimit: true);
         var stats = scheduler.Pump(ref budget);
 
         Assert.That(stats.ProcessedCount, Is.EqualTo(3));
@@ -95,7 +95,7 @@ public class RuntimeScopeBudgetTests
         for (int i = 0; i < 10; i++)
             scheduler.TryPost(new BudgetTestEventA { Value = i });
 
-        var budget = new RuntimeFrameBudget(0, 0, 0, remainingPostCount: 8);
+        var budget = new RuntimeFrameBudget(0, 0, 0, remainingPostCount: 8, hasPostLimit: true);
 
         var stats1 = scheduler.Pump(ref budget);
         Assert.That(stats1.ProcessedCount, Is.EqualTo(8));
@@ -112,7 +112,7 @@ public class RuntimeScopeBudgetTests
         for (int i = 0; i < 10; i++)
             scheduler.TryPost(new BudgetTestEventA { Value = i });
 
-        var budget = new RuntimeFrameBudget(0, 0, 0, remainingPostCount: 5);
+        var budget = new RuntimeFrameBudget(0, 0, 0, remainingPostCount: 5, hasPostLimit: true);
         var stats = scheduler.Pump(ref budget);
 
         Assert.That(stats.ProcessedCount, Is.EqualTo(5));
@@ -132,7 +132,7 @@ public class RuntimeScopeBudgetTests
         for (int i = 0; i < 5; i++)
             scheduler2.TryPost(new BudgetTestEventA { Value = i });
 
-        var budget = new RuntimeFrameBudget(0, 0, 0, remainingPostCount: 7);
+        var budget = new RuntimeFrameBudget(0, 0, 0, remainingPostCount: 7, hasPostLimit: true);
 
         var stats1 = scheduler1.Pump(ref budget);
         Assert.That(stats1.ProcessedCount, Is.EqualTo(5));
@@ -147,6 +147,7 @@ public class RuntimeScopeBudgetTests
     public void Zero_budget_at_constructor_means_unlimited()
     {
         var budget = new RuntimeFrameBudget(0, 0, 0);
+        Assert.That(budget.HasPostLimit, Is.False);
         Assert.That(budget.RemainingPostCount, Is.EqualTo(0));
     }
 

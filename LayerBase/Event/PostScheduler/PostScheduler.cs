@@ -505,9 +505,16 @@ public sealed class PostScheduler : IDisposable
         }
         else
         {
-            int maxCoalesced = plan.MaxPending > 0 ? plan.MaxPending : _options.MaxSpecialPending;
+            int perTypeLimit = plan.MaxPending > 0 ? plan.MaxPending : _options.MaxSpecialPending;
+            int typeCount = 0;
+            foreach (var kv in _coalescedBuffer)
+            {
+                if (kv.Key.EventTypeId == typeId)
+                    typeCount++;
+            }
+            int maxCoalesced = Math.Min(perTypeLimit, _options.MaxSpecialPending);
 
-            if (_coalescedBuffer.Count >= maxCoalesced)
+            if (typeCount >= maxCoalesced)
             {
                 switch (plan.Backpressure)
                 {
@@ -708,9 +715,15 @@ public sealed class PostScheduler : IDisposable
             if (_latestSnapshotWordIndex >= 0)
             {
                 processed += DispatchLatestSnapshotBudgeted(budget - processed);
+                if (processed >= budget) { budgetExhausted = true; return processed; }
             }
 
             return processed;
+        }
+        catch
+        {
+            budgetExhausted = true;
+            throw;
         }
         finally
         {
@@ -742,6 +755,13 @@ public sealed class PostScheduler : IDisposable
 
             while (bits != 0)
             {
+                if (processed >= budget)
+                {
+                    _dirtyBits.UpdateSnapshotBits(wordIndex, bits);
+                    _dirtySnapshotWordIndex = wordIndex;
+                    return processed;
+                }
+
                 int bitIndex = BitHelper.TrailingZeroCount(bits);
                 int typeId = (wordIndex << 6) + bitIndex;
                 _payloadStorage.DispatchDefault(typeId, _eventCenter);
@@ -838,6 +858,13 @@ public sealed class PostScheduler : IDisposable
 
             while (bits != 0)
             {
+                if (processed >= budget)
+                {
+                    _latestBits.UpdateSnapshotBits(wordIndex, bits);
+                    _latestSnapshotWordIndex = wordIndex;
+                    return processed;
+                }
+
                 int bitIndex = BitHelper.TrailingZeroCount(bits);
                 int typeId = (wordIndex << 6) + bitIndex;
                 bits &= bits - 1;
@@ -964,12 +991,12 @@ public sealed class PostScheduler : IDisposable
     {
         if (_disposed) return new PostPumpStats(0, 0, 0, 0);
 
-        int maxFromBudget = budget.RemainingPostCount;
+        int maxFromBudget = budget.HasPostLimit ? budget.RemainingPostCount : -1;
         int effectiveCap;
 
-        if (maxFromBudget <= 0 && _options.MaxEventsPerPump <= 0)
+        if (!budget.HasPostLimit && _options.MaxEventsPerPump <= 0)
             effectiveCap = int.MaxValue;
-        else if (maxFromBudget <= 0)
+        else if (!budget.HasPostLimit)
             effectiveCap = _options.MaxEventsPerPump;
         else if (_options.MaxEventsPerPump <= 0)
             effectiveCap = maxFromBudget;
@@ -1031,7 +1058,7 @@ public sealed class PostScheduler : IDisposable
         if (startTimestamp != 0)
             totalElapsedMs = (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
 
-        if (maxFromBudget > 0)
+        if (budget.HasPostLimit)
             budget.RemainingPostCount = Math.Max(0, maxFromBudget - processed);
 
         int pendingQueueCount = _readyQueue.Count + _nextQueue.Count;

@@ -501,11 +501,13 @@ public sealed partial class LayerRuntime : IDisposable
             deadlineTicks = startTicks + budgetTicks;
         }
 
+        int postLimit = options.MaxEventsPerPump;
         return new RuntimeFrameBudget(
-            maxEvents: options.MaxEventsPerPump,
+            maxEvents: postLimit,
             usedEvents: 0,
             deadlineTicks: deadlineTicks,
-            remainingPostCount: options.MaxEventsPerPump);
+            remainingPostCount: postLimit > 0 ? postLimit : 0,
+            hasPostLimit: postLimit > 0);
     }
     internal void ReportInfo(LayerEventInfo info)
     {

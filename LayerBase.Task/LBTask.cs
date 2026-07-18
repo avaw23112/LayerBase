@@ -29,6 +29,12 @@ public readonly struct LBTask
 
     public static LBTask CompletedTask => new(null);
 
+    public static int DelayHeapPendingCount => DelayScheduler.PendingCount;
+
+    public static int DelayHeapPeakPendingCount => DelayScheduler.PeakPendingCount;
+
+    public static int DelayHeapLockContentionCount => DelayScheduler.LockContentionCount;
+
     public static LBTask FromException(Exception ex)
     {
         if (ex == null) throw new ArgumentNullException(nameof(ex));
@@ -379,15 +385,29 @@ public readonly struct LBTask
         private static readonly object s_lock = new();
         private static readonly List<DelayWorkItem> s_heap = new();
         private static readonly Timer s_timer = new(OnTimer, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        private static int s_peakPendingCount;
+        private static int s_lockAcquisitions;
+
+        public static int PendingCount => s_heap.Count;
+
+        public static int PeakPendingCount => Volatile.Read(ref s_peakPendingCount);
+
+        public static int LockContentionCount => Volatile.Read(ref s_lockAcquisitions);
 
         public static void Schedule(DelayWorkItem work, TimeSpan delay)
         {
-            var due = Stopwatch.GetTimestamp() + ToTimestampTicks(delay);
+            var timestamp = Stopwatch.GetTimestamp();
+            var delayTicks = ToTimestampTicks(delay);
+            var due = timestamp + delayTicks;
+            if (due < timestamp) due = long.MaxValue;
             work.DueTimestamp = due;
 
             lock (s_lock)
             {
+                Interlocked.Increment(ref s_lockAcquisitions);
                 HeapPush(work);
+                if (s_heap.Count > Volatile.Read(ref s_peakPendingCount))
+                    Interlocked.CompareExchange(ref s_peakPendingCount, s_heap.Count, Volatile.Read(ref s_peakPendingCount));
                 if (ReferenceEquals(s_heap[0], work)) ArmTimer(due);
             }
         }
@@ -396,6 +416,7 @@ public readonly struct LBTask
         {
             lock (s_lock)
             {
+                Interlocked.Increment(ref s_lockAcquisitions);
                 var index = work.HeapIndex;
                 if (index < 0 || index >= s_heap.Count || !ReferenceEquals(s_heap[index], work))
                     return false;
@@ -417,6 +438,7 @@ public readonly struct LBTask
 
                 lock (s_lock)
                 {
+                    Interlocked.Increment(ref s_lockAcquisitions);
                     if (s_heap.Count == 0)
                     {
                         s_timer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
@@ -458,8 +480,14 @@ public readonly struct LBTask
                 return;
             }
 
-            var seconds = ticks / (double)Stopwatch.Frequency;
-            s_timer.Change(TimeSpan.FromSeconds(seconds), Timeout.InfiniteTimeSpan);
+            var milliseconds = ticks * 1000.0 / Stopwatch.Frequency;
+            if (milliseconds >= int.MaxValue)
+            {
+                s_timer.Change(int.MaxValue, Timeout.Infinite);
+                return;
+            }
+
+            s_timer.Change(Math.Max(1, (int)milliseconds), Timeout.Infinite);
         }
 
         private static void HeapPush(DelayWorkItem item)

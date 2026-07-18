@@ -259,12 +259,11 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 
             if ((entry.Flags & TimerFlags.Active) != 0)
             {
+                count++;
                 try
                 {
                     if (sink.TryAcceptExpired(in entry.Payload, new TimerHandle(current, entry.Version)))
                     {
-                        count++;
-
                         if ((entry.Flags & TimerFlags.Repeat) != 0)
                             RescheduleRepeatSlow(current, ref entry);
                         else
@@ -305,6 +304,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 
         if (_overdueTail == -1)
         {
+            FastArray.At(_pool, head).Prev = -1;
             _overdueHead = head;
             _overdueTail = tail;
         }

@@ -12,12 +12,12 @@ namespace LayerBase.Test;
 [Category("ProductionHardening")]
 public sealed class WorkerScopeLifecycleThreadTests
 {
-    private readonly ConcurrentQueue<string> _lifecycleLog = new();
+    private ConcurrentQueue<string> _lifecycleLog = new();
 
     [SetUp]
     public void SetUp()
     {
-        _lifecycleLog.Clear();
+        _lifecycleLog = new ConcurrentQueue<string>();
         LayerHub.Reset();
         EventMetaDataHandler.Clear();
     }
@@ -72,10 +72,15 @@ public sealed class WorkerScopeLifecycleThreadTests
     [Test]
     public void Each_lifecycle_callback_runs_exactly_once()
     {
-        using var runtime = BuildWithWorkerScope();
+        var lifecycleLog = new ConcurrentQueue<string>();
+        var runtime = LayerHub.CreateLayers()
+            .Push(new WorkerScopeLifecycleLayer(lifecycleLog))
+            .Build();
+        runtime.Dispose();
 
-        var lifecycleCallbacks = _lifecycleLog
+        var lifecycleCallbacks = lifecycleLog
             .Select(line => line.Split(':')[0])
+            .Where(name => name is "Initialize" or "PostBuild" or "RuntimeStart")
             .GroupBy(name => name)
             .ToDictionary(g => g.Key, g => g.Count());
 

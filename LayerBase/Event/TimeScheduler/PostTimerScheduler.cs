@@ -69,6 +69,24 @@ internal sealed class PostTimerScheduler : IDisposable,
         _timerPlans = plans;
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ResolvePlanSlow(int eventId)
+    {
+        int oldLength = _timerPlans.Length;
+        int newLength = Math.Max(eventId + 1, Math.Max(oldLength * 2, 16));
+        Array.Resize(ref _timerPlans, newLength);
+
+        for (int i = oldLength; i < newLength; i++)
+        {
+            _timerPlans[i] = new TimerPostTypePlan(
+                i,
+                false,
+                PostTypePlan.Default(i, _postScheduler.Options.DefaultBackpressure),
+                null,
+                null);
+        }
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TimerHandle Schedule<TEvent>(
         in TEvent value,
@@ -78,6 +96,10 @@ internal sealed class PostTimerScheduler : IDisposable,
         where TEvent : struct
     {
         int eventId = EventTypeId<TEvent>.Id;
+
+        if ((uint)eventId >= (uint)_timerPlans.Length)
+            ResolvePlanSlow(eventId);
+
         PayloadHandle payloadHandle = _payloadStorage.Store(_runtimeId, in value);
 
         TimerPostTypePlan plan = _timerPlans[eventId];

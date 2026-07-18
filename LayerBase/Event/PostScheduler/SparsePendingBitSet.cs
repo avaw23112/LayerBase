@@ -117,6 +117,11 @@ internal sealed class SparsePendingBitSet
         _snapshotWordFlags[wordIndex] = 0;
     }
 
+    public void UpdateSnapshotBits(int wordIndex, ulong bits)
+    {
+        _snapshotBits[wordIndex] = bits;
+    }
+
     public void ClearSnapshot()
     {
         for (int i = 0; i < _snapshotWordCount; i++)

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using LayerBase.Scope;
 
 namespace LayerBase.Worker;
@@ -27,10 +28,49 @@ internal sealed class WorkerJobScheduler : IDisposable
     private int _freeCount;
     private bool _accepting = true;
     private bool _disposed;
+    private static int s_workerItemPoolCapacity = 64;
+    private static int s_workerItemPoolTotalCount;
+    private static readonly ConcurrentBag<CancellationTokenSource> s_ctsPool = new();
+
+    internal static void SetWorkerItemPoolCapacity(int capacity)
+    {
+        s_workerItemPoolCapacity = Math.Max(1, capacity);
+    }
+
+    internal static int WorkerItemPoolTotalCount =>
+        Volatile.Read(ref s_workerItemPoolTotalCount);
+
+    internal static int CtsPoolCount => s_ctsPool.Count;
+
+    internal static CancellationTokenSource RentCtsFromPool()
+    {
+        if (!s_ctsPool.TryTake(out var cts))
+            cts = new CancellationTokenSource();
+        return cts;
+    }
+
+    internal static void ReturnCtsToPool(CancellationTokenSource cts)
+    {
+#if NET
+        try
+        {
+            if (cts.TryReset())
+            {
+                s_ctsPool.Add(cts);
+                return;
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+#endif
+        cts.Dispose();
+    }
 
     public WorkerJobScheduler(WorkerJobSchedulerOptions options)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        SetWorkerItemPoolCapacity(options.WorkerItemPoolCapacity);
         _queue = new Queue<IWorkerJobItem>(options.JobQueueCapacity);
         _threads = new Thread[options.WorkerCount];
         _states = new StateSlot[options.StateCapacity];
@@ -64,7 +104,7 @@ internal sealed class WorkerJobScheduler : IDisposable
         where TEvent : struct
     {
         CancellationTokenSource cts = cancellationToken == default
-            ? WorkerJobItem<TJob, TInput, TEvent>.RentCts()
+            ? RentCtsFromPool()
             : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         WorkerHandle handle;
         IWorkerJobItem item;
@@ -74,28 +114,28 @@ internal sealed class WorkerJobScheduler : IDisposable
             handle = AllocateHandleLocked(cts);
             if (!handle.IsValid)
             {
-                WorkerJobItem<TJob, TInput, TEvent>.ReturnCts(cts);
+                ReturnCtsToPool(cts);
                 return WorkerHandle.Invalid;
             }
 
             if (!_accepting || _disposed)
             {
                 MarkTerminalLocked(handle, WorkerState.Failed);
-                WorkerJobItem<TJob, TInput, TEvent>.ReturnCts(cts);
+                ReturnCtsToPool(cts);
                 return handle;
             }
 
             if (cancellationToken.IsCancellationRequested)
             {
                 MarkTerminalLocked(handle, WorkerState.Cancelled);
-                WorkerJobItem<TJob, TInput, TEvent>.ReturnCts(cts);
+                ReturnCtsToPool(cts);
                 return handle;
             }
 
             if (_queue.Count >= _options.JobQueueCapacity)
             {
                 MarkTerminalLocked(handle, WorkerState.Failed);
-                WorkerJobItem<TJob, TInput, TEvent>.ReturnCts(cts);
+                ReturnCtsToPool(cts);
                 return handle;
             }
 
@@ -137,7 +177,10 @@ internal sealed class WorkerJobScheduler : IDisposable
                 return false;
 
             slot.Cancellation?.Cancel();
+            var cts = DetachCancellationLocked(handle);
             MarkTerminalLocked(handle, WorkerState.Cancelled);
+            if (cts != null)
+                ReturnCtsToPool(cts);
             return true;
         }
     }
@@ -182,13 +225,29 @@ internal sealed class WorkerJobScheduler : IDisposable
             _signal.Set();
         }
 
+        var deadline = Stopwatch.GetTimestamp() +
+            _options.ShutdownTotalTimeoutMilliseconds * (Stopwatch.Frequency / 1000);
         for (int i = 0; i < _threads.Length; i++)
         {
-            if (_threads[i].IsAlive && !_threads[i].Join(_options.ShutdownTimeoutMilliseconds))
+            if (!_threads[i].IsAlive)
+                continue;
+
+            var remainingTicks = deadline - Stopwatch.GetTimestamp();
+            if (remainingTicks <= 0)
             {
                 _threads[i].IsBackground = true;
                 System.Diagnostics.Debug.WriteLine(
-                    $"[WorkerJobScheduler] Thread '{_threads[i].Name}' timed out after {_options.ShutdownTimeoutMilliseconds}ms, set to background.");
+                    $"[WorkerJobScheduler] Thread '{_threads[i].Name}' timed out, set to background.");
+            }
+            else
+            {
+                var remainingMs = (int)(remainingTicks * 1000 / Stopwatch.Frequency);
+                if (!_threads[i].Join(Math.Max(1, remainingMs)))
+                {
+                    _threads[i].IsBackground = true;
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[WorkerJobScheduler] Thread '{_threads[i].Name}' timed out, set to background.");
+                }
             }
         }
 
@@ -196,8 +255,9 @@ internal sealed class WorkerJobScheduler : IDisposable
 
         for (int i = 0; i < _states.Length; i++)
         {
-            _states[i].Cancellation?.Dispose();
+            var cts = _states[i].Cancellation;
             _states[i].Cancellation = null;
+            cts?.Dispose();
         }
     }
 
@@ -214,7 +274,6 @@ internal sealed class WorkerJobScheduler : IDisposable
         _states[index].Version = version;
         _states[index].State = WorkerState.Pending;
         _states[index].InUse = true;
-        _states[index].Cancellation?.Dispose();
         _states[index].Cancellation = cts;
         return new WorkerHandle(index, version);
     }
@@ -254,10 +313,20 @@ internal sealed class WorkerJobScheduler : IDisposable
 
         slot.State = state;
         slot.InUse = false;
-        slot.Cancellation?.Dispose();
         slot.Cancellation = null;
 
         _free[_freeCount++] = handle.Index;
+    }
+
+    private CancellationTokenSource? DetachCancellationLocked(WorkerHandle handle)
+    {
+        if (!IsKnownHandleLocked(handle))
+            return null;
+
+        ref var slot = ref _states[handle.Index];
+        var cts = slot.Cancellation;
+        slot.Cancellation = null;
+        return cts;
     }
 
     private bool IsKnownHandleLocked(WorkerHandle handle)
@@ -322,8 +391,8 @@ internal sealed class WorkerJobScheduler : IDisposable
         where TInput : struct
         where TEvent : struct
     {
-        private static readonly ConcurrentBag<WorkerJobItem<TJob, TInput, TEvent>> Pool = new();
-        private static readonly ConcurrentBag<CancellationTokenSource> CtsPool = new();
+        private static readonly ConcurrentQueue<WorkerJobItem<TJob, TInput, TEvent>> s_pool = new();
+        private static int s_poolCount;
 
         private WorkerJobScheduler _scheduler = null!;
         private WorkerHandle _handle;
@@ -342,7 +411,9 @@ internal sealed class WorkerJobScheduler : IDisposable
             WorkerEventJobOptions options,
             CancellationTokenSource cancellation)
         {
-            if (!Pool.TryTake(out var item))
+            if (s_pool.TryDequeue(out var item))
+                Interlocked.Decrement(ref s_poolCount);
+            else
                 item = new WorkerJobItem<TJob, TInput, TEvent>();
 
             item._scheduler = scheduler;
@@ -369,39 +440,21 @@ internal sealed class WorkerJobScheduler : IDisposable
         private void Return()
         {
             ResetFields();
-            Pool.Add(this);
-        }
-
-        internal static CancellationTokenSource RentCts()
-        {
-            if (!CtsPool.TryTake(out var cts))
-                cts = new CancellationTokenSource();
-            return cts;
-        }
-
-        internal static void ReturnCts(CancellationTokenSource cts)
-        {
-#if NET
-            try
+            if (Interlocked.Increment(ref s_poolCount) <= s_workerItemPoolCapacity)
             {
-                if (cts.TryReset())
-                {
-                    CtsPool.Add(cts);
-                    return;
-                }
+                s_pool.Enqueue(this);
             }
-            catch (ObjectDisposedException)
+            else
             {
+                Interlocked.Decrement(ref s_poolCount);
             }
-#endif
-            cts.Dispose();
         }
 
         public void Execute(int workerIndex)
         {
             if (!_scheduler.TryMarkRunning(_handle))
             {
-                ReturnCts(_cancellation);
+                ReturnCtsToPool(_cancellation);
                 Return();
                 return;
             }
@@ -414,7 +467,7 @@ internal sealed class WorkerJobScheduler : IDisposable
                     WorkerJobFailureKind.Cancelled,
                     WorkerJobExceptionInfo.None);
                 _scheduler.MarkTerminal(_handle, WorkerState.Cancelled);
-                ReturnCts(_cancellation);
+                ReturnCtsToPool(_cancellation);
                 Return();
                 return;
             }
@@ -469,7 +522,7 @@ internal sealed class WorkerJobScheduler : IDisposable
             }
             finally
             {
-                ReturnCts(_cancellation);
+                ReturnCtsToPool(_cancellation);
                 Return();
             }
         }
@@ -483,7 +536,7 @@ internal sealed class WorkerJobScheduler : IDisposable
                 WorkerJobFailureKind.Cancelled,
                 WorkerJobExceptionInfo.None);
             _scheduler.MarkTerminal(_handle, WorkerState.Cancelled);
-            ReturnCts(_cancellation);
+            ReturnCtsToPool(_cancellation);
             Return();
         }
     }

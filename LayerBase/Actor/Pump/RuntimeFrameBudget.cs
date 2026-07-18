@@ -7,15 +7,17 @@ public struct RuntimeFrameBudget
     public long DeadlineTicks;
     public int RemainingPostCount;
     public int StartingScopeIndex;
+    public bool HasPostLimit;
 
     public RuntimeFrameBudget(int maxEvents, int usedEvents, long deadlineTicks,
-        int remainingPostCount = 0, int startingScopeIndex = 0)
+        int remainingPostCount = 0, int startingScopeIndex = 0, bool hasPostLimit = false)
     {
         MaxWorkItems = maxEvents;
         UsedWorkItems = usedEvents;
         DeadlineTicks = deadlineTicks;
         RemainingPostCount = remainingPostCount;
         StartingScopeIndex = startingScopeIndex;
+        HasPostLimit = hasPostLimit;
     }
 
     public int MaxEvents
