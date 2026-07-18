@@ -14,9 +14,9 @@ internal sealed class WorkerJobScheduler : IDisposable
     private readonly WorkerJobSchedulerOptions _options;
     private readonly object _gate = new();
     private readonly Queue<IWorkerExecutionItem> _queue;
-    private readonly ManualResetEventSlim _signal = new(false);
-    private readonly Thread[] _threads;
-
+    private ManualResetEventSlim _signal = new(false);
+    private Thread[] _threads = Array.Empty<Thread>();
+    private bool _threadsStarted;
     private bool _accepting = true;
     private bool _stopRequested;
     private bool _resourcesReleased;
@@ -24,28 +24,15 @@ internal sealed class WorkerJobScheduler : IDisposable
     public WorkerJobScheduler(WorkerJobSchedulerOptions options)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
-
         _queue = new Queue<IWorkerExecutionItem>(options.JobQueueCapacity);
-        _threads = new Thread[options.WorkerCount];
-
-        for (int i = 0; i < _threads.Length; i++)
-        {
-            int workerIndex = i;
-
-            _threads[i] = new Thread(() => WorkerLoop(workerIndex))
-            {
-                IsBackground = true,
-                Name = $"LayerBase Worker {workerIndex}"
-            };
-
-            _threads[i].Start();
-        }
     }
 
     internal bool TryEnqueue(IWorkerExecutionItem item)
     {
         if (item == null)
             throw new ArgumentNullException(nameof(item));
+
+        StartThreadsOnce();
 
         lock (_gate)
         {
@@ -77,7 +64,8 @@ internal sealed class WorkerJobScheduler : IDisposable
             while (_queue.Count > 0)
                 pending.Add(_queue.Dequeue());
 
-            _signal.Set();
+            if (_threadsStarted)
+                _signal.Set();
         }
 
         foreach (IWorkerExecutionItem item in pending)
@@ -89,6 +77,12 @@ internal sealed class WorkerJobScheduler : IDisposable
     internal WorkerExecutorShutdownResult Stop(in ShutdownDeadline deadline)
     {
         BeginStop();
+
+        if (!_threadsStarted)
+        {
+            ReleaseResources();
+            return WorkerExecutorShutdownResult.AlreadyStopped;
+        }
 
         bool hadLiveThread = false;
 
@@ -123,6 +117,37 @@ internal sealed class WorkerJobScheduler : IDisposable
             TimeSpan.FromMilliseconds(_options.ShutdownTotalTimeoutMilliseconds));
 
         _ = Stop(in deadline);
+    }
+
+    private void StartThreadsOnce()
+    {
+        if (_threadsStarted)
+            return;
+
+        lock (_gate)
+        {
+            if (_threadsStarted)
+                return;
+
+            int count = _options.WorkerCount;
+            _signal = new ManualResetEventSlim(false);
+            _threads = new Thread[count];
+
+            for (int i = 0; i < count; i++)
+            {
+                int workerIndex = i;
+
+                _threads[i] = new Thread(() => WorkerLoop(workerIndex))
+                {
+                    IsBackground = true,
+                    Name = $"LayerBase Worker {workerIndex}"
+                };
+
+                _threads[i].Start();
+            }
+
+            _threadsStarted = true;
+        }
     }
 
     private void WorkerLoop(int workerIndex)

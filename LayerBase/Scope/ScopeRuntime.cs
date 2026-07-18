@@ -1137,7 +1137,7 @@ internal sealed class ScopeRuntime : IDisposable
         return new ScopeExitSafePointResponse(ScopeControlResult.Succeeded);
     }
 
-    private void StopOnOwnerThread()
+    internal void StopOnOwnerThread()
     {
         if (_state == ScopeRuntimeState.Disposed ||
             _state == ScopeRuntimeState.Disposing ||

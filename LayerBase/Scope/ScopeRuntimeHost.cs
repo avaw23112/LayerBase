@@ -202,21 +202,6 @@ internal sealed class ScopeRuntimeHost : IDisposable
         RequestDisposeForAllScopes(in deadline, workerTimedOut);
     }
 
-    private void DisposeUnstartedScopes()
-    {
-        ScopeRuntime[] runtimes = _directory.Runtimes;
-
-        for (int i = runtimes.Length - 1; i >= 0; i--)
-        {
-            runtimes[i].DisposeUnstarted();
-        }
-
-        for (int i = _workers.Length - 1; i >= 0; i--)
-        {
-            _workers[i].Stop(ShutdownDeadline.Start(TimeSpan.Zero));
-        }
-    }
-
     private void RequestStopForAllScopes(in ShutdownDeadline deadline)
     {
         ScopeRuntime[] runtimes = _directory.Runtimes;
@@ -232,11 +217,33 @@ internal sealed class ScopeRuntimeHost : IDisposable
                 continue;
             }
 
-            var task = scope.RequestStopAsync();
-
-            WaitForControl(scope, task, in deadline);
+            if (scope.Options.Threading != ScopeThreadingMode.Worker)
+            {
+                scope.StopOnOwnerThread();
+            }
+            else
+            {
+                var task = scope.RequestStopAsync();
+                WaitForControl(scope, task, in deadline);
+            }
         }
     }
+
+    private void DisposeUnstartedScopes()
+    {
+        ScopeRuntime[] runtimes = _directory.Runtimes;
+
+        for (int i = runtimes.Length - 1; i >= 0; i--)
+        {
+            runtimes[i].DisposeUnstarted();
+        }
+
+        for (int i = _workers.Length - 1; i >= 0; i--)
+        {
+            _workers[i].Stop(ShutdownDeadline.Start(TimeSpan.Zero));
+        }
+    }
+
 
     private void RequestDisposeForAllScopes(in ShutdownDeadline deadline, bool workerTimedOut)
     {
@@ -256,13 +263,22 @@ internal sealed class ScopeRuntimeHost : IDisposable
                 continue;
             }
 
-            var task = scope.RequestDisposeAsync();
-
-            if (scope.Options.Threading == ScopeThreadingMode.Inline)
-                scope.PumpIngress();
-
-            if (!task.GetAwaiter().IsCompleted)
+            if (scope.Options.Threading != ScopeThreadingMode.Worker)
+            {
                 scope.Dispose();
+            }
+            else
+            {
+                var task = scope.RequestDisposeAsync();
+                var awaiter = task.GetAwaiter();
+
+                while (!awaiter.IsCompleted)
+                {
+                    if (deadline.IsExpired)
+                        break;
+                    Thread.Yield();
+                }
+            }
         }
     }
 
