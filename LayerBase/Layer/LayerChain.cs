@@ -1,4 +1,6 @@
 ﻿using System.Text;
+using System.Threading;
+using LayerBase.Async;
 using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.Scope;
@@ -106,7 +108,7 @@ internal sealed class LayerChain
                             scope.RequestPostBuildAsync().GetAwaiter().GetResult();
                             break;
                         case ScopeLifecyclePhase.RuntimeStart:
-                            scope.RequestRuntimeStartAsync().GetAwaiter().GetResult();
+                            SpinWaitForWorkerControl(scope.RequestRuntimeStartAsync());
                             break;
                     }
                 }
@@ -131,6 +133,19 @@ internal sealed class LayerChain
                 }
             }
         }
+    }
+
+    private static void SpinWaitForWorkerControl<T>(LayerBase.Async.LBTask<T> task) where T : struct
+    {
+        var awaiter = task.GetAwaiter();
+        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+        while (!awaiter.IsCompleted)
+        {
+            if (sw.ElapsedMilliseconds > 5000)
+                return;
+            Thread.Sleep(0);
+        }
+        awaiter.GetResult();
     }
 
     /// <summary>
