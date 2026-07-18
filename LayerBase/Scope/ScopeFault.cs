@@ -29,6 +29,7 @@ public enum ScopeFaultPhase
     WorkerLoop,
     QueueAdmission,
     ResourceUnbind,
+    Shutdown,
     Unknown
 }
 

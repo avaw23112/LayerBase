@@ -2,6 +2,13 @@ using System.Diagnostics;
 
 namespace LayerBase.Scope;
 
+internal enum ScopeWorkerShutdownResult
+{
+    Stopped,
+    TimedOut,
+    AlreadyStopped
+}
+
 internal sealed class ScopeWorker : IDisposable
 {
     private readonly ScopeRuntime _runtime;
@@ -10,6 +17,7 @@ internal sealed class ScopeWorker : IDisposable
     private readonly AutoResetEvent _workSignal = new(initialState: false);
     private bool _startedThread;
     private bool _disposed;
+    private ScopeWorkerShutdownResult _shutdownResult;
 
     public ScopeWorker(ScopeRuntime runtime)
     {
@@ -21,6 +29,8 @@ internal sealed class ScopeWorker : IDisposable
             Name = $"LayerBase.Scope.{runtime.Descriptor.Name}"
         };
     }
+
+    public ScopeWorkerShutdownResult ShutdownResult => _shutdownResult;
 
     public void Start()
     {
@@ -48,15 +58,28 @@ internal sealed class ScopeWorker : IDisposable
         {
             if (!_thread.Join(5000))
             {
+                _shutdownResult = ScopeWorkerShutdownResult.TimedOut;
                 _thread.IsBackground = true;
                 System.Diagnostics.Debug.WriteLine(
                     $"[ScopeWorker] Thread '{_thread.Name}' timed out after 5000ms, set to background.");
+                return;
             }
+
+            _shutdownResult = ScopeWorkerShutdownResult.Stopped;
+        }
+        else
+        {
+            _shutdownResult = ScopeWorkerShutdownResult.AlreadyStopped;
         }
 
         if (!_startedThread)
             _runtime.Dispose();
+        else
+            ReleaseResources();
+    }
 
+    private void ReleaseResources()
+    {
         _workSignal.Dispose();
     }
 

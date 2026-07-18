@@ -177,11 +177,29 @@ internal sealed class ScopeRuntimeHost : IDisposable
             return;
 
         _disposed = true;
+        bool hasTimedOut = false;
         for (int i = _workers.Length - 1; i >= 0; i--)
+        {
             _workers[i].Dispose();
+            if (_workers[i].ShutdownResult == ScopeWorkerShutdownResult.TimedOut)
+                hasTimedOut = true;
+        }
+
         var runtimes = _directory.Runtimes;
         for (int i = runtimes.Length - 1; i >= 0; i--)
-            DisposeScopeThroughControl(runtimes[i]);
+        {
+            var scope = runtimes[i];
+            if (scope.Options.Threading == ScopeThreadingMode.Worker && hasTimedOut)
+            {
+                if (scope.State != ScopeRuntimeState.Disposed)
+                {
+                    scope.Transport.CloseBusinessAdmission();
+                }
+                continue;
+            }
+
+            DisposeScopeThroughControl(scope);
+        }
     }
 
     private static void DisposeScopeThroughControl(ScopeRuntime scope)
