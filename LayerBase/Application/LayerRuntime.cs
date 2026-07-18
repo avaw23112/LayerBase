@@ -441,12 +441,12 @@ public sealed partial class LayerRuntime : IDisposable
             scheduler?.Options ?? PostSchedulerOptions.Default,
             Stopwatch.GetTimestamp());
 
-        // 5. Local post pump
+        // 5. Local post pump (uses shared budget)
         PostPumpStats postStats;
 
         if (scheduler?.HasPendingWork == true)
         {
-            postStats = scheduler.Pump();
+            postStats = scheduler.Pump(ref runtimeBudget);
         }
         else
         {
@@ -466,6 +466,7 @@ public sealed partial class LayerRuntime : IDisposable
 
         _scopeHost.PumpInlineScopes(
             deltaTime,
+            ref runtimeBudget,
             policy,
             _scopeCompletionExceptionReporter);
         
@@ -498,7 +499,8 @@ public sealed partial class LayerRuntime : IDisposable
         return new RuntimeFrameBudget(
             maxEvents: options.MaxEventsPerPump,
             usedEvents: 0,
-            deadlineTicks: deadlineTicks);
+            deadlineTicks: deadlineTicks,
+            remainingPostCount: options.MaxEventsPerPump);
     }
     internal void ReportInfo(LayerEventInfo info)
     {

@@ -5,12 +5,17 @@ public struct RuntimeFrameBudget
     public int MaxWorkItems;
     public int UsedWorkItems;
     public long DeadlineTicks;
+    public int RemainingPostCount;
+    public int StartingScopeIndex;
 
-    public RuntimeFrameBudget(int maxEvents, int usedEvents, long deadlineTicks)
+    public RuntimeFrameBudget(int maxEvents, int usedEvents, long deadlineTicks,
+        int remainingPostCount = 0, int startingScopeIndex = 0)
     {
         MaxWorkItems = maxEvents;
         UsedWorkItems = usedEvents;
         DeadlineTicks = deadlineTicks;
+        RemainingPostCount = remainingPostCount;
+        StartingScopeIndex = startingScopeIndex;
     }
 
     public int MaxEvents

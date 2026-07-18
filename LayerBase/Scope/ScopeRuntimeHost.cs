@@ -1,4 +1,5 @@
 using LayerBase.Async;
+using LayerBase.Actor;
 
 namespace LayerBase.Scope;
 
@@ -182,18 +183,28 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
     public void PumpInlineScopes(
         float deltaTime,
+        ref RuntimeFrameBudget budget,
         CompletionExceptionPolicy exceptionPolicy,
         Action<Exception>? reportException)
     {
         ThrowIfDisposed();
 
+        if (_inlineScopes.Length == 0)
+            return;
+
+        int startIndex = budget.StartingScopeIndex % _inlineScopes.Length;
+
         for (int i = 0; i < _inlineScopes.Length; i++)
         {
-            _inlineScopes[i].PumpScopeResources(
+            int idx = (startIndex + i) % _inlineScopes.Length;
+            _inlineScopes[idx].PumpScopeResources(
                 deltaTime,
+                ref budget,
                 exceptionPolicy,
                 reportException);
         }
+
+        budget.StartingScopeIndex = (startIndex + 1) % _inlineScopes.Length;
     }
 
     public void Dispose()

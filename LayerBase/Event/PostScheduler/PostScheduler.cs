@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Numerics;
 using LayerBase.Core.DataStruct;
+using LayerBase.Actor;
 
 namespace LayerBase.Core.Event;
 
@@ -662,11 +663,12 @@ public sealed class PostScheduler : IDisposable
         }
     }
 
-    private int FlushBuffers(int processedSoFar)
+    private int FlushBuffers(int processedSoFar, int totalBudgetCap = int.MaxValue)
     {
-        int budget = _options.MaxEventsPerPump > 0
+        int budgetFromOptions = _options.MaxEventsPerPump > 0
             ? _options.MaxEventsPerPump - processedSoFar
             : int.MaxValue;
+        int budget = Math.Min(budgetFromOptions, totalBudgetCap == int.MaxValue ? int.MaxValue : totalBudgetCap - processedSoFar);
 
         if (budget <= 0)
             return 0;
@@ -953,6 +955,84 @@ public sealed class PostScheduler : IDisposable
         var totalElapsedMs = 0.0;
         if (startTimestamp != 0)
             totalElapsedMs = (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
+
+        int pendingQueueCount = _readyQueue.Count + _nextQueue.Count;
+        return new PostPumpStats(processed, totalElapsedMs, pendingQueueCount, wavesProcessed);
+    }
+
+    public PostPumpStats Pump(ref RuntimeFrameBudget budget)
+    {
+        if (_disposed) return new PostPumpStats(0, 0, 0, 0);
+
+        int maxFromBudget = budget.RemainingPostCount;
+        int effectiveCap;
+
+        if (maxFromBudget <= 0 && _options.MaxEventsPerPump <= 0)
+            effectiveCap = int.MaxValue;
+        else if (maxFromBudget <= 0)
+            effectiveCap = _options.MaxEventsPerPump;
+        else if (_options.MaxEventsPerPump <= 0)
+            effectiveCap = maxFromBudget;
+        else
+            effectiveCap = Math.Min(maxFromBudget, _options.MaxEventsPerPump);
+
+        long startTimestamp = 0;
+        if (_options.MaxMillisecondsPerPump > 0) startTimestamp = Stopwatch.GetTimestamp();
+
+        int processed = 0;
+        int wavesProcessed = 0;
+
+        processed += FlushBuffers(processed, effectiveCap);
+
+        _isPumping = true;
+        try
+        {
+            if (_readyQueue.IsEmpty && !_nextQueue.IsEmpty) PromoteNextToReady();
+
+            while (true)
+            {
+                if (_readyQueue.IsEmpty) break;
+                int currentWaveCount = _readyQueue.Count;
+
+                wavesProcessed++;
+                for (int i = 0; i < currentWaveCount; i++)
+                {
+                    PostItem item;
+
+                    if (!_readyQueue.TryDequeue(out item)) break;
+
+                    DispatchItem(in item);
+                    processed++;
+
+                    if (effectiveCap != int.MaxValue && processed >= effectiveCap)
+                        goto EndPump;
+
+                    if (_options.MaxMillisecondsPerPump > 0 && processed % _options.TimeCheckInterval == 0)
+                    {
+                        var elapsedMs = (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
+                        if (elapsedMs >= _options.MaxMillisecondsPerPump)
+                            goto EndPump;
+                    }
+                }
+
+                if (wavesProcessed < _options.MaxWavesPerPump && !_nextQueue.IsEmpty)
+                    PromoteNextToReady();
+                else
+                    break;
+            }
+        }
+        finally
+        {
+            _isPumping = false;
+        }
+
+        EndPump:
+        var totalElapsedMs = 0.0;
+        if (startTimestamp != 0)
+            totalElapsedMs = (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
+
+        if (maxFromBudget > 0)
+            budget.RemainingPostCount = Math.Max(0, maxFromBudget - processed);
 
         int pendingQueueCount = _readyQueue.Count + _nextQueue.Count;
         return new PostPumpStats(processed, totalElapsedMs, pendingQueueCount, wavesProcessed);

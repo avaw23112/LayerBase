@@ -434,6 +434,24 @@ internal sealed class ScopeRuntime : IDisposable
         PumpScopeResourcesCore(deltaTime, exceptionPolicy, reportException);
     }
 
+    public void PumpScopeResources(
+        float deltaTime,
+        ref RuntimeFrameBudget budget,
+        CompletionExceptionPolicy exceptionPolicy = CompletionExceptionPolicy.Throw,
+        Action<Exception>? reportException = null)
+    {
+        BindOwnerThreadIfNeeded();
+        var context = SynchronizationContext;
+        if (context != null)
+        {
+            using var scope = context.EnterScope();
+            PumpScopeResourcesCore(deltaTime, ref budget, exceptionPolicy, reportException);
+            return;
+        }
+
+        PumpScopeResourcesCore(deltaTime, ref budget, exceptionPolicy, reportException);
+    }
+
     private void PumpScopeResourcesCore(
         float deltaTime,
         CompletionExceptionPolicy exceptionPolicy,
@@ -448,6 +466,25 @@ internal sealed class ScopeRuntime : IDisposable
         TickTimer(deltaTime);
         DelayManager?.Tick(deltaTime);
         PostScheduler?.Pump();
+        PumpEventExpectations();
+        PumpUpdate(deltaTime);
+    }
+
+    private void PumpScopeResourcesCore(
+        float deltaTime,
+        ref RuntimeFrameBudget budget,
+        CompletionExceptionPolicy exceptionPolicy,
+        Action<Exception>? reportException)
+    {
+        _tickCount++;
+        PumpIngress();
+        if (!CanPumpLifecycle())
+            return;
+
+        PumpSynchronizationContext(exceptionPolicy, reportException);
+        TickTimer(deltaTime);
+        DelayManager?.Tick(deltaTime);
+        PostScheduler?.Pump(ref budget);
         PumpEventExpectations();
         PumpUpdate(deltaTime);
     }
