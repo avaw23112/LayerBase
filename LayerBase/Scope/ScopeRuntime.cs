@@ -1158,6 +1158,9 @@ internal sealed class ScopeRuntime : IDisposable
         if (!_disposeRequestedFromControl)
             return;
 
+        if (!WorkerJobs.CanDispose)
+            return;
+
         var completion = _pendingDisposeCompletion;
         try
         {
@@ -1453,6 +1456,30 @@ internal sealed class ScopeRuntime : IDisposable
         DisposeOwnerThreadResources();
     }
 
+    internal void DisposeUnstarted()
+    {
+#if DEBUG
+        if (OwnerThreadId != 0 && !IsOwnerThread)
+        {
+            throw new InvalidOperationException(
+                $"Unstarted scope `{Descriptor.Name}` already has a different owner thread.");
+        }
+#endif
+
+        if (_state == ScopeRuntimeState.Disposed)
+            return;
+
+        WorkerJobs.BeginStopOnOwnerThread();
+
+        if (!WorkerJobs.CanDispose)
+        {
+            throw new InvalidOperationException(
+                "Unstarted scope unexpectedly owns active worker jobs.");
+        }
+
+        DisposeOwnerThreadResources();
+    }
+
     private void DisposeOwnerThreadResources(
         ScopeCallCompletion<ScopeDisposeResponse>? disposeCompletion = null)
     {
@@ -1466,6 +1493,11 @@ internal sealed class ScopeRuntime : IDisposable
         _pendingDisposeCompletion = null;
         if (_state != ScopeRuntimeState.Stopped)
             StopOnOwnerThread();
+
+        if (WorkerJobs.CanDispose)
+        {
+            WorkerJobs.DisposeOnOwnerThread();
+        }
 
         _state = ScopeRuntimeState.Disposing;
         var context = SynchronizationContext;

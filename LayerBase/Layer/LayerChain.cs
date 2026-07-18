@@ -79,16 +79,6 @@ internal sealed class LayerChain
         _responsibilityChain.AddLast(node);
     }
 
-    /// <summary>
-    /// 按 Scope 生命周期计划逆序释放所有 Layer。
-    /// </summary>
-    internal void DisposeLayers()
-    {
-        var scopes = _owner.ScopeHost.Scopes;
-        RunScopeLifecycleOnOwnerThread(scopes, ScopeLifecyclePhase.RuntimeStop);
-        RunScopeLifecycleOnOwnerThread(scopes, ScopeLifecyclePhase.Dispose);
-    }
-
     internal void DisposeScopeServices(int scopeId)
     {
         foreach (var node in _responsibilityChain)
@@ -118,12 +108,6 @@ internal sealed class LayerChain
                         case ScopeLifecyclePhase.RuntimeStart:
                             scope.RequestRuntimeStartAsync().GetAwaiter().GetResult();
                             break;
-                        case ScopeLifecyclePhase.RuntimeStop:
-                            scope.RequestStopAsync().GetAwaiter().GetResult();
-                            break;
-                        case ScopeLifecyclePhase.Dispose:
-                            scope.RequestDisposeAsync().GetAwaiter().GetResult();
-                            break;
                     }
                 }
                 catch (Exception ex)
@@ -143,12 +127,6 @@ internal sealed class LayerChain
                         break;
                     case ScopeLifecyclePhase.RuntimeStart:
                         scope.LifecyclePlan.RunRuntimeStart();
-                        break;
-                    case ScopeLifecyclePhase.RuntimeStop:
-                        scope.RunRuntimeStop();
-                        break;
-                    case ScopeLifecyclePhase.Dispose:
-                        scope.RunLifecycleDispose();
                         break;
                 }
             }

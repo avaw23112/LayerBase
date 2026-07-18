@@ -20,25 +20,25 @@ using LayerBase.Worker;
 namespace LayerBase;
 
 /// <summary>
-/// LayerBase 的运行时实例。每�?LayerRuntime 拥有独立�?Layer 链、事件中心�?
-/// 调度器、定时器、Actor 世界、ECS 世界和服务容器�?
-/// 通过 LayerRuntime.LayersBuilder（由 LayerHub.CreateLayers 返回）进行构建�?
+/// LayerBase 的运行时实例。每�?LayerRuntime 拥有独立�?Layer 链、事件中心�?
+/// 调度器、定时器、Actor 世界、ECS 世界和服务容器�?
+/// 通过 LayerRuntime.LayersBuilder（由 LayerHub.CreateLayers 返回）进行构建�?
 /// </summary>
 public sealed partial class LayerRuntime : IDisposable
 {
     #region External Dependencies
-    // 核心子系统，在构造时创建，贯�?Runtime 生命周期�?
+    // 核心子系统，在构造时创建，贯�?Runtime 生命周期�?
     internal EventCenter EventCenter => _scopeHost.MainScope.EventCenter;
     internal ActorWorld Actors => _mainActorRuntime.World;
     #endregion
 
     #region Runtime State - Configuration
-    // 运行时配置参数�?
+    // 运行时配置参数�?
     private FixedUpdateOptions _fixedUpdateOptions = FixedUpdateOptions.Disabled;
     #endregion
 
     #region Runtime State - Subsystems
-    // 各子系统实例，在 Build 过程中创建�?
+    // 各子系统实例，在 Build 过程中创建�?
     private LayerChain? _chain;
     private ScopeRuntimeHost _scopeHost;
     private readonly MainActorRuntime _mainActorRuntime;
@@ -53,12 +53,12 @@ public sealed partial class LayerRuntime : IDisposable
     #endregion
 
     #region Runtime State - Layer Bindings
-    // Layer 注册信息：索引计数器、类型绑定表、版本号�?
+    // Layer 注册信息：索引计数器、类型绑定表、版本号�?
     private int _layerIndexCounter;
     #endregion
 
     #region Runtime State - Identification
-    // Runtime 的唯一标识符和释放标记�?
+    // Runtime 的唯一标识符和释放标记�?
     private readonly int _id;
     private readonly int _generation = 1;
     private ScopeRef<MainScope> _mainScope;
@@ -623,19 +623,37 @@ public sealed partial class LayerRuntime : IDisposable
         if (_disposed) return;
         _disposed = true;
 
+        var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
+
         try
         {
             _state = RuntimeState.Stopping;
-            _scopeHost.MainScope.RunRuntimeStop();
-            _mainActorRuntime.RuntimeStop();
+
             _workerExecutor.BeginStop();
-            _chain?.DisposeLayers();
-            _chain = null;
+
+            _mainActorRuntime.RuntimeStop();
+
             _state = RuntimeState.Disposing;
+
             _scopeHost.Dispose();
+
+            _chain = null;
+
             _mainActorRuntime.Dispose();
             _tools?.Dispose();
-            _workerExecutor.Dispose();
+
+            WorkerExecutorShutdownResult executorResult =
+                _workerExecutor.Stop(in deadline);
+
+            if (executorResult == WorkerExecutorShutdownResult.TimedOut)
+            {
+                ReportLayerEventError(
+                    -1,
+                    "WorkerExecutor",
+                    "Shutdown",
+                    new TimeoutException(
+                        "Worker executor exceeded the runtime shutdown deadline."));
+            }
         }
         finally
         {
@@ -651,17 +669,13 @@ public sealed partial class LayerRuntime : IDisposable
 
         _disposed = true;
 
+        var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
+
         try
         {
             _state = RuntimeState.Stopping;
 
-            if (_scopeHost.MainScope.PostScheduler != null)
-            {
-                _workerExecutor.BeginStop();
-            }
-
-            _chain?.DisposeLayers();
-            _chain = null;
+            _workerExecutor.BeginStop();
 
             _state = RuntimeState.Disposing;
 
@@ -670,9 +684,23 @@ public sealed partial class LayerRuntime : IDisposable
                 _scopeHost.Dispose();
             }
 
+            _chain = null;
+
             _mainActorRuntime.Dispose();
             _tools?.Dispose();
-            _workerExecutor.Dispose();
+
+            WorkerExecutorShutdownResult executorResult =
+                _workerExecutor.Stop(in deadline);
+
+            if (executorResult == WorkerExecutorShutdownResult.TimedOut)
+            {
+                ReportLayerEventError(
+                    -1,
+                    "WorkerExecutor",
+                    "Shutdown",
+                    new TimeoutException(
+                        "Worker executor exceeded the runtime shutdown deadline."));
+            }
         }
         finally
         {
