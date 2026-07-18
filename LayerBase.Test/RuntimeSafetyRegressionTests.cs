@@ -236,7 +236,8 @@ public partial class RuntimeSafetyRegressionTests
             maxExpiredPerTick: 16,
             maxPromotePerTick: 16,
             defaultRepeatMode: TimerRepeatMode.Once,
-            defaultCatchUpPolicy: TimerCatchUpPolicy.SkipMissed));
+            defaultCatchUpPolicy: TimerCatchUpPolicy.SkipMissed,
+            maxCatchUpTicksPerPump: 64));
         var sink = new RecordingTimerSink();
 
         var first = scheduler.Schedule(1, delaySeconds: 10);
