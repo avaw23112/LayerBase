@@ -35,7 +35,7 @@ public sealed class WorkerSchedulerSafetyTests
             .Push(layer)
             .Build();
 
-        var freeCountField = typeof(WorkerJobScheduler)
+        var freeCountField = typeof(WorkerJobCoordinator)
             .GetField("_freeCount", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
         int initialFree = (int)freeCountField.GetValue(runtime.WorkerJobs)!;
@@ -50,6 +50,8 @@ public sealed class WorkerSchedulerSafetyTests
 
             bool allDone = SpinUntil(() =>
             {
+                runtime.Pump(0f);
+
                 foreach (var h in handles)
                 {
                     var state = runtime.WorkerJobs.GetState(h);
@@ -83,13 +85,21 @@ public sealed class WorkerSchedulerSafetyTests
 
         WorkerHandle firstHandle = service.Run(1);
         Assert.That(
-            SpinUntil(() => runtime.WorkerJobs.GetState(firstHandle) == WorkerState.Completed, TimeSpan.FromSeconds(10)),
+            SpinUntil(() =>
+            {
+                runtime.Pump(0f);
+                return runtime.WorkerJobs.GetState(firstHandle) == WorkerState.Completed;
+            }, TimeSpan.FromSeconds(10)),
             Is.True);
 
         var oldHandle = firstHandle;
         WorkerHandle secondHandle = service.Run(2);
         Assert.That(
-            SpinUntil(() => runtime.WorkerJobs.GetState(secondHandle) == WorkerState.Completed, TimeSpan.FromSeconds(10)),
+            SpinUntil(() =>
+            {
+                runtime.Pump(0f);
+                return runtime.WorkerJobs.GetState(secondHandle) == WorkerState.Completed;
+            }, TimeSpan.FromSeconds(10)),
             Is.True);
 
         var oldState = runtime.WorkerJobs.GetState(oldHandle);

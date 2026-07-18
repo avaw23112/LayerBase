@@ -2,13 +2,12 @@ namespace LayerBase.Worker;
 
 public readonly struct WorkerJobAccessor
 {
-    private readonly WorkerJobScheduler? _scheduler;
-    private readonly WorkerJobOrigin _origin;
+    private readonly WorkerJobCoordinator? _coordinator;
 
-    internal WorkerJobAccessor(WorkerJobScheduler scheduler, WorkerJobOrigin origin)
+    internal WorkerJobAccessor(WorkerJobCoordinator coordinator)
     {
-        _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
-        _origin = origin;
+        _coordinator = coordinator ??
+            throw new ArgumentNullException(nameof(coordinator));
     }
 
     public WorkerHandle Run<TJob, TInput, TEvent>(
@@ -20,15 +19,15 @@ public readonly struct WorkerJobAccessor
         where TInput : struct
         where TEvent : struct
     {
-        if (_scheduler == null)
-            throw new InvalidOperationException("Worker job accessor is not initialized.");
-        if (!_origin.CanSubmit)
-            return WorkerHandle.Invalid;
+        if (_coordinator == null)
+        {
+            throw new InvalidOperationException(
+                "Worker job accessor is not initialized.");
+        }
 
-        return _scheduler.Run<TJob, TInput, TEvent>(
+        return _coordinator.Run<TJob, TInput, TEvent>(
             in job,
             in input,
-            in _origin,
             options,
             cancellationToken);
     }

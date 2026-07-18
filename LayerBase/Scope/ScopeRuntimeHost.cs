@@ -8,6 +8,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
     private readonly ScopeRuntimeDirectory _directory;
     private readonly ScopeRuntime[] _inlineScopes;
     private readonly ScopeWorker[] _workers;
+    private bool _workersStarted;
     private bool _disposed;
 
     private ScopeRuntimeHost(ScopeRuntimeDirectory directory, ScopeWorker[] workers)
@@ -89,7 +90,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
         catch
         {
             for (int i = 0; i < scopes.Length; i++)
-                scopes[i]?.Dispose();
+                scopes[i]?.DisposeUnstarted();
             foreach (var worker in workers)
                 worker.Dispose();
             throw;
@@ -99,8 +100,16 @@ internal sealed class ScopeRuntimeHost : IDisposable
     public void StartWorkers()
     {
         ThrowIfDisposed();
+
+        if (_workersStarted)
+            return;
+
         for (int i = 0; i < _workers.Length; i++)
+        {
             _workers[i].Start();
+        }
+
+        _workersStarted = true;
     }
 
     public void ApplyFaultPolicy(in ScopeFaultRecord record)
@@ -177,41 +186,144 @@ internal sealed class ScopeRuntimeHost : IDisposable
             return;
 
         _disposed = true;
-        bool hasTimedOut = false;
-        for (int i = _workers.Length - 1; i >= 0; i--)
+
+        var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
+
+        if (!_workersStarted)
         {
-            _workers[i].Dispose();
-            if (_workers[i].ShutdownResult == ScopeWorkerShutdownResult.TimedOut)
-                hasTimedOut = true;
+            DisposeUnstartedScopes();
+            return;
         }
 
-        var runtimes = _directory.Runtimes;
+        RequestStopForAllScopes(in deadline);
+
+        bool workerTimedOut = StopWorkers(in deadline);
+
+        RequestDisposeForAllScopes(in deadline, workerTimedOut);
+    }
+
+    private void DisposeUnstartedScopes()
+    {
+        ScopeRuntime[] runtimes = _directory.Runtimes;
+
         for (int i = runtimes.Length - 1; i >= 0; i--)
         {
-            var scope = runtimes[i];
-            if (scope.Options.Threading == ScopeThreadingMode.Worker && hasTimedOut)
-            {
-                if (scope.State != ScopeRuntimeState.Disposed)
-                {
-                    scope.Transport.CloseBusinessAdmission();
-                }
-                continue;
-            }
+            runtimes[i].DisposeUnstarted();
+        }
 
-            DisposeScopeThroughControl(scope);
+        for (int i = _workers.Length - 1; i >= 0; i--)
+        {
+            _workers[i].Stop(ShutdownDeadline.Start(TimeSpan.Zero));
         }
     }
 
-    private static void DisposeScopeThroughControl(ScopeRuntime scope)
+    private void RequestStopForAllScopes(in ShutdownDeadline deadline)
     {
-        if (scope.State == ScopeRuntimeState.Disposed)
-            return;
+        ScopeRuntime[] runtimes = _directory.Runtimes;
 
-        var disposeTask = scope.RequestDisposeAsync();
-        scope.PumpIngress();
+        for (int i = runtimes.Length - 1; i >= 0; i--)
+        {
+            ScopeRuntime scope = runtimes[i];
 
-        if (!disposeTask.GetAwaiter().IsCompleted)
-            scope.Dispose();
+            if (scope.State is
+                ScopeRuntimeState.Stopped or
+                ScopeRuntimeState.Disposed)
+            {
+                continue;
+            }
+
+            var task = scope.RequestStopAsync();
+
+            WaitForControl(scope, task, in deadline);
+        }
+    }
+
+    private void RequestDisposeForAllScopes(in ShutdownDeadline deadline, bool workerTimedOut)
+    {
+        ScopeRuntime[] runtimes = _directory.Runtimes;
+
+        for (int i = runtimes.Length - 1; i >= 0; i--)
+        {
+            ScopeRuntime scope = runtimes[i];
+
+            if (scope.State == ScopeRuntimeState.Disposed)
+                continue;
+
+            if (scope.Options.Threading == ScopeThreadingMode.Worker && workerTimedOut)
+            {
+                if (scope.State != ScopeRuntimeState.Disposed)
+                    scope.Transport.CloseBusinessAdmission();
+                continue;
+            }
+
+            var task = scope.RequestDisposeAsync();
+
+            if (scope.Options.Threading == ScopeThreadingMode.Inline)
+                scope.PumpIngress();
+
+            if (!task.GetAwaiter().IsCompleted)
+                scope.Dispose();
+        }
+    }
+
+    private bool StopWorkers(in ShutdownDeadline deadline)
+    {
+        bool anyTimedOut = false;
+
+        for (int i = _workers.Length - 1; i >= 0; i--)
+        {
+            ScopeWorkerShutdownResult result = _workers[i].Stop(in deadline);
+
+            if (result == ScopeWorkerShutdownResult.TimedOut)
+            {
+                anyTimedOut = true;
+
+                ScopeRuntime runtime = _workers[i].Runtime;
+
+                runtime.ReportFatalFault(
+                    new TimeoutException(
+                        $"Scope worker `{runtime.Descriptor.Name}` exceeded the shutdown deadline."),
+                    ScopeFaultPhase.WorkerLoop);
+            }
+        }
+
+        return anyTimedOut;
+    }
+
+    private static bool WaitForControl<T>(
+        ScopeRuntime scope,
+        LayerBase.Async.LBTask<T> task,
+        in ShutdownDeadline deadline)
+    {
+        var awaiter = task.GetAwaiter();
+
+        while (!awaiter.IsCompleted)
+        {
+            if (scope.Options.Threading == ScopeThreadingMode.Inline)
+            {
+                scope.PumpIngress();
+
+                if (awaiter.IsCompleted)
+                    break;
+            }
+
+            if (deadline.IsExpired)
+                return false;
+
+            Thread.Yield();
+        }
+
+        try
+        {
+            _ = awaiter.GetResult();
+        }
+        catch
+        {
+            // Control faults are reported through the scope fault channel;
+            // shutdown must keep making progress for the remaining scopes.
+        }
+
+        return true;
     }
 
     private void ThrowIfDisposed()

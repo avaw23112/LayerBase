@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using LayerBase;
 using LayerBase.DI;
 using LayerBase.Event.EventMetaData;
@@ -16,7 +17,6 @@ public sealed class WorkerPoolTests
     {
         LayerHub.Reset();
         EventMetaDataHandler.Clear();
-        WorkerJobScheduler.SetWorkerItemPoolCapacity(64);
     }
 
     [Test]
@@ -31,16 +31,15 @@ public sealed class WorkerPoolTests
 
         Assert.That(SpinUntilAllDone(runtime, handles, TimeSpan.FromSeconds(15)), Is.True);
 
-        var cts = WorkerJobScheduler.RentCtsFromPool();
-        Assert.That(cts, Is.Not.Null);
-        Assert.That(cts.TryReset(), Is.True);
-        cts.Dispose();
+        Assert.That(runtime.WorkerJobs.ActiveCount, Is.EqualTo(0));
+        Assert.That(GetCoordinatorCtsPoolCount(runtime.WorkerJobs), Is.GreaterThan(0),
+            "Uncancelled cancellation sources should return to the coordinator pool.");
 
         runtime.Dispose();
     }
 
     [Test]
-    public void Linked_cts_is_disposed_and_not_pooled()
+    public void External_token_registration_is_released_after_completion()
     {
         using var cts = new CancellationTokenSource();
         var (runtime, service) = BuildRuntime();
@@ -48,12 +47,13 @@ public sealed class WorkerPoolTests
         var handle = service.Run(42, cts.Token);
         Assert.That(SpinUntilAllDone(runtime, [handle], TimeSpan.FromSeconds(15)), Is.True);
 
-        var poolCountBefore = WorkerJobScheduler.CtsPoolCount;
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
-        linkedCts.Dispose();
-        var poolCountAfter = WorkerJobScheduler.CtsPoolCount;
+        WorkerState terminal = runtime.WorkerJobs.GetState(handle);
 
-        Assert.That(poolCountAfter, Is.EqualTo(poolCountBefore));
+        cts.Cancel();
+        runtime.Pump(0f);
+
+        Assert.That(runtime.WorkerJobs.GetState(handle), Is.EqualTo(terminal),
+            "Cancelling the external token after completion must not change the terminal state.");
         runtime.Dispose();
     }
 
@@ -68,10 +68,9 @@ public sealed class WorkerPoolTests
 
         Assert.That(SpinUntilAllDone(runtime, handles, TimeSpan.FromSeconds(15)), Is.True);
 
-        var cts = WorkerJobScheduler.RentCtsFromPool();
-        Assert.That(cts, Is.Not.Null);
-        Assert.That(cts.TryReset(), Is.True);
-        cts.Dispose();
+        Assert.That(runtime.WorkerJobs.ActiveCount, Is.EqualTo(0));
+        Assert.That(GetCoordinatorCtsPoolCount(runtime.WorkerJobs),
+            Is.LessThanOrEqualTo(WorkerJobSchedulerOptions.Default.WorkerItemPoolCapacity));
 
         runtime.Dispose();
     }
@@ -79,18 +78,15 @@ public sealed class WorkerPoolTests
     [Test]
     public void Worker_item_pool_does_not_exceed_configured_cap()
     {
-        int smallCap = 4;
-        WorkerJobScheduler.SetWorkerItemPoolCapacity(smallCap);
-
         var (runtime, service) = BuildRuntime();
 
         var handles = new List<WorkerHandle>();
-        for (int i = 0; i < 64; i++)
+        for (int i = 0; i < 128; i++)
             handles.Add(service.Run(i));
 
         Assert.That(SpinUntilAllDone(runtime, handles, TimeSpan.FromSeconds(15)), Is.True);
 
-        Assert.That(WorkerJobScheduler.WorkerItemPoolTotalCount, Is.LessThanOrEqualTo(smallCap * 2));
+        Assert.That(GetExecutionItemPoolCount(), Is.LessThanOrEqualTo(64));
         runtime.Dispose();
     }
 
@@ -127,6 +123,27 @@ public sealed class WorkerPoolTests
         runtime.Dispose();
     }
 
+    private static int GetCoordinatorCtsPoolCount(WorkerJobCoordinator coordinator)
+    {
+        FieldInfo field = typeof(WorkerJobCoordinator)
+            .GetField("_ctsPool", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        var pool = (Stack<CancellationTokenSource>)field.GetValue(coordinator)!;
+        return pool.Count;
+    }
+
+    private static int GetExecutionItemPoolCount()
+    {
+        Type itemType = typeof(WorkerExecutionItem<,,>)
+            .MakeGenericType(typeof(PoolProbeJob), typeof(PoolProbeInput), typeof(PoolProbeResult));
+
+        FieldInfo field = itemType.GetField(
+            "s_poolCount",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        return (int)field.GetValue(null)!;
+    }
+
     private static (LayerRuntime Runtime, PoolProbeService Service) BuildRuntime()
     {
         var layer = new PoolProbeLayer();
@@ -143,6 +160,8 @@ public sealed class WorkerPoolTests
         var sw = Stopwatch.StartNew();
         while (sw.Elapsed < timeout)
         {
+            runtime.Pump(0f);
+
             bool allDone = true;
             foreach (var h in handles)
             {

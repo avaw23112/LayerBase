@@ -64,6 +64,8 @@ public sealed class WorkerShutdownTests
 
         bool allDone = SpinUntil(() =>
         {
+            runtime.Pump(0f);
+
             foreach (var h in handles)
             {
                 var state = runtime.WorkerJobs.GetState(h);

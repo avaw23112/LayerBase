@@ -121,10 +121,9 @@ public static class ServiceExtensions
 
     public static WorkerJobAccessor WorkerJobs(this IService service)
     {
-        var binding = service.GetBinding();
-        return new WorkerJobAccessor(
-            binding.Runtime.WorkerJobs,
-            new WorkerJobOrigin(binding.OwnerScope.Endpoint));
+        ServiceLayerBinding binding = service.GetBinding();
+
+        return new WorkerJobAccessor(binding.OwnerScope.WorkerJobs);
     }
 
     public static void SubscribeFlow<TValue>(
@@ -258,10 +257,9 @@ public static class LayerContextExtensions
 
     public static WorkerJobAccessor WorkerJobs(this ILayerContext context)
     {
-        var binding = context.GetBinding();
-        return new WorkerJobAccessor(
-            binding.Runtime.WorkerJobs,
-            new WorkerJobOrigin(binding.OwnerScope.Endpoint));
+        ServiceLayerBinding binding = context.GetBinding();
+
+        return new WorkerJobAccessor(binding.OwnerScope.WorkerJobs);
     }
 
     public static void SubscribeFlow<TValue>(

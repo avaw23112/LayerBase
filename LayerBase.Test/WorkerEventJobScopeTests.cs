@@ -38,9 +38,14 @@ public sealed class WorkerEventJobScopeTests
         int ownerThreadId = Environment.CurrentManagedThreadId;
         WorkerHandle handle = service.Run(21);
 
-        Assert.That(SpinUntil(() => runtime.WorkerJobs.GetState(handle) == WorkerState.Completed), Is.True);
-        Assert.That(runtime.WorkerJobs.GetState(handle), Is.EqualTo(WorkerState.Completed));
-        Assert.That(received, Is.Empty, "Completed only means the result ScopeEvent reached the origin inbox.");
+        Assert.That(runtime.WorkerJobs.GetState(handle), Is.EqualTo(WorkerState.Pending),
+            "Job state is owned by the origin scope; it only advances when the owner thread pumps.");
+
+        Assert.That(SpinUntil(() =>
+        {
+            runtime.Pump(0f);
+            return runtime.WorkerJobs.GetState(handle) == WorkerState.Completed;
+        }), Is.True);
 
         runtime.Pump(0f);
 
@@ -65,7 +70,11 @@ public sealed class WorkerEventJobScopeTests
 
         WorkerHandle handle = service.RunThrowing();
 
-        Assert.That(SpinUntil(() => runtime.WorkerJobs.GetState(handle) == WorkerState.Failed), Is.True);
+        Assert.That(SpinUntil(() =>
+        {
+            runtime.Pump(0f);
+            return runtime.WorkerJobs.GetState(handle) == WorkerState.Failed;
+        }), Is.True);
         runtime.Pump(0f);
 
         Assert.That(failures, Has.Count.EqualTo(1));
@@ -104,7 +113,11 @@ public sealed class WorkerEventJobScopeTests
 
         WorkerHandle handle = service.Run(13);
 
-        Assert.That(SpinUntil(() => runtime.WorkerJobs.GetState(handle) == WorkerState.Completed), Is.True);
+        Assert.That(SpinUntil(() =>
+        {
+            customScope.PumpScopeResources(0f);
+            return customScope.WorkerJobs.GetState(handle) == WorkerState.Completed;
+        }), Is.True);
 
         mainScope.PumpScopeResources(0f);
         Assert.That(mainValue, Is.EqualTo(0));
@@ -130,21 +143,26 @@ public sealed class WorkerEventJobScopeTests
         for (int i = 1; i <= 3; i++)
         {
             WorkerHandle handle = service.Run(i, WorkerEventJobOptions.All);
-            Assert.That(SpinUntil(() => runtime.WorkerJobs.GetState(handle) == WorkerState.Completed), Is.True);
+            Assert.That(SpinUntil(() =>
+            {
+                runtime.Pump(0f);
+                return runtime.WorkerJobs.GetState(handle) == WorkerState.Completed;
+            }), Is.True);
             runtime.Pump(0f);
         }
 
         Assert.That(received.Select(result => result.Value), Is.EquivalentTo(new[] { 2, 4, 6 }));
 
         received.Clear();
-        WorkerHandle latestA = service.Run(4, WorkerEventJobOptions.Latest);
-        WorkerHandle latestB = service.Run(5, WorkerEventJobOptions.Latest);
-        WorkerHandle latestC = service.Run(6, WorkerEventJobOptions.Latest);
-
-        Assert.That(SpinUntil(() =>
-            runtime.WorkerJobs.GetState(latestA) == WorkerState.Completed &&
-            runtime.WorkerJobs.GetState(latestB) == WorkerState.Completed &&
-            runtime.WorkerJobs.GetState(latestC) == WorkerState.Completed), Is.True);
+        foreach (int value in new[] { 4, 5, 6 })
+        {
+            WorkerHandle latest = service.Run(value, WorkerEventJobOptions.Latest);
+            Assert.That(SpinUntil(() =>
+            {
+                runtime.Pump(0f);
+                return runtime.WorkerJobs.GetState(latest) == WorkerState.Completed;
+            }), Is.True);
+        }
 
         runtime.Pump(0f);
         runtime.Pump(0f);

@@ -17,6 +17,7 @@ internal sealed class ScopeWorker : IDisposable
     private readonly AutoResetEvent _workSignal = new(initialState: false);
     private bool _startedThread;
     private bool _disposed;
+    private bool _resourcesReleased;
     private ScopeWorkerShutdownResult _shutdownResult;
 
     public ScopeWorker(ScopeRuntime runtime)
@@ -32,6 +33,8 @@ internal sealed class ScopeWorker : IDisposable
 
     public ScopeWorkerShutdownResult ShutdownResult => _shutdownResult;
 
+    internal ScopeRuntime Runtime => _runtime;
+
     public void Start()
     {
         if (_startedThread)
@@ -42,6 +45,42 @@ internal sealed class ScopeWorker : IDisposable
         _started.Wait();
     }
 
+    internal ScopeWorkerShutdownResult Stop(in ShutdownDeadline deadline)
+    {
+        if (!_startedThread)
+        {
+            _runtime.DisposeUnstarted();
+            ReleaseResources();
+            return ScopeWorkerShutdownResult.AlreadyStopped;
+        }
+
+        _workSignal.Set();
+
+        if (!_thread.IsAlive)
+        {
+            ReleaseResources();
+            return ScopeWorkerShutdownResult.AlreadyStopped;
+        }
+
+        if (ReferenceEquals(Thread.CurrentThread, _thread))
+        {
+            return ScopeWorkerShutdownResult.TimedOut;
+        }
+
+        int remaining = deadline.RemainingMilliseconds;
+
+        if (remaining <= 0 || !_thread.Join(remaining))
+        {
+            _thread.IsBackground = true;
+
+            return ScopeWorkerShutdownResult.TimedOut;
+        }
+
+        ReleaseResources();
+
+        return ScopeWorkerShutdownResult.Stopped;
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -49,37 +88,19 @@ internal sealed class ScopeWorker : IDisposable
 
         _disposed = true;
 
-        if (_startedThread && _runtime.State != ScopeRuntimeState.Disposed)
-            _ = _runtime.RequestDisposeAsync();
+        var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(5));
 
-        _workSignal.Set();
-
-        if (_thread.IsAlive && !ReferenceEquals(Thread.CurrentThread, _thread))
-        {
-            if (!_thread.Join(5000))
-            {
-                _shutdownResult = ScopeWorkerShutdownResult.TimedOut;
-                _thread.IsBackground = true;
-                System.Diagnostics.Debug.WriteLine(
-                    $"[ScopeWorker] Thread '{_thread.Name}' timed out after 5000ms, set to background.");
-                return;
-            }
-
-            _shutdownResult = ScopeWorkerShutdownResult.Stopped;
-        }
-        else
-        {
-            _shutdownResult = ScopeWorkerShutdownResult.AlreadyStopped;
-        }
-
-        if (!_startedThread)
-            _runtime.Dispose();
-        else
-            ReleaseResources();
+        _shutdownResult = Stop(in deadline);
     }
 
     private void ReleaseResources()
     {
+        if (_resourcesReleased)
+            return;
+
+        _resourcesReleased = true;
+
+        _started.Dispose();
         _workSignal.Dispose();
     }
 

@@ -61,6 +61,10 @@ internal sealed class ScopeRuntime : IDisposable
         Transport = new ScopeTransport(
             new ScopeAddress(runtimeId, generation, Descriptor.ScopeId),
             SignalIngress);
+        WorkerJobs = new WorkerJobCoordinator(
+            this,
+            runtime.WorkerExecutor,
+            WorkerJobSchedulerOptions.Default);
         EventCenter = new EventCenter();
         LocalCalls = new ScopeLocalCallRegistry(Descriptor.ScopeId);
         CallRoutes = new ScopeCallRouteTable(Descriptor.ScopeId);
@@ -121,6 +125,8 @@ internal sealed class ScopeRuntime : IDisposable
     public ScopeTransport Transport { get; }
 
     public ScopeEndpoint Endpoint => Transport.Endpoint;
+
+    public WorkerJobCoordinator WorkerJobs { get; }
 
     public EventCenter EventCenter { get; }
 
@@ -1142,6 +1148,7 @@ internal sealed class ScopeRuntime : IDisposable
 
         _state = ScopeRuntimeState.Stopping;
         Transport.CloseBusinessAdmission();
+        WorkerJobs.BeginStopOnOwnerThread();
         RunRuntimeStop();
         _state = ScopeRuntimeState.Stopped;
     }
@@ -1149,6 +1156,9 @@ internal sealed class ScopeRuntime : IDisposable
     private void DisposeAfterControlIfNeeded()
     {
         if (!_disposeRequestedFromControl)
+            return;
+
+        if (!WorkerJobs.CanDispose)
             return;
 
         var completion = _pendingDisposeCompletion;
@@ -1203,6 +1213,7 @@ internal sealed class ScopeRuntime : IDisposable
                         _runtimeId,
                         envelope.Payload,
                         Transport.EventPayloadStorage,
+                        WorkerJobs,
                         scheduler))
                 {
                     continue;
@@ -1417,8 +1428,8 @@ internal sealed class ScopeRuntime : IDisposable
             Timer?.PendingCount ?? 0,
             DelayManager?.PendingCount ?? 0,
             SynchronizationContext?.PendingCount ?? 0,
-            workerJobsPending: 0,
-            workerJobsRunning: 0,
+            workerJobsPending: WorkerJobs.ActiveCount - WorkerJobs.RunningCount,
+            workerJobsRunning: WorkerJobs.RunningCount,
             EcsScheduler.CaptureDiagnostics(),
             tools,
             new SnapDiagnosticsSnapshot(
@@ -1445,6 +1456,30 @@ internal sealed class ScopeRuntime : IDisposable
         DisposeOwnerThreadResources();
     }
 
+    internal void DisposeUnstarted()
+    {
+#if DEBUG
+        if (OwnerThreadId != 0 && !IsOwnerThread)
+        {
+            throw new InvalidOperationException(
+                $"Unstarted scope `{Descriptor.Name}` already has a different owner thread.");
+        }
+#endif
+
+        if (_state == ScopeRuntimeState.Disposed)
+            return;
+
+        WorkerJobs.BeginStopOnOwnerThread();
+
+        if (!WorkerJobs.CanDispose)
+        {
+            throw new InvalidOperationException(
+                "Unstarted scope unexpectedly owns active worker jobs.");
+        }
+
+        DisposeOwnerThreadResources();
+    }
+
     private void DisposeOwnerThreadResources(
         ScopeCallCompletion<ScopeDisposeResponse>? disposeCompletion = null)
     {
@@ -1458,6 +1493,11 @@ internal sealed class ScopeRuntime : IDisposable
         _pendingDisposeCompletion = null;
         if (_state != ScopeRuntimeState.Stopped)
             StopOnOwnerThread();
+
+        if (WorkerJobs.CanDispose)
+        {
+            WorkerJobs.DisposeOnOwnerThread();
+        }
 
         _state = ScopeRuntimeState.Disposing;
         var context = SynchronizationContext;

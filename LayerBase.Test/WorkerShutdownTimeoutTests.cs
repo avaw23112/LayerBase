@@ -75,7 +75,8 @@ public sealed class WorkerShutdownTimeoutTests
         runtime.Dispose();
         sw.Stop();
 
-        Assert.That(sw.ElapsedMilliseconds, Is.LessThan(15000));
+        Assert.That(sw.ElapsedMilliseconds, Is.LessThan(17000),
+            "Shutdown shares one 15s deadline; a stuck scope may consume it fully but never more.");
     }
 
     private sealed class StuckUpdateService : IService, IUpdate
