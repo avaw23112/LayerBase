@@ -26,7 +26,7 @@ internal sealed class ScopeRuntime : IDisposable
     private ScopeSafePointState _safePointState = ScopeSafePointState.Running;
     private long _safePointToken;
     private ScopeSnapPlan _snapPlan = ScopeSnapPlan.Empty;
-    private ScopeEndpoint?[] _scopeEndpoints = Array.Empty<ScopeEndpoint?>();
+    private ScopeRuntimeDirectory? _scopeDirectory;
     private float _fixedUpdateAccumulator;
     private bool _runtimeStopRun;
     private bool _lifecycleDisposeRun;
@@ -289,23 +289,17 @@ internal sealed class ScopeRuntime : IDisposable
         _hasActorClient = true;
     }
 
-    public void BindScopeEndpoints(ScopeEndpoint?[] endpoints)
+    public void BindScopeEndpoints(ScopeRuntimeDirectory directory)
     {
-        _scopeEndpoints = endpoints
-            ?? throw new ArgumentNullException(nameof(endpoints));
+        _scopeDirectory = directory
+            ?? throw new ArgumentNullException(nameof(directory));
     }
 
     internal bool TryGetScopeEndpoint(int scopeId, out ScopeEndpoint endpoint)
     {
-        if ((uint)scopeId < (uint)_scopeEndpoints.Length)
-        {
-            ScopeEndpoint? candidate = _scopeEndpoints[scopeId];
-            if (candidate.HasValue)
-            {
-                endpoint = candidate.Value;
-                return true;
-            }
-        }
+        var directory = _scopeDirectory;
+        if (directory != null && directory.TryGetEndpoint(scopeId, out endpoint))
+            return true;
 
         endpoint = default;
         return false;
