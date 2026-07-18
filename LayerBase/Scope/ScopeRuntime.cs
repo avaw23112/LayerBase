@@ -203,8 +203,16 @@ internal sealed class ScopeRuntime : IDisposable
             _runtimeId,
             options,
             scheduler.PayloadStorage,
-            scheduler,
-            policyTable);
+            scheduler);
+        Timer.CompilePlans(policyTable, EventTypeIdAllocator.MaxId);
+    }
+
+    internal void CompileTimerPlans()
+    {
+        if (Timer == null)
+            return;
+        var policyTable = RequirePolicyTable();
+        Timer.CompilePlans(policyTable, EventTypeIdAllocator.MaxId);
     }
 
     public void InitializeDelay(DelayBufferOptions options)

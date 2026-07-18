@@ -250,6 +250,12 @@ public sealed partial class LayerRuntime : IDisposable
             scope.InitializeDelay(options);
     }
 
+    internal void RecompileTimerPlans()
+    {
+        foreach (var scope in _scopeHost.Scopes)
+            scope.CompileTimerPlans();
+    }
+
     internal void InstallScopeHost(ScopeExecutionPlan[] plans)
     {
         if (plans == null)
@@ -930,6 +936,7 @@ public sealed partial class LayerRuntime : IDisposable
                 _runtime.InitializeDelay(_delayOptions);
                 _layerChain.Prebuild();
                 _runtime.RebuildEventPolicies();
+                _runtime.RecompileTimerPlans();
                 _runtime.RunTopologyAudit();
                 _runtime._state = RuntimeState.Built;
 

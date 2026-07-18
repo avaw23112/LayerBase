@@ -11,7 +11,7 @@ internal sealed class PostTimerScheduler : IDisposable,
     private readonly TimeScheduler<PostTimerPayload> _timer;
     private readonly EventPayloadStorage _payloadStorage;
     private readonly PostScheduler _postScheduler;
-    private EventBuildPolicyTable _policyTable;
+    private TimerPostTypePlan[] _timerPlans = Array.Empty<TimerPostTypePlan>();
 
     internal int PendingCount => _timer.PendingCount;
 
@@ -19,16 +19,57 @@ internal sealed class PostTimerScheduler : IDisposable,
         int runtimeId,
         TimeSchedulerOptions options,
         EventPayloadStorage payloadStorage,
-        PostScheduler postScheduler,
-        EventBuildPolicyTable policyTable)
+        PostScheduler postScheduler)
     {
         _runtimeId = runtimeId;
         _payloadStorage = payloadStorage;
         _postScheduler = postScheduler;
-        _policyTable = policyTable;
         _timer = new TimeScheduler<PostTimerPayload>(options, payloadReleaser: this);
     }
 
+    public void CompilePlans(EventBuildPolicyTable policyTable, int maxEventTypeId)
+    {
+        if (maxEventTypeId < 0)
+        {
+            _timerPlans = Array.Empty<TimerPostTypePlan>();
+            return;
+        }
+
+        var plans = new TimerPostTypePlan[maxEventTypeId + 1];
+
+        for (int eventId = 0; eventId <= maxEventTypeId; eventId++)
+        {
+            EventTimerPolicy? timerPolicy = policyTable.GetTimerPolicy(eventId);
+
+            bool hasOverride = false;
+            PostTypePlan expiredPlan = default;
+
+            if (timerPolicy?.ExpiredPostPolicy is { } expiredPolicy)
+            {
+                EventPostPolicyRules.Validate(
+                    in expiredPolicy,
+                    $"EventTypeId={eventId}.TimerPolicy.ExpiredPostPolicy");
+
+                expiredPlan = PostTypePlan.FromPolicy(
+                    eventId,
+                    in expiredPolicy,
+                    _postScheduler.Options.DefaultBackpressure);
+
+                hasOverride = true;
+            }
+
+            plans[eventId] = new TimerPostTypePlan(
+                eventId,
+                hasOverride,
+                expiredPlan,
+                timerPolicy?.RepeatMode,
+                timerPolicy?.CatchUpPolicy);
+        }
+
+        _timerPlans = plans;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TimerHandle Schedule<TEvent>(
         in TEvent value,
         float delaySeconds,
@@ -39,42 +80,23 @@ internal sealed class PostTimerScheduler : IDisposable,
         int eventId = EventTypeId<TEvent>.Id;
         PayloadHandle payloadHandle = _payloadStorage.Store(_runtimeId, in value);
 
-        bool hasOverride = false;
-        PostTypePlan overridePlan = default;
-
-        EventTimerPolicy? timerPolicy = _policyTable.GetTimerPolicy(eventId);
-
-        if (timerPolicy?.ExpiredPostPolicy is { } expiredPolicy)
-        {
-            EventPostPolicyRules.Validate(
-                in expiredPolicy,
-                $"{typeof(TEvent).FullName}.TimerPolicy.ExpiredPostPolicy");
-
-            overridePlan = PostTypePlan.FromPolicy(
-                eventId,
-                in expiredPolicy,
-                _postScheduler.Options.DefaultBackpressure);
-
-            hasOverride = true;
-        }
+        TimerPostTypePlan plan = _timerPlans[eventId];
+        PostTypePlan expiredPlan = plan.ExpiredPlan;
 
         var payload = new PostTimerPayload(
             payloadHandle,
-            in overridePlan,
-            hasOverride);
+            in expiredPlan,
+            plan.HasExpiredOverride);
 
         try
         {
-            TimerRepeatMode? repeatMode = timerPolicy?.RepeatMode;
-            TimerCatchUpPolicy? catchUpPolicy = timerPolicy?.CatchUpPolicy;
-
             TimerHandle handle = _timer.Schedule(
                 in payload,
                 delaySeconds,
                 repeatCount,
                 intervalSeconds,
-                repeatMode,
-                catchUpPolicy);
+                plan.RepeatMode,
+                plan.CatchUpPolicy);
 
             if (handle.IsInvalid)
                 _payloadStorage.Release(payloadHandle);
@@ -96,11 +118,6 @@ internal sealed class PostTimerScheduler : IDisposable,
     public void Tick(float deltaTime)
     {
         _timer.Tick(deltaTime, this);
-    }
-
-    public void UpdatePolicyTable(EventBuildPolicyTable policyTable)
-    {
-        _policyTable = policyTable ?? throw new ArgumentNullException(nameof(policyTable));
     }
 
     public void PrewarmEvent<TEvent>()

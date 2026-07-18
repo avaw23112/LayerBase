@@ -23,10 +23,11 @@ public class SchedulePostBenchmarks
         var policyTable = new EventBuildPolicyTable();
         _payloadStorage = new EventPayloadStorage(PayloadDiagnosticsMode.Disabled);
         _postScheduler = new PostScheduler(0, eventCenter, PostSchedulerOptions.Default, policyTable);
-        _timer = new PostTimerScheduler(0, TimeSchedulerOptions.Default, _payloadStorage, _postScheduler, policyTable);
+        _timer = new PostTimerScheduler(0, TimeSchedulerOptions.Default, _payloadStorage, _postScheduler);
 
         _timer.PrewarmEvent<BenchEvent>();
         _postScheduler.PrewarmEvent<BenchEvent>();
+        _timer.CompilePlans(policyTable, EventTypeIdAllocator.MaxId);
 
         for (int i = 0; i < 1000; i++)
         {

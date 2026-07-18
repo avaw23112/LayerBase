@@ -25,29 +25,30 @@ public class SchedulePostAllocationTests
         public PostScheduler PostScheduler { get; }
         public EventPayloadStorage PayloadStorage { get; }
         public PostTimerScheduler Timer { get; }
+        private readonly EventBuildPolicyTable _policyTable;
 
         public TestPostSchedulerHelper(int runtimeId = 999)
         {
             var eventCenter = new EventCenter();
-            var policyTable = new EventBuildPolicyTable();
+            _policyTable = new EventBuildPolicyTable();
             PayloadStorage = new EventPayloadStorage(PayloadDiagnosticsMode.Atomic);
             PostScheduler = new PostScheduler(
                 runtimeId,
                 eventCenter,
                 PostSchedulerOptions.Default,
-                policyTable);
+                _policyTable);
             Timer = new PostTimerScheduler(
                 runtimeId,
                 TimeSchedulerOptions.Default,
                 PayloadStorage,
-                PostScheduler,
-                policyTable);
+                PostScheduler);
         }
 
         public void EnsureEvent<TEvent>() where TEvent : struct
         {
             PostScheduler.PrewarmEvent<TEvent>();
             Timer.PrewarmEvent<TEvent>();
+            Timer.CompilePlans(_policyTable, EventTypeIdAllocator.MaxId);
         }
 
         public void Dispose()
@@ -171,8 +172,8 @@ public class SchedulePostAllocationTests
             0,
             TimeSchedulerOptions.Default,
             payloadStorage,
-            postScheduler,
-            new EventBuildPolicyTable());
+            postScheduler);
+        timer.CompilePlans(new EventBuildPolicyTable(), EventTypeIdAllocator.MaxId);
 
         var handle = timer.Schedule(new BlittableEvent { X = 1, Y = 2 }, 0.001f);
         timer.Tick(0.02f);
@@ -208,8 +209,8 @@ public class SchedulePostAllocationTests
             0,
             TimeSchedulerOptions.Default,
             payloadStorage,
-            postScheduler,
-            new EventBuildPolicyTable());
+            postScheduler);
+        timer.CompilePlans(new EventBuildPolicyTable(), EventTypeIdAllocator.MaxId);
 
         var diagBefore = payloadStorage.CaptureDiagnostics();
 
