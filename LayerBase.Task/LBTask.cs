@@ -262,6 +262,7 @@ public readonly struct LBTask
         private LBTaskSource? _source;
         private int _sourceVersion;
         private CancellationToken _token;
+        public int HeapIndex = -1;
 
         public CancellationTokenRegistration CancellationRegistration;
 
@@ -351,6 +352,7 @@ public readonly struct LBTask
             _registrationInitializing = 0;
             _returnPending = 0;
             CancellationRegistration = default;
+            HeapIndex = -1;
             Pool.Return(this);
         }
 
@@ -394,18 +396,16 @@ public readonly struct LBTask
         {
             lock (s_lock)
             {
-                for (var i = 0; i < s_heap.Count; i++)
-                {
-                    if (!ReferenceEquals(s_heap[i], work)) continue;
+                var index = work.HeapIndex;
+                if (index < 0 || index >= s_heap.Count || !ReferenceEquals(s_heap[index], work))
+                    return false;
 
-                    HeapRemoveAt(i);
-                    if (s_heap.Count > 0) ArmTimer(s_heap[0].DueTimestamp);
-                    else s_timer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-                    return true;
-                }
+                work.HeapIndex = -1;
+                HeapRemoveAt(index);
+                if (s_heap.Count > 0) ArmTimer(s_heap[0].DueTimestamp);
+                else s_timer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                return true;
             }
-
-            return false;
         }
 
         private static void OnTimer(object? state)
@@ -472,10 +472,12 @@ public readonly struct LBTask
                 if (s_heap[parent].DueTimestamp <= item.DueTimestamp) break;
 
                 s_heap[index] = s_heap[parent];
+                s_heap[index].HeapIndex = index;
                 index = parent;
             }
 
             s_heap[index] = item;
+            item.HeapIndex = index;
         }
 
         private static DelayWorkItem HeapPop()
@@ -484,6 +486,7 @@ public readonly struct LBTask
             var lastIndex = s_heap.Count - 1;
             var last = s_heap[lastIndex];
             s_heap.RemoveAt(lastIndex);
+            root.HeapIndex = -1;
             if (lastIndex == 0) return root;
 
             var index = 0;
@@ -501,10 +504,12 @@ public readonly struct LBTask
                 if (s_heap[child].DueTimestamp >= last.DueTimestamp) break;
 
                 s_heap[index] = s_heap[child];
+                s_heap[index].HeapIndex = index;
                 index = child;
             }
 
             s_heap[index] = last;
+            last.HeapIndex = index;
             return root;
         }
 
@@ -513,6 +518,7 @@ public readonly struct LBTask
             var lastIndex = s_heap.Count - 1;
             if (removeIndex == lastIndex)
             {
+                s_heap[lastIndex].HeapIndex = -1;
                 s_heap.RemoveAt(lastIndex);
                 return;
             }
@@ -520,6 +526,7 @@ public readonly struct LBTask
             var replacement = s_heap[lastIndex];
             s_heap.RemoveAt(lastIndex);
             s_heap[removeIndex] = replacement;
+            replacement.HeapIndex = removeIndex;
 
             var index = removeIndex;
             while (index > 0)
@@ -528,12 +535,14 @@ public readonly struct LBTask
                 if (s_heap[parent].DueTimestamp <= replacement.DueTimestamp) break;
 
                 s_heap[index] = s_heap[parent];
+                s_heap[index].HeapIndex = index;
                 index = parent;
             }
 
             if (index != removeIndex)
             {
                 s_heap[index] = replacement;
+                replacement.HeapIndex = index;
                 return;
             }
 
@@ -551,10 +560,12 @@ public readonly struct LBTask
                 if (s_heap[child].DueTimestamp >= replacement.DueTimestamp) break;
 
                 s_heap[index] = s_heap[child];
+                s_heap[index].HeapIndex = index;
                 index = child;
             }
 
             s_heap[index] = replacement;
+            replacement.HeapIndex = index;
         }
     }
 
