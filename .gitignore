@@ -1104,4 +1104,5 @@ tmp_build_test.log,verbosity
 codex/tmp/
 codex/work/
 /*.nuget
-artifacts/package-smoke/LayerBase.Test/TestResults/
+**/TestResults/
+*.trx

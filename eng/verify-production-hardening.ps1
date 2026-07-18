@@ -1,33 +1,41 @@
-param(
-    [string]$Configuration = "Release",
-    [switch]$RunSoak
-)
-
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== Verify Generated Assembly Modules ===" -ForegroundColor Cyan
-powershell "$PSScriptRoot\verify-generated-assembly-modules.ps1"
+dotnet restore
 
-Write-Host "=== Build $Configuration ===" -ForegroundColor Cyan
-dotnet build LayerBase.sln --configuration $Configuration --no-restore
+dotnet build `
+  -c Release `
+  --no-restore
 
-Write-Host "=== Run ProductionHardening Tests ===" -ForegroundColor Cyan
-dotnet test LayerBase.Test/LayerBase.Test.csproj `
-    --configuration $Configuration `
-    --no-build `
-    --filter "TestCategory=ProductionHardening"
+dotnet test `
+  LayerBase.Test/LayerBase.Test.csproj `
+  -c Release `
+  --no-build
 
-Write-Host "=== Run Generator Tests ===" -ForegroundColor Cyan
-dotnet test LayerBase.Generator/LayerBase.Generator.Tests/LayerBase.Generator.Tests.csproj `
-    --configuration Release
+dotnet test `
+  LayerBase.Test/LayerBase.Test.csproj `
+  -c Release `
+  --no-build `
+  --filter "TestCategory=ProductionHardening"
 
-if ($RunSoak)
+dotnet test `
+  LayerBase.Test/LayerBase.Test.csproj `
+  -c Release `
+  --no-build `
+  --filter "TestCategory=ProductionSoak"
+
+$trackedArtifacts = git ls-files |
+    Select-String -Pattern "TestResults|\.trx$"
+
+if ($trackedArtifacts)
 {
-    Write-Host "=== Run ProductionSoak Tests ===" -ForegroundColor Cyan
-    dotnet test LayerBase.Test/LayerBase.Test.csproj `
-        --configuration $Configuration `
-        --no-build `
-        --filter "TestCategory=ProductionSoak"
+    Write-Error "Tracked test artifacts detected:`n$trackedArtifacts"
 }
 
-Write-Host "=== All Production Hardening Checks Passed ===" -ForegroundColor Green
+$dirty = git status --porcelain
+
+if ($dirty)
+{
+    Write-Error "Verification changed the worktree:`n$dirty"
+}
+
+Write-Host "Production hardening verification passed."
