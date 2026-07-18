@@ -148,6 +148,8 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
         switch (sourceScope.Options.FaultPolicy)
         {
+            case ScopeFaultPolicy.ReportAndContinue:
+                break;
             case ScopeFaultPolicy.StopScope:
                 _ = sourceScope.RequestStopAsync();
                 break;

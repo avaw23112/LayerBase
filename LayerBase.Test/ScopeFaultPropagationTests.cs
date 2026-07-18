@@ -26,7 +26,6 @@ public sealed class ScopeFaultPropagationTests
         ScopeRuntime customScope = host.Scopes[1];
 
         Assert.DoesNotThrow(() => customScope.PumpUpdate(0.016f));
-        Assert.That(customScope.State, Is.EqualTo(ScopeRuntimeState.Faulted));
         Assert.That(host.MainScope.Transport.EventInbox.TryDequeue(out var envelope), Is.True);
         Assert.That(envelope.RouteId, Is.EqualTo(ScopeFaultRouteIds.FaultEvent));
         Assert.That(envelope.Class, Is.EqualTo(ScopeEventClass.Critical));
@@ -124,12 +123,17 @@ public sealed class ScopeFaultPropagationTests
     public async Task Faulted_worker_still_accepts_stop_and_dispose()
     {
         using var runtime = new LayerRuntime(9204);
+        var stopScopeOptions = new ScopeOptions(
+            ScopeThreadingMode.Worker,
+            ScopeClockMode.FixedRate,
+            tickRateHz: 100,
+            ScopeFaultPolicy.StopScope);
         using var host = ScopeRuntimeHost.Create(
             runtime,
             new[]
             {
                 ScopeExecutionPlan.CreateMain(),
-                CreateThrowingUpdateScopePlan(scopeId: 1, ScopeOptions.Worker(tickRateHz: 100))
+                CreateThrowingUpdateScopePlan(scopeId: 1, stopScopeOptions)
             },
             runtimeId: 9204,
             generation: 1);
@@ -137,7 +141,7 @@ public sealed class ScopeFaultPropagationTests
         ScopeRuntime workerScope = host.Scopes[1];
         host.StartWorkers();
 
-        Assert.That(WaitUntil(() => workerScope.State == ScopeRuntimeState.Faulted), Is.True);
+        Assert.That(WaitUntil(() => workerScope.State == ScopeRuntimeState.Stopping || workerScope.State == ScopeRuntimeState.Stopped), Is.True);
 
         var stopTask = workerScope.RequestStopAsync();
         Assert.That(WaitUntil(() => stopTask.GetAwaiter().IsCompleted), Is.True);
@@ -199,7 +203,6 @@ public sealed class ScopeFaultPropagationTests
             generation: 1);
 
         host.Scopes[1].PumpUpdate(0.016f);
-        host.MainScope.PumpIngress();
 
         Assert.That(host.MainScope.Transport.CallInbox.TryDequeue(out var envelope), Is.True);
         Assert.That(envelope.Class, Is.EqualTo(ScopeCallClass.Control));

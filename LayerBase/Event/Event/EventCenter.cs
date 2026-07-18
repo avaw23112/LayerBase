@@ -799,30 +799,21 @@ public sealed class EventCenter
             if (start >= end) return;
             ref var hBase = ref GetArrayDataRef(_subscribeHandlers);
             var i = start;
-            var currentIndex = start;
-            try
+            for (; i <= end - 4; i += 4)
             {
-                for (; i <= end - 4; i += 4)
-                {
-                    currentIndex = i;
-                    Unsafe.Add(ref hBase, i)(in value);
-                    currentIndex = i + 1;
-                    Unsafe.Add(ref hBase, i + 1)(in value);
-                    currentIndex = i + 2;
-                    Unsafe.Add(ref hBase, i + 2)(in value);
-                    currentIndex = i + 3;
-                    Unsafe.Add(ref hBase, i + 3)(in value);
-                }
-
-                for (; i < end; i++)
-                {
-                    currentIndex = i;
-                    Unsafe.Add(ref hBase, i)(in value);
-                }
+                try { Unsafe.Add(ref hBase, i)(in value); }
+                catch (Exception e) { HandleFault(FaultKind.Subscribe, i, in value, e); }
+                try { Unsafe.Add(ref hBase, i + 1)(in value); }
+                catch (Exception e) { HandleFault(FaultKind.Subscribe, i + 1, in value, e); }
+                try { Unsafe.Add(ref hBase, i + 2)(in value); }
+                catch (Exception e) { HandleFault(FaultKind.Subscribe, i + 2, in value, e); }
+                try { Unsafe.Add(ref hBase, i + 3)(in value); }
+                catch (Exception e) { HandleFault(FaultKind.Subscribe, i + 3, in value, e); }
             }
-            catch (Exception e)
+            for (; i < end; i++)
             {
-                HandleFault(FaultKind.Subscribe, currentIndex, in value, e);
+                try { Unsafe.Add(ref hBase, i)(in value); }
+                catch (Exception e) { HandleFault(FaultKind.Subscribe, i, in value, e); }
             }
         }
 
@@ -833,38 +824,50 @@ public sealed class EventCenter
             ref var hBase = ref GetArrayDataRef(_syncHandlers);
             var combinedState = 0;
             var i = start;
-            var currentIndex = start;
-            try
+            for (; i <= end - 4; i += 4)
             {
-                for (; i <= end - 4; i += 4)
+                try
                 {
-                    currentIndex = i;
                     var r1 = Unsafe.Add(ref hBase, i)(in value);
                     if (r1 == EventHandledState.Handled) return EventHandledState.Handled;
-                    currentIndex = i + 1;
+                    combinedState |= (int)r1;
+                }
+                catch (Exception e) { HandleFault(FaultKind.Sync, i, in value, e); }
+
+                try
+                {
                     var r2 = Unsafe.Add(ref hBase, i + 1)(in value);
                     if (r2 == EventHandledState.Handled) return EventHandledState.Handled;
-                    currentIndex = i + 2;
+                    combinedState |= (int)r2;
+                }
+                catch (Exception e) { HandleFault(FaultKind.Sync, i + 1, in value, e); }
+
+                try
+                {
                     var r3 = Unsafe.Add(ref hBase, i + 2)(in value);
                     if (r3 == EventHandledState.Handled) return EventHandledState.Handled;
-                    currentIndex = i + 3;
+                    combinedState |= (int)r3;
+                }
+                catch (Exception e) { HandleFault(FaultKind.Sync, i + 2, in value, e); }
+
+                try
+                {
                     var r4 = Unsafe.Add(ref hBase, i + 3)(in value);
                     if (r4 == EventHandledState.Handled) return EventHandledState.Handled;
-                    combinedState |= (int)r1 | (int)r2 | (int)r3 | (int)r4;
+                    combinedState |= (int)r4;
                 }
+                catch (Exception e) { HandleFault(FaultKind.Sync, i + 3, in value, e); }
+            }
 
-                for (; i < end; i++)
+            for (; i < end; i++)
+            {
+                try
                 {
-                    currentIndex = i;
                     var state = Unsafe.Add(ref hBase, i)(in value);
                     if (state == EventHandledState.Handled) return EventHandledState.Handled;
                     combinedState |= (int)state;
                 }
-            }
-            catch (Exception e)
-            {
-                HandleFault(FaultKind.Sync, currentIndex, in value, e);
-                return EventHandledState.Continue;
+                catch (Exception e) { HandleFault(FaultKind.Sync, i, in value, e); }
             }
 
             return (combinedState & 2) != 0 ? EventHandledState.HandledAndContinue : EventHandledState.Continue;

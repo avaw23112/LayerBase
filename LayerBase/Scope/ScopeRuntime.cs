@@ -1118,7 +1118,6 @@ internal sealed class ScopeRuntime : IDisposable
         }
 
         _runtime.ReportScopeFault(faultEvent.Record);
-        RequireHost().ApplyFaultPolicy(faultEvent.Record);
         return true;
     }
 
@@ -1140,8 +1139,6 @@ internal sealed class ScopeRuntime : IDisposable
             contextSlot);
 
         Interlocked.Increment(ref _faultCount);
-        _state = ScopeRuntimeState.Faulted;
-        Transport.CloseBusinessAdmission();
 
         if (Descriptor.ScopeId == ScopeDefinitionIds.Main)
         {
@@ -1152,6 +1149,24 @@ internal sealed class ScopeRuntime : IDisposable
 
         if (TryGetScopeEndpoint(ScopeDefinitionIds.Main, out var mainEndpoint))
             _ = EnqueueScopeFaultEvent(mainEndpoint, record);
+
+        RequireHost().ApplyFaultPolicy(record);
+    }
+
+    internal void ReportFatalFault(Exception exception, ScopeFaultPhase phase)
+    {
+        var record = new ScopeFaultRecord(
+            _runtimeId,
+            _generation,
+            Descriptor.ScopeId,
+            phase,
+            exception);
+
+        Interlocked.Increment(ref _faultCount);
+        _state = ScopeRuntimeState.Faulted;
+        Transport.CloseBusinessAdmission();
+
+        _runtime.ReportScopeFault(record);
     }
 
     private ScopePostResult EnqueueScopeFaultEvent(ScopeEndpoint targetEndpoint, in ScopeFaultRecord record)
