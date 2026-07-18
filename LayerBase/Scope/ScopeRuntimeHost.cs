@@ -197,9 +197,9 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
         RequestStopForAllScopes(in deadline);
 
-        bool workerTimedOut = StopWorkers(in deadline);
+        RequestDisposeForAllScopes(in deadline);
 
-        RequestDisposeForAllScopes(in deadline, workerTimedOut);
+        StopWorkers(in deadline);
     }
 
     private void RequestStopForAllScopes(in ShutdownDeadline deadline)
@@ -244,8 +244,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
         }
     }
 
-
-    private void RequestDisposeForAllScopes(in ShutdownDeadline deadline, bool workerTimedOut)
+    private void RequestDisposeForAllScopes(in ShutdownDeadline deadline)
     {
         ScopeRuntime[] runtimes = _directory.Runtimes;
 
@@ -255,13 +254,6 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
             if (scope.State == ScopeRuntimeState.Disposed)
                 continue;
-
-            if (scope.Options.Threading == ScopeThreadingMode.Worker && workerTimedOut)
-            {
-                if (scope.State != ScopeRuntimeState.Disposed)
-                    scope.Transport.CloseBusinessAdmission();
-                continue;
-            }
 
             if (scope.Options.Threading != ScopeThreadingMode.Worker)
             {
@@ -277,6 +269,16 @@ internal sealed class ScopeRuntimeHost : IDisposable
                     if (deadline.IsExpired)
                         break;
                     Thread.Yield();
+                }
+
+                if (!awaiter.IsCompleted)
+                {
+                    scope.Transport.CloseBusinessAdmission();
+
+                    scope.ReportFatalFault(
+                        new TimeoutException(
+                            $"Scope `{scope.Descriptor.Name}` did not dispose before the runtime shutdown deadline."),
+                        ScopeFaultPhase.WorkerLoop);
                 }
             }
         }
