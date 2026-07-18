@@ -39,6 +39,9 @@ public sealed class PostScheduler : IDisposable
     private int _sealedMaxEventTypeId = -1;
     private bool _disposed;
     private bool _isPumping;
+    private int _dirtySnapshotWordIndex = -1;
+    private int _coalescedSnapshotIndex = -1;
+    private int _latestSnapshotWordIndex = -1;
     private readonly BackpressurePolicy _defaultBackpressure;
 
     internal EventPayloadStorage PayloadStorage => _payloadStorage;
@@ -50,8 +53,14 @@ public sealed class PostScheduler : IDisposable
         _latestBits.HasPending ||
         _pendingCoalesced.Count != 0;
 
+    private bool HasActiveCursors =>
+        _dirtySnapshotWordIndex >= 0 ||
+        _coalescedSnapshotIndex >= 0 ||
+        _latestSnapshotWordIndex >= 0;
+
     internal bool HasPendingWork =>
         HasSpecialPending ||
+        HasActiveCursors ||
         !_readyQueue.IsEmpty ||
         !_nextQueue.IsEmpty;
 
@@ -161,6 +170,9 @@ public sealed class PostScheduler : IDisposable
         _pendingCoalesced.Clear();
         _coalescedBuffer.Clear();
         _snapshotCoalesced.Clear();
+        _dirtySnapshotWordIndex = -1;
+        _coalescedSnapshotIndex = -1;
+        _latestSnapshotWordIndex = -1;
     }
 
     private void EnsureEventCapacity(int typeId, bool rebuildBitmap = true)
@@ -492,7 +504,20 @@ public sealed class PostScheduler : IDisposable
         }
         else
         {
-            // New slot
+            int maxCoalesced = plan.MaxPending > 0 ? plan.MaxPending : _options.MaxSpecialPending;
+
+            if (_coalescedBuffer.Count >= maxCoalesced)
+            {
+                switch (plan.Backpressure)
+                {
+                    case BackpressurePolicy.DropOldest:
+                        EvictOldestCoalescedSlot();
+                        break;
+                    default:
+                        return PostResult.Failure();
+                }
+            }
+
             var handle = _payloadStorage.Store(_runtimeId, value);
             var seq = NextSequenceId();
             var newSlot = new CoalescedSlot
@@ -602,79 +627,113 @@ public sealed class PostScheduler : IDisposable
         _policyTable = policyTable ?? throw new ArgumentNullException(nameof(policyTable));
     }
 
-    private int FlushBuffers()
+    private void TakeSpecialSnapshots()
     {
-        if (!HasSpecialPending)
-            return 0;
-
-        int count = 0;
-
-        // 1. Take Snapshots
-
-        // Dirty Signals Snapshot
         _dirtyBits.TakeSnapshot();
+        _dirtySnapshotWordIndex = _dirtyBits.SnapshotWordCount > 0 ? 0 : -1;
 
-        // Coalesced Snapshot
         if (_pendingCoalesced.Count > 0)
         {
-            _pendingCoalesced.Sort((a, b) =>
-                _coalescedBuffer[a].FirstSequenceId.CompareTo(_coalescedBuffer[b].FirstSequenceId));
             foreach (var key in _pendingCoalesced)
             {
                 _snapshotCoalesced.Add(_coalescedBuffer[key]);
                 _coalescedBuffer.Remove(key);
             }
-
             _pendingCoalesced.Clear();
         }
+        _coalescedSnapshotIndex = _snapshotCoalesced.Count > 0 ? 0 : -1;
 
-        // Latest Snapshot
         _latestBits.TakeSnapshot();
+        _latestSnapshotWordIndex = _latestBits.SnapshotWordCount > 0 ? 0 : -1;
 
         ReadOnlySpan<int> latestWords = _latestBits.SnapshotWords;
-
         for (int i = 0; i < latestWords.Length; i++)
         {
             int wordIndex = latestWords[i];
             ulong bits = _latestBits.GetSnapshotBits(wordIndex);
-
             while (bits != 0)
             {
                 int bitIndex = BitHelper.TrailingZeroCount(bits);
                 int typeId = (wordIndex << 6) + bitIndex;
-
                 _latestSnapshotBuffer[typeId] = _latestBuffer[typeId];
                 _latestBuffer[typeId] = PayloadHandle.Invalid;
-
                 bits &= bits - 1;
             }
         }
+    }
 
-        // 2. Dispatch snapshots
+    private int FlushBuffers(int processedSoFar)
+    {
+        int budget = _options.MaxEventsPerPump > 0
+            ? _options.MaxEventsPerPump - processedSoFar
+            : int.MaxValue;
+
+        if (budget <= 0)
+            return 0;
+
+        bool hasActiveSnapshot = _dirtySnapshotWordIndex >= 0
+                              || _coalescedSnapshotIndex >= 0
+                              || _latestSnapshotWordIndex >= 0;
+
+        if (!hasActiveSnapshot)
+        {
+            if (!HasSpecialPending)
+                return 0;
+
+            TakeSpecialSnapshots();
+
+            if (_dirtySnapshotWordIndex < 0 && _coalescedSnapshotIndex < 0 && _latestSnapshotWordIndex < 0)
+                return 0;
+        }
+
+        int processed = 0;
+        bool budgetExhausted = false;
+
         try
         {
-            count += DispatchDirtySnapshotSafely();
-            count += DispatchCoalescedSnapshotSafely();
-            count += DispatchLatestSnapshotSafely();
-            return count;
+            if (_dirtySnapshotWordIndex >= 0)
+            {
+                processed += DispatchDirtySnapshotBudgeted(budget - processed);
+                if (processed >= budget) { budgetExhausted = true; return processed; }
+            }
+
+            if (_coalescedSnapshotIndex >= 0)
+            {
+                processed += DispatchCoalescedSnapshotBudgeted(budget - processed);
+                if (processed >= budget) { budgetExhausted = true; return processed; }
+            }
+
+            if (_latestSnapshotWordIndex >= 0)
+            {
+                processed += DispatchLatestSnapshotBudgeted(budget - processed);
+            }
+
+            return processed;
         }
         finally
         {
-            _dirtyBits.ClearSnapshot();
-            ReleaseRemainingCoalescedSnapshot();
-            _snapshotCoalesced.Clear();
-            ReleaseRemainingLatestSnapshot();
-            _latestBits.ClearSnapshot();
+            if (!budgetExhausted)
+            {
+                _dirtyBits.ClearSnapshot();
+                ReleaseRemainingCoalescedSnapshot();
+                _snapshotCoalesced.Clear();
+                ReleaseRemainingLatestSnapshot();
+                _latestBits.ClearSnapshot();
+                _dirtySnapshotWordIndex = -1;
+                _coalescedSnapshotIndex = -1;
+                _latestSnapshotWordIndex = -1;
+            }
         }
     }
 
-    private int DispatchDirtySnapshotSafely()
+    private int DispatchDirtySnapshotBudgeted(int budget)
     {
         var processed = 0;
-
         ReadOnlySpan<int> words = _dirtyBits.SnapshotWords;
 
-        for (int i = 0; i < words.Length; i++)
+        int startWord = _dirtySnapshotWordIndex >= 0 ? _dirtySnapshotWordIndex : 0;
+
+        for (int i = startWord; i < words.Length; i++)
         {
             int wordIndex = words[i];
             ulong bits = _dirtyBits.GetSnapshotBits(wordIndex);
@@ -683,50 +742,57 @@ public sealed class PostScheduler : IDisposable
             {
                 int bitIndex = BitHelper.TrailingZeroCount(bits);
                 int typeId = (wordIndex << 6) + bitIndex;
-
                 _payloadStorage.DispatchDefault(typeId, _eventCenter);
-
                 processed++;
                 bits &= bits - 1;
             }
 
             _dirtyBits.ClearSnapshotWord(wordIndex);
+
+            if (processed >= budget)
+            {
+                int nextWord = i + 1;
+                _dirtySnapshotWordIndex = nextWord < words.Length ? nextWord : -1;
+                return processed;
+            }
         }
 
+        _dirtySnapshotWordIndex = -1;
         return processed;
     }
 
-    private int DispatchCoalescedSnapshotSafely()
+    private int DispatchCoalescedSnapshotBudgeted(int budget)
     {
         var processed = 0;
-        try
+        int startIndex = _coalescedSnapshotIndex >= 0 ? _coalescedSnapshotIndex : 0;
+
+        for (var i = startIndex; i < _snapshotCoalesced.Count; i++)
         {
-            for (var i = 0; i < _snapshotCoalesced.Count; i++)
+            var slot = _snapshotCoalesced[i];
+            if (slot.PayloadHandle.IsInvalid)
+                continue;
+
+            try
             {
-                var slot = _snapshotCoalesced[i];
-                if (slot.PayloadHandle.IsInvalid) continue;
+                _payloadStorage.Dispatch(slot.PayloadHandle, _eventCenter);
+                processed++;
+            }
+            finally
+            {
+                _payloadStorage.Release(slot.PayloadHandle);
+                slot.PayloadHandle = PayloadHandle.Invalid;
+                _snapshotCoalesced[i] = slot;
+            }
 
-                try
-                {
-                    _payloadStorage.Dispatch(slot.PayloadHandle, _eventCenter);
-                    processed++;
-                }
-                finally
-                {
-                    _payloadStorage.Release(slot.PayloadHandle);
-
-                    // Mark as invalid to prevent double release in outer finally
-                    slot.PayloadHandle = PayloadHandle.Invalid;
-                    _snapshotCoalesced[i] = slot;
-                }
+            if (processed >= budget)
+            {
+                int nextIndex = i + 1;
+                _coalescedSnapshotIndex = nextIndex < _snapshotCoalesced.Count ? nextIndex : -1;
+                return processed;
             }
         }
-        finally
-        {
-            ReleaseRemainingCoalescedSnapshot();
-            _snapshotCoalesced.Clear();
-        }
 
+        _coalescedSnapshotIndex = -1;
         return processed;
     }
 
@@ -741,13 +807,29 @@ public sealed class PostScheduler : IDisposable
         }
     }
 
-    private int DispatchLatestSnapshotSafely()
+    private void EvictOldestCoalescedSlot()
+    {
+        if (_pendingCoalesced.Count == 0)
+            return;
+
+        var oldestKey = _pendingCoalesced[0];
+        if (_coalescedBuffer.TryGetValue(oldestKey, out var oldestSlot))
+        {
+            _payloadStorage.Release(oldestSlot.PayloadHandle);
+            _coalescedBuffer.Remove(oldestKey);
+        }
+
+        _pendingCoalesced.RemoveAt(0);
+    }
+
+    private int DispatchLatestSnapshotBudgeted(int budget)
     {
         var processed = 0;
-
         ReadOnlySpan<int> words = _latestBits.SnapshotWords;
 
-        for (int i = 0; i < words.Length; i++)
+        int startWord = _latestSnapshotWordIndex >= 0 ? _latestSnapshotWordIndex : 0;
+
+        for (int i = startWord; i < words.Length; i++)
         {
             int wordIndex = words[i];
             ulong bits = _latestBits.GetSnapshotBits(wordIndex);
@@ -774,8 +856,16 @@ public sealed class PostScheduler : IDisposable
             }
 
             _latestBits.ClearSnapshotWord(wordIndex);
+
+            if (processed >= budget)
+            {
+                int nextWord = i + 1;
+                _latestSnapshotWordIndex = nextWord < words.Length ? nextWord : -1;
+                return processed;
+            }
         }
 
+        _latestSnapshotWordIndex = -1;
         return processed;
     }
 
@@ -814,8 +904,7 @@ public sealed class PostScheduler : IDisposable
         int processed = 0;
         int wavesProcessed = 0;
 
-        processed += FlushBuffers();
-
+        processed += FlushBuffers(processed);
 
         _isPumping = true;
         try
@@ -951,6 +1040,10 @@ public sealed class PostScheduler : IDisposable
 
         ReleaseQueuedPayloads(_readyQueue);
         ReleaseQueuedPayloads(_nextQueue);
+
+        _dirtySnapshotWordIndex = -1;
+        _coalescedSnapshotIndex = -1;
+        _latestSnapshotWordIndex = -1;
 
         _payloadStorage.Dispose();
     }

@@ -18,6 +18,7 @@ public readonly struct PostSchedulerOptions
     public readonly int MaxCompletionsPerPump;
     public readonly BackpressurePolicy DefaultBackpressure;
     public readonly PayloadDiagnosticsMode PayloadDiagnostics;
+    public readonly int MaxSpecialPending;
 
     public PostSchedulerOptions(
         int                readyCapacity,
@@ -28,7 +29,8 @@ public readonly struct PostSchedulerOptions
         int                timeCheckInterval,
         BackpressurePolicy defaultBackpressure,
         int                maxCompletionsPerPump = 0,
-        PayloadDiagnosticsMode payloadDiagnostics = PayloadDiagnosticsMode.Local)
+        PayloadDiagnosticsMode payloadDiagnostics = PayloadDiagnosticsMode.Local,
+        int                maxSpecialPending = 4096)
     {
         ReadyCapacity = readyCapacity;
         NextCapacity = nextCapacity;
@@ -39,6 +41,7 @@ public readonly struct PostSchedulerOptions
         MaxCompletionsPerPump = maxCompletionsPerPump;
         DefaultBackpressure = defaultBackpressure;
         PayloadDiagnostics = payloadDiagnostics;
+        MaxSpecialPending = maxSpecialPending;
     }
 
     public static PostSchedulerOptions Default => new(
