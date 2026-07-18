@@ -10,6 +10,7 @@ public readonly struct TimeSchedulerOptions
     public readonly int MaxPromotePerTick;
     public readonly TimerRepeatMode DefaultRepeatMode;
     public readonly TimerCatchUpPolicy DefaultCatchUpPolicy;
+    public readonly int MaxCatchUpTicksPerPump;
 
     public TimeSchedulerOptions(
         float              tickDurationSeconds,
@@ -19,8 +20,18 @@ public readonly struct TimeSchedulerOptions
         int                maxExpiredPerTick,
         int                maxPromotePerTick,
         TimerRepeatMode    defaultRepeatMode,
-        TimerCatchUpPolicy defaultCatchUpPolicy)
+        TimerCatchUpPolicy defaultCatchUpPolicy,
+        int                maxCatchUpTicksPerPump = 8)
     {
+        if (tickDurationSeconds <= 0 || float.IsNaN(tickDurationSeconds) || float.IsInfinity(tickDurationSeconds))
+            throw new ArgumentException(nameof(tickDurationSeconds));
+        if (initialTimerCapacity <= 0 || initialTimerCapacity > (1 << 30))
+            throw new ArgumentException(nameof(initialTimerCapacity));
+        if (maxPromotePerTick <= 0)
+            throw new ArgumentException(nameof(maxPromotePerTick));
+        if (maxExpiredPerTick <= 0)
+            throw new ArgumentException(nameof(maxExpiredPerTick));
+
         TickDurationSeconds = tickDurationSeconds;
         WheelSize = wheelSize;
         InitialTimerCapacity = initialTimerCapacity;
@@ -29,6 +40,7 @@ public readonly struct TimeSchedulerOptions
         MaxPromotePerTick = maxPromotePerTick;
         DefaultRepeatMode = defaultRepeatMode;
         DefaultCatchUpPolicy = defaultCatchUpPolicy;
+        MaxCatchUpTicksPerPump = maxCatchUpTicksPerPump;
     }
 
     public static TimeSchedulerOptions Default => new(
@@ -39,5 +51,6 @@ public readonly struct TimeSchedulerOptions
         maxExpiredPerTick: 1024,
         maxPromotePerTick: 64,
         defaultRepeatMode: TimerRepeatMode.Once,
-        defaultCatchUpPolicy: TimerCatchUpPolicy.SkipMissed);
+        defaultCatchUpPolicy: TimerCatchUpPolicy.SkipMissed,
+        maxCatchUpTicksPerPump: 8);
 }

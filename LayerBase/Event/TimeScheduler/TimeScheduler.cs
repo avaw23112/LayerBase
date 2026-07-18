@@ -152,6 +152,9 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     {
         if (_disposed) return;
 
+        if (float.IsNaN(deltaTime) || float.IsInfinity(deltaTime) || deltaTime < 0)
+            throw new ArgumentException(nameof(deltaTime));
+
         _accumulator += deltaTime;
         if (_accumulator < _tickDuration) return;
 
@@ -176,10 +179,12 @@ public sealed class TimeScheduler<TPayload> : IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void TickCatchUpSlow(IExpiredTimerSink<TPayload> sink)
     {
-        while (_accumulator >= _tickDuration)
+        int catchUpCount = 0;
+        while (_accumulator >= _tickDuration && catchUpCount < _options.MaxCatchUpTicksPerPump)
         {
             _accumulator -= _tickDuration;
             TickOnce(sink);
+            catchUpCount++;
         }
     }
 

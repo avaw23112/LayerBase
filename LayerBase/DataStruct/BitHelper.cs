@@ -62,6 +62,10 @@ internal static class BitHelper
     public static int NextPowerOfTwo(int value)
     {
         if (value <= 1) return 1;
+        if (value > 1 << 30) throw new ArgumentOutOfRangeException(nameof(value));
+#if NETCOREAPP || NET5_0_OR_GREATER
+        return (int)BitOperations.RoundUpToPowerOf2((uint)value);
+#else
         value--;
         value |= value >> 1;
         value |= value >> 2;
@@ -70,5 +74,6 @@ internal static class BitHelper
         value |= value >> 16;
         value++;
         return value;
+#endif
     }
 }
