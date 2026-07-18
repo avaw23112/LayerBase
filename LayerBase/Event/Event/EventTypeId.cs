@@ -1,6 +1,5 @@
 namespace LayerBase.Core.Event;
 
-using System.Collections.Generic;
 using System.Threading;
 
 /// <summary>
@@ -21,34 +20,9 @@ internal static class EventTypeIdAllocator
     /// </summary>
     private static int s_nextId;
 
-    private static readonly Dictionary<Type, int> s_typeToId = new();
-    private static readonly object s_lock = new();
-
-    /// <summary>
-    /// 为事件类型分配或查找已分配 ID。
-    /// </summary>
     public static int Allocate()
     {
         return Interlocked.Increment(ref s_nextId);
-    }
-
-    /// <summary>
-    /// 通过 Type 解析事件 ID。如果在 Build 阶段首次访问，会触发 ID 分配。
-    /// </summary>
-    public static int Resolve(Type eventType)
-    {
-        if (eventType == null)
-            throw new ArgumentNullException(nameof(eventType));
-
-        lock (s_lock)
-        {
-            if (s_typeToId.TryGetValue(eventType, out int existing))
-                return existing;
-
-            int id = Allocate();
-            s_typeToId[eventType] = id;
-            return id;
-        }
     }
 
     public static int MaxId => Volatile.Read(ref s_nextId);

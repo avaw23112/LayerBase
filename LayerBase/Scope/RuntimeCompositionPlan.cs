@@ -413,7 +413,21 @@ internal sealed class RuntimeCompositionPlan
                 layerTypeIndex);
             int ownerScopeId = ResolveScopeId(ev.OwnerScopeType, scopeIdsByType);
 
-            int eventId = EventTypeIdAllocator.Resolve(ev.EventType);
+            IEventMetaData metaData = ev.MetaDataFactory()
+                ?? throw new InvalidOperationException(
+                    $"Event metadata factory for `{ev.EventType.FullName}` returned null.");
+
+            int eventId = metaData.EventId;
+            EventIdentity identity = metaData.GetIdentity();
+
+            if (identity.EventType != ev.EventType)
+            {
+                throw new InvalidOperationException(
+                    $"Event metadata `{metaData.GetType().FullName}` represents " +
+                    $"`{identity.EventType.FullName}`, but contribution declares " +
+                    $"`{ev.EventType.FullName}`.");
+            }
+
             var key = (ownerScopeId, eventId);
 
             if (!seen.Add(key))
