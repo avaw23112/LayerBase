@@ -45,7 +45,14 @@ internal sealed class ScopeWorker : IDisposable
         _workSignal.Set();
 
         if (_thread.IsAlive && !ReferenceEquals(Thread.CurrentThread, _thread))
-            _thread.Join();
+        {
+            if (!_thread.Join(5000))
+            {
+                _thread.IsBackground = true;
+                System.Diagnostics.Debug.WriteLine(
+                    $"[ScopeWorker] Thread '{_thread.Name}' timed out after 5000ms, set to background.");
+            }
+        }
 
         if (!_startedThread)
             _runtime.Dispose();

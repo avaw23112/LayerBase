@@ -609,20 +609,26 @@ public sealed partial class LayerRuntime : IDisposable
         if (_disposed) return;
         _disposed = true;
 
-        _state = RuntimeState.Stopping;
-        _scopeHost.MainScope.RunRuntimeStop();
-        _mainActorRuntime.RuntimeStop();
-        _workerJobs.BeginStop();
-        _chain?.DisposeLayers();
-        _chain = null;
-        _state = RuntimeState.Disposing;
-        _scopeHost.Dispose();
-        _mainActorRuntime.Dispose();
-        _tools?.Dispose();
-        _workerJobs.Dispose();
-        LayerHub.ClearRuntimeCaches(_id);
-        LayerHub.Internal_Unregister(this);
-        _state = RuntimeState.Disposed;
+        try
+        {
+            _state = RuntimeState.Stopping;
+            _scopeHost.MainScope.RunRuntimeStop();
+            _mainActorRuntime.RuntimeStop();
+            _workerJobs.BeginStop();
+            _chain?.DisposeLayers();
+            _chain = null;
+            _state = RuntimeState.Disposing;
+            _scopeHost.Dispose();
+            _mainActorRuntime.Dispose();
+            _tools?.Dispose();
+            _workerJobs.Dispose();
+        }
+        finally
+        {
+            LayerHub.ClearRuntimeCaches(_id);
+            LayerHub.Internal_Unregister(this);
+            _state = RuntimeState.Disposed;
+        }
     }
     #endregion
 

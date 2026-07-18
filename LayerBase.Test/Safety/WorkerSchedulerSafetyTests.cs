@@ -27,14 +27,6 @@ public sealed class WorkerSchedulerSafetyTests
         int stateCapacity = 32;
         int targetCount = stateCapacity * 4;
 
-        var scheduler = new WorkerJobScheduler(new WorkerJobSchedulerOptions(2, stateCapacity, 4096));
-
-        var freeCountField = typeof(WorkerJobScheduler)
-            .GetField("_freeCount", BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        int initialFree = (int)freeCountField.GetValue(scheduler)!;
-        Assert.That(initialFree, Is.EqualTo(stateCapacity));
-
         var layer = new ProbeLayer();
         var service = new ProbeService();
         layer.RegisterService(service);
@@ -42,6 +34,11 @@ public sealed class WorkerSchedulerSafetyTests
         using var runtime = LayerHub.CreateLayers()
             .Push(layer)
             .Build();
+
+        var freeCountField = typeof(WorkerJobScheduler)
+            .GetField("_freeCount", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        int initialFree = (int)freeCountField.GetValue(runtime.WorkerJobs)!;
 
         for (int batch = 0; batch < targetCount / stateCapacity; batch++)
         {
@@ -68,7 +65,7 @@ public sealed class WorkerSchedulerSafetyTests
                 $"Batch {batch}: not all jobs completed within timeout.");
         }
 
-        int finalFree = (int)freeCountField.GetValue(scheduler)!;
+        int finalFree = (int)freeCountField.GetValue(runtime.WorkerJobs)!;
         Assert.That(finalFree, Is.EqualTo(initialFree),
             "After all jobs complete, free count should return to initial capacity.");
     }

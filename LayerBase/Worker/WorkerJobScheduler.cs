@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using LayerBase.Scope;
 
 namespace LayerBase.Worker;
@@ -62,7 +63,9 @@ internal sealed class WorkerJobScheduler : IDisposable
         where TInput : struct
         where TEvent : struct
     {
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        CancellationTokenSource cts = cancellationToken == default
+            ? WorkerJobItem<TJob, TInput, TEvent>.RentCts()
+            : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         WorkerHandle handle;
         IWorkerJobItem item;
 
@@ -71,37 +74,37 @@ internal sealed class WorkerJobScheduler : IDisposable
             handle = AllocateHandleLocked(cts);
             if (!handle.IsValid)
             {
-                cts.Dispose();
+                WorkerJobItem<TJob, TInput, TEvent>.ReturnCts(cts);
                 return WorkerHandle.Invalid;
             }
 
             if (!_accepting || _disposed)
             {
                 MarkTerminalLocked(handle, WorkerState.Failed);
-                cts.Dispose();
+                WorkerJobItem<TJob, TInput, TEvent>.ReturnCts(cts);
                 return handle;
             }
 
             if (cancellationToken.IsCancellationRequested)
             {
                 MarkTerminalLocked(handle, WorkerState.Cancelled);
-                cts.Dispose();
+                WorkerJobItem<TJob, TInput, TEvent>.ReturnCts(cts);
                 return handle;
             }
 
             if (_queue.Count >= _options.JobQueueCapacity)
             {
                 MarkTerminalLocked(handle, WorkerState.Failed);
-                cts.Dispose();
+                WorkerJobItem<TJob, TInput, TEvent>.ReturnCts(cts);
                 return handle;
             }
 
-            item = new WorkerJobItem<TJob, TInput, TEvent>(
+            item = WorkerJobItem<TJob, TInput, TEvent>.Rent(
                 this,
                 handle,
-                job,
-                input,
-                origin,
+                in job,
+                in input,
+                in origin,
                 options,
                 cts);
             _queue.Enqueue(item);
@@ -181,8 +184,12 @@ internal sealed class WorkerJobScheduler : IDisposable
 
         for (int i = 0; i < _threads.Length; i++)
         {
-            if (_threads[i].IsAlive)
-                _threads[i].Join();
+            if (_threads[i].IsAlive && !_threads[i].Join(_options.ShutdownTimeoutMilliseconds))
+            {
+                _threads[i].IsBackground = true;
+                System.Diagnostics.Debug.WriteLine(
+                    $"[WorkerJobScheduler] Thread '{_threads[i].Name}' timed out after {_options.ShutdownTimeoutMilliseconds}ms, set to background.");
+            }
         }
 
         _signal.Dispose();
@@ -315,15 +322,18 @@ internal sealed class WorkerJobScheduler : IDisposable
         where TInput : struct
         where TEvent : struct
     {
-        private readonly WorkerJobScheduler _scheduler;
-        private readonly WorkerHandle _handle;
-        private readonly TJob _job;
-        private readonly TInput _input;
-        private readonly WorkerJobOrigin _origin;
-        private readonly WorkerEventJobOptions _options;
-        private readonly CancellationTokenSource _cancellation;
+        private static readonly ConcurrentBag<WorkerJobItem<TJob, TInput, TEvent>> Pool = new();
+        private static readonly ConcurrentBag<CancellationTokenSource> CtsPool = new();
 
-        public WorkerJobItem(
+        private WorkerJobScheduler _scheduler = null!;
+        private WorkerHandle _handle;
+        private TJob _job;
+        private TInput _input;
+        private WorkerJobOrigin _origin;
+        private WorkerEventJobOptions _options;
+        private CancellationTokenSource _cancellation = null!;
+
+        public static WorkerJobItem<TJob, TInput, TEvent> Rent(
             WorkerJobScheduler scheduler,
             WorkerHandle handle,
             in TJob job,
@@ -332,20 +342,67 @@ internal sealed class WorkerJobScheduler : IDisposable
             WorkerEventJobOptions options,
             CancellationTokenSource cancellation)
         {
-            _scheduler = scheduler;
-            _handle = handle;
-            _job = job;
-            _input = input;
-            _origin = origin;
-            _options = options;
-            _cancellation = cancellation;
+            if (!Pool.TryTake(out var item))
+                item = new WorkerJobItem<TJob, TInput, TEvent>();
+
+            item._scheduler = scheduler;
+            item._handle = handle;
+            item._job = job;
+            item._input = input;
+            item._origin = origin;
+            item._options = options;
+            item._cancellation = cancellation;
+            return item;
+        }
+
+        private void ResetFields()
+        {
+            _scheduler = null!;
+            _handle = default;
+            _job = default;
+            _input = default;
+            _origin = default;
+            _options = default;
+            _cancellation = null!;
+        }
+
+        private void Return()
+        {
+            ResetFields();
+            Pool.Add(this);
+        }
+
+        internal static CancellationTokenSource RentCts()
+        {
+            if (!CtsPool.TryTake(out var cts))
+                cts = new CancellationTokenSource();
+            return cts;
+        }
+
+        internal static void ReturnCts(CancellationTokenSource cts)
+        {
+#if NET
+            try
+            {
+                if (cts.TryReset())
+                {
+                    CtsPool.Add(cts);
+                    return;
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+#endif
+            cts.Dispose();
         }
 
         public void Execute(int workerIndex)
         {
             if (!_scheduler.TryMarkRunning(_handle))
             {
-                _cancellation.Dispose();
+                ReturnCts(_cancellation);
+                Return();
                 return;
             }
 
@@ -357,7 +414,8 @@ internal sealed class WorkerJobScheduler : IDisposable
                     WorkerJobFailureKind.Cancelled,
                     WorkerJobExceptionInfo.None);
                 _scheduler.MarkTerminal(_handle, WorkerState.Cancelled);
-                _cancellation.Dispose();
+                ReturnCts(_cancellation);
+                Return();
                 return;
             }
 
@@ -411,7 +469,8 @@ internal sealed class WorkerJobScheduler : IDisposable
             }
             finally
             {
-                _cancellation.Dispose();
+                ReturnCts(_cancellation);
+                Return();
             }
         }
 
@@ -424,7 +483,8 @@ internal sealed class WorkerJobScheduler : IDisposable
                 WorkerJobFailureKind.Cancelled,
                 WorkerJobExceptionInfo.None);
             _scheduler.MarkTerminal(_handle, WorkerState.Cancelled);
-            _cancellation.Dispose();
+            ReturnCts(_cancellation);
+            Return();
         }
     }
 
