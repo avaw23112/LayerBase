@@ -84,7 +84,7 @@ public class EventPipelineTests
 
             runtime.Send(new TestEvent());
             Assert.That(errorCount, Is.EqualTo(1));
-            Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv" }));
+            Assert.That(_trace, Is.EquivalentTo(new[] { "L1_Recv", "Safe" }));
 
             _trace.Clear();
             runtime.Send(new TestEvent());
