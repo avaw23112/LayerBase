@@ -46,11 +46,12 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        foreach (var lazy in _instances.Values)
+        foreach (var kvp in _instances.ToArray())
         {
-            if (lazy.IsValueCreated && lazy.Value is IDisposable disposable)
+            if (kvp.Value.IsValueCreated && kvp.Value.Value is IDisposable disposable)
                 disposable.Dispose();
         }
+        _instances.Clear();
     }
 
     public object? GetService(Type serviceType)
@@ -120,14 +121,13 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         foreach (var kvp in _instances)
         {
             if (kvp.Key.OwnerScopeId == ownerScopeId)
-            {
-                if (kvp.Value.IsValueCreated && kvp.Value.Value is IDisposable disposable)
-                    disposable.Dispose();
                 keysToRemove.Add(kvp.Key);
-            }
         }
         foreach (var key in keysToRemove)
-            _instances.TryRemove(key, out _);
+        {
+            if (_instances.TryRemove(key, out var lazy) && lazy.IsValueCreated && lazy.Value is IDisposable disposable)
+                disposable.Dispose();
+        }
     }
 
     internal void InjectMembers(object instance)

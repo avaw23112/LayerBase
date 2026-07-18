@@ -276,7 +276,6 @@ public abstract class Layer : Node, IDisposable
             if (resolved.Instance is IPostBuild postBuild) state.PostBuilds.Add(postBuild);
             if (resolved.Instance is IRuntimeStart runtimeStart) state.RuntimeStarts.Add(runtimeStart);
             if (resolved.Instance is IRuntimeStop runtimeStop) state.RuntimeStops.Add(runtimeStop);
-            if (resolved.Instance is IDisposable disposable) state.Disposables.Add(disposable);
         }
 
         // Layer self-implements lifecycle methods only belong to MainScope
@@ -349,8 +348,8 @@ public abstract class Layer : Node, IDisposable
         {
             if (state.Updates.Count > 0)
                 update.Add(state.PumpUpdate);
-            if (state.Disposables.Count > 0)
-                dispose.Add(state.RunDispose);
+            int capturedScopeId = ownerScopeId;
+            dispose.Add(() => _serviceProvider?.DisposeScope(capturedScopeId));
         }
 
         return new ScopeLayerLifecycleSlice(
@@ -369,6 +368,11 @@ public abstract class Layer : Node, IDisposable
             runtimeStop.Count - runtimeStopStart,
             disposeStart,
             dispose.Count - disposeStart);
+    }
+
+    internal void DisposeScopeServices(int scopeId)
+    {
+        _serviceProvider?.DisposeScope(scopeId);
     }
 
     internal void DisposeScopeResources(int ownerScopeId)

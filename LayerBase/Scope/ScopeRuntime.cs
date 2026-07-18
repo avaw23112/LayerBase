@@ -1467,6 +1467,7 @@ internal sealed class ScopeRuntime : IDisposable
             context.DrainClosingOperations(PostScheduler?.Options.MaxCompletionsPerPump ?? 0);
         }
 
+        _runtime.DisposeScopeServices(ScopeId);
         RunLifecycleDispose();
         Transport.CloseAllAdmissionAndWaitForWriters();
         ReleaseCallInbox();

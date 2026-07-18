@@ -89,6 +89,15 @@ internal sealed class LayerChain
         RunScopeLifecycleOnOwnerThread(scopes, ScopeLifecyclePhase.Dispose);
     }
 
+    internal void DisposeScopeServices(int scopeId)
+    {
+        foreach (var node in _responsibilityChain)
+        {
+            if (node is Layer layer)
+                layer.DisposeScopeServices(scopeId);
+        }
+    }
+
     private static void RunScopeLifecycleOnOwnerThread(IReadOnlyList<ScopeRuntime> scopes, ScopeLifecyclePhase phase)
     {
         for (int i = scopes.Count - 1; i >= 0; i--)

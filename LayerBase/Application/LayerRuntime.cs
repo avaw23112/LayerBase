@@ -396,6 +396,11 @@ public sealed partial class LayerRuntime : IDisposable
     {
         _chain?.MarkDelayDirty();
     }
+
+    internal void DisposeScopeServices(int scopeId)
+    {
+        _chain?.DisposeScopeServices(scopeId);
+    }
     #endregion
 
     #region Lifecycle - Pump
