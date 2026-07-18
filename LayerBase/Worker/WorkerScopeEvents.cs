@@ -5,82 +5,91 @@ namespace LayerBase.Worker;
 
 internal static class WorkerScopeEventRouteIds
 {
-    public const int Result = -301;
-    public const int Failure = -302;
+    public const int ExecutionCompleted = -301;
+    public const int CancelRequested = -302;
 }
 
-internal interface IWorkerEventJobResult
+internal enum WorkerExecutionCompletionKind : byte
+{
+    Succeeded = 0,
+    Cancelled = 1,
+    Faulted = 2
+}
+
+internal interface IWorkerExecutionResult
 {
     Type EventType { get; }
 
-    PostResult PostTo(PostScheduler scheduler);
+    PostResult PostTo(
+        PostScheduler scheduler,
+        EventPostPolicy? policy);
 }
 
-internal sealed class WorkerEventJobResult<TEvent> : IWorkerEventJobResult
+internal sealed class WorkerExecutionResult<TEvent> : IWorkerExecutionResult
     where TEvent : struct
 {
     private readonly TEvent _value;
 
-    public WorkerEventJobResult(TEvent value)
+    public WorkerExecutionResult(in TEvent value)
     {
         _value = value;
     }
 
     public Type EventType => typeof(TEvent);
 
-    public PostResult PostTo(PostScheduler scheduler)
+    public PostResult PostTo(
+        PostScheduler scheduler,
+        EventPostPolicy? policy)
     {
-        return scheduler.TryPost(_value);
+        if (!policy.HasValue)
+            return scheduler.TryPost(in _value);
+
+        return policy.Value.Mode switch
+        {
+            PostDeliveryMode.Normal => scheduler.TryPost(in _value),
+            PostDeliveryMode.Latest => scheduler.TryPostLatest(in _value),
+            PostDeliveryMode.Coalesced => scheduler.TryPostCoalesced(in _value),
+            PostDeliveryMode.DirtySignal => scheduler.TryPost(in _value),
+            _ => PostResult.Failure()
+        };
     }
 }
 
-internal readonly struct WorkerEventJobResultScopeEvent
+internal readonly struct WorkerExecutionCompletedScopeEvent
 {
-    public WorkerEventJobResultScopeEvent(WorkerHandle handle, IWorkerEventJobResult result)
-    {
-        Handle = handle;
-        Result = result ?? throw new ArgumentNullException(nameof(result));
-    }
-
-    public WorkerHandle Handle { get; }
-
-    public IWorkerEventJobResult Result { get; }
-}
-
-internal readonly struct WorkerEventJobResultScopeEvent<TEvent>
-    where TEvent : struct
-{
-    public WorkerEventJobResultScopeEvent(WorkerHandle handle, TEvent value, EventPostPolicy? postPolicy)
-    {
-        Handle = handle;
-        Value = value;
-        PostPolicy = postPolicy;
-    }
-
-    public WorkerHandle Handle { get; }
-
-    public TEvent Value { get; }
-
-    public EventPostPolicy? PostPolicy { get; }
-}
-
-internal readonly struct WorkerEventJobFailedScopeEvent
-{
-    public WorkerEventJobFailedScopeEvent(
+    public WorkerExecutionCompletedScopeEvent(
         WorkerHandle handle,
-        WorkerJobFailureKind kind,
+        WorkerExecutionCompletionKind kind,
+        IWorkerExecutionResult? result,
+        WorkerEventJobOptions options,
         WorkerJobExceptionInfo error)
     {
         Handle = handle;
         Kind = kind;
+        Result = result;
+        Options = options;
         Error = error;
     }
 
     public WorkerHandle Handle { get; }
 
-    public WorkerJobFailureKind Kind { get; }
+    public WorkerExecutionCompletionKind Kind { get; }
+
+    public IWorkerExecutionResult? Result { get; }
+
+    public WorkerEventJobOptions Options { get; }
 
     public WorkerJobExceptionInfo Error { get; }
+}
+
+internal readonly struct WorkerCancelRequestedScopeEvent
+{
+    public WorkerCancelRequestedScopeEvent(WorkerHandle handle)
+    {
+        Handle = handle;
+    }
+
+    public WorkerHandle Handle { get; }
 }
 
 internal static class WorkerScopeEventDispatcher
@@ -90,63 +99,65 @@ internal static class WorkerScopeEventDispatcher
         int runtimeId,
         PayloadHandle payload,
         EventPayloadStorage payloadStorage,
+        WorkerJobCoordinator coordinator,
         PostScheduler? scheduler)
     {
-        if (routeId == WorkerScopeEventRouteIds.Result)
+        switch (routeId)
         {
-            DispatchResult(runtimeId, payload, payloadStorage, scheduler);
-            return true;
-        }
+            case WorkerScopeEventRouteIds.ExecutionCompleted:
+                DispatchExecutionCompleted(
+                    runtimeId,
+                    payload,
+                    payloadStorage,
+                    coordinator,
+                    scheduler);
+                return true;
 
-        if (routeId == WorkerScopeEventRouteIds.Failure)
-        {
-            DispatchFailure(runtimeId, payload, payloadStorage, scheduler);
-            return true;
-        }
+            case WorkerScopeEventRouteIds.CancelRequested:
+                DispatchCancelRequested(
+                    runtimeId,
+                    payload,
+                    payloadStorage,
+                    coordinator);
+                return true;
 
-        return false;
+            default:
+                return false;
+        }
     }
 
-    private static void DispatchResult(
+    private static void DispatchExecutionCompleted(
         int runtimeId,
         PayloadHandle payload,
         EventPayloadStorage payloadStorage,
+        WorkerJobCoordinator coordinator,
         PostScheduler? scheduler)
     {
-        if (scheduler == null)
-            return;
-
-        if (!payloadStorage.TryGet<WorkerEventJobResultScopeEvent>(
+        if (!payloadStorage.TryGet<WorkerExecutionCompletedScopeEvent>(
                 runtimeId,
                 payload,
-                out var resultEvent))
+                out var completion))
         {
             return;
         }
 
-        _ = resultEvent.Result.PostTo(scheduler);
+        coordinator.HandleExecutionCompleted(in completion, scheduler);
     }
 
-    private static void DispatchFailure(
+    private static void DispatchCancelRequested(
         int runtimeId,
         PayloadHandle payload,
         EventPayloadStorage payloadStorage,
-        PostScheduler? scheduler)
+        WorkerJobCoordinator coordinator)
     {
-        if (scheduler == null)
-            return;
-
-        if (!payloadStorage.TryGet<WorkerEventJobFailedScopeEvent>(
+        if (!payloadStorage.TryGet<WorkerCancelRequestedScopeEvent>(
                 runtimeId,
                 payload,
-                out var failedEvent))
+                out var cancel))
         {
             return;
         }
 
-        _ = scheduler.TryPost(new WorkerJobFailedEvent(
-            failedEvent.Handle,
-            failedEvent.Kind,
-            failedEvent.Error));
+        coordinator.HandleCancelRequested(cancel.Handle);
     }
 }

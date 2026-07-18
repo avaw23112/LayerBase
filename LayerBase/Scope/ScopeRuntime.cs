@@ -61,6 +61,10 @@ internal sealed class ScopeRuntime : IDisposable
         Transport = new ScopeTransport(
             new ScopeAddress(runtimeId, generation, Descriptor.ScopeId),
             SignalIngress);
+        WorkerJobs = new WorkerJobCoordinator(
+            this,
+            runtime.WorkerExecutor,
+            WorkerJobSchedulerOptions.Default);
         EventCenter = new EventCenter();
         LocalCalls = new ScopeLocalCallRegistry(Descriptor.ScopeId);
         CallRoutes = new ScopeCallRouteTable(Descriptor.ScopeId);
@@ -121,6 +125,8 @@ internal sealed class ScopeRuntime : IDisposable
     public ScopeTransport Transport { get; }
 
     public ScopeEndpoint Endpoint => Transport.Endpoint;
+
+    public WorkerJobCoordinator WorkerJobs { get; }
 
     public EventCenter EventCenter { get; }
 
@@ -1142,6 +1148,7 @@ internal sealed class ScopeRuntime : IDisposable
 
         _state = ScopeRuntimeState.Stopping;
         Transport.CloseBusinessAdmission();
+        WorkerJobs.BeginStopOnOwnerThread();
         RunRuntimeStop();
         _state = ScopeRuntimeState.Stopped;
     }
@@ -1203,6 +1210,7 @@ internal sealed class ScopeRuntime : IDisposable
                         _runtimeId,
                         envelope.Payload,
                         Transport.EventPayloadStorage,
+                        WorkerJobs,
                         scheduler))
                 {
                     continue;
@@ -1417,8 +1425,8 @@ internal sealed class ScopeRuntime : IDisposable
             Timer?.PendingCount ?? 0,
             DelayManager?.PendingCount ?? 0,
             SynchronizationContext?.PendingCount ?? 0,
-            workerJobsPending: 0,
-            workerJobsRunning: 0,
+            workerJobsPending: WorkerJobs.ActiveCount - WorkerJobs.RunningCount,
+            workerJobsRunning: WorkerJobs.RunningCount,
             EcsScheduler.CaptureDiagnostics(),
             tools,
             new SnapDiagnosticsSnapshot(
