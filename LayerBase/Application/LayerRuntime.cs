@@ -1033,14 +1033,22 @@ public sealed partial class LayerRuntime : IDisposable
 
                 _runtime.MainActorRuntime.PrepareRuntimeBuild();
                 _layerChain.BuildPlans(1024, true);
-                _runtime._scopeHost.StartWorkers();
-                _layerChain.RunLifecyclePhases(() =>
-                {
-                    _runtime.MainActorRuntime.CompleteRuntimeBuild();
-                    _runtime.BuildFullSnapCache();
-                    _runtime.PrewarmInternal(LayerPrewarmOptions.Default);
-                    _runtime.FreezeRuntimeRegistries();
-                });
+                var buildDeadline =
+                    ShutdownDeadline.Start(
+                        TimeSpan.FromSeconds(15));
+
+                _runtime._scopeHost.StartWorkers(
+                    in buildDeadline);
+
+                _layerChain.RunLifecyclePhases(
+                    in buildDeadline,
+                    () =>
+                    {
+                        _runtime.MainActorRuntime.CompleteRuntimeBuild();
+                        _runtime.BuildFullSnapCache();
+                        _runtime.PrewarmInternal(LayerPrewarmOptions.Default);
+                        _runtime.FreezeRuntimeRegistries();
+                    });
                 _runtime._state = RuntimeState.Running;
             }
             catch
