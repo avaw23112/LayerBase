@@ -128,13 +128,47 @@ internal sealed class RuntimeCompositionPlan
 
         ValidateLayerIndexes(layerPlans);
 
+        var scopeRegistry = new ScopeDefinitionRegistry();
+        foreach (var sd in contributions.ScopeDefinitions)
+        {
+            scopeRegistry.Add(sd.Definition, $"module:{sd.ModuleId}");
+        }
+
+        foreach (var layer in pushedLayers)
+        {
+            if (layer is IGeneratedScopeDefinitionProvider provider)
+            {
+                foreach (var definition in provider.__GetScopeDefinitions())
+                {
+                    GeneratedScopeDefinition reconciled = definition;
+                    var scopeIdField = definition.ScopeType.GetField(
+                        "ScopeId",
+                        System.Reflection.BindingFlags.Static |
+                        System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.NonPublic);
+                    if (scopeIdField != null && scopeIdField.FieldType == typeof(int))
+                    {
+                        int explicitScopeId = (int)scopeIdField.GetValue(null)!;
+                        if (explicitScopeId != definition.ScopeId)
+                        {
+                            string identity = ScopeDefinitionIds.GetIdentity(definition.ScopeType);
+                            reconciled = new GeneratedScopeDefinition(
+                                explicitScopeId,
+                                identity,
+                                definition.ScopeType,
+                                definition.Factory);
+                        }
+                    }
+
+                    scopeRegistry.Add(reconciled, $"layer:{layer.GetType().FullName}");
+                }
+            }
+        }
+
         var layerTypeIndex = BuildLayerTypeIndex(layerPlans);
         var layerContributionBuilders = new List<LayerScopeContributionBuilder>[layerPlans.Length];
-        var scopeIdsByType = new Dictionary<Type, int>();
-        scopeIdsByType[typeof(MainScope)] = ScopeDefinitionIds.Main;
-        CollectLocalScopeTypes(pushedLayers, scopeIdsByType);
 
-        var services = ResolveServices(contributions.Services, layerTypeIndex, scopeIdsByType);
+        var services = ResolveServices(contributions.Services, layerTypeIndex, scopeRegistry);
         for (int serviceIndex = 0; serviceIndex < services.Length; serviceIndex++)
         {
             var service = services[serviceIndex];
@@ -142,7 +176,7 @@ internal sealed class RuntimeCompositionPlan
                 .AddService(serviceIndex);
         }
 
-        var contexts = ResolveContexts(contributions.Contexts, services, layerTypeIndex, scopeIdsByType);
+        var contexts = ResolveContexts(contributions.Contexts, services, layerTypeIndex, scopeRegistry);
         for (int contextIndex = 0; contextIndex < contexts.Length; contextIndex++)
         {
             var context = contexts[contextIndex];
@@ -150,7 +184,7 @@ internal sealed class RuntimeCompositionPlan
                 .AddContext(contextIndex);
         }
 
-        var localCalls = ResolveLocalCalls(contributions.LocalCalls, layerTypeIndex, scopeIdsByType);
+        var localCalls = ResolveLocalCalls(contributions.LocalCalls, layerTypeIndex, scopeRegistry);
         for (int localCallIndex = 0; localCallIndex < localCalls.Length; localCallIndex++)
         {
             var localCall = localCalls[localCallIndex];
@@ -158,7 +192,7 @@ internal sealed class RuntimeCompositionPlan
                 .AddLocalCall(localCallIndex);
         }
 
-        var eventHandlers = ResolveEventHandlers(contributions.EventHandlers, layerTypeIndex, scopeIdsByType);
+        var eventHandlers = ResolveEventHandlers(contributions.EventHandlers, layerTypeIndex, scopeRegistry);
         for (int eventHandlerIndex = 0; eventHandlerIndex < eventHandlers.Length; eventHandlerIndex++)
         {
             var eventHandler = eventHandlers[eventHandlerIndex];
@@ -167,32 +201,14 @@ internal sealed class RuntimeCompositionPlan
         }
 
         var localTools = CollectLocalLayerTools(pushedLayers);
-        var tools = ResolveTools(contributions.Tools.Concat(localTools).ToArray(), layerTypeIndex, scopeIdsByType);
+        var tools = ResolveTools(contributions.Tools.Concat(localTools).ToArray(), layerTypeIndex, scopeRegistry);
 
-        var eventPlans = ResolveEventPlans(contributions.Events, layerTypeIndex, scopeIdsByType);
+        var eventPlans = ResolveEventPlans(contributions.Events, layerTypeIndex, scopeRegistry);
 
         ApplyScopeContributions(layerPlans, layerContributionBuilders);
 
-        var scopes = BuildScopeExecutionPlans(layerPlans, scopeIdsByType);
+        var scopes = BuildScopeExecutionPlans(layerPlans, scopeRegistry);
         return new RuntimeCompositionPlan(layerPlans, scopes, services, contexts, localCalls, eventHandlers, tools, eventPlans);
-    }
-
-    private static void CollectLocalScopeTypes(
-        IReadOnlyList<Layer> pushedLayers,
-        Dictionary<Type, int> scopeIdsByType)
-    {
-        foreach (var layer in pushedLayers)
-        {
-            if (layer is not IGeneratedScopeDefinitionProvider provider)
-            {
-                continue;
-            }
-
-            foreach (var definition in provider.__GetScopeDefinitions())
-            {
-                ResolveScopeId(definition.ScopeType, scopeIdsByType);
-            }
-        }
     }
 
     private static LayerToolContributionPlan[] CollectLocalLayerTools(IReadOnlyList<Layer> pushedLayers)
@@ -243,7 +259,7 @@ internal sealed class RuntimeCompositionPlan
     private static ResolvedServiceContribution[] ResolveServices(
         ServiceContributionPlan[] services,
         LayerTypeIndex layerTypeIndex,
-        Dictionary<Type, int> scopeIdsByType)
+        ScopeDefinitionRegistry scopeRegistry)
     {
         var resolved = new List<ResolvedServiceContribution>();
         foreach (var service in services)
@@ -253,7 +269,7 @@ internal sealed class RuntimeCompositionPlan
                 service.ServiceType,
                 service.OwnerLayerType,
                 layerTypeIndex);
-            int ownerScopeId = ResolveScopeId(service.OwnerScopeType, scopeIdsByType);
+            int ownerScopeId = ResolveScopeId(service.OwnerScopeType, scopeRegistry);
 
             resolved.Add(new ResolvedServiceContribution(
                 service.ModuleId,
@@ -275,7 +291,7 @@ internal sealed class RuntimeCompositionPlan
         ContextContributionPlan[] contexts,
         ResolvedServiceContribution[] services,
         LayerTypeIndex layerTypeIndex,
-        Dictionary<Type, int> scopeIdsByType)
+        ScopeDefinitionRegistry scopeRegistry)
     {
         var resolved = new List<ResolvedContextContribution>();
         foreach (var context in contexts)
@@ -285,7 +301,7 @@ internal sealed class RuntimeCompositionPlan
                 context.ContextType,
                 context.OwnerLayerType,
                 layerTypeIndex);
-            int ownerScopeId = ResolveScopeId(context.OwnerScopeType, scopeIdsByType);
+            int ownerScopeId = ResolveScopeId(context.OwnerScopeType, scopeRegistry);
             int ownerServiceIndex = Array.FindIndex(services, service =>
                 service.OwnerLayerIndex == ownerLayerIndex &&
                 service.OwnerScopeId == ownerScopeId &&
@@ -313,7 +329,7 @@ internal sealed class RuntimeCompositionPlan
     private static ResolvedLocalCallContribution[] ResolveLocalCalls(
         LocalCallContributionPlan[] localCalls,
         LayerTypeIndex layerTypeIndex,
-        Dictionary<Type, int> scopeIdsByType)
+        ScopeDefinitionRegistry scopeRegistry)
     {
         var seen = new Dictionary<LocalCallKey, (Type OwnerLayerType, Type HandlerType)>();
         var resolved = new List<ResolvedLocalCallContribution>();
@@ -324,7 +340,7 @@ internal sealed class RuntimeCompositionPlan
                 localCall.HandlerType,
                 localCall.OwnerLayerType,
                 layerTypeIndex);
-            int ownerScopeId = ResolveScopeId(localCall.OwnerScopeType, scopeIdsByType);
+            int ownerScopeId = ResolveScopeId(localCall.OwnerScopeType, scopeRegistry);
             var key = new LocalCallKey(ownerScopeId, localCall.RequestType, localCall.ResponseType);
             if (seen.TryGetValue(key, out var existing))
                 throw new ScopeLocalCallRouteConflictException(
@@ -356,7 +372,7 @@ internal sealed class RuntimeCompositionPlan
     private static ResolvedLayerToolContribution[] ResolveTools(
         LayerToolContributionPlan[] tools,
         LayerTypeIndex layerTypeIndex,
-        Dictionary<Type, int> scopeIdsByType)
+        ScopeDefinitionRegistry scopeRegistry)
     {
         var seen = new HashSet<LayerToolKey>();
         var implementationTypes = new HashSet<Type>();
@@ -368,7 +384,7 @@ internal sealed class RuntimeCompositionPlan
                 tool.ContractType,
                 tool.OwnerLayerType,
                 layerTypeIndex);
-            int ownerScopeId = ResolveScopeId(tool.OwnerScopeType, scopeIdsByType);
+            int ownerScopeId = ResolveScopeId(tool.OwnerScopeType, scopeRegistry);
             var key = new LayerToolKey(tool.ContractType, tool.LocalKey);
             if (!seen.Add(key))
                 throw new InvalidOperationException(
@@ -399,7 +415,7 @@ internal sealed class RuntimeCompositionPlan
     private static EventMetaDataBuildPlan[] ResolveEventPlans(
         EventContributionPlan[] events,
         LayerTypeIndex layerTypeIndex,
-        Dictionary<Type, int> scopeIdsByType)
+        ScopeDefinitionRegistry scopeRegistry)
     {
         var resolved = new List<EventMetaDataBuildPlan>();
         var seen = new HashSet<(int ScopeId, int EventId)>();
@@ -411,7 +427,7 @@ internal sealed class RuntimeCompositionPlan
                 ev.EventType,
                 ev.OwnerLayerType,
                 layerTypeIndex);
-            int ownerScopeId = ResolveScopeId(ev.OwnerScopeType, scopeIdsByType);
+            int ownerScopeId = ResolveScopeId(ev.OwnerScopeType, scopeRegistry);
 
             IEventMetaData metaData = ev.MetaDataFactory()
                 ?? throw new InvalidOperationException(
@@ -452,7 +468,7 @@ internal sealed class RuntimeCompositionPlan
     private static ResolvedEventHandlerContribution[] ResolveEventHandlers(
         EventHandlerContributionPlan[] eventHandlers,
         LayerTypeIndex layerTypeIndex,
-        Dictionary<Type, int> scopeIdsByType)
+        ScopeDefinitionRegistry scopeRegistry)
     {
         var resolved = new List<ResolvedEventHandlerContribution>();
         foreach (var eventHandler in eventHandlers)
@@ -462,7 +478,7 @@ internal sealed class RuntimeCompositionPlan
                 eventHandler.HandlerType,
                 eventHandler.OwnerLayerType,
                 layerTypeIndex);
-            int ownerScopeId = ResolveScopeId(eventHandler.OwnerScopeType, scopeIdsByType);
+            int ownerScopeId = ResolveScopeId(eventHandler.OwnerScopeType, scopeRegistry);
 
             resolved.Add(new ResolvedEventHandlerContribution(
                 eventHandler.ModuleId,
@@ -550,37 +566,50 @@ internal sealed class RuntimeCompositionPlan
 
     private static ScopeExecutionPlan[] BuildScopeExecutionPlans(
         LayerBuildPlan[] layerPlans,
-        Dictionary<Type, int> scopeIdsByType)
+        ScopeDefinitionRegistry registry)
     {
-        var layerIndexes = layerPlans
+        int[] layerIndexes = layerPlans
             .OrderBy(static layer => layer.LayerIndex)
             .Select(static layer => layer.LayerIndex)
             .ToArray();
-        return scopeIdsByType
-            .OrderBy(static item => item.Value)
-            .Select(item => new ScopeExecutionPlan(
-                new ScopeDescriptor(item.Value, item.Key.Name, item.Key),
-                item.Value == ScopeDefinitionIds.Main ? ScopeOptions.Main : ScopeOptions.Inline,
-                layerSlices: layerIndexes
-                    .Select(static layerIndex => new ScopeLayerSlice(layerIndex))
-                    .ToArray(),
-                lifecyclePlan: ScopeLifecyclePlan.EmptyForLayerIndexes(layerIndexes)))
+
+        return registry.OrderedDefinitions
+            .Select(definition =>
+            {
+                IScopeDefinition instance = definition.CreateDefinition();
+
+                return new ScopeExecutionPlan(
+                    new ScopeDescriptor(
+                        definition.ScopeId,
+                        definition.ScopeType.Name,
+                        definition.ScopeType),
+                    instance.Options,
+                    layerSlices: layerIndexes
+                        .Select(static index => new ScopeLayerSlice(index))
+                        .ToArray(),
+                    lifecyclePlan:
+                        ScopeLifecyclePlan.EmptyForLayerIndexes(layerIndexes));
+            })
             .ToArray();
     }
 
-    private static int ResolveScopeId(Type scopeType, Dictionary<Type, int> scopeIdsByType)
+    private static int ResolveScopeId(Type scopeType, ScopeDefinitionRegistry scopeRegistry)
     {
-        if (scopeIdsByType.TryGetValue(scopeType, out int existing))
-            return existing;
+        if (scopeRegistry.TryGet(scopeType, out GeneratedScopeDefinition existing))
+            return existing.ScopeId;
 
         int scopeId = ScopeDefinitionIds.FromType(scopeType);
         if (scopeId < 0)
             throw new InvalidOperationException($"Scope `{scopeType.FullName}` has an invalid negative ScopeId.");
 
-        if (scopeIdsByType.ContainsValue(scopeId))
-            throw new InvalidOperationException($"Scope id `{scopeId}` is already registered.");
+        string identity = ScopeDefinitionIds.GetIdentity(scopeType);
+        var auto = new GeneratedScopeDefinition(
+            scopeId,
+            identity,
+            scopeType,
+            () => (IScopeDefinition)Activator.CreateInstance(scopeType)!);
 
-        scopeIdsByType[scopeType] = scopeId;
+        scopeRegistry.Add(auto, source: $"auto:{scopeType.FullName}");
         return scopeId;
     }
 

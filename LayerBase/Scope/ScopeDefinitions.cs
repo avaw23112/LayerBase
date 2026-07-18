@@ -67,12 +67,24 @@ internal static class ScopeDefinitionIds
             $"Unable to derive a non-zero Scope ID for identity '{identity}'.");
     }
 
+    internal static string GetIdentity(Type scopeType)
+    {
+        if (scopeType == typeof(MainScope))
+            return MainIdentity;
+
+        return BuildFallbackIdentity(scopeType);
+    }
+
     private static string BuildFallbackIdentity(Type scopeType)
     {
         var identityAttr = scopeType.GetCustomAttributes(typeof(ScopeIdentityAttribute), false);
         if (identityAttr.Length > 0 && identityAttr[0] is ScopeIdentityAttribute sia)
             return "scope-key:" + sia.Value;
 
-        return $"scope:{scopeType.Assembly.GetName().Name}:{scopeType.FullName}";
+        string assemblyName = scopeType.Assembly.GetName().Name;
+        string typeName = scopeType.DeclaringType != null
+            ? $"{scopeType.DeclaringType.Name}+{scopeType.Name}"
+            : scopeType.Name;
+        return $"scope:{assemblyName}:{typeName}";
     }
 }
