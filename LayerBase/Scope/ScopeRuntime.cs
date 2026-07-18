@@ -401,6 +401,12 @@ internal sealed class ScopeRuntime : IDisposable
         if (Interlocked.Exchange(ref _hasIngress, 0) == 0)
             return;
 
+        DrainCompletionInbox();
+        DisposeAfterControlIfNeeded();
+
+        if (_state == ScopeRuntimeState.Disposed)
+            return;
+
         DrainCallInbox();
         DisposeAfterControlIfNeeded();
 
@@ -409,12 +415,17 @@ internal sealed class ScopeRuntime : IDisposable
 
         if (ShouldYieldBusinessForSafePoint())
         {
-            Volatile.Write(ref _hasIngress, 1);
+            if (Transport.CompletionInbox.Count != 0)
+                Volatile.Write(ref _hasIngress, 1);
+
             return;
         }
 
         DrainEventInbox();
         DisposeAfterControlIfNeeded();
+
+        if (Transport.CompletionInbox.Count != 0)
+            Volatile.Write(ref _hasIngress, 1);
     }
 
     public void PumpScopeResources(
@@ -684,6 +695,39 @@ internal sealed class ScopeRuntime : IDisposable
 
         _lifecycleDisposeRun = true;
         LifecyclePlan.DisposeReverse();
+    }
+
+    private void DrainCompletionInbox()
+    {
+        while (Transport.CompletionInbox.TryDequeue(
+                   out ScopeCompletionEnvelope envelope))
+        {
+            switch (envelope.Kind)
+            {
+                case ScopeCompletionKind.WorkerExecutionCompleted:
+                {
+                    var completion = envelope.WorkerCompletion;
+                    WorkerJobs.HandleExecutionCompleted(
+                        in completion,
+                        PostScheduler);
+                    break;
+                }
+
+                case ScopeCompletionKind.WorkerCancelRequested:
+                    WorkerJobs.HandleCancelRequested(
+                        envelope.WorkerHandle);
+                    break;
+
+                default:
+                    throw new InvalidOperationException(
+                        $"Unsupported scope completion kind: {envelope.Kind}.");
+            }
+
+            DisposeAfterControlIfNeeded();
+
+            if (_state == ScopeRuntimeState.Disposed)
+                return;
+        }
     }
 
     private void DrainCallInbox()
@@ -1204,17 +1248,6 @@ internal sealed class ScopeRuntime : IDisposable
                         _runtimeId,
                         envelope.Payload,
                         Transport.EventPayloadStorage))
-                {
-                    continue;
-                }
-
-                if (WorkerScopeEventDispatcher.TryDispatch(
-                        envelope.RouteId,
-                        _runtimeId,
-                        envelope.Payload,
-                        Transport.EventPayloadStorage,
-                        WorkerJobs,
-                        scheduler))
                 {
                     continue;
                 }

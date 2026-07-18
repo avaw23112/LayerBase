@@ -15,6 +15,7 @@ internal sealed class ScopeTransport : IDisposable
 
     public ScopeTransport(ScopeAddress address, Action? onIngressAccepted = null)
     {
+        CompletionInbox = new ScopeCompletionInbox(onIngressAccepted);
         EventInbox = ScopeBoundedInbox<ScopeEventEnvelope>.CreateEventInbox(
             new ScopeEventInboxOptions(capacity: 1024, reservedForInternal: 128, reservedForCritical: 16),
             onIngressAccepted);
@@ -25,6 +26,8 @@ internal sealed class ScopeTransport : IDisposable
     }
 
     public ScopeEndpoint Endpoint { get; }
+
+    internal ScopeCompletionInbox CompletionInbox { get; }
 
     internal ScopeBoundedInbox<ScopeEventEnvelope> EventInbox { get; }
 
@@ -155,6 +158,12 @@ internal sealed class ScopeTransport : IDisposable
             version: 1);
     }
 
+    internal void EnqueueCompletion(
+        in ScopeCompletionEnvelope envelope)
+    {
+        CompletionInbox.Enqueue(in envelope);
+    }
+
     internal static ScopePostResult ToPostResult(ScopeEnqueueResult result)
     {
         return result switch
@@ -188,6 +197,7 @@ internal sealed class ScopeTransport : IDisposable
         _writerGate.MarkDisposed();
         EventInbox.CloseAllAdmission();
         CallInbox.CloseAllAdmission();
+        CompletionInbox.ClearAcceptedCallback();
         _callPayloadStorage.Dispose();
         _eventPayloadStorage.Dispose();
         _writerGate.Dispose();

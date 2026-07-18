@@ -96,16 +96,7 @@ internal sealed class WorkerExecutionItem<TJob, TInput, TEvent> : IWorkerExecuti
 
         try
         {
-            ScopePostResult postResult = _origin.Transport.EnqueueEvent(
-                WorkerScopeEventRouteIds.ExecutionCompleted,
-                ScopeEventClass.Critical,
-                in completion);
-
-            if (!postResult.IsAccepted)
-            {
-                System.Diagnostics.Debug.Fail(
-                    "Worker completion was rejected. Internal completion admission must remain open until WorkerJobCoordinator reaches zero active jobs.");
-            }
+            SubmitCompletion(in completion);
         }
         finally
         {
@@ -119,15 +110,22 @@ internal sealed class WorkerExecutionItem<TJob, TInput, TEvent> : IWorkerExecuti
 
         try
         {
-            _ = _origin.Transport.EnqueueEvent(
-                WorkerScopeEventRouteIds.ExecutionCompleted,
-                ScopeEventClass.Critical,
-                in completion);
+            SubmitCompletion(in completion);
         }
         finally
         {
             Return();
         }
+    }
+
+    private void SubmitCompletion(
+        in WorkerExecutionCompletedScopeEvent completion)
+    {
+        ScopeCompletionEnvelope envelope =
+            ScopeCompletionEnvelope.WorkerExecutionCompleted(
+                in completion);
+
+        _origin.Transport.EnqueueCompletion(in envelope);
     }
 
     internal void ReturnWithoutExecution()
