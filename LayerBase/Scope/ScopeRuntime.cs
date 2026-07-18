@@ -745,6 +745,15 @@ internal sealed class ScopeRuntime : IDisposable
             case ScopeLifecycleRouteIds.CaptureDiagnostics:
                 DispatchCaptureDiagnosticsControl(envelope);
                 return true;
+            case ScopeLifecycleRouteIds.Initialize:
+                DispatchInitializeControl(envelope);
+                return true;
+            case ScopeLifecycleRouteIds.PostBuild:
+                DispatchPostBuildControl(envelope);
+                return true;
+            case ScopeLifecycleRouteIds.RuntimeStart:
+                DispatchRuntimeStartControl(envelope);
+                return true;
             default:
                 envelope.Completion?.TrySetException(
                     new InvalidOperationException($"Unknown scope lifecycle control route {envelope.RouteId}."));
@@ -1015,6 +1024,96 @@ internal sealed class ScopeRuntime : IDisposable
         {
             _safePointState = ScopeSafePointState.Faulted;
             throw;
+        }
+    }
+
+    private void DispatchInitializeControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeInitializeCall, ScopeInitializeResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope initialize payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            RequireOwnerThread();
+            LifecyclePlan.RunInitialize();
+            queuedCall.Completion.TrySetResult(new ScopeInitializeResponse(ScopeControlResult.Succeeded));
+        }
+        catch (Exception ex)
+        {
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchPostBuildControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopePostBuildCall, ScopePostBuildResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope post build payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            RequireOwnerThread();
+            LifecyclePlan.RunPostBuild();
+            queuedCall.Completion.TrySetResult(new ScopePostBuildResponse(ScopeControlResult.Succeeded));
+        }
+        catch (Exception ex)
+        {
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchRuntimeStartControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeRuntimeStartCall, ScopeRuntimeStartResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope runtime start payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            RequireOwnerThread();
+            LifecyclePlan.RunRuntimeStart();
+            queuedCall.Completion.TrySetResult(new ScopeRuntimeStartResponse(ScopeControlResult.Succeeded));
+        }
+        catch (Exception ex)
+        {
+            queuedCall.Completion.TrySetException(ex);
         }
     }
 

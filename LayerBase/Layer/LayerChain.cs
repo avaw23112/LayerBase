@@ -85,10 +85,65 @@ internal sealed class LayerChain
     internal void DisposeLayers()
     {
         var scopes = _owner.ScopeHost.Scopes;
+        RunScopeLifecycleOnOwnerThread(scopes, ScopeLifecyclePhase.RuntimeStop);
+        RunScopeLifecycleOnOwnerThread(scopes, ScopeLifecyclePhase.Dispose);
+    }
+
+    private static void RunScopeLifecycleOnOwnerThread(IReadOnlyList<ScopeRuntime> scopes, ScopeLifecyclePhase phase)
+    {
         for (int i = scopes.Count - 1; i >= 0; i--)
-            scopes[i].RunRuntimeStop();
-        for (int i = scopes.Count - 1; i >= 0; i--)
-            scopes[i].RunLifecycleDispose();
+        {
+            var scope = scopes[i];
+            if (scope.Options.Threading == ScopeThreadingMode.Worker)
+            {
+                try
+                {
+                    switch (phase)
+                    {
+                        case ScopeLifecyclePhase.Initialize:
+                            scope.RequestInitializeAsync().GetAwaiter().GetResult();
+                            break;
+                        case ScopeLifecyclePhase.PostBuild:
+                            scope.RequestPostBuildAsync().GetAwaiter().GetResult();
+                            break;
+                        case ScopeLifecyclePhase.RuntimeStart:
+                            scope.RequestRuntimeStartAsync().GetAwaiter().GetResult();
+                            break;
+                        case ScopeLifecyclePhase.RuntimeStop:
+                            scope.RequestStopAsync().GetAwaiter().GetResult();
+                            break;
+                        case ScopeLifecyclePhase.Dispose:
+                            scope.RequestDisposeAsync().GetAwaiter().GetResult();
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    scope.ReportFault(ex, ScopeFaultPhase.ServiceUpdate);
+                }
+            }
+            else
+            {
+                switch (phase)
+                {
+                    case ScopeLifecyclePhase.Initialize:
+                        scope.LifecyclePlan.RunInitialize();
+                        break;
+                    case ScopeLifecyclePhase.PostBuild:
+                        scope.LifecyclePlan.RunPostBuild();
+                        break;
+                    case ScopeLifecyclePhase.RuntimeStart:
+                        scope.LifecyclePlan.RunRuntimeStart();
+                        break;
+                    case ScopeLifecyclePhase.RuntimeStop:
+                        scope.RunRuntimeStop();
+                        break;
+                    case ScopeLifecyclePhase.Dispose:
+                        scope.RunLifecycleDispose();
+                        break;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -108,9 +163,9 @@ internal sealed class LayerChain
     }
 
     /// <summary>
-    /// 完整构建阶段：绑定共享字段、执行生命周期构建、PostBuild 和 RuntimeStart。
+    /// 完整构建阶段：绑定共享字段、执行生命周期构建、构建 lifecycle plan。
     /// </summary>
-    internal void Build(int eventStateSlabSize, bool releaseMode, Action? afterPostBuild = null)
+    internal void BuildPlans(int eventStateSlabSize, bool releaseMode)
     {
         var builtLayers = new List<Layer>();
         foreach (var node in _responsibilityChain)
@@ -138,14 +193,17 @@ internal sealed class LayerChain
         }
 
         EventGraphValidator.Validate(builtLayers, _owner);
+    }
 
-        foreach (var scope in _owner.ScopeHost.Scopes)
-            scope.LifecyclePlan.RunInitialize();
-        foreach (var scope in _owner.ScopeHost.Scopes)
-            scope.LifecyclePlan.RunPostBuild();
+    /// <summary>
+    /// 在 Worker 启动后执行生命周期阶段。
+    /// </summary>
+    internal void RunLifecyclePhases(Action? afterPostBuild = null)
+    {
+        RunScopeLifecycleOnOwnerThread(_owner.ScopeHost.Scopes, ScopeLifecyclePhase.Initialize);
+        RunScopeLifecycleOnOwnerThread(_owner.ScopeHost.Scopes, ScopeLifecyclePhase.PostBuild);
         afterPostBuild?.Invoke();
-        foreach (var scope in _owner.ScopeHost.Scopes)
-            scope.LifecyclePlan.RunRuntimeStart();
+        RunScopeLifecycleOnOwnerThread(_owner.ScopeHost.Scopes, ScopeLifecyclePhase.RuntimeStart);
     }
 
     /// <summary>

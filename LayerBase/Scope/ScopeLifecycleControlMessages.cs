@@ -3,6 +3,15 @@ using LayerBase.Snap;
 
 namespace LayerBase.Scope;
 
+internal enum ScopeLifecyclePhase
+{
+    Initialize,
+    PostBuild,
+    RuntimeStart,
+    RuntimeStop,
+    Dispose
+}
+
 internal enum ScopeControlResult : byte
 {
     Succeeded = 0,
@@ -110,6 +119,48 @@ internal readonly struct ScopeCaptureDiagnosticsCall
 {
 }
 
+internal readonly struct ScopeInitializeCall
+{
+}
+
+internal readonly struct ScopeInitializeResponse
+{
+    public ScopeInitializeResponse(ScopeControlResult result)
+    {
+        Result = result;
+    }
+
+    public ScopeControlResult Result { get; }
+}
+
+internal readonly struct ScopePostBuildCall
+{
+}
+
+internal readonly struct ScopePostBuildResponse
+{
+    public ScopePostBuildResponse(ScopeControlResult result)
+    {
+        Result = result;
+    }
+
+    public ScopeControlResult Result { get; }
+}
+
+internal readonly struct ScopeRuntimeStartCall
+{
+}
+
+internal readonly struct ScopeRuntimeStartResponse
+{
+    public ScopeRuntimeStartResponse(ScopeControlResult result)
+    {
+        Result = result;
+    }
+
+    public ScopeControlResult Result { get; }
+}
+
 internal readonly struct ScopeCaptureDiagnosticsResponse
 {
     public ScopeCaptureDiagnosticsResponse(
@@ -140,6 +191,12 @@ internal static class ScopeLifecycleRouteIds
     public const int ExitSafePoint = -106;
 
     public const int CaptureDiagnostics = -107;
+
+    public const int Initialize = -108;
+
+    public const int PostBuild = -109;
+
+    public const int RuntimeStart = -110;
 
     public static int Resolve<TRequest, TResponse>()
         where TRequest : struct
@@ -185,6 +242,24 @@ internal static class ScopeLifecycleRouteIds
             typeof(TResponse) == typeof(ScopeCaptureDiagnosticsResponse))
         {
             return CaptureDiagnostics;
+        }
+
+        if (typeof(TRequest) == typeof(ScopeInitializeCall) &&
+            typeof(TResponse) == typeof(ScopeInitializeResponse))
+        {
+            return Initialize;
+        }
+
+        if (typeof(TRequest) == typeof(ScopePostBuildCall) &&
+            typeof(TResponse) == typeof(ScopePostBuildResponse))
+        {
+            return PostBuild;
+        }
+
+        if (typeof(TRequest) == typeof(ScopeRuntimeStartCall) &&
+            typeof(TResponse) == typeof(ScopeRuntimeStartResponse))
+        {
+            return RuntimeStart;
         }
 
         throw new InvalidOperationException(
@@ -239,6 +314,21 @@ internal static class ScopeLifecycleControlExtensions
         return scope.EnqueueControlCall<ScopeExitSafePointCall, ScopeExitSafePointResponse>(
             new ScopeExitSafePointCall(),
             cancellationToken);
+    }
+
+    public static LBTask<ScopeInitializeResponse> RequestInitializeAsync(this ScopeRuntime scope)
+    {
+        return scope.EnqueueControlCall<ScopeInitializeCall, ScopeInitializeResponse>(new ScopeInitializeCall());
+    }
+
+    public static LBTask<ScopePostBuildResponse> RequestPostBuildAsync(this ScopeRuntime scope)
+    {
+        return scope.EnqueueControlCall<ScopePostBuildCall, ScopePostBuildResponse>(new ScopePostBuildCall());
+    }
+
+    public static LBTask<ScopeRuntimeStartResponse> RequestRuntimeStartAsync(this ScopeRuntime scope)
+    {
+        return scope.EnqueueControlCall<ScopeRuntimeStartCall, ScopeRuntimeStartResponse>(new ScopeRuntimeStartCall());
     }
 
     public static LBTask<ScopeCaptureDiagnosticsResponse> RequestCaptureDiagnosticsAsync(

@@ -990,7 +990,9 @@ public sealed partial class LayerRuntime : IDisposable
                 _runtime._tools = new LayerToolRegistry(_runtime, _runtime.CompositionPlan.Tools);
 
                 _runtime.MainActorRuntime.PrepareRuntimeBuild();
-                _layerChain.Build(1024, true, () =>
+                _layerChain.BuildPlans(1024, true);
+                _runtime._scopeHost.StartWorkers();
+                _layerChain.RunLifecyclePhases(() =>
                 {
                     _runtime.MainActorRuntime.CompleteRuntimeBuild();
                     _runtime.BuildFullSnapCache();
@@ -998,7 +1000,6 @@ public sealed partial class LayerRuntime : IDisposable
                     _runtime.FreezeRuntimeRegistries();
                 });
                 _runtime._state = RuntimeState.Running;
-                _runtime._scopeHost.StartWorkers();
             }
             catch
             {
