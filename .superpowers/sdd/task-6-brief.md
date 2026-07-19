@@ -1,66 +1,103 @@
-## Task 6：把 Timer Policy 编译到 Build 阶段
+# Task 6：将 Scope Fault 移入可靠 Completion 通道
 
-当前 Schedule 在 Payload 已 Store 后才验证 ExpiredPostPolicy，并在热路径构造事件类型字符串。
+当前�?Main Scope �?Fault 作为 Critical Event 投递到有界 EventInbox，并忽略失败结果�?现有测试也仍�?EventInbox 中出�?Fault Event 为验收�?
+## 文件
 
-### Files
+* 修改：`LayerBase/Scope/ScopeCompletionInbox.cs`
+* 修改：`LayerBase/Scope/ScopeRuntime.cs`
+* 修改：`LayerBase.Test/ScopeFaultPropagationTests.cs`
+* 修改：`LayerBase.Test/WorkerCompletionInboxTests.cs`
 
-* Create: `LayerBase/Event/TimeScheduler/TimerPostTypePlan.cs`
-* Modify: `LayerBase/Event/TimeScheduler/PostTimerScheduler.cs`
-* Modify: `LayerBase/Application/LayerRuntime.cs`
-* Modify: `LayerBase/Scope/ScopeRuntime.cs`
-* Create: `LayerBase.Test/SchedulePostAllocationTests.cs` (or modify existing)
-
-### Required design
-
-1. **Create `TimerPostTypePlan` struct** - precompiled plan for timer->post routing:
+## Envelope
 
 ```csharp
-internal readonly struct TimerPostTypePlan
+internal enum ScopeCompletionKind : byte
 {
-    public TimerPostTypePlan(
-        int eventTypeId,
-        bool hasExpiredOverride,
-        PostTypePlan expiredPlan,
-        TimerRepeatMode? repeatMode,
-        TimerCatchUpPolicy? catchUpPolicy)
-    {
-        EventTypeId = eventTypeId;
-        HasExpiredOverride = hasExpiredOverride;
-        ExpiredPlan = expiredPlan;
-        RepeatMode = repeatMode;
-        CatchUpPolicy = catchUpPolicy;
-    }
-
-    public int EventTypeId { get; }
-    public bool HasExpiredOverride { get; }
-    public PostTypePlan ExpiredPlan { get; }
-    public TimerRepeatMode? RepeatMode { get; }
-    public TimerCatchUpPolicy? CatchUpPolicy { get; }
+    WorkerExecutionCompleted = 0,
+    WorkerCancelRequested = 1,
+    WorkerExecutionStarted = 2,
+    ScopeFault = 3
 }
 ```
 
-2. **Modify `PostTimerScheduler`**:
-   - Add field `private TimerPostTypePlan[] _timerPlans = Array.Empty<TimerPostTypePlan>();`
-   - Add method to install plans at build time
-   - In `Schedule` hot path, use `ref readonly TimerPostTypePlan plan = ref GetPlan(eventId);` instead of querying PolicyTable
-   - Remove hot-path validation of ExpiredPostPolicy
-
-3. **Build phase integration**:
-   - In `ScopeRuntime`, compile timer policies into `TimerPostTypePlan[]` during build
-   - Install plans on the PostTimerScheduler
-   - Verify `ExpiredPostPolicy` validity during build (fail fast)
-
-4. **SchedulePostAllocationTests**: Add zero-alloc assertion after prewarm.
-
-### Verification
-
-```powershell
-dotnet test LayerBase.Test/LayerBase.Test.csproj -c Debug --filter "FullyQualifiedName~SchedulePost"
+增加�?
+```csharp
+public ScopeFaultRecord FaultRecord { get; }
 ```
 
-### Commit
+以及工厂�?
+```csharp
+public static ScopeCompletionEnvelope ScopeFault(
+    in ScopeFaultRecord record)
+{
+    var emptyCompletion =
+        default(WorkerExecutionCompletedScopeEvent);
 
-```powershell
-git add LayerBase/Event/TimeScheduler/TimerPostTypePlan.cs LayerBase/Event/TimeScheduler/PostTimerScheduler.cs LayerBase/Application/LayerRuntime.cs LayerBase/Scope/ScopeRuntime.cs
-git commit -m "perf(timer): compile timer post policies at build"
+    return new ScopeCompletionEnvelope(
+        ScopeCompletionKind.ScopeFault,
+        in emptyCompletion,
+        WorkerHandle.Invalid,
+        in record);
+}
 ```
+
+## Fault 投�?
+�?Main Scope�?
+```csharp
+ScopeCompletionEnvelope envelope =
+    ScopeCompletionEnvelope.ScopeFault(in record);
+
+mainEndpoint.Transport.EnqueueCompletion(in envelope);
+```
+
+Main Scope Drain�?
+```csharp
+case ScopeCompletionKind.ScopeFault:
+    _runtime.ReportScopeFault(envelope.FaultRecord);
+    break;
+```
+
+Source Scope 仍然在本地执�?`ApplyFaultPolicy()`，Main Scope 只负责统一报告，不重复执行策略�?
+## 测试修改
+
+原测试：
+
+```csharp
+Assert.That(
+    host.MainScope.Transport.EventInbox.TryDequeue(out var envelope),
+    Is.True);
+```
+
+改为检查：
+
+```csharp
+Assert.That(
+    host.MainScope.Transport.CompletionInbox.Count,
+    Is.EqualTo(1));
+```
+
+再调用：
+
+```csharp
+host.MainScope.PumpIngress();
+```
+
+确认 `runtime.Faulted` 被调用�?
+新增关键测试�?
+```text
+填满 Main EventInbox
+�?Worker/Inline Scope 报错
+�?Fault 仍进�?CompletionInbox
+�?Main Pump �?Faulted 回调被调�?```
+
+提交�?
+```powershell
+git add LayerBase/Scope `
+        LayerBase.Test/ScopeFaultPropagationTests.cs `
+        LayerBase.Test/WorkerCompletionInboxTests.cs
+
+git commit -m "fix(scope): route fault records through reliable completion inbox"
+```
+
+---
+

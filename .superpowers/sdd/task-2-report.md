@@ -44,6 +44,26 @@ Fixed `ScopeRuntimeHost` and `LayerRuntime` shutdown handling to:
 - Test: fault during shutdown is NOT replaced by ObjectDisposedException
 - Test: dispose control exception is observed and reported, not silently lost
 
+## Post-Review Fixes (Round 3)
+
+### Critical Issue 1: `_shutdownStarted` was dead code (assigned but never read)
+
+**Fix:** Restructured two-phase state management in `Dispose()`:
+- `Interlocked.Exchange(ref _shutdownStarted, 1)` is now the re-entrance guard (set first)
+- `Volatile.Write(ref _disposed, 1)` is set last in the `finally` block
+- `ThrowIfDisposed()` only checks `_disposed` (after complete teardown)
+- Added `Volatile.Read(ref _shutdownStarted)` guard in `StartWorkers()` to reject new host-level business during shutdown
+
+### Critical Issue 2: Assignment order was inverted
+
+Previously `_disposed` was set BEFORE `_shutdownStarted` via `Interlocked.Exchange`, causing `ThrowIfDisposed()` to throw immediately at the start of `Dispose()`. Now `_shutdownStarted` is the entrance guard, and `_disposed` is the final tombstone.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `LayerBase/Scope/ScopeRuntimeHost.cs` | `Dispose()` now uses `_shutdownStarted` as re-entrance guard; `_disposed` set last via `Volatile.Write`; `StartWorkers()` checks `_shutdownStarted` instead of `ThrowIfDisposed()` |
+
 ## Verification
 
 ```powershell

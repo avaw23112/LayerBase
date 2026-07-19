@@ -727,6 +727,10 @@ internal sealed class ScopeRuntime : IDisposable
                         envelope.WorkerHandle);
                     break;
 
+                case ScopeCompletionKind.ScopeFault:
+                    _runtime.ReportScopeFault(envelope.FaultRecord);
+                    break;
+
                 default:
                     throw new InvalidOperationException(
                         $"Unsupported scope completion kind: {envelope.Kind}.");
@@ -1331,7 +1335,11 @@ internal sealed class ScopeRuntime : IDisposable
         }
 
         if (TryGetScopeEndpoint(ScopeDefinitionIds.Main, out var mainEndpoint))
-            _ = EnqueueScopeFaultEvent(mainEndpoint, record);
+        {
+            ScopeCompletionEnvelope envelope =
+                ScopeCompletionEnvelope.ScopeFault(in record);
+            mainEndpoint.Transport.EnqueueCompletion(in envelope);
+        }
 
         RequireHost().ApplyFaultPolicy(record);
     }
@@ -1350,28 +1358,6 @@ internal sealed class ScopeRuntime : IDisposable
         Transport.CloseBusinessAdmission();
 
         _runtime.ReportScopeFault(record);
-    }
-
-    private ScopePostResult EnqueueScopeFaultEvent(ScopeEndpoint targetEndpoint, in ScopeFaultRecord record)
-    {
-        if (_state == ScopeRuntimeState.Disposed)
-            return ScopePostResult.RuntimeDisposed;
-
-        var faultEvent = new ScopeFaultEvent(record);
-        ScopeTransport targetTransport = targetEndpoint.Transport;
-        var payload = targetTransport.EventPayloadStorage.Store(_runtimeId, in faultEvent);
-        var envelope = new ScopeEventEnvelope(
-            new ScopeAddress(record.RuntimeId, record.RuntimeGeneration, record.SourceScopeId),
-            ScopeFaultRouteIds.FaultEvent,
-            ScopeEventClass.Critical,
-            payload);
-
-        var result = targetTransport.EventInbox.TryEnqueue(envelope, envelope.Class.ToAdmissionClass());
-        if (result == ScopeEnqueueResult.Accepted)
-            return ScopePostResult.Accepted;
-
-        targetTransport.EventPayloadStorage.Release(payload);
-        return ScopeTransport.ToPostResult(result);
     }
 
     private void ReportEventExpectationFault(

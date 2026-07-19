@@ -10,7 +10,7 @@ namespace EventsTest;
 public sealed class ScopeFaultPropagationTests
 {
     [Test]
-    public void Update_exception_emits_scope_fault_event_to_main_scope_inbox()
+    public void Update_exception_delivers_fault_through_completion_inbox_to_main_scope()
     {
         using var runtime = new LayerRuntime(9201);
         using var host = ScopeRuntimeHost.Create(
@@ -23,13 +23,19 @@ public sealed class ScopeFaultPropagationTests
             runtimeId: 9201,
             generation: 1);
 
+        ScopeFaultInfo? fault = null;
+        runtime.Faulted += info => { fault = info; };
+
         ScopeRuntime customScope = host.Scopes[1];
 
         Assert.DoesNotThrow(() => customScope.PumpUpdate(0.016f));
-        Assert.That(host.MainScope.Transport.EventInbox.TryDequeue(out var envelope), Is.True);
-        Assert.That(envelope.RouteId, Is.EqualTo(ScopeFaultRouteIds.FaultEvent));
-        Assert.That(envelope.Class, Is.EqualTo(ScopeEventClass.Critical));
-        Assert.That(envelope.Origin.ScopeId, Is.EqualTo(1));
+        Assert.That(host.MainScope.Transport.CompletionInbox.Count, Is.EqualTo(1));
+
+        host.MainScope.PumpIngress();
+
+        Assert.That(fault, Is.Not.Null);
+        Assert.That(fault!.Value.Record.SourceScopeId, Is.EqualTo(1));
+        Assert.That(fault.Value.Record.Phase, Is.EqualTo(ScopeFaultPhase.ServiceUpdate));
     }
 
     [Test]
@@ -84,6 +90,51 @@ public sealed class ScopeFaultPropagationTests
 
         Assert.DoesNotThrow(() => host.MainScope.PumpIngress());
         Assert.That(host.MainScope.Transport.EventInbox.TryDequeue(out _), Is.False);
+    }
+
+    [Test]
+    public void Non_main_scope_fault_delivered_via_completion_inbox_when_main_event_inbox_full()
+    {
+        using var runtime = new LayerRuntime(9208);
+        using var host = ScopeRuntimeHost.Create(
+            runtime,
+            new[]
+            {
+                ScopeExecutionPlan.CreateMain(),
+                CreateThrowingUpdateScopePlan(scopeId: 1, ScopeOptions.Inline)
+            },
+            runtimeId: 9208,
+            generation: 1);
+
+        ScopeFaultInfo? fault = null;
+        runtime.Faulted += info => { fault = info; };
+
+        ScopeRuntime customScope = host.Scopes[1];
+        ScopeRuntime mainScope = host.MainScope;
+
+        for (int i = 0; i < 1024; i++)
+        {
+            ScopePostResult result = mainScope.Transport.EnqueueEvent(
+                routeId: 9999,
+                ScopeEventClass.Critical,
+                new FillEvent(i));
+            Assert.That(result, Is.EqualTo(ScopePostResult.Accepted));
+        }
+
+        ScopePostResult rejected = mainScope.Transport.EnqueueEvent(
+            routeId: 9999,
+            ScopeEventClass.Critical,
+            new FillEvent(9999));
+        Assert.That(rejected, Is.EqualTo(ScopePostResult.QueueFull));
+
+        customScope.PumpUpdate(0.016f);
+
+        Assert.That(mainScope.Transport.CompletionInbox.Count, Is.EqualTo(1));
+
+        mainScope.PumpIngress();
+
+        Assert.That(fault, Is.Not.Null);
+        Assert.That(fault!.Value.Record.SourceScopeId, Is.EqualTo(1));
     }
 
     [Test]
@@ -262,6 +313,12 @@ public sealed class ScopeFaultPropagationTests
 
     private readonly struct FaultCallResponse
     {
+    }
+
+    private readonly struct FillEvent
+    {
+        public FillEvent(int value) { Value = value; }
+        public int Value { get; }
     }
 
     private sealed class FaultCallHandler

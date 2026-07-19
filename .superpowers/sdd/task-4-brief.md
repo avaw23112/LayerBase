@@ -1,131 +1,84 @@
-## Task 4：Timer 输入验证、Catch-up 上限与容量溢出
+# Task 4：修�?Inline Scope 公平轮转和预算统�?
+当前公平游标存放在每帧重新创建的 `RuntimeFrameBudget.StartingScopeIndex` 中，因此下一帧重新从 0 开始�?
+同时 Inline Scope 调用 `PostScheduler.Pump(ref budget)` 后没有将处理数量计入 `UsedWorkItems`�?�?Scope 则会显式消费数量�?
+## 文件
 
-当前 Tick 会持续消费全部 accumulator，配置和输入没有完整有限值边界。
+* 修改：`LayerBase/Scope/ScopeRuntimeHost.cs`
+* 修改：`LayerBase/Scope/ScopeRuntime.cs`
+* 修改：`LayerBase.Test/RuntimeScopeBudgetTests.cs`
+* 新增：`LayerBase.Test/InlineScopeFairnessTests.cs`
 
-### Files
+## 公平轮转实现
 
-* Modify: `LayerBase/Event/TimeScheduler/TimeSchedulerOptions.cs`
-* Modify: `LayerBase/Event/TimeScheduler/TimeScheduler.cs`
-* Modify: `LayerBase/DataStruct/BitHelper.cs`
-* Create: `LayerBase.Test/TimeSchedulerBoundaryTests.cs`
-
-### Required behavior
-
-构造阶段拒绝：
-
-```
-TickDurationSeconds <= 0
-非有限 TickDurationSeconds
-InitialTimerCapacity <= 0
-MaxPromotePerTick <= 0
-MaxExpiredPerTick <= 0
-容量 > 1 << 30
+Host 新增�?
+```csharp
+private int _nextInlineScopeIndex;
 ```
 
-Tick 阶段拒绝：
-
-```
-deltaTime < 0
-NaN
-PositiveInfinity
-NegativeInfinity
+替换�?
+```csharp
+int startIndex =
+    budget.StartingScopeIndex % _inlineScopes.Length;
 ```
 
-在 `TimeSchedulerOptions` 尾部增加：
+为：
 
 ```csharp
-public readonly int MaxCatchUpTicksPerPump = 8;
+int startIndex =
+    _nextInlineScopeIndex % _inlineScopes.Length;
 ```
 
-`TickCatchUpSlow` 最多执行该次数，剩余 accumulator 保留到下一 Pump。
-
-### Safe NextPowerOfTwo
+结束后：
 
 ```csharp
-public static int NextPowerOfTwo(int value)
-{
-    if (value <= 1)
-        return 1;
-
-    if (value > 1 << 30)
-        throw new ArgumentOutOfRangeException(nameof(value));
-
-    return (int)BitOperations.RoundUpToPowerOf2((uint)value);
-}
+_nextInlineScopeIndex =
+    (startIndex + 1) % _inlineScopes.Length;
 ```
 
-### Changes needed
+保留 `RuntimeFrameBudget.StartingScopeIndex` 字段，避免公开结构体破坏性变更，但不再将它作�?Host 持久状态�?
+## 预算消费实现
 
-1. **TimeSchedulerOptions**: Add validation in constructor. Add `MaxCatchUpTicksPerPump` field. Update `Default`.
-2. **TimeScheduler**: In `Tick()`, validate deltaTime. In `TickCatchUpSlow()`, add max iteration cap using `MaxCatchUpTicksPerPump`. Use `_options.MaxCatchUpTicksPerPump`.
-3. **BitHelper.NextPowerOfTwo**: Add overflow guard.
-4. **Tests**: Create boundary tests for all validation cases.
+`ScopeRuntime.PumpScopeResourcesCore()`�?
+```csharp
+PostPumpStats postStats =
+    PostScheduler?.Pump(ref budget)
+    ?? new PostPumpStats(0, 0, 0, 0);
 
-### Tests
+budget.Consume(postStats.ProcessedCount);
+```
+
+## 公平测试
+
+测试逻辑必须是：
+
+```text
+Scope A �?B 各有一个事�?第一帧预�?1：A 被处理，B 保留
+再次�?A 投递一个事�?第二帧预�?1�?    正确实现必须先处�?B
+    若仍�?A 开始，B 会继续饥�?```
+
+最终断言�?
+```csharp
+Assert.That(scopeB.PostScheduler!.HasPendingWork, Is.False);
+Assert.That(scopeA.PostScheduler!.HasPendingWork, Is.True);
+```
+
+## 预算测试
+
+断言 Inline Scope 处理三个 Post 后：
 
 ```csharp
-[TestFixture]
-[Category("ProductionHardening")]
-public sealed class TimeSchedulerBoundaryTests
-{
-    [Test]
-    public void Invalid_timer_options_are_rejected()
-    {
-        Assert.That(() => new TimeSchedulerOptions(0, 512, 256, 0, 1024, 64, TimerRepeatMode.Once, TimerCatchUpPolicy.SkipMissed),
-            Throws.ArgumentException);
-        Assert.That(() => new TimeSchedulerOptions(float.NaN, 512, 256, 0, 1024, 64, TimerRepeatMode.Once, TimerCatchUpPolicy.SkipMissed),
-            Throws.ArgumentException);
-        Assert.That(() => new TimeSchedulerOptions(1/60f, 512, 0, 0, 1024, 64, TimerRepeatMode.Once, TimerCatchUpPolicy.SkipMissed),
-            Throws.ArgumentException);
-        Assert.That(() => new TimeSchedulerOptions(1/60f, 512, 256, 0, 0, 64, TimerRepeatMode.Once, TimerCatchUpPolicy.SkipMissed),
-            Throws.ArgumentException);
-        Assert.That(() => new TimeSchedulerOptions(1/60f, 512, 256, 0, 1024, 0, TimerRepeatMode.Once, TimerCatchUpPolicy.SkipMissed),
-            Throws.ArgumentException);
-    }
-
-    [Test]
-    public void Next_power_of_two_rejects_overflow()
-    {
-        Assert.That(() => BitHelper.NextPowerOfTwo(1 << 30 + 1), Throws.TypeOf<ArgumentOutOfRangeException>());
-        Assert.That(BitHelper.NextPowerOfTwo(3), Is.EqualTo(4));
-        Assert.That(BitHelper.NextPowerOfTwo(1), Is.EqualTo(1));
-        Assert.That(BitHelper.NextPowerOfTwo(0), Is.EqualTo(1));
-    }
-
-    [Test]
-    public void Non_finite_delta_time_is_rejected()
-    {
-        using var scheduler = new TimeScheduler<int>(TimeSchedulerOptions.Default);
-        Assert.That(() => scheduler.Tick(float.NaN, null), Throws.ArgumentException);
-        Assert.That(() => scheduler.Tick(float.NegativeInfinity, null), Throws.ArgumentException);
-        Assert.That(() => scheduler.Tick(float.PositiveInfinity, null), Throws.ArgumentException);
-        Assert.That(() => scheduler.Tick(-1f, null), Throws.ArgumentException);
-    }
-
-    [Test]
-    public void Catch_up_is_limited_per_pump()
-    {
-        var options = new TimeSchedulerOptions(
-            1/60f, 512, 256, 0, 1024, 64,
-            TimerRepeatMode.Once, TimerCatchUpPolicy.SkipMissed);
-        using var scheduler = new TimeScheduler<int>(options);
-        // Advance 100 ticks worth of time in one call - catch-up should be capped
-        scheduler.Tick(100f / 60f, null);
-        // After one pump, accumulator should still have remaining time
-        Assert.That(scheduler.PendingCount, Is.LessThan(100)); // Not all ticks consumed
-    }
-}
+Assert.That(budget.UsedWorkItems, Is.EqualTo(3));
+Assert.That(budget.RemainingPostCount, Is.EqualTo(0));
 ```
 
-### Step 2: Confirm test failure
-
+提交�?
 ```powershell
-dotnet test LayerBase.Test/LayerBase.Test.csproj -c Debug --filter "FullyQualifiedName~TimeSchedulerBoundaryTests"
+git add LayerBase/Scope `
+        LayerBase.Test/RuntimeScopeBudgetTests.cs `
+        LayerBase.Test/InlineScopeFairnessTests.cs
+
+git commit -m "fix(scope): persist inline fairness and consume shared work budget"
 ```
 
-### Step 3: Commit
+---
 
-```powershell
-git add LayerBase/Event/TimeScheduler/TimeSchedulerOptions.cs LayerBase/Event/TimeScheduler/TimeScheduler.cs LayerBase/DataStruct/BitHelper.cs LayerBase.Test/TimeSchedulerBoundaryTests.cs
-git commit -m "fix(timer): validate inputs and cap catch-up"
-```
