@@ -1,3 +1,4 @@
+using System.Reflection;
 using LayerBase;
 using LayerBase.DI;
 using LayerBase.DI.Options;
@@ -148,6 +149,108 @@ public sealed class WorkerShutdownTimeoutTests
     private sealed class StuckWorkerScope : IScopeDefinition
     {
         public const int ScopeId = 888;
+        public ScopeOptions Options => ScopeOptions.Worker(tickRateHz: 10);
+    }
+
+    [Test]
+    public void Delayed_thread_exit_releases_resources_after_timeout()
+    {
+        var blockEvent = new ManualResetEventSlim(false);
+        var builder = LayerHub.CreateLayers()
+            .Push(new BlockableWorkerLayer(blockEvent));
+
+        Assert.Throws<TimeoutException>(() => builder.Build());
+
+        ScopeWorker worker = GetSingleWorker(builder);
+
+        Assert.That(worker.ResourcesReleased, Is.False,
+            "Resources should NOT be released while worker thread is still alive.");
+
+        blockEvent.Set();
+
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!worker.ResourcesReleased && DateTime.UtcNow < deadline)
+            Thread.Sleep(50);
+
+        Assert.That(worker.ResourcesReleased, Is.True,
+            "Resources must be released after the worker thread exits.");
+    }
+
+    private static ScopeWorker GetSingleWorker(LayerRuntime.LayersBuilder builder)
+    {
+        var runtimeField = typeof(LayerRuntime.LayersBuilder)
+            .GetField("_runtime", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new InvalidOperationException("Cannot access _runtime field on LayersBuilder");
+
+        var runtime = runtimeField.GetValue(builder)
+            ?? throw new InvalidOperationException("_runtime is null");
+
+        var scopeHostField = typeof(LayerRuntime)
+            .GetField("_scopeHost", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new InvalidOperationException("Cannot access _scopeHost field on LayerRuntime");
+
+        var scopeHost = scopeHostField.GetValue(runtime)
+            ?? throw new InvalidOperationException("_scopeHost is null");
+
+        var workersField = scopeHost.GetType()
+            .GetField("_workers", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new InvalidOperationException("Cannot access _workers field on ScopeRuntimeHost");
+
+        var workers = (ScopeWorker[])workersField.GetValue(scopeHost)
+            ?? throw new InvalidOperationException("_workers is null");
+
+        Assert.That(workers, Has.Length.EqualTo(1),
+            "Expected exactly one worker scope.");
+        return workers[0];
+    }
+
+    private sealed class BlockableUpdateService : IService, IUpdate
+    {
+        private readonly ManualResetEventSlim _blocker;
+
+        public BlockableUpdateService(ManualResetEventSlim blocker)
+        {
+            _blocker = blocker;
+        }
+
+        public void ConfigureServices(IServiceCollection services) { }
+
+        public void Update()
+        {
+            _blocker.Wait();
+        }
+    }
+
+    private sealed class BlockableWorkerLayer : Layer, IGeneratedScopeDefinitionProvider
+    {
+        private readonly ManualResetEventSlim _blocker;
+
+        public BlockableWorkerLayer(ManualResetEventSlim blocker)
+        {
+            _blocker = blocker;
+        }
+
+        public GeneratedScopeDefinition[] __GetScopeDefinitions()
+        {
+            return new[]
+            {
+                new GeneratedScopeDefinition(
+                    scopeId: 999,
+                    identity: "scope:test:BlockableWorker",
+                    scopeType: typeof(BlockableWorkerScope),
+                    factory: static () => new BlockableWorkerScope())
+            };
+        }
+
+        public override void ConfigureServices(IServiceCollection services)
+        {
+            RegisterService(typeof(BlockableUpdateService), new BlockableUpdateService(_blocker), typeof(BlockableWorkerScope));
+        }
+    }
+
+    private sealed class BlockableWorkerScope : IScopeDefinition
+    {
+        public const int ScopeId = 999;
         public ScopeOptions Options => ScopeOptions.Worker(tickRateHz: 10);
     }
 

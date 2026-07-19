@@ -18,13 +18,15 @@ internal sealed class ScopeWorker : IDisposable
     private readonly AutoResetEvent _workSignal = new(initialState: false);
     private bool _startedThread;
     private bool _disposed;
-    private bool _resourcesReleased;
+    private int _startWaitCompleted;
+    private int _threadExited;
+    private int _resourcesReleased;
     private ScopeWorkerShutdownResult _shutdownResult;
 
     public ScopeWorker(ScopeRuntime runtime)
     {
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-        _runtime.BindWorkerWakeSignal(() => _workSignal.Set());
+        _runtime.BindWorkerWakeSignal(SignalWork);
         _thread = new Thread(Run)
         {
             IsBackground = true,
@@ -44,22 +46,30 @@ internal sealed class ScopeWorker : IDisposable
         _startedThread = true;
         _thread.Start();
 
-        int remaining = deadline.RemainingMilliseconds;
-
-        if (remaining <= 0 || !_ready.Wait(remaining))
+        try
         {
-            throw new TimeoutException(
-                $"Scope worker `{_runtime.Descriptor.Name}` did not become ready before the build deadline.");
+            int remaining = deadline.RemainingMilliseconds;
+
+            if (remaining <= 0 || !_ready.Wait(remaining))
+            {
+                throw new TimeoutException(
+                    $"Scope worker `{_runtime.Descriptor.Name}` did not become ready before the build deadline.");
+            }
+
+            Exception? startupException =
+                Volatile.Read(ref _startupException);
+
+            if (startupException != null)
+            {
+                throw new InvalidOperationException(
+                    $"Scope worker `{_runtime.Descriptor.Name}` failed during startup.",
+                    startupException);
+            }
         }
-
-        Exception? startupException =
-            Volatile.Read(ref _startupException);
-
-        if (startupException != null)
+        finally
         {
-            throw new InvalidOperationException(
-                $"Scope worker `{_runtime.Descriptor.Name}` failed during startup.",
-                startupException);
+            Volatile.Write(ref _startWaitCompleted, 1);
+            TryReleaseResourcesAfterExit();
         }
     }
 
@@ -72,7 +82,13 @@ internal sealed class ScopeWorker : IDisposable
             return ScopeWorkerShutdownResult.AlreadyStopped;
         }
 
-        _workSignal.Set();
+        try
+        {
+            _workSignal.Set();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
 
         if (!_thread.IsAlive)
         {
@@ -111,12 +127,38 @@ internal sealed class ScopeWorker : IDisposable
         _shutdownResult = Stop(in deadline);
     }
 
-    private void ReleaseResources()
+    internal bool ResourcesReleased =>
+        Volatile.Read(ref _resourcesReleased) != 0;
+
+    private void SignalWork()
     {
-        if (_resourcesReleased)
+        if (Volatile.Read(ref _resourcesReleased) != 0)
             return;
 
-        _resourcesReleased = true;
+        try
+        {
+            _workSignal.Set();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    private void TryReleaseResourcesAfterExit()
+    {
+        if (Volatile.Read(ref _startWaitCompleted) == 0 ||
+            Volatile.Read(ref _threadExited) == 0)
+        {
+            return;
+        }
+
+        ReleaseResources();
+    }
+
+    private void ReleaseResources()
+    {
+        if (Interlocked.Exchange(ref _resourcesReleased, 1) != 0)
+            return;
 
         _ready.Dispose();
         _workSignal.Dispose();
@@ -162,6 +204,8 @@ internal sealed class ScopeWorker : IDisposable
             {
                 SynchronizationContext.SetSynchronizationContext(
                     previousContext);
+                Volatile.Write(ref _threadExited, 1);
+                TryReleaseResourcesAfterExit();
             }
         }
     }
