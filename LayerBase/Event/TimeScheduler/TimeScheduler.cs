@@ -240,14 +240,15 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         if (processedInTick < _maxExpiredPerTick)
         {
             current = ProcessTimerList(current, sink, ref processedInTick, ref firstException);
+        }
 
-            if (current != -1)
-                MoveToOverdue(current);
-        }
-        else if (current != -1)
+        while (processedInTick < _maxExpiredPerTick && _overdueHead != -1)
         {
-            MoveToOverdue(current);
+            ProcessOverdueQueue(sink, ref processedInTick, ref firstException);
         }
+
+        if (current != -1)
+            MoveToOverdue(current);
 
         if (firstException != null)
             throw firstException;
