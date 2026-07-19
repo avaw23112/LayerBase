@@ -1,151 +1,163 @@
-## Task 1：统一 EventTypeId 的唯一来源
+# Task 1：补�?Worker Pending �?Running �?Terminal 状�?
+`MarkExecutionStarted()` 已经存在，并负责设置 `WorkerState.Running` 和增�?`_runningCount`，但 Worker 执行路径没有发布"开始执�?通知�?当前 `WorkerExecutionItem.Execute()` 直接执行 Job 并只发布最终完成事件�?
+## 文件
 
-当前 `EventTypeIdAllocator.Resolve(Type)` 和 `EventTypeId<TEvent>.Id` 会分别调用 `Allocate()`，两者没有共享映射。CompositionPlan 使用前者，EventMetaData 使用后者，而 Build 又要求两者相等。
+* 修改：`LayerBase/Scope/ScopeCompletionInbox.cs`
+* 修改：`LayerBase/Scope/ScopeRuntime.cs`
+* 修改：`LayerBase/Worker/WorkerExecutionItem.cs`
+* 修改：`LayerBase/Worker/WorkerJobCoordinator.cs`
+* 修改：`LayerBase.Test/WorkerCoordinatorRaceTests.cs`
+* 修改：`LayerBase.Test/WorkerCompletionInboxTests.cs`
 
-### Files
+## 先写失败测试
 
-* Modify: `LayerBase/Event/Event/EventTypeId.cs`
-* Modify: `LayerBase/Scope/RuntimeCompositionPlan.cs`
-* Create: `LayerBase.Test/EventTypeIdUnificationTests.cs`
-
-### Required behavior
-
-* `EventTypeId<TEvent>.Id` 是唯一运行时 EventId 来源。
-* `RuntimeCompositionPlan` 从元数据实例读取 `EventId`。
-* 不再通过 `Type` 单独分配第二个 ID。
-* 元数据声明的事件类型必须和 `EventContribution.EventType` 一致。
-
-### Step 1：写失败测试
-
-新增：
-
+新增�?
 ```csharp
-[TestFixture]
-[Category("ProductionHardening")]
-public sealed class EventTypeIdUnificationTests
+[Test]
+public void Blocking_job_enters_running_before_physical_completion()
 {
-    [SetUp]
-    public void SetUp()
-    {
-        LayerHub.Reset();
-        EventMetaDataHandler.Clear();
-    }
+    using var entered = new ManualResetEventSlim(false);
+    using var release = new ManualResetEventSlim(false);
 
-    [Test]
-    public void Module_event_metadata_uses_generic_event_id()
-    {
-        using LayerRuntime runtime = LayerHub.CreateLayers()
-            .Push(new TestLayer())
-            .AddAssemblyModule(new TestModule())
-            .Build();
+    var service = new BlockingWorkerService(entered, release);
+    var layer = new BlockingWorkerLayer();
+    layer.RegisterService(service);
 
-        int eventId = EventTypeId<TestEvent>.Id;
-        EventPostPolicy? policy = runtime.PolicyTable.GetPostPolicy(eventId);
+    using LayerRuntime runtime = LayerHub.CreateLayers()
+        .Push(layer)
+        .Build();
 
-        Assert.That(policy, Is.Not.Null);
-        Assert.That(policy!.Value.Mode, Is.EqualTo(PostDeliveryMode.Latest));
-    }
+    WorkerHandle handle = service.Run(CancellationToken.None);
 
-    private readonly struct TestEvent;
+    Assert.That(entered.Wait(TimeSpan.FromSeconds(5)), Is.True);
 
-    private sealed class TestEventMetaData : EventMetaData<TestEvent>
-    {
-        public override EventPostPolicy? PostPolicy =>
-            new EventPostPolicy(
-                PostDeliveryMode.Latest,
-                BackpressurePolicy.RejectNew,
-                maxPending: 1);
-    }
+    Assert.That(
+        SpinUntil(() =>
+        {
+            runtime.Pump(0f);
+            return runtime.WorkerJobs.GetState(handle) == WorkerState.Running;
+        }),
+        Is.True);
 
-    private sealed class TestLayer : Layer
-    {
-    }
+    Assert.That(runtime.WorkerJobs.RunningCount, Is.EqualTo(1));
 
-    private sealed class TestModule : IAssemblyModule
-    {
-        public AssemblyModuleId Id => new("event-id-unification");
+    release.Set();
 
-        public AssemblyModuleManifest Manifest { get; } =
-            new AssemblyModuleManifest(
-                new AssemblyModuleId("event-id-unification"),
-                Array.Empty<ServiceContribution>(),
-                Array.Empty<ContextContribution>(),
-                Array.Empty<LocalCallContribution>(),
-                Array.Empty<EventHandlerContribution>(),
-                Array.Empty<LayerToolContribution>(),
-                new[]
-                {
-                    EventContribution.ForTypes(
-                        typeof(TestEvent),
-                        typeof(TestLayer),
-                        typeof(MainScope),
-                        static () => new TestEventMetaData())
-                });
-    }
+    Assert.That(
+        SpinUntil(() =>
+        {
+            runtime.Pump(0f);
+            return runtime.WorkerJobs.GetState(handle) == WorkerState.Completed;
+        }),
+        Is.True);
+
+    Assert.That(runtime.WorkerJobs.RunningCount, Is.EqualTo(0));
 }
 ```
 
-### Step 2：确认测试失败
+先运行：
 
-```bash
-dotnet test LayerBase.Test/LayerBase.Test.csproj -c Debug \
-  --filter "FullyQualifiedName~EventTypeIdUnificationTests"
+```powershell
+dotnet test LayerBase.Test/LayerBase.Test.csproj `
+  -c Release `
+  --filter "FullyQualifiedName~Blocking_job_enters_running_before_physical_completion"
 ```
 
-预期：Build 抛出 metadata EventId mismatch。
+预期：失败，因为当前状态不会进�?`Running`�?
+## 实现要求
 
-### Step 3：实现唯一 ID 来源
-
-在 `ResolveEventPlans` 中先实例化元数据原型：
-
+扩展枚举�?
 ```csharp
-IEventMetaData metaData = ev.MetaDataFactory()
-    ?? throw new InvalidOperationException(
-        $"Event metadata factory for `{ev.EventType.FullName}` returned null.");
-
-int eventId = metaData.EventId;
-EventIdentity identity = metaData.GetIdentity();
-
-if (identity.EventType != ev.EventType)
+internal enum ScopeCompletionKind : byte
 {
-    throw new InvalidOperationException(
-        $"Event metadata `{metaData.GetType().FullName}` represents " +
-        $"`{identity.EventType.FullName}`, but contribution declares " +
-        $"`{ev.EventType.FullName}`.");
+    WorkerExecutionCompleted = 0,
+    WorkerCancelRequested = 1,
+    WorkerExecutionStarted = 2
 }
 ```
 
-使用该 `eventId` 创建 `EventMetaDataBuildPlan`。
+增加工厂�?
+```csharp
+public static ScopeCompletionEnvelope WorkerExecutionStarted(
+    WorkerHandle handle)
+{
+    var emptyCompletion = default(WorkerExecutionCompletedScopeEvent);
 
-从 `EventTypeIdAllocator` 删除：
+    return new ScopeCompletionEnvelope(
+        ScopeCompletionKind.WorkerExecutionStarted,
+        in emptyCompletion,
+        handle);
+}
+```
+
+`WorkerExecutionItem.Execute()` 中：
 
 ```csharp
-private static readonly Dictionary<Type, int> s_typeToId;
-private static readonly object s_lock;
-public static int Resolve(Type eventType);
+if (_token.IsCancellationRequested)
+{
+    completion = CreateCancelledCompletion();
+}
+else
+{
+    SubmitExecutionStarted();
+
+    try
+    {
+        var context = new WorkerJobContext(workerIndex, _token);
+        TEvent result = _job.Execute(in _input, in context);
+
+        completion = _token.IsCancellationRequested
+            ? CreateCancelledCompletion()
+            : new WorkerExecutionCompletedScopeEvent(
+                _handle,
+                WorkerExecutionCompletionKind.Succeeded,
+                new WorkerExecutionResult<TEvent>(in result),
+                _options,
+                WorkerJobExceptionInfo.None);
+    }
+    // 保留现有异常处理
+}
 ```
 
-保留：
-
+新增�?
 ```csharp
-public static int Allocate();
-public static int MaxId;
+private void SubmitExecutionStarted()
+{
+    ScopeCompletionEnvelope envelope =
+        ScopeCompletionEnvelope.WorkerExecutionStarted(_handle);
+
+    _origin.Transport.EnqueueCompletion(in envelope);
+}
 ```
 
-### Step 4：验证
-
-```bash
-dotnet test LayerBase.Test/LayerBase.Test.csproj -c Debug \
-  --filter "FullyQualifiedName~EventTypeIdUnificationTests"
+`ScopeRuntime.DrainCompletionInbox()` 增加�?
+```csharp
+case ScopeCompletionKind.WorkerExecutionStarted:
+    WorkerJobs.MarkExecutionStarted(envelope.WorkerHandle);
+    break;
 ```
 
-预期：PASS。
+## 禁止方案
 
-### Step 5：提交
-
-```bash
-git add LayerBase/Event/Event/EventTypeId.cs \
-        LayerBase/Scope/RuntimeCompositionPlan.cs \
-        LayerBase.Test/EventTypeIdUnificationTests.cs
-git commit -m "fix(event): unify generated metadata event ids"
+禁止�?
+```csharp
+coordinator.MarkExecutionStarted(handle);
 ```
+
+�?Worker Thread 直接调用 Coordinator。这样会破坏 Owner Thread 单写模型�?
+## 验收
+
+```powershell
+dotnet test LayerBase.Test/LayerBase.Test.csproj `
+  -c Release `
+  --filter "FullyQualifiedName~WorkerCoordinatorRaceTests|FullyQualifiedName~WorkerCompletionInboxTests"
+```
+
+提交�?
+```powershell
+git add LayerBase/Scope LayerBase/Worker LayerBase.Test
+git commit -m "fix(worker): publish physical execution start to origin scope"
+```
+
+---
+

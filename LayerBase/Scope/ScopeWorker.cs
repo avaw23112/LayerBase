@@ -183,7 +183,9 @@ internal sealed class ScopeWorker : IDisposable
                 : 0f;
 
         while (_runtime.State !=
-               ScopeRuntimeState.Disposed)
+               ScopeRuntimeState.Disposed &&
+               _runtime.State !=
+               ScopeRuntimeState.Faulted)
         {
             try
             {
