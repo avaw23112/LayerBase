@@ -61,6 +61,47 @@ public sealed class WorkerCoordinatorRaceTests
     }
 
     [Test]
+    public void Blocking_job_enters_running_before_physical_completion()
+    {
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+
+        var service = new BlockingWorkerService(entered, release);
+        var layer = new BlockingWorkerLayer();
+        layer.RegisterService(service);
+
+        using LayerRuntime runtime = LayerHub.CreateLayers()
+            .Push(layer)
+            .Build();
+
+        WorkerHandle handle = service.Run(CancellationToken.None);
+
+        Assert.That(entered.Wait(TimeSpan.FromSeconds(5)), Is.True);
+
+        Assert.That(
+            SpinUntil(() =>
+            {
+                runtime.Pump(0f);
+                return runtime.WorkerJobs.GetState(handle) == WorkerState.Running;
+            }),
+            Is.True);
+
+        Assert.That(runtime.WorkerJobs.RunningCount, Is.EqualTo(1));
+
+        release.Set();
+
+        Assert.That(
+            SpinUntil(() =>
+            {
+                runtime.Pump(0f);
+                return runtime.WorkerJobs.GetState(handle) == WorkerState.Completed;
+            }),
+            Is.True);
+
+        Assert.That(runtime.WorkerJobs.RunningCount, Is.EqualTo(0));
+    }
+
+    [Test]
     [Category("ProductionSoak")]
     public void Completion_and_cancel_produce_one_terminal_state()
     {

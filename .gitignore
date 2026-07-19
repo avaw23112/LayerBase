@@ -1106,3 +1106,6 @@ codex/work/
 /*.nuget
 **/TestResults/
 *.trx
+
+# SDD artifacts.superpowers/
+

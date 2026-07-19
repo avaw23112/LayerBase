@@ -6,7 +6,9 @@ namespace LayerBase.Scope;
 internal enum ScopeCompletionKind : byte
 {
     WorkerExecutionCompleted = 0,
-    WorkerCancelRequested = 1
+    WorkerCancelRequested = 1,
+    WorkerExecutionStarted = 2,
+    ScopeFault = 3
 }
 
 internal readonly struct ScopeCompletionEnvelope
@@ -19,6 +21,19 @@ internal readonly struct ScopeCompletionEnvelope
         Kind = kind;
         WorkerCompletion = workerCompletion;
         WorkerHandle = workerHandle;
+        FaultRecord = default;
+    }
+
+    private ScopeCompletionEnvelope(
+        ScopeCompletionKind kind,
+        in WorkerExecutionCompletedScopeEvent workerCompletion,
+        WorkerHandle workerHandle,
+        in ScopeFaultRecord faultRecord)
+    {
+        Kind = kind;
+        WorkerCompletion = workerCompletion;
+        WorkerHandle = workerHandle;
+        FaultRecord = faultRecord;
     }
 
     public ScopeCompletionKind Kind { get; }
@@ -26,6 +41,21 @@ internal readonly struct ScopeCompletionEnvelope
     public WorkerExecutionCompletedScopeEvent WorkerCompletion { get; }
 
     public WorkerHandle WorkerHandle { get; }
+
+    public ScopeFaultRecord FaultRecord { get; }
+
+    public static ScopeCompletionEnvelope ScopeFault(
+        in ScopeFaultRecord record)
+    {
+        var emptyCompletion = default(
+            WorkerExecutionCompletedScopeEvent);
+
+        return new ScopeCompletionEnvelope(
+            ScopeCompletionKind.ScopeFault,
+            in emptyCompletion,
+            WorkerHandle.Invalid,
+            in record);
+    }
 
     public static ScopeCompletionEnvelope WorkerExecutionCompleted(
         in WorkerExecutionCompletedScopeEvent completion)
@@ -44,6 +74,18 @@ internal readonly struct ScopeCompletionEnvelope
 
         return new ScopeCompletionEnvelope(
             ScopeCompletionKind.WorkerCancelRequested,
+            in emptyCompletion,
+            handle);
+    }
+
+    public static ScopeCompletionEnvelope WorkerExecutionStarted(
+        WorkerHandle handle)
+    {
+        var emptyCompletion = default(
+            WorkerExecutionCompletedScopeEvent);
+
+        return new ScopeCompletionEnvelope(
+            ScopeCompletionKind.WorkerExecutionStarted,
             in emptyCompletion,
             handle);
     }

@@ -621,7 +621,6 @@ public sealed partial class LayerRuntime : IDisposable
     {
         RequireOwnerThreadDebug();
         if (_disposed) return;
-        _disposed = true;
 
         var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
 
@@ -657,6 +656,7 @@ public sealed partial class LayerRuntime : IDisposable
         }
         finally
         {
+            _disposed = true;
             LayerHub.ClearRuntimeCaches(_id);
             LayerHub.Internal_Unregister(this);
             _state = RuntimeState.Disposed;
@@ -666,8 +666,6 @@ public sealed partial class LayerRuntime : IDisposable
     {
         if (_disposed)
             return;
-
-        _disposed = true;
 
         var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
 
@@ -704,6 +702,7 @@ public sealed partial class LayerRuntime : IDisposable
         }
         finally
         {
+            _disposed = true;
             LayerHub.ClearRuntimeCaches(_id);
             LayerHub.Internal_Unregister(this);
             _state = RuntimeState.Disposed;

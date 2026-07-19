@@ -9,7 +9,9 @@ internal sealed class ScopeRuntimeHost : IDisposable
     private readonly ScopeRuntime[] _inlineScopes;
     private readonly ScopeWorker[] _workers;
     private bool _workersStarted;
-    private bool _disposed;
+    private int _shutdownStarted;
+    private int _disposed;
+    private int _nextInlineScopeIndex;
 
     private ScopeRuntimeHost(ScopeRuntimeDirectory directory, ScopeWorker[] workers)
     {
@@ -108,7 +110,8 @@ internal sealed class ScopeRuntimeHost : IDisposable
     public void StartWorkers(
         in ShutdownDeadline deadline)
     {
-        ThrowIfDisposed();
+        if (Volatile.Read(ref _shutdownStarted) != 0)
+            throw new ObjectDisposedException(nameof(ScopeRuntimeHost));
 
         if (_workersStarted)
             return;
@@ -123,19 +126,28 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
     public void ApplyFaultPolicy(in ScopeFaultRecord record)
     {
-        if (!TryGetRuntime(record.SourceScopeId, out var sourceScope))
+        if (!_directory.TryGetRuntime(
+                record.SourceScopeId,
+                out ScopeRuntime sourceScope))
+        {
             return;
+        }
 
         switch (sourceScope.Options.FaultPolicy)
         {
             case ScopeFaultPolicy.ReportAndContinue:
-                break;
+                return;
+
             case ScopeFaultPolicy.StopScope:
                 _ = sourceScope.RequestStopAsync();
-                break;
+                return;
+
             case ScopeFaultPolicy.StopRuntime:
                 _ = MainScope.RequestStopAsync();
-                break;
+                return;
+
+            default:
+                throw new ArgumentOutOfRangeException();
         }
     }
 
@@ -174,7 +186,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
         if (_inlineScopes.Length == 0)
             return;
 
-        int startIndex = budget.StartingScopeIndex % _inlineScopes.Length;
+        int startIndex = _nextInlineScopeIndex % _inlineScopes.Length;
 
         for (int i = 0; i < _inlineScopes.Length; i++)
         {
@@ -187,28 +199,34 @@ internal sealed class ScopeRuntimeHost : IDisposable
         }
 
         budget.StartingScopeIndex = (startIndex + 1) % _inlineScopes.Length;
+        _nextInlineScopeIndex = (startIndex + 1) % _inlineScopes.Length;
     }
 
     public void Dispose()
     {
-        if (_disposed)
+        if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
             return;
-
-        _disposed = true;
 
         var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
 
-        if (!_workersStarted)
+        try
         {
-            DisposeUnstartedScopes();
-            return;
+            if (!_workersStarted)
+            {
+                DisposeUnstartedScopes();
+                return;
+            }
+
+            RequestStopForAllScopes(in deadline);
+
+            RequestDisposeForAllScopes(in deadline);
+
+            StopWorkers(in deadline);
         }
-
-        RequestStopForAllScopes(in deadline);
-
-        RequestDisposeForAllScopes(in deadline);
-
-        StopWorkers(in deadline);
+        finally
+        {
+            Volatile.Write(ref _disposed, 1);
+        }
     }
 
     private void RequestStopForAllScopes(in ShutdownDeadline deadline)
@@ -270,24 +288,22 @@ internal sealed class ScopeRuntimeHost : IDisposable
             }
             else
             {
-                var task = scope.RequestDisposeAsync();
-                var awaiter = task.GetAwaiter();
-
-                while (!awaiter.IsCompleted)
+                try
                 {
-                    if (deadline.IsExpired)
-                        break;
-                    Thread.Yield();
+                    ScopeDisposeResponse response =
+                        ScopeControlBarrier.Wait(
+                            scope.RequestDisposeAsync(),
+                            in deadline,
+                            $"{scope.Descriptor.Name}.Dispose");
+
+                    ScopeControlBarrier.EnsureSucceeded(
+                        response.State,
+                        "Dispose",
+                        scope);
                 }
-
-                if (!awaiter.IsCompleted)
+                catch (Exception ex)
                 {
-                    scope.Transport.CloseBusinessAdmission();
-
-                    scope.ReportFatalFault(
-                        new TimeoutException(
-                            $"Scope `{scope.Descriptor.Name}` did not dispose before the runtime shutdown deadline."),
-                        ScopeFaultPhase.WorkerLoop);
+                    scope.ReportFatalFault(ex, ScopeFaultPhase.WorkerLoop);
                 }
             }
         }
@@ -344,10 +360,9 @@ internal sealed class ScopeRuntimeHost : IDisposable
         {
             _ = awaiter.GetResult();
         }
-        catch
+        catch (Exception ex)
         {
-            // Control faults are reported through the scope fault channel;
-            // shutdown must keep making progress for the remaining scopes.
+            scope.ReportFatalFault(ex, ScopeFaultPhase.Shutdown);
         }
 
         return true;
@@ -355,7 +370,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
+        if (Volatile.Read(ref _disposed) != 0)
             throw new ObjectDisposedException(nameof(ScopeRuntimeHost));
     }
 }

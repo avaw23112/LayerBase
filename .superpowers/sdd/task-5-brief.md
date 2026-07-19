@@ -1,169 +1,91 @@
-## Task 5：改造 Timer Wheel 为 FIFO，并保证异常后结构完整
+# Task 5：修�?Coalesced 错误淘汰�?O(n²) 退�?
+当前单类型数量需要遍历整�?`_coalescedBuffer`；某个类型超限后调用的是全局最旧淘汰，可能删除另一个事件类型�?当前全局列表还使�?`RemoveAt(0)`�?
+## 文件
 
-当前 Wheel 头插形成 LIFO，同一过期 Tick 的 Latest 最终可能保留最早的值；处理槽位时又会先摘除整条链表，Sink 抛异常可能丢失剩余 Timer。
+* 修改：`LayerBase/Event/PostScheduler/CoalescingStructures.cs`
+* 修改：`LayerBase/Event/PostScheduler/PostScheduler.cs`
+* 新增：`LayerBase.Test/PostSchedulerCoalescedEvictionTests.cs`
 
-### Files
+## 数据结构
 
-* Modify: `LayerBase/Event/TimeScheduler/TimeScheduler.cs`
-* Modify: `LayerBase/Event/TimeScheduler/PostTimerScheduler.cs`
-* Modify: `LayerBase.Test/PostSchedulerLatestTests.cs`
-* Create: `LayerBase.Test/TimeSchedulerExceptionSafetyTests.cs`
-* Create: `LayerBase.Test/TimeSchedulerBacklogTests.cs`
-
-### Required structure
-
-替换单个 `_wheel` Head 数组：
+将：
 
 ```csharp
-private readonly int[] _wheelHeads;
-private readonly int[] _wheelTails;
+private readonly List<CoalescedSlotKey> _pendingCoalesced = new();
 ```
 
-增加：
-
+改为�?
 ```csharp
-private int _overdueHead = -1;
-private int _overdueTail = -1;
-private const int OverdueSlotIndex = -2;
+private readonly LinkedList<CoalescedSlotKey>
+    _pendingCoalesced = new();
+
+private readonly Dictionary<int, LinkedList<CoalescedSlotKey>>
+    _pendingCoalescedByType = new();
 ```
 
-### FIFO insertion
-
+`CoalescedSlot` 增加内部节点�?
 ```csharp
-entry.Next = -1;
-entry.Prev = tail;
-
-if (tail == -1)
-    head = index;
-else
-    _pool[tail].Next = index;
-
-tail = index;
+internal LinkedListNode<CoalescedSlotKey>? GlobalOrderNode;
+internal LinkedListNode<CoalescedSlotKey>? TypeOrderNode;
 ```
 
-### Backlog
-
-达到 `MaxExpiredPerTick` 后：
-
-* 第一次把剩余链表转为 Overdue Queue 时允许 O(n) 标记 `SlotIndex = OverdueSlotIndex`。
-* 后续 Pump 从 `_overdueHead` 分批处理。
-* 不允许每帧重新遍历全部剩余节点。
-* Cancel 必须支持从 Overdue Queue O(1) 删除。
-
-### Sink 异常处理
-
-每个 Timer 单独执行：
+## 插入
 
 ```csharp
-try
+LinkedListNode<CoalescedSlotKey> globalNode =
+    _pendingCoalesced.AddLast(slotKey);
+
+if (!_pendingCoalescedByType.TryGetValue(
+        typeId,
+        out LinkedList<CoalescedSlotKey>? typeOrder))
 {
-    accepted = sink.TryAcceptExpired(...);
+    typeOrder = new LinkedList<CoalescedSlotKey>();
+    _pendingCoalescedByType.Add(typeId, typeOrder);
 }
-catch (Exception ex)
-{
-    ReleaseTimer(index, ref entry);
-    firstException ??= ex;
-    accepted = false;
-}
+
+LinkedListNode<CoalescedSlotKey> typeNode =
+    typeOrder.AddLast(slotKey);
+
+newSlot.GlobalOrderNode = globalNode;
+newSlot.TypeOrderNode = typeNode;
 ```
 
-必须继续修复或处理剩余结构。
-
-处理结束后允许重新抛出 `firstException`，由 Scope 的 Timer Fault 通道处理；但不得遗留 Active 且不可达的 Timer。
-
-### Changes needed
-
-1. **TimeScheduler.cs**:
-   - Replace `private readonly int[] _wheel;` with `private readonly int[] _wheelHeads;` and `private readonly int[] _wheelTails;`
-   - Add `_overdueHead`, `_overdueTail`, `OverdueSlotIndex`
-   - Change `PlaceInWheel` to FIFO insertion
-   - Change `ProcessCurrentSlot` to handle backlog (overdue queue)
-   - Add per-timer try/catch in the processing loop
-   - Change `RemoveFromStructure` to handle overdue queue
-   - Change `RequeueRemainingForNextTick` to work with FIFO
-   - Change constructor to initialize both `_wheelHeads` and `_wheelTails` with -1
-
-2. **PostTimerScheduler.cs**: 
-   - No structural changes needed but may need to compile against new TimeScheduler API
-
-3. **TimeSchedulerBacklogTests.cs**: Test large backlog handling
-4. **TimeSchedulerExceptionSafetyTests.cs**: Test sink exception safety
-
-### Tests
-
+## 单类型淘�?
 ```csharp
-[TestFixture]
-[Category("ProductionHardening")]
-public sealed class TimeSchedulerBacklogTests
+private bool EvictOldestCoalescedSlotForType(int eventTypeId)
 {
-    [Test]
-    public void Same_tick_timers_expire_in_schedule_order()
+    if (!_pendingCoalescedByType.TryGetValue(
+            eventTypeId,
+            out LinkedList<CoalescedSlotKey>? order) ||
+        order.First == null)
     {
-        using var scheduler = new TimeScheduler<int>(TimeSchedulerOptions.Default);
-        var expired = new List<int>();
-        var sink = new CallbackSink<int>(p => expired.Add(p));
-
-        scheduler.Schedule(1, 0.5f);
-        scheduler.Schedule(2, 0.5f);
-        scheduler.Schedule(3, 0.5f);
-
-        scheduler.Tick(1f, sink);
-
-        Assert.That(expired, Is.EqualTo(new[] { 1, 2, 3 }));
-    }
-}
-
-[TestFixture]
-[Category("ProductionHardening")]
-public sealed class TimeSchedulerExceptionSafetyTests
-{
-    [Test]
-    public void Throwing_sink_does_not_lose_remaining_timers()
-    {
-        using var scheduler = new TimeScheduler<int>(TimeSchedulerOptions.Default);
-        var expired = new List<int>();
-        int callCount = 0;
-
-        scheduler.Schedule(1, 0.5f);
-        scheduler.Schedule(2, 0.5f);
-        scheduler.Schedule(3, 0.5f);
-
-        Assert.That(() => scheduler.Tick(1f, new ThrowingThenCollectingSink(expired)),
-            Throws.Exception);
-
-        Assert.That(expired, Has.Count.GreaterThan(0));
-        Assert.That(scheduler.PendingCount, Is.EqualTo(0)); // all timers released or processed
+        return false;
     }
 
-    private sealed class ThrowingThenCollectingSink : IExpiredTimerSink<int>
-    {
-        private readonly List<int> _expired;
-        private int _callCount;
-
-        public ThrowingThenCollectingSink(List<int> expired) => _expired = expired;
-
-        public bool TryAcceptExpired(in int payload, TimerHandle handle)
-        {
-            _callCount++;
-            if (_callCount == 2) throw new InvalidOperationException("simulated fault");
-            _expired.Add(payload);
-            return true;
-        }
-    }
+    return RemovePendingCoalescedSlot(
+        order.First.Value,
+        releasePayload: true,
+        out _);
 }
 ```
 
-For `PostSchedulerLatestTests.cs`: Change expected value from `100` to `300` if test verifies timer Latest keeps last scheduled value.
+全局上限才允许使用：
 
-### Step 2: Verify
+```csharp
+_pendingCoalesced.First
+```
 
+## 测试
+
+至少包含�?
+1. A 类型超限不能删除 B 类型�?2. A 类型 `DropOldest` 删除 A 最�?Key�?3. Snapshot 后所有全局节点和类型节点被清理�?4. 连续 10,000 次插入、淘汰后 Pending 数量不增长�?5. Dispose 不重复释�?Payload�?
+提交�?
 ```powershell
-dotnet test LayerBase.Test/LayerBase.Test.csproj -c Debug --filter "FullyQualifiedName~TimeSchedulerExceptionSafetyTests|FullyQualifiedName~TimeSchedulerBacklogTests"
+git add LayerBase/Event/PostScheduler `
+        LayerBase.Test/PostSchedulerCoalescedEvictionTests.cs
+
+git commit -m "fix(post): make coalesced eviction type-correct and constant-time"
 ```
 
-### Step 3: Commit
+---
 
-```powershell
-git add LayerBase/Event/TimeScheduler/TimeScheduler.cs LayerBase/Event/TimeScheduler/PostTimerScheduler.cs LayerBase.Test/PostSchedulerLatestTests.cs LayerBase.Test/TimeSchedulerExceptionSafetyTests.cs LayerBase.Test/TimeSchedulerBacklogTests.cs
-git commit -m "fix(timer): preserve fifo order and backlog integrity"
-```
