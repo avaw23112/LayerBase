@@ -73,6 +73,18 @@ internal static class ScopeOwnerInvocation
                 scope.CaptureDiagnosticsOnOwnerThread());
         }
 
+        if (boxed is ScopeSerializeFullSnapCall &&
+            typeof(TResponse) == typeof(ScopeSerializeFullSnapResponse))
+        {
+            return (TResponse)(object)scope.SerializeFullSnapOnOwnerThread();
+        }
+
+        if (boxed is ScopeDeserializeFullSnapCall deserialize &&
+            typeof(TResponse) == typeof(ScopeDeserializeFullSnapResponse))
+        {
+            return (TResponse)(object)scope.DeserializeFullSnapOnOwnerThread(deserialize.Document);
+        }
+
         throw new InvalidOperationException(
             $"Unsupported local scope owner invocation {typeof(TRequest).Name}/{typeof(TResponse).Name}.");
     }

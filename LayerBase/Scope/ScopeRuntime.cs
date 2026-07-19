@@ -837,6 +837,12 @@ internal sealed class ScopeRuntime : IDisposable
             case ScopeLifecycleRouteIds.RecompileTimerPlans:
                 DispatchRecompileTimerPlansControl(envelope);
                 return true;
+            case ScopeLifecycleRouteIds.SerializeFullSnap:
+                DispatchSerializeFullSnapControl(envelope);
+                return true;
+            case ScopeLifecycleRouteIds.DeserializeFullSnap:
+                DispatchDeserializeFullSnapControl(envelope);
+                return true;
             default:
                 envelope.Completion?.TrySetException(
                     new InvalidOperationException($"Unknown scope lifecycle control route {envelope.RouteId}."));
@@ -1151,6 +1157,64 @@ internal sealed class ScopeRuntime : IDisposable
         }
     }
 
+    private void DispatchSerializeFullSnapControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeSerializeFullSnapCall, ScopeSerializeFullSnapResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope FullSnap serialize payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            queuedCall.Completion.TrySetResult(SerializeFullSnapOnOwnerThread());
+        }
+        catch (Exception ex)
+        {
+            ReportFault(ex, ScopeFaultPhase.Snapshot);
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchDeserializeFullSnapControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeDeserializeFullSnapCall, ScopeDeserializeFullSnapResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope FullSnap deserialize payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            queuedCall.Completion.TrySetResult(DeserializeFullSnapOnOwnerThread(queuedCall.Request.Document));
+        }
+        catch (Exception ex)
+        {
+            ReportFault(ex, ScopeFaultPhase.Snapshot);
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
     internal ScopeEnterSafePointResponse EnterSafePointForSnap()
     {
         RequireOwnerThread();
@@ -1199,6 +1263,46 @@ internal sealed class ScopeRuntime : IDisposable
             _safePointState = ScopeSafePointState.Faulted;
             throw;
         }
+    }
+
+    internal ScopeSerializeFullSnapResponse SerializeFullSnapOnOwnerThread()
+    {
+        RequireOwnerThread();
+        try
+        {
+            EnterSafePointForSnap();
+            return new ScopeSerializeFullSnapResponse(
+                ScopeControlResult.Succeeded,
+                WriteSnapshotForSnap().Sections);
+        }
+        finally
+        {
+            ReleaseSafePointAfterFullSnapTransaction();
+        }
+    }
+
+    internal ScopeDeserializeFullSnapResponse DeserializeFullSnapOnOwnerThread(SnapDocument document)
+    {
+        RequireOwnerThread();
+        try
+        {
+            EnterSafePointForSnap();
+            ReadSnapshotForSnap(document);
+            return new ScopeDeserializeFullSnapResponse(ScopeControlResult.Succeeded);
+        }
+        finally
+        {
+            ReleaseSafePointAfterFullSnapTransaction();
+        }
+    }
+
+    private void ReleaseSafePointAfterFullSnapTransaction()
+    {
+        if (_safePointState == ScopeSafePointState.Running)
+            return;
+
+        _safePointState = ScopeSafePointState.Releasing;
+        _safePointState = ScopeSafePointState.Running;
     }
 
     private void DispatchInitializeControl(ScopeCallEnvelope envelope)

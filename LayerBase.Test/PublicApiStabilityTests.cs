@@ -91,4 +91,25 @@ public sealed class PublicApiStabilityTests
         foreach (string forbidden in forbiddenNames)
             Assert.That(publicNames, Does.Not.Contain(forbidden));
     }
+
+    [Test]
+    public void FullSnap_public_api_is_layer_runtime_async_only()
+    {
+        Type runtimeType = typeof(LayerRuntime);
+
+        Assert.That(runtimeType.GetProperty("FullSnap", BindingFlags.Public | BindingFlags.Instance), Is.Null);
+        Assert.That(runtimeType.GetMethod("SerializeFullSnapAsync", BindingFlags.Public | BindingFlags.Instance), Is.Not.Null);
+        Assert.That(runtimeType.GetMethod("DeserializeFullSnapAsync", BindingFlags.Public | BindingFlags.Instance), Is.Not.Null);
+        Assert.That(runtimeType.GetMethod("SerializeFullSnapJsonAsync", BindingFlags.Public | BindingFlags.Instance), Is.Not.Null);
+        Assert.That(runtimeType.GetMethod("DeserializeFullSnapJsonAsync", BindingFlags.Public | BindingFlags.Instance), Is.Not.Null);
+    }
+
+    [Test]
+    public void FullSnap_runtime_contract_does_not_become_public()
+    {
+        Assembly assembly = typeof(LayerRuntime).Assembly;
+        Type? contract = assembly.GetTypes().SingleOrDefault(static type => type.Name == "IFullSnapRuntime");
+
+        Assert.That(contract == null || !(contract.IsPublic || contract.IsNestedPublic), Is.True);
+    }
 }

@@ -164,6 +164,43 @@ internal readonly struct ScopeExitSafePointResponse
     public ScopeControlResult Result { get; }
 }
 
+internal readonly struct ScopeSerializeFullSnapCall
+{
+}
+
+internal readonly struct ScopeSerializeFullSnapResponse
+{
+    public ScopeSerializeFullSnapResponse(ScopeControlResult result, SnapSection[] sections)
+    {
+        Result = result;
+        Sections = sections ?? Array.Empty<SnapSection>();
+    }
+
+    public ScopeControlResult Result { get; }
+
+    public SnapSection[] Sections { get; }
+}
+
+internal readonly struct ScopeDeserializeFullSnapCall
+{
+    public ScopeDeserializeFullSnapCall(SnapDocument document)
+    {
+        Document = document ?? throw new ArgumentNullException(nameof(document));
+    }
+
+    public SnapDocument Document { get; }
+}
+
+internal readonly struct ScopeDeserializeFullSnapResponse
+{
+    public ScopeDeserializeFullSnapResponse(ScopeControlResult result)
+    {
+        Result = result;
+    }
+
+    public ScopeControlResult Result { get; }
+}
+
 internal readonly struct ScopeCaptureDiagnosticsCall
 {
 }
@@ -253,6 +290,10 @@ internal static class ScopeLifecycleRouteIds
 
     public const int RecompileTimerPlans = -113;
 
+    public const int SerializeFullSnap = -114;
+
+    public const int DeserializeFullSnap = -115;
+
     public static int Resolve<TRequest, TResponse>()
         where TRequest : struct
         where TResponse : struct
@@ -333,6 +374,18 @@ internal static class ScopeLifecycleRouteIds
             typeof(TResponse) == typeof(ScopeRecompileTimerPlansResponse))
         {
             return RecompileTimerPlans;
+        }
+
+        if (typeof(TRequest) == typeof(ScopeSerializeFullSnapCall) &&
+            typeof(TResponse) == typeof(ScopeSerializeFullSnapResponse))
+        {
+            return SerializeFullSnap;
+        }
+
+        if (typeof(TRequest) == typeof(ScopeDeserializeFullSnapCall) &&
+            typeof(TResponse) == typeof(ScopeDeserializeFullSnapResponse))
+        {
+            return DeserializeFullSnap;
         }
 
         throw new InvalidOperationException(
@@ -438,6 +491,25 @@ internal static class ScopeLifecycleControlExtensions
     {
         return scope.EnqueueControlCall<ScopeRecompileTimerPlansCall, ScopeRecompileTimerPlansResponse>(
             new ScopeRecompileTimerPlansCall(),
+            cancellationToken);
+    }
+
+    public static LBTask<ScopeSerializeFullSnapResponse> RequestSerializeFullSnapAsync(
+        this ScopeRuntime scope,
+        CancellationToken cancellationToken = default)
+    {
+        return scope.EnqueueControlCall<ScopeSerializeFullSnapCall, ScopeSerializeFullSnapResponse>(
+            new ScopeSerializeFullSnapCall(),
+            cancellationToken);
+    }
+
+    public static LBTask<ScopeDeserializeFullSnapResponse> RequestDeserializeFullSnapAsync(
+        this ScopeRuntime scope,
+        SnapDocument document,
+        CancellationToken cancellationToken = default)
+    {
+        return scope.EnqueueControlCall<ScopeDeserializeFullSnapCall, ScopeDeserializeFullSnapResponse>(
+            new ScopeDeserializeFullSnapCall(document),
             cancellationToken);
     }
 }

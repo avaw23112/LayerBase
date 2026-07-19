@@ -79,8 +79,6 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal PostTimerScheduler Timer => _scopeHost.MainScope.Timer ?? throw new InvalidOperationException("Runtime not built.");
 
-    public IFullSnapRuntime FullSnap => _fullSnap ?? throw new InvalidOperationException("Runtime not built.");
-
     public LayerToolRegistry Tools => _tools ?? throw new InvalidOperationException("Runtime not built.");
 
     public bool IsDebugMode { get; internal set; }

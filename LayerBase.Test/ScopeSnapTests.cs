@@ -38,13 +38,13 @@ public class ScopeSnapTests
     }
 
     [Test]
-    public void Snap_key_format_remains_master_compatible()
+    public async Task Snap_key_format_remains_master_compatible()
     {
         var runtime = LayerHub.CreateLayers()
             .Push(new ScopeSnapLayer())
             .Build();
 
-        SnapDocument document = runtime.FullSnap.Serialize();
+        SnapDocument document = await runtime.SerializeFullSnapAsync();
 
         Assert.That(document.Sections.Keys, Does.Contain("LayerBase.Test.ScopeSnapLayer_FullSnap"));
         Assert.That(document.Sections.Keys, Does.Contain("LayerBase.Test.ScopeSnapScopedService_FullSnap"));
@@ -63,7 +63,7 @@ public class ScopeSnapTests
     }
 
     [Test]
-    public void Main_scope_only_sync_snap_still_works()
+    public async Task Main_scope_only_async_snap_still_works()
     {
         var layer = new ScopeSnapLayer();
         LayerRuntime runtime = LayerHub.CreateLayers()
@@ -72,11 +72,11 @@ public class ScopeSnapTests
 
         layer.LayerValue = 10;
         ScopeSnapScopedService.LastInstance!.ServiceValue = 20;
-        SnapDocument document = runtime.FullSnap.Serialize();
+        SnapDocument document = await runtime.SerializeFullSnapAsync();
 
         layer.LayerValue = 0;
         ScopeSnapScopedService.LastInstance!.ServiceValue = 0;
-        runtime.FullSnap.Deserialize(document);
+        await runtime.DeserializeFullSnapAsync(document);
 
         Assert.That(layer.LayerValue, Is.EqualTo(10));
         Assert.That(ScopeSnapScopedService.LastInstance!.ServiceValue, Is.EqualTo(20));
@@ -146,6 +146,38 @@ public class ScopeSnapTests
     }
 
     [Test]
+    public async Task Worker_serialize_failure_with_canceled_request_releases_safe_point()
+    {
+        using var runtime = new LayerRuntime(2404);
+        using ScopeRuntimeHost host = CreateWorkerHost(runtime, ScopeSnapWorkerScope.ScopeId);
+        ScopeRuntime worker = host.Scopes.Single(static scope => scope.ScopeId == ScopeSnapWorkerScope.ScopeId);
+        using var cts = new CancellationTokenSource();
+        var fullSnap = new FullSnapRuntime(runtime, host);
+        fullSnap.Register(
+            ScopeSnapWorkerScope.ScopeId,
+            new ScopeSnapNodePlan(0, 0, new ScopeCancelingThrowSnapNode(cts)));
+        fullSnap.FreezePlans();
+        host.StartWorkers();
+
+        try
+        {
+            await fullSnap.SerializeAsync(cts.Token).WithTimeout(TimeSpan.FromSeconds(2));
+            Assert.Fail("SerializeAsync should fail when the snap node throws.");
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        ScopeCaptureDiagnosticsResponse response =
+            await worker.RequestCaptureDiagnosticsAsync().WithTimeout(TimeSpan.FromSeconds(2));
+
+        Assert.That(response.Snapshot.Snap.State, Is.EqualTo(ScopeSafePointState.Running));
+    }
+
+    [Test]
     public void Plain_object_clip_snap_still_works()
     {
         var carrier = new MultiClipCarrier();
@@ -209,6 +241,30 @@ public class ScopeSnapTests
             WriteThreadId = Environment.CurrentManagedThreadId;
             if (_commandBufferSizeProvider != null)
                 CommandBufferSizeAtWrite = _commandBufferSizeProvider();
+        }
+
+        public void ReadFullSnap(ref SnapReader reader)
+        {
+        }
+    }
+
+    private sealed class ScopeCancelingThrowSnapNode : IGeneratedFullSnapNode
+    {
+        private readonly CancellationTokenSource _cancellation;
+
+        public ScopeCancelingThrowSnapNode(CancellationTokenSource cancellation)
+        {
+            _cancellation = cancellation;
+        }
+
+        public string __SnapKey => "canceling-throw-node";
+
+        public int __SnapVersion => 1;
+
+        public void WriteFullSnap(ref SnapWriter writer)
+        {
+            _cancellation.Cancel();
+            throw new InvalidOperationException("snap write failed");
         }
 
         public void ReadFullSnap(ref SnapReader reader)

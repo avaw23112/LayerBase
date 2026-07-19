@@ -17,7 +17,7 @@ public class SnapTests
     }
 
     [Test]
-    public void FullSnap_runtime_collects_generated_nodes_and_round_trips_state()
+    public async Task FullSnap_runtime_collects_generated_nodes_and_round_trips_state()
     {
         var layer = new SnapLayer();
         LayerRuntime runtime = LayerHub.CreateLayers()
@@ -35,7 +35,7 @@ public class SnapTests
         service.ServiceValue = 22;
         manager.ManagerValue = 33;
 
-        SnapDocument document = runtime.FullSnap.Serialize();
+        SnapDocument document = await runtime.SerializeFullSnapAsync();
 
         Assert.That(document.Sections.Keys, Does.Contain("LayerBase.Test.SnapLayer_FullSnap"));
         Assert.That(document.Sections.Keys, Does.Contain("LayerBase.Test.SnapStateService_FullSnap"));
@@ -52,7 +52,7 @@ public class SnapTests
         service.ServiceValue = -1;
         manager.ManagerValue = -1;
 
-        runtime.FullSnap.Deserialize(document);
+        await runtime.DeserializeFullSnapAsync(document);
 
         Assert.That(layer.LayerValue, Is.EqualTo(11));
         Assert.That(service.ServiceValue, Is.EqualTo(22));
@@ -60,23 +60,23 @@ public class SnapTests
     }
 
     [Test]
-    public void FullSnap_deserialize_throws_when_required_field_is_missing()
+    public async Task FullSnap_deserialize_throws_when_required_field_is_missing()
     {
         var layer = new SnapLayer { LayerValue = 7 };
         LayerRuntime runtime = LayerHub.CreateLayers()
             .Push(layer)
             .Build();
 
-        SnapDocument document = runtime.FullSnap.Serialize();
+        SnapDocument document = await runtime.SerializeFullSnapAsync();
         document.Sections["LayerBase.Test.SnapLayer_FullSnap"].Data.Remove("layerValue");
 
-        Assert.That(
-            () => runtime.FullSnap.Deserialize(document),
-            Throws.TypeOf<SnapFormatException>().With.Message.Contains("layerValue"));
+        SnapFormatException? exception = Assert.ThrowsAsync<SnapFormatException>(
+            async () => await runtime.DeserializeFullSnapAsync(document));
+        Assert.That(exception!.Message, Does.Contain("layerValue"));
     }
 
     [Test]
-    public void SnapArrayReader_round_trips_objects_and_reports_type_mismatch()
+    public async Task SnapArrayReader_round_trips_objects_and_reports_type_mismatch()
     {
         var layer = new InventorySnapLayer();
         LayerRuntime runtime = LayerHub.CreateLayers()
@@ -86,10 +86,10 @@ public class SnapTests
         layer.InventoryService.Items.Add(new ItemStack(1, 2));
         layer.InventoryService.Items.Add(new ItemStack(3, 4));
 
-        SnapDocument document = runtime.FullSnap.Serialize();
+        SnapDocument document = await runtime.SerializeFullSnapAsync();
 
         layer.InventoryService.Items.Clear();
-        runtime.FullSnap.Deserialize(document);
+        await runtime.DeserializeFullSnapAsync(document);
 
         Assert.That(layer.InventoryService.Items, Has.Count.EqualTo(2));
         Assert.That(layer.InventoryService.Items[0].ItemId, Is.EqualTo(1));
@@ -101,24 +101,24 @@ public class SnapTests
         JsonObject firstItem = (JsonObject)items[0]!;
         firstItem["count"] = "bad";
 
-        Assert.That(
-            () => runtime.FullSnap.Deserialize(document),
-            Throws.TypeOf<SnapFormatException>().With.Message.Contains("count"));
+        SnapFormatException? exception = Assert.ThrowsAsync<SnapFormatException>(
+            async () => await runtime.DeserializeFullSnapAsync(document));
+        Assert.That(exception!.Message, Does.Contain("count"));
     }
 
     [Test]
-    public void SnapArrayReader_reports_out_of_range_access()
+    public async Task SnapArrayReader_reports_out_of_range_access()
     {
         var layer = new OutOfRangeSnapLayer();
         LayerRuntime runtime = LayerHub.CreateLayers()
             .Push(layer)
             .Build();
 
-        SnapDocument document = runtime.FullSnap.Serialize();
+        SnapDocument document = await runtime.SerializeFullSnapAsync();
 
-        Assert.That(
-            () => runtime.FullSnap.Deserialize(document),
-            Throws.TypeOf<SnapFormatException>().With.Message.Contains("out of range"));
+        SnapFormatException? exception = Assert.ThrowsAsync<SnapFormatException>(
+            async () => await runtime.DeserializeFullSnapAsync(document));
+        Assert.That(exception!.Message, Does.Contain("out of range"));
     }
 
     [Test]

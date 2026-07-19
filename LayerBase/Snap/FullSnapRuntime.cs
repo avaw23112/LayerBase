@@ -1,11 +1,10 @@
-using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using LayerBase.Async;
 using LayerBase.Scope;
 
 namespace LayerBase.Snap;
 
-internal sealed class FullSnapRuntime : IFullSnapRuntime
+internal sealed class FullSnapRuntime
 {
     private readonly LayerRuntime _runtime;
     private readonly ScopeRuntimeHost _scopes;
@@ -65,113 +64,73 @@ internal sealed class FullSnapRuntime : IFullSnapRuntime
         _scopeNodeCounts = counts;
     }
 
-    public SnapDocument Serialize()
+    internal SnapDocument Serialize()
     {
         ThrowIfWorkerScopeRequiresAsync();
-        var frozen = new List<ScopeRuntime>();
-        try
-        {
-            EnterSafePointDirect(frozen);
-            return WriteFrozenScopesDirect();
-        }
-        finally
-        {
-            ExitSafePointDirect(frozen);
-        }
+        var document = new SnapDocument();
+        foreach (ScopeRuntime scope in _scopes.Scopes)
+            AddSections(document, scope.SerializeFullSnapOnOwnerThread().Sections);
+
+        return document;
     }
 
-    public async LBTask<SnapDocument> SerializeAsync(CancellationToken cancellationToken = default)
+    internal async LBTask<SnapDocument> SerializeAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_scopes.HasWorkerScopes)
-            return Serialize();
 
-        var frozen = new List<ScopeRuntime>();
-        SnapDocument? document = null;
-        Exception? failure = null;
-
-        try
+        var document = new SnapDocument();
+        foreach (ScopeRuntime scope in _scopes.Scopes)
         {
-            await EnterSafePointAsync(frozen, cancellationToken);
-            document = await WriteFrozenScopesAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            ScopeSerializeFullSnapResponse response = await ScopeOwnerInvocation
+                .InvokeAsync<ScopeSerializeFullSnapCall, ScopeSerializeFullSnapResponse>(
+                    scope,
+                    new ScopeSerializeFullSnapCall(),
+                    cancellationToken);
+            if (response.Result != ScopeControlResult.Succeeded)
+                throw new InvalidOperationException($"Scope `{scope.Descriptor.Name}` failed to serialize FullSnap.");
+
+            AddSections(document, response.Sections);
         }
-        catch (Exception ex)
-        {
-            failure = ex;
-        }
 
-        await ExitSafePointAsync(frozen, cancellationToken);
-
-        if (failure != null)
-            ExceptionDispatchInfo.Capture(failure).Throw();
-
-        return document!;
+        return document;
     }
 
-    public void Deserialize(SnapDocument document)
+    internal void Deserialize(SnapDocument document)
     {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
 
         ThrowIfWorkerScopeRequiresAsync();
-        var frozen = new List<ScopeRuntime>();
-        var restoreStarted = false;
-
-        try
-        {
-            EnterSafePointDirect(frozen);
-            restoreStarted = true;
-            ReadFrozenScopesDirect(document);
-        }
-        catch
-        {
-            if (!restoreStarted)
-                ExitSafePointDirect(frozen);
-
-            throw;
-        }
-
-        ExitSafePointDirect(frozen);
+        foreach (ScopeRuntime scope in _scopes.Scopes)
+            scope.DeserializeFullSnapOnOwnerThread(document);
     }
 
-    public async LBTask DeserializeAsync(SnapDocument document, CancellationToken cancellationToken = default)
+    internal async LBTask DeserializeAsync(SnapDocument document, CancellationToken cancellationToken = default)
     {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
 
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_scopes.HasWorkerScopes)
+        foreach (ScopeRuntime scope in _scopes.Scopes)
         {
-            Deserialize(document);
-            return;
+            cancellationToken.ThrowIfCancellationRequested();
+            ScopeDeserializeFullSnapResponse response = await ScopeOwnerInvocation
+                .InvokeAsync<ScopeDeserializeFullSnapCall, ScopeDeserializeFullSnapResponse>(
+                    scope,
+                    new ScopeDeserializeFullSnapCall(document),
+                    cancellationToken);
+            if (response.Result != ScopeControlResult.Succeeded)
+                throw new InvalidOperationException($"Scope `{scope.Descriptor.Name}` failed to deserialize FullSnap.");
         }
-
-        var frozen = new List<ScopeRuntime>();
-        var restoreStarted = false;
-
-        try
-        {
-            await EnterSafePointAsync(frozen, cancellationToken);
-            restoreStarted = true;
-            await ReadFrozenScopesAsync(document, cancellationToken);
-        }
-        catch
-        {
-            if (!restoreStarted)
-                await ExitSafePointAsync(frozen, cancellationToken);
-
-            throw;
-        }
-
-        await ExitSafePointAsync(frozen, cancellationToken);
     }
 
-    public string SerializeJson(JsonSerializerOptions? options = null)
+    internal string SerializeJson(JsonSerializerOptions? options = null)
     {
         return JsonSnapCodec.EncodeToString(Serialize(), options);
     }
 
-    public async LBTask<string> SerializeJsonAsync(
+    internal async LBTask<string> SerializeJsonAsync(
         JsonSerializerOptions? options = null,
         CancellationToken cancellationToken = default)
     {
@@ -179,12 +138,12 @@ internal sealed class FullSnapRuntime : IFullSnapRuntime
         return JsonSnapCodec.EncodeToString(document, options);
     }
 
-    public void DeserializeJson(string json, JsonSerializerOptions? options = null)
+    internal void DeserializeJson(string json, JsonSerializerOptions? options = null)
     {
         Deserialize(JsonSnapCodec.DecodeFromString(json, options));
     }
 
-    public async LBTask DeserializeJsonAsync(
+    internal async LBTask DeserializeJsonAsync(
         string json,
         JsonSerializerOptions? options = null,
         CancellationToken cancellationToken = default)
@@ -202,115 +161,9 @@ internal sealed class FullSnapRuntime : IFullSnapRuntime
         }
     }
 
-    private void EnterSafePointDirect(List<ScopeRuntime> frozen)
-    {
-        foreach (ScopeRuntime scope in _scopes.Scopes)
-        {
-            scope.EnterSafePointForSnap();
-            frozen.Add(scope);
-        }
-    }
-
-    private async LBTask EnterSafePointAsync(
-        List<ScopeRuntime> frozen,
-        CancellationToken cancellationToken)
-    {
-        foreach (ScopeRuntime scope in _scopes.Scopes)
-        {
-            if (!ShouldCoordinateAsync(scope))
-                continue;
-
-            ScopeEnterSafePointResponse response = scope.Options.Threading == ScopeThreadingMode.Worker
-                ? await scope.RequestEnterSafePointAsync(cancellationToken)
-                : scope.EnterSafePointForSnap();
-            if (response.Result != ScopeControlResult.Succeeded)
-                throw new InvalidOperationException($"Scope `{scope.Descriptor.Name}` rejected FullSnap safe point.");
-
-            frozen.Add(scope);
-        }
-    }
-
-    private SnapDocument WriteFrozenScopesDirect()
-    {
-        var document = new SnapDocument();
-        foreach (ScopeRuntime scope in _scopes.Scopes)
-            AddSections(document, scope.WriteSnapshotForSnap().Sections);
-
-        return document;
-    }
-
-    private async LBTask<SnapDocument> WriteFrozenScopesAsync(CancellationToken cancellationToken)
-    {
-        var document = new SnapDocument();
-        foreach (ScopeRuntime scope in _scopes.Scopes)
-        {
-            if (!ShouldCoordinateAsync(scope))
-                continue;
-
-            ScopeWriteSnapshotResponse response = scope.Options.Threading == ScopeThreadingMode.Worker
-                ? await scope.RequestWriteSnapshotAsync(cancellationToken)
-                : scope.WriteSnapshotForSnap();
-            if (response.Result != ScopeControlResult.Succeeded)
-                throw new InvalidOperationException($"Scope `{scope.Descriptor.Name}` failed to write FullSnap.");
-
-            AddSections(document, response.Sections);
-        }
-
-        return document;
-    }
-
-    private void ReadFrozenScopesDirect(SnapDocument document)
-    {
-        foreach (ScopeRuntime scope in _scopes.Scopes)
-            scope.ReadSnapshotForSnap(document);
-    }
-
-    private async LBTask ReadFrozenScopesAsync(SnapDocument document, CancellationToken cancellationToken)
-    {
-        foreach (ScopeRuntime scope in _scopes.Scopes)
-        {
-            if (!ShouldCoordinateAsync(scope))
-                continue;
-
-            ScopeReadSnapshotResponse response = scope.Options.Threading == ScopeThreadingMode.Worker
-                ? await scope.RequestReadSnapshotAsync(document, cancellationToken)
-                : scope.ReadSnapshotForSnap(document);
-            if (response.Result != ScopeControlResult.Succeeded)
-                throw new InvalidOperationException($"Scope `{scope.Descriptor.Name}` failed to read FullSnap.");
-        }
-    }
-
     private static void AddSections(SnapDocument document, SnapSection[] sections)
     {
         for (int i = 0; i < sections.Length; i++)
             document.AddSection(sections[i]);
-    }
-
-    private static void ExitSafePointDirect(List<ScopeRuntime> frozen)
-    {
-        for (int i = frozen.Count - 1; i >= 0; i--)
-            frozen[i].ExitSafePointForSnap();
-    }
-
-    private static async LBTask ExitSafePointAsync(
-        List<ScopeRuntime> frozen,
-        CancellationToken cancellationToken)
-    {
-        for (int i = frozen.Count - 1; i >= 0; i--)
-        {
-            ScopeRuntime scope = frozen[i];
-            if (scope.Options.Threading == ScopeThreadingMode.Worker)
-                await scope.RequestExitSafePointAsync(cancellationToken);
-            else
-                scope.ExitSafePointForSnap();
-        }
-    }
-
-    private bool ShouldCoordinateAsync(ScopeRuntime scope)
-    {
-        if (scope.Options.Threading == ScopeThreadingMode.Worker)
-            return true;
-
-        return _scopeNodeCounts.TryGetValue(scope.ScopeId, out int count) && count > 0;
     }
 }
