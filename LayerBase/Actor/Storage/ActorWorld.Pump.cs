@@ -11,12 +11,21 @@ public sealed partial class ActorWorld
         bool                   pumpFixedUpdate,
         ref RuntimeFrameBudget budget)
     {
-        if (_state == ActorWorldState.Disposed || _state == ActorWorldState.Stopping)
+        if (_state == ActorWorldState.Disposed)
         {
             return;
         }
         try
         {
+            DrainCompletionInbox();
+
+            if (_disposeRequested || _state == ActorWorldState.Stopping)
+            {
+                SweepPendingDestroy();
+                TryFinalizeDeferredDispose();
+                return;
+            }
+
             if (DelayScheduler.HasPending)
             {
                 DelayScheduler.Tick(deltaTime);

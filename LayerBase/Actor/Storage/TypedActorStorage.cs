@@ -719,6 +719,20 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         return true;
     }
 
+    public override int MarkAllPendingDestroy()
+    {
+        int marked = 0;
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+        {
+            if (MarkPendingDestroy(slotIndex, _generations[slotIndex]))
+            {
+                marked++;
+            }
+        }
+
+        return marked;
+    }
+
     public override int CountAlive()
     {
         int count = 0;
@@ -756,6 +770,17 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             {
                 count++;
             }
+        }
+
+        return count;
+    }
+
+    public override int CountActiveOperations()
+    {
+        int count = 0;
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+        {
+            count += ActiveOperationCount(slotIndex);
         }
 
         return count;
@@ -824,7 +849,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             hasUpdate: handles.Update.IsValid,
             hasLateUpdate: handles.LateUpdate.IsValid,
             hasFixedUpdate: handles.FixedUpdate.IsValid,
-            failureReason: string.Empty);
+            failureReason: string.Empty,
+            activeOperations: ActiveOperationCount(slotIndex));
     }
 
     public override void AppendDebugRow(StringBuilder builder, int archetypeId, string archetypeInfo)
@@ -891,6 +917,17 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             Interlocked.Exchange(ref _activeOperations[slotIndex], 0);
         }
+    }
+
+    internal void EnqueueCompletion(IActorWorldCompletion completion)
+    {
+        if (_world == null)
+        {
+            completion.CompleteOnOwner();
+            return;
+        }
+
+        _world.EnqueueCompletion(completion);
     }
 
     internal int ActiveOperationCount(int slotIndex)

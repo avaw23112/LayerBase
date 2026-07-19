@@ -40,8 +40,38 @@ public sealed partial class ActorWorld
             return;
         }
 
-        _state = ActorWorldState.Disposed;
+        _disposeRequested = true;
+        _state = ActorWorldState.Stopping;
         DelayScheduler.Clear();
+
+        MarkAllActorsPendingDestroy();
+        DrainCompletionInbox();
+        SweepPendingDestroy();
+        TryFinalizeDeferredDispose();
+    }
+
+    private void TryFinalizeDeferredDispose()
+    {
+        if (!_disposeRequested
+            || _state == ActorWorldState.Disposed
+            || CountActiveOperations() > 0
+            || _pendingDestroyCount > 0
+            || CountCompletionInbox() > 0)
+        {
+            return;
+        }
+
+        FinalizeDispose();
+    }
+
+    private void FinalizeDispose()
+    {
+        if (_state == ActorWorldState.Disposed)
+        {
+            return;
+        }
+
+        _state = ActorWorldState.Disposed;
         _queryCacheByDescriptor.Clear();
         _callBucketsByRouteId = Array.Empty<IActorCallBucket>();
 
@@ -53,7 +83,11 @@ public sealed partial class ActorWorld
         _eventStreamUnbinders.Clear();
         _eventStreamRuntimes.Clear();
         GlobalEventMailPools.Clear();
-        ActorWorldRuntimeIndexAllocator.Return(RuntimeIndex);
+        if (!_runtimeIndexReturned)
+        {
+            _runtimeIndexReturned = true;
+            ActorWorldRuntimeIndexAllocator.Return(RuntimeIndex);
+        }
     }
 
     public bool IsEnable(ActorId actorId)

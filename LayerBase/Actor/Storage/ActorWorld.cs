@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace LayerBase.Actor;
 
 public sealed partial class ActorWorld : IDisposable
@@ -18,6 +20,8 @@ public sealed partial class ActorWorld : IDisposable
     internal ActorLifecycleScheduler Lifecycle { get; }
     internal ActorDelayScheduler DelayScheduler { get; }
     private int _pendingDestroyCount;
+    private bool _disposeRequested;
+    private bool _runtimeIndexReturned;
     internal LayerRuntime? Runtime { get; }
     internal ActorMailOptions DefaultMailOptions { get; }
     private ActorWorldState _state;
@@ -27,6 +31,7 @@ public sealed partial class ActorWorld : IDisposable
     private readonly DirtyBucketList _dirtyEventStreams = new();
 
     private bool _hasCallBuckets;
+    private readonly ConcurrentQueue<IActorWorldCompletion> _completionInbox = new();
 
     internal ActorWorld()
     {
@@ -163,5 +168,37 @@ public sealed partial class ActorWorld : IDisposable
         }
 
         Array.Resize(ref _callBucketsByRouteId, newSize);
+    }
+
+    internal void EnqueueCompletion(IActorWorldCompletion completion)
+    {
+        if (completion == null)
+            throw new ArgumentNullException(nameof(completion));
+
+        _completionInbox.Enqueue(completion);
+    }
+
+    private void DrainCompletionInbox()
+    {
+        while (_completionInbox.TryDequeue(out var completion))
+        {
+            completion.CompleteOnOwner();
+        }
+    }
+
+    private int CountActiveOperations()
+    {
+        int count = 0;
+        foreach (BehaviourArchetype archetype in _archetypes)
+        {
+            count += archetype.CountActiveOperations();
+        }
+
+        return count;
+    }
+
+    private int CountCompletionInbox()
+    {
+        return _completionInbox.Count;
     }
 }

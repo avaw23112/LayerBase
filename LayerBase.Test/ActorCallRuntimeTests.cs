@@ -39,13 +39,41 @@ public struct ActorCallRuntimeUnsupportedResponse
     public int Value;
 }
 
+public struct ActorCallRuntimeBlockingRequest
+{
+    public int Value;
+}
+
+public struct ActorCallRuntimeBlockingResponse
+{
+    public int Value;
+}
+
+public struct ActorCallRuntimeTokenRequest
+{
+    public int Value;
+}
+
+public struct ActorCallRuntimeTokenResponse
+{
+    public int Value;
+}
+
 internal static class ActorCallRuntimeTrace
 {
     public static List<string> Entries { get; } = new();
+    public static LBTaskCompletionSource<ActorCallRuntimeBlockingResponse>? BlockingSource { get; set; }
+    public static LBTaskCompletionSource<ActorCallRuntimeTokenResponse>? TokenSource { get; set; }
+    public static CancellationToken CapturedToken { get; set; }
 
     public static void Reset()
     {
         Entries.Clear();
+        BlockingSource?.Dispose();
+        BlockingSource = null;
+        TokenSource?.Dispose();
+        TokenSource = null;
+        CapturedToken = default;
     }
 }
 
@@ -67,6 +95,25 @@ internal sealed partial class ActorCallRuntimeActor : IActor
         {
             Value = request.Value * 2
         });
+    }
+
+    [ActorCallBehaviour]
+    private LBTask<ActorCallRuntimeBlockingResponse> OnBlockingAsk(
+        in ActorCallRuntimeBlockingRequest request,
+        CancellationToken                 cancellationToken)
+    {
+        ActorCallRuntimeTrace.Entries.Add($"blocking:{request.Value}");
+        return ActorCallRuntimeTrace.BlockingSource!.Task;
+    }
+
+    [ActorCallBehaviour]
+    private LBTask<ActorCallRuntimeTokenResponse> OnTokenAsk(
+        in ActorCallRuntimeTokenRequest request,
+        CancellationToken              cancellationToken)
+    {
+        ActorCallRuntimeTrace.Entries.Add($"token:{request.Value}");
+        ActorCallRuntimeTrace.CapturedToken = cancellationToken;
+        return ActorCallRuntimeTrace.TokenSource!.Task;
     }
 }
 
@@ -115,6 +162,133 @@ public class ActorCallRuntimeTests
         Assert.That(awaiter.IsCompleted, Is.True);
         Assert.That(awaiter.GetResult().Value, Is.EqualTo(8));
         Assert.That(ActorCallRuntimeTrace.Entries, Is.EqualTo(new[] { "ask:4" }));
+    }
+
+    [Test]
+    public void Async_actor_call_completion_returns_to_owner_pump()
+    {
+        var world = new ActorWorld();
+        ActorCallRuntimeActor actor = world.CreateActor<ActorCallRuntimeActor>();
+        ActorId actorId = actor.GetActorId();
+        ActorCallRuntimeTrace.BlockingSource =
+            new LBTaskCompletionSource<ActorCallRuntimeBlockingResponse>();
+
+        LBTask<ActorCallRuntimeBlockingResponse> task =
+            world.Ask<ActorCallRuntimeBlockingRequest, ActorCallRuntimeBlockingResponse>(
+                actorId,
+                new ActorCallRuntimeBlockingRequest { Value = 7 });
+
+        var budget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        Assert.That(task.GetAwaiter().IsCompleted, Is.False);
+        ActorDebugInfo runningInfo = world.GetDebugInfo(actorId);
+        Assert.That(runningInfo.ActiveOperations, Is.EqualTo(1));
+
+        Assert.That(world.DestroyActor(actorId), Is.True);
+        budget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        ActorCallRuntimeTrace.BlockingSource.SetResult(
+            new ActorCallRuntimeBlockingResponse { Value = 14 });
+        SpinWait.SpinUntil(
+            () => task.GetAwaiter().IsCompleted,
+            TimeSpan.FromMilliseconds(100));
+
+        Assert.That(task.GetAwaiter().IsCompleted, Is.False);
+        ActorDebugInfo pendingInfo = world.GetDebugInfo(actorId);
+        Assert.That(pendingInfo.ActiveOperations, Is.EqualTo(1));
+
+        budget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        Assert.That(task.GetAwaiter().GetResult().Value, Is.EqualTo(14));
+        ActorDebugInfo staleInfo = world.GetDebugInfo(actorId);
+        Assert.That(staleInfo.IsValid, Is.False);
+    }
+
+    [Test]
+    public void Disposing_world_with_active_actor_call_returns_runtime_index_last()
+    {
+        var world = new ActorWorld();
+        int runtimeIndex = world.RuntimeIndex;
+        ActorCallRuntimeActor actor = world.CreateActor<ActorCallRuntimeActor>();
+        ActorCallRuntimeTrace.BlockingSource =
+            new LBTaskCompletionSource<ActorCallRuntimeBlockingResponse>();
+
+        LBTask<ActorCallRuntimeBlockingResponse> task =
+            world.Ask<ActorCallRuntimeBlockingRequest, ActorCallRuntimeBlockingResponse>(
+                actor.GetActorId(),
+                new ActorCallRuntimeBlockingRequest { Value = 9 });
+
+        var budget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        world.Dispose();
+
+        using var nextWorld = new ActorWorld();
+        Assert.That(nextWorld.RuntimeIndex, Is.Not.EqualTo(runtimeIndex));
+
+        ActorCallRuntimeTrace.BlockingSource.SetResult(
+            new ActorCallRuntimeBlockingResponse { Value = 18 });
+
+        bool completed = SpinWait.SpinUntil(
+            () =>
+            {
+                var pumpBudget = new RuntimeFrameBudget(16, 0, 0);
+                world.Pump(0f, 0f, false, ref pumpBudget);
+                return task.GetAwaiter().IsCompleted;
+            },
+            TimeSpan.FromMilliseconds(1000));
+
+        Assert.That(completed, Is.True);
+        Assert.That(task.GetAwaiter().GetResult().Value, Is.EqualTo(18));
+
+        using var recycledWorld = new ActorWorld();
+        Assert.That(recycledWorld.RuntimeIndex, Is.EqualTo(runtimeIndex));
+    }
+
+    [Test]
+    public void Actor_lifetime_token_reaches_call_handler()
+    {
+        var world = new ActorWorld();
+        ActorCallRuntimeActor actor = world.CreateActor<ActorCallRuntimeActor>();
+        ActorCallRuntimeTrace.TokenSource =
+            new LBTaskCompletionSource<ActorCallRuntimeTokenResponse>();
+
+        LBTask<ActorCallRuntimeTokenResponse> task =
+            world.Ask<ActorCallRuntimeTokenRequest, ActorCallRuntimeTokenResponse>(
+                actor.GetActorId(),
+                new ActorCallRuntimeTokenRequest { Value = 11 });
+
+        var budget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref budget);
+
+        Assert.That(ActorCallRuntimeTrace.CapturedToken.CanBeCanceled, Is.True);
+        Assert.That(ActorCallRuntimeTrace.CapturedToken.IsCancellationRequested, Is.False);
+
+        world.Dispose();
+
+        Assert.That(
+            SpinWait.SpinUntil(
+                () => ActorCallRuntimeTrace.CapturedToken.IsCancellationRequested,
+                TimeSpan.FromMilliseconds(1000)),
+            Is.True);
+
+        ActorCallRuntimeTrace.TokenSource.SetResult(
+            new ActorCallRuntimeTokenResponse { Value = 22 });
+
+        Assert.That(
+            SpinWait.SpinUntil(
+                () =>
+                {
+                    var pumpBudget = new RuntimeFrameBudget(16, 0, 0);
+                    world.Pump(0f, 0f, false, ref pumpBudget);
+                    return task.GetAwaiter().IsCompleted;
+                },
+                TimeSpan.FromMilliseconds(1000)),
+            Is.True);
+        Assert.That(task.GetAwaiter().GetResult().Value, Is.EqualTo(22));
     }
 
     [Test]
@@ -220,6 +394,23 @@ public class ActorCallRuntimeTests
         world.Dispose();
 
         Assert.Throws<OperationCanceledException>(() => task.GetAwaiter().GetResult());
+        Assert.That(ActorCallRuntimeTrace.Entries, Is.Empty);
+    }
+
+    [Test]
+    public void Dispose_faults_queued_ask_before_handler_starts()
+    {
+        var world = new ActorWorld();
+        ActorCallRuntimeActor actor = world.CreateActor<ActorCallRuntimeActor>();
+
+        LBTask<ActorCallRuntimeResponse> task = world.Ask<ActorCallRuntimeRequest, ActorCallRuntimeResponse>(
+            actor.GetActorId(),
+            new ActorCallRuntimeRequest(10));
+
+        world.Dispose();
+
+        ActorCallException exception = Assert.Throws<ActorCallException>(() => task.GetAwaiter().GetResult())!;
+        Assert.That(exception.FailureKind, Is.EqualTo(ActorCallFailureKind.PendingDestroy));
         Assert.That(ActorCallRuntimeTrace.Entries, Is.Empty);
     }
 

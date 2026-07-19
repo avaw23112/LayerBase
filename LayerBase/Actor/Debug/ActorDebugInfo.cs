@@ -12,6 +12,7 @@ public readonly struct ActorDebugInfo
     public readonly string[] Tags;
     public readonly string[] Groups;
     public readonly int PendingMailCount;
+    public readonly int ActiveOperations;
     public readonly bool HasUpdate;
     public readonly bool HasLateUpdate;
     public readonly bool HasFixedUpdate;
@@ -31,7 +32,8 @@ public readonly struct ActorDebugInfo
         bool     hasUpdate,
         bool     hasLateUpdate,
         bool     hasFixedUpdate,
-        string   failureReason)
+        string   failureReason,
+        int      activeOperations = 0)
     {
         ActorId = actorId;
         IsValid = isValid;
@@ -43,6 +45,7 @@ public readonly struct ActorDebugInfo
         Tags = tags ?? Array.Empty<string>();
         Groups = groups ?? Array.Empty<string>();
         PendingMailCount = pendingMailCount;
+        ActiveOperations = activeOperations;
         HasUpdate = hasUpdate;
         HasLateUpdate = hasLateUpdate;
         HasFixedUpdate = hasFixedUpdate;

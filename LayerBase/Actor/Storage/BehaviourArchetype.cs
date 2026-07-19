@@ -243,6 +243,17 @@ internal sealed class BehaviourArchetype
         return storage.MarkPendingDestroy(actorId.SlotIndex, actorId.Generation);
     }
 
+    internal int MarkAllPendingDestroy()
+    {
+        int count = 0;
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            count += _storages[i].MarkAllPendingDestroy();
+        }
+
+        return count;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool IsCurrentGeneration(ActorId actorId)
     {
@@ -321,6 +332,28 @@ internal sealed class BehaviourArchetype
         for (int i = 0; i < _storages.Length; i++)
         {
             count += _storages[i].CountEnabled();
+        }
+
+        return count;
+    }
+
+    internal int CountPendingDestroy()
+    {
+        int count = 0;
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            count += _storages[i].CountPendingDestroy();
+        }
+
+        return count;
+    }
+
+    internal int CountActiveOperations()
+    {
+        int count = 0;
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            count += _storages[i].CountActiveOperations();
         }
 
         return count;

@@ -50,6 +50,20 @@ public sealed partial class ActorWorld
             archetype.SweepPendingDestroy(this);
         }
 
-        _pendingDestroyCount = 0;
+        int remaining = 0;
+        foreach (BehaviourArchetype archetype in _archetypes)
+        {
+            remaining += archetype.CountPendingDestroy();
+        }
+
+        _pendingDestroyCount = remaining;
+    }
+
+    private void MarkAllActorsPendingDestroy()
+    {
+        foreach (BehaviourArchetype archetype in _archetypes)
+        {
+            _pendingDestroyCount += archetype.MarkAllPendingDestroy();
+        }
     }
 }

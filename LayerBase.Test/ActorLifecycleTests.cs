@@ -231,6 +231,21 @@ public class ActorLifecycleTests
     }
 
     [Test]
+    public void Dispose_runs_destroy_for_every_live_actor()
+    {
+        var world = new ActorWorld();
+        world.CreateActor<LifecycleProbeActor>();
+        world.CreateActor<LifecycleProbeActor>();
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "start", "start" }));
+        ActorLifecycleTrace.Entries.Clear();
+
+        world.Dispose();
+
+        Assert.That(LifecycleProbeActor.DestroyCount, Is.EqualTo(2));
+        Assert.That(ActorLifecycleTrace.Entries, Is.EqualTo(new[] { "destroy", "destroy" }));
+    }
+
+    [Test]
     public void DestroyActor_clears_mail_and_dirty_slot_never_invokes_destroyed_behaviour()
     {
         var world = new ActorWorld();

@@ -213,45 +213,79 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
             return;
         }
 
+        CancellationTokenSource? linkedCancellation = null;
         try
         {
-            LBTask<TResponse> task = _invoker(actor, in mail.Request, mail.CancellationToken);
+            CancellationToken effectiveToken = CreateEffectiveToken(
+                mail.CancellationToken,
+                _owner.GetOrCreateLifetimeToken(slotIndex),
+                out linkedCancellation);
+            LBTask<TResponse> task = _invoker(actor, in mail.Request, effectiveToken);
             if (task.GetAwaiter().IsCompleted)
             {
                 _owner.CompleteOperation(slotIndex);
                 CompleteImmediately(task.GetAwaiter(), mail.Source);
+                linkedCancellation?.Dispose();
             }
             else
             {
-                Forward(task, mail.Source, slotIndex);
+                Forward(task, mail.Source, slotIndex, linkedCancellation);
+                linkedCancellation = null;
             }
         }
         catch (Exception exception)
         {
             _owner.CompleteOperation(slotIndex);
             mail.Source.SetException(exception);
+            linkedCancellation?.Dispose();
         }
     }
 
     private void Forward(
         LBTask<TResponse>                 task,
         LBTaskCompletionSource<TResponse> target,
-        int                               slotIndex)
+        int                               slotIndex,
+        IDisposable?                      operationResource)
     {
         var awaiter = task.GetAwaiter();
         if (awaiter.IsCompleted)
         {
             _owner.CompleteOperation(slotIndex);
             CompleteImmediately(awaiter, target);
+            operationResource?.Dispose();
             return;
         }
 
         int capturedSlot = slotIndex;
         awaiter.OnCompleted(() =>
         {
-            _owner.CompleteOperation(capturedSlot);
-            CompleteImmediately(task.GetAwaiter(), target);
+            _owner.EnqueueCompletion(
+                new ActorCallCompletion<TActor, TResponse>(
+                    _owner,
+                    capturedSlot,
+                    task,
+                    target,
+                    operationResource));
         });
+    }
+
+    private static CancellationToken CreateEffectiveToken(
+        CancellationToken requestToken,
+        CancellationToken lifetimeToken,
+        out CancellationTokenSource? linkedCancellation)
+    {
+        linkedCancellation = null;
+        if (requestToken.CanBeCanceled && lifetimeToken.CanBeCanceled)
+        {
+            linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                requestToken,
+                lifetimeToken);
+            return linkedCancellation.Token;
+        }
+
+        return lifetimeToken.CanBeCanceled
+            ? lifetimeToken
+            : requestToken;
     }
 
     private static void CompleteImmediately(
