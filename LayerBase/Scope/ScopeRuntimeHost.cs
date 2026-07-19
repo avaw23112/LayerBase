@@ -1,6 +1,7 @@
 using System.Linq;
 using LayerBase.Async;
 using LayerBase.Actor;
+using LayerBase.Core.Event;
 using LayerBase.Lifetime;
 
 namespace LayerBase.Scope;
@@ -34,7 +35,6 @@ internal sealed class ScopeRuntimeHost : ILifetimeParticipant, IDisposable
         var mainEndpoint = scopes[0].Endpoint;
         for (int i = 0; i < scopes.Length; i++)
         {
-            scopes[i].BindHost(this);
             scopes[i].BindMainActorEndpoint(mainEndpoint);
             scopes[i].BindScopeEndpoints(_directory);
         }
@@ -80,17 +80,83 @@ internal sealed class ScopeRuntimeHost : ILifetimeParticipant, IDisposable
 
         var scopes = new ScopeRuntime[plans.Count];
         var workers = new List<ScopeWorker>();
+        ScopeRuntimeHost? host = null;
+        ScopeFaultHandler fault = (in ScopeFaultRecord record) =>
+        {
+            runtime.ReportScopeFault(in record);
+            host?.ApplyFaultPolicy(in record);
+        };
+        ScopeDelayRegistryChangedHandler delayRegistryChanged = scopeId =>
+        {
+            if (scopeId == ScopeDefinitionIds.Main)
+                runtime.MarkDelayDirty();
+        };
+        ScopeSystemCallHandler systemCall = (ScopeRuntime scope, in ScopeCallEnvelope envelope, EventPayloadStorage payloadStorage) =>
+            scope.ScopeId == ScopeDefinitionIds.Main &&
+            runtime.MainActorRuntime.DispatchCallRoute(
+                envelope.RouteId,
+                runtimeId,
+                envelope,
+                payloadStorage);
+        ScopeSystemEventHandler systemEvent = (ScopeRuntime scope, in ScopeEventEnvelope envelope, EventPayloadStorage payloadStorage) =>
+            scope.ScopeId == ScopeDefinitionIds.Main &&
+            (runtime.MainActorRuntime.DispatchProjectionRoute(
+                 envelope.RouteId,
+                 scope,
+                 runtimeId,
+                 envelope.Payload,
+                 payloadStorage) ||
+             runtime.MainActorRuntime.DispatchCommandRoute(
+                 envelope.RouteId,
+                 runtimeId,
+                 envelope.Payload,
+                 payloadStorage));
+        ScopeRuntimeCallbacks CreateCallbacks()
+        {
+            return new ScopeRuntimeCallbacks(
+                fault,
+                delayRegistryChanged,
+                runtime.ReportLayerEventError,
+                runtime.DisposeScopeServices,
+                systemCall,
+                systemEvent,
+                () => runtime.HasToolRegistry ? runtime.Tools.CaptureDiagnostics() : default);
+        }
+
         try
         {
             for (int i = 0; i < plans.Count; i++)
             {
-                scopes[i] = new ScopeRuntime(runtime, plans[i], runtimeId, generation);
+                if (plans[i].Descriptor.ScopeId == ScopeDefinitionIds.Main)
+                {
+                    scopes[i] = new ScopeRuntime(
+                        plans[i],
+                        runtimeId,
+                        generation,
+                        runtime.WorkerExecutor,
+                        CreateCallbacks(),
+                        runtime.MainActorRuntime.Client,
+                        runtime.MainActorRuntime.Factory,
+                        runtime.MainActorRuntime.ProjectedActorCommandSink,
+                        runtime.MainActorRuntime.BindProjectionWorld);
+                }
+                else
+                {
+                    scopes[i] = new ScopeRuntime(
+                        plans[i],
+                        runtimeId,
+                        generation,
+                        runtime.WorkerExecutor,
+                        CreateCallbacks());
+                }
+
                 if (plans[i].Options.Threading == ScopeThreadingMode.Worker)
                     workers.Add(new ScopeWorker(scopes[i]));
             }
 
             var directory = new ScopeRuntimeDirectory(scopes);
-            return new ScopeRuntimeHost(directory, workers.ToArray());
+            host = new ScopeRuntimeHost(directory, workers.ToArray());
+            return host;
         }
         catch
         {

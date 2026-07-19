@@ -4,6 +4,7 @@ using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Event.EventMetaData;
 using LayerBase.Scope;
+using LayerBase.Worker;
 using NUnit.Framework;
 
 namespace LayerBase.Test;
@@ -168,7 +169,12 @@ public class RuntimeScopeBudgetTests
         var inlinePlan = new ScopeExecutionPlan(
             new ScopeDescriptor(1, "InlineScope", typeof(MainScope)),
             ScopeOptions.Inline);
-        using var scope = new ScopeRuntime(runtime, inlinePlan, runtimeId: 9303, generation: 1);
+        using var scope = new ScopeRuntime(
+            inlinePlan,
+            runtimeId: 9303,
+            generation: 1,
+            runtime.WorkerExecutor,
+            CreateNoopCallbacks(runtime));
 
         var options = new PostSchedulerOptions(1024, 1024, 0, 0, 1, 64, BackpressurePolicy.RejectNew);
         var policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
@@ -188,5 +194,14 @@ public class RuntimeScopeBudgetTests
 
         Assert.That(budget.UsedWorkItems, Is.EqualTo(3));
         Assert.That(budget.RemainingPostCount, Is.EqualTo(0));
+    }
+
+    private static ScopeRuntimeCallbacks CreateNoopCallbacks(LayerRuntime runtime)
+    {
+        return new ScopeRuntimeCallbacks(
+            static (in ScopeFaultRecord _) => { },
+            static _ => { },
+            runtime.ReportLayerEventError,
+            runtime.DisposeScopeServices);
     }
 }

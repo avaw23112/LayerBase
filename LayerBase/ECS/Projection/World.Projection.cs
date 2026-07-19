@@ -13,18 +13,10 @@ public partial class World
     private IProjectedActorCommandSink _projectedActorCommandSink = RejectingProjectedActorCommandSink.Instance;
     private ScopeEcsScheduler? _ecsScheduler;
 
-    internal LayerRuntime Runtime { get; private set; } = null!;
-
     internal ScopeEcsScheduler EcsScheduler =>
         _ecsScheduler ?? throw new InvalidOperationException("World is not bound to a ScopeEcsScheduler.");
 
     internal IProjectedActorCommandSink ProjectedActorCommands => _projectedActorCommandSink;
-
-    internal void BindRuntime(
-        LayerRuntime runtime)
-    {
-        Runtime = runtime;
-    }
 
     internal void BindEcsScheduler(
         ScopeEcsScheduler scheduler)
@@ -37,6 +29,11 @@ public partial class World
     {
         _projectedActorCommandSink =
             commandSink ?? throw new ArgumentNullException(nameof(commandSink));
+    }
+
+    internal void ClearProjectedActorCommandSink()
+    {
+        _projectedActorCommandSink = RejectingProjectedActorCommandSink.Instance;
     }
 
     internal ref ProjectedActorMeta GetProjectionMeta(
