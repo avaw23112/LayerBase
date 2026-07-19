@@ -275,6 +275,7 @@ public readonly struct LBTask
         private LBTaskSource? _source;
         private int _sourceVersion;
         private CancellationToken _token;
+        private DelayWorkItemLease? _cancellationLease;
         public int HeapIndex = -1;
 
         public CancellationTokenRegistration CancellationRegistration;
@@ -299,31 +300,50 @@ public readonly struct LBTask
             work._token = token;
             work._dueTimestamp = 0;
             work._completed = 0;
-            work._registrationInitializing = 0;
+            work._registrationInitializing = token.CanBeCanceled ? 1 : 0;
             work._returnPending = 0;
             work.CancellationRegistration = default;
+            work._cancellationLease = null;
             return work;
         }
 
         public void RegisterCancellation()
         {
-            if (!_token.CanBeCanceled) return;
+            if (!_token.CanBeCanceled)
+            {
+                _registrationInitializing = 0;
+                if (Interlocked.Exchange(ref _returnPending, 0) == 1) ReturnToPool();
+                return;
+            }
 
-            Volatile.Write(ref _registrationInitializing, 1);
-                var registration = _token.Register(static state =>
+            DelayWorkItemLease lease =
+                DelayWorkItemLease.Rent(this, Volatile.Read(ref _leaseVersion));
+
+            _cancellationLease = lease;
+
+            var registration = _token.Register(static state =>
+            {
+                var callbackLease = (DelayWorkItemLease)state!;
+                try
                 {
-                    var lease = (DelayWorkItemLease)state!;
-                    lease.Work.TryCancel(lease.LeaseVersion);
-                    lease.Return();
-                }, DelayWorkItemLease.Rent(this, Volatile.Read(ref _leaseVersion)));
+                    callbackLease.Work.TryCancel(callbackLease.LeaseVersion);
+                }
+                finally
+                {
+                    callbackLease.Return();
+                }
+            }, lease);
+
             CancellationRegistration = registration;
-            Volatile.Write(ref _registrationInitializing, 0);
 
             if (Volatile.Read(ref _completed) != 0)
             {
                 registration.Dispose();
                 CancellationRegistration = default;
+                ReturnCancellationLease();
             }
+
+            Volatile.Write(ref _registrationInitializing, 0);
 
             if (Interlocked.Exchange(ref _returnPending, 0) == 1) ReturnToPool();
         }
@@ -343,6 +363,8 @@ public readonly struct LBTask
             try
             {
                 CancellationRegistration.Dispose();
+                CancellationRegistration = default;
+                ReturnCancellationLease();
                 if (canceled)
                     _source!.TrySetCanceled(_sourceVersion, _token);
                 else
@@ -357,6 +379,11 @@ public readonly struct LBTask
             }
         }
 
+        private void ReturnCancellationLease()
+        {
+            Interlocked.Exchange(ref _cancellationLease, null)?.Return();
+        }
+
         private void ReturnToPool()
         {
             _source = null;
@@ -366,6 +393,7 @@ public readonly struct LBTask
             _registrationInitializing = 0;
             _returnPending = 0;
             CancellationRegistration = default;
+            _cancellationLease = null;
             HeapIndex = -1;
             Pool.Return(this);
         }
