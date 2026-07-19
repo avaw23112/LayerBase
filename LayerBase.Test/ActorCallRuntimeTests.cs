@@ -165,7 +165,7 @@ public class ActorCallRuntimeTests
     }
 
     [Test]
-    public void Async_actor_call_completion_returns_to_owner_pump()
+    public void Actor_destroy_cancels_active_call()
     {
         var world = new ActorWorld();
         ActorCallRuntimeActor actor = world.CreateActor<ActorCallRuntimeActor>();
@@ -189,26 +189,24 @@ public class ActorCallRuntimeTests
         budget = new RuntimeFrameBudget(16, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
 
+        Assert.That(task.GetAwaiter().IsCompleted, Is.True);
+        ActorDebugInfo cancelledInfo = world.GetDebugInfo(actorId);
+        Assert.That(cancelledInfo.ActiveOperations, Is.EqualTo(0));
+
         ActorCallRuntimeTrace.BlockingSource.SetResult(
             new ActorCallRuntimeBlockingResponse { Value = 14 });
-        SpinWait.SpinUntil(
-            () => task.GetAwaiter().IsCompleted,
-            TimeSpan.FromMilliseconds(100));
 
-        Assert.That(task.GetAwaiter().IsCompleted, Is.False);
-        ActorDebugInfo pendingInfo = world.GetDebugInfo(actorId);
-        Assert.That(pendingInfo.ActiveOperations, Is.EqualTo(1));
+        Assert.Throws<OperationCanceledException>(() => task.GetAwaiter().GetResult());
 
         budget = new RuntimeFrameBudget(16, 0, 0);
         world.Pump(0f, 0f, false, ref budget);
 
-        Assert.That(task.GetAwaiter().GetResult().Value, Is.EqualTo(14));
         ActorDebugInfo staleInfo = world.GetDebugInfo(actorId);
         Assert.That(staleInfo.IsValid, Is.False);
     }
 
     [Test]
-    public void Disposing_world_with_active_actor_call_returns_runtime_index_last()
+    public void Runtime_dispose_completes_active_actor_call_with_object_disposed()
     {
         var world = new ActorWorld();
         int runtimeIndex = world.RuntimeIndex;
@@ -226,23 +224,14 @@ public class ActorCallRuntimeTests
 
         world.Dispose();
 
-        using var nextWorld = new ActorWorld();
-        Assert.That(nextWorld.RuntimeIndex, Is.Not.EqualTo(runtimeIndex));
+        Assert.That(task.GetAwaiter().IsCompleted, Is.True);
 
         ActorCallRuntimeTrace.BlockingSource.SetResult(
             new ActorCallRuntimeBlockingResponse { Value = 18 });
 
-        bool completed = SpinWait.SpinUntil(
-            () =>
-            {
-                var pumpBudget = new RuntimeFrameBudget(16, 0, 0);
-                world.Pump(0f, 0f, false, ref pumpBudget);
-                return task.GetAwaiter().IsCompleted;
-            },
-            TimeSpan.FromMilliseconds(1000));
-
-        Assert.That(completed, Is.True);
-        Assert.That(task.GetAwaiter().GetResult().Value, Is.EqualTo(18));
+        var pumpBudget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref pumpBudget);
+        Assert.Throws<ObjectDisposedException>(() => task.GetAwaiter().GetResult());
 
         using var recycledWorld = new ActorWorld();
         Assert.That(recycledWorld.RuntimeIndex, Is.EqualTo(runtimeIndex));
@@ -278,17 +267,9 @@ public class ActorCallRuntimeTests
         ActorCallRuntimeTrace.TokenSource.SetResult(
             new ActorCallRuntimeTokenResponse { Value = 22 });
 
-        Assert.That(
-            SpinWait.SpinUntil(
-                () =>
-                {
-                    var pumpBudget = new RuntimeFrameBudget(16, 0, 0);
-                    world.Pump(0f, 0f, false, ref pumpBudget);
-                    return task.GetAwaiter().IsCompleted;
-                },
-                TimeSpan.FromMilliseconds(1000)),
-            Is.True);
-        Assert.That(task.GetAwaiter().GetResult().Value, Is.EqualTo(22));
+        var pumpBudget = new RuntimeFrameBudget(16, 0, 0);
+        world.Pump(0f, 0f, false, ref pumpBudget);
+        Assert.Throws<ObjectDisposedException>(() => task.GetAwaiter().GetResult());
     }
 
     [Test]
@@ -398,7 +379,7 @@ public class ActorCallRuntimeTests
     }
 
     [Test]
-    public void Dispose_faults_queued_ask_before_handler_starts()
+    public void Dispose_completes_queued_ask_with_object_disposed_before_handler_starts()
     {
         var world = new ActorWorld();
         ActorCallRuntimeActor actor = world.CreateActor<ActorCallRuntimeActor>();
@@ -409,8 +390,7 @@ public class ActorCallRuntimeTests
 
         world.Dispose();
 
-        ActorCallException exception = Assert.Throws<ActorCallException>(() => task.GetAwaiter().GetResult())!;
-        Assert.That(exception.FailureKind, Is.EqualTo(ActorCallFailureKind.PendingDestroy));
+        Assert.Throws<ObjectDisposedException>(() => task.GetAwaiter().GetResult());
         Assert.That(ActorCallRuntimeTrace.Entries, Is.Empty);
     }
 

@@ -26,6 +26,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private ActorLifecycleHandles[] _lifecycleHandles;
     private ActorSlotFreeList _freeList;
     private int[] _activeOperations;
+    private List<IActorActiveCall>?[] _activeCalls;
     private CancellationTokenSource?[] _lifetimeTokens;
     private int _nextSlotIndex;
     private readonly int _archetypeId;
@@ -70,6 +71,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         }
 
         _activeOperations = new int[_actors.Length];
+        _activeCalls = new List<IActorActiveCall>?[_actors.Length];
         _lifetimeTokens = new CancellationTokenSource?[_actors.Length];
         _freeList = new ActorSlotFreeList(_actors.Length);
         _nextSlotIndex = 0;
@@ -121,7 +123,9 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             return true;
         }
 
-        ClearAllMails(slotIndex);
+        ClearAllMails(
+            slotIndex,
+            new ActorCallException(ActorCallFailureKind.PendingDestroy));
         FinalizeDestroySlot(slotIndex, world);
         _structuralDirtyFlags[slotIndex] = ActorStructuralDirtyFlags.None;
         RefreshPostGenerations(slotIndex);
@@ -733,6 +737,28 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         return marked;
     }
 
+    public override void CompleteAllActiveCallsAsDisposed()
+    {
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+        {
+            if (ActiveOperationCount(slotIndex) > 0)
+            {
+                CancelLifetimeToken(slotIndex);
+            }
+
+            CompleteActiveCallsAsDisposed(slotIndex);
+        }
+    }
+
+    public override void CompleteAllPendingCallsAsDisposed()
+    {
+        var exception = new ObjectDisposedException(nameof(ActorWorld));
+        for (int slotIndex = 0; slotIndex < MaxSlot; slotIndex++)
+        {
+            ClearAllMails(slotIndex, exception);
+        }
+    }
+
     public override int CountAlive()
     {
         int count = 0;
@@ -885,10 +911,16 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             if (activeOps > 0)
             {
                 CancelLifetimeToken(slotIndex);
+                CompleteActiveCallsAsCanceled(slotIndex);
+                ClearAllMails(
+                    slotIndex,
+                    new ActorCallException(ActorCallFailureKind.PendingDestroy));
                 continue;
             }
 
-            ClearAllMails(slotIndex);
+            ClearAllMails(
+                slotIndex,
+                new ActorCallException(ActorCallFailureKind.PendingDestroy));
             FinalizeDestroySlot(slotIndex, world);
             RefreshPostGenerations(slotIndex);
             _structuralDirtyFlags[slotIndex] = ActorStructuralDirtyFlags.None;
@@ -917,6 +949,29 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         {
             Interlocked.Exchange(ref _activeOperations[slotIndex], 0);
         }
+    }
+
+    internal void RegisterActiveCall(int slotIndex, IActorActiveCall call)
+    {
+        if ((uint)slotIndex >= (uint)_activeCalls.Length)
+            return;
+
+        List<IActorActiveCall>? calls = _activeCalls[slotIndex];
+        if (calls == null)
+        {
+            calls = new List<IActorActiveCall>();
+            _activeCalls[slotIndex] = calls;
+        }
+
+        calls.Add(call);
+    }
+
+    internal void UnregisterActiveCall(int slotIndex, IActorActiveCall call)
+    {
+        if ((uint)slotIndex >= (uint)_activeCalls.Length)
+            return;
+
+        _activeCalls[slotIndex]?.Remove(call);
     }
 
     internal void EnqueueCompletion(IActorWorldCompletion completion)
@@ -993,6 +1048,7 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _createdFromPool, newSize);
         Array.Resize(ref _actorExists, newSize);
         Array.Resize(ref _activeOperations, newSize);
+        Array.Resize(ref _activeCalls, newSize);
         Array.Resize(ref _lifetimeTokens, newSize);
         Array.Resize(ref _lifecycleHandles, newSize);
         for (int i = oldSize; i < newSize; i++)
@@ -1088,11 +1144,43 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         _lifecycleHandles[slotIndex] = ActorLifecycleHandles.Empty;
     }
 
-    private void ClearAllMails(int slotIndex)
+    private void CompleteActiveCallsAsCanceled(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_activeCalls.Length)
+            return;
+
+        List<IActorActiveCall>? calls = _activeCalls[slotIndex];
+        if (calls == null || calls.Count == 0)
+            return;
+
+        IActorActiveCall[] snapshot = calls.ToArray();
+        for (int i = 0; i < snapshot.Length; i++)
+        {
+            snapshot[i].CompleteCanceled();
+        }
+    }
+
+    private void CompleteActiveCallsAsDisposed(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_activeCalls.Length)
+            return;
+
+        List<IActorActiveCall>? calls = _activeCalls[slotIndex];
+        if (calls == null || calls.Count == 0)
+            return;
+
+        IActorActiveCall[] snapshot = calls.ToArray();
+        for (int i = 0; i < snapshot.Length; i++)
+        {
+            snapshot[i].CompleteDisposed();
+        }
+    }
+
+    private void ClearAllMails(int slotIndex, Exception exception)
     {
         foreach (ActorCallColumnRuntime? column in _callColumnsByRouteId)
         {
-            column?.ClearMail(slotIndex);
+            column?.ClearMail(slotIndex, exception);
         }
     }
 

@@ -30,6 +30,10 @@ internal abstract class TypedStorageRuntime
 
     public abstract int MarkAllPendingDestroy();
 
+    public abstract void CompleteAllActiveCallsAsDisposed();
+
+    public abstract void CompleteAllPendingCallsAsDisposed();
+
     public abstract void SweepPendingDestroy(ActorWorld world);
 
     public abstract int CountActiveOperations();

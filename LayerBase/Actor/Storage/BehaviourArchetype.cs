@@ -254,6 +254,22 @@ internal sealed class BehaviourArchetype
         return count;
     }
 
+    internal void CompleteAllActiveCallsAsDisposed()
+    {
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            _storages[i].CompleteAllActiveCallsAsDisposed();
+        }
+    }
+
+    internal void CompleteAllPendingCallsAsDisposed()
+    {
+        for (int i = 0; i < _storages.Length; i++)
+        {
+            _storages[i].CompleteAllPendingCallsAsDisposed();
+        }
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool IsCurrentGeneration(ActorId actorId)
     {

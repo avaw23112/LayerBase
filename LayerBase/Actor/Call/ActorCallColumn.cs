@@ -257,15 +257,17 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         }
 
         int capturedSlot = slotIndex;
+        var completion = new ActorCallCompletion<TActor, TResponse>(
+            _owner,
+            capturedSlot,
+            task,
+            target,
+            operationResource);
+        _owner.RegisterActiveCall(capturedSlot, completion);
+
         awaiter.OnCompleted(() =>
         {
-            _owner.EnqueueCompletion(
-                new ActorCallCompletion<TActor, TResponse>(
-                    _owner,
-                    capturedSlot,
-                    task,
-                    target,
-                    operationResource));
+            _owner.EnqueueCompletion(completion);
         });
     }
 
@@ -322,7 +324,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         Array.Resize(ref _mails, newSize);
     }
 
-    public override void ClearMail(int slotIndex)
+    public override void ClearMail(int slotIndex, Exception exception)
     {
         if ((uint)slotIndex >= (uint)_mails.Length)
         {
@@ -332,7 +334,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         ref EventMail<ActorCallMail<TRequest, TResponse>> mail = ref _mails[slotIndex];
         while (EventMailReader.TryDequeue(ref mail, _bufferPool, out ActorCallMail<TRequest, TResponse> value))
         {
-            value.Source.SetException(new ActorCallException(ActorCallFailureKind.PendingDestroy));
+            value.Source.SetException(exception);
         }
 
         EventMailReader.ForceRelease(ref mail, _bufferPool);

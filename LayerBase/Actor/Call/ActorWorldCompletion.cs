@@ -7,7 +7,16 @@ internal interface IActorWorldCompletion
     void CompleteOnOwner();
 }
 
-internal sealed class ActorCallCompletion<TActor, TResponse> : IActorWorldCompletion
+internal interface IActorActiveCall
+{
+    void CompleteCanceled();
+
+    void CompleteDisposed();
+}
+
+internal sealed class ActorCallCompletion<TActor, TResponse> :
+    IActorWorldCompletion,
+    IActorActiveCall
     where TActor : class, IActor, new()
     where TResponse : struct
 {
@@ -16,6 +25,7 @@ internal sealed class ActorCallCompletion<TActor, TResponse> : IActorWorldComple
     private readonly LBTask<TResponse> _task;
     private readonly LBTaskCompletionSource<TResponse> _target;
     private readonly IDisposable? _operationResource;
+    private int _completed;
 
     public ActorCallCompletion(
         TypedActorStorage<TActor> storage,
@@ -33,7 +43,8 @@ internal sealed class ActorCallCompletion<TActor, TResponse> : IActorWorldComple
 
     public void CompleteOnOwner()
     {
-        _storage.CompleteOperation(_slotIndex);
+        if (!TryCompleteOperation())
+            return;
 
         try
         {
@@ -47,9 +58,32 @@ internal sealed class ActorCallCompletion<TActor, TResponse> : IActorWorldComple
         {
             _target.SetException(exception);
         }
-        finally
-        {
-            _operationResource?.Dispose();
-        }
+    }
+
+    public void CompleteCanceled()
+    {
+        if (!TryCompleteOperation())
+            return;
+
+        _target.SetCanceled(new CancellationToken(canceled: true));
+    }
+
+    public void CompleteDisposed()
+    {
+        if (!TryCompleteOperation())
+            return;
+
+        _target.SetException(new ObjectDisposedException(nameof(ActorWorld)));
+    }
+
+    private bool TryCompleteOperation()
+    {
+        if (Interlocked.Exchange(ref _completed, 1) != 0)
+            return false;
+
+        _storage.UnregisterActiveCall(_slotIndex, this);
+        _storage.CompleteOperation(_slotIndex);
+        _operationResource?.Dispose();
+        return true;
     }
 }

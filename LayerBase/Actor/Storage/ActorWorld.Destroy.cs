@@ -66,4 +66,20 @@ public sealed partial class ActorWorld
             _pendingDestroyCount += archetype.MarkAllPendingDestroy();
         }
     }
+
+    private void CompleteAllActiveCallsAsDisposed()
+    {
+        foreach (BehaviourArchetype archetype in _archetypes)
+        {
+            archetype.CompleteAllActiveCallsAsDisposed();
+        }
+    }
+
+    private void CompleteAllPendingCallsAsDisposed()
+    {
+        foreach (BehaviourArchetype archetype in _archetypes)
+        {
+            archetype.CompleteAllPendingCallsAsDisposed();
+        }
+    }
 }

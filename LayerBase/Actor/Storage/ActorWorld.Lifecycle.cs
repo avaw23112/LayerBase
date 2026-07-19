@@ -40,11 +40,18 @@ public sealed partial class ActorWorld
             return;
         }
 
+        bool firstDisposeRequest = !_disposeRequested;
         _disposeRequested = true;
         _state = ActorWorldState.Stopping;
         DelayScheduler.Clear();
 
-        MarkAllActorsPendingDestroy();
+        if (firstDisposeRequest)
+        {
+            MarkAllActorsPendingDestroy();
+        }
+
+        CompleteAllActiveCallsAsDisposed();
+        CompleteAllPendingCallsAsDisposed();
         DrainCompletionInbox();
         SweepPendingDestroy();
         TryFinalizeDeferredDispose();
