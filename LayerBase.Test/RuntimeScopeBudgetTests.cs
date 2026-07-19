@@ -1,6 +1,9 @@
+using LayerBase;
 using LayerBase.Actor;
+using LayerBase.Async;
 using LayerBase.Core.Event;
 using LayerBase.Event.EventMetaData;
+using LayerBase.Scope;
 using NUnit.Framework;
 
 namespace LayerBase.Test;
@@ -156,5 +159,34 @@ public class RuntimeScopeBudgetTests
     {
         var budget = new RuntimeFrameBudget(0, 0, 0);
         Assert.That(budget.StartingScopeIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Inline_scope_pump_consumes_budget_work_items()
+    {
+        using var runtime = new LayerRuntime(9303);
+        var inlinePlan = new ScopeExecutionPlan(
+            new ScopeDescriptor(1, "InlineScope", typeof(MainScope)),
+            ScopeOptions.Inline);
+        using var scope = new ScopeRuntime(runtime, inlinePlan, runtimeId: 9303, generation: 1);
+
+        var options = new PostSchedulerOptions(1024, 1024, 0, 0, 1, 64, BackpressurePolicy.RejectNew);
+        var policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
+        int id = EventTypeId<BudgetTestEventA>.Id;
+        policyTable.SetMetaData(id, new BudgetTestMetaA());
+
+        scope.InitializeOrUpdateScheduler(options, policyTable, new[]
+        {
+            new PostTypePlan(id, PostDeliveryMode.Normal, BackpressurePolicy.DropOldest, 0, options.DefaultBackpressure),
+        });
+
+        for (int i = 0; i < 3; i++)
+            scope.PostScheduler!.TryPost(new BudgetTestEventA { Value = i });
+
+        var budget = new RuntimeFrameBudget(0, 0, 0, hasPostLimit: false);
+        scope.PumpScopeResources(0.016f, ref budget, CompletionExceptionPolicy.Throw, null);
+
+        Assert.That(budget.UsedWorkItems, Is.EqualTo(3));
+        Assert.That(budget.RemainingPostCount, Is.EqualTo(0));
     }
 }

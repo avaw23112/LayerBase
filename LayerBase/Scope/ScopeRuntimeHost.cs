@@ -11,6 +11,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
     private bool _workersStarted;
     private int _shutdownStarted;
     private int _disposed;
+    private int _nextInlineScopeIndex;
 
     private ScopeRuntimeHost(ScopeRuntimeDirectory directory, ScopeWorker[] workers)
     {
@@ -185,7 +186,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
         if (_inlineScopes.Length == 0)
             return;
 
-        int startIndex = budget.StartingScopeIndex % _inlineScopes.Length;
+        int startIndex = _nextInlineScopeIndex % _inlineScopes.Length;
 
         for (int i = 0; i < _inlineScopes.Length; i++)
         {
@@ -198,6 +199,7 @@ internal sealed class ScopeRuntimeHost : IDisposable
         }
 
         budget.StartingScopeIndex = (startIndex + 1) % _inlineScopes.Length;
+        _nextInlineScopeIndex = (startIndex + 1) % _inlineScopes.Length;
     }
 
     public void Dispose()

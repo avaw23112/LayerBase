@@ -495,7 +495,11 @@ internal sealed class ScopeRuntime : IDisposable
         PumpSynchronizationContext(exceptionPolicy, reportException);
         TickTimer(deltaTime);
         DelayManager?.Tick(deltaTime);
-        PostScheduler?.Pump(ref budget);
+        PostPumpStats postStats =
+            PostScheduler?.Pump(ref budget)
+            ?? new PostPumpStats(0, 0, 0, 0);
+
+        budget.Consume(postStats.ProcessedCount);
         PumpEventExpectations();
         PumpUpdate(deltaTime);
     }
