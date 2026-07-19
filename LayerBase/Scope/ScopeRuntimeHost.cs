@@ -255,20 +255,11 @@ internal sealed class ScopeRuntimeHost : ILifetimeParticipant, IDisposable
 
     public LifetimeDrainResult Drain(in ShutdownDeadline deadline)
     {
-        if (_workers.Length == 0) return LifetimeDrainResult.Drained;
-        bool anyTimedOut = false;
-        for (int i = _workers.Length - 1; i >= 0; i--)
-        {
-            ScopeWorkerShutdownResult result = _workers[i].Stop(in deadline);
-            if (result == ScopeWorkerShutdownResult.TimedOut)
-            {
-                anyTimedOut = true;
-                _workers[i].Runtime.ReportFatalFault(
-                    new TimeoutException($"Scope worker `{_workers[i].Runtime.Descriptor.Name}` exceeded shutdown deadline."),
-                    ScopeFaultPhase.WorkerLoop);
-            }
-        }
-        return anyTimedOut ? LifetimeDrainResult.TimedOut : LifetimeDrainResult.Drained;
+        RequestDisposeForAllScopes(in deadline);
+
+        return DrainWorkers(in deadline)
+            ? LifetimeDrainResult.TimedOut
+            : LifetimeDrainResult.Drained;
     }
 
     public void Release(TerminalCleanupRunner cleanup)

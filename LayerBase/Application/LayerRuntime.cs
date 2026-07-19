@@ -276,6 +276,7 @@ public sealed partial class LayerRuntime : IDisposable
 
         ScopeRuntimeHost previousHost = _scopeHost;
         _scopeHost = ScopeRuntimeHost.Create(this, plans, _id, _generation);
+        _lifetimeRoot.Owner.Own(_scopeHost);
         _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
         previousHost.Dispose();
     }
