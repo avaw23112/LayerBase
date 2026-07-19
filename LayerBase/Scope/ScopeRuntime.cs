@@ -718,6 +718,11 @@ internal sealed class ScopeRuntime : IDisposable
                         envelope.WorkerHandle);
                     break;
 
+                case ScopeCompletionKind.WorkerExecutionStarted:
+                    WorkerJobs.MarkExecutionStarted(
+                        envelope.WorkerHandle);
+                    break;
+
                 default:
                     throw new InvalidOperationException(
                         $"Unsupported scope completion kind: {envelope.Kind}.");

@@ -6,7 +6,8 @@ namespace LayerBase.Scope;
 internal enum ScopeCompletionKind : byte
 {
     WorkerExecutionCompleted = 0,
-    WorkerCancelRequested = 1
+    WorkerCancelRequested = 1,
+    WorkerExecutionStarted = 2
 }
 
 internal readonly struct ScopeCompletionEnvelope
@@ -44,6 +45,18 @@ internal readonly struct ScopeCompletionEnvelope
 
         return new ScopeCompletionEnvelope(
             ScopeCompletionKind.WorkerCancelRequested,
+            in emptyCompletion,
+            handle);
+    }
+
+    public static ScopeCompletionEnvelope WorkerExecutionStarted(
+        WorkerHandle handle)
+    {
+        var emptyCompletion = default(
+            WorkerExecutionCompletedScopeEvent);
+
+        return new ScopeCompletionEnvelope(
+            ScopeCompletionKind.WorkerExecutionStarted,
             in emptyCompletion,
             handle);
     }

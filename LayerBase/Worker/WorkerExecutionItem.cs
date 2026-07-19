@@ -63,6 +63,8 @@ internal sealed class WorkerExecutionItem<TJob, TInput, TEvent> : IWorkerExecuti
         }
         else
         {
+            SubmitExecutionStarted();
+
             try
             {
                 var context = new WorkerJobContext(workerIndex, _token);
@@ -124,6 +126,14 @@ internal sealed class WorkerExecutionItem<TJob, TInput, TEvent> : IWorkerExecuti
         ScopeCompletionEnvelope envelope =
             ScopeCompletionEnvelope.WorkerExecutionCompleted(
                 in completion);
+
+        _origin.Transport.EnqueueCompletion(in envelope);
+    }
+
+    private void SubmitExecutionStarted()
+    {
+        ScopeCompletionEnvelope envelope =
+            ScopeCompletionEnvelope.WorkerExecutionStarted(_handle);
 
         _origin.Transport.EnqueueCompletion(in envelope);
     }
