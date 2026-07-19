@@ -2,18 +2,29 @@ namespace LayerBase.Worker;
 
 internal sealed class WorkerJobSchedulerOptions
 {
-    public WorkerJobSchedulerOptions(int workerCount, int stateCapacity, int jobQueueCapacity)
+    public WorkerJobSchedulerOptions(
+        int maxConcurrency,
+        int queueCapacity,
+        int maxBatchItems,
+        TimeSpan maxBatchDuration)
     {
-        WorkerCount = Math.Max(1, workerCount);
-        StateCapacity = Math.Max(16, stateCapacity);
-        JobQueueCapacity = Math.Max(1, jobQueueCapacity);
+        MaxConcurrency = Math.Max(1, maxConcurrency);
+        QueueCapacity = Math.Max(1, queueCapacity);
+        MaxBatchItems = Math.Max(1, maxBatchItems);
+        MaxBatchDuration = maxBatchDuration > TimeSpan.Zero
+            ? maxBatchDuration
+            : TimeSpan.FromMilliseconds(1);
     }
 
-    public int WorkerCount { get; }
+    public int MaxConcurrency { get; }
 
-    public int StateCapacity { get; }
+    public int QueueCapacity { get; }
 
-    public int JobQueueCapacity { get; }
+    public int MaxBatchItems { get; }
+
+    public TimeSpan MaxBatchDuration { get; }
+
+    public int StateCapacity { get; init; } = 4096;
 
     public int ShutdownTimeoutMilliseconds { get; init; } = 5000;
 
@@ -22,7 +33,8 @@ internal sealed class WorkerJobSchedulerOptions
     public int WorkerItemPoolCapacity { get; init; } = 64;
 
     public static WorkerJobSchedulerOptions Default => new(
-        workerCount: Math.Max(1, Environment.ProcessorCount - 1),
-        stateCapacity: 4096,
-        jobQueueCapacity: 4096);
+        maxConcurrency: Math.Max(1, Environment.ProcessorCount - 1),
+        queueCapacity: 4096,
+        maxBatchItems: 64,
+        maxBatchDuration: TimeSpan.FromMilliseconds(1));
 }

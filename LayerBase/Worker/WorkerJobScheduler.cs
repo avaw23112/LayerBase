@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using LayerBase.Lifetime;
 using LayerBase.Scope;
 
@@ -12,15 +14,21 @@ internal enum WorkerExecutorShutdownResult
 
 internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
 {
+    private static readonly WaitCallback RunBatchCallback =
+        static state => ((WorkerJobScheduler)state!).RunBatch();
+
     private readonly WorkerJobSchedulerOptions _options;
-    private readonly object _gate = new();
-    private readonly Queue<IWorkerExecutionItem> _queue;
-    private ManualResetEventSlim? _signal;
-    private Thread[] _threads = Array.Empty<Thread>();
-    private bool _threadsStarted;
-    private bool _accepting = true;
-    private bool _stopRequested;
-    internal bool _resourcesReleased;
+    private readonly ConcurrentQueue<IWorkerExecutionItem> _queue = new();
+    private readonly ConcurrentQueue<int> _lanePool = new();
+    private readonly ManualResetEventSlim _drained = new(initialState: true);
+    private readonly long _maxBatchTimestampTicks;
+
+    private int _accepting = 1;
+    private int _queuedCount;
+    private int _executingCount;
+    private int _runnerCount;
+    private int _drainCompleted = 1;
+    private int _resourcesReleased;
 
     string ILifetimeParticipant.LifetimeName => "WorkerJobScheduler";
 
@@ -30,9 +38,7 @@ internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
 
     LifetimeDrainResult ILifetimeParticipant.Drain(in ShutdownDeadline deadline)
     {
-        return Stop(in deadline) == WorkerExecutorShutdownResult.TimedOut
-            ? LifetimeDrainResult.TimedOut
-            : LifetimeDrainResult.Drained;
+        return Drain(in deadline);
     }
 
     void ILifetimeParticipant.Release(TerminalCleanupRunner cleanup)
@@ -43,7 +49,12 @@ internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
     public WorkerJobScheduler(WorkerJobSchedulerOptions options)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _queue = new Queue<IWorkerExecutionItem>(options.JobQueueCapacity);
+        _maxBatchTimestampTicks = Math.Max(
+            1L,
+            (long)(_options.MaxBatchDuration.TotalSeconds * Stopwatch.Frequency));
+
+        for (int i = 0; i < _options.MaxConcurrency; i++)
+            _lanePool.Enqueue(i);
     }
 
     internal bool TryEnqueue(IWorkerExecutionItem item)
@@ -51,83 +62,54 @@ internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
         if (item == null)
             throw new ArgumentNullException(nameof(item));
 
-        StartThreadsOnce();
+        if (Volatile.Read(ref _accepting) == 0)
+            return false;
 
-        lock (_gate)
+        if (!TryReserveQueueSlot())
+            return false;
+
+        if (Volatile.Read(ref _accepting) == 0)
         {
-            if (!_accepting ||
-                _stopRequested ||
-                _queue.Count >= _options.JobQueueCapacity)
-            {
-                return false;
-            }
-
-            _queue.Enqueue(item);
-            _signal!.Set();
-            return true;
+            Interlocked.Decrement(ref _queuedCount);
+            TrySignalDrained();
+            return false;
         }
+
+        Volatile.Write(ref _drainCompleted, 0);
+        _drained.Reset();
+        _queue.Enqueue(item);
+        EnsureRunners();
+
+        return true;
     }
 
     internal void BeginStop()
     {
-        List<IWorkerExecutionItem> pending = new();
-
-        lock (_gate)
-        {
-            if (_stopRequested)
-                return;
-
-            _accepting = false;
-            _stopRequested = true;
-
-            while (_queue.Count > 0)
-                pending.Add(_queue.Dequeue());
-
-            if (_threadsStarted)
-                _signal!.Set();
-        }
-
-        foreach (IWorkerExecutionItem item in pending)
-        {
-            item.CancelBeforeRun();
-        }
+        RequestStop();
     }
 
     internal WorkerExecutorShutdownResult Stop(in ShutdownDeadline deadline)
     {
-        BeginStop();
+        LifetimeDrainResult result = Drain(in deadline);
+        return result == LifetimeDrainResult.TimedOut
+            ? WorkerExecutorShutdownResult.TimedOut
+            : WorkerExecutorShutdownResult.Stopped;
+    }
 
-        if (!_threadsStarted)
+    internal LifetimeDrainResult Drain(in ShutdownDeadline deadline)
+    {
+        CloseAdmission();
+        EnsureRunners();
+
+        while (!IsDrained)
         {
-            ReleaseResources();
-            return WorkerExecutorShutdownResult.AlreadyStopped;
-        }
-
-        bool hadLiveThread = false;
-
-        for (int i = 0; i < _threads.Length; i++)
-        {
-            Thread thread = _threads[i];
-
-            if (!thread.IsAlive)
-                continue;
-
-            hadLiveThread = true;
-
-            int remainingMilliseconds = deadline.RemainingMilliseconds;
-
-            if (remainingMilliseconds <= 0 ||
-                !thread.Join(remainingMilliseconds))
-            {
-                return WorkerExecutorShutdownResult.TimedOut;
-            }
+            int remaining = deadline.RemainingMilliseconds;
+            if (remaining <= 0 || !_drained.Wait(remaining))
+                return LifetimeDrainResult.TimedOut;
         }
 
         ReleaseResources();
-
-        return hadLiveThread
-            ? WorkerExecutorShutdownResult.Stopped
-            : WorkerExecutorShutdownResult.AlreadyStopped;
+        return LifetimeDrainResult.Drained;
     }
 
     public void Dispose()
@@ -135,66 +117,108 @@ internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
         var deadline = ShutdownDeadline.Start(
             TimeSpan.FromMilliseconds(_options.ShutdownTotalTimeoutMilliseconds));
 
-        _ = Stop(in deadline);
+        _ = Drain(in deadline);
     }
 
-    private void StartThreadsOnce()
+    internal void CloseAdmission()
     {
-        if (_threadsStarted)
+        Interlocked.Exchange(ref _accepting, 0);
+        TrySignalDrained();
+    }
+
+    internal void RequestStop()
+    {
+        CloseAdmission();
+        EnsureRunners();
+    }
+
+    internal void AbortPending()
+    {
+        CloseAdmission();
+
+        while (_queue.TryDequeue(out IWorkerExecutionItem? item))
+        {
+            Interlocked.Decrement(ref _queuedCount);
+            item.CancelBeforeRun();
+        }
+
+        TrySignalDrained();
+    }
+
+    internal void ReleaseResources()
+    {
+        if (!IsDrained)
             return;
 
-        lock (_gate)
-        {
-            if (_threadsStarted)
-                return;
+        if (Interlocked.Exchange(ref _resourcesReleased, 1) != 0)
+            return;
 
-            int count = _options.WorkerCount;
-            _signal = new ManualResetEventSlim(false);
-            _threads = new Thread[count];
-
-            for (int i = 0; i < count; i++)
-            {
-                int workerIndex = i;
-
-                _threads[i] = new Thread(() => WorkerLoop(workerIndex))
-                {
-                    IsBackground = true,
-                    Name = $"LayerBase Worker {workerIndex}"
-                };
-
-                _threads[i].Start();
-            }
-
-            _threadsStarted = true;
-        }
+        _drained.Dispose();
     }
 
-    private void WorkerLoop(int workerIndex)
+    private bool TryReserveQueueSlot()
     {
         while (true)
         {
-            IWorkerExecutionItem? item = null;
+            int current = Volatile.Read(ref _queuedCount);
+            if (current >= _options.QueueCapacity)
+                return false;
 
-            lock (_gate)
+            if (Interlocked.CompareExchange(
+                    ref _queuedCount,
+                    current + 1,
+                    current) == current)
             {
-                if (_queue.Count > 0)
-                {
-                    item = _queue.Dequeue();
+                return true;
+            }
+        }
+    }
 
-                    if (_queue.Count == 0)
-                        _signal.Reset();
-                }
-                else if (_stopRequested)
-                {
-                    return;
-                }
+    private void EnsureRunners()
+    {
+        while (true)
+        {
+            int queued = Volatile.Read(ref _queuedCount);
+            int runners = Volatile.Read(ref _runnerCount);
+
+            if (queued <= runners || runners >= _options.MaxConcurrency)
+                return;
+
+            if (Interlocked.CompareExchange(
+                    ref _runnerCount,
+                    runners + 1,
+                    runners) != runners)
+            {
+                continue;
             }
 
-            if (item != null)
+            ThreadPool.UnsafeQueueUserWorkItem(
+                RunBatchCallback,
+                this);
+        }
+    }
+
+    private void RunBatch()
+    {
+        int laneId = RentLane();
+
+        try
+        {
+            long deadline = Stopwatch.GetTimestamp() + _maxBatchTimestampTicks;
+            int executed = 0;
+
+            while (executed < _options.MaxBatchItems &&
+                   Stopwatch.GetTimestamp() < deadline)
             {
+                if (!_queue.TryDequeue(out IWorkerExecutionItem? item))
+                    break;
+
+                Interlocked.Decrement(ref _queuedCount);
+                Interlocked.Increment(ref _executingCount);
+
                 try
                 {
-                    item.Execute(workerIndex);
+                    item.Execute(laneId);
                 }
                 catch (Exception exception)
                 {
@@ -204,56 +228,53 @@ internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
                     }
                     catch
                     {
-                        // Infrastructure fault reporting must not tear down the worker loop.
+                        // Infrastructure fault reporting must not tear down the runner.
                     }
                 }
+                finally
+                {
+                    Interlocked.Decrement(ref _executingCount);
+                }
 
-                continue;
+                executed++;
             }
+        }
+        finally
+        {
+            ReturnLane(laneId);
+            Interlocked.Decrement(ref _runnerCount);
 
-            _signal!.Wait();
+            if (Volatile.Read(ref _queuedCount) != 0)
+                EnsureRunners();
+
+            TrySignalDrained();
         }
     }
 
-    internal void CloseAdmission()
+    private int RentLane()
     {
-        lock (_gate)
-        {
-            _accepting = false;
-        }
+        if (_lanePool.TryDequeue(out int laneId))
+            return laneId;
+
+        return 0;
     }
 
-    internal void RequestStop()
+    private void ReturnLane(int laneId)
     {
-        List<IWorkerExecutionItem> pending = new();
-
-        lock (_gate)
-        {
-            if (_stopRequested)
-                return;
-
-            _accepting = false;
-            _stopRequested = true;
-
-            while (_queue.Count > 0)
-                pending.Add(_queue.Dequeue());
-
-            if (_threadsStarted)
-                _signal!.Set();
-        }
-
-        foreach (IWorkerExecutionItem item in pending)
-        {
-            item.CancelBeforeRun();
-        }
+        _lanePool.Enqueue(laneId);
     }
 
-    internal void ReleaseResources()
+    private bool IsDrained =>
+        Volatile.Read(ref _queuedCount) == 0 &&
+        Volatile.Read(ref _executingCount) == 0 &&
+        Volatile.Read(ref _runnerCount) == 0;
+
+    private void TrySignalDrained()
     {
-        if (_resourcesReleased)
+        if (!IsDrained)
             return;
 
-        _resourcesReleased = true;
-        Interlocked.Exchange(ref _signal, null)?.Dispose();
+        if (Interlocked.Exchange(ref _drainCompleted, 1) == 0)
+            _drained.Set();
     }
 }

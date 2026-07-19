@@ -5,7 +5,7 @@ namespace LayerBase.Worker;
 
 internal interface IWorkerExecutionItem
 {
-    void Execute(int workerIndex);
+    void Execute(int executionLaneId);
 
     void CancelBeforeRun();
 
@@ -55,7 +55,7 @@ internal sealed class WorkerExecutionItem<TJob, TInput, TEvent> : IWorkerExecuti
         return item;
     }
 
-    public void Execute(int workerIndex)
+    public void Execute(int executionLaneId)
     {
         WorkerExecutionCompletedScopeEvent completion;
 
@@ -69,7 +69,7 @@ internal sealed class WorkerExecutionItem<TJob, TInput, TEvent> : IWorkerExecuti
 
             try
             {
-                var context = new WorkerJobContext(workerIndex, _token);
+                var context = new WorkerJobContext(executionLaneId, _token);
 
                 TEvent result = _job.Execute(in _input, in context);
 

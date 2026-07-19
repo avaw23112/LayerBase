@@ -210,6 +210,6 @@ public readonly struct BusinessFraudScoreJob
         in WorkerJobContext context)
     {
         var score = Math.Min(99, 20 + input.Quantity * 7);
-        return new BusinessFraudScoreCalculatedEvent(input.OrderId, score, context.WorkerIndex);
+        return new BusinessFraudScoreCalculatedEvent(input.OrderId, score, context.ExecutionLaneId);
     }
 }

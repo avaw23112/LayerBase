@@ -80,7 +80,15 @@ public class FaultInfrastructureTests
     [Test]
     public void Worker_execute_exception_faults_item_and_worker_continues()
     {
-        using var scheduler = new WorkerJobScheduler(new WorkerJobSchedulerOptions(1, 16, 8));
+        using var scheduler = new WorkerJobScheduler(
+            new WorkerJobSchedulerOptions(
+                maxConcurrency: 1,
+                queueCapacity: 8,
+                maxBatchItems: 16,
+                maxBatchDuration: TimeSpan.FromMilliseconds(1))
+            {
+                StateCapacity = 16
+            });
         var throwing = new ThrowingWorkerItem();
         var succeeding = new RecordingWorkerItem();
 
@@ -144,7 +152,7 @@ public class FaultInfrastructureTests
 
         public Exception? InfrastructureException { get; private set; }
 
-        public void Execute(int workerIndex)
+        public void Execute(int executionLaneId)
         {
             throw new InvalidOperationException("worker item failed");
         }
@@ -164,7 +172,7 @@ public class FaultInfrastructureTests
     {
         public ManualResetEventSlim Executed { get; } = new(false);
 
-        public void Execute(int workerIndex)
+        public void Execute(int executionLaneId)
         {
             Executed.Set();
         }

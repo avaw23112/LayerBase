@@ -172,18 +172,18 @@ public readonly struct BusinessFraudScoreInput
 
 public readonly struct BusinessFraudScoreCalculatedEvent
 {
-    public BusinessFraudScoreCalculatedEvent(string orderId, int score, int workerIndex)
+    public BusinessFraudScoreCalculatedEvent(string orderId, int score, int executionLaneId)
     {
         OrderId = orderId;
         Score = score;
-        WorkerIndex = workerIndex;
+        ExecutionLaneId = executionLaneId;
     }
 
     public string OrderId { get; }
 
     public int Score { get; }
 
-    public int WorkerIndex { get; }
+    public int ExecutionLaneId { get; }
 }
 
 public interface IBusinessShippingLabelTool

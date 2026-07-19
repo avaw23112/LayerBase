@@ -2,13 +2,13 @@ namespace LayerBase.Worker;
 
 public readonly struct WorkerJobContext
 {
-    internal WorkerJobContext(int workerIndex, CancellationToken cancellationToken)
+    internal WorkerJobContext(int executionLaneId, CancellationToken cancellationToken)
     {
-        WorkerIndex = workerIndex;
+        ExecutionLaneId = executionLaneId;
         CancellationToken = cancellationToken;
     }
 
-    public int WorkerIndex { get; }
+    public int ExecutionLaneId { get; }
 
     public bool IsCancellationRequested => CancellationToken.IsCancellationRequested;
 

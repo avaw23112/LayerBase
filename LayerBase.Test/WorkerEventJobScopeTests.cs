@@ -235,7 +235,7 @@ public sealed class WorkerEventJobScopeTests
 
         Assert.That(contextMembers, Is.EquivalentTo(new[]
         {
-            nameof(WorkerJobContext.WorkerIndex),
+            nameof(WorkerJobContext.ExecutionLaneId),
             nameof(WorkerJobContext.IsCancellationRequested),
             nameof(WorkerJobContext.CancellationToken)
         }));
