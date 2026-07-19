@@ -39,7 +39,8 @@ public sealed class ScopeIsolationBoundaryTests
                 .Build();
 
         var main = layer.GetService<IScopedBoundaryService>();
-        var secondary = layer.GetService<SecondaryBoundaryConsumer>().ResolveScopedService();
+        var secondary = layer.GetService<SecondaryBoundaryConsumer>(
+            SecondaryBoundaryScope.ScopeId).ResolveScopedService();
 
         Assert.That(main.Name, Is.EqualTo("main"));
         Assert.That(secondary.Name, Is.EqualTo("secondary"));
@@ -57,7 +58,8 @@ public sealed class ScopeIsolationBoundaryTests
                                     .Push(layer)
                                     .Build();
 
-        var subscriber = layer.GetService<StaticScopeSubscriber>();
+        var subscriber = layer.GetService<StaticScopeSubscriber>(
+            SecondaryBoundaryScope.ScopeId);
         subscriber.SubscribeStaticHandler();
         Assert.That(ServiceLayerBinder.GetBinding(subscriber)?.OwnerScope.ScopeId, Is.EqualTo(SecondaryBoundaryScope.ScopeId));
         subscriber.SendLocalEvent("secondary");
