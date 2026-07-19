@@ -142,6 +142,61 @@ public sealed class FullSnapHardeningTests
     }
 
     [Test]
+    public void Snap_read_limits_reject_section_count()
+    {
+        string json = """
+                      {"FormatVersion":1,"Sections":{"a":{"Key":"a","Version":1,"Data":{"v":1}},"b":{"Key":"b","Version":1,"Data":{"v":2}}}}
+                      """;
+
+        SnapFormatException? ex = Assert.Throws<SnapFormatException>(
+            () => JsonSnapCodec.DecodeFromString(json, new SnapReadLimits { MaxSections = 1 }));
+
+        Assert.That(ex!.Message, Does.Contain("MaxSections"));
+    }
+
+    [Test]
+    public void Snap_read_limits_reject_single_section_size()
+    {
+        string json = """
+                      {"FormatVersion":1,"Sections":{"a":{"Key":"a","Version":1,"Data":{"payload":"abcdefghijklmnopqrstuvwxyz"}}}}
+                      """;
+
+        SnapFormatException? ex = Assert.Throws<SnapFormatException>(
+            () => JsonSnapCodec.DecodeFromString(json, new SnapReadLimits { MaxSectionBytes = 48 }));
+
+        Assert.That(ex!.Message, Does.Contain("MaxSectionBytes"));
+    }
+
+    [Test]
+    public void Snap_read_limits_reject_total_section_size()
+    {
+        string json = """
+                      {"FormatVersion":1,"Sections":{"a":{"Key":"a","Version":1,"Data":{"payload":"abc"}},"b":{"Key":"b","Version":1,"Data":{"payload":"def"}}}}
+                      """;
+
+        SnapFormatException? ex = Assert.Throws<SnapFormatException>(
+            () => JsonSnapCodec.DecodeFromString(json, new SnapReadLimits { MaxTotalSectionBytes = 80 }));
+
+        Assert.That(ex!.Message, Does.Contain("MaxTotalSectionBytes"));
+    }
+
+    [Test]
+    public void Snap_read_limits_reject_empty_key_null_data_and_invalid_version()
+    {
+        Assert.Throws<SnapFormatException>(
+            () => JsonSnapCodec.DecodeFromString(
+                """{"FormatVersion":1,"Sections":{"":{"Key":"","Version":1,"Data":{}}}}"""));
+
+        Assert.Throws<SnapFormatException>(
+            () => JsonSnapCodec.DecodeFromString(
+                """{"FormatVersion":1,"Sections":{"a":{"Key":"a","Version":1,"Data":null}}}"""));
+
+        Assert.Throws<SnapFormatException>(
+            () => JsonSnapCodec.DecodeFromString(
+                """{"FormatVersion":1,"Sections":{"a":{"Key":"a","Version":0,"Data":{}}}}"""));
+    }
+
+    [Test]
     public async Task Validation_failure_leaves_runtime_unchanged()
     {
         var layer = new SnapLayer();

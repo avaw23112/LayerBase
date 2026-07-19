@@ -1340,7 +1340,7 @@ internal sealed class ScopeRuntime : IDisposable
         finally
         {
             Volatile.Write(ref _snapLastBytes, byteCount);
-            Volatile.Write(ref _snapLastDurationTicks, Stopwatch.GetElapsedTime(startedAt).Ticks);
+            Volatile.Write(ref _snapLastDurationTicks, GetElapsedTicks(startedAt));
             ReleaseSafePointAfterFullSnapTransaction();
         }
     }
@@ -1365,9 +1365,15 @@ internal sealed class ScopeRuntime : IDisposable
         finally
         {
             Volatile.Write(ref _snapLastBytes, byteCount);
-            Volatile.Write(ref _snapLastDurationTicks, Stopwatch.GetElapsedTime(startedAt).Ticks);
+            Volatile.Write(ref _snapLastDurationTicks, GetElapsedTicks(startedAt));
             ReleaseSafePointAfterFullSnapTransaction();
         }
+    }
+
+    private static long GetElapsedTicks(long startedAt)
+    {
+        long elapsedTimestampTicks = Stopwatch.GetTimestamp() - startedAt;
+        return elapsedTimestampTicks * TimeSpan.TicksPerSecond / Stopwatch.Frequency;
     }
 
     private void ReleaseSafePointAfterFullSnapTransaction()

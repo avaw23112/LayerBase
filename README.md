@@ -85,7 +85,7 @@ LayerBase 现已内建一套**运行时业务快照**能力，用于保存和恢
 
 它刻意不是“整份 Runtime 内存镜像”，而是**业务字段显式快照**：
 
-- **`IFullSnap`**：参与 Runtime 级完整快照，由框架在 Build 后自动收集并由 `runtime.FullSnap` 统一调度。
+- **`IFullSnap`**：参与 Runtime 级完整快照，由框架在 Build 后自动收集，并通过 `LayerRuntime` 的异步 FullSnap API 调度。
 - **`IClipSnap<T>`**：面向局部状态切片，由业务代码主动调用，不进入 FullSnap 文档流。
 - **`SnapWriter` / `SnapReader`**：基于 `System.Text.Json.Nodes` 的显式字段写入/读取 API。
 - **`SnapArrayWriter` / `SnapArrayReader`**：保留数组逐项读写模型，适合实体列表、背包项等复杂数组数据。
@@ -116,12 +116,14 @@ public sealed partial class BattleContext : ILayerContext, IFullSnap
 ```
 
 ```csharp
-var document = runtime.FullSnap.Serialize();
-string json = runtime.FullSnap.SerializeJson();
+SnapDocument document = await runtime.SerializeFullSnapAsync();
+string json = await runtime.SerializeFullSnapJsonAsync();
 
-runtime.FullSnap.Deserialize(document);
-runtime.FullSnap.DeserializeJson(json);
+await runtime.DeserializeFullSnapAsync(document);
+await runtime.DeserializeFullSnapJsonAsync(json);
 ```
+
+FullSnap JSON 读入会在恢复任何 Scope 状态前完成输入校验：UTF-8 字节数、JSON 深度、FormatVersion、Section 数量、单 Section 大小、总 Section 大小、重复 Key、空 Key、空 Data 和非法 Version 都会被拒绝。需要收紧读入边界时，可通过 `FullSnapLimits` 间接设置对应的 `SnapReadLimits`。
 
 ### ClipSnap 示例
 
@@ -639,9 +641,10 @@ LayerBase 的 Build 阶段大致分为：
     - `EventGraphValidator` 校验事件图拓扑
 
 4. **Runtime Dispose (销毁)**
-    - 执行 `RuntimeStop`
-    - `DisposeLayers` 释放层级资源
-    - 清理 Scheduler / Timer / Delay 队列与缓存
+    - 关闭新的业务入口并 Drain 已接受工作
+    - Scope Owner Thread 自主执行 `RuntimeStop`
+    - Host 收到 Stop Response 后允许 Worker 自然退出
+    - 清理 Scheduler / Timer / Scope 资源与缓存
 
 ---
 
@@ -1156,7 +1159,7 @@ Manager state that should actually be persisted.
 
 It is intentionally **not** a full runtime memory image. Instead, it is an **explicit business-field snapshot** model:
 
-- **`IFullSnap`**: participates in runtime-wide full snapshots, automatically collected after Build and orchestrated by `runtime.FullSnap`.
+- **`IFullSnap`**: participates in runtime-wide full snapshots, automatically collected after Build and orchestrated through the async FullSnap APIs on `LayerRuntime`.
 - **`IClipSnap<T>`**: a local state slice exported/imported explicitly by business code, outside the FullSnap document flow.
 - **`SnapWriter` / `SnapReader`**: explicit field write/read APIs built on `System.Text.Json.Nodes`.
 - **`SnapArrayWriter` / `SnapArrayReader`**: indexed array read/write helpers for inventories, entity batches, and other structured arrays.
@@ -1187,12 +1190,14 @@ public sealed partial class BattleContext : ILayerContext, IFullSnap
 ```
 
 ```csharp
-var document = runtime.FullSnap.Serialize();
-string json = runtime.FullSnap.SerializeJson();
+SnapDocument document = await runtime.SerializeFullSnapAsync();
+string json = await runtime.SerializeFullSnapJsonAsync();
 
-runtime.FullSnap.Deserialize(document);
-runtime.FullSnap.DeserializeJson(json);
+await runtime.DeserializeFullSnapAsync(document);
+await runtime.DeserializeFullSnapJsonAsync(json);
 ```
+
+FullSnap JSON input is validated before any Scope state is restored: UTF-8 byte count, JSON depth, FormatVersion, section count, single-section size, total section size, duplicate keys, empty keys, empty data, and invalid versions are rejected up front. Tighten the read boundary through `FullSnapLimits`, which maps to `SnapReadLimits` internally.
 
 ### ClipSnap Example
 
@@ -1730,9 +1735,10 @@ The Build phase of LayerBase is divided into:
     - `EventGraphValidator` topology validation
 
 4. **Runtime Dispose**
-    - Execute `RuntimeStop`
-    - `DisposeLayers` to release resources
-    - Clear Scheduler / Timer / Delay queues and caches
+    - Close new business admission and drain accepted work
+    - Let each Scope owner thread execute `RuntimeStop`
+    - Let workers exit naturally after the host receives Stop responses
+    - Clear Scheduler / Timer / Scope resources and caches
 
 ---
 

@@ -59,7 +59,9 @@ public static class BusinessScenarioUsage
         runtime.Pump(0.10f);
         Console.WriteLine($"[Billing] Payment reminder sent: {commerceLayer.ReminderCount > 0}");
 
-        var snapJson = runtime.FullSnap.SerializeJson();
+        var snapJson = runtime.SerializeFullSnapJsonAsync()
+                              .GetAwaiter()
+                              .GetResult();
         var diagnostics = runtime.CaptureDiagnostics();
         Console.WriteLine(
             $"[Operations] Snapshot bytes={snapJson.Length}, scopes={diagnostics.Scopes.Length}, tools={diagnostics.Scopes[0].Tools.RegisteredCount}");

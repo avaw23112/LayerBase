@@ -28,14 +28,13 @@ Unity、Godot）心跳循环（Pump）深度调优的零分配（Zero-Allocation
 
 虽然本包默认已随主库 `LayerBase` 自动集成，但您完全可以**将它剥离出来单独使用**，作为原生 `Task` 的零 GC 替代品。
 
-### 1. 基础的异步延迟 (自驱动)
+### 1. 基础的异步延迟
 
-`LBTask.Delay` 不需要任何外部驱动，直接 `await` 即可享受 0 GC 的延迟：
+`LBTask.Delay` 不需要任何外部驱动，直接 `await` 即可。它委托给 .NET `Task.Delay` / `TimeProvider.System`，不维护全局 Delay 堆、锁或自建 Timer：
 
 ```csharp
 public async LBTask DoSomethingDelay()
 {
-    // 底层由内置的 DelayScheduler 处理，不产生 Task 堆分配
     await LBTask.Delay(TimeSpan.FromSeconds(3f));
     Console.WriteLine("3 秒后触发...");
 }
@@ -143,14 +142,13 @@ high-frequency heap allocations lead to severe Garbage Collection (GC) spikes, c
 While this package is integrated by default with the main `LayerBase` library, you can **strip it out and use it
 independently** as a Zero-GC replacement for native `Task`.
 
-### 1. Basic Async Delay (Self-Driven)
+### 1. Basic Async Delay
 
-`LBTask.Delay` requires no external driver; simply `await` it to enjoy 0-GC delays:
+`LBTask.Delay` requires no external driver; simply `await` it. It delegates to .NET `Task.Delay` / `TimeProvider.System` and does not maintain a global Delay heap, lock, or custom Timer:
 
 ```csharp
 public async LBTask DoSomethingDelay()
 {
-    // Handled by the built-in DelayScheduler, no Task heap allocation
     await LBTask.Delay(TimeSpan.FromSeconds(3f));
     Console.WriteLine("Triggered after 3 seconds...");
 }

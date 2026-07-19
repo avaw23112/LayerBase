@@ -204,6 +204,8 @@ internal sealed class FullSnapRuntime
     private void ValidateDocument(SnapDocument document, FullSnapLimits limits)
     {
         limits.ThrowIfInvalid();
+        SnapReadLimits readLimits = limits.ToReadLimits();
+        readLimits.ThrowIfInvalid();
         if (document.Sections == null)
         {
             throw new SnapFormatException("FullSnap document sections cannot be null.");
@@ -233,6 +235,12 @@ internal sealed class FullSnapRuntime
                 $"FullSnap scope count exceeds MaxScopeCount ({scopeCount} > {limits.MaxScopeCount}).");
         }
 
+        if (document.Sections.Count > readLimits.MaxSections)
+        {
+            throw new SnapFormatException(
+                $"FullSnap section count exceeds MaxSections ({document.Sections.Count} > {readLimits.MaxSections}).");
+        }
+
         foreach (int plannedScopeId in _pendingPlans.Keys)
         {
             if (!scopeIds.Contains(plannedScopeId))
@@ -251,6 +259,8 @@ internal sealed class FullSnapRuntime
         var scopeBytes = new Dictionary<int, long>();
         var scopeSections = new Dictionary<int, int>();
         var sectionScopes = BuildSectionScopeMap();
+        long totalSectionBytes = 0;
+        var sectionKeys = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (KeyValuePair<string, SnapSection> entry in document.Sections)
         {
@@ -266,10 +276,20 @@ internal sealed class FullSnapRuntime
                 throw new SnapFormatException("FullSnap section key cannot be empty.");
             }
 
+            if (!sectionKeys.Add(key))
+            {
+                throw new SnapFormatException($"Duplicate FullSnap section `{key}`.");
+            }
+
             if (!string.Equals(key, section.Key, StringComparison.Ordinal))
             {
                 throw new SnapFormatException(
                     $"FullSnap section dictionary key `{key}` does not match payload key `{section.Key}`.");
+            }
+
+            if (section.Version <= 0)
+            {
+                throw new SnapFormatException($"FullSnap section `{key}` version must be a positive integer.");
             }
 
             if (!_keys.TryGetValue(key, out ScopeSnapNodePlan plan))
@@ -288,18 +308,32 @@ internal sealed class FullSnapRuntime
                 throw new SnapFormatException($"FullSnap section `{key}` has null data.");
             }
 
-            int depth = JsonSnapCodec.GetJsonDepth(section.Data);
-            if (depth > limits.MaxJsonDepth)
+            int sectionBytes = JsonSnapCodec.GetSectionByteCount(section);
+            if (sectionBytes > readLimits.MaxSectionBytes)
             {
                 throw new SnapFormatException(
-                    $"FullSnap section `{key}` exceeds MaxJsonDepth ({depth} > {limits.MaxJsonDepth}).");
+                    $"FullSnap section `{key}` exceeds MaxSectionBytes ({sectionBytes} > {readLimits.MaxSectionBytes}).");
+            }
+
+            totalSectionBytes += sectionBytes;
+            if (totalSectionBytes > readLimits.MaxTotalSectionBytes)
+            {
+                throw new SnapFormatException(
+                    $"FullSnap sections exceed MaxTotalSectionBytes ({totalSectionBytes} > {readLimits.MaxTotalSectionBytes}).");
+            }
+
+            int depth = JsonSnapCodec.GetJsonDepth(section.Data);
+            if (depth > readLimits.MaxJsonDepth)
+            {
+                throw new SnapFormatException(
+                    $"FullSnap section `{key}` exceeds MaxJsonDepth ({depth} > {readLimits.MaxJsonDepth}).");
             }
 
             int scopeId = sectionScopes[key];
             scopeSections[scopeId] = scopeSections.TryGetValue(scopeId, out int count) ? count + 1 : 1;
             scopeBytes[scopeId] = scopeBytes.TryGetValue(scopeId, out long bytes)
-                ? bytes + JsonSnapCodec.GetSectionByteCount(section)
-                : JsonSnapCodec.GetSectionByteCount(section);
+                ? bytes + sectionBytes
+                : sectionBytes;
         }
 
         foreach (KeyValuePair<int, List<ScopeSnapNodePlan>> scopePlan in _pendingPlans)

@@ -35,4 +35,23 @@ public readonly record struct FullSnapLimits(
         if (MaxFormatVersion < MinFormatVersion)
             throw new ArgumentOutOfRangeException(nameof(MaxFormatVersion), "MaxFormatVersion must be greater than or equal to MinFormatVersion.");
     }
+
+    internal SnapReadLimits ToReadLimits()
+    {
+        ThrowIfInvalid();
+
+        return new SnapReadLimits
+        {
+            MaxJsonBytes = ClampToInt(MaxTotalBytes),
+            MaxSections = ClampToInt((long)MaxScopeCount * MaxSectionsPerScope),
+            MaxSectionBytes = ClampToInt(MaxScopeBytes),
+            MaxTotalSectionBytes = ClampToInt(MaxTotalBytes),
+            MaxJsonDepth = MaxJsonDepth
+        };
+    }
+
+    private static int ClampToInt(long value)
+    {
+        return value >= int.MaxValue ? int.MaxValue : (int)value;
+    }
 }
