@@ -7,23 +7,59 @@ on:
   pull_request:
   workflow_dispatch:
 
-jobs:
-  release-tests:
-    runs-on: windows-latest
+permissions:
+  contents: read
 
-    strategy:
-      fail-fast: false
-      matrix:
-        dotnet:
-          - "8.0.x"
-          - "9.0.x"
+concurrency:
+  group: production-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  library-build-net8:
+    runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: ${{ matrix.dotnet }}
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build LayerBase for net8.0
+        run: dotnet build LayerBase/LayerBase.csproj -c Release --no-restore -f net8.0
+
+      - name: Build LayerBase for netstandard2.1
+        run: dotnet build LayerBase/LayerBase.csproj -c Release --no-restore -f netstandard2.1
+
+  release-tests-net9:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Run all Release tests
+        run: dotnet test LayerBase.Test/LayerBase.Test.csproj -c Release --no-build
+
+      - name: Run ProductionHardening tests
+        run: dotnet test LayerBase.Test/LayerBase.Test.csproj -c Release --no-build --filter "TestCategory=ProductionHardening"
+
+      - name: Run ProductionSoak tests
+        run: dotnet test LayerBase.Test/LayerBase.Test.csproj -c Release --no-build --filter "TestCategory=ProductionSoak"
 
       - name: Verify production hardening
         shell: pwsh
@@ -31,9 +67,43 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: test-results-${{ matrix.dotnet }}
+          name: test-results-net9
           path: |
             **/TestResults/**
           if-no-files-found: ignore
+
+  package:
+    needs: release-tests-net9
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Vulnerability audit
+        run: dotnet list LayerBase/LayerBase.csproj package --vulnerable --include-transitive
+
+      - name: Pack
+        run: dotnet pack LayerBase/LayerBase.csproj -c Release --no-build -o artifacts/packages /p:ContinuousIntegrationBuild=true /p:Deterministic=true
+
+      - name: Verify package
+        shell: pwsh
+        run: ./eng/verify-package.ps1
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nupkg
+          path: artifacts/packages/
