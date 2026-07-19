@@ -106,9 +106,9 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
             return;
         }
 
-        LifetimeOperation operation = default;
+        LifetimeOperationLease? lease = null;
 
-        if (_tracker != null && !_tracker.TryBegin(out operation))
+        if (_tracker != null && !_tracker.TryBegin(out lease))
         {
             queuedCall.Completion.TrySetException(
                 new InvalidOperationException($"Scope is not accepting new calls."));
@@ -124,20 +124,18 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
 
             if (task.GetAwaiter().IsCompleted)
             {
-                if (_tracker != null)
-                    _tracker.CompleteOnOwner(operation);
+                lease?.TryComplete();
                 CompleteSynchronously(task, queuedCall.Completion);
             }
             else
             {
                 PendingScopeCallObservation.Observe(
-                    task, queuedCall.Completion, _tracker, operation, _transport);
+                    task, queuedCall.Completion, lease, _transport);
             }
         }
         catch (Exception ex)
         {
-            if (_tracker != null)
-                _tracker.CompleteOnOwner(operation);
+            lease?.TryComplete();
             queuedCall.Completion.TrySetException(ex);
         }
     }
@@ -173,8 +171,7 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
 
         private LBTask<TResponse> _task;
         private ScopeCallCompletion<TResponse>? _completion;
-        private LifetimeOperationTracker? _tracker;
-        private LifetimeOperation _operation;
+        private LifetimeOperationLease? _lease;
         private ScopeTransport? _transport;
 
         private PendingScopeCallObservation()
@@ -185,8 +182,7 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
         public static void Observe(
             LBTask<TResponse> task,
             ScopeCallCompletion<TResponse> completion,
-            LifetimeOperationTracker? tracker,
-            LifetimeOperation operation,
+            LifetimeOperationLease? lease,
             ScopeTransport? transport)
         {
             if (!Pool.TryDequeue(out var observation))
@@ -200,8 +196,7 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
 
             observation._task = task;
             observation._completion = completion;
-            observation._tracker = tracker;
-            observation._operation = operation;
+            observation._lease = lease;
             observation._transport = transport;
 
             task.GetAwaiter().OnCompleted(
@@ -231,23 +226,22 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
             }
             finally
             {
-                if (_tracker != null)
+                if (_lease != null)
                 {
                     if (_transport != null)
                     {
                         _transport.EnqueueCompletion(
-                            ScopeCompletionEnvelope.LifetimeOperationCompleted(_operation));
+                            ScopeCompletionEnvelope.LifetimeOperationCompleted(_lease));
                     }
                     else
                     {
-                        _tracker.CompleteOnOwner(_operation);
+                        _lease.TryComplete();
                     }
                 }
 
                 _task = default;
                 _completion = null;
-                _tracker = null;
-                _operation = default;
+                _lease = null;
                 _transport = null;
 
                 if (Interlocked.Increment(ref _poolCount) <= MaxPoolSize)

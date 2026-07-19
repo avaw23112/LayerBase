@@ -24,7 +24,7 @@ internal readonly struct ScopeCompletionEnvelope
         WorkerCompletion = workerCompletion;
         WorkerHandle = workerHandle;
         FaultRecord = default;
-        Operation = LifetimeOperation.Invalid;
+        OperationLease = LifetimeOperationLease.Invalid;
     }
 
     private ScopeCompletionEnvelope(
@@ -37,16 +37,16 @@ internal readonly struct ScopeCompletionEnvelope
         WorkerCompletion = workerCompletion;
         WorkerHandle = workerHandle;
         FaultRecord = faultRecord;
-        Operation = LifetimeOperation.Invalid;
+        OperationLease = LifetimeOperationLease.Invalid;
     }
 
-    private ScopeCompletionEnvelope(LifetimeOperation operation)
+    private ScopeCompletionEnvelope(LifetimeOperationLease operationLease)
     {
         Kind = ScopeCompletionKind.LifetimeOperationCompleted;
         WorkerCompletion = default;
         WorkerHandle = WorkerHandle.Invalid;
         FaultRecord = default;
-        Operation = operation;
+        OperationLease = operationLease;
     }
 
     public ScopeCompletionKind Kind { get; }
@@ -57,7 +57,7 @@ internal readonly struct ScopeCompletionEnvelope
 
     public ScopeFaultRecord FaultRecord { get; }
 
-    public LifetimeOperation Operation { get; }
+    public LifetimeOperationLease OperationLease { get; }
 
     public static ScopeCompletionEnvelope ScopeFault(
         in ScopeFaultRecord record)
@@ -106,9 +106,9 @@ internal readonly struct ScopeCompletionEnvelope
     }
 
     public static ScopeCompletionEnvelope LifetimeOperationCompleted(
-        LifetimeOperation operation)
+        LifetimeOperationLease operationLease)
     {
-        return new ScopeCompletionEnvelope(operation);
+        return new ScopeCompletionEnvelope(operationLease);
     }
 }
 

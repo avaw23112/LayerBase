@@ -69,6 +69,9 @@ internal sealed class ScopeRuntime : IDisposable
             runtime.WorkerExecutor,
             WorkerJobSchedulerOptions.Default);
         EventCenter = new EventCenter();
+        EventCenter.BindBusinessOperations(
+            _asyncCallOperations,
+            Transport);
         LocalCalls = new ScopeLocalCallRegistry(Descriptor.ScopeId);
         CallRoutes = new ScopeCallRouteTable(Descriptor.ScopeId);
         EventRoutes = new ScopeEventRouteTable(Descriptor.ScopeId);
@@ -739,7 +742,7 @@ internal sealed class ScopeRuntime : IDisposable
                     break;
 
                 case ScopeCompletionKind.LifetimeOperationCompleted:
-                    _asyncCallOperations.CompleteOnOwner(envelope.Operation);
+                    envelope.OperationLease.TryComplete();
                     break;
 
                 default:
@@ -1743,7 +1746,11 @@ internal sealed class ScopeRuntime : IDisposable
         if (!_asyncCallOperations.IsDrained)
         {
             if (disposeCompletion != null)
-                disposeCompletion.TrySetResult(new ScopeDisposeResponse(ScopeControlResult.Succeeded));
+            {
+                _pendingDisposeCompletion = disposeCompletion;
+                _disposeRequestedFromControl = true;
+            }
+
             return;
         }
 

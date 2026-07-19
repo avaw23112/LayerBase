@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace LayerBase.Lifetime;
 
 internal readonly struct LifetimeOperation
@@ -11,7 +9,7 @@ internal readonly struct LifetimeOperation
 
     public int Id { get; }
 
-    public static LifetimeOperation Invalid => default;
+    public static LifetimeOperation Invalid => new(-1);
 }
 
 internal sealed class LifetimeOperationTracker
@@ -20,29 +18,33 @@ internal sealed class LifetimeOperationTracker
     private int _activeCount;
     private bool _admissionClosed;
 
-    public int ActiveCount => _activeCount;
+    public int ActiveCount => Volatile.Read(ref _activeCount);
 
-    public bool IsAdmissionClosed => _admissionClosed;
+    public bool IsAdmissionClosed => Volatile.Read(ref _admissionClosed);
 
-    public bool IsDrained => _admissionClosed && _activeCount == 0;
+    public bool IsDrained =>
+        Volatile.Read(ref _admissionClosed) &&
+        Volatile.Read(ref _activeCount) == 0;
 
-    public bool TryBegin(out LifetimeOperation operation)
+    public bool TryBegin(out LifetimeOperationLease lease)
     {
-        if (_admissionClosed)
+        if (Volatile.Read(ref _admissionClosed))
         {
-            operation = LifetimeOperation.Invalid;
+            lease = LifetimeOperationLease.Invalid;
             return false;
         }
 
-        int id = _nextOperationId++;
+        int id = Interlocked.Increment(ref _nextOperationId);
         Interlocked.Increment(ref _activeCount);
-        operation = new LifetimeOperation(id);
+        lease = LifetimeOperationLease.Create(
+            this,
+            new LifetimeOperation(id));
         return true;
     }
 
     public void CloseAdmission()
     {
-        _admissionClosed = true;
+        Volatile.Write(ref _admissionClosed, true);
     }
 
     public void CompleteOnOwner(LifetimeOperation operation)

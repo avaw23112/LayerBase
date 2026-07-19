@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using LayerBase.Async;
 using LayerBase.Core.EventHandler;
 using LayerBase.Event.EventMetaData;
+using LayerBase.Lifetime;
 using LayerBase.Scope;
 
 namespace LayerBase.Core.Event;
@@ -18,8 +19,18 @@ public sealed class EventCenter
     private readonly EventExpectationQueue _expectations = new();
     private EventBuildPolicyTable? _policyTable;
     private EventBucketBase?[] _eventBuckets = Array.Empty<EventBucketBase?>();
+    private LifetimeOperationTracker? _businessOperations;
+    private ScopeTransport? _businessTransport;
 
     internal PostScheduler? PostScheduler { get; set; }
+
+    internal void BindBusinessOperations(
+        LifetimeOperationTracker operations,
+        ScopeTransport transport)
+    {
+        _businessOperations = operations ?? throw new ArgumentNullException(nameof(operations));
+        _businessTransport = transport ?? throw new ArgumentNullException(nameof(transport));
+    }
 
     internal void SubscribeFlow<T>(int layerIndex, IEventHandler<T> handler) where T : struct
     {
@@ -878,10 +889,26 @@ public sealed class EventCenter
         {
             EventHandleDelegateAsync<T>[] handlers = _asyncHandlers;
             FaultTable<T> faultTable = _faultTable;
+            LifetimeOperationTracker? operations = _owner._businessOperations;
+            ScopeTransport? transport = _owner._businessTransport;
 
             for (int i = start; i < end; i++)
             {
                 LBTask task;
+                LifetimeOperationLease? lease = null;
+
+                if (operations != null &&
+                    !operations.TryBegin(out lease))
+                {
+                    HandleFault(
+                        faultTable,
+                        FaultKind.Async,
+                        i,
+                        in value,
+                        new InvalidOperationException(
+                            "Scope is not accepting new async event handlers."));
+                    continue;
+                }
 
                 try
                 {
@@ -889,6 +916,7 @@ public sealed class EventCenter
                 }
                 catch (Exception ex)
                 {
+                    lease?.TryComplete();
                     HandleFault(
                         faultTable,
                         FaultKind.Async,
@@ -915,6 +943,10 @@ public sealed class EventCenter
                             in value,
                             ex);
                     }
+                    finally
+                    {
+                        lease?.TryComplete();
+                    }
 
                     continue;
                 }
@@ -924,7 +956,9 @@ public sealed class EventCenter
                     faultTable.AsyncFaults[i],
                     faultTable.EventNameId,
                     in value,
-                    task);
+                    task,
+                    lease,
+                    transport);
             }
         }
 
@@ -1004,6 +1038,8 @@ public sealed class EventCenter
         private int _active;
         private T _payload;
         private LBTask _task;
+        private LifetimeOperationLease? _lease;
+        private ScopeTransport? _transport;
 
         private AsyncFaultContext()
         {
@@ -1015,7 +1051,9 @@ public sealed class EventCenter
             FaultSlot faultSlot,
             int eventNameId,
             in T payload,
-            LBTask task)
+            LBTask task,
+            LifetimeOperationLease? lease,
+            ScopeTransport? transport)
         {
             Debug.Assert(
                 !task.GetAwaiter().IsCompleted,
@@ -1031,6 +1069,8 @@ public sealed class EventCenter
             context._eventNameId = eventNameId;
             context._payload = payload;
             context._task = task;
+            context._lease = lease;
+            context._transport = transport;
             Volatile.Write(ref context._active, 1);
             task.GetAwaiter().OnCompleted(context._continuation);
         }
@@ -1052,11 +1092,26 @@ public sealed class EventCenter
             }
             finally
             {
+                if (_lease != null)
+                {
+                    if (_transport != null)
+                    {
+                        _transport.EnqueueCompletion(
+                            ScopeCompletionEnvelope.LifetimeOperationCompleted(_lease));
+                    }
+                    else
+                    {
+                        _lease.TryComplete();
+                    }
+                }
+
                 _owner = null;
                 _faultSlot = default;
                 _eventNameId = 0;
                 _payload = default;
                 _task = default;
+                _lease = null;
+                _transport = null;
                 if (Interlocked.Increment(ref s_poolCount) <= MAX_POOL_SIZE) s_pool.Enqueue(this);
                 else Interlocked.Decrement(ref s_poolCount);
             }
