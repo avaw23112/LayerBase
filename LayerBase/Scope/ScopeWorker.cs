@@ -155,6 +155,11 @@ internal sealed class ScopeWorker : IDisposable
         ReleaseResources();
     }
 
+    internal void ForceReleaseResources()
+    {
+        ReleaseResources();
+    }
+
     private void ReleaseResources()
     {
         if (Interlocked.Exchange(ref _resourcesReleased, 1) != 0)
