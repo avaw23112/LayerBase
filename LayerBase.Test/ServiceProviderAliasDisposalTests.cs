@@ -19,24 +19,29 @@ public sealed class ServiceProviderAliasDisposalTests
 
         var instance = new AliasedDisposable();
 
-        var provider = new ServiceProvider(
-            runtime,
-            new[]
-            {
-                new ServiceDescriptor(
-                    typeof(IAliasReader),
-                    null,
-                    ServiceLifetime.Instance,
-                    null,
-                    instance),
-                new ServiceDescriptor(
-                    typeof(IAliasWriter),
-                    null,
-                    ServiceLifetime.Instance,
-                    null,
-                    instance),
-            },
-            layer);
+        var descriptors = new[]
+        {
+            new ServiceDescriptor(
+                typeof(IAliasReader),
+                null,
+                ServiceLifetime.Instance,
+                null,
+                instance),
+            new ServiceDescriptor(
+                typeof(IAliasWriter),
+                null,
+                ServiceLifetime.Instance,
+                null,
+                instance),
+        };
+        var catalog = new ServiceCatalog(descriptors);
+        var provider = new ServiceProvider(new[]
+        {
+            new ScopeServiceProvider(
+                runtime.ScopeHost.MainScope,
+                catalog.GetPlanOrEmpty(ScopeDefinitionIds.Main),
+                layer)
+        });
 
         // Resolve services to trigger instance creation
         provider.GetService(typeof(IAliasReader));

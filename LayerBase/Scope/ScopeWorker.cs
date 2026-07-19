@@ -104,7 +104,6 @@ internal sealed class ScopeWorker : IDisposable
             ReleaseResources();
             return true;
         }
-
         if (!_thread.IsAlive)
         {
             _startState = ScopeWorkerStartState.Exited;
@@ -123,7 +122,7 @@ internal sealed class ScopeWorker : IDisposable
         {
             _thread.IsBackground = true;
             return false;
-        }
+        }   
 
         _startState = ScopeWorkerStartState.Exited;
         ReleaseResources();

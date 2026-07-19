@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using LayerBase.Actor;
@@ -297,7 +296,7 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal void BuildFullSnapCache()
     {
-        _fullSnap = new FullSnapRuntime(this, _scopeHost);
+        _fullSnap = new FullSnapRuntime(_scopeHost);
         if (_chain == null) return;
 
         var visited = new HashSet<object>(LayerBase.Snap.ReferenceEqualityComparer.Instance);

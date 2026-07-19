@@ -1212,7 +1212,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
             var serviceName = injection.ServiceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             builder.Append("        this.")
                    .Append(injection.Member.Name)
-                   .Append(" = services.Get<")
+                   .Append(" = services.GetScopeService<")
                    .Append(serviceName)
                    .AppendLine(">();");
         }
@@ -1226,7 +1226,7 @@ public sealed class LayerServiceGenerator : IIncrementalGenerator
                        .Append(handler.ContextIndex)
                        .Append('_')
                        .Append(handler.HandlerIndex)
-                       .Append(" = services.Get<")
+                       .Append(" = services.GetScopeService<")
                        .Append(serviceName)
                        .AppendLine(">();");
             }

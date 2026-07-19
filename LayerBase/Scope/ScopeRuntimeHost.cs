@@ -478,8 +478,7 @@ internal sealed class ScopeRuntimeHost : ILifetimeParticipant, IDisposable
             if (scope.State == ScopeRuntimeState.Disposed) continue;
             try
             {
-                if (!WaitForControl(
-                        scope,
+                if (!WaitForControl(scope,
                         scope.RequestDisposeAsync(),
                         in deadline,
                         $"{scope.Descriptor.Name}.Dispose",

@@ -23,7 +23,7 @@ public class ScopeSnapTests
     {
         using var runtime = new LayerRuntime(2400);
         using ScopeRuntimeHost host = CreateInlineHost(runtime, ScopeSnapCustomScope.ScopeId);
-        var fullSnap = new FullSnapRuntime(runtime, host);
+        var fullSnap = new FullSnapRuntime(host);
 
         fullSnap.Register(
             ScopeDefinitionIds.Main,
@@ -87,7 +87,7 @@ public class ScopeSnapTests
     {
         using var runtime = new LayerRuntime(2401);
         using ScopeRuntimeHost host = CreateWorkerHost(runtime, ScopeSnapWorkerScope.ScopeId);
-        var fullSnap = new FullSnapRuntime(runtime, host);
+        var fullSnap = new FullSnapRuntime(host);
         fullSnap.FreezePlans();
         host.StartWorkers();
 
@@ -105,7 +105,7 @@ public class ScopeSnapTests
     {
         using var runtime = new LayerRuntime(2402);
         using ScopeRuntimeHost host = CreateWorkerHost(runtime, ScopeSnapWorkerScope.ScopeId);
-        var fullSnap = new FullSnapRuntime(runtime, host);
+        var fullSnap = new FullSnapRuntime(host);
         var node = new ThreadRecordingSnapNode("worker-node");
         fullSnap.Register(
             ScopeSnapWorkerScope.ScopeId,
@@ -126,7 +126,7 @@ public class ScopeSnapTests
         using var runtime = new LayerRuntime(2403);
         using ScopeRuntimeHost host = CreateWorkerHost(runtime, ScopeSnapWorkerScope.ScopeId);
         ScopeRuntime worker = host.Scopes.Single(static scope => scope.ScopeId == ScopeSnapWorkerScope.ScopeId);
-        var fullSnap = new FullSnapRuntime(runtime, host);
+        var fullSnap = new FullSnapRuntime( host);
         var node = new ThreadRecordingSnapNode(
             "flush-node",
             () => worker.EcsScheduler.CommandBuffer.Size);
@@ -152,7 +152,7 @@ public class ScopeSnapTests
         using ScopeRuntimeHost host = CreateWorkerHost(runtime, ScopeSnapWorkerScope.ScopeId);
         ScopeRuntime worker = host.Scopes.Single(static scope => scope.ScopeId == ScopeSnapWorkerScope.ScopeId);
         using var cts = new CancellationTokenSource();
-        var fullSnap = new FullSnapRuntime(runtime, host);
+        var fullSnap = new FullSnapRuntime(host);
         fullSnap.Register(
             ScopeSnapWorkerScope.ScopeId,
             new ScopeSnapNodePlan(0, 0, new ScopeCancelingThrowSnapNode(cts)));

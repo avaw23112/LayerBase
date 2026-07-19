@@ -7,15 +7,13 @@ namespace LayerBase.Snap;
 
 internal sealed class FullSnapRuntime
 {
-    private readonly LayerRuntime _runtime;
     private readonly ScopeRuntimeHost _scopes;
     private readonly Dictionary<int, List<ScopeSnapNodePlan>> _pendingPlans = new();
     private readonly Dictionary<string, ScopeSnapNodePlan> _keys = new(StringComparer.Ordinal);
     private IReadOnlyDictionary<int, int> _scopeNodeCounts = new Dictionary<int, int>();
 
-    public FullSnapRuntime(LayerRuntime runtime, ScopeRuntimeHost scopes)
+    public FullSnapRuntime(ScopeRuntimeHost scopes)
     {
-        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
     }
 

@@ -43,6 +43,26 @@ public sealed class ScopeServiceIsolationTests
     }
 
     [Test]
+    public void Service_provider_root_does_not_depend_on_runtime_or_layer()
+    {
+        string source = File.ReadAllText(FindRepositoryFile("LayerBase", "DI", "ServiceProvider.cs"));
+
+        Assert.That(source, Does.Not.Contain("LayerRuntime"));
+        Assert.That(source, Does.Not.Contain("Layer _ownerLayer"));
+        Assert.That(source, Does.Not.Contain("ScopeRuntimeHost"));
+    }
+
+    [Test]
+    public void Scope_service_provider_is_not_child_of_root_provider()
+    {
+        string source = File.ReadAllText(FindRepositoryFile("LayerBase", "DI", "ScopeServiceProvider.cs"));
+
+        Assert.That(source, Does.Not.Contain("ServiceProvider _root"));
+        Assert.That(source, Does.Not.Contain("_root.Resolve"));
+        Assert.That(source, Does.Not.Contain("_root.CreateInstance"));
+    }
+
+    [Test]
     public void Same_instance_cannot_be_owned_by_two_scopes()
     {
         var instance = new SharedOwnershipService();

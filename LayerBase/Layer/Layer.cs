@@ -222,7 +222,14 @@ public abstract class Layer : Node, IDisposable
         _collectingGeneratedServices = false;
 
         var descriptors = _serviceCollection.ToDescriptors();
-        var newProvider = new ServiceProvider(OwnerContext!, descriptors, this);
+        var catalog = new ServiceCatalog(descriptors);
+        var scopeProviders = OwnerContext!.ScopeHost.Scopes
+                                         .Select(scope => new ScopeServiceProvider(
+                                             scope,
+                                             catalog.GetPlanOrEmpty(scope.ScopeId),
+                                             this))
+                                         .ToArray();
+        var newProvider = new ServiceProvider(scopeProviders);
         var oldProvider = Interlocked.Exchange(ref _serviceProvider, newProvider);
         oldProvider?.Dispose();
 

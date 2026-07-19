@@ -252,7 +252,50 @@ public class LayerGeneratorContractTests
                            .ToImmutableArray();
 
         Assert.That(errors, Is.Empty,
-            string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+                           string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+    }
+
+    [Test]
+    public void Scoped_service_mount_injection_does_not_use_unscoped_service_get()
+    {
+        const string source = """
+                              using LayerBase.DI;
+                              using LayerBase.DI.Options;
+                              using LayerBase.Layers;
+                              using LayerBase.Scope;
+
+                              public sealed class InventoryScope : IScopeDefinition
+                              {
+                                  public const int ScopeId = 71;
+                                  public ScopeOptions Options => ScopeOptions.Inline;
+                              }
+
+                              public sealed partial class CommerceLayer : Layer
+                              {
+                              }
+
+                              [OwnerLayer(typeof(CommerceLayer))]
+                              [Scope<InventoryScope>]
+                              public sealed partial class InventoryService : IService
+                              {
+                                  [Mount] private InventoryContext _context = null!;
+
+                                  public void ConfigureServices(IServiceCollection services) { }
+                              }
+
+                              [OwnerService(typeof(InventoryService))]
+                              public sealed partial class InventoryContext : ILayerContext
+                              {
+                              }
+                              """;
+
+        var result = RunGenerators(source, new LayerServiceGenerator());
+        string generatedSource = string.Join(Environment.NewLine, result.GeneratedSources);
+
+        Assert.That(result.Diagnostics, Is.Empty,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+        Assert.That(generatedSource, Does.Contain("typeof(global::InventoryScope)"));
+        Assert.That(generatedSource, Does.Not.Contain("services.Get<global::InventoryContext>()"));
     }
 
     [Test]
@@ -485,13 +528,18 @@ public class LayerGeneratorContractTests
             parseOptions: new CSharpParseOptions(LanguageVersion.Preview));
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
-        var diagnostics = driver.GetRunResult().Results
+        GeneratorDriverRunResult runResult = driver.GetRunResult();
+        var diagnostics = runResult.Results
                                 .SelectMany(static result => result.Diagnostics)
                                 .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error ||
                                                             diagnostic.Severity == DiagnosticSeverity.Warning)
                                 .ToImmutableArray();
+        var generatedSources = runResult.Results
+                                        .SelectMany(static result => result.GeneratedSources)
+                                        .Select(static source => source.SourceText.ToString())
+                                        .ToImmutableArray();
 
-        return new GeneratorTestResult(diagnostics, outputCompilation);
+        return new GeneratorTestResult(diagnostics, outputCompilation, generatedSources);
     }
 
     private static ImmutableArray<Diagnostic> RunCallAnalyzer(string source)
@@ -532,6 +580,8 @@ public class LayerGeneratorContractTests
         }
     }
 
-    private readonly record struct GeneratorTestResult(ImmutableArray<Diagnostic> Diagnostics,
-        Compilation OutputCompilation);
+    private readonly record struct GeneratorTestResult(
+        ImmutableArray<Diagnostic> Diagnostics,
+        Compilation OutputCompilation,
+        ImmutableArray<string> GeneratedSources);
 }
