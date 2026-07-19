@@ -765,7 +765,10 @@ public abstract class Layer : Node, IDisposable
             handler.GetType(),
             GetType(),
             invoker,
-            new ScopeLocalCallDispatcher<TRequest, TResponse>(invoker)));
+            new ScopeLocalCallDispatcher<TRequest, TResponse>(
+                invoker,
+                ownerScope.AsyncCallOperations,
+                ownerScope.Transport)));
     }
 
     internal void RegisterCallHandlerForOwner<TRequest, TResponse>(
@@ -819,7 +822,10 @@ public abstract class Layer : Node, IDisposable
             handler.GetType(),
             GetType(),
             invoker,
-            new ScopeLocalCallDispatcher<TRequest, TResponse>(handler.HandleAsync)));
+            new ScopeLocalCallDispatcher<TRequest, TResponse>(
+                handler.HandleAsync,
+                ownerScope.AsyncCallOperations,
+                ownerScope.Transport)));
     }
 
     public void RegisterScopeEventHandlerForOwner<TEvent>(

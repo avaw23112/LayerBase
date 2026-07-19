@@ -11,6 +11,7 @@ using LayerBase.Core.ResponsibilityChain;
 using LayerBase.DI;
 using LayerBase.Event.Delay;
 using LayerBase.Layers;
+using LayerBase.Lifetime;
 using LayerBase.Modules;
 using LayerBase.Scope;
 using LayerBase.Snap;
@@ -64,6 +65,7 @@ public sealed partial class LayerRuntime : IDisposable
     private ScopeRef<MainScope> _mainScope;
     private RuntimeState _state = RuntimeState.Created;
     private bool _disposed;
+    private readonly RuntimeLifetimeRoot _lifetimeRoot = new();
     #endregion
 
     #region Properties
@@ -120,6 +122,10 @@ public sealed partial class LayerRuntime : IDisposable
         _scopeHost = ScopeRuntimeHost.CreateMain(this, _id, _generation);
 
         _mainScope = new ScopeRef<MainScope>(_scopeHost.MainScope.Endpoint);
+
+        _lifetimeRoot.Owner.Own(_workerExecutor);
+        _lifetimeRoot.Owner.Own(_mainActorRuntime);
+        _lifetimeRoot.Owner.Own(_scopeHost);
 
         LayerHub.Internal_Register(this);
 
@@ -622,46 +628,35 @@ public sealed partial class LayerRuntime : IDisposable
         RequireOwnerThreadDebug();
         if (_disposed) return;
 
+        if (_lifetimeRoot.IsReleased)
+        {
+            FinishDispose();
+            return;
+        }
+
         var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
 
-        try
+        ShutdownReport report = _lifetimeRoot.Shutdown(in deadline);
+
+        if (report.State == LifetimeState.DrainTimedOut)
         {
-            _state = RuntimeState.Stopping;
+            _state = RuntimeState.DrainTimedOut;
 
-            _workerExecutor.BeginStop();
+            ReportLayerEventError(
+                -1,
+                "RuntimeLifetimeRoot",
+                "Shutdown",
+                new TimeoutException(
+                    "Runtime shutdown timed out. Resources preserved for retry."));
 
-            _mainActorRuntime.RuntimeStop();
-
-            _state = RuntimeState.Disposing;
-
-            _scopeHost.Dispose();
-
-            _chain = null;
-
-            _mainActorRuntime.Dispose();
-            _tools?.Dispose();
-
-            WorkerExecutorShutdownResult executorResult =
-                _workerExecutor.Stop(in deadline);
-
-            if (executorResult == WorkerExecutorShutdownResult.TimedOut)
-            {
-                ReportLayerEventError(
-                    -1,
-                    "WorkerExecutor",
-                    "Shutdown",
-                    new TimeoutException(
-                        "Worker executor exceeded the runtime shutdown deadline."));
-            }
+            return;
         }
-        finally
-        {
-            _disposed = true;
-            LayerHub.ClearRuntimeCaches(_id);
-            LayerHub.Internal_Unregister(this);
-            _state = RuntimeState.Disposed;
-        }
+
+        _chain = null;
+
+        FinishDispose(report);
     }
+
     internal void AbortBuild()
     {
         if (_disposed)
@@ -669,44 +664,30 @@ public sealed partial class LayerRuntime : IDisposable
 
         var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
 
-        try
+        _lifetimeRoot.Shutdown(in deadline);
+
+        _chain = null;
+        _tools?.Dispose();
+
+        _disposed = true;
+        _state = RuntimeState.Disposed;
+
+        LayerHub.ClearRuntimeCaches(_id);
+        LayerHub.Internal_Unregister(this);
+    }
+
+    private void FinishDispose(ShutdownReport? report = null)
+    {
+        _disposed = true;
+        _state = report?.State switch
         {
-            _state = RuntimeState.Stopping;
+            LifetimeState.ReleasedWithErrors => RuntimeState.DisposedWithErrors,
+            _ => RuntimeState.Disposed
+        };
 
-            _workerExecutor.BeginStop();
-
-            _state = RuntimeState.Disposing;
-
-            if (_scopeHost.MainScope.State != ScopeRuntimeState.Disposed)
-            {
-                _scopeHost.Dispose();
-            }
-
-            _chain = null;
-
-            _mainActorRuntime.Dispose();
-            _tools?.Dispose();
-
-            WorkerExecutorShutdownResult executorResult =
-                _workerExecutor.Stop(in deadline);
-
-            if (executorResult == WorkerExecutorShutdownResult.TimedOut)
-            {
-                ReportLayerEventError(
-                    -1,
-                    "WorkerExecutor",
-                    "Shutdown",
-                    new TimeoutException(
-                        "Worker executor exceeded the runtime shutdown deadline."));
-            }
-        }
-        finally
-        {
-            _disposed = true;
-            LayerHub.ClearRuntimeCaches(_id);
-            LayerHub.Internal_Unregister(this);
-            _state = RuntimeState.Disposed;
-        }
+        _tools?.Dispose();
+        LayerHub.ClearRuntimeCaches(_id);
+        LayerHub.Internal_Unregister(this);
     }
 
     #endregion

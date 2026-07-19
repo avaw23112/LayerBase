@@ -123,7 +123,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
                 continue;
             }
 
-            Dispatch(actor, in value);
+            Dispatch(actor, in value, slotIndex);
             budget.Consume(1);
             if (options.MaxMailsPerActorPerPump > 0)
             {
@@ -177,7 +177,7 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
                 continue;
             }
 
-            Dispatch(actor, in value);
+            Dispatch(actor, in value, slotIndex);
             budget.Consume(1);
 
             if (mail.Count == 0)
@@ -197,10 +197,18 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
 
     public void Dispatch(
         TActor                                actor,
-        in ActorCallMail<TRequest, TResponse> mail)
+        in ActorCallMail<TRequest, TResponse> mail,
+        int                                   slotIndex)
     {
+        if (!_owner.TryBeginOperation(slotIndex))
+        {
+            mail.Source.SetException(new ActorCallException(ActorCallFailureKind.ActorNotFound));
+            return;
+        }
+
         if (mail.CancellationToken.IsCancellationRequested)
         {
+            _owner.CompleteOperation(slotIndex);
             mail.Source.SetCanceled(mail.CancellationToken);
             return;
         }
@@ -208,26 +216,42 @@ internal sealed class ActorCallColumn<TActor, TRequest, TResponse> :
         try
         {
             LBTask<TResponse> task = _invoker(actor, in mail.Request, mail.CancellationToken);
-            Forward(task, mail.Source);
+            if (task.GetAwaiter().IsCompleted)
+            {
+                _owner.CompleteOperation(slotIndex);
+                CompleteImmediately(task.GetAwaiter(), mail.Source);
+            }
+            else
+            {
+                Forward(task, mail.Source, slotIndex);
+            }
         }
         catch (Exception exception)
         {
+            _owner.CompleteOperation(slotIndex);
             mail.Source.SetException(exception);
         }
     }
 
-    private static void Forward(
+    private void Forward(
         LBTask<TResponse>                 task,
-        LBTaskCompletionSource<TResponse> target)
+        LBTaskCompletionSource<TResponse> target,
+        int                               slotIndex)
     {
         var awaiter = task.GetAwaiter();
         if (awaiter.IsCompleted)
         {
+            _owner.CompleteOperation(slotIndex);
             CompleteImmediately(awaiter, target);
             return;
         }
 
-        awaiter.OnCompleted(() => { CompleteImmediately(task.GetAwaiter(), target); });
+        int capturedSlot = slotIndex;
+        awaiter.OnCompleted(() =>
+        {
+            _owner.CompleteOperation(capturedSlot);
+            CompleteImmediately(task.GetAwaiter(), target);
+        });
     }
 
     private static void CompleteImmediately(

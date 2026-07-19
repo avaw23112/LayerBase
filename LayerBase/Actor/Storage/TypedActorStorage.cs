@@ -25,6 +25,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
     private bool[] _createdFromPool;
     private ActorLifecycleHandles[] _lifecycleHandles;
     private ActorSlotFreeList _freeList;
+    private int[] _activeOperations;
+    private CancellationTokenSource?[] _lifetimeTokens;
     private int _nextSlotIndex;
     private readonly int _archetypeId;
     private ActorTypeMeta<TActor>? _meta;
@@ -67,6 +69,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
             _lifecycleHandles[i] = ActorLifecycleHandles.Empty;
         }
 
+        _activeOperations = new int[_actors.Length];
+        _lifetimeTokens = new CancellationTokenSource?[_actors.Length];
         _freeList = new ActorSlotFreeList(_actors.Length);
         _nextSlotIndex = 0;
     }
@@ -851,11 +855,72 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
                 continue;
             }
 
+            int activeOps = ActiveOperationCount(slotIndex);
+            if (activeOps > 0)
+            {
+                CancelLifetimeToken(slotIndex);
+                continue;
+            }
+
             ClearAllMails(slotIndex);
             FinalizeDestroySlot(slotIndex, world);
             RefreshPostGenerations(slotIndex);
             _structuralDirtyFlags[slotIndex] = ActorStructuralDirtyFlags.None;
         }
+    }
+
+    internal bool TryBeginOperation(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_activeOperations.Length)
+            return false;
+
+        if (_states[slotIndex] != ActorSlotState.Alive)
+            return false;
+
+        Interlocked.Increment(ref _activeOperations[slotIndex]);
+        return true;
+    }
+
+    internal void CompleteOperation(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_activeOperations.Length)
+            return;
+
+        int count = Interlocked.Decrement(ref _activeOperations[slotIndex]);
+        if (count < 0)
+        {
+            Interlocked.Exchange(ref _activeOperations[slotIndex], 0);
+        }
+    }
+
+    internal int ActiveOperationCount(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_activeOperations.Length)
+            return 0;
+
+        return Volatile.Read(ref _activeOperations[slotIndex]);
+    }
+
+    internal CancellationToken GetOrCreateLifetimeToken(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_lifetimeTokens.Length)
+            return CancellationToken.None;
+
+        if (_lifetimeTokens[slotIndex] == null ||
+            _lifetimeTokens[slotIndex]!.IsCancellationRequested)
+        {
+            _lifetimeTokens[slotIndex] = new CancellationTokenSource();
+        }
+
+        return _lifetimeTokens[slotIndex]!.Token;
+    }
+
+    internal void CancelLifetimeToken(int slotIndex)
+    {
+        if ((uint)slotIndex >= (uint)_lifetimeTokens.Length)
+            return;
+
+        Interlocked.Exchange(ref _lifetimeTokens[slotIndex], null)?.Cancel();
     }
 
     private int AllocateNewSlot()
@@ -890,6 +955,8 @@ internal sealed class TypedActorStorage<TActor> : TypedStorageRuntime
         Array.Resize(ref _enabled, newSize);
         Array.Resize(ref _createdFromPool, newSize);
         Array.Resize(ref _actorExists, newSize);
+        Array.Resize(ref _activeOperations, newSize);
+        Array.Resize(ref _lifetimeTokens, newSize);
         Array.Resize(ref _lifecycleHandles, newSize);
         for (int i = oldSize; i < newSize; i++)
         {

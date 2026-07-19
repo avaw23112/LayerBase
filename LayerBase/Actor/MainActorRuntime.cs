@@ -2,17 +2,37 @@ using System.Diagnostics;
 using Arch.Core;
 using LayerBase.Core.Event;
 using LayerBase.ECS.Projection;
+using LayerBase.Lifetime;
 using LayerBase.Scope;
 
 namespace LayerBase.Actor;
 
-internal sealed class MainActorRuntime : IDisposable
+internal sealed class MainActorRuntime : ILifetimeParticipant, IDisposable
 {
     private readonly ActorWorld _world;
     private readonly ActorProjectionRuntime _projectionRuntime;
     private readonly int _generation;
     private MainActorRuntimeState _state = MainActorRuntimeState.Created;
     private long _pumpCount;
+    private bool _admissionClosed;
+    private bool _drainCompleted;
+
+    string ILifetimeParticipant.LifetimeName => "MainActorRuntime";
+
+    void ILifetimeParticipant.CloseAdmission() => CloseAdmission();
+
+    void ILifetimeParticipant.RequestStop() => RequestStop();
+
+    LifetimeDrainResult ILifetimeParticipant.Drain(in Scope.ShutdownDeadline deadline)
+    {
+        Drain();
+        return LifetimeDrainResult.Drained;
+    }
+
+    void ILifetimeParticipant.Release(TerminalCleanupRunner cleanup)
+    {
+        Dispose();
+    }
 
     public MainActorRuntime(LayerRuntime runtime, int generation)
     {
@@ -64,6 +84,22 @@ internal sealed class MainActorRuntime : IDisposable
             fixedDeltaTime: fixedDeltaTime,
             pumpFixedUpdate: pumpFixedUpdate,
             budget: ref budget);
+    }
+
+    public void CloseAdmission()
+    {
+        _admissionClosed = true;
+    }
+
+    public void RequestStop()
+    {
+        _state = MainActorRuntimeState.Stopping;
+        _world.RuntimeStop();
+    }
+
+    public void Drain()
+    {
+        _drainCompleted = true;
     }
 
     public void RuntimeStop()

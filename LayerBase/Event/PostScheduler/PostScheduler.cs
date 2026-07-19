@@ -530,19 +530,29 @@ public sealed class PostScheduler : IDisposable
         else
         {
             int perTypeLimit = plan.MaxPending > 0 ? plan.MaxPending : _options.MaxSpecialPending;
-            int typeCount = _pendingCoalescedByType.TryGetValue(typeId, out var typeList) ? typeList.Count : 0;
-            int maxCoalesced = Math.Min(perTypeLimit, _options.MaxSpecialPending);
 
-            if (typeCount >= maxCoalesced)
+            if (perTypeLimit > 0)
             {
-                switch (plan.Backpressure)
+                int typeCount = _pendingCoalescedByType.TryGetValue(typeId, out var typeList)
+                    ? typeList.Count
+                    : 0;
+
+                if (typeCount >= perTypeLimit)
                 {
-                    case BackpressurePolicy.DropOldest:
-                        EvictOldestCoalescedSlotForType(typeId);
-                        break;
-                    default:
-                        return PostResult.Failure();
+                    switch (plan.Backpressure)
+                    {
+                        case BackpressurePolicy.DropOldest:
+                            EvictOldestCoalescedSlotForType(typeId);
+                            break;
+                        default:
+                            return PostResult.Failure();
+                    }
                 }
+            }
+
+            if (_options.MaxSpecialPending > 0 && _pendingCoalesced.Count >= _options.MaxSpecialPending)
+            {
+                EvictOldestCoalescedSlot();
             }
 
             var handle = _payloadStorage.Store(_runtimeId, value);
@@ -926,6 +936,11 @@ public sealed class PostScheduler : IDisposable
                 out var typeList))
         {
             typeList.Remove(slot.TypeOrderNode);
+
+            if (typeList.Count == 0)
+            {
+                _pendingCoalescedByType.Remove(key.EventTypeId);
+            }
         }
 
         _coalescedBuffer.Remove(key);

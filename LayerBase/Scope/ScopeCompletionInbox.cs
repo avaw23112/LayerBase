@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using LayerBase.Lifetime;
 using LayerBase.Worker;
 
 namespace LayerBase.Scope;
@@ -8,7 +9,8 @@ internal enum ScopeCompletionKind : byte
     WorkerExecutionCompleted = 0,
     WorkerCancelRequested = 1,
     WorkerExecutionStarted = 2,
-    ScopeFault = 3
+    ScopeFault = 3,
+    LifetimeOperationCompleted = 4
 }
 
 internal readonly struct ScopeCompletionEnvelope
@@ -22,6 +24,7 @@ internal readonly struct ScopeCompletionEnvelope
         WorkerCompletion = workerCompletion;
         WorkerHandle = workerHandle;
         FaultRecord = default;
+        Operation = LifetimeOperation.Invalid;
     }
 
     private ScopeCompletionEnvelope(
@@ -34,6 +37,16 @@ internal readonly struct ScopeCompletionEnvelope
         WorkerCompletion = workerCompletion;
         WorkerHandle = workerHandle;
         FaultRecord = faultRecord;
+        Operation = LifetimeOperation.Invalid;
+    }
+
+    private ScopeCompletionEnvelope(LifetimeOperation operation)
+    {
+        Kind = ScopeCompletionKind.LifetimeOperationCompleted;
+        WorkerCompletion = default;
+        WorkerHandle = WorkerHandle.Invalid;
+        FaultRecord = default;
+        Operation = operation;
     }
 
     public ScopeCompletionKind Kind { get; }
@@ -43,6 +56,8 @@ internal readonly struct ScopeCompletionEnvelope
     public WorkerHandle WorkerHandle { get; }
 
     public ScopeFaultRecord FaultRecord { get; }
+
+    public LifetimeOperation Operation { get; }
 
     public static ScopeCompletionEnvelope ScopeFault(
         in ScopeFaultRecord record)
@@ -88,6 +103,12 @@ internal readonly struct ScopeCompletionEnvelope
             ScopeCompletionKind.WorkerExecutionStarted,
             in emptyCompletion,
             handle);
+    }
+
+    public static ScopeCompletionEnvelope LifetimeOperationCompleted(
+        LifetimeOperation operation)
+    {
+        return new ScopeCompletionEnvelope(operation);
     }
 }
 

@@ -332,7 +332,32 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         int remaining = ProcessTimerList(current, sink, ref count, ref firstException);
 
         if (remaining != -1)
-            MoveToOverdue(remaining);
+            PrependToOverdue(remaining);
+    }
+
+    private void PrependToOverdue(int head)
+    {
+        int tail = head;
+        while (tail != -1)
+        {
+            ref var entry = ref FastArray.At(_pool, tail);
+            entry.SlotIndex = OverdueSlotIndex;
+            if (entry.Next == -1)
+                break;
+            tail = entry.Next;
+        }
+
+        if (_overdueHead == -1)
+        {
+            _overdueHead = head;
+            _overdueTail = tail;
+            return;
+        }
+
+        ref var tailEntry = ref FastArray.At(_pool, tail);
+        tailEntry.Next = _overdueHead;
+        FastArray.At(_pool, _overdueHead).Prev = tail;
+        _overdueHead = head;
     }
 
     private void AppendSingleToOverdue(int index)

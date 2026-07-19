@@ -1,3 +1,4 @@
+using LayerBase.Lifetime;
 using LayerBase.Scope;
 
 namespace LayerBase.Worker;
@@ -9,7 +10,7 @@ internal enum WorkerExecutorShutdownResult
     AlreadyStopped
 }
 
-internal sealed class WorkerJobScheduler : IDisposable
+internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
 {
     private readonly WorkerJobSchedulerOptions _options;
     private readonly object _gate = new();
@@ -19,7 +20,25 @@ internal sealed class WorkerJobScheduler : IDisposable
     private bool _threadsStarted;
     private bool _accepting = true;
     private bool _stopRequested;
-    private bool _resourcesReleased;
+    internal bool _resourcesReleased;
+
+    string ILifetimeParticipant.LifetimeName => "WorkerJobScheduler";
+
+    void ILifetimeParticipant.CloseAdmission() => CloseAdmission();
+
+    void ILifetimeParticipant.RequestStop() => RequestStop();
+
+    LifetimeDrainResult ILifetimeParticipant.Drain(in ShutdownDeadline deadline)
+    {
+        return Stop(in deadline) == WorkerExecutorShutdownResult.TimedOut
+            ? LifetimeDrainResult.TimedOut
+            : LifetimeDrainResult.Drained;
+    }
+
+    void ILifetimeParticipant.Release(TerminalCleanupRunner cleanup)
+    {
+        ReleaseResources();
+    }
 
     public WorkerJobScheduler(WorkerJobSchedulerOptions options)
     {
@@ -181,7 +200,40 @@ internal sealed class WorkerJobScheduler : IDisposable
         }
     }
 
-    private void ReleaseResources()
+    internal void CloseAdmission()
+    {
+        lock (_gate)
+        {
+            _accepting = false;
+        }
+    }
+
+    internal void RequestStop()
+    {
+        List<IWorkerExecutionItem> pending = new();
+
+        lock (_gate)
+        {
+            if (_stopRequested)
+                return;
+
+            _accepting = false;
+            _stopRequested = true;
+
+            while (_queue.Count > 0)
+                pending.Add(_queue.Dequeue());
+
+            if (_threadsStarted)
+                _signal!.Set();
+        }
+
+        foreach (IWorkerExecutionItem item in pending)
+        {
+            item.CancelBeforeRun();
+        }
+    }
+
+    internal void ReleaseResources()
     {
         if (_resourcesReleased)
             return;

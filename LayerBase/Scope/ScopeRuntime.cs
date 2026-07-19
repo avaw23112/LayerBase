@@ -7,6 +7,7 @@ using LayerBase.Core.Event;
 using LayerBase.ECS;
 using LayerBase.ECS.Projection;
 using LayerBase.Event.Delay;
+using LayerBase.Lifetime;
 using LayerBase.Snap;
 using LayerBase.Worker;
 
@@ -41,6 +42,8 @@ internal sealed class ScopeRuntime : IDisposable
     private readonly Action<Exception> _eventExpectationFaultReporter;
 
     private Action? _signalWorker;
+    private readonly LifetimeOperationTracker _asyncCallOperations = new();
+    private readonly CancellationTokenSource _scopeLifetimeCancellation = new();
 
     public ScopeRuntime(LayerRuntime runtime, ScopeExecutionPlan plan, int runtimeId, int generation)
     {
@@ -157,6 +160,10 @@ internal sealed class ScopeRuntime : IDisposable
     public ScopeCallRouteTable CallRoutes { get; }
 
     public ScopeEventRouteTable EventRoutes { get; }
+
+    internal LifetimeOperationTracker AsyncCallOperations => _asyncCallOperations;
+
+    internal CancellationToken ScopeLifetimeToken => _scopeLifetimeCancellation.Token;
 
     public LayerProviderRuntime[] LayerProviders { get; }
 
@@ -729,6 +736,10 @@ internal sealed class ScopeRuntime : IDisposable
 
                 case ScopeCompletionKind.ScopeFault:
                     _runtime.ReportScopeFault(envelope.FaultRecord);
+                    break;
+
+                case ScopeCompletionKind.LifetimeOperationCompleted:
+                    _asyncCallOperations.CompleteOnOwner(envelope.Operation);
                     break;
 
                 default:
@@ -1521,6 +1532,16 @@ internal sealed class ScopeRuntime : IDisposable
         _pendingDisposeCompletion = null;
         if (_state != ScopeRuntimeState.Stopped)
             StopOnOwnerThread();
+
+        _asyncCallOperations.CloseAdmission();
+        _scopeLifetimeCancellation.Cancel();
+
+        if (!_asyncCallOperations.IsDrained)
+        {
+            if (disposeCompletion != null)
+                disposeCompletion.TrySetResult(new ScopeDisposeResponse(ScopeControlResult.Succeeded));
+            return;
+        }
 
         if (WorkerJobs.CanDispose)
         {

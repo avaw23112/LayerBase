@@ -254,17 +254,22 @@ public readonly struct LBTask
     {
         private static readonly ObjectPool<DelayWorkItem> Pool = new(() => new DelayWorkItem());
 
+        private sealed class DelayCancellationState
+        {
+            public readonly DelayWorkItem Work;
+            public readonly int LeaseVersion;
+
+            public DelayCancellationState(DelayWorkItem work, int leaseVersion)
+            {
+                Work = work;
+                LeaseVersion = leaseVersion;
+            }
+        }
+
         public static readonly WaitCallback OnTimer = static state =>
         {
-            var lease = (DelayWorkItemLease)state!;
-            try
-            {
-                lease.Work.TryComplete(false, lease.LeaseVersion);
-            }
-            finally
-            {
-                lease.Return();
-            }
+            var cancelState = (DelayCancellationState)state!;
+            cancelState.Work.TryComplete(false, cancelState.LeaseVersion);
         };
 
         private int _completed;
@@ -275,7 +280,6 @@ public readonly struct LBTask
         private LBTaskSource? _source;
         private int _sourceVersion;
         private CancellationToken _token;
-        private DelayWorkItemLease? _cancellationLease;
         public int HeapIndex = -1;
 
         public CancellationTokenRegistration CancellationRegistration;
@@ -294,7 +298,6 @@ public readonly struct LBTask
                 work._leaseVersion++;
                 if (work._leaseVersion == 0) work._leaseVersion = 1;
             }
-
             work._source = source;
             work._sourceVersion = source.Version;
             work._token = token;
@@ -303,7 +306,6 @@ public readonly struct LBTask
             work._registrationInitializing = token.CanBeCanceled ? 1 : 0;
             work._returnPending = 0;
             work.CancellationRegistration = default;
-            work._cancellationLease = null;
             return work;
         }
 
@@ -316,23 +318,14 @@ public readonly struct LBTask
                 return;
             }
 
-            DelayWorkItemLease lease =
-                DelayWorkItemLease.Rent(this, Volatile.Read(ref _leaseVersion));
-
-            _cancellationLease = lease;
+            int leaseVersion = Volatile.Read(ref _leaseVersion);
+            var cancelState = new DelayCancellationState(this, leaseVersion);
 
             var registration = _token.Register(static state =>
             {
-                var callbackLease = (DelayWorkItemLease)state!;
-                try
-                {
-                    callbackLease.Work.TryCancel(callbackLease.LeaseVersion);
-                }
-                finally
-                {
-                    callbackLease.Return();
-                }
-            }, lease);
+                var cs = (DelayCancellationState)state!;
+                cs.Work.TryCancel(cs.LeaseVersion);
+            }, cancelState);
 
             CancellationRegistration = registration;
 
@@ -340,7 +333,6 @@ public readonly struct LBTask
             {
                 registration.Dispose();
                 CancellationRegistration = default;
-                ReturnCancellationLease();
             }
 
             Volatile.Write(ref _registrationInitializing, 0);
@@ -364,7 +356,6 @@ public readonly struct LBTask
             {
                 CancellationRegistration.Dispose();
                 CancellationRegistration = default;
-                ReturnCancellationLease();
                 if (canceled)
                     _source!.TrySetCanceled(_sourceVersion, _token);
                 else
@@ -379,11 +370,6 @@ public readonly struct LBTask
             }
         }
 
-        private void ReturnCancellationLease()
-        {
-            Interlocked.Exchange(ref _cancellationLease, null)?.Return();
-        }
-
         private void ReturnToPool()
         {
             _source = null;
@@ -393,57 +379,13 @@ public readonly struct LBTask
             _registrationInitializing = 0;
             _returnPending = 0;
             CancellationRegistration = default;
-            _cancellationLease = null;
             HeapIndex = -1;
             Pool.Return(this);
         }
 
-        public DelayWorkItemLease CaptureLease()
+        public object CaptureLease()
         {
-            return DelayWorkItemLease.Rent(this, Volatile.Read(ref _leaseVersion));
-        }
-    }
-
-    private sealed class DelayWorkItemLease
-    {
-        private static readonly ObjectPool<DelayWorkItemLease> Pool =
-            new(() => new DelayWorkItemLease());
-
-        private int _returned;
-
-        private DelayWorkItemLease()
-        {
-        }
-
-        public DelayWorkItem Work { get; private set; } = null!;
-
-        public int LeaseVersion { get; private set; }
-
-        public static DelayWorkItemLease Rent(
-            DelayWorkItem work,
-            int leaseVersion)
-        {
-            DelayWorkItemLease lease = Pool.Rent();
-
-            lease.Work = work;
-            lease.LeaseVersion = leaseVersion;
-            Volatile.Write(ref lease._returned, 0);
-
-            return lease;
-        }
-
-        public void Return()
-        {
-            if (Interlocked.Exchange(
-                    ref _returned,
-                    1) != 0)
-            {
-                return;
-            }
-
-            Work = null!;
-            LeaseVersion = 0;
-            Pool.Return(this);
+            return new DelayCancellationState(this, Volatile.Read(ref _leaseVersion));
         }
     }
 

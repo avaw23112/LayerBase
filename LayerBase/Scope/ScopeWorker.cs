@@ -9,6 +9,16 @@ internal enum ScopeWorkerShutdownResult
     AlreadyStopped
 }
 
+internal enum ScopeWorkerStartState : byte
+{
+    Created,
+    Starting,
+    Running,
+    StartFailed,
+    Stopping,
+    Exited
+}
+
 internal sealed class ScopeWorker : IDisposable
 {
     private readonly ScopeRuntime _runtime;
@@ -22,6 +32,7 @@ internal sealed class ScopeWorker : IDisposable
     private int _threadExited;
     private int _resourcesReleased;
     private ScopeWorkerShutdownResult _shutdownResult;
+    private ScopeWorkerStartState _startState;
 
     public ScopeWorker(ScopeRuntime runtime)
     {
@@ -36,6 +47,8 @@ internal sealed class ScopeWorker : IDisposable
 
     public ScopeWorkerShutdownResult ShutdownResult => _shutdownResult;
 
+    public ScopeWorkerStartState StartState => _startState;
+
     internal ScopeRuntime Runtime => _runtime;
 
     public void Start(in ShutdownDeadline deadline)
@@ -43,6 +56,7 @@ internal sealed class ScopeWorker : IDisposable
         if (_startedThread)
             return;
 
+        _startState = ScopeWorkerStartState.Starting;
         _startedThread = true;
         _thread.Start();
 
@@ -52,6 +66,7 @@ internal sealed class ScopeWorker : IDisposable
 
             if (remaining <= 0 || !_ready.Wait(remaining))
             {
+                _startState = ScopeWorkerStartState.StartFailed;
                 throw new TimeoutException(
                     $"Scope worker `{_runtime.Descriptor.Name}` did not become ready before the build deadline.");
             }
@@ -61,10 +76,13 @@ internal sealed class ScopeWorker : IDisposable
 
             if (startupException != null)
             {
+                _startState = ScopeWorkerStartState.StartFailed;
                 throw new InvalidOperationException(
                     $"Scope worker `{_runtime.Descriptor.Name}` failed during startup.",
                     startupException);
             }
+
+            _startState = ScopeWorkerStartState.Running;
         }
         finally
         {
@@ -75,12 +93,23 @@ internal sealed class ScopeWorker : IDisposable
 
     internal ScopeWorkerShutdownResult Stop(in ShutdownDeadline deadline)
     {
+        if (_startState == ScopeWorkerStartState.StartFailed)
+        {
+            if (!_thread.IsAlive)
+            {
+                ReleaseResources();
+                return ScopeWorkerShutdownResult.AlreadyStopped;
+            }
+        }
+
         if (!_startedThread)
         {
             _runtime.DisposeUnstarted();
             ReleaseResources();
             return ScopeWorkerShutdownResult.AlreadyStopped;
         }
+
+        _startState = ScopeWorkerStartState.Stopping;
 
         try
         {
@@ -92,6 +121,7 @@ internal sealed class ScopeWorker : IDisposable
 
         if (!_thread.IsAlive)
         {
+            _startState = ScopeWorkerStartState.Exited;
             ReleaseResources();
             return ScopeWorkerShutdownResult.AlreadyStopped;
         }
@@ -110,6 +140,7 @@ internal sealed class ScopeWorker : IDisposable
             return ScopeWorkerShutdownResult.TimedOut;
         }
 
+        _startState = ScopeWorkerStartState.Exited;
         ReleaseResources();
 
         return ScopeWorkerShutdownResult.Stopped;
@@ -186,6 +217,7 @@ internal sealed class ScopeWorker : IDisposable
             catch (Exception ex)
             {
                 Volatile.Write(ref _startupException, ex);
+                _startState = ScopeWorkerStartState.StartFailed;
                 _ready.Set();
                 return;
             }
@@ -210,6 +242,7 @@ internal sealed class ScopeWorker : IDisposable
                 SynchronizationContext.SetSynchronizationContext(
                     previousContext);
                 Volatile.Write(ref _threadExited, 1);
+                _startState = ScopeWorkerStartState.Exited;
                 TryReleaseResourcesAfterExit();
             }
         }

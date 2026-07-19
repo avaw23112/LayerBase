@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using LayerBase;
 using LayerBase.DI.Options;
 using LayerBase.Layers;
+using LayerBase.Lifetime;
 using LayerBase.Scope;
 
 namespace LayerBase.DI;
@@ -15,7 +16,10 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
     private readonly Dictionary<Type, ServiceDescriptor[]> _descriptorsByType;
     private readonly LayerRuntime _runtime;
     private readonly Layer _ownerLayer;
-    private ResolutionContext? _activeResolutionContext;
+    private readonly object _lifetimeGate = new();
+    private readonly OwnedDisposableRegistry _disposables = new();
+    [ThreadStatic]
+    private static ResolutionContext? t_activeResolutionContext;
     private int _disposed;
 
     public ServiceProvider(
@@ -47,41 +51,42 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        Lazy<object>[] values =
-            _instances.Values.ToArray();
+        var cleanup = new TerminalCleanupRunner();
 
-        _instances.Clear();
-
-        DisposeUniqueInstances(values);
+        lock (_lifetimeGate)
+        {
+            _disposables.ReleaseAll(cleanup);
+            _instances.Clear();
+        }
     }
 
     public object? GetService(Type serviceType)
     {
-        var context = _activeResolutionContext ?? new ResolutionContext();
+        var context = t_activeResolutionContext ?? new ResolutionContext();
         return GetServiceInternal(serviceType, ScopeDefinitionIds.Main, context);
     }
 
     public T Get<T>()
     {
-        var service = GetService(typeof(T));
+        var context = t_activeResolutionContext ?? new ResolutionContext();
+        var service = GetServiceInternal(typeof(T), ScopeDefinitionIds.Main, context);
         if (service == null)
             throw new InvalidOperationException($"Service not registered: {typeof(T)}");
-
         return (T)service;
     }
 
     internal T Get<T>(int ownerScopeId)
     {
-        var service = GetService(typeof(T), ownerScopeId);
+        var context = t_activeResolutionContext ?? new ResolutionContext();
+        var service = GetServiceInternal(typeof(T), ownerScopeId, context);
         if (service == null)
             throw new InvalidOperationException($"Service not registered in scope {ownerScopeId}: {typeof(T)}");
-
         return (T)service;
     }
 
     internal object? GetService(Type serviceType, int ownerScopeId)
     {
-        var context = _activeResolutionContext ?? new ResolutionContext();
+        var context = t_activeResolutionContext ?? new ResolutionContext();
         return GetServiceInternal(serviceType, ownerScopeId, context);
     }
 
@@ -118,24 +123,26 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
 
     internal void DisposeScope(int ownerScopeId)
     {
-        var removed =
-            new List<Lazy<object>>();
+        var cleanup = new TerminalCleanupRunner();
 
-        foreach (KeyValuePair<ServiceKey, Lazy<object>> pair
-                 in _instances)
+        lock (_lifetimeGate)
         {
-            if (pair.Key.OwnerScopeId != ownerScopeId)
-                continue;
+            var removedKeys = new List<ServiceKey>();
 
-            if (_instances.TryRemove(
-                    pair.Key,
-                    out Lazy<object>? lazy))
+            foreach (KeyValuePair<ServiceKey, Lazy<object>> pair in _instances)
             {
-                removed.Add(lazy);
+                if (pair.Key.OwnerScopeId != ownerScopeId)
+                    continue;
+                removedKeys.Add(pair.Key);
             }
-        }
 
-        DisposeUniqueInstances(removed);
+            foreach (ServiceKey key in removedKeys)
+            {
+                _instances.TryRemove(key, out _);
+            }
+
+            _disposables.ReleaseScope(ownerScopeId, cleanup);
+        }
     }
 
     internal void InjectMembers(object instance)
@@ -180,75 +187,97 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
 
     private object Resolve(ServiceDescriptor descriptor, ResolutionContext context)
     {
-        var instance = descriptor.Lifetime switch
-        {
-            ServiceLifetime.Instance => GetOrCreateCached(descriptor, context),
-            ServiceLifetime.Singleton => GetOrCreateCached(descriptor, context),
-            ServiceLifetime.Scoped => GetOrCreateCached(descriptor, context),
-            ServiceLifetime.Transient => CreateInstance(descriptor, context),
-            _ => throw new NotSupportedException($"Unsupported lifetime {descriptor.Lifetime}")
-        };
+        var serviceType = descriptor.ServiceType;
+        if (!context.CallStack.Add(serviceType))
+            throw new InvalidOperationException($"Circular dependency detected: {serviceType}");
 
-        var existingBinding = ServiceLayerBinder.GetBinding(instance);
-        if (existingBinding != null &&
-            (existingBinding.RuntimeId != _runtime.Id ||
-             existingBinding.LayerIndex != _ownerLayer.RouteIndex))
+        var previousContext = t_activeResolutionContext;
+        t_activeResolutionContext = context;
+
+        try
         {
-            throw new InvalidOperationException(
-                $"Service instance {instance.GetType().Name} is already bound to another Layer provider.");
+            var instance = descriptor.Lifetime switch
+            {
+                ServiceLifetime.Instance => GetOrCreateCached(descriptor, context),
+                ServiceLifetime.Singleton => GetOrCreateCached(descriptor, context),
+                ServiceLifetime.Scoped => GetOrCreateCached(descriptor, context),
+                ServiceLifetime.Transient => CreateInstance(descriptor, context),
+                _ => throw new NotSupportedException($"Unsupported lifetime {descriptor.Lifetime}")
+            };
+
+            var existingBinding = ServiceLayerBinder.GetBinding(instance);
+            if (existingBinding != null &&
+                (existingBinding.RuntimeId != _runtime.Id ||
+                 existingBinding.LayerIndex != _ownerLayer.RouteIndex))
+            {
+                throw new InvalidOperationException(
+                    $"Service instance {instance.GetType().Name} is already bound to another Layer provider.");
+            }
+
+            if (!_runtime.ScopeHost.TryGetRuntime(descriptor.OwnerScopeId, out var ownerScope))
+            {
+                throw new InvalidOperationException(
+                    $"Service `{descriptor.ServiceType.FullName}` targets unknown scope id {descriptor.OwnerScopeId}.");
+            }
+
+            ServiceLayerBinder.AttachScopeObject(instance, _ownerLayer, ownerScope);
+            return instance;
         }
-
-        if (!_runtime.ScopeHost.TryGetRuntime(descriptor.OwnerScopeId, out var ownerScope))
+        finally
         {
-            throw new InvalidOperationException(
-                $"Service `{descriptor.ServiceType.FullName}` targets unknown scope id {descriptor.OwnerScopeId}.");
+            t_activeResolutionContext = previousContext;
+            context.CallStack.Remove(serviceType);
         }
-
-        ServiceLayerBinder.AttachScopeObject(instance, _ownerLayer, ownerScope);
-        return instance;
     }
 
     private object GetOrCreateCached(ServiceDescriptor descriptor, ResolutionContext context)
     {
-        var implementationType = descriptor.ImplType ?? descriptor.ServiceType;
-        if (context.CallStack.Contains(implementationType))
-            throw new InvalidOperationException($"Circular dependency detected: {implementationType}");
+        var key = new ServiceKey(descriptor.OwnerScopeId, descriptor.ServiceType);
 
-        var lazy = _instances.GetOrAdd(
-            new ServiceKey(descriptor.OwnerScopeId, descriptor.ServiceType),
-            _ => new Lazy<object>(
-                () => CreateInstance(descriptor, context),
-                LazyThreadSafetyMode.ExecutionAndPublication));
+        if (_instances.TryGetValue(key, out var existing))
+            return existing.Value;
 
-        try
+        lock (_lifetimeGate)
         {
-            return lazy.Value;
-        }
-        catch
-        {
-            _instances.TryRemove(new ServiceKey(descriptor.OwnerScopeId, descriptor.ServiceType), out _);
-            throw;
+            if (_instances.TryGetValue(key, out existing))
+                return existing.Value;
+
+            var instance = CreateInstance(descriptor, context);
+            var lazy = new Lazy<object>(() => instance);
+            _instances[key] = lazy;
+            return instance;
         }
     }
 
     private object CreateInstance(ServiceDescriptor descriptor, ResolutionContext context)
     {
         if (descriptor.Lifetime == ServiceLifetime.Instance)
-            return descriptor.Instance ?? throw new InvalidOperationException($"No instance for {descriptor.ServiceType}");
+        {
+            RegisterDisposable(descriptor.Instance!, descriptor.OwnerScopeId);
+            return descriptor.Instance!;
+        }
 
         if (descriptor.ImplType == null && descriptor.Factory == null)
             throw new InvalidOperationException($"No implementation for {descriptor.ServiceType}");
 
         var implementationType = descriptor.ImplType ?? descriptor.ServiceType;
-        if (!context.CallStack.Add(implementationType))
-            throw new InvalidOperationException($"Circular dependency detected: {implementationType}");
 
-        var previousContext = _activeResolutionContext;
-        _activeResolutionContext = context;
+        bool needUnlock = false;
+
+        if (!Monitor.IsEntered(_lifetimeGate))
+        {
+            Monitor.Enter(_lifetimeGate);
+            needUnlock = true;
+        }
+
         try
         {
             if (descriptor.Factory != null)
-                return descriptor.Factory(this);
+            {
+                var factoryResult = descriptor.Factory(this);
+                RegisterDisposable(factoryResult, descriptor.OwnerScopeId);
+                return factoryResult;
+            }
 
             var ctor = SelectConstructor(descriptor.ImplType!);
             var parameters = ctor.GetParameters();
@@ -259,18 +288,18 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
                 if (dependency == null)
                     throw new InvalidOperationException(
                         $"Unable to resolve dependency {parameters[i].ParameterType} for {descriptor.ImplType}");
-
                 args[i] = dependency;
             }
 
             var instance = ctor.Invoke(args);
             InjectMembers(instance, context);
+            RegisterDisposable(instance, descriptor.OwnerScopeId);
             return instance;
         }
         finally
         {
-            _activeResolutionContext = previousContext;
-            context.CallStack.Remove(implementationType);
+            if (needUnlock)
+                Monitor.Exit(_lifetimeGate);
         }
     }
 
@@ -317,6 +346,14 @@ internal sealed class ServiceProvider : IServiceProvider, IDisposable
         if (instance is IGeneratedMountInject generatedMount)
         {
             generatedMount.__InjectMounts(this);
+        }
+    }
+
+    private void RegisterDisposable(object instance, int ownerScopeId)
+    {
+        if (instance is IDisposable or IAsyncDisposable)
+        {
+            _disposables.Register(instance, ownerScopeId);
         }
     }
 

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using LayerBase.Async;
 using LayerBase.Call;
 using LayerBase.Core.Event;
+using LayerBase.Lifetime;
 
 namespace LayerBase.Scope;
 
@@ -71,10 +72,17 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
     where TResponse : struct
 {
     private readonly ScopeLocalCallInvoker<TRequest, TResponse> _invoker;
+    private readonly LifetimeOperationTracker? _tracker;
+    private readonly ScopeTransport? _transport;
 
-    public ScopeLocalCallDispatcher(ScopeLocalCallInvoker<TRequest, TResponse> invoker)
+    public ScopeLocalCallDispatcher(
+        ScopeLocalCallInvoker<TRequest, TResponse> invoker,
+        LifetimeOperationTracker? tracker = null,
+        ScopeTransport? transport = null)
     {
         _invoker = invoker;
+        _tracker = tracker;
+        _transport = transport;
     }
 
     public void Dispatch(
@@ -98,6 +106,15 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
             return;
         }
 
+        LifetimeOperation operation = default;
+
+        if (_tracker != null && !_tracker.TryBegin(out operation))
+        {
+            queuedCall.Completion.TrySetException(
+                new InvalidOperationException($"Scope is not accepting new calls."));
+            return;
+        }
+
         try
         {
             LBTask<TResponse> task =
@@ -107,19 +124,20 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
 
             if (task.GetAwaiter().IsCompleted)
             {
-                CompleteSynchronously(
-                    task,
-                    queuedCall.Completion);
+                if (_tracker != null)
+                    _tracker.CompleteOnOwner(operation);
+                CompleteSynchronously(task, queuedCall.Completion);
             }
             else
             {
                 PendingScopeCallObservation.Observe(
-                    task,
-                    queuedCall.Completion);
+                    task, queuedCall.Completion, _tracker, operation, _transport);
             }
         }
         catch (Exception ex)
         {
+            if (_tracker != null)
+                _tracker.CompleteOnOwner(operation);
             queuedCall.Completion.TrySetException(ex);
         }
     }
@@ -155,6 +173,9 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
 
         private LBTask<TResponse> _task;
         private ScopeCallCompletion<TResponse>? _completion;
+        private LifetimeOperationTracker? _tracker;
+        private LifetimeOperation _operation;
+        private ScopeTransport? _transport;
 
         private PendingScopeCallObservation()
         {
@@ -163,7 +184,10 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
 
         public static void Observe(
             LBTask<TResponse> task,
-            ScopeCallCompletion<TResponse> completion)
+            ScopeCallCompletion<TResponse> completion,
+            LifetimeOperationTracker? tracker,
+            LifetimeOperation operation,
+            ScopeTransport? transport)
         {
             if (!Pool.TryDequeue(out var observation))
             {
@@ -176,6 +200,9 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
 
             observation._task = task;
             observation._completion = completion;
+            observation._tracker = tracker;
+            observation._operation = operation;
+            observation._transport = transport;
 
             task.GetAwaiter().OnCompleted(
                 observation._continuation);
@@ -204,8 +231,24 @@ internal sealed class ScopeLocalCallDispatcher<TRequest, TResponse> : IScopeLoca
             }
             finally
             {
+                if (_tracker != null)
+                {
+                    if (_transport != null)
+                    {
+                        _transport.EnqueueCompletion(
+                            ScopeCompletionEnvelope.LifetimeOperationCompleted(_operation));
+                    }
+                    else
+                    {
+                        _tracker.CompleteOnOwner(_operation);
+                    }
+                }
+
                 _task = default;
                 _completion = null;
+                _tracker = null;
+                _operation = default;
+                _transport = null;
 
                 if (Interlocked.Increment(ref _poolCount) <= MaxPoolSize)
                 {

@@ -11,5 +11,7 @@ public enum RuntimeState : byte
     Stopped,
     Disposing,
     Disposed,
+    DisposedWithErrors,
+    DrainTimedOut,
     Faulted
 }
