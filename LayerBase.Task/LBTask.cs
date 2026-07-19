@@ -29,11 +29,33 @@ public readonly struct LBTask
 
     public static LBTask CompletedTask => new(null);
 
-    public static int DelayHeapPendingCount => DelayScheduler.PendingCount;
+    public static LBTask FromTask(Task task)
+    {
+        if (task == null) throw new ArgumentNullException(nameof(task));
+        if (task.IsCompletedSuccessfully) return CompletedTask;
 
-    public static int DelayHeapPeakPendingCount => DelayScheduler.PeakPendingCount;
+        var src = LBTaskSource.Rent();
+        var version = src.Version;
+        task.ContinueWith(static (completedTask, state) =>
+        {
+            var (source, sourceVersion) = ((LBTaskSource Source, int Version))state!;
+            try
+            {
+                completedTask.GetAwaiter().GetResult();
+                source.TrySetResult(sourceVersion);
+            }
+            catch (OperationCanceledException ex)
+            {
+                source.TrySetCanceled(sourceVersion, ex.CancellationToken);
+            }
+            catch (Exception ex)
+            {
+                source.TrySetException(sourceVersion, ex);
+            }
+        }, (src, version), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
-    public static int DelayHeapLockContentionCount => DelayScheduler.LockContentionCount;
+        return new LBTask(src, version);
+    }
 
     public static LBTask FromException(Exception ex)
     {
@@ -77,14 +99,11 @@ public readonly struct LBTask
 
     public static LBTask Delay(TimeSpan delay, CancellationToken token = default)
     {
-        if (delay <= TimeSpan.Zero) return CompletedTask;
-        if (token.IsCancellationRequested) return FromCanceled(token);
-
-        var src = LBTaskSource.Rent();
-        var work = DelayWorkItem.Rent(src, token);
-        DelayScheduler.Schedule(work, delay);
-        work.RegisterCancellation();
-        return new LBTask(src);
+#if NET8_0_OR_GREATER
+        return FromTask(Task.Delay(delay, TimeProvider.System, token));
+#else
+        return FromTask(Task.Delay(delay, token));
+#endif
     }
 
     public static LBTask Run(Action action)
@@ -248,362 +267,6 @@ public readonly struct LBTask
         var src = LBTaskSource.Rent(ctx);
         ctx.CompletionQueue.Enqueue(() => src.SetResult());
         return new LBTask(src);
-    }
-
-    private sealed class DelayWorkItem
-    {
-        private static readonly ObjectPool<DelayWorkItem> Pool = new(() => new DelayWorkItem());
-
-        private sealed class DelayCancellationState
-        {
-            public readonly DelayWorkItem Work;
-            public readonly int LeaseVersion;
-
-            public DelayCancellationState(DelayWorkItem work, int leaseVersion)
-            {
-                Work = work;
-                LeaseVersion = leaseVersion;
-            }
-        }
-
-        public static readonly WaitCallback OnTimer = static state =>
-        {
-            var cancelState = (DelayCancellationState)state!;
-            cancelState.Work.TryComplete(false, cancelState.LeaseVersion);
-        };
-
-        private int _completed;
-        private long _dueTimestamp;
-        private int _leaseVersion;
-        private int _registrationInitializing;
-        private int _returnPending;
-        private LBTaskSource? _source;
-        private int _sourceVersion;
-        private CancellationToken _token;
-        public int HeapIndex = -1;
-
-        public CancellationTokenRegistration CancellationRegistration;
-
-        public long DueTimestamp
-        {
-            get => Volatile.Read(ref _dueTimestamp);
-            set => Volatile.Write(ref _dueTimestamp, value);
-        }
-
-        public static DelayWorkItem Rent(LBTaskSource source, CancellationToken token)
-        {
-            var work = Pool.Rent();
-            unchecked
-            {
-                work._leaseVersion++;
-                if (work._leaseVersion == 0) work._leaseVersion = 1;
-            }
-            work._source = source;
-            work._sourceVersion = source.Version;
-            work._token = token;
-            work._dueTimestamp = 0;
-            work._completed = 0;
-            work._registrationInitializing = token.CanBeCanceled ? 1 : 0;
-            work._returnPending = 0;
-            work.CancellationRegistration = default;
-            return work;
-        }
-
-        public void RegisterCancellation()
-        {
-            if (!_token.CanBeCanceled)
-            {
-                _registrationInitializing = 0;
-                if (Interlocked.Exchange(ref _returnPending, 0) == 1) ReturnToPool();
-                return;
-            }
-
-            int leaseVersion = Volatile.Read(ref _leaseVersion);
-            var cancelState = new DelayCancellationState(this, leaseVersion);
-
-            var registration = _token.Register(static state =>
-            {
-                var cs = (DelayCancellationState)state!;
-                cs.Work.TryCancel(cs.LeaseVersion);
-            }, cancelState);
-
-            CancellationRegistration = registration;
-
-            if (Volatile.Read(ref _completed) != 0)
-            {
-                registration.Dispose();
-                CancellationRegistration = default;
-            }
-
-            Volatile.Write(ref _registrationInitializing, 0);
-
-            if (Interlocked.Exchange(ref _returnPending, 0) == 1) ReturnToPool();
-        }
-
-        private void TryCancel(int leaseVersion)
-        {
-            if (leaseVersion != Volatile.Read(ref _leaseVersion)) return;
-            DelayScheduler.Cancel(this);
-            TryComplete(true, leaseVersion);
-        }
-
-        private void TryComplete(bool canceled, int leaseVersion)
-        {
-            if (leaseVersion != Volatile.Read(ref _leaseVersion)) return;
-            if (Interlocked.Exchange(ref _completed, 1) != 0) return;
-
-            try
-            {
-                CancellationRegistration.Dispose();
-                CancellationRegistration = default;
-                if (canceled)
-                    _source!.TrySetCanceled(_sourceVersion, _token);
-                else
-                    _source!.TrySetResult(_sourceVersion);
-            }
-            finally
-            {
-                if (Volatile.Read(ref _registrationInitializing) == 1)
-                    Volatile.Write(ref _returnPending, 1);
-                else
-                    ReturnToPool();
-            }
-        }
-
-        private void ReturnToPool()
-        {
-            _source = null;
-            _sourceVersion = 0;
-            _token = default;
-            _dueTimestamp = 0;
-            _registrationInitializing = 0;
-            _returnPending = 0;
-            CancellationRegistration = default;
-            HeapIndex = -1;
-            Pool.Return(this);
-        }
-
-        public object CaptureLease()
-        {
-            return new DelayCancellationState(this, Volatile.Read(ref _leaseVersion));
-        }
-    }
-
-    private static class DelayScheduler
-    {
-        private static readonly object s_lock = new();
-        private static readonly List<DelayWorkItem> s_heap = new();
-        private static readonly Timer s_timer = new(OnTimer, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-        private static int s_peakPendingCount;
-        private static int s_lockAcquisitions;
-
-        public static int PendingCount => s_heap.Count;
-
-        public static int PeakPendingCount => Volatile.Read(ref s_peakPendingCount);
-
-        public static int LockContentionCount => Volatile.Read(ref s_lockAcquisitions);
-
-        public static void Schedule(DelayWorkItem work, TimeSpan delay)
-        {
-            var timestamp = Stopwatch.GetTimestamp();
-            var delayTicks = ToTimestampTicks(delay);
-            var due = timestamp + delayTicks;
-            if (due < timestamp) due = long.MaxValue;
-            work.DueTimestamp = due;
-
-            lock (s_lock)
-            {
-                Interlocked.Increment(ref s_lockAcquisitions);
-                HeapPush(work);
-                if (s_heap.Count > Volatile.Read(ref s_peakPendingCount))
-                    Interlocked.CompareExchange(ref s_peakPendingCount, s_heap.Count, Volatile.Read(ref s_peakPendingCount));
-                if (ReferenceEquals(s_heap[0], work)) ArmTimer(due);
-            }
-        }
-
-        public static bool Cancel(DelayWorkItem work)
-        {
-            lock (s_lock)
-            {
-                Interlocked.Increment(ref s_lockAcquisitions);
-                var index = work.HeapIndex;
-                if (index < 0 || index >= s_heap.Count || !ReferenceEquals(s_heap[index], work))
-                    return false;
-
-                work.HeapIndex = -1;
-                HeapRemoveAt(index);
-                if (s_heap.Count > 0) ArmTimer(s_heap[0].DueTimestamp);
-                else s_timer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-                return true;
-            }
-        }
-
-        private static void OnTimer(object? state)
-        {
-            while (true)
-            {
-                DelayWorkItem? dueWork = null;
-                var now = Stopwatch.GetTimestamp();
-
-                lock (s_lock)
-                {
-                    Interlocked.Increment(ref s_lockAcquisitions);
-                    if (s_heap.Count == 0)
-                    {
-                        s_timer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-                        return;
-                    }
-
-                    var next = s_heap[0];
-                    var nextDue = next.DueTimestamp;
-                    if (nextDue > now)
-                    {
-                        ArmTimer(nextDue);
-                        return;
-                    }
-
-                    dueWork = HeapPop();
-                }
-
-                if (dueWork != null) ThreadPool.QueueUserWorkItem(DelayWorkItem.OnTimer, dueWork.CaptureLease());
-            }
-        }
-
-        private static long ToTimestampTicks(TimeSpan delay)
-        {
-            if (delay <= TimeSpan.Zero) return 0;
-
-            var ticks = delay.TotalSeconds * Stopwatch.Frequency;
-            if (ticks >= long.MaxValue) return long.MaxValue;
-
-            return (long)ticks;
-        }
-
-        private static void ArmTimer(long dueTimestamp)
-        {
-            var now = Stopwatch.GetTimestamp();
-            var ticks = dueTimestamp - now;
-            if (ticks <= 0)
-            {
-                s_timer.Change(TimeSpan.Zero, Timeout.InfiniteTimeSpan);
-                return;
-            }
-
-            var milliseconds = ticks * 1000.0 / Stopwatch.Frequency;
-            if (milliseconds >= int.MaxValue)
-            {
-                s_timer.Change(int.MaxValue, Timeout.Infinite);
-                return;
-            }
-
-            s_timer.Change(Math.Max(1, (int)milliseconds), Timeout.Infinite);
-        }
-
-        private static void HeapPush(DelayWorkItem item)
-        {
-            s_heap.Add(item);
-            var index = s_heap.Count - 1;
-            while (index > 0)
-            {
-                var parent = (index - 1) >> 1;
-                if (s_heap[parent].DueTimestamp <= item.DueTimestamp) break;
-
-                s_heap[index] = s_heap[parent];
-                s_heap[index].HeapIndex = index;
-                index = parent;
-            }
-
-            s_heap[index] = item;
-            item.HeapIndex = index;
-        }
-
-        private static DelayWorkItem HeapPop()
-        {
-            var root = s_heap[0];
-            var lastIndex = s_heap.Count - 1;
-            var last = s_heap[lastIndex];
-            s_heap.RemoveAt(lastIndex);
-            root.HeapIndex = -1;
-            if (lastIndex == 0) return root;
-
-            var index = 0;
-            while (true)
-            {
-                var left = (index << 1) + 1;
-                if (left >= s_heap.Count) break;
-
-                var right = left + 1;
-                var child = right < s_heap.Count &&
-                            s_heap[right].DueTimestamp < s_heap[left].DueTimestamp
-                    ? right
-                    : left;
-
-                if (s_heap[child].DueTimestamp >= last.DueTimestamp) break;
-
-                s_heap[index] = s_heap[child];
-                s_heap[index].HeapIndex = index;
-                index = child;
-            }
-
-            s_heap[index] = last;
-            last.HeapIndex = index;
-            return root;
-        }
-
-        private static void HeapRemoveAt(int removeIndex)
-        {
-            var lastIndex = s_heap.Count - 1;
-            if (removeIndex == lastIndex)
-            {
-                s_heap[lastIndex].HeapIndex = -1;
-                s_heap.RemoveAt(lastIndex);
-                return;
-            }
-
-            var replacement = s_heap[lastIndex];
-            s_heap.RemoveAt(lastIndex);
-            s_heap[removeIndex] = replacement;
-            replacement.HeapIndex = removeIndex;
-
-            var index = removeIndex;
-            while (index > 0)
-            {
-                var parent = (index - 1) >> 1;
-                if (s_heap[parent].DueTimestamp <= replacement.DueTimestamp) break;
-
-                s_heap[index] = s_heap[parent];
-                s_heap[index].HeapIndex = index;
-                index = parent;
-            }
-
-            if (index != removeIndex)
-            {
-                s_heap[index] = replacement;
-                replacement.HeapIndex = index;
-                return;
-            }
-
-            while (true)
-            {
-                var left = (index << 1) + 1;
-                if (left >= s_heap.Count) break;
-
-                var right = left + 1;
-                var child = right < s_heap.Count &&
-                            s_heap[right].DueTimestamp < s_heap[left].DueTimestamp
-                    ? right
-                    : left;
-
-                if (s_heap[child].DueTimestamp >= replacement.DueTimestamp) break;
-
-                s_heap[index] = s_heap[child];
-                s_heap[index].HeapIndex = index;
-                index = child;
-            }
-
-            s_heap[index] = replacement;
-            replacement.HeapIndex = index;
-        }
     }
 
     private sealed class RunActionWorkItem
