@@ -27,6 +27,7 @@ public sealed class ScopeFaultPropagationTests
         runtime.Faulted += info => { fault = info; };
 
         ScopeRuntime customScope = host.Scopes[1];
+        customScope.RunRuntimeStartOnOwnerThread();
 
         Assert.DoesNotThrow(() => customScope.PumpUpdate(0.016f));
 
@@ -58,7 +59,9 @@ public sealed class ScopeFaultPropagationTests
             fault = info;
         };
 
-        host.Scopes[1].PumpUpdate(0.016f);
+        ScopeRuntime customScope = host.Scopes[1];
+        customScope.RunRuntimeStartOnOwnerThread();
+        customScope.PumpUpdate(0.016f);
         host.MainScope.PumpIngress();
 
         Assert.That(fault, Is.Not.Null);
@@ -83,7 +86,9 @@ public sealed class ScopeFaultPropagationTests
 
         runtime.Faulted += _ => throw new InvalidOperationException("callback failed");
 
-        host.Scopes[1].PumpUpdate(0.016f);
+        ScopeRuntime customScope = host.Scopes[1];
+        customScope.RunRuntimeStartOnOwnerThread();
+        customScope.PumpUpdate(0.016f);
 
         Assert.DoesNotThrow(() => host.MainScope.PumpIngress());
         Assert.That(host.MainScope.Transport.EventInbox.TryDequeue(out _), Is.False);
@@ -108,6 +113,7 @@ public sealed class ScopeFaultPropagationTests
 
         ScopeRuntime customScope = host.Scopes[1];
         ScopeRuntime mainScope = host.MainScope;
+        customScope.RunRuntimeStartOnOwnerThread();
 
         for (int i = 0; i < 1024; i++)
         {
@@ -144,6 +150,7 @@ public sealed class ScopeFaultPropagationTests
             generation: 1);
 
         ScopeRuntime scope = host.MainScope;
+        scope.RunRuntimeStartOnOwnerThread();
         scope.LocalCalls.Register(new ScopeLocalCallRouteEntry(
             ScopeDefinitionIds.Main,
             ScopeLocalCallRouteId<FaultCallRequest, FaultCallResponse>.Id,
@@ -164,7 +171,7 @@ public sealed class ScopeFaultPropagationTests
     }
 
     [Test]
-    public async Task Faulted_worker_still_accepts_stop_and_dispose()
+    public async Task Faulted_worker_rejects_new_controls_after_stop_cutoff()
     {
         using var runtime = new LayerRuntime(9204);
         var stopScopeOptions = new ScopeOptions(
@@ -198,14 +205,11 @@ public sealed class ScopeFaultPropagationTests
 
         var stopTask = workerScope.RequestStopAsync();
         Assert.That(WaitUntil(() => stopTask.GetAwaiter().IsCompleted), Is.True);
-        ScopeStopResponse stopResponse = await stopTask;
-        Assert.That(stopResponse.State, Is.EqualTo(ScopeControlResult.Succeeded));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await stopTask);
 
         var disposeTask = workerScope.RequestDisposeAsync();
         Assert.That(WaitUntil(() => disposeTask.GetAwaiter().IsCompleted), Is.True);
-        ScopeDisposeResponse disposeResponse = await disposeTask;
-        Assert.That(disposeResponse.State, Is.EqualTo(ScopeControlResult.Succeeded));
-        Assert.That(workerScope.State, Is.EqualTo(ScopeRuntimeState.Disposed));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await disposeTask);
     }
 
     [Test]
@@ -228,6 +232,7 @@ public sealed class ScopeFaultPropagationTests
             generation: 1);
 
         ScopeRuntime customScope = host.Scopes[1];
+        customScope.RunRuntimeStartOnOwnerThread();
         customScope.PumpUpdate(0.016f);
         host.MainScope.PumpIngress();
 
@@ -237,7 +242,7 @@ public sealed class ScopeFaultPropagationTests
     }
 
     [Test]
-    public void Stop_runtime_policy_uses_main_scope_control_call()
+    public void Stop_runtime_policy_requests_host_stop_before_main_scope_stop()
     {
         using var runtime = new LayerRuntime(9206);
         var stopRuntimeOptions = new ScopeOptions(
@@ -255,11 +260,14 @@ public sealed class ScopeFaultPropagationTests
             runtimeId: 9206,
             generation: 1);
 
-        host.Scopes[1].PumpUpdate(0.016f);
+        ScopeRuntime customScope = host.Scopes[1];
+        customScope.RunRuntimeStartOnOwnerThread();
+        customScope.PumpUpdate(0.016f);
 
-        Assert.That(host.MainScope.Transport.CallInbox.TryDequeue(out var envelope), Is.True);
+        Assert.That(customScope.Transport.CallInbox.TryDequeue(out var envelope), Is.True);
         Assert.That(envelope.Class, Is.EqualTo(ScopeCallClass.Control));
         Assert.That(envelope.RouteId, Is.EqualTo(ScopeLifecycleRouteIds.Stop));
+        Assert.That(host.MainScope.Transport.CallInbox.TryDequeue(out _), Is.False);
     }
 
     [Test]

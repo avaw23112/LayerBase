@@ -79,10 +79,10 @@ internal static class ScopeOwnerInvocation
             return (TResponse)(object)scope.SerializeFullSnapOnOwnerThread();
         }
 
-        if (boxed is ScopeDeserializeFullSnapCall deserialize &&
-            typeof(TResponse) == typeof(ScopeDeserializeFullSnapResponse))
+        if (boxed is ScopeRestoreFullSnapCall restore &&
+            typeof(TResponse) == typeof(ScopeRestoreFullSnapResponse))
         {
-            return (TResponse)(object)scope.DeserializeFullSnapOnOwnerThread(deserialize.Document);
+            return (TResponse)(object)scope.RestoreFullSnapOnOwnerThread(restore.Document);
         }
 
         throw new InvalidOperationException(

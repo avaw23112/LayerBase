@@ -48,15 +48,41 @@ public class SnapTests
         Assert.That(((IGeneratedFullSnapNode)service).__SnapVersion, Is.EqualTo(1));
         Assert.That(((IGeneratedFullSnapNode)manager).__SnapVersion, Is.EqualTo(1));
 
-        layer.LayerValue = -1;
-        service.ServiceValue = -1;
-        manager.ManagerValue = -1;
+        var restoredLayer = new SnapLayer();
+        using LayerRuntime restoredRuntime = LayerHub.CreateLayers()
+            .Push(restoredLayer)
+            .RestoreFrom(document)
+            .Build();
 
-        await runtime.DeserializeFullSnapAsync(document);
+        Assert.That(restoredRuntime.State, Is.EqualTo(RuntimeState.Running));
+        Assert.That(restoredLayer.LayerValue, Is.EqualTo(11));
+        Assert.That(restoredLayer.StateService.ServiceValue, Is.EqualTo(22));
+        Assert.That(restoredLayer.StateService.Manager.ManagerValue, Is.EqualTo(33));
+    }
 
-        Assert.That(layer.LayerValue, Is.EqualTo(11));
-        Assert.That(service.ServiceValue, Is.EqualTo(22));
-        Assert.That(manager.ManagerValue, Is.EqualTo(33));
+    [Test]
+    public async Task FullSnap_restore_from_builder_applies_snapshot_before_runtime_start()
+    {
+        var sourceLayer = new SnapLayer();
+        using LayerRuntime sourceRuntime = LayerHub.CreateLayers()
+            .Push(sourceLayer)
+            .Build();
+
+        sourceLayer.LayerValue = 14;
+        sourceLayer.StateService.ServiceValue = 28;
+        sourceLayer.StateService.Manager.ManagerValue = 42;
+        SnapDocument document = await sourceRuntime.SerializeFullSnapAsync();
+
+        var restoredLayer = new SnapLayer();
+        using LayerRuntime restoredRuntime = LayerHub.CreateLayers()
+            .Push(restoredLayer)
+            .RestoreFrom(document)
+            .Build();
+
+        Assert.That(restoredRuntime.State, Is.EqualTo(RuntimeState.Running));
+        Assert.That(restoredLayer.LayerValue, Is.EqualTo(14));
+        Assert.That(restoredLayer.StateService.ServiceValue, Is.EqualTo(28));
+        Assert.That(restoredLayer.StateService.Manager.ManagerValue, Is.EqualTo(42));
     }
 
     [Test]
@@ -70,8 +96,11 @@ public class SnapTests
         SnapDocument document = await runtime.SerializeFullSnapAsync();
         document.Sections["LayerBase.Test.SnapLayer_FullSnap"].Data.Remove("layerValue");
 
-        SnapFormatException? exception = Assert.ThrowsAsync<SnapFormatException>(
-            async () => await runtime.DeserializeFullSnapAsync(document));
+        SnapFormatException? exception = Assert.Throws<SnapFormatException>(
+            () => LayerHub.CreateLayers()
+                .Push(new SnapLayer())
+                .RestoreFrom(document)
+                .Build());
         Assert.That(exception!.Message, Does.Contain("layerValue"));
     }
 
@@ -88,21 +117,28 @@ public class SnapTests
 
         SnapDocument document = await runtime.SerializeFullSnapAsync();
 
-        layer.InventoryService.Items.Clear();
-        await runtime.DeserializeFullSnapAsync(document);
+        var restoredLayer = new InventorySnapLayer();
+        using LayerRuntime restoredRuntime = LayerHub.CreateLayers()
+            .Push(restoredLayer)
+            .RestoreFrom(document)
+            .Build();
 
-        Assert.That(layer.InventoryService.Items, Has.Count.EqualTo(2));
-        Assert.That(layer.InventoryService.Items[0].ItemId, Is.EqualTo(1));
-        Assert.That(layer.InventoryService.Items[0].Count, Is.EqualTo(2));
-        Assert.That(layer.InventoryService.Items[1].ItemId, Is.EqualTo(3));
-        Assert.That(layer.InventoryService.Items[1].Count, Is.EqualTo(4));
+        Assert.That(restoredRuntime.State, Is.EqualTo(RuntimeState.Running));
+        Assert.That(restoredLayer.InventoryService.Items, Has.Count.EqualTo(2));
+        Assert.That(restoredLayer.InventoryService.Items[0].ItemId, Is.EqualTo(1));
+        Assert.That(restoredLayer.InventoryService.Items[0].Count, Is.EqualTo(2));
+        Assert.That(restoredLayer.InventoryService.Items[1].ItemId, Is.EqualTo(3));
+        Assert.That(restoredLayer.InventoryService.Items[1].Count, Is.EqualTo(4));
 
         JsonArray items = (JsonArray)document.Sections["LayerBase.Test.InventorySnapService_FullSnap"].Data["items"]!;
         JsonObject firstItem = (JsonObject)items[0]!;
         firstItem["count"] = "bad";
 
-        SnapFormatException? exception = Assert.ThrowsAsync<SnapFormatException>(
-            async () => await runtime.DeserializeFullSnapAsync(document));
+        SnapFormatException? exception = Assert.Throws<SnapFormatException>(
+            () => LayerHub.CreateLayers()
+                .Push(new InventorySnapLayer())
+                .RestoreFrom(document)
+                .Build());
         Assert.That(exception!.Message, Does.Contain("count"));
     }
 
@@ -116,8 +152,11 @@ public class SnapTests
 
         SnapDocument document = await runtime.SerializeFullSnapAsync();
 
-        SnapFormatException? exception = Assert.ThrowsAsync<SnapFormatException>(
-            async () => await runtime.DeserializeFullSnapAsync(document));
+        SnapFormatException? exception = Assert.Throws<SnapFormatException>(
+            () => LayerHub.CreateLayers()
+                .Push(new OutOfRangeSnapLayer())
+                .RestoreFrom(document)
+                .Build());
         Assert.That(exception!.Message, Does.Contain("out of range"));
     }
 

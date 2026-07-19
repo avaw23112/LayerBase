@@ -10,9 +10,10 @@ internal sealed class ScopeServiceProvider : IServiceProvider, IDisposable
     private readonly ScopeRuntime _ownerScope;
     private readonly ScopeServicePlan _plan;
     private readonly Layer _ownerLayer;
+    private readonly object _sync = new();
     private readonly object?[] _instances;
     private readonly ScopeOwnedResourceList _resources = new();
-    private int _disposed;
+    private int _disposeState;
 
     [ThreadStatic]
     private static ResolutionContext? t_activeResolutionContext;
@@ -30,7 +31,7 @@ internal sealed class ScopeServiceProvider : IServiceProvider, IDisposable
 
     public int OwnerScopeId => _ownerScope.ScopeId;
 
-    public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
+    public bool IsDisposed => Volatile.Read(ref _disposeState) == 2;
 
     internal IEnumerable<Type> ServiceTypes => _plan.ServiceTypes;
 
@@ -41,7 +42,7 @@ internal sealed class ScopeServiceProvider : IServiceProvider, IDisposable
 
     public object? GetService(Type serviceType)
     {
-        return GetService(serviceType, new ResolutionContext());
+        return GetService(serviceType, t_activeResolutionContext ?? new ResolutionContext());
     }
 
     public T Get<T>()
@@ -57,12 +58,10 @@ internal sealed class ScopeServiceProvider : IServiceProvider, IDisposable
         Type serviceType,
         ResolutionContext context)
     {
-        if (IsDisposed)
+        if (Volatile.Read(ref _disposeState) != 0)
             throw new ObjectDisposedException(nameof(ScopeServiceProvider));
         if (serviceType == null)
             throw new ArgumentNullException(nameof(serviceType));
-
-        RequireOwnerThreadIfBound();
 
         if (!_plan.TryGetDescriptor(serviceType, out int slot, out ServiceDescriptor? descriptor))
             return null;
@@ -95,12 +94,29 @@ internal sealed class ScopeServiceProvider : IServiceProvider, IDisposable
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        int state = Volatile.Read(ref _disposeState);
+        if (state == 2)
+            return;
+        if (state != 0)
             return;
 
-        RequireOwnerThreadIfBound();
-        _resources.ReleaseAll();
-        Array.Clear(_instances,0,_instances.Length);
+        if (!_resources.IsEmpty)
+            RequireOwnerThreadIfBound();
+
+        if (Interlocked.CompareExchange(ref _disposeState, 1, 0) != 0)
+            return;
+
+        try
+        {
+            _resources.ReleaseAll();
+            Array.Clear(_instances,0,_instances.Length);
+            Volatile.Write(ref _disposeState, 2);
+        }
+        catch
+        {
+            Volatile.Write(ref _disposeState, 0);
+            throw;
+        }
     }
 
     private object Resolve(
@@ -108,6 +124,14 @@ internal sealed class ScopeServiceProvider : IServiceProvider, IDisposable
         ServiceDescriptor descriptor,
         ResolutionContext context)
     {
+        if (descriptor.Lifetime != ServiceLifetime.Transient &&
+            Volatile.Read(ref _instances[slot]) is { } existing)
+        {
+            return existing;
+        }
+
+        RequireOwnerThreadIfBound();
+
         var serviceKey = new ServiceKey(descriptor.OwnerScopeId, descriptor.ServiceType);
         if (!context.CallStack.Add(serviceKey))
             throw new InvalidOperationException($"Circular dependency detected: {descriptor.ServiceType}");
@@ -119,14 +143,13 @@ internal sealed class ScopeServiceProvider : IServiceProvider, IDisposable
         {
             object instance = descriptor.Lifetime switch
             {
-                ServiceLifetime.Instance => GetOrCreateCached(slot, descriptor, context),
-                ServiceLifetime.Singleton => GetOrCreateCached(slot, descriptor, context),
-                ServiceLifetime.Scoped => GetOrCreateCached(slot, descriptor, context),
-                ServiceLifetime.Transient => CreateInstance(descriptor, context),
+                ServiceLifetime.Instance => GetOrCreateCachedAndAttach(slot, descriptor, context),
+                ServiceLifetime.Singleton => GetOrCreateCachedAndAttach(slot, descriptor, context),
+                ServiceLifetime.Scoped => GetOrCreateCachedAndAttach(slot, descriptor, context),
+                ServiceLifetime.Transient => CreateAndAttach(descriptor, context),
                 _ => throw new NotSupportedException($"Unsupported lifetime {descriptor.Lifetime}")
             };
 
-            AttachInstance(instance, descriptor);
             return instance;
         }
         finally
@@ -181,15 +204,48 @@ internal sealed class ScopeServiceProvider : IServiceProvider, IDisposable
         return instance;
     }
 
+    private object GetOrCreateCachedAndAttach(
+        int slot,
+        ServiceDescriptor descriptor,
+        ResolutionContext context)
+    {
+        if (Volatile.Read(ref _instances[slot]) is { } existing)
+            return existing;
+
+        lock (_sync)
+        {
+            if (_instances[slot] is { } cached)
+                return cached;
+
+            object instance = CreateInstance(descriptor, context);
+            AttachInstance(instance, descriptor);
+            Volatile.Write(ref _instances[slot], instance);
+            return instance;
+        }
+    }
+
+    private object CreateAndAttach(
+        ServiceDescriptor descriptor,
+        ResolutionContext context)
+    {
+        object instance = CreateInstance(descriptor, context);
+        AttachInstance(instance, descriptor);
+        return instance;
+    }
+
     private void AttachInstance(
         object instance,
         ServiceDescriptor descriptor)
     {
         var existingBinding = ServiceLayerBinder.GetBinding(instance);
         if (existingBinding != null &&
-            (existingBinding.LayerIndex != _ownerLayer.RouteIndex ||
+            (existingBinding.RuntimeId != _ownerLayer.OwnerContext?.Id ||
+             existingBinding.LayerIndex != _ownerLayer.RouteIndex ||
              existingBinding.OwnerScope.ScopeId != OwnerScopeId))
         {
+            if (descriptor.Lifetime != ServiceLifetime.Instance)
+                return;
+
             throw new InvalidOperationException(
                 $"Service instance {instance.GetType().Name} is already bound to another Scope provider.");
         }

@@ -50,6 +50,20 @@ public sealed class WorkerScopeLifecycleThreadTests
     }
 
     [Test]
+    public void Worker_scope_services_are_constructed_on_owner_thread()
+    {
+        using var runtime = LayerHub.CreateLayers()
+            .Push(new WorkerScopeConstructorThreadLayer(_lifecycleLog))
+            .Build();
+
+        var byName = _lifecycleLog
+            .Select(static line => line.Split(':'))
+            .ToDictionary(static parts => parts[0], static parts => int.Parse(parts[1]));
+
+        Assert.That(byName["Ctor"], Is.EqualTo(byName["RuntimeStart"]));
+    }
+
+    [Test]
     public void Worker_scope_runtime_stop_runs_on_owner_thread()
     {
         var runtime = BuildWithWorkerScope();
@@ -123,6 +137,61 @@ public sealed class WorkerScopeLifecycleThreadTests
                 typeof(LifecycleTrackingService),
                 new LifecycleTrackingService(_lifecycleLog),
                 typeof(WorkerScope));
+        }
+    }
+
+    private sealed class WorkerScopeConstructorThreadLayer : Layer, IGeneratedScopeDefinitionProvider
+    {
+        private readonly ConcurrentQueue<string> _lifecycleLog;
+
+        public WorkerScopeConstructorThreadLayer(ConcurrentQueue<string> lifecycleLog)
+        {
+            _lifecycleLog = lifecycleLog;
+        }
+
+        public GeneratedScopeDefinition[] __GetScopeDefinitions()
+        {
+            return new[]
+            {
+                new GeneratedScopeDefinition(
+                    scopeId: 778,
+                    identity: "scope:test:WorkerCtorScope",
+                    scopeType: typeof(WorkerCtorScope),
+                    factory: static () => new WorkerCtorScope())
+            };
+        }
+
+        public override void ConfigureServices(IServiceCollection services)
+        {
+            using var _ = ((ServiceCollection)services).PushRegistrationScope(
+                registrationScopeId: 0,
+                ownerScopeId: 778);
+
+            services.AddSingleton<ConstructorThreadService>(_ => new ConstructorThreadService(_lifecycleLog));
+        }
+    }
+
+    private sealed class WorkerCtorScope : IScopeDefinition
+    {
+        public const int ScopeId = 778;
+        public ScopeOptions Options => ScopeOptions.Worker();
+    }
+
+    private sealed class ConstructorThreadService : IService, IRuntimeStart
+    {
+        private readonly ConcurrentQueue<string> _log;
+
+        public ConstructorThreadService(ConcurrentQueue<string> log)
+        {
+            _log = log;
+            _log.Enqueue($"Ctor:{Environment.CurrentManagedThreadId}");
+        }
+
+        public void ConfigureServices(IServiceCollection services) { }
+
+        public void RuntimeStart()
+        {
+            _log.Enqueue($"RuntimeStart:{Environment.CurrentManagedThreadId}");
         }
     }
 

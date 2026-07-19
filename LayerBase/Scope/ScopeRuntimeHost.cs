@@ -118,6 +118,7 @@ internal sealed class ScopeRuntimeHost : ILifetimeParticipant, IDisposable
                 fault,
                 delayRegistryChanged,
                 runtime.ReportLayerEventError,
+                runtime.InitializeScopeServices,
                 runtime.DisposeScopeServices,
                 systemCall,
                 systemEvent,
@@ -269,7 +270,7 @@ internal sealed class ScopeRuntimeHost : ILifetimeParticipant, IDisposable
                 return;
 
             case ScopeFaultPolicy.StopRuntime:
-                _ = MainScope.RequestStopAsync();
+                RequestStop();
                 return;
 
             default:
@@ -385,6 +386,7 @@ internal sealed class ScopeRuntimeHost : ILifetimeParticipant, IDisposable
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
             return;
         var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
+        var disposeCompleted = false;
         try
         {
             if (!HasAnyWorkerStarted)
@@ -393,12 +395,24 @@ internal sealed class ScopeRuntimeHost : ILifetimeParticipant, IDisposable
                     _directory.Runtimes[i].DisposeUnstarted();
                 for (int i = _workers.Length - 1; i >= 0; i--)
                     _workers[i].ForceReleaseResources();
+                disposeCompleted = true;
                 return;
             }
-            Drain(in deadline);
+
+            LifetimeDrainResult result = Drain(in deadline);
+            if (result == LifetimeDrainResult.TimedOut)
+                return;
+
             RequestDisposeForAllScopes(in deadline);
+            disposeCompleted = true;
         }
-        finally { Volatile.Write(ref _disposed, 1); }
+        finally
+        {
+            if (disposeCompleted)
+                Volatile.Write(ref _disposed, 1);
+            else
+                Interlocked.Exchange(ref _shutdownStarted, 0);
+        }
     }
 
     private bool DrainNonMainScopes(in ShutdownDeadline deadline)
@@ -478,6 +492,13 @@ internal sealed class ScopeRuntimeHost : ILifetimeParticipant, IDisposable
             if (scope.State == ScopeRuntimeState.Disposed) continue;
             try
             {
+                if (scope.State == ScopeRuntimeState.Stopped &&
+                    scope.Options.Threading == ScopeThreadingMode.Inline)
+                {
+                    scope.DisposeStoppedOnOwnerThread();
+                    continue;
+                }
+
                 if (!WaitForControl(scope,
                         scope.RequestDisposeAsync(),
                         in deadline,

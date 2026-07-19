@@ -226,7 +226,8 @@ internal sealed class ScopeRuntime : IDisposable
         }
 
         PostScheduler.BuildPlans(plans);
-        _state = ScopeRuntimeState.Running;
+        if (_state == ScopeRuntimeState.Created)
+            _state = ScopeRuntimeState.Ready;
     }
 
     public void InitializeTimer(TimeSchedulerOptions options)
@@ -440,6 +441,24 @@ internal sealed class ScopeRuntime : IDisposable
 
         if (_state == ScopeRuntimeState.Disposed)
             return;
+
+        if (_state != ScopeRuntimeState.Running)
+        {
+            DrainControlCallInbox();
+            DisposeAfterControlIfNeeded();
+
+            if (_state == ScopeRuntimeState.Disposed)
+                return;
+
+            if (_state is ScopeRuntimeState.StopRequested or ScopeRuntimeState.Draining)
+            {
+                PumpTerminalDrainStep();
+                return;
+            }
+
+            if (_state != ScopeRuntimeState.Running)
+                return;
+        }
 
         DrainCallInbox();
         DisposeAfterControlIfNeeded();
@@ -693,7 +712,7 @@ internal sealed class ScopeRuntime : IDisposable
     private bool CanPumpLifecycle()
     {
         return _safePointState == ScopeSafePointState.Running &&
-               _state is ScopeRuntimeState.Created or ScopeRuntimeState.Ready or ScopeRuntimeState.Running;
+               _state == ScopeRuntimeState.Running;
     }
 
     public void RequireOwnerThread()
@@ -742,6 +761,13 @@ internal sealed class ScopeRuntime : IDisposable
 
         _lifecycleDisposeRun = true;
         LifecyclePlan.DisposeReverse();
+    }
+
+    internal void RunRuntimeStartOnOwnerThread()
+    {
+        RequireOwnerThread();
+        LifecyclePlan.RunRuntimeStart();
+        _state = ScopeRuntimeState.Running;
     }
 
     private void DrainCompletionInbox()
@@ -820,6 +846,24 @@ internal sealed class ScopeRuntime : IDisposable
         }
     }
 
+    private void DrainControlCallInbox()
+    {
+        while (Transport.CallInbox.TryDequeueWhere(
+                   static envelope => envelope.Kind == ScopeCallEnvelopeKind.Request &&
+                                      envelope.Class == ScopeCallClass.Control,
+                   out var envelope))
+        {
+            try
+            {
+                _ = DispatchLifecycleControlIfMatched(envelope);
+            }
+            finally
+            {
+                Transport.CallPayloadStorage.Release(envelope.Payload);
+            }
+        }
+    }
+
     private bool DispatchLifecycleControlIfMatched(ScopeCallEnvelope envelope)
     {
         if (envelope.Kind != ScopeCallEnvelopeKind.Request ||
@@ -854,6 +898,9 @@ internal sealed class ScopeRuntime : IDisposable
             case ScopeLifecycleRouteIds.Initialize:
                 DispatchInitializeControl(envelope);
                 return true;
+            case ScopeLifecycleRouteIds.InitializeServices:
+                DispatchInitializeServicesControl(envelope);
+                return true;
             case ScopeLifecycleRouteIds.PostBuild:
                 DispatchPostBuildControl(envelope);
                 return true;
@@ -872,8 +919,8 @@ internal sealed class ScopeRuntime : IDisposable
             case ScopeLifecycleRouteIds.SerializeFullSnap:
                 DispatchSerializeFullSnapControl(envelope);
                 return true;
-            case ScopeLifecycleRouteIds.DeserializeFullSnap:
-                DispatchDeserializeFullSnapControl(envelope);
+            case ScopeLifecycleRouteIds.RestoreFullSnap:
+                DispatchRestoreFullSnapControl(envelope);
                 return true;
             default:
                 envelope.Completion?.TrySetException(
@@ -1238,9 +1285,9 @@ internal sealed class ScopeRuntime : IDisposable
         }
     }
 
-    private void DispatchDeserializeFullSnapControl(ScopeCallEnvelope envelope)
+    private void DispatchRestoreFullSnapControl(ScopeCallEnvelope envelope)
     {
-        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeDeserializeFullSnapCall, ScopeDeserializeFullSnapResponse>>(
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeRestoreFullSnapCall, ScopeRestoreFullSnapResponse>>(
                 _runtimeId,
                 envelope.Payload,
                 out var queuedCall))
@@ -1258,7 +1305,7 @@ internal sealed class ScopeRuntime : IDisposable
 
         try
         {
-            queuedCall.Completion.TrySetResult(DeserializeFullSnapOnOwnerThread(queuedCall.Request.Document));
+            queuedCall.Completion.TrySetResult(RestoreFullSnapOnOwnerThread(queuedCall.Request.Document));
         }
         catch (Exception ex)
         {
@@ -1345,7 +1392,7 @@ internal sealed class ScopeRuntime : IDisposable
         }
     }
 
-    internal ScopeDeserializeFullSnapResponse DeserializeFullSnapOnOwnerThread(SnapDocument document)
+    internal ScopeRestoreFullSnapResponse RestoreFullSnapOnOwnerThread(SnapDocument document)
     {
         RequireOwnerThread();
         long startedAt = Stopwatch.GetTimestamp();
@@ -1355,7 +1402,7 @@ internal sealed class ScopeRuntime : IDisposable
             EnterSafePointForSnap();
             ReadSnapshotForSnap(document);
             Interlocked.Increment(ref _snapDeserializeCount);
-            return new ScopeDeserializeFullSnapResponse(ScopeControlResult.Succeeded);
+            return new ScopeRestoreFullSnapResponse(ScopeControlResult.Succeeded);
         }
         catch
         {
@@ -1429,6 +1476,36 @@ internal sealed class ScopeRuntime : IDisposable
         }
     }
 
+    private void DispatchInitializeServicesControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeInitializeServicesCall, ScopeInitializeServicesResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope initialize services payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            RequireOwnerThread();
+            _callbacks.InitializeServices(ScopeId);
+            queuedCall.Completion.TrySetResult(new ScopeInitializeServicesResponse(ScopeControlResult.Succeeded));
+        }
+        catch (Exception ex)
+        {
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
     private void DispatchPostBuildControl(ScopeCallEnvelope envelope)
     {
         if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopePostBuildCall, ScopePostBuildResponse>>(
@@ -1479,8 +1556,7 @@ internal sealed class ScopeRuntime : IDisposable
 
         try
         {
-            RequireOwnerThread();
-            LifecyclePlan.RunRuntimeStart();
+            RunRuntimeStartOnOwnerThread();
             queuedCall.Completion.TrySetResult(new ScopeRuntimeStartResponse(ScopeControlResult.Succeeded));
         }
         catch (Exception ex)
@@ -1563,7 +1639,7 @@ internal sealed class ScopeRuntime : IDisposable
 
         _state = ScopeRuntimeState.StopRequested;
         _drainPhase = ScopeDrainPhase.ClosingIngress;
-        Transport.CloseBusinessAdmission();
+        Transport.CloseAllAdmissionAndWaitForWriters();
         _state = ScopeRuntimeState.Draining;
         _drainPhase = ScopeDrainPhase.DrainingAcceptedWork;
         Volatile.Write(ref _hasIngress, 1);
@@ -1783,7 +1859,7 @@ internal sealed class ScopeRuntime : IDisposable
 
         Interlocked.Increment(ref _faultCount);
         _state = ScopeRuntimeState.Faulted;
-        Transport.CloseBusinessAdmission();
+        Transport.CloseAllAdmissionAndWaitForWriters();
 
         _callbacks.Fault(in record);
     }

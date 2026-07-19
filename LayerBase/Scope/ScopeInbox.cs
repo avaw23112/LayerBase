@@ -192,6 +192,29 @@ internal sealed class ScopeBoundedInbox<T> : IScopeInbox<T>
         }
     }
 
+    public bool TryDequeueWhere(Predicate<T> predicate, out T item)
+    {
+        if (predicate == null)
+            throw new ArgumentNullException(nameof(predicate));
+
+        lock (_gate)
+        {
+            for (int offset = 0; offset < _count; offset++)
+            {
+                int index = (_head + offset) % _items.Length;
+                if (!predicate(_items[index]))
+                    continue;
+
+                item = _items[index];
+                RemoveAtOffset(offset);
+                return true;
+            }
+
+            item = default!;
+            return false;
+        }
+    }
+
     public void CloseBusinessAdmission()
     {
         lock (_gate)
@@ -218,6 +241,20 @@ internal sealed class ScopeBoundedInbox<T> : IScopeInbox<T>
             ScopeAdmissionClass.Internal => _internalLimit,
             _ => _items.Length
         };
+    }
+
+    private void RemoveAtOffset(int offset)
+    {
+        for (int currentOffset = offset; currentOffset < _count - 1; currentOffset++)
+        {
+            int current = (_head + currentOffset) % _items.Length;
+            int next = (_head + currentOffset + 1) % _items.Length;
+            _items[current] = _items[next];
+        }
+
+        int tail = (_head + _count - 1) % _items.Length;
+        _items[tail] = default!;
+        _count--;
     }
 }
 

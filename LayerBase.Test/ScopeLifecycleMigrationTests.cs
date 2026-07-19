@@ -1,6 +1,8 @@
 using System.Reflection;
 using LayerBase;
 using LayerBase.Async;
+using LayerBase.Call;
+using LayerBase.Core.Event;
 using LayerBase.DI;
 using LayerBase.DI.Options;
 using LayerBase.Layers;
@@ -144,13 +146,14 @@ public sealed class ScopeLifecycleMigrationTests
         Assert.That(host.TryGetScope<InlineTraceScope>(out var scope), Is.True);
         Assert.That(scope.Address.ScopeId, Is.EqualTo(1));
 
+        host.Scopes[1].RunRuntimeStartOnOwnerThread();
         host.Scopes[1].PumpUpdate(0.016f);
 
         Assert.That(trace, Is.EqualTo(new[] { "I0", "I2" }));
     }
 
     [Test]
-    public void Worker_scope_runs_lifecycle_plan_on_owner_thread()
+    public async Task Worker_scope_runs_lifecycle_plan_on_owner_thread()
     {
         var updateSignal = new ManualResetEventSlim(false);
         var stopSignal = new ManualResetEventSlim(false);
@@ -177,6 +180,7 @@ public sealed class ScopeLifecycleMigrationTests
             Assert.That(scope.Address.ScopeId, Is.EqualTo(2));
 
             host.StartWorkers();
+            await StartWorkerScopeAsync(host.Scopes[1]);
 
             Assert.That(updateSignal.Wait(TimeSpan.FromSeconds(2)), Is.True);
         }
@@ -188,7 +192,7 @@ public sealed class ScopeLifecycleMigrationTests
     }
 
     [Test]
-    public void Worker_scopes_install_independent_synchronization_contexts()
+    public async Task Worker_scopes_install_independent_synchronization_contexts()
     {
         var firstSignal = new ManualResetEventSlim(false);
         var secondSignal = new ManualResetEventSlim(false);
@@ -219,6 +223,8 @@ public sealed class ScopeLifecycleMigrationTests
             generation: 1);
 
         host.StartWorkers();
+        await StartWorkerScopeAsync(host.Scopes[1]);
+        await StartWorkerScopeAsync(host.Scopes[2]);
 
         Assert.That(firstSignal.Wait(TimeSpan.FromSeconds(2)), Is.True);
         Assert.That(secondSignal.Wait(TimeSpan.FromSeconds(2)), Is.True);
@@ -233,7 +239,7 @@ public sealed class ScopeLifecycleMigrationTests
     }
 
     [Test]
-    public void Worker_task_continuation_runs_on_worker_owner_thread()
+    public async Task Worker_task_continuation_runs_on_worker_owner_thread()
     {
         var signal = new ManualResetEventSlim(false);
         var mainThreadId = Environment.CurrentManagedThreadId;
@@ -257,6 +263,7 @@ public sealed class ScopeLifecycleMigrationTests
             generation: 1);
 
         host.StartWorkers();
+        await StartWorkerScopeAsync(host.Scopes[1]);
 
         Assert.That(signal.Wait(TimeSpan.FromSeconds(2)), Is.True);
         Assert.That(capturedContext, Is.SameAs(host.Scopes[1].SynchronizationContext));
@@ -319,6 +326,7 @@ public sealed class ScopeLifecycleMigrationTests
             generation: 1);
         ScopeRuntime scope = host.Scopes[1];
         scope.InstallSynchronizationContext();
+        scope.RunRuntimeStartOnOwnerThread();
         using var previousContext = LayerBaseSynchronizationContext.Install();
         using var previousScope = previousContext.EnterScope();
 
@@ -384,6 +392,7 @@ public sealed class ScopeLifecycleMigrationTests
 
         ScopeRuntime scope = host.Scopes[1];
         scope.InstallSynchronizationContext();
+        scope.RunRuntimeStartOnOwnerThread();
         scope.SynchronizationContext!.Post(_ => trace.Add("Continuation"), null);
 
         scope.PumpScopeResources(0.016f);
@@ -561,7 +570,7 @@ public sealed class ScopeLifecycleMigrationTests
     }
 
     [Test]
-    public async Task Stopped_scope_rejects_business_but_accepts_dispose_control()
+    public async Task Stop_closes_all_new_inbox_admission_but_keeps_completion_open()
     {
         using var runtime = new LayerRuntime(9105);
         using var host = ScopeRuntimeHost.Create(
@@ -586,16 +595,25 @@ public sealed class ScopeLifecycleMigrationTests
         _ = await stopTask;
 
         var postResult = scope.EnqueueEvent(new TraceScopeEvent(7));
-        Assert.That(postResult.Status, Is.EqualTo(ScopePostStatus.Rejected));
+        Assert.That(postResult.Status, Is.EqualTo(ScopePostStatus.RuntimeDisposed));
+
+        ScopePostResult internalResult = scope.Transport.EnqueueEvent(
+            routeId: 9105,
+            ScopeEventClass.Internal,
+            new TraceScopeEvent(8));
+        Assert.That(internalResult, Is.EqualTo(ScopePostResult.RuntimeDisposed));
+
+        ScopePostResult criticalResult = scope.Transport.EnqueueEvent(
+            routeId: 9105,
+            ScopeEventClass.Critical,
+            new TraceScopeEvent(9));
+        Assert.That(criticalResult, Is.EqualTo(ScopePostResult.RuntimeDisposed));
+
+        var controlTask = scope.RequestPrewarmAsync(LayerPrewarmOptions.Default);
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await controlTask);
 
         var disposeTask = scope.RequestDisposeAsync();
-        Assert.That(disposeTask.GetAwaiter().IsCompleted, Is.False);
-
-        scope.PumpIngress();
-
-        ScopeDisposeResponse response = await disposeTask;
-        Assert.That(response.State, Is.EqualTo(ScopeControlResult.Succeeded));
-        Assert.That(scope.State, Is.EqualTo(ScopeRuntimeState.Disposed));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await disposeTask);
     }
 
     [Test]
@@ -611,6 +629,11 @@ public sealed class ScopeLifecycleMigrationTests
                               .Select(static field => field.Name),
             Has.No.EqualTo("_running"),
             "A worker-local stop flag must not carry lifecycle command semantics.");
+
+        Assert.That(workerType.GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+                              .Select(static field => field.Name),
+            Has.No.EqualTo("_disposed"),
+            "Dispose must not be a second worker-loop exit protocol.");
     }
 
     [Test]
@@ -641,6 +664,12 @@ public sealed class ScopeLifecycleMigrationTests
         Assert.That(host.Scopes[0].Transport.EventInbox.TryDequeue(out _), Is.False);
         Assert.That(host.Scopes[1].Transport.EventInbox.TryDequeue(out var envelope), Is.True);
         Assert.That(envelope.Origin.ScopeId, Is.EqualTo(1));
+    }
+
+    private static async Task StartWorkerScopeAsync(ScopeRuntime scope)
+    {
+        await scope.RequestRuntimeStartAsync()
+            .WithTimeout(TimeSpan.FromSeconds(2));
     }
 
     private static Array GetArray(Type type, object instance, string name)

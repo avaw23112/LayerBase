@@ -74,11 +74,14 @@ public class ScopeSnapTests
         ScopeSnapScopedService.LastInstance!.ServiceValue = 20;
         SnapDocument document = await runtime.SerializeFullSnapAsync();
 
-        layer.LayerValue = 0;
-        ScopeSnapScopedService.LastInstance!.ServiceValue = 0;
-        await runtime.DeserializeFullSnapAsync(document);
+        var restoredLayer = new ScopeSnapLayer();
+        using LayerRuntime restoredRuntime = LayerHub.CreateLayers()
+            .Push(restoredLayer)
+            .RestoreFrom(document)
+            .Build();
 
-        Assert.That(layer.LayerValue, Is.EqualTo(10));
+        Assert.That(restoredRuntime.State, Is.EqualTo(RuntimeState.Running));
+        Assert.That(restoredLayer.LayerValue, Is.EqualTo(10));
         Assert.That(ScopeSnapScopedService.LastInstance!.ServiceValue, Is.EqualTo(20));
     }
 
@@ -118,6 +121,42 @@ public class ScopeSnapTests
 
         Assert.That(document.Sections.Keys, Does.Contain("worker-node"));
         Assert.That(node.WriteThreadId, Is.Not.EqualTo(mainThreadId));
+    }
+
+    [Test]
+    public async Task Worker_scope_fullsnap_capture_is_fanned_out_before_waiting_for_results()
+    {
+        using var runtime = new LayerRuntime(2405);
+        using ScopeRuntimeHost host = CreateWorkerHost(
+            runtime,
+            ScopeSnapWorkerScope.ScopeId,
+            ScopeSnapSecondWorkerScope.ScopeId);
+        using var gate = new BlockingSnapGate(expectedEntrants: 2);
+        var fullSnap = new FullSnapRuntime(host);
+        fullSnap.Register(
+            ScopeSnapWorkerScope.ScopeId,
+            new ScopeSnapNodePlan(0, 0, new BlockingSnapNode("worker-node-a", gate)));
+        fullSnap.Register(
+            ScopeSnapSecondWorkerScope.ScopeId,
+            new ScopeSnapNodePlan(0, 1, new BlockingSnapNode("worker-node-b", gate)));
+        fullSnap.FreezePlans();
+        host.StartWorkers();
+
+        LBTask<SnapDocument> capture = fullSnap.SerializeAsync();
+
+        try
+        {
+            Assert.That(gate.WaitForAllEntered(TimeSpan.FromSeconds(2)), Is.True);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        SnapDocument document = await capture.WithTimeout(TimeSpan.FromSeconds(2));
+
+        Assert.That(document.Sections.Keys, Does.Contain("worker-node-a"));
+        Assert.That(document.Sections.Keys, Does.Contain("worker-node-b"));
     }
 
     [Test]
@@ -188,17 +227,24 @@ public class ScopeSnapTests
         Assert.That(carrier.TryClip<HealthClip>(out _), Is.True);
     }
 
-    private static ScopeRuntimeHost CreateWorkerHost(LayerRuntime runtime, int scopeId)
+    private static ScopeRuntimeHost CreateWorkerHost(LayerRuntime runtime, params int[] scopeIds)
     {
+        var plans = new List<ScopeExecutionPlan>
+        {
+            ScopeExecutionPlan.CreateMain()
+        };
+
+        foreach (int scopeId in scopeIds)
+        {
+            plans.Add(
+                new ScopeExecutionPlan(
+                    new ScopeDescriptor(scopeId, $"{nameof(ScopeSnapWorkerScope)}{scopeId}", typeof(ScopeSnapWorkerScope)),
+                    ScopeOptions.Worker(tickRateHz: 100)));
+        }
+
         return ScopeRuntimeHost.Create(
             runtime,
-            new[]
-            {
-                ScopeExecutionPlan.CreateMain(),
-                new ScopeExecutionPlan(
-                    new ScopeDescriptor(scopeId, nameof(ScopeSnapWorkerScope), typeof(ScopeSnapWorkerScope)),
-                    ScopeOptions.Worker(tickRateHz: 100))
-            },
+            plans,
             runtime.Id,
             runtime.Generation);
     }
@@ -271,6 +317,64 @@ public class ScopeSnapTests
         {
         }
     }
+
+    private sealed class BlockingSnapGate : IDisposable
+    {
+        private readonly CountdownEvent _entered;
+        private readonly ManualResetEventSlim _release = new(false);
+
+        public BlockingSnapGate(int expectedEntrants)
+        {
+            _entered = new CountdownEvent(expectedEntrants);
+        }
+
+        public void EnterAndWait()
+        {
+            _entered.Signal();
+            if (!_release.Wait(TimeSpan.FromSeconds(5)))
+                throw new TimeoutException("Timed out waiting to release blocking snap node.");
+        }
+
+        public bool WaitForAllEntered(TimeSpan timeout)
+        {
+            return _entered.Wait(timeout);
+        }
+
+        public void Release()
+        {
+            _release.Set();
+        }
+
+        public void Dispose()
+        {
+            _release.Dispose();
+            _entered.Dispose();
+        }
+    }
+
+    private sealed class BlockingSnapNode : IGeneratedFullSnapNode
+    {
+        private readonly BlockingSnapGate _gate;
+
+        public BlockingSnapNode(string key, BlockingSnapGate gate)
+        {
+            __SnapKey = key;
+            _gate = gate;
+        }
+
+        public string __SnapKey { get; }
+
+        public int __SnapVersion => 1;
+
+        public void WriteFullSnap(ref SnapWriter writer)
+        {
+            _gate.EnterAndWait();
+        }
+
+        public void ReadFullSnap(ref SnapReader reader)
+        {
+        }
+    }
 }
 
 public sealed class ScopeSnapCustomScope : IScopeDefinition
@@ -285,6 +389,12 @@ public sealed class ScopeSnapWorkerScope : IScopeDefinition
     public const int ScopeId = 241;
     public ScopeOptions Options => ScopeOptions.Inline;
     
+}
+
+public sealed class ScopeSnapSecondWorkerScope : IScopeDefinition
+{
+    public const int ScopeId = 242;
+    public ScopeOptions Options => ScopeOptions.Inline;
 }
 
 public partial class ScopeSnapLayer : Layer, IFullSnap

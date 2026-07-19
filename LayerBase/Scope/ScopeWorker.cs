@@ -21,7 +21,6 @@ internal sealed class ScopeWorker : IDisposable
     private Exception? _startupException;
     private readonly AutoResetEvent _workSignal = new(initialState: false);
     private bool _startedThread;
-    private bool _disposed;
     private int _startWaitCompleted;
     private int _threadExited;
     private int _resourcesReleased;
@@ -132,17 +131,13 @@ internal sealed class ScopeWorker : IDisposable
 
     public void Dispose()
     {
-        if (_disposed)
-            return;
+        if (_startedThread && Volatile.Read(ref _threadExited) == 0)
+        {
+            throw new InvalidOperationException(
+                "ScopeWorker cannot be disposed before thread exit.");
+        }
 
-        _disposed = true;
-
-        var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(5));
-        if (_runtime.State == ScopeRuntimeState.Stopped)
-            RequestExitAfterScopeStopped();
-        else
-            SignalWork();
-        _ = WaitForExit(in deadline);
+        ReleaseResources();
     }
 
     internal bool ResourcesReleased =>
@@ -248,6 +243,11 @@ internal sealed class ScopeWorker : IDisposable
                 {
                     case ScopeRuntimeState.Created:
                     case ScopeRuntimeState.Ready:
+                        _runtime.PumpIngress();
+                        if (!_runtime.HasImmediateWork)
+                            _workSignal.WaitOne(1);
+                        break;
+
                     case ScopeRuntimeState.Running:
                         PumpRunningScope(
                             in tick,
@@ -268,8 +268,7 @@ internal sealed class ScopeWorker : IDisposable
                         if (_runtime.State == ScopeRuntimeState.Disposed)
                             return;
 
-                        if (Volatile.Read(ref _exitRequested) == 0 &&
-                            !Volatile.Read(ref _disposed))
+                        if (Volatile.Read(ref _exitRequested) == 0)
                         {
                             _workSignal.WaitOne();
                             break;
@@ -317,10 +316,7 @@ internal sealed class ScopeWorker : IDisposable
     {
         _runtime.PumpWorkerImmediateWork();
 
-        if (_runtime.State is not (
-                ScopeRuntimeState.Created or
-                ScopeRuntimeState.Ready or
-                ScopeRuntimeState.Running))
+        if (_runtime.State != ScopeRuntimeState.Running)
         {
             return;
         }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using LayerBase;
 using LayerBase.DI;
 using LayerBase.Event.EventMetaData;
@@ -16,6 +17,8 @@ public sealed class ScopeServiceDisposalTests
     public void SetUp()
     {
         _disposeLog.Clear();
+        RetryDisposableService.DisposeCount = 0;
+        ThrowOnceDisposableService.DisposeCount = 0;
         LayerHub.Reset();
         EventMetaDataHandler.Clear();
     }
@@ -82,6 +85,81 @@ public sealed class ScopeServiceDisposalTests
         Assert.That(_disposeLog, Has.Some.Contains("SecondaryService"));
     }
 
+    [Test]
+    public void Scope_service_provider_wrong_thread_dispose_can_be_retried_on_owner_thread()
+    {
+        using var runtime = new LayerRuntime(60101);
+        var host = ScopeRuntimeHost.CreateMain(runtime, runtimeId: 60101, generation: 1);
+        ScopeRuntime scope = host.MainScope;
+        using var ownerThread = new OwnerThread(scope);
+        var provider = CreateSingleServiceProvider<RetryDisposableService>(scope, runtime);
+
+        ownerThread.Invoke(() => provider.Get<RetryDisposableService>());
+
+        Assert.Throws<InvalidOperationException>(() => provider.Dispose());
+
+        ownerThread.Invoke(() => provider.Dispose());
+
+        Assert.That(RetryDisposableService.DisposeCount, Is.EqualTo(1));
+
+        ownerThread.Invoke(() => scope.Dispose());
+    }
+
+    [Test]
+    public void Scope_service_provider_dispose_reports_resource_errors()
+    {
+        using var runtime = new LayerRuntime(60102);
+        using var host = ScopeRuntimeHost.CreateMain(runtime, runtimeId: 60102, generation: 1);
+        ScopeRuntime scope = host.MainScope;
+        scope.InstallSynchronizationContext();
+        var provider = CreateSingleServiceProvider<ThrowingDisposableService>(scope, runtime);
+
+        provider.Get<ThrowingDisposableService>();
+
+        Assert.Throws<AggregateException>(() => provider.Dispose());
+        Assert.That(provider.IsDisposed, Is.False);
+    }
+
+    [Test]
+    public void Layer_dispose_failure_can_be_retried()
+    {
+        var layer = new ThrowOnceDisposeLayer();
+        var runtime = LayerHub.CreateLayers()
+            .Push(layer)
+            .Build();
+
+        try
+        {
+            Assert.Throws<AggregateException>(() => layer.Dispose());
+
+            Assert.DoesNotThrow(() => layer.Dispose());
+
+            Assert.That(ThrowOnceDisposableService.DisposeCount, Is.EqualTo(2));
+        }
+        finally
+        {
+            runtime.Dispose();
+        }
+    }
+
+    private static ScopeServiceProvider CreateSingleServiceProvider<TService>(
+        ScopeRuntime scope,
+        LayerRuntime runtime)
+        where TService : class
+    {
+        var descriptor = new ServiceDescriptor(
+            typeof(TService),
+            typeof(TService),
+            ServiceLifetime.Singleton,
+            null,
+            null,
+            ownerScopeId: scope.ScopeId);
+        var plan = ScopeServicePlan.Compile(scope.ScopeId, new[] { descriptor });
+        var layer = new MultiInterfaceLayer(new List<string>());
+        layer.AttachToContext(runtime);
+        return new ScopeServiceProvider(scope, plan, layer);
+    }
+
     private sealed class TracedDisposable : IService, IDisposable
     {
         private readonly List<string> _log;
@@ -100,6 +178,99 @@ public sealed class ScopeServiceDisposalTests
         {
             int count = Interlocked.Increment(ref _disposeCount);
             _log.Add($"{_name}:{count}");
+        }
+    }
+
+    private sealed class RetryDisposableService : IDisposable
+    {
+        public static int DisposeCount;
+
+        public void Dispose()
+        {
+            Interlocked.Increment(ref DisposeCount);
+        }
+    }
+
+    private sealed class ThrowingDisposableService : IDisposable
+    {
+        public void Dispose()
+        {
+            throw new InvalidOperationException("dispose failed");
+        }
+    }
+
+    private sealed class ThrowOnceDisposableService : IDisposable
+    {
+        public static int DisposeCount;
+
+        public void Dispose()
+        {
+            if (Interlocked.Increment(ref DisposeCount) == 1)
+                throw new InvalidOperationException("first dispose failed");
+        }
+    }
+
+    private sealed class ThrowOnceDisposeLayer : Layer
+    {
+        public override void ConfigureServices(IServiceCollection services)
+        {
+            services.AddSingleton(new ThrowOnceDisposableService());
+        }
+    }
+
+    private sealed class OwnerThread : IDisposable
+    {
+        private readonly BlockingCollection<Action> _actions = new();
+        private readonly Thread _thread;
+        private readonly ManualResetEventSlim _ready = new(false);
+
+        public OwnerThread(ScopeRuntime scope)
+        {
+            _thread = new Thread(() =>
+            {
+                scope.InstallSynchronizationContext();
+                _ready.Set();
+                foreach (Action action in _actions.GetConsumingEnumerable())
+                    action();
+            })
+            {
+                IsBackground = true
+            };
+            _thread.Start();
+            _ready.Wait(TimeSpan.FromSeconds(2));
+        }
+
+        public void Invoke(Action action)
+        {
+            Exception? error = null;
+            using var done = new ManualResetEventSlim(false);
+            _actions.Add(() =>
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    error = ex;
+                }
+                finally
+                {
+                    done.Set();
+                }
+            });
+
+            Assert.That(done.Wait(TimeSpan.FromSeconds(2)), Is.True);
+            if (error != null)
+                throw error;
+        }
+
+        public void Dispose()
+        {
+            _actions.CompleteAdding();
+            _thread.Join(TimeSpan.FromSeconds(2));
+            _actions.Dispose();
+            _ready.Dispose();
         }
     }
 

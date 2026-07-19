@@ -161,6 +161,50 @@ internal sealed class LayerChain
         }
     }
 
+    internal void InitializeScopeServicesOnOwnerThreads(
+        in ShutdownDeadline deadline)
+    {
+        IReadOnlyList<ScopeRuntime> scopes = _owner.ScopeHost.Scopes;
+        for (int i = 0; i < scopes.Count; i++)
+        {
+            ScopeRuntime scope = scopes[i];
+            if (scope.Options.Threading != ScopeThreadingMode.Worker)
+            {
+                InitializeScopeServices(scope.ScopeId);
+                continue;
+            }
+
+            ScopeInitializeServicesResponse response =
+                ScopeControlBarrier.Wait(
+                    scope.RequestInitializeServicesAsync(),
+                    in deadline,
+                    $"{scope.Descriptor.Name}.InitializeServices");
+
+            ScopeControlBarrier.EnsureSucceeded(
+                response.Result,
+                "InitializeServices",
+                scope);
+        }
+    }
+
+    internal void InitializeScopeServices(int scopeId)
+    {
+        foreach (var node in _responsibilityChain)
+        {
+            if (node is Layer layer)
+                layer.InitializeScopeServices(scopeId);
+        }
+    }
+
+    internal void BuildAutoBindings()
+    {
+        foreach (var node in _responsibilityChain)
+        {
+            if (node is Layer layer)
+                layer.BuildAutoBinding();
+        }
+    }
+
     private static void RunInlineLifecycle(
         ScopeRuntime scope,
         ScopeLifecyclePhase phase)
@@ -176,7 +220,7 @@ internal sealed class LayerChain
                 break;
 
             case ScopeLifecyclePhase.RuntimeStart:
-                scope.LifecyclePlan.RunRuntimeStart();
+                scope.RunRuntimeStartOnOwnerThread();
                 break;
 
             default:
@@ -196,10 +240,7 @@ internal sealed class LayerChain
         foreach (var node in _responsibilityChain)
         {
             if (node is Layer layer)
-            {
                 layer.PrepareBuild();
-                layer.BuildAutoBinding();
-            }
         }
     }
 

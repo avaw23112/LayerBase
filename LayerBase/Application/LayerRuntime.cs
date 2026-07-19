@@ -458,6 +458,11 @@ public sealed partial class LayerRuntime : IDisposable
     {
         _chain?.DisposeScopeServices(scopeId);
     }
+
+    internal void InitializeScopeServices(int scopeId)
+    {
+        _chain?.InitializeScopeServices(scopeId);
+    }
     #endregion
 
     #region Lifecycle - Pump
@@ -670,6 +675,16 @@ public sealed partial class LayerRuntime : IDisposable
     public void Dispose()
     {
         RequireOwnerThreadDebug();
+        DisposeCore();
+    }
+
+    internal void DisposeFromHubReset()
+    {
+        DisposeCore();
+    }
+
+    private void DisposeCore()
+    {
         if (_disposed) return;
 
         if (_lifetimeRoot.IsReleased)
@@ -963,6 +978,8 @@ public sealed partial class LayerRuntime : IDisposable
         private TimeSchedulerOptions _timerOptions = TimeSchedulerOptions.Default;
         private DelayBufferOptions _delayOptions = DelayBufferOptions.Default;
         private FixedUpdateOptions _fixedUpdateOptions = FixedUpdateOptions.Default;
+        private SnapDocument? _restoreDocument;
+        private FullSnapLimits _restoreLimits = FullSnapLimits.Default;
         private bool _built;
 
         internal LayersBuilder(LayerRuntime runtime) => _runtime = runtime;
@@ -1026,6 +1043,19 @@ public sealed partial class LayerRuntime : IDisposable
             return this;
         }
 
+        public LayersBuilder RestoreFrom(SnapDocument document)
+        {
+            return RestoreFrom(document, FullSnapLimits.Default);
+        }
+
+        public LayersBuilder RestoreFrom(SnapDocument document, FullSnapLimits limits)
+        {
+            if (_built) throw new InvalidOperationException("Cannot configure restore after Build has been called.");
+            _restoreDocument = document ?? throw new ArgumentNullException(nameof(document));
+            _restoreLimits = limits;
+            return this;
+        }
+
         public LayerRuntime Build()
         {
             if (_built) throw new InvalidOperationException("LayersBuilder.Build can only be called once.");
@@ -1047,6 +1077,16 @@ public sealed partial class LayerRuntime : IDisposable
                 _runtime.InitializeTimer(_timerOptions);
                 _runtime.InitializeDelay(_delayOptions);
                 _layerChain.Prebuild();
+                var buildDeadline =
+                    ShutdownDeadline.Start(
+                        TimeSpan.FromSeconds(15));
+
+                _runtime._scopeHost.StartWorkers(
+                    in buildDeadline);
+
+                _layerChain.InitializeScopeServicesOnOwnerThreads(
+                    in buildDeadline);
+                _layerChain.BuildAutoBindings();
                 _runtime.RebuildEventPolicies();
                 _runtime.RecompileTimerPlans();
                 _runtime.RunTopologyAudit();
@@ -1057,19 +1097,18 @@ public sealed partial class LayerRuntime : IDisposable
 
                 _runtime.MainActorRuntime.PrepareRuntimeBuild();
                 _layerChain.BuildPlans(1024, true);
-                var buildDeadline =
-                    ShutdownDeadline.Start(
-                        TimeSpan.FromSeconds(15));
-
-                _runtime._scopeHost.StartWorkers(
-                    in buildDeadline);
-
                 _layerChain.RunLifecyclePhases(
                     in buildDeadline,
                     () =>
                     {
                         _runtime.MainActorRuntime.CompleteRuntimeBuild();
                         _runtime.BuildFullSnapCache();
+                        if (_restoreDocument != null)
+                        {
+                            _runtime.RequireFullSnapRuntime()
+                                .RestoreDuringBuild(_restoreDocument, _restoreLimits, in buildDeadline);
+                        }
+
                         _runtime.PrewarmInternal(LayerPrewarmOptions.Default);
                         _runtime.FreezeRuntimeRegistries();
                     });

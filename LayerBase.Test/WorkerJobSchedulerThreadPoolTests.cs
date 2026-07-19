@@ -107,6 +107,40 @@ public sealed class WorkerJobSchedulerThreadPoolTests
     }
 
     [Test]
+    public void Low_frequency_long_jobs_expand_to_available_concurrency()
+    {
+        using var scheduler = CreateScheduler(
+            maxConcurrency: 2,
+            queueCapacity: 8,
+            maxBatchItems: 16);
+        using var firstRelease = new ManualResetEventSlim(false);
+        using var secondRelease = new ManualResetEventSlim(false);
+        var first = new BlockingWorkerItem(firstRelease);
+        var second = new BlockingWorkerItem(secondRelease);
+
+        try
+        {
+            Assert.That(scheduler.TryEnqueue(first), Is.True);
+            Assert.That(first.Started.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+            Assert.That(scheduler.TryEnqueue(second), Is.True);
+
+            Assert.That(second.Started.Wait(TimeSpan.FromMilliseconds(500)), Is.True,
+                "A queued job should start a new runner while another runner is executing and MaxConcurrency is available.");
+        }
+        finally
+        {
+            firstRelease.Set();
+            secondRelease.Set();
+        }
+
+        ShutdownDeadline deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(5));
+        Assert.That(scheduler.Drain(in deadline), Is.EqualTo(LifetimeDrainResult.Drained));
+        Assert.That(first.ExecutedCount, Is.EqualTo(1));
+        Assert.That(second.ExecutedCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Runner_reschedules_after_batch_budget()
     {
         using var scheduler = CreateScheduler(
@@ -199,17 +233,48 @@ public sealed class WorkerJobSchedulerThreadPoolTests
         Assert.That(lanes.All(lane => lane >= 0 && lane < maxConcurrency), Is.True);
     }
 
+    [Test]
+    public void Dispose_reports_timeout_when_jobs_are_still_running()
+    {
+        var scheduler = CreateScheduler(
+            maxConcurrency: 1,
+            queueCapacity: 8,
+            maxBatchItems: 16,
+            shutdownTotalTimeoutMilliseconds: 100);
+        using var release = new ManualResetEventSlim(false);
+        var running = new BlockingWorkerItem(release);
+
+        try
+        {
+            Assert.That(scheduler.TryEnqueue(running), Is.True);
+            Assert.That(running.Started.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+            Assert.Throws<TimeoutException>(() => scheduler.Dispose());
+        }
+        finally
+        {
+            release.Set();
+        }
+
+        ShutdownDeadline deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(5));
+        Assert.That(scheduler.Drain(in deadline), Is.EqualTo(LifetimeDrainResult.Drained));
+    }
+
     private static WorkerJobScheduler CreateScheduler(
         int maxConcurrency,
         int queueCapacity,
-        int maxBatchItems)
+        int maxBatchItems,
+        int? shutdownTotalTimeoutMilliseconds = null)
     {
         return new WorkerJobScheduler(
             new WorkerJobSchedulerOptions(
                 maxConcurrency,
                 queueCapacity,
                 maxBatchItems,
-                TimeSpan.FromMilliseconds(50)));
+                TimeSpan.FromMilliseconds(50))
+            {
+                ShutdownTotalTimeoutMilliseconds = shutdownTotalTimeoutMilliseconds ?? 15000
+            });
     }
 
     private static string FindRepoRoot()

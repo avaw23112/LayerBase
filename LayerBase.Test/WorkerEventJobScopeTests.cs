@@ -321,6 +321,7 @@ public sealed class WorkerEventJobScopeTests
 
         scope.InitializeOrUpdateScheduler(options, policyTable, plans);
         scope.InitializeTimer(TimeSchedulerOptions.Default);
+        scope.RunRuntimeStartOnOwnerThread();
     }
 
     private sealed class WorkerProbeLayer : Layer

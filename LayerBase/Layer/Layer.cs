@@ -33,6 +33,7 @@ public abstract class Layer : Node, IDisposable
     private readonly List<RegisteredService> _activeServices = new();
     // 已解析的服务列表（由 ServiceProvider 创建）。
     private List<ServiceProvider.ResolvedService> _resolvedServices = new();
+    private ServiceDescriptor[] _serviceDescriptors = Array.Empty<ServiceDescriptor>();
     // Layer 级服务提供者。
     private ServiceProvider? _serviceProvider;
     // 是否正在收集生成器自动挂载的服务。
@@ -67,7 +68,11 @@ public abstract class Layer : Node, IDisposable
     #endregion
 
     #region Runtime State - Disposal
-    // 0=未释放，1=已释放。使用 int 配合 Interlocked 保证线程安全。
+    private const int DisposeStateAlive = 0;
+    private const int DisposeStateDisposing = 1;
+    private const int DisposeStateDisposed = 2;
+
+    // 失败时恢复到 Alive，允许关闭流程在资源释放错误后重试。
     private int _disposed;
     #endregion
 
@@ -133,23 +138,39 @@ public abstract class Layer : Node, IDisposable
     /// <summary>释放 Layer 占用的所有资源。</summary>
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        int state = Volatile.Read(ref _disposed);
+        if (state == DisposeStateDisposed) return;
 
-        lock (_subscriptions)
+        if (state == DisposeStateDisposing ||
+            Interlocked.CompareExchange(ref _disposed, DisposeStateDisposing, DisposeStateAlive) != DisposeStateAlive)
         {
-            foreach (var sub in _subscriptions) sub.Dispose();
-            _subscriptions.Clear();
+            return;
         }
 
-        while (_pendingOps.TryDequeue(out _)) { }
+        try
+        {
+            lock (_subscriptions)
+            {
+                foreach (var sub in _subscriptions) sub.Dispose();
+                _subscriptions.Clear();
+            }
 
-        DetachResolvedObjects();
-        ReleaseDelayPublishers();
-        _activeServices.Clear();
-        _resolvedServices.Clear();
-        _serviceProvider?.Dispose();
-        _serviceProvider = null;
-        DetachFromContext();
+            while (_pendingOps.TryDequeue(out _)) { }
+
+            DetachResolvedObjects();
+            ReleaseDelayPublishers();
+            _activeServices.Clear();
+            _resolvedServices.Clear();
+            _serviceProvider?.Dispose();
+            _serviceProvider = null;
+            DetachFromContext();
+            Volatile.Write(ref _disposed, DisposeStateDisposed);
+        }
+        catch
+        {
+            Volatile.Write(ref _disposed, DisposeStateAlive);
+            throw;
+        }
     }
 
     private void DetachResolvedObjects()
@@ -204,6 +225,7 @@ public abstract class Layer : Node, IDisposable
         _lifecycleByScopeId.Clear();
         _activeServices.Clear();
         _resolvedServices.Clear();
+        _serviceDescriptors = Array.Empty<ServiceDescriptor>();
         _serviceCollection.Reset();
         _producedEvents.Clear();
         _sharedFields.Clear();
@@ -221,8 +243,8 @@ public abstract class Layer : Node, IDisposable
         ConfigureServices(_serviceCollection);
         _collectingGeneratedServices = false;
 
-        var descriptors = _serviceCollection.ToDescriptors();
-        var catalog = new ServiceCatalog(descriptors);
+        _serviceDescriptors = _serviceCollection.ToDescriptors().ToArray();
+        var catalog = new ServiceCatalog(_serviceDescriptors);
         var scopeProviders = OwnerContext!.ScopeHost.Scopes
                                          .Select(scope => new ScopeServiceProvider(
                                              scope,
@@ -234,10 +256,23 @@ public abstract class Layer : Node, IDisposable
         oldProvider?.Dispose();
 
         newProvider.InjectMembers(this);
-        foreach (var registration in _activeServices)
-            newProvider.InjectMembers(registration.Service);
+    }
 
-        _resolvedServices = newProvider.ResolveOrderedServices(descriptors);
+    internal void InitializeScopeServices(int scopeId)
+    {
+        var provider = _serviceProvider
+            ?? throw new InvalidOperationException("Layer service provider is not prepared.");
+
+        _resolvedServices.RemoveAll(resolved => resolved.Descriptor.OwnerScopeId == scopeId);
+
+        foreach (var registration in _activeServices)
+        {
+            if (registration.OwnerScopeId == scopeId)
+                provider.InjectMembers(registration.Service, scopeId);
+        }
+
+        _resolvedServices.AddRange(
+            provider.ResolveOrderedServices(_serviceDescriptors, scopeId));
     }
 
     /// <summary>构建自动绑定：调用路由、事件订阅和延迟发布器。</summary>
@@ -436,6 +471,8 @@ public abstract class Layer : Node, IDisposable
 
         if (!_registeredServiceTypes.Add(new RegisteredServiceKey(ownerScopeId, serviceType))) return;
 
+        EnsureSingleScopeOwner(service, ownerScopeId);
+
         if (OwnerContext != null && OwnerContext.ScopeHost.TryGetRuntime(ownerScopeId, out var ownerScope))
             ServiceLayerBinder.AttachScopeObject(service, this, ownerScope);
         else if (OwnerContext != null)
@@ -451,6 +488,13 @@ public abstract class Layer : Node, IDisposable
             AddActiveService(registration);
             return;
         }
+
+        if (OwnerContext != null)
+        {
+            AddActiveService(registration);
+            return;
+        }
+
         _manualServices.Add(registration);
     }
 
@@ -983,6 +1027,33 @@ public abstract class Layer : Node, IDisposable
             autoMount.__AutoMountContexts(_serviceCollection);
 
         registration.Service.ConfigureServices(_serviceCollection);
+    }
+
+    private void EnsureSingleScopeOwner(IService service, int ownerScopeId)
+    {
+        foreach (RegisteredService registration in _manualServices)
+        {
+            if (ReferenceEquals(registration.Service, service) &&
+                registration.OwnerScopeId != ownerScopeId)
+            {
+                ThrowServiceAlreadyBound(service);
+            }
+        }
+
+        foreach (RegisteredService registration in _activeServices)
+        {
+            if (ReferenceEquals(registration.Service, service) &&
+                registration.OwnerScopeId != ownerScopeId)
+            {
+                ThrowServiceAlreadyBound(service);
+            }
+        }
+    }
+
+    private static void ThrowServiceAlreadyBound(IService service)
+    {
+        throw new InvalidOperationException(
+            $"Service instance {service.GetType().Name} is already bound to another Scope provider.");
     }
     #endregion
 

@@ -117,7 +117,9 @@ internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
         var deadline = ShutdownDeadline.Start(
             TimeSpan.FromMilliseconds(_options.ShutdownTotalTimeoutMilliseconds));
 
-        _ = Drain(in deadline);
+        LifetimeDrainResult result = Drain(in deadline);
+        if (result == LifetimeDrainResult.TimedOut)
+            throw new TimeoutException("WorkerJobScheduler did not drain before the shutdown deadline.");
     }
 
     internal void CloseAdmission()
@@ -179,9 +181,15 @@ internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
         while (true)
         {
             int queued = Volatile.Read(ref _queuedCount);
-            int runners = Volatile.Read(ref _runnerCount);
+            if (queued == 0)
+                return;
 
-            if (queued <= runners || runners >= _options.MaxConcurrency)
+            int runners = Volatile.Read(ref _runnerCount);
+            int desired = Math.Min(
+                _options.MaxConcurrency,
+                queued + Volatile.Read(ref _executingCount));
+
+            if (runners >= desired)
                 return;
 
             if (Interlocked.CompareExchange(
@@ -256,7 +264,8 @@ internal sealed class WorkerJobScheduler : ILifetimeParticipant, IDisposable
         if (_lanePool.TryDequeue(out int laneId))
             return laneId;
 
-        return 0;
+        throw new InvalidOperationException(
+            "WorkerJobScheduler lane pool is empty while starting a runner.");
     }
 
     private void ReturnLane(int laneId)

@@ -186,9 +186,9 @@ internal readonly struct ScopeSerializeFullSnapResponse
     public SnapSection[] Sections { get; }
 }
 
-internal readonly struct ScopeDeserializeFullSnapCall
+internal readonly struct ScopeRestoreFullSnapCall
 {
-    public ScopeDeserializeFullSnapCall(SnapDocument document)
+    public ScopeRestoreFullSnapCall(SnapDocument document)
     {
         Document = document ?? throw new ArgumentNullException(nameof(document));
     }
@@ -196,9 +196,9 @@ internal readonly struct ScopeDeserializeFullSnapCall
     public SnapDocument Document { get; }
 }
 
-internal readonly struct ScopeDeserializeFullSnapResponse
+internal readonly struct ScopeRestoreFullSnapResponse
 {
-    public ScopeDeserializeFullSnapResponse(ScopeControlResult result)
+    public ScopeRestoreFullSnapResponse(ScopeControlResult result)
     {
         Result = result;
     }
@@ -212,6 +212,20 @@ internal readonly struct ScopeCaptureDiagnosticsCall
 
 internal readonly struct ScopeInitializeCall
 {
+}
+
+internal readonly struct ScopeInitializeServicesCall
+{
+}
+
+internal readonly struct ScopeInitializeServicesResponse
+{
+    public ScopeInitializeServicesResponse(ScopeControlResult result)
+    {
+        Result = result;
+    }
+
+    public ScopeControlResult Result { get; }
 }
 
 internal readonly struct ScopeInitializeResponse
@@ -297,7 +311,9 @@ internal static class ScopeLifecycleRouteIds
 
     public const int SerializeFullSnap = -114;
 
-    public const int DeserializeFullSnap = -115;
+    public const int RestoreFullSnap = -115;
+
+    public const int InitializeServices = -116;
 
     public static int Resolve<TRequest, TResponse>()
         where TRequest : struct
@@ -351,6 +367,12 @@ internal static class ScopeLifecycleRouteIds
             return Initialize;
         }
 
+        if (typeof(TRequest) == typeof(ScopeInitializeServicesCall) &&
+            typeof(TResponse) == typeof(ScopeInitializeServicesResponse))
+        {
+            return InitializeServices;
+        }
+
         if (typeof(TRequest) == typeof(ScopePostBuildCall) &&
             typeof(TResponse) == typeof(ScopePostBuildResponse))
         {
@@ -387,10 +409,10 @@ internal static class ScopeLifecycleRouteIds
             return SerializeFullSnap;
         }
 
-        if (typeof(TRequest) == typeof(ScopeDeserializeFullSnapCall) &&
-            typeof(TResponse) == typeof(ScopeDeserializeFullSnapResponse))
+        if (typeof(TRequest) == typeof(ScopeRestoreFullSnapCall) &&
+            typeof(TResponse) == typeof(ScopeRestoreFullSnapResponse))
         {
-            return DeserializeFullSnap;
+            return RestoreFullSnap;
         }
 
         throw new InvalidOperationException(
@@ -452,6 +474,12 @@ internal static class ScopeLifecycleControlExtensions
         return scope.EnqueueControlCall<ScopeInitializeCall, ScopeInitializeResponse>(new ScopeInitializeCall());
     }
 
+    public static LBTask<ScopeInitializeServicesResponse> RequestInitializeServicesAsync(this ScopeRuntime scope)
+    {
+        return scope.EnqueueControlCall<ScopeInitializeServicesCall, ScopeInitializeServicesResponse>(
+            new ScopeInitializeServicesCall());
+    }
+
     public static LBTask<ScopePostBuildResponse> RequestPostBuildAsync(this ScopeRuntime scope)
     {
         return scope.EnqueueControlCall<ScopePostBuildCall, ScopePostBuildResponse>(new ScopePostBuildCall());
@@ -508,13 +536,13 @@ internal static class ScopeLifecycleControlExtensions
             cancellationToken);
     }
 
-    public static LBTask<ScopeDeserializeFullSnapResponse> RequestDeserializeFullSnapAsync(
+    public static LBTask<ScopeRestoreFullSnapResponse> RequestRestoreFullSnapAsync(
         this ScopeRuntime scope,
         SnapDocument document,
         CancellationToken cancellationToken = default)
     {
-        return scope.EnqueueControlCall<ScopeDeserializeFullSnapCall, ScopeDeserializeFullSnapResponse>(
-            new ScopeDeserializeFullSnapCall(document),
+        return scope.EnqueueControlCall<ScopeRestoreFullSnapCall, ScopeRestoreFullSnapResponse>(
+            new ScopeRestoreFullSnapCall(document),
             cancellationToken);
     }
 }

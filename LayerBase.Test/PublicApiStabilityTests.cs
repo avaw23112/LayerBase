@@ -93,7 +93,7 @@ public sealed class PublicApiStabilityTests
     }
 
     [Test]
-    public void FullSnap_public_api_is_layer_runtime_async_only()
+    public void FullSnap_public_api_is_runtime_capture_builder_restore_only()
     {
         Type runtimeType = typeof(LayerRuntime);
 
@@ -104,9 +104,17 @@ public sealed class PublicApiStabilityTests
             .ToArray();
 
         Assert.That(methodNames, Does.Contain("SerializeFullSnapAsync"));
-        Assert.That(methodNames, Does.Contain("DeserializeFullSnapAsync"));
         Assert.That(methodNames, Does.Contain("SerializeFullSnapJsonAsync"));
-        Assert.That(methodNames, Does.Contain("DeserializeFullSnapJsonAsync"));
+        Assert.That(methodNames, Does.Not.Contain("DeserializeFullSnapAsync"));
+        Assert.That(methodNames, Does.Not.Contain("DeserializeFullSnapJsonAsync"));
+
+        Type builderType = typeof(LayerRuntime).GetNestedType("LayersBuilder", BindingFlags.Public | BindingFlags.NonPublic)!;
+        string[] builderMethodNames = builderType
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Select(static method => method.Name)
+            .ToArray();
+
+        Assert.That(builderMethodNames, Does.Contain("RestoreFrom"));
     }
 
     [Test]

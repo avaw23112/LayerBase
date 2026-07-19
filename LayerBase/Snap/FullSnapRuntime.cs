@@ -78,16 +78,25 @@ internal sealed class FullSnapRuntime
         cancellationToken.ThrowIfCancellationRequested();
 
         var document = new SnapDocument();
+        var captures = new List<PendingCapture>();
         foreach (ScopeRuntime scope in _scopes.Scopes)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ScopeSerializeFullSnapResponse response = await ScopeOwnerInvocation
-                .InvokeAsync<ScopeSerializeFullSnapCall, ScopeSerializeFullSnapResponse>(
+            captures.Add(
+                new PendingCapture(
                     scope,
-                    new ScopeSerializeFullSnapCall(),
-                    cancellationToken);
+                    ScopeOwnerInvocation.InvokeAsync<ScopeSerializeFullSnapCall, ScopeSerializeFullSnapResponse>(
+                        scope,
+                        new ScopeSerializeFullSnapCall(),
+                        cancellationToken)));
+        }
+
+        foreach (PendingCapture capture in captures)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ScopeSerializeFullSnapResponse response = await capture.Response;
             if (response.Result != ScopeControlResult.Succeeded)
-                throw new InvalidOperationException($"Scope `{scope.Descriptor.Name}` failed to serialize FullSnap.");
+                throw new InvalidOperationException($"Scope `{capture.Scope.Descriptor.Name}` failed to serialize FullSnap.");
 
             AddSections(document, response.Sections);
         }
@@ -95,47 +104,25 @@ internal sealed class FullSnapRuntime
         return document;
     }
 
-    internal void Deserialize(SnapDocument document)
-    {
-        Deserialize(document, FullSnapLimits.Default);
-    }
-
-    internal void Deserialize(SnapDocument document, FullSnapLimits limits)
-    {
-        if (document == null)
-            throw new ArgumentNullException(nameof(document));
-
-        ValidateDocument(document, limits);
-        ThrowIfWorkerScopeRequiresAsync();
-        foreach (ScopeRuntime scope in _scopes.Scopes)
-            scope.DeserializeFullSnapOnOwnerThread(document);
-    }
-
-    internal async LBTask DeserializeAsync(SnapDocument document, CancellationToken cancellationToken = default)
-    {
-        await DeserializeAsync(document, FullSnapLimits.Default, cancellationToken);
-    }
-
-    internal async LBTask DeserializeAsync(
+    internal void RestoreDuringBuild(
         SnapDocument document,
         FullSnapLimits limits,
-        CancellationToken cancellationToken = default)
+        in ShutdownDeadline deadline)
     {
         if (document == null)
             throw new ArgumentNullException(nameof(document));
 
         ValidateDocument(document, limits);
-        cancellationToken.ThrowIfCancellationRequested();
         foreach (ScopeRuntime scope in _scopes.Scopes)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            ScopeDeserializeFullSnapResponse response = await ScopeOwnerInvocation
-                .InvokeAsync<ScopeDeserializeFullSnapCall, ScopeDeserializeFullSnapResponse>(
+            ScopeRestoreFullSnapResponse response = ScopeControlBarrier.Wait(
+                ScopeOwnerInvocation.InvokeAsync<ScopeRestoreFullSnapCall, ScopeRestoreFullSnapResponse>(
                     scope,
-                    new ScopeDeserializeFullSnapCall(document),
-                    cancellationToken);
+                    new ScopeRestoreFullSnapCall(document)),
+                in deadline,
+                $"{scope.Descriptor.Name}.RestoreFullSnap");
             if (response.Result != ScopeControlResult.Succeeded)
-                throw new InvalidOperationException($"Scope `{scope.Descriptor.Name}` failed to deserialize FullSnap.");
+                throw new InvalidOperationException($"Scope `{scope.Descriptor.Name}` failed to restore FullSnap.");
         }
     }
 
@@ -149,39 +136,9 @@ internal sealed class FullSnapRuntime
         CancellationToken cancellationToken = default)
     {
         SnapDocument document = await SerializeAsync(cancellationToken);
-        return JsonSnapCodec.EncodeToString(document, options);
-    }
-
-    internal void DeserializeJson(string json, JsonSerializerOptions? options = null)
-    {
-        Deserialize(JsonSnapCodec.DecodeFromString(json, FullSnapLimits.Default, options));
-    }
-
-    internal void DeserializeJson(
-        string json,
-        FullSnapLimits limits,
-        JsonSerializerOptions? options = null)
-    {
-        Deserialize(JsonSnapCodec.DecodeFromString(json, limits, options), limits);
-    }
-
-    internal async LBTask DeserializeJsonAsync(
-        string json,
-        JsonSerializerOptions? options = null,
-        CancellationToken cancellationToken = default)
-    {
-        SnapDocument document = JsonSnapCodec.DecodeFromString(json, FullSnapLimits.Default, options);
-        await DeserializeAsync(document, cancellationToken);
-    }
-
-    internal async LBTask DeserializeJsonAsync(
-        string json,
-        FullSnapLimits limits,
-        JsonSerializerOptions? options = null,
-        CancellationToken cancellationToken = default)
-    {
-        SnapDocument document = JsonSnapCodec.DecodeFromString(json, limits, options);
-        await DeserializeAsync(document, limits, cancellationToken);
+        return await Task.Run(
+            () => JsonSnapCodec.EncodeToString(document, options),
+            cancellationToken);
     }
 
     private void ThrowIfWorkerScopeRequiresAsync()
@@ -383,5 +340,20 @@ internal sealed class FullSnapRuntime
         }
 
         return sectionScopes;
+    }
+
+    private readonly struct PendingCapture
+    {
+        public PendingCapture(
+            ScopeRuntime scope,
+            LBTask<ScopeSerializeFullSnapResponse> response)
+        {
+            Scope = scope;
+            Response = response;
+        }
+
+        public ScopeRuntime Scope { get; }
+
+        public LBTask<ScopeSerializeFullSnapResponse> Response { get; }
     }
 }

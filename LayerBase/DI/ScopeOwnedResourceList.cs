@@ -8,6 +8,8 @@ internal sealed class ScopeOwnedResourceList
     private readonly List<object> _creationOrder = new();
     private readonly HashSet<object> _instances = new(ReferenceIdentityComparer.Instance);
 
+    public bool IsEmpty => _creationOrder.Count == 0;
+
     public void Add(object instance)
     {
         if (instance == null)
@@ -33,17 +35,26 @@ internal sealed class ScopeOwnedResourceList
         for (int i = _creationOrder.Count - 1; i >= 0; i--)
         {
             object instance = _creationOrder[i];
+            bool released = false;
             cleanup.Run(instance.GetType().Name, () =>
             {
                 if (instance is IDisposable disposable)
                     disposable.Dispose();
 
                 ServiceLayerBinder.Detach(instance);
+                released = true;
             });
+
+            if (released)
+            {
+                _creationOrder.RemoveAt(i);
+                _instances.Remove(instance);
+            }
         }
 
-        _creationOrder.Clear();
-        _instances.Clear();
+        AggregateException? error = cleanup.BuildException();
+        if (error != null)
+            throw error;
     }
 
     private sealed class ReferenceIdentityComparer : IEqualityComparer<object>

@@ -31,13 +31,15 @@ public sealed class FullSnapHardeningTests
             Sections = document.Sections
         };
 
-        layer.LayerValue = -1;
-
-        SnapFormatException? ex = Assert.ThrowsAsync<SnapFormatException>(
-            async () => await runtime.DeserializeFullSnapAsync(document));
+        var restoredLayer = new SnapLayer { LayerValue = -1 };
+        SnapFormatException? ex = Assert.Throws<SnapFormatException>(
+            () => LayerHub.CreateLayers()
+                .Push(restoredLayer)
+                .RestoreFrom(document)
+                .Build());
 
         Assert.That(ex!.Message, Does.Contain("FormatVersion"));
-        Assert.That(layer.LayerValue, Is.EqualTo(-1));
+        Assert.That(restoredLayer.LayerValue, Is.EqualTo(-1));
     }
 
     [Test]
@@ -57,13 +59,15 @@ public sealed class FullSnapHardeningTests
             Data = new JsonObject()
         });
 
-        layer.LayerValue = -1;
-
-        SnapFormatException? ex = Assert.ThrowsAsync<SnapFormatException>(
-            async () => await runtime.DeserializeFullSnapAsync(document));
+        var restoredLayer = new SnapLayer { LayerValue = -1 };
+        SnapFormatException? ex = Assert.Throws<SnapFormatException>(
+            () => LayerHub.CreateLayers()
+                .Push(restoredLayer)
+                .RestoreFrom(document)
+                .Build());
 
         Assert.That(ex!.Message, Does.Contain("unknown-section"));
-        Assert.That(layer.LayerValue, Is.EqualTo(-1));
+        Assert.That(restoredLayer.LayerValue, Is.EqualTo(-1));
     }
 
     [Test]
@@ -76,15 +80,17 @@ public sealed class FullSnapHardeningTests
 
         layer.LayerValue = 21;
         SnapDocument document = await runtime.SerializeFullSnapAsync();
-        layer.LayerValue = -1;
-
         var limits = FullSnapLimits.Default with { MaxTotalBytes = 16 };
 
-        SnapFormatException? ex = Assert.ThrowsAsync<SnapFormatException>(
-            async () => await runtime.DeserializeFullSnapAsync(document, limits));
+        var restoredLayer = new SnapLayer { LayerValue = -1 };
+        SnapFormatException? ex = Assert.Throws<SnapFormatException>(
+            () => LayerHub.CreateLayers()
+                .Push(restoredLayer)
+                .RestoreFrom(document, limits)
+                .Build());
 
         Assert.That(ex!.Message, Does.Contain("MaxTotalBytes"));
-        Assert.That(layer.LayerValue, Is.EqualTo(-1));
+        Assert.That(restoredLayer.LayerValue, Is.EqualTo(-1));
     }
 
     [Test]
@@ -106,14 +112,16 @@ public sealed class FullSnapHardeningTests
             cursor = child;
         }
 
-        layer.LayerValue = -1;
-
         var limits = FullSnapLimits.Default with { MaxJsonDepth = 4 };
-        SnapFormatException? ex = Assert.ThrowsAsync<SnapFormatException>(
-            async () => await runtime.DeserializeFullSnapAsync(document, limits));
+        var restoredLayer = new SnapLayer { LayerValue = -1 };
+        SnapFormatException? ex = Assert.Throws<SnapFormatException>(
+            () => LayerHub.CreateLayers()
+                .Push(restoredLayer)
+                .RestoreFrom(document, limits)
+                .Build());
 
         Assert.That(ex!.Message, Does.Contain("MaxJsonDepth"));
-        Assert.That(layer.LayerValue, Is.EqualTo(-1));
+        Assert.That(restoredLayer.LayerValue, Is.EqualTo(-1));
     }
 
     [Test]
@@ -132,13 +140,11 @@ public sealed class FullSnapHardeningTests
             $"\"{key}\":{{\"Key\":\"{key}\",\"Version\":1,\"Data\":{{\"layerValue\":99}}}},\"{key}\":",
             StringComparison.Ordinal);
 
-        layer.LayerValue = -1;
-
-        SnapFormatException? ex = Assert.ThrowsAsync<SnapFormatException>(
-            async () => await runtime.DeserializeFullSnapJsonAsync(duplicateJson));
+        SnapFormatException? ex = Assert.Throws<SnapFormatException>(
+            () => JsonSnapCodec.DecodeFromString(duplicateJson, FullSnapLimits.Default));
 
         Assert.That(ex!.Message, Does.Contain("Duplicate"));
-        Assert.That(layer.LayerValue, Is.EqualTo(-1));
+        Assert.That(layer.LayerValue, Is.EqualTo(3));
     }
 
     [Test]
@@ -197,6 +203,14 @@ public sealed class FullSnapHardeningTests
     }
 
     [Test]
+    public void JsonSnapCodec_default_options_are_not_shared_mutable_state()
+    {
+        JsonSnapCodec.DefaultOptions.WriteIndented = true;
+
+        Assert.That(JsonSnapCodec.DefaultOptions.WriteIndented, Is.False);
+    }
+
+    [Test]
     public async Task Validation_failure_leaves_runtime_unchanged()
     {
         var layer = new SnapLayer();
@@ -214,12 +228,14 @@ public sealed class FullSnapHardeningTests
             Data = existing.Data
         };
 
-        layer.LayerValue = -1;
+        var restoredLayer = new SnapLayer { LayerValue = -1 };
+        Assert.Throws<SnapFormatException>(
+            () => LayerHub.CreateLayers()
+                .Push(restoredLayer)
+                .RestoreFrom(document)
+                .Build());
 
-        Assert.ThrowsAsync<SnapFormatException>(
-            async () => await runtime.DeserializeFullSnapAsync(document));
-
-        Assert.That(layer.LayerValue, Is.EqualTo(-1));
+        Assert.That(restoredLayer.LayerValue, Is.EqualTo(-1));
     }
 
     [Test]
@@ -232,17 +248,13 @@ public sealed class FullSnapHardeningTests
 
         SnapDocument document = await runtime.SerializeFullSnapAsync();
 
-        InvalidOperationException? ex = Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await runtime.DeserializeFullSnapAsync(document));
+        InvalidOperationException? ex = Assert.Throws<InvalidOperationException>(
+            () => LayerHub.CreateLayers()
+                .Push(new FaultingReadSnapLayer())
+                .RestoreFrom(document)
+                .Build());
 
         Assert.That(ex!.Message, Does.Contain("read failed"));
-        ScopeDiagnosticsSnapshot scope = runtime.CaptureDiagnostics()
-            .Scopes
-            .Single(static snapshot => snapshot.ScopeId == ScopeDefinitionIds.Main);
-        Assert.That(scope.Snap.State, Is.EqualTo(ScopeSafePointState.Faulted));
-        Assert.That(scope.Snap.FailureCount, Is.EqualTo(1));
-        Assert.That(scope.Snap.LastBytes, Is.GreaterThan(0));
-        Assert.That(scope.Snap.LastDurationTicks, Is.GreaterThan(0));
     }
 
     [Test]
@@ -255,13 +267,16 @@ public sealed class FullSnapHardeningTests
 
         layer.LayerValue = 13;
         SnapDocument document = await runtime.SerializeFullSnapAsync();
-        await runtime.DeserializeFullSnapAsync(document);
+        using LayerRuntime restoredRuntime = LayerHub.CreateLayers()
+            .Push(new SnapLayer())
+            .RestoreFrom(document)
+            .Build();
 
-        ScopeDiagnosticsSnapshot scope = runtime.CaptureDiagnostics()
+        ScopeDiagnosticsSnapshot scope = restoredRuntime.CaptureDiagnostics()
             .Scopes
             .Single(static snapshot => snapshot.ScopeId == ScopeDefinitionIds.Main);
         Assert.That(scope.Snap.NodeCount, Is.GreaterThan(0));
-        Assert.That(scope.Snap.SerializeCount, Is.EqualTo(1));
+        Assert.That(scope.Snap.SerializeCount, Is.EqualTo(0));
         Assert.That(scope.Snap.DeserializeCount, Is.EqualTo(1));
         Assert.That(scope.Snap.FailureCount, Is.EqualTo(0));
         Assert.That(scope.Snap.LastBytes, Is.GreaterThan(0));

@@ -76,6 +76,7 @@ public sealed class RuntimeOwnershipBoundaryTests
             static scopeId => { },
             static (layerIndex, source, eventName, exception) => { },
             static scopeId => { },
+            static scopeId => { },
             firstCall + secondCall,
             null));
 
@@ -83,6 +84,7 @@ public sealed class RuntimeOwnershipBoundaryTests
             static (in ScopeFaultRecord fault) => { },
             static scopeId => { },
             static (layerIndex, source, eventName, exception) => { },
+            static scopeId => { },
             static scopeId => { },
             null,
             firstEvent + secondEvent));

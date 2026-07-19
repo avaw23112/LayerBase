@@ -6,10 +6,12 @@ namespace LayerBase.Snap;
 
 public static class JsonSnapCodec
 {
-    public static readonly JsonSerializerOptions DefaultOptions = new()
+    private static readonly JsonSerializerOptions s_defaultOptionsTemplate = new()
     {
         WriteIndented = false
     };
+
+    public static JsonSerializerOptions DefaultOptions => CreateOptions(null);
 
     public static string EncodeToString(SnapDocument document, JsonSerializerOptions? options = null)
     {
@@ -18,7 +20,7 @@ public static class JsonSnapCodec
             throw new ArgumentNullException(nameof(document));
         }
 
-        return JsonSerializer.Serialize(document, options ?? DefaultOptions);
+        return JsonSerializer.Serialize(document, CreateOptions(options));
     }
 
     public static byte[] EncodeToUtf8Bytes(SnapDocument document, JsonSerializerOptions? options = null)
@@ -28,7 +30,7 @@ public static class JsonSnapCodec
             throw new ArgumentNullException(nameof(document));
         }
 
-        return JsonSerializer.SerializeToUtf8Bytes(document, options ?? DefaultOptions);
+        return JsonSerializer.SerializeToUtf8Bytes(document, CreateOptions(options));
     }
 
     public static SnapDocument DecodeFromString(string json, JsonSerializerOptions? options = null)
@@ -83,9 +85,7 @@ public static class JsonSnapCodec
             ValidateNoDuplicateProperties(parsed.RootElement);
             ValidateSnapJsonShape(parsed.RootElement, limits, minFormatVersion, maxFormatVersion);
 
-            SnapDocument? document = JsonSerializer.Deserialize<SnapDocument>(
-                json,
-                options ?? DefaultOptions);
+            SnapDocument? document = parsed.RootElement.Deserialize<SnapDocument>(CreateOptions(options));
 
             return NormalizeDecodedDocument(document);
         }
@@ -142,20 +142,20 @@ public static class JsonSnapCodec
 
         try
         {
-            byte[] bytes = utf8Json.ToArray();
-            using var stream = new MemoryStream(bytes);
-            using var parsed = JsonDocument.Parse(
-                stream,
-                new JsonDocumentOptions
+            var reader = new Utf8JsonReader(
+                utf8Json,
+                new JsonReaderOptions
                 {
                     MaxDepth = limits.MaxJsonDepth
                 });
+            using var parsed = JsonDocument.ParseValue(ref reader);
+            if (reader.Read())
+                throw new SnapFormatException("FullSnap JSON must contain a single root value.");
+
             ValidateNoDuplicateProperties(parsed.RootElement);
             ValidateSnapJsonShape(parsed.RootElement, limits, minFormatVersion, maxFormatVersion);
 
-            SnapDocument? document = JsonSerializer.Deserialize<SnapDocument>(
-                bytes,
-                options ?? DefaultOptions);
+            SnapDocument? document = parsed.RootElement.Deserialize<SnapDocument>(CreateOptions(options));
 
             return NormalizeDecodedDocument(document);
         }
@@ -182,7 +182,7 @@ public static class JsonSnapCodec
 
     internal static int GetSectionByteCount(SnapSection section)
     {
-        return JsonSerializer.SerializeToUtf8Bytes(section, DefaultOptions).Length;
+        return JsonSerializer.SerializeToUtf8Bytes(section, CreateOptions(null)).Length;
     }
 
     internal static int GetJsonDepth(JsonNode? node)
@@ -230,6 +230,11 @@ public static class JsonSnapCodec
         }
 
         return document;
+    }
+
+    private static JsonSerializerOptions CreateOptions(JsonSerializerOptions? options)
+    {
+        return new JsonSerializerOptions(options ?? s_defaultOptionsTemplate);
     }
 
     private static void ValidateNoDuplicateProperties(JsonElement element)

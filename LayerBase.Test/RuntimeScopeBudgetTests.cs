@@ -185,6 +185,7 @@ public class RuntimeScopeBudgetTests
         {
             new PostTypePlan(id, PostDeliveryMode.Normal, BackpressurePolicy.DropOldest, 0, options.DefaultBackpressure),
         });
+        scope.RunRuntimeStartOnOwnerThread();
 
         for (int i = 0; i < 3; i++)
             scope.PostScheduler!.TryPost(new BudgetTestEventA { Value = i });
@@ -202,6 +203,7 @@ public class RuntimeScopeBudgetTests
             static (in ScopeFaultRecord _) => { },
             static _ => { },
             runtime.ReportLayerEventError,
+            runtime.InitializeScopeServices,
             runtime.DisposeScopeServices);
     }
 }
