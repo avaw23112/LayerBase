@@ -239,7 +239,14 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 
         if (processedInTick < _maxExpiredPerTick)
         {
+            int oldOverdueTailBeforeCurrent = _overdueTail;
             current = ProcessTimerList(current, sink, ref processedInTick, ref firstException);
+
+            if (current != -1)
+            {
+                InsertCurrentRemainderToOverdue(current, oldOverdueTailBeforeCurrent);
+                current = -1;
+            }
         }
 
         while (processedInTick < _maxExpiredPerTick && _overdueHead != -1)
@@ -349,6 +356,7 @@ public sealed class TimeScheduler<TPayload> : IDisposable
 
         if (_overdueHead == -1)
         {
+            FastArray.At(_pool, head).Prev = -1;
             _overdueHead = head;
             _overdueTail = tail;
             return;
@@ -357,7 +365,58 @@ public sealed class TimeScheduler<TPayload> : IDisposable
         ref var tailEntry = ref FastArray.At(_pool, tail);
         tailEntry.Next = _overdueHead;
         FastArray.At(_pool, _overdueHead).Prev = tail;
+        FastArray.At(_pool, head).Prev = -1;
         _overdueHead = head;
+    }
+
+    private void InsertCurrentRemainderToOverdue(int head, int previousTail)
+    {
+        int current = head;
+        int tail = -1;
+        while (current != -1)
+        {
+            ref var entry = ref FastArray.At(_pool, current);
+            entry.SlotIndex = OverdueSlotIndex;
+            if (entry.Next == -1)
+            {
+                tail = current;
+                break;
+            }
+
+            current = entry.Next;
+        }
+
+        if (_overdueHead == -1)
+        {
+            FastArray.At(_pool, head).Prev = -1;
+            _overdueHead = head;
+            _overdueTail = tail;
+            return;
+        }
+
+        if (previousTail == -1)
+        {
+            FastArray.At(_pool, head).Prev = -1;
+            FastArray.At(_pool, tail).Next = _overdueHead;
+            FastArray.At(_pool, _overdueHead).Prev = tail;
+            _overdueHead = head;
+            return;
+        }
+
+        ref var previousTailEntry = ref FastArray.At(_pool, previousTail);
+        int next = previousTailEntry.Next;
+        previousTailEntry.Next = head;
+        FastArray.At(_pool, head).Prev = previousTail;
+        FastArray.At(_pool, tail).Next = next;
+
+        if (next == -1)
+        {
+            _overdueTail = tail;
+        }
+        else
+        {
+            FastArray.At(_pool, next).Prev = tail;
+        }
     }
 
     private void AppendSingleToOverdue(int index)

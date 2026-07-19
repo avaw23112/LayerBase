@@ -533,16 +533,18 @@ public sealed class PostScheduler : IDisposable
 
             if (perTypeLimit > 0)
             {
-                int typeCount = _pendingCoalescedByType.TryGetValue(typeId, out var typeList)
-                    ? typeList.Count
-                    : 0;
+                int typeCount = CountRetainedCoalescedForType(typeId);
 
                 if (typeCount >= perTypeLimit)
                 {
                     switch (plan.Backpressure)
                     {
                         case BackpressurePolicy.DropOldest:
-                            EvictOldestCoalescedSlotForType(typeId);
+                            if (!EvictOldestCoalescedSlotForType(typeId) ||
+                                CountRetainedCoalescedForType(typeId) >= perTypeLimit)
+                            {
+                                return PostResult.Failure();
+                            }
                             break;
                         default:
                             return PostResult.Failure();
@@ -550,9 +552,14 @@ public sealed class PostScheduler : IDisposable
                 }
             }
 
-            if (_options.MaxSpecialPending > 0 && _pendingCoalesced.Count >= _options.MaxSpecialPending)
+            if (_options.MaxSpecialPending > 0 && CountRetainedCoalesced() >= _options.MaxSpecialPending)
             {
-                EvictOldestCoalescedSlot();
+                if (plan.Backpressure != BackpressurePolicy.DropOldest ||
+                    !EvictOldestCoalescedSlot() ||
+                    CountRetainedCoalesced() >= _options.MaxSpecialPending)
+                {
+                    return PostResult.Failure();
+                }
             }
 
             var handle = _payloadStorage.Store(_runtimeId, value);
@@ -586,6 +593,49 @@ public sealed class PostScheduler : IDisposable
         }
 
         return PostResult.Failure();
+    }
+
+    private int CountRetainedCoalesced()
+    {
+        return _pendingCoalesced.Count + CountRetainedCoalescedSnapshot();
+    }
+
+    private int CountRetainedCoalescedForType(int typeId)
+    {
+        int count = _pendingCoalescedByType.TryGetValue(typeId, out var typeList)
+            ? typeList.Count
+            : 0;
+
+        if (_coalescedSnapshotIndex < 0)
+            return count;
+
+        for (int i = _coalescedSnapshotIndex; i < _snapshotCoalesced.Count; i++)
+        {
+            var slot = _snapshotCoalesced[i];
+            if (slot.Key.EventTypeId == typeId && !slot.PayloadHandle.IsInvalid)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private int CountRetainedCoalescedSnapshot()
+    {
+        if (_coalescedSnapshotIndex < 0)
+            return 0;
+
+        int count = 0;
+        for (int i = _coalescedSnapshotIndex; i < _snapshotCoalesced.Count; i++)
+        {
+            if (!_snapshotCoalesced[i].PayloadHandle.IsInvalid)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private PostResult HandleMergeFailureInternalLocked<T>(

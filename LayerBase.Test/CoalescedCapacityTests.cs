@@ -110,4 +110,32 @@ public class CoalescedCapacityTests
         scheduler.Pump();
         Assert.That(received, Is.EqualTo(2));
     }
+
+    [Test]
+    public void Special_retained_count_respects_contract()
+    {
+        var options = new PostSchedulerOptions(1024, 1024, 1, 0, 1, 64, BackpressurePolicy.RejectNew,
+            maxSpecialPending: 2);
+        var eventCenter = new EventCenter();
+        var policyTable = new EventBuildPolicyTable(options.DefaultBackpressure);
+        var typeId = EventTypeId<CapacityTestEvent>.Id;
+        policyTable.SetMetaData(typeId, new CapacityTestMeta());
+
+        using var scheduler = new PostScheduler(0, eventCenter, options, policyTable);
+        scheduler.BuildPlans(new[]
+        {
+            new PostTypePlan(typeId, PostDeliveryMode.Coalesced, BackpressurePolicy.RejectNew, 0,
+                options.DefaultBackpressure)
+        });
+
+        Assert.That(scheduler.TryPost(new CapacityTestEvent { Id = 1, Value = 10 }).IsSuccess, Is.True);
+        Assert.That(scheduler.TryPost(new CapacityTestEvent { Id = 2, Value = 20 }).IsSuccess, Is.True);
+
+        var stats = scheduler.Pump();
+        Assert.That(stats.ProcessedCount, Is.EqualTo(1));
+        Assert.That(scheduler.HasPendingWork, Is.True);
+
+        Assert.That(scheduler.TryPost(new CapacityTestEvent { Id = 3, Value = 30 }).IsSuccess, Is.True);
+        Assert.That(scheduler.TryPost(new CapacityTestEvent { Id = 4, Value = 40 }).IsSuccess, Is.False);
+    }
 }
