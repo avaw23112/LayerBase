@@ -10,7 +10,7 @@ namespace EventsTest;
 public sealed class ScopeFaultPropagationTests
 {
     [Test]
-    public void Update_exception_delivers_fault_through_completion_inbox_to_main_scope()
+    public void Update_exception_reports_fault_through_runtime_callback()
     {
         using var runtime = new LayerRuntime(9201);
         using var host = ScopeRuntimeHost.Create(
@@ -29,9 +29,6 @@ public sealed class ScopeFaultPropagationTests
         ScopeRuntime customScope = host.Scopes[1];
 
         Assert.DoesNotThrow(() => customScope.PumpUpdate(0.016f));
-        Assert.That(host.MainScope.Transport.CompletionInbox.Count, Is.EqualTo(1));
-
-        host.MainScope.PumpIngress();
 
         Assert.That(fault, Is.Not.Null);
         Assert.That(fault!.Value.Record.SourceScopeId, Is.EqualTo(1));
@@ -93,7 +90,7 @@ public sealed class ScopeFaultPropagationTests
     }
 
     [Test]
-    public void Non_main_scope_fault_delivered_via_completion_inbox_when_main_event_inbox_full()
+    public void Non_main_scope_fault_callback_is_not_blocked_when_main_event_inbox_full()
     {
         using var runtime = new LayerRuntime(9208);
         using var host = ScopeRuntimeHost.Create(
@@ -128,10 +125,6 @@ public sealed class ScopeFaultPropagationTests
         Assert.That(rejected, Is.EqualTo(ScopePostResult.QueueFull));
 
         customScope.PumpUpdate(0.016f);
-
-        Assert.That(mainScope.Transport.CompletionInbox.Count, Is.EqualTo(1));
-
-        mainScope.PumpIngress();
 
         Assert.That(fault, Is.Not.Null);
         Assert.That(fault!.Value.Record.SourceScopeId, Is.EqualTo(1));
@@ -192,7 +185,16 @@ public sealed class ScopeFaultPropagationTests
         ScopeRuntime workerScope = host.Scopes[1];
         host.StartWorkers();
 
-        Assert.That(WaitUntil(() => workerScope.State == ScopeRuntimeState.Stopping || workerScope.State == ScopeRuntimeState.Stopped), Is.True);
+        workerScope.ReportFault(
+            new InvalidOperationException("worker failed"),
+            ScopeFaultPhase.ServiceUpdate);
+
+        Assert.That(
+            WaitUntil(() => workerScope.State is
+                ScopeRuntimeState.StopRequested or
+                ScopeRuntimeState.Draining or
+                ScopeRuntimeState.Stopped),
+            Is.True);
 
         var stopTask = workerScope.RequestStopAsync();
         Assert.That(WaitUntil(() => stopTask.GetAwaiter().IsCompleted), Is.True);

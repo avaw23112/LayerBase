@@ -2,20 +2,12 @@ using System.Diagnostics;
 
 namespace LayerBase.Scope;
 
-internal enum ScopeWorkerShutdownResult
-{
-    Stopped,
-    TimedOut,
-    AlreadyStopped
-}
-
 internal enum ScopeWorkerStartState : byte
 {
     Created,
     Starting,
     Running,
     StartFailed,
-    Stopping,
     Exited
 }
 
@@ -34,7 +26,7 @@ internal sealed class ScopeWorker : IDisposable
     private int _threadExited;
     private int _resourcesReleased;
     private int _consecutiveWorkerLoopFaults;
-    private ScopeWorkerShutdownResult _shutdownResult;
+    private int _exitRequested;
     private ScopeWorkerStartState _startState;
 
     public ScopeWorker(ScopeRuntime runtime)
@@ -47,8 +39,6 @@ internal sealed class ScopeWorker : IDisposable
             Name = $"LayerBase.Scope.{runtime.Descriptor.Name}"
         };
     }
-
-    public ScopeWorkerShutdownResult ShutdownResult => _shutdownResult;
 
     public ScopeWorkerStartState StartState => _startState;
 
@@ -94,44 +84,37 @@ internal sealed class ScopeWorker : IDisposable
         }
     }
 
-    internal ScopeWorkerShutdownResult Stop(in ShutdownDeadline deadline)
+    internal void RequestExitAfterScopeStopped()
     {
-        if (_startState == ScopeWorkerStartState.StartFailed)
+        if (_runtime.State != ScopeRuntimeState.Stopped)
         {
-            if (!_thread.IsAlive)
-            {
-                ReleaseResources();
-                return ScopeWorkerShutdownResult.AlreadyStopped;
-            }
+            throw new InvalidOperationException(
+                "Worker exit requires a stopped Scope.");
         }
 
+        if (Interlocked.Exchange(ref _exitRequested, 1) == 0)
+            SignalWork();
+    }
+
+    internal bool WaitForExit(in ShutdownDeadline deadline)
+    {
         if (!_startedThread)
         {
             _runtime.DisposeUnstarted();
             ReleaseResources();
-            return ScopeWorkerShutdownResult.AlreadyStopped;
-        }
-
-        _startState = ScopeWorkerStartState.Stopping;
-
-        try
-        {
-            _workSignal.Set();
-        }
-        catch (ObjectDisposedException)
-        {
+            return true;
         }
 
         if (!_thread.IsAlive)
         {
             _startState = ScopeWorkerStartState.Exited;
             ReleaseResources();
-            return ScopeWorkerShutdownResult.AlreadyStopped;
+            return true;
         }
 
         if (ReferenceEquals(Thread.CurrentThread, _thread))
         {
-            return ScopeWorkerShutdownResult.TimedOut;
+            return false;
         }
 
         int remaining = deadline.RemainingMilliseconds;
@@ -139,14 +122,13 @@ internal sealed class ScopeWorker : IDisposable
         if (remaining <= 0 || !_thread.Join(remaining))
         {
             _thread.IsBackground = true;
-
-            return ScopeWorkerShutdownResult.TimedOut;
+            return false;
         }
 
         _startState = ScopeWorkerStartState.Exited;
         ReleaseResources();
 
-        return ScopeWorkerShutdownResult.Stopped;
+        return true;
     }
 
     public void Dispose()
@@ -157,8 +139,11 @@ internal sealed class ScopeWorker : IDisposable
         _disposed = true;
 
         var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(5));
-
-        _shutdownResult = Stop(in deadline);
+        if (_runtime.State == ScopeRuntimeState.Stopped)
+            RequestExitAfterScopeStopped();
+        else
+            SignalWork();
+        _ = WaitForExit(in deadline);
     }
 
     internal bool ResourcesReleased =>
@@ -232,22 +217,11 @@ internal sealed class ScopeWorker : IDisposable
         }
         finally
         {
-            try
-            {
-                if (_runtime.State !=
-                    ScopeRuntimeState.Disposed)
-                {
-                    _runtime.RunRuntimeStop();
-                }
-            }
-            finally
-            {
-                SynchronizationContext.SetSynchronizationContext(
-                    previousContext);
-                Volatile.Write(ref _threadExited, 1);
-                _startState = ScopeWorkerStartState.Exited;
-                TryReleaseResourcesAfterExit();
-            }
+            SynchronizationContext.SetSynchronizationContext(
+                previousContext);
+            Volatile.Write(ref _threadExited, 1);
+            _startState = ScopeWorkerStartState.Exited;
+            TryReleaseResourcesAfterExit();
         }
     }
 
@@ -267,49 +241,54 @@ internal sealed class ScopeWorker : IDisposable
                 ? 1f / tick.RateHz
                 : 0f;
 
-        while (_runtime.State !=
-               ScopeRuntimeState.Disposed &&
-               _runtime.State !=
-               ScopeRuntimeState.Faulted)
+        while (true)
         {
             try
             {
-                _runtime.PumpWorkerImmediateWork();
-
-                if (_runtime.State ==
-                    ScopeRuntimeState.Disposed)
+                switch (_runtime.State)
                 {
-                    break;
+                    case ScopeRuntimeState.Created:
+                    case ScopeRuntimeState.Ready:
+                    case ScopeRuntimeState.Running:
+                        PumpRunningScope(
+                            in tick,
+                            intervalTimestampTicks,
+                            fixedDeltaTime,
+                            ref nextTickDeadline);
+                        break;
+
+                    case ScopeRuntimeState.StopRequested:
+                    case ScopeRuntimeState.Draining:
+                        _runtime.PumpTerminalDrainStep();
+                        if (!_runtime.HasImmediateWork)
+                            _workSignal.WaitOne(1);
+                        break;
+
+                    case ScopeRuntimeState.Stopped:
+                        _runtime.PumpIngress();
+                        if (_runtime.State == ScopeRuntimeState.Disposed)
+                            return;
+
+                        if (Volatile.Read(ref _exitRequested) == 0 &&
+                            !Volatile.Read(ref _disposed))
+                        {
+                            _workSignal.WaitOne();
+                            break;
+                        }
+
+                        _runtime.DisposeStoppedOnOwnerThread();
+                        return;
+
+                    case ScopeRuntimeState.Disposed:
+                    case ScopeRuntimeState.Faulted:
+                        return;
+
+                    default:
+                        _runtime.PumpWorkerImmediateWork();
+                        if (!_runtime.HasImmediateWork)
+                            _workSignal.WaitOne(1);
+                        break;
                 }
-
-                long now =
-                    Stopwatch.GetTimestamp();
-
-                if (now >= nextTickDeadline)
-                {
-                    PumpDueTicks(
-                        in tick,
-                        intervalTimestampTicks,
-                        fixedDeltaTime,
-                        ref nextTickDeadline);
-
-                    _consecutiveWorkerLoopFaults = 0;
-                    continue;
-                }
-
-                if (_runtime.HasImmediateWork)
-                {
-                    _consecutiveWorkerLoopFaults = 0;
-                    continue;
-                }
-
-                int waitMilliseconds =
-                    CalculateWaitMilliseconds(
-                        now,
-                        nextTickDeadline);
-
-                _workSignal.WaitOne(
-                    waitMilliseconds);
 
                 _consecutiveWorkerLoopFaults = 0;
             }
@@ -329,6 +308,48 @@ internal sealed class ScopeWorker : IDisposable
                     ScopeFaultPhase.WorkerLoop);
             }
         }
+    }
+
+    private void PumpRunningScope(
+        in ScopeTickOptions tick,
+        long intervalTimestampTicks,
+        float fixedDeltaTime,
+        ref long nextTickDeadline)
+    {
+        _runtime.PumpWorkerImmediateWork();
+
+        if (_runtime.State is not (
+                ScopeRuntimeState.Created or
+                ScopeRuntimeState.Ready or
+                ScopeRuntimeState.Running))
+        {
+            return;
+        }
+
+        long now =
+            Stopwatch.GetTimestamp();
+
+        if (now >= nextTickDeadline)
+        {
+            PumpDueTicks(
+                in tick,
+                intervalTimestampTicks,
+                fixedDeltaTime,
+                ref nextTickDeadline);
+
+            return;
+        }
+
+        if (_runtime.HasImmediateWork)
+            return;
+
+        int waitMilliseconds =
+            CalculateWaitMilliseconds(
+                now,
+                nextTickDeadline);
+
+        _workSignal.WaitOne(
+            waitMilliseconds);
     }
 
     private static long CalculateIntervalTimestampTicks(

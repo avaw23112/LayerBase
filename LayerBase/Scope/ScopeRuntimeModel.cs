@@ -13,13 +13,71 @@ internal delegate void FixedUpdateInvoker(float fixedDeltaTime);
 public enum ScopeRuntimeState
 {
     Created = 0,
-    Running = 1,
-    StopRequested = 2,
-    Stopping = 3,
-    Stopped = 4,
-    Disposing = 5,
-    Disposed = 6,
-    Faulted = 7
+    Ready = 1,
+    Running = 2,
+    StopRequested = 3,
+    Draining = 4,
+    Stopped = 5,
+    Disposing = 6,
+    Disposed = 7,
+    Faulted = 8
+}
+
+internal enum ScopeDrainPhase : byte
+{
+    None,
+    ClosingIngress,
+    DrainingAcceptedWork,
+    SealingLocalProducers,
+    RunningRuntimeStop,
+    WaitingForWorkerExit,
+    Disposing,
+    Completed,
+    Faulted
+}
+
+internal readonly struct ScopeDrainSnapshot
+{
+    public ScopeDrainSnapshot(
+        int eventCount,
+        int callCount,
+        int completionCount,
+        int postCount,
+        int continuationCount,
+        int workerJobCount,
+        int asyncOperationCount)
+    {
+        EventCount = eventCount;
+        CallCount = callCount;
+        CompletionCount = completionCount;
+        PostCount = postCount;
+        ContinuationCount = continuationCount;
+        WorkerJobCount = workerJobCount;
+        AsyncOperationCount = asyncOperationCount;
+    }
+
+    public int EventCount { get; }
+
+    public int CallCount { get; }
+
+    public int CompletionCount { get; }
+
+    public int PostCount { get; }
+
+    public int ContinuationCount { get; }
+
+    public int WorkerJobCount { get; }
+
+    public int AsyncOperationCount { get; }
+
+    public bool IsEmpty =>
+        EventCount == 0 &&
+        CallCount == 0 &&
+        CompletionCount == 0 &&
+        PostCount == 0 &&
+        ContinuationCount == 0 &&
+        WorkerJobCount == 0 &&
+        AsyncOperationCount == 0;
 }
 
 public enum ScopeSafePointState : byte

@@ -168,6 +168,24 @@ public sealed class WorkerShutdownTimeoutTests
 
         blockEvent.Set();
 
+        var stopDeadline = DateTime.UtcNow.AddSeconds(10);
+        while (worker.Runtime.State != ScopeRuntimeState.Stopped &&
+               worker.Runtime.State != ScopeRuntimeState.Disposed &&
+               DateTime.UtcNow < stopDeadline)
+        {
+            Thread.Sleep(50);
+        }
+
+        Assert.That(worker.Runtime.State, Is.EqualTo(ScopeRuntimeState.Stopped),
+            "Worker scope should finish its owner-thread stop after the blocked update returns.");
+        Assert.That(worker.ResourcesReleased, Is.False,
+            "Timeout must not force worker resources to be released before an exit request.");
+
+        worker.RequestExitAfterScopeStopped();
+        var exitDeadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(5));
+        Assert.That(worker.WaitForExit(in exitDeadline), Is.True,
+            "Worker should exit after Stop has completed and an exit request is issued.");
+
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (!worker.ResourcesReleased && DateTime.UtcNow < deadline)
             Thread.Sleep(50);

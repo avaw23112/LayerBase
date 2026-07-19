@@ -37,11 +37,14 @@ internal sealed class ScopeRuntime : IDisposable
     private bool _runtimeStopRun;
     private bool _lifecycleDisposeRun;
     private bool _disposeRequestedFromControl;
+    private bool _localProducersSealed;
+    private ScopeDrainPhase _drainPhase;
     private int _ownerThreadId;
     private int _hasIngress;
     private long _tickCount;
     private long _faultCount;
     private ScopeCallCompletion<ScopeDisposeResponse>? _pendingDisposeCompletion;
+    private readonly List<ScopeCallCompletion<ScopeStopResponse>> _pendingStopCompletions = new();
     private readonly ConcurrentDictionary<Type, IDelayPublisherInternal> _delayPublishers = new();
 
     private readonly Action<Exception> _eventExpectationFaultReporter;
@@ -421,6 +424,13 @@ internal sealed class ScopeRuntime : IDisposable
 
     public void PumpIngress()
     {
+        if (_state == ScopeRuntimeState.StopRequested ||
+            _state == ScopeRuntimeState.Draining)
+        {
+            PumpTerminalDrainStep();
+            return;
+        }
+
         if (Interlocked.Exchange(ref _hasIngress, 0) == 0)
             return;
 
@@ -437,6 +447,12 @@ internal sealed class ScopeRuntime : IDisposable
         if (_state == ScopeRuntimeState.Disposed)
             return;
 
+        if (_state is ScopeRuntimeState.StopRequested or ScopeRuntimeState.Draining)
+        {
+            PumpTerminalDrainStep();
+            return;
+        }
+
         if (ShouldYieldBusinessForSafePoint())
         {
             if (Transport.CompletionInbox.Count != 0)
@@ -447,6 +463,9 @@ internal sealed class ScopeRuntime : IDisposable
 
         DrainEventInbox();
         DisposeAfterControlIfNeeded();
+
+        if (_state is ScopeRuntimeState.StopRequested or ScopeRuntimeState.Draining)
+            PumpTerminalDrainStep();
 
         if (Transport.CompletionInbox.Count != 0)
             Volatile.Write(ref _hasIngress, 1);
@@ -674,7 +693,7 @@ internal sealed class ScopeRuntime : IDisposable
     private bool CanPumpLifecycle()
     {
         return _safePointState == ScopeSafePointState.Running &&
-               _state is ScopeRuntimeState.Created or ScopeRuntimeState.Running or ScopeRuntimeState.StopRequested;
+               _state is ScopeRuntimeState.Created or ScopeRuntimeState.Ready or ScopeRuntimeState.Running;
     }
 
     public void RequireOwnerThread()
@@ -888,8 +907,7 @@ internal sealed class ScopeRuntime : IDisposable
 
         try
         {
-            StopOnOwnerThread();
-            queuedCall.Completion.TrySetResult(new ScopeStopResponse(ScopeControlResult.Succeeded));
+            BeginStopRequestOnOwnerThread(queuedCall.Completion);
         }
         catch (Exception ex)
         {
@@ -918,12 +936,20 @@ internal sealed class ScopeRuntime : IDisposable
 
         try
         {
-            if (_state != ScopeRuntimeState.Stopped)
-                StopOnOwnerThread();
+            if (_state == ScopeRuntimeState.Disposed)
+            {
+                queuedCall.Completion.TrySetResult(
+                    new ScopeDisposeResponse(ScopeControlResult.Succeeded));
+                return;
+            }
 
-            _state = ScopeRuntimeState.Disposing;
             _pendingDisposeCompletion = queuedCall.Completion;
             _disposeRequestedFromControl = true;
+
+            if (_state != ScopeRuntimeState.Stopped)
+                BeginStopRequestOnOwnerThread(null);
+
+            DisposeAfterControlIfNeeded();
         }
         catch (Exception ex)
         {
@@ -1244,7 +1270,7 @@ internal sealed class ScopeRuntime : IDisposable
     internal ScopeEnterSafePointResponse EnterSafePointForSnap()
     {
         RequireOwnerThread();
-        if (_state is ScopeRuntimeState.Stopping or ScopeRuntimeState.Stopped or ScopeRuntimeState.Disposing or ScopeRuntimeState.Disposed or ScopeRuntimeState.Faulted)
+        if (_state is ScopeRuntimeState.StopRequested or ScopeRuntimeState.Draining or ScopeRuntimeState.Stopped or ScopeRuntimeState.Disposing or ScopeRuntimeState.Disposed or ScopeRuntimeState.Faulted)
             throw new InvalidOperationException($"Scope `{Descriptor.Name}` cannot enter FullSnap safe point from state {_state}.");
 
         if (_safePointState == ScopeSafePointState.Frozen)
@@ -1471,25 +1497,162 @@ internal sealed class ScopeRuntime : IDisposable
         return new ScopeExitSafePointResponse(ScopeControlResult.Succeeded);
     }
 
-    internal void StopOnOwnerThread()
+    internal void PumpTerminalDrainStep()
     {
-        if (_state == ScopeRuntimeState.Disposed ||
-            _state == ScopeRuntimeState.Disposing ||
-            _state == ScopeRuntimeState.Stopped)
+        RequireOwnerThread();
+
+        if (_state == ScopeRuntimeState.StopRequested)
+            _state = ScopeRuntimeState.Draining;
+
+        if (_state != ScopeRuntimeState.Draining)
+            return;
+
+        Interlocked.Exchange(ref _hasIngress, 0);
+        DrainCompletionInbox();
+        DrainFaultInbox();
+        DrainCallInbox();
+        DrainEventInbox();
+
+        PumpSynchronizationContext(
+            CompletionExceptionPolicy.Throw,
+            reportException: null);
+        PostScheduler?.Pump();
+        PumpEventExpectations();
+
+        if (!_localProducersSealed && CanSealLocalProducers())
+            SealLocalProducers();
+
+        if (!IsCompletelyDrained())
         {
+            Volatile.Write(ref _hasIngress, 1);
             return;
         }
 
-        _state = ScopeRuntimeState.Stopping;
+        CompleteRuntimeStop();
+        DisposeAfterControlIfNeeded();
+    }
+
+    private void BeginStopRequestOnOwnerThread(
+        ScopeCallCompletion<ScopeStopResponse>? completion)
+    {
+        RequireOwnerThread();
+
+        if (_state == ScopeRuntimeState.Stopped)
+        {
+            completion?.TrySetResult(BuildSuccessfulStopResponse());
+            return;
+        }
+
+        if (_state == ScopeRuntimeState.Disposed)
+        {
+            completion?.TrySetException(new ObjectDisposedException(nameof(ScopeRuntime)));
+            return;
+        }
+
+        if (completion != null)
+            _pendingStopCompletions.Add(completion);
+
+        if (_state is ScopeRuntimeState.StopRequested or ScopeRuntimeState.Draining)
+            return;
+
+        _state = ScopeRuntimeState.StopRequested;
+        _drainPhase = ScopeDrainPhase.ClosingIngress;
         Transport.CloseBusinessAdmission();
-        WorkerJobs.BeginStopOnOwnerThread();
+        _state = ScopeRuntimeState.Draining;
+        _drainPhase = ScopeDrainPhase.DrainingAcceptedWork;
+        Volatile.Write(ref _hasIngress, 1);
+    }
+
+    private bool CanSealLocalProducers()
+    {
+        ScopeDrainSnapshot snapshot = CaptureDrainSnapshot();
+        return snapshot.EventCount == 0 &&
+               snapshot.CallCount == 0 &&
+               snapshot.CompletionCount == 0 &&
+               snapshot.PostCount == 0 &&
+               snapshot.ContinuationCount == 0 &&
+               snapshot.AsyncOperationCount == 0;
+    }
+
+    private void SealLocalProducers()
+    {
+        RequireOwnerThread();
+
+        _drainPhase = ScopeDrainPhase.SealingLocalProducers;
+        WorkerJobs.CloseAdmissionOnOwnerThread();
+        _asyncCallOperations.CloseAdmission();
+        _scopeLifetimeCancellation.Cancel(throwOnFirstException: false);
+        _localProducersSealed = true;
+    }
+
+    private bool IsCompletelyDrained()
+    {
+        return CaptureDrainSnapshot().IsEmpty;
+    }
+
+    private void CompleteRuntimeStop()
+    {
+        RequireOwnerThread();
+
+        ScopeDrainSnapshot before = CaptureDrainSnapshot();
+        if (!before.IsEmpty)
+        {
+            throw new InvalidOperationException(
+                "RuntimeStop cannot run before Scope drain completes.");
+        }
+
+        _drainPhase = ScopeDrainPhase.RunningRuntimeStop;
         RunRuntimeStop();
+
+        ScopeDrainSnapshot after = CaptureDrainSnapshot();
+        if (!after.IsEmpty)
+        {
+            throw new InvalidOperationException(
+                "RuntimeStop created new asynchronous work.");
+        }
+
         _state = ScopeRuntimeState.Stopped;
+        _drainPhase = ScopeDrainPhase.WaitingForWorkerExit;
+        CompleteAllStopResponses(after);
+    }
+
+    private ScopeStopResponse BuildSuccessfulStopResponse()
+    {
+        return new ScopeStopResponse(
+            ScopeControlResult.Succeeded,
+            CaptureDrainSnapshot());
+    }
+
+    private void CompleteAllStopResponses(ScopeDrainSnapshot snapshot)
+    {
+        var response = new ScopeStopResponse(
+            ScopeControlResult.Succeeded,
+            snapshot);
+
+        for (int i = 0; i < _pendingStopCompletions.Count; i++)
+            _pendingStopCompletions[i].TrySetResult(response);
+
+        _pendingStopCompletions.Clear();
+    }
+
+    private ScopeDrainSnapshot CaptureDrainSnapshot()
+    {
+        return new ScopeDrainSnapshot(
+            Transport.EventInbox.CaptureDiagnostics().Count,
+            Transport.CallInbox.CaptureDiagnostics().Count,
+            Transport.CompletionInbox.Count,
+            PostScheduler?.PendingCount ?? 0,
+            SynchronizationContext != null && SynchronizationContext.HasReadyWork ? 1 : 0,
+            WorkerJobs.ActiveCount,
+            _asyncCallOperations.ActiveCount);
     }
 
     private void DisposeAfterControlIfNeeded()
     {
         if (!_disposeRequestedFromControl)
+            return;
+
+        if (_state != ScopeRuntimeState.Stopped)
             return;
 
         if (!WorkerJobs.CanDispose)
@@ -1781,7 +1944,7 @@ internal sealed class ScopeRuntime : IDisposable
         _disposeRequestedFromControl = false;
         _pendingDisposeCompletion = null;
         if (_state != ScopeRuntimeState.Stopped)
-            StopOnOwnerThread();
+            StopAndDrainSynchronouslyOnOwnerThread();
 
         _asyncCallOperations.CloseAdmission();
         _scopeLifetimeCancellation.Cancel();
@@ -1843,6 +2006,27 @@ internal sealed class ScopeRuntime : IDisposable
         disposeCompletion?.TrySetResult(new ScopeDisposeResponse(ScopeControlResult.Succeeded));
         _callbacks.Detach();
         Transport.Dispose();
+    }
+
+    internal void DisposeStoppedOnOwnerThread()
+    {
+        RequireOwnerThread();
+
+        if (_state != ScopeRuntimeState.Stopped &&
+            _state != ScopeRuntimeState.Disposed)
+        {
+            throw new InvalidOperationException(
+                "Scope must be stopped before owner-thread worker disposal.");
+        }
+
+        DisposeOwnerThreadResources();
+    }
+
+    private void StopAndDrainSynchronouslyOnOwnerThread()
+    {
+        BeginStopRequestOnOwnerThread(null);
+        while (_state is ScopeRuntimeState.StopRequested or ScopeRuntimeState.Draining)
+            PumpTerminalDrainStep();
     }
 
     private void ReleaseDelayPublishers()

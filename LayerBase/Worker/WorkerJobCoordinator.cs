@@ -279,6 +279,13 @@ internal sealed class WorkerJobCoordinator : IDisposable
         }
     }
 
+    internal void CloseAdmissionOnOwnerThread()
+    {
+        RequireOwnerThreadDebug();
+
+        _accepting = false;
+    }
+
     internal void DisposeOnOwnerThread()
     {
         RequireOwnerThreadDebug();

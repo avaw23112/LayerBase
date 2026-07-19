@@ -26,12 +26,17 @@ internal readonly struct ScopeStopCall
 
 internal readonly struct ScopeStopResponse
 {
-    public ScopeStopResponse(ScopeControlResult state)
+    public ScopeStopResponse(ScopeControlResult result, ScopeDrainSnapshot snapshot)
     {
-        State = state;
+        Result = result;
+        Snapshot = snapshot;
     }
 
-    public ScopeControlResult State { get; }
+    public ScopeControlResult Result { get; }
+
+    public ScopeControlResult State => Result;
+
+    public ScopeDrainSnapshot Snapshot { get; }
 }
 
 internal readonly struct ScopeDisposeCall
