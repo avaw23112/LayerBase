@@ -828,6 +828,15 @@ internal sealed class ScopeRuntime : IDisposable
             case ScopeLifecycleRouteIds.RuntimeStart:
                 DispatchRuntimeStartControl(envelope);
                 return true;
+            case ScopeLifecycleRouteIds.Prewarm:
+                DispatchPrewarmControl(envelope);
+                return true;
+            case ScopeLifecycleRouteIds.FreezeRuntimeRegistries:
+                DispatchFreezeRuntimeRegistriesControl(envelope);
+                return true;
+            case ScopeLifecycleRouteIds.RecompileTimerPlans:
+                DispatchRecompileTimerPlansControl(envelope);
+                return true;
             default:
                 envelope.Completion?.TrySetException(
                     new InvalidOperationException($"Unknown scope lifecycle control route {envelope.RouteId}."));
@@ -1044,6 +1053,97 @@ internal sealed class ScopeRuntime : IDisposable
                 new ScopeCaptureDiagnosticsResponse(
                     ScopeControlResult.Succeeded,
                     CaptureDiagnosticsOnOwnerThread()));
+        }
+        catch (Exception ex)
+        {
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchPrewarmControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopePrewarmCall, ScopePrewarmResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope prewarm payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            RequireOwnerThread();
+            LayerPrewarmOptions options = queuedCall.Request.Options;
+            Prewarm(in options);
+            queuedCall.Completion.TrySetResult(new ScopePrewarmResponse(ScopeControlResult.Succeeded));
+        }
+        catch (Exception ex)
+        {
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchFreezeRuntimeRegistriesControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeFreezeRuntimeRegistriesCall, ScopeFreezeRuntimeRegistriesResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope freeze payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            RequireOwnerThread();
+            FreezeRuntimeRegistries();
+            queuedCall.Completion.TrySetResult(new ScopeFreezeRuntimeRegistriesResponse(ScopeControlResult.Succeeded));
+        }
+        catch (Exception ex)
+        {
+            queuedCall.Completion.TrySetException(ex);
+        }
+    }
+
+    private void DispatchRecompileTimerPlansControl(ScopeCallEnvelope envelope)
+    {
+        if (!Transport.CallPayloadStorage.TryGet<ScopeQueuedCall<ScopeRecompileTimerPlansCall, ScopeRecompileTimerPlansResponse>>(
+                _runtimeId,
+                envelope.Payload,
+                out var queuedCall))
+        {
+            envelope.Completion?.TrySetException(
+                new InvalidOperationException("Scope timer recompile payload is no longer available."));
+            return;
+        }
+
+        if (queuedCall.CancellationToken.IsCancellationRequested)
+        {
+            queuedCall.Completion.TrySetCanceled(queuedCall.CancellationToken);
+            return;
+        }
+
+        try
+        {
+            RequireOwnerThread();
+            CompileTimerPlans();
+            queuedCall.Completion.TrySetResult(new ScopeRecompileTimerPlansResponse(ScopeControlResult.Succeeded));
         }
         catch (Exception ex)
         {

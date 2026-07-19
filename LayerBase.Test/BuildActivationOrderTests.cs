@@ -17,6 +17,7 @@ public sealed class BuildActivationOrderTests
         LayerHub.Reset();
         BuildOrderPrewarmProbe.Trace = null;
         BuildOrderPrewarmProbe.Centers = null;
+        BuildOrderPrewarmProbe.ThreadsByCenter = null;
         BuildOrderPrewarmProbe.EnsureRegistered();
     }
 
@@ -25,6 +26,7 @@ public sealed class BuildActivationOrderTests
     {
         BuildOrderPrewarmProbe.Trace = null;
         BuildOrderPrewarmProbe.Centers = null;
+        BuildOrderPrewarmProbe.ThreadsByCenter = null;
     }
 
     [Test]
@@ -99,6 +101,35 @@ public sealed class BuildActivationOrderTests
         Assert.That(runtime.CompositionPlan.Scopes.Select(static scope => scope.Descriptor.ScopeId),
             Does.Contain(BuildOrderScope.ScopeId));
         Assert.That(centers.Select(static center => center.GetHashCode()).Distinct().Count(), Is.GreaterThanOrEqualTo(2));
+    }
+
+    [Test]
+    public void Worker_scope_prewarm_runs_on_worker_owner_thread()
+    {
+        var threadsByCenter = new Dictionary<EventCenter, int>();
+        BuildOrderPrewarmProbe.ThreadsByCenter = threadsByCenter;
+
+        using var runtime = LayerHub.CreateLayers()
+                                    .Push(new BuildOrderLayer(new List<string>()))
+                                    .AddAssemblyModule(new TestAssemblyModule(
+                                        "worker-scope",
+                                        services: new[]
+                                        {
+                                            ServiceContribution.ForTypes(
+                                                typeof(IScopedBuildOrderService),
+                                                typeof(ScopedBuildOrderService),
+                                                typeof(BuildOrderLayer),
+                                                typeof(BuildOrderWorkerScope),
+                                                ServiceLifetime.Singleton)
+                                        }))
+                                    .Build();
+
+        ScopeRuntime workerScope = runtime.ScopeHost.Scopes.Single(static scope =>
+            scope.ScopeId == BuildOrderWorkerScope.ScopeId);
+
+        Assert.That(workerScope.Options.Threading, Is.EqualTo(ScopeThreadingMode.Worker));
+        Assert.That(threadsByCenter.TryGetValue(workerScope.EventCenter, out int prewarmThreadId), Is.True);
+        Assert.That(prewarmThreadId, Is.EqualTo(workerScope.OwnerThreadId));
     }
 
     [Test]
@@ -214,6 +245,13 @@ public sealed class BuildActivationOrderTests
         
     }
 
+    private sealed class BuildOrderWorkerScope : IScopeDefinition
+    {
+        public const int ScopeId = 27;
+
+        public ScopeOptions Options => ScopeOptions.Worker(tickRateHz: 30);
+    }
+
     private sealed class TestAssemblyModule : IAssemblyModule
     {
         public TestAssemblyModule(
@@ -243,6 +281,8 @@ public sealed class BuildActivationOrderTests
 
         public static List<EventCenter>? Centers;
 
+        public static Dictionary<EventCenter, int>? ThreadsByCenter;
+
         public static void EnsureRegistered()
         {
             if (Interlocked.Exchange(ref s_registered, 1) != 0)
@@ -252,6 +292,7 @@ public sealed class BuildActivationOrderTests
             {
                 Trace?.Add("Prewarm");
                 Centers?.Add(center);
+                ThreadsByCenter?.Add(center, Environment.CurrentManagedThreadId);
             });
         }
     }

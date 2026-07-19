@@ -265,8 +265,24 @@ public sealed partial class LayerRuntime : IDisposable
 
     internal void RecompileTimerPlans()
     {
+        if (!_scopeHost.HasAnyWorkerStarted)
+        {
+            foreach (var scope in _scopeHost.Scopes)
+                scope.CompileTimerPlans();
+            return;
+        }
+
+        var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
         foreach (var scope in _scopeHost.Scopes)
-            scope.CompileTimerPlans();
+        {
+            ScopeRecompileTimerPlansResponse response = ScopeControlBarrier.Wait(
+                ScopeOwnerInvocation.InvokeAsync<ScopeRecompileTimerPlansCall, ScopeRecompileTimerPlansResponse>(
+                    scope,
+                    new ScopeRecompileTimerPlansCall()),
+                in deadline,
+                $"{scope.Descriptor.Name}.RecompileTimerPlans");
+            ScopeControlBarrier.EnsureSucceeded(response.Result, "RecompileTimerPlans", scope);
+        }
     }
 
     internal void InstallScopeHost(ScopeExecutionPlan[] plans)
@@ -335,16 +351,46 @@ public sealed partial class LayerRuntime : IDisposable
         if (_disposed || _state is RuntimeState.Disposing or RuntimeState.Disposed)
             throw new ObjectDisposedException(nameof(LayerRuntime));
 
+        var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
         foreach (var scope in _scopeHost.Scopes)
-            scope.Prewarm(in options);
+        {
+            if (!_scopeHost.HasAnyWorkerStarted)
+            {
+                scope.Prewarm(in options);
+                continue;
+            }
+
+            ScopePrewarmResponse response = ScopeControlBarrier.Wait(
+                ScopeOwnerInvocation.InvokeAsync<ScopePrewarmCall, ScopePrewarmResponse>(
+                    scope,
+                    new ScopePrewarmCall(options)),
+                in deadline,
+                $"{scope.Descriptor.Name}.Prewarm");
+            ScopeControlBarrier.EnsureSucceeded(response.Result, "Prewarm", scope);
+        }
 
         return this;
     }
 
     internal void FreezeRuntimeRegistries()
     {
+        var deadline = ShutdownDeadline.Start(TimeSpan.FromSeconds(15));
         foreach (var scope in _scopeHost.Scopes)
-            scope.FreezeRuntimeRegistries();
+        {
+            if (!_scopeHost.HasAnyWorkerStarted)
+            {
+                scope.FreezeRuntimeRegistries();
+                continue;
+            }
+
+            ScopeFreezeRuntimeRegistriesResponse response = ScopeControlBarrier.Wait(
+                ScopeOwnerInvocation.InvokeAsync<ScopeFreezeRuntimeRegistriesCall, ScopeFreezeRuntimeRegistriesResponse>(
+                    scope,
+                    new ScopeFreezeRuntimeRegistriesCall()),
+                in deadline,
+                $"{scope.Descriptor.Name}.FreezeRuntimeRegistries");
+            ScopeControlBarrier.EnsureSucceeded(response.Result, "FreezeRuntimeRegistries", scope);
+        }
     }
 
     private void RegisterFullSnapNode(IGeneratedFullSnapNode node, int layerIndex, int objectSlot)

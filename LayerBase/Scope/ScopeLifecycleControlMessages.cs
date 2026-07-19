@@ -1,4 +1,5 @@
 using LayerBase.Async;
+using LayerBase.Core.Event;
 using LayerBase.Snap;
 
 namespace LayerBase.Scope;
@@ -45,6 +46,54 @@ internal readonly struct ScopeDisposeResponse
     }
 
     public ScopeControlResult State { get; }
+}
+
+internal readonly struct ScopePrewarmCall
+{
+    public ScopePrewarmCall(LayerPrewarmOptions options)
+    {
+        Options = options;
+    }
+
+    public LayerPrewarmOptions Options { get; }
+}
+
+internal readonly struct ScopePrewarmResponse
+{
+    public ScopePrewarmResponse(ScopeControlResult result)
+    {
+        Result = result;
+    }
+
+    public ScopeControlResult Result { get; }
+}
+
+internal readonly struct ScopeFreezeRuntimeRegistriesCall
+{
+}
+
+internal readonly struct ScopeFreezeRuntimeRegistriesResponse
+{
+    public ScopeFreezeRuntimeRegistriesResponse(ScopeControlResult result)
+    {
+        Result = result;
+    }
+
+    public ScopeControlResult Result { get; }
+}
+
+internal readonly struct ScopeRecompileTimerPlansCall
+{
+}
+
+internal readonly struct ScopeRecompileTimerPlansResponse
+{
+    public ScopeRecompileTimerPlansResponse(ScopeControlResult result)
+    {
+        Result = result;
+    }
+
+    public ScopeControlResult Result { get; }
 }
 
 internal readonly struct ScopeEnterSafePointCall
@@ -198,6 +247,12 @@ internal static class ScopeLifecycleRouteIds
 
     public const int RuntimeStart = -110;
 
+    public const int Prewarm = -111;
+
+    public const int FreezeRuntimeRegistries = -112;
+
+    public const int RecompileTimerPlans = -113;
+
     public static int Resolve<TRequest, TResponse>()
         where TRequest : struct
         where TResponse : struct
@@ -260,6 +315,24 @@ internal static class ScopeLifecycleRouteIds
             typeof(TResponse) == typeof(ScopeRuntimeStartResponse))
         {
             return RuntimeStart;
+        }
+
+        if (typeof(TRequest) == typeof(ScopePrewarmCall) &&
+            typeof(TResponse) == typeof(ScopePrewarmResponse))
+        {
+            return Prewarm;
+        }
+
+        if (typeof(TRequest) == typeof(ScopeFreezeRuntimeRegistriesCall) &&
+            typeof(TResponse) == typeof(ScopeFreezeRuntimeRegistriesResponse))
+        {
+            return FreezeRuntimeRegistries;
+        }
+
+        if (typeof(TRequest) == typeof(ScopeRecompileTimerPlansCall) &&
+            typeof(TResponse) == typeof(ScopeRecompileTimerPlansResponse))
+        {
+            return RecompileTimerPlans;
         }
 
         throw new InvalidOperationException(
@@ -337,6 +410,34 @@ internal static class ScopeLifecycleControlExtensions
     {
         return scope.EnqueueControlCall<ScopeCaptureDiagnosticsCall, ScopeCaptureDiagnosticsResponse>(
             new ScopeCaptureDiagnosticsCall(),
+            cancellationToken);
+    }
+
+    public static LBTask<ScopePrewarmResponse> RequestPrewarmAsync(
+        this ScopeRuntime scope,
+        LayerPrewarmOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return scope.EnqueueControlCall<ScopePrewarmCall, ScopePrewarmResponse>(
+            new ScopePrewarmCall(options),
+            cancellationToken);
+    }
+
+    public static LBTask<ScopeFreezeRuntimeRegistriesResponse> RequestFreezeRuntimeRegistriesAsync(
+        this ScopeRuntime scope,
+        CancellationToken cancellationToken = default)
+    {
+        return scope.EnqueueControlCall<ScopeFreezeRuntimeRegistriesCall, ScopeFreezeRuntimeRegistriesResponse>(
+            new ScopeFreezeRuntimeRegistriesCall(),
+            cancellationToken);
+    }
+
+    public static LBTask<ScopeRecompileTimerPlansResponse> RequestRecompileTimerPlansAsync(
+        this ScopeRuntime scope,
+        CancellationToken cancellationToken = default)
+    {
+        return scope.EnqueueControlCall<ScopeRecompileTimerPlansCall, ScopeRecompileTimerPlansResponse>(
+            new ScopeRecompileTimerPlansCall(),
             cancellationToken);
     }
 }
