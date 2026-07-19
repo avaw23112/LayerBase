@@ -32,4 +32,6 @@ public struct CoalescedSlot
     public long LastSequenceId;
     public int MergeCount;
     public bool Active;
+    internal LinkedListNode<CoalescedSlotKey>? GlobalOrderNode;
+    internal LinkedListNode<CoalescedSlotKey>? TypeOrderNode;
 }

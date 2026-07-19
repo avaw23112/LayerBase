@@ -27,7 +27,8 @@ public sealed class PostScheduler : IDisposable
 
     // Coalesced: Data Coalescing (Payload merging) - Keep for now, but in slow path
     private readonly Dictionary<CoalescedSlotKey, CoalescedSlot> _coalescedBuffer = new();
-    private readonly List<CoalescedSlotKey> _pendingCoalesced = new();
+    private readonly LinkedList<CoalescedSlotKey> _pendingCoalesced = new();
+    private readonly Dictionary<int, LinkedList<CoalescedSlotKey>> _pendingCoalescedByType = new();
 
     // Latest: Data Coalescing (Last payload only)
     private PayloadHandle[] _latestBuffer = new PayloadHandle[256];
@@ -191,6 +192,7 @@ public sealed class PostScheduler : IDisposable
         _latestBits.ClearPending();
         _latestBits.ClearSnapshot();
         _pendingCoalesced.Clear();
+        _pendingCoalescedByType.Clear();
         _coalescedBuffer.Clear();
         _snapshotCoalesced.Clear();
         _dirtySnapshotCursor.Reset();
@@ -528,12 +530,7 @@ public sealed class PostScheduler : IDisposable
         else
         {
             int perTypeLimit = plan.MaxPending > 0 ? plan.MaxPending : _options.MaxSpecialPending;
-            int typeCount = 0;
-            foreach (var kv in _coalescedBuffer)
-            {
-                if (kv.Key.EventTypeId == typeId)
-                    typeCount++;
-            }
+            int typeCount = _pendingCoalescedByType.TryGetValue(typeId, out var typeList) ? typeList.Count : 0;
             int maxCoalesced = Math.Min(perTypeLimit, _options.MaxSpecialPending);
 
             if (typeCount >= maxCoalesced)
@@ -541,7 +538,7 @@ public sealed class PostScheduler : IDisposable
                 switch (plan.Backpressure)
                 {
                     case BackpressurePolicy.DropOldest:
-                        EvictOldestCoalescedSlot();
+                        EvictOldestCoalescedSlotForType(typeId);
                         break;
                     default:
                         return PostResult.Failure();
@@ -559,8 +556,17 @@ public sealed class PostScheduler : IDisposable
                 MergeCount = 1,
                 Active = true
             };
+            var globalNode = _pendingCoalesced.AddLast(slotKey);
+            if (!_pendingCoalescedByType.TryGetValue(typeId, out var typeOrder))
+            {
+                typeOrder = new LinkedList<CoalescedSlotKey>();
+                _pendingCoalescedByType.Add(typeId, typeOrder);
+            }
+
+            var typeNode = typeOrder.AddLast(slotKey);
+            newSlot.GlobalOrderNode = globalNode;
+            newSlot.TypeOrderNode = typeNode;
             _coalescedBuffer[slotKey] = newSlot;
-            _pendingCoalesced.Add(slotKey);
             return PostResult.Enqueued();
         }
 
@@ -667,12 +673,19 @@ public sealed class PostScheduler : IDisposable
 
         if (_pendingCoalesced.Count > 0)
         {
-            foreach (var key in _pendingCoalesced)
+            var node = _pendingCoalesced.First;
+            while (node != null)
             {
-                _snapshotCoalesced.Add(_coalescedBuffer[key]);
-                _coalescedBuffer.Remove(key);
+                var next = node.Next;
+                var key = node.Value;
+                if (_coalescedBuffer.TryGetValue(key, out var slot))
+                {
+                    _snapshotCoalesced.Add(slot);
+                }
+
+                RemovePendingCoalescedSlot(key, releasePayload: false, out _);
+                node = next;
             }
-            _pendingCoalesced.Clear();
         }
         _coalescedSnapshotIndex = _snapshotCoalesced.Count > 0 ? 0 : -1;
 
@@ -869,19 +882,58 @@ public sealed class PostScheduler : IDisposable
         }
     }
 
-    private void EvictOldestCoalescedSlot()
+    private bool EvictOldestCoalescedSlot()
     {
-        if (_pendingCoalesced.Count == 0)
-            return;
+        if (_pendingCoalesced.First == null)
+            return false;
 
-        var oldestKey = _pendingCoalesced[0];
-        if (_coalescedBuffer.TryGetValue(oldestKey, out var oldestSlot))
+        return RemovePendingCoalescedSlot(
+            _pendingCoalesced.First.Value,
+            releasePayload: true,
+            out _);
+    }
+
+    private bool EvictOldestCoalescedSlotForType(int eventTypeId)
+    {
+        if (!_pendingCoalescedByType.TryGetValue(
+                eventTypeId,
+                out LinkedList<CoalescedSlotKey>? order) ||
+            order.First == null)
         {
-            _payloadStorage.Release(oldestSlot.PayloadHandle);
-            _coalescedBuffer.Remove(oldestKey);
+            return false;
         }
 
-        _pendingCoalesced.RemoveAt(0);
+        return RemovePendingCoalescedSlot(
+            order.First.Value,
+            releasePayload: true,
+            out _);
+    }
+
+    private bool RemovePendingCoalescedSlot(
+        CoalescedSlotKey key,
+        bool releasePayload,
+        out CoalescedSlot slot)
+    {
+        if (!_coalescedBuffer.TryGetValue(key, out slot))
+            return false;
+
+        if (slot.GlobalOrderNode != null)
+            _pendingCoalesced.Remove(slot.GlobalOrderNode);
+
+        if (slot.TypeOrderNode != null &&
+            _pendingCoalescedByType.TryGetValue(
+                key.EventTypeId,
+                out var typeList))
+        {
+            typeList.Remove(slot.TypeOrderNode);
+        }
+
+        _coalescedBuffer.Remove(key);
+
+        if (releasePayload)
+            _payloadStorage.Release(slot.PayloadHandle);
+
+        return true;
     }
 
     private int DispatchLatestSnapshotBudgeted(int budget)
@@ -1188,12 +1240,14 @@ public sealed class PostScheduler : IDisposable
         _dirtyBits.ClearPending();
         _dirtyBits.ClearSnapshot();
 
-        foreach (var key in _pendingCoalesced)
+        while (_pendingCoalesced.Count > 0)
         {
-            _payloadStorage.Release(_coalescedBuffer[key].PayloadHandle);
+            RemovePendingCoalescedSlot(
+                _pendingCoalesced.First!.Value,
+                releasePayload: true,
+                out _);
         }
 
-        _pendingCoalesced.Clear();
         _coalescedBuffer.Clear();
 
         ReleaseQueuedPayloads(_readyQueue);
